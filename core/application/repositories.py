@@ -203,6 +203,36 @@ class IProcessedMessageRepository(ABC):
         ...
 
 
+class IAuthFlowRepository(ABC):
+    """Persisted authentication state machine storage (audit D1 / TASK 03).
+
+    The auth flow is the one piece of UI state that MUST survive a restart:
+    losing it mid-code leaves the user staring at a bot that will not say why.
+    """
+
+    @abstractmethod
+    async def get(self, user_id: int) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    async def save(self, row: dict) -> None:
+        ...
+
+    @abstractmethod
+    async def delete(self, user_id: int) -> None:
+        ...
+
+    @abstractmethod
+    async def expired(self) -> list:
+        """Rows whose ttl has lapsed while still in an active state."""
+        ...
+
+    @abstractmethod
+    async def active(self) -> list:
+        """Rows still waiting on the user (active states only)."""
+        ...
+
+
 class IUiStateRepository(ABC):
     """Durable per-user UI flow state — survives restarts."""
 

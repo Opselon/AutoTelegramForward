@@ -27,6 +27,7 @@ from pyrogram.errors import (
 )
 
 from ...application.use_cases import SessionUseCases
+from .auth_state import AuthState, AuthStateMachine
 from .client_pool import ClientPool
 
 logger = logging.getLogger(__name__)
@@ -74,10 +75,16 @@ class LoginFlowResult:
 class LoginFlowManager:
     """State machine for linking user accounts inside the bot chat."""
 
-    def __init__(self, pool: ClientPool, sessions: SessionUseCases) -> None:
+    def __init__(
+        self,
+        pool: ClientPool,
+        sessions: SessionUseCases,
+        auth_machine: Optional[AuthStateMachine] = None,
+    ) -> None:
         self._pool = pool
         self._sessions = sessions
-        self._pending: Dict[int, LoginState] = {}  # keyed by bot user id
+        self._machine = auth_machine
+        self._pending: Dict[int, LoginState] = {}  # live client cache, keyed by bot user id
         self._last_send: Dict[int, float] = {}  # bot user id -> last send_code ts
         self._phone_last_send: Dict[str, float] = {}  # phone -> last send ts
 
@@ -90,6 +97,27 @@ class LoginFlowManager:
             self.cancel(user_id)
             return None
         return self._pending.get(user_id)
+
+    async def auth_state(self, user_id: int) -> Optional[AuthState]:
+        """The persisted state, which is what survives a restart."""
+        if self._machine is None:
+            return None
+        flow = await self._machine.current(user_id)
+        return flow.state if flow else None
+
+    async def login_in_progress(self, user_id: int) -> bool:
+        """True while any login step owns this conversation."""
+        if await self.auth_state(user_id) in (
+            None,
+            AuthState.NEW,
+            AuthState.WELCOME,
+            AuthState.AUTHENTICATED,
+            AuthState.READY,
+            AuthState.AUTH_EXPIRED,
+            AuthState.SESSION_REVOKED,
+        ):
+            return self.has_pending(user_id)
+        return True
 
     def has_pending(self, user_id: int) -> bool:
         return self.pending_for(user_id) is not None
@@ -113,6 +141,40 @@ class LoginFlowManager:
         for uid in expired:
             self.cancel(uid)
         return len(expired)
+
+    async def recover_after_restart(self) -> int:
+        """Reconcile in-memory clients against the persisted state.
+
+        ``ClientPool.create_login_client`` builds an ``in_memory=True`` client,
+        so its MTProto key and the ``phone_code_hash`` die with the process. A
+        code submitted against a hash from a dead process is rejected by
+        Telegram, and a fresh client cannot be built without the user
+        confirming the phone again.
+
+        So an in-flight flow degrades honestly: the state moves to
+        ``AUTH_EXPIRED`` while the phone number and the attempt counters
+        survive, and the user resumes with one tap and Telegram's own attempt
+        budget intact. Nothing is silently dropped, and nothing pretends to be
+        resumable that Telegram would reject.
+        """
+        if self._machine is None:
+            self.sweep_expired()
+            return 0
+        # ttl-lapsed flows are expired by definition
+        n = await self._machine.sweep_expired()
+        # Then every flow still marked as *waiting on the user*: its login
+        # client was in_memory=True, so its MTProto key and phone_code_hash
+        # died with the process. Telegram would reject a code submitted
+        # against a hash from a dead client, so the flow degrades to
+        # AUTH_EXPIRED — the phone and attempt counters survive, so the user
+        # resumes with one tap and Telegram's own attempt budget intact.
+        #
+        # Driven off the persisted state, not the in-memory cache: after a
+        # crash the cache is empty, which is precisely the case that needs
+        # recovering.
+        n += await self._machine.expire_active()
+        self._pending.clear()
+        return n
 
     @staticmethod
     def normalize_phone(raw: str) -> str:
@@ -215,6 +277,12 @@ class LoginFlowManager:
         """
         state = self.pending_for(user_id)
         if not state or state.step != "code":
+            # Distinguish "nothing was ever started" from "the login client
+            # died in a restart" - the second case is our bug, not the user's
+            # code being wrong, and the UI must say so.
+            flow = await self.auth_state(user_id)
+            if flow == AuthState.AUTH_EXPIRED:
+                return "auth_expired"
             return "no_pending_login"
         if state.client is None:
             return "no_pending_login"
@@ -250,6 +318,9 @@ class LoginFlowManager:
     async def submit_password(self, user_id: int, password: str) -> str:
         state = self.pending_for(user_id)
         if not state or state.step != "password":
+            flow = await self.auth_state(user_id)
+            if flow == AuthState.AUTH_EXPIRED:
+                return "auth_expired"
             return "no_pending_login"
         if state.client is None:
             return "no_pending_login"

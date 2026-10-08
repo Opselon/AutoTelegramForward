@@ -22,6 +22,7 @@ from ...domain.value_objects import (
     ForwardMode,
     RoutingType,
 )
+from .auth_state import AuthStateMachine
 from .client_pool import ClientPool
 from .i18n import I18n, SUPPORTED_LANGUAGES
 from .login_flow import LoginFlowManager
@@ -50,6 +51,7 @@ class BotManager:
         bot_tokens=None,
         dispatcher=None,
         ui_state_repo=None,
+        auth_machine=None,
     ) -> None:
         self.bot = Client(
             "atf_bot", api_id=pool.api_id, api_hash=pool.api_hash,
@@ -68,7 +70,7 @@ class BotManager:
         self._bot_tokens = bot_tokens
         self._ui_state_repo = ui_state_repo
         self._dispatcher = dispatcher
-        self._login = LoginFlowManager(pool, sessions)
+        self._login = LoginFlowManager(pool, sessions, auth_machine)
         self._register_handlers()
         # Set by main.py after ProBotUI mounts: uid -> bool. When the button
         # UI owns an active flow for a user, BotManager stays silent so the

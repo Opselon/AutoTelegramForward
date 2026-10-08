@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 MIGRATIONS = {
     1: """
@@ -201,6 +201,31 @@ MIGRATIONS = {
         errors INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (ts_hour)
     );
+    """,
+    4: """
+    -- TASK 03 / audit D1: persisted authentication state machine.
+    -- A login in progress must survive a process restart (or at worst
+    -- degrade to a resumable state) instead of vanishing silently.
+    CREATE TABLE IF NOT EXISTS auth_flows (
+        user_id INTEGER PRIMARY KEY,
+        state TEXT NOT NULL,                -- AuthState value
+        phone_number TEXT NOT NULL DEFAULT '',
+        credential_id TEXT NOT NULL DEFAULT 'default',
+        phone_code_hash TEXT NOT NULL DEFAULT '',
+        -- retry counters survive a restart so a crash cannot be used to
+        -- reset the Telegram-side attempt budget
+        code_attempts INTEGER NOT NULL DEFAULT 0,
+        password_attempts INTEGER NOT NULL DEFAULT 0,
+        -- version for optimistic concurrency: idempotent transitions
+        version INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        last_error TEXT NOT NULL DEFAULT '',
+        correlation_id TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_auth_flows_state ON auth_flows(state);
+    CREATE INDEX IF NOT EXISTS idx_auth_flows_expires ON auth_flows(expires_at);
     """,
 }
 

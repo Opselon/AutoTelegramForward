@@ -36,9 +36,11 @@ from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
     SqliteSessionRepository,
     SqliteUiStateRepository,
     SqliteUserRepository,
+    SqliteAuthFlowRepository,
 )
 from core.infrastructure.security.crypto import CryptoService  # noqa: E402
 from core.infrastructure.telegram.bot_manager import BotManager  # noqa: E402
+from core.infrastructure.telegram.login_flow import LOGIN_TTL  # noqa: E402
 from core.infrastructure.telegram.client_pool import ClientPool  # noqa: E402
 from core.infrastructure.telegram.dispatcher import MessageDispatcher  # noqa: E402
 from core.infrastructure.telegram.pro_bot_ui import ProBotUI  # noqa: E402
@@ -62,6 +64,7 @@ def build_container(cfg: Config) -> dict:
     token_repo = SqliteBotTokenRepository(db, crypto)
     processed_repo = SqliteProcessedMessageRepository(db)
     ui_state_repo = SqliteUiStateRepository(db)
+    auth_flow_repo = SqliteAuthFlowRepository(db)
     error_log_repo = SqliteErrorLogRepository(db)
     metrics_repo = SqliteMetricsRepository(db)
     rule_stats_repo = SqliteRuleStatsRepository(db)
@@ -100,7 +103,8 @@ def build_container(cfg: Config) -> dict:
         "processed": processed_repo, "pipeline": pipeline, "pool": pool,
         "dispatcher": dispatcher, "i18n": i18n, "factory": factory,
         "logger_addr": cfg.logger_addr,
-        "ui_state_repo": ui_state_repo, "error_log": error_log_repo,
+        "ui_state_repo": ui_state_repo, "auth_flow_repo": auth_flow_repo,
+        "error_log": error_log_repo,
         "metrics": metrics_repo, "rule_stats": rule_stats_repo,
         "users": user_repo,
     }
@@ -216,6 +220,13 @@ async def main() -> None:
     container["log_client"] = log_client
     log_client.info("core", "system", "core started", {"version": cfg.version})
 
+    # TASK 03 / audit D1: persisted auth state machine, so a login in
+    # progress survives a restart instead of vanishing without explanation.
+    from core.infrastructure.telegram.auth_state import AuthStateMachine  # noqa: E402
+    auth_machine = AuthStateMachine(container["auth_flow_repo"], ttl_seconds=LOGIN_TTL)
+    container["auth_machine"] = auth_machine
+    await auth_machine.sweep_expired()
+
     bot = BotManager(
         bot_token=cfg.bot_token, admin_ids=cfg.admin_ids,
         pool=container["pool"], sessions=container["sessions"],
@@ -226,6 +237,7 @@ async def main() -> None:
         bot_tokens=container.get("bot_tokens"),
         dispatcher=container.get("dispatcher"),
         ui_state_repo=container.get("ui_state_repo"),
+        auth_machine=auth_machine,
     )
     await bot.start()
     logger.info("Bot started. Core is running. Press Ctrl+C to stop.")
@@ -238,6 +250,16 @@ async def main() -> None:
         log_client.info("core", "boot", f"sessions restored: {live}/{len(statuses)} live")
     except Exception as exc:
         logger.warning("session restore failed: %s", exc)
+
+    # A restart kills the in-memory login clients; move any flow that still
+    # claims to hold an open socket to AUTH_EXPIRED so the user is told,
+    # instead of the bot silently ignoring their code.
+    try:
+        expired = await bot.login_manager.recover_after_restart()
+        if expired:
+            log_client.info("core", "boot", f"auth flows expired on restart: {expired}")
+    except Exception as exc:
+        logger.warning("auth flow recovery failed: %s", exc)
 
     # Mount the Pro button UI directly onto the live bot client.
     try:

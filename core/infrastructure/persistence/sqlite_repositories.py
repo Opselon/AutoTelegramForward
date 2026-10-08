@@ -24,8 +24,10 @@ from ...application.repositories import (
     IRuleStatsRepository,
     IUiStateRepository,
     IUserRepository,
+    IAuthFlowRepository,
 )
 from ...domain.entities import AIConfig, FilterRule, ForwardRule, TelegramSession
+from ..telegram.auth_state import ACTIVE_STATES, AuthState
 from ...domain.value_objects import (
     AIProviderType,
     ContentMode,
@@ -502,6 +504,63 @@ class SqliteProcessedMessageRepository(IProcessedMessageRepository):
 # --------------------------------------------------------------------------- #
 # v3: professional state DB — UI state, error log, metrics, rule stats, users
 # --------------------------------------------------------------------------- #
+
+class SqliteAuthFlowRepository(IAuthFlowRepository):
+    """Persisted auth state machine rows (audit D1).
+
+    Every write bumps ``version`` — optimistic concurrency, so a late callback
+    from a previous flow cannot clobber the current one.
+    """
+
+    _COLUMNS = (
+        "user_id", "state", "phone_number", "credential_id", "phone_code_hash",
+        "code_attempts", "password_attempts", "version", "created_at",
+        "updated_at", "expires_at", "last_error", "correlation_id",
+    )
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def get(self, user_id: int) -> Optional[dict]:
+        return self._db.query_one(
+            "SELECT * FROM auth_flows WHERE user_id=?", (int(user_id),)
+        )
+
+    async def save(self, row: dict) -> None:
+        cols = [c for c in self._COLUMNS if c in row]
+        placeholders = ",".join("?" for _ in cols)
+        assignments = ",".join(f"{c}=excluded.{c}" for c in cols)
+        values = [row[c] for c in cols]
+        self._db.execute(
+            f"INSERT INTO auth_flows ({','.join(cols)}) VALUES ({placeholders})"
+            f" ON CONFLICT(user_id) DO UPDATE SET {assignments}",
+            tuple(values),
+        )
+
+    async def delete(self, user_id: int) -> None:
+        self._db.execute("DELETE FROM auth_flows WHERE user_id=?", (int(user_id),))
+
+    async def expired(self) -> list:
+        # only flows that are still waiting on somebody can expire
+        return self._db.query_all(
+            "SELECT * FROM auth_flows WHERE expires_at < ? AND state NOT IN (?,?,?,?)",
+            (
+                int(time.time()),
+                AuthState.AUTHENTICATED.value,
+                AuthState.READY.value,
+                AuthState.SESSION_REVOKED.value,
+                AuthState.AUTH_EXPIRED.value,
+            ),
+        )
+
+    async def active(self) -> list:
+        # one index seek on idx_auth_flows_state per active state
+        marks = ",".join("?" for _ in ACTIVE_STATES)
+        return self._db.query_all(
+            f"SELECT * FROM auth_flows WHERE state IN ({marks})",
+            tuple(s.value for s in ACTIVE_STATES),
+        )
+
 
 class SqliteUiStateRepository(IUiStateRepository):
     """Durable UI flows: a restart mid-login resumes where the user stopped."""

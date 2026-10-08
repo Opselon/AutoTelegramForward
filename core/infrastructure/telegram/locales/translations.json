@@ -160,7 +160,10 @@
     "ui_stats_body": "📊 **Statistics**\nProcessed: {processed}\nForwarded: {forwarded}\nFiltered: {filtered}\nAI-rewritten: {rewritten}\nErrors: {errors}\nUptime: {uptime}s",
     "ui_use_menu": "Tap a button below 👇",
     "ui_welcome": "👋 Welcome to **AutoForward Pro**!\n\nEverything is buttons below — tap to manage sessions, rules, filters, AI, logs and stats.\n\nSend /menu anytime to reopen this panel.",
-    "unknown_command": "Unknown command. Use /help."
+    "unknown_command": "Unknown command. Use /help.",
+    "ui_login_expired": "⚠️ Your login session expired because the bot was restarted while you were entering the code. No code can be used now — but your phone number is kept, so you can start again in one tap.",
+    "ui_login_retry": "Restart login",
+    "auth_expired": "This login expired when the bot was restarted. Please start it again."
   },
   "fa": {
     "ai_add_hint": "پیکربندی را بفرستید:\n`provider model api_key`\nمثلاً `openai gpt-4o-mini sk-...`\nتأمین‌کنندگان: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -323,7 +326,10 @@
     "ui_stats_body": "📊 **آمار**\nپردازش‌شده: {processed}\nفورواردشده: {forwarded}\nفیلترشده: {filtered}\nبازنویسی AI: {rewritten}\nخطاها: {errors}\nزمان کارکرد: {uptime} ثانیه",
     "ui_use_menu": "روی یک دکمه بزنید 👇",
     "ui_welcome": "👋 به **AutoForward Pro** خوش آمدید!\n\nهمه‌چیز دکمه‌ای است — از دکمه‌های زیر برای مدیریت نشست‌ها، قوانین، فیلترها، هوش مصنوعی، لاگ‌ها و آمار استفاده کنید.\n\nبرای باز کردن این پنل در هر زمان /menu را بفرستید.",
-    "unknown_command": "دستور ناشناخته. از /help استفاده کنید."
+    "unknown_command": "دستور ناشناخته. از /help استفاده کنید.",
+    "ui_login_expired": "⚠️ نشست ورود شما چون ربات در حین وارد کردن کد ری‌استارت شد، منقضی شد. دیگر هیچ کدی کار نمی‌کند — اما شماره شما نگه داشته شده، پس می‌توانید با یک لمس دوباره شروع کنید.",
+    "ui_login_retry": "شروع دوباره ورود",
+    "auth_expired": "این ورود هنگام ری‌استارت ربات منقضی شد. لطفاً دوباره شروع کنید."
   },
   "ru": {
     "ai_add_hint": "Отправьте конфигурацию:\n`провайдер модель api_key`\nнапример `openai gpt-4o-mini sk-...`\nПровайдеры: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -486,7 +492,10 @@
     "ui_stats_body": "📊 **Статистика**\nОбработано: {processed}\nПереслано: {forwarded}\nОтфильтровано: {filtered}\nИИ-переписано: {rewritten}\nОшибки: {errors}\nВремя работы: {uptime}с",
     "ui_use_menu": "Нажмите кнопку ниже 👇",
     "ui_welcome": "👋 Добро пожаловать в **AutoForward Pro**!\n\nВсё управляется кнопками — сессии, правила, фильтры, ИИ, логи и статистика.\n\nОтправьте /menu, чтобы открыть панель.",
-    "unknown_command": "Неизвестная команда. Используйте /help."
+    "unknown_command": "Неизвестная команда. Используйте /help.",
+    "ui_login_expired": "⚠️ Сессия входа истекла, так как бот был перезапущен, пока вы вводили код. Теперь код не подойдёт — но ваш номер сохранён, поэтому можно начать заново одним нажатием.",
+    "ui_login_retry": "Начать вход заново",
+    "auth_expired": "Этот вход истёк при перезапуске бота. Пожалуйста, начните заново."
   },
   "zh": {
     "ai_add_hint": "发送 AI 配置：\n`provider model api_key`\n例如 `openai gpt-4o-mini sk-...`\n供应商：openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -649,6 +658,9 @@
     "ui_stats_body": "📊 **统计**\n已处理：{processed}\n已转发：{forwarded}\n已过滤：{filtered}\nAI 重写：{rewritten}\n错误：{errors}\n运行时间：{uptime} 秒",
     "ui_use_menu": "点击下方按钮 👇",
     "ui_welcome": "👋 欢迎使用 **AutoForward Pro**！\n\n全部通过按钮操作 —— 管理会话、规则、过滤器、AI、日志和统计。\n\n随时发送 /menu 打开面板。",
-    "unknown_command": "未知命令，请使用 /help。"
+    "unknown_command": "未知命令，请使用 /help。",
+    "ui_login_expired": "⚠️ 您的登录会话已过期，因为机器人在您输入验证码时被重启了。现在任何验证码都无法使用——但您的号码已保留，您可以一键重新开始。",
+    "ui_login_retry": "重新开始登录",
+    "auth_expired": "此登录在机器人重启时已过期。请重新开始。"
   }
 }

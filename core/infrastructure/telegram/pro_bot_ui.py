@@ -77,6 +77,7 @@ CB = {
     "cred_add": "ca",
     "cred_del": "cd",
     "cred_default": "cdef",
+    "login_retry": "slr",
     "cancel": "cx",
     "debug": "dbg",
     "refresh": "rf",
@@ -494,6 +495,31 @@ class ProBotUI:
             await cq.answer()
 
         # ---------------- login flow ----------------
+        @b.on_callback_query(filters.regex("^" + CB["login_retry"] + "$"))
+        async def _cb_login_retry(_, cq: CallbackQuery):
+            # One-tap restart of a login that expired in a restart.
+            # Reuses the persisted phone, so the user never retypes it.
+            uid = cq.from_user.id
+            st = self._state(uid)
+            phone = (getattr(st, "login_phone", "") or "").strip()
+            if not LoginFlowManager.valid_phone(phone):
+                st.step = "login_phone"
+                await self._persist(uid, st)
+                await cq.answer()
+                return await cq.message.edit_text(
+                    self._t("ui_login_phone"), reply_markup=self._cancel_kbd())
+            result = await self._login.start(uid, LoginFlowManager.normalize_phone(phone))
+            await cq.answer()
+            if result != "send_code":
+                key, _, detail = result.partition(":")
+                return await cq.message.edit_text(
+                    self._t(f"ui_login_fail_{key}", error=detail),
+                    reply_markup=self._cancel_kbd())
+            st.step = "login_code"
+            await self._persist(uid, st)
+            await cq.message.edit_text(
+                self._t("ui_login_code"), reply_markup=self._cancel_kbd())
+
         @b.on_callback_query(filters.regex("^" + CB["login"] + "$"))
         async def _cb_login(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
@@ -991,6 +1017,18 @@ class ProBotUI:
         await self._finish_login(message, st, result)
 
     async def _finish_login(self, message: Message, st: UiState, result: str) -> None:
+        if result == "auth_expired":
+            # The login client died in a restart. No code can ever succeed
+            # against the old phone_code_hash, so offer a one-tap restart
+            # with the same phone instead of letting the user retype codes.
+            st.step = "login_phone"
+            await self._persist(message.from_user.id, st)
+            phone = getattr(st, "login_phone", "") or ""
+            return await message.reply_text(
+                self._t("ui_login_expired", phone=phone),
+                reply_markup=self._kbd(
+                    [[("📱 " + self._t("ui_login_retry"), CB["login_retry"])]]
+                ) if phone else self._cancel_kbd())
         st.step = ""
         await self._persist(message.from_user.id, st)
         if result.startswith("login_success"):
