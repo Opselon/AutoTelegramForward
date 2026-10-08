@@ -1,0 +1,294 @@
+syntax = "proto3";
+
+package autoforward;
+
+option go_package = "autoforward/api/proto;autoforwardpb";
+
+// -----------------------------------------------------------------------------
+// Common Models
+// -----------------------------------------------------------------------------
+
+message StatusResponse {
+  bool success = 1;
+  string message = 2;
+  string error_code = 3;
+}
+
+// -----------------------------------------------------------------------------
+// Session Management
+// -----------------------------------------------------------------------------
+
+message SessionInfo {
+  string id = 1;
+  string phone_number = 2;
+  string user_id = 3;
+  string username = 4;
+  string first_name = 5;
+  bool is_active = 6;
+  bool is_authorized = 7;
+  int64 created_at = 8;
+  int64 updated_at = 9;
+}
+
+message ListSessionsRequest {}
+
+message ListSessionsResponse {
+  repeated SessionInfo sessions = 1;
+}
+
+message StartLoginRequest {
+  string phone_number = 1;
+}
+
+message StartLoginResponse {
+  bool success = 1;
+  string phone_code_hash = 2;
+  string message = 3;
+}
+
+message SubmitCodeRequest {
+  string phone_number = 1;
+  string phone_code_hash = 2;
+  string code = 3;
+}
+
+message SubmitCodeResponse {
+  bool success = 1;
+  bool requires_password = 2;
+  string session_id = 3;
+  string message = 4;
+}
+
+message SubmitPasswordRequest {
+  string phone_number = 1;
+  string phone_code_hash = 2;
+  string password = 3;
+}
+
+message SubmitPasswordResponse {
+  bool success = 1;
+  string session_id = 2;
+  string message = 3;
+}
+
+message BackupSessionRequest {
+  string session_id = 1;
+}
+
+message BackupSessionResponse {
+  bool success = 1;
+  string encrypted_session_data = 2;
+  string checksum = 3;
+  string message = 4;
+}
+
+message RestoreSessionRequest {
+  string encrypted_session_data = 1;
+}
+
+message RestoreSessionResponse {
+  bool success = 1;
+  string session_id = 2;
+  string message = 3;
+}
+
+message TerminateSessionRequest {
+  string session_id = 1;
+}
+
+// -----------------------------------------------------------------------------
+// Forwarding Rules
+// -----------------------------------------------------------------------------
+
+enum RoutingType {
+  ROUTING_UNKNOWN = 0;
+  CHANNEL_TO_CHANNEL = 1;
+  PV_TO_PV = 2;
+  CHANNEL_TO_PV = 3;
+  PV_TO_CHANNEL = 4;
+}
+
+enum ForwardMode {
+  FORWARD_MODE_UNKNOWN = 0;
+  DIRECT_FORWARD = 1; // Telegram native forward (keeps header)
+  COPY_MESSAGE = 2;   // Clean copy without sender header
+}
+
+message ForwardRule {
+  string id = 1;
+  string session_id = 2;
+  string source_chat_id = 3;
+  string source_chat_name = 4;
+  string target_chat_id = 5;
+  string target_chat_name = 6;
+  RoutingType routing_type = 7;
+  ForwardMode forward_mode = 8;
+  bool is_active = 9;
+  string filter_rule_id = 10;
+  string ai_config_id = 11;
+  bool remove_links = 12;
+  string custom_caption_template = 13;
+  int64 created_at = 14;
+  int64 updated_at = 15;
+}
+
+message CreateRuleRequest {
+  ForwardRule rule = 1;
+}
+
+message UpdateRuleRequest {
+  ForwardRule rule = 1;
+}
+
+message DeleteRuleRequest {
+  string id = 1;
+}
+
+message ListRulesRequest {
+  string session_id = 1;
+}
+
+message ListRulesResponse {
+  repeated ForwardRule rules = 1;
+}
+
+// -----------------------------------------------------------------------------
+// Filter Rules
+// -----------------------------------------------------------------------------
+
+message FilterRule {
+  string id = 1;
+  string name = 2;
+  repeated string whitelist_keywords = 3;
+  repeated string blacklist_keywords = 4;
+  repeated string regex_patterns = 5;
+  repeated string allowed_media_types = 6; // text, photo, video, document, voice, audio, animation
+  repeated string blocked_media_types = 7;
+  bool drop_service_messages = 8;
+  int64 min_message_length = 9;
+  int64 max_message_length = 10;
+}
+
+message CreateFilterRequest {
+  FilterRule filter = 1;
+}
+
+message UpdateFilterRequest {
+  FilterRule filter = 1;
+}
+
+message DeleteFilterRequest {
+  string id = 1;
+}
+
+message ListFiltersRequest {}
+
+message ListFiltersResponse {
+  repeated FilterRule filters = 1;
+}
+
+// -----------------------------------------------------------------------------
+// AI Rewrite Configuration
+// -----------------------------------------------------------------------------
+
+message AIConfig {
+  string id = 1;
+  string name = 2;
+  string provider = 3;     // openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom
+  string model = 4;        // gpt-4o-mini, claude-3-5-sonnet, gemini-2.0-flash, etc.
+  string api_key = 5;      // Encrypted or masked
+  string base_url = 6;     // Optional custom endpoint
+  string system_prompt = 7;
+  string user_prompt_template = 8; // e.g. "Rewrite this post in professional tone: {text}"
+  double temperature = 9;
+  bool is_enabled = 10;
+  string target_language = 11; // en, fa, ru, zh, etc.
+}
+
+message CreateAIConfigRequest {
+  AIConfig config = 1;
+}
+
+message UpdateAIConfigRequest {
+  AIConfig config = 1;
+}
+
+message DeleteAIConfigRequest {
+  string id = 1;
+}
+
+message ListAIConfigsRequest {}
+
+message ListAIConfigsResponse {
+  repeated AIConfig configs = 1;
+}
+
+message TestAIRewriteRequest {
+  string ai_config_id = 1;
+  string sample_text = 2;
+}
+
+message TestAIRewriteResponse {
+  bool success = 1;
+  string rewritten_text = 2;
+  string error_message = 3;
+}
+
+// -----------------------------------------------------------------------------
+// System Status & Statistics
+// -----------------------------------------------------------------------------
+
+message SystemStatsRequest {}
+
+message SystemStatsResponse {
+  bool core_running = 1;
+  int64 uptime_seconds = 2;
+  int32 active_sessions_count = 3;
+  int32 active_rules_count = 4;
+  int64 total_messages_processed = 5;
+  int64 total_messages_forwarded = 6;
+  int64 total_messages_filtered = 7;
+  int64 total_messages_rewritten = 8;
+  string bot_username = 9;
+  string version = 10;
+}
+
+// -----------------------------------------------------------------------------
+// gRPC Services Definition
+// -----------------------------------------------------------------------------
+
+service SessionControlService {
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc StartLogin(StartLoginRequest) returns (StartLoginResponse);
+  rpc SubmitCode(SubmitCodeRequest) returns (SubmitCodeResponse);
+  rpc SubmitPassword(SubmitPasswordRequest) returns (SubmitPasswordResponse);
+  rpc BackupSession(BackupSessionRequest) returns (BackupSessionResponse);
+  rpc RestoreSession(RestoreSessionRequest) returns (RestoreSessionResponse);
+  rpc TerminateSession(TerminateSessionRequest) returns (StatusResponse);
+}
+
+service ForwardRuleControlService {
+  rpc ListRules(ListRulesRequest) returns (ListRulesResponse);
+  rpc CreateRule(CreateRuleRequest) returns (ForwardRule);
+  rpc UpdateRule(UpdateRuleRequest) returns (ForwardRule);
+  rpc DeleteRule(DeleteRuleRequest) returns (StatusResponse);
+}
+
+service FilterControlService {
+  rpc ListFilters(ListFiltersRequest) returns (ListFiltersResponse);
+  rpc CreateFilter(CreateFilterRequest) returns (FilterRule);
+  rpc UpdateFilter(UpdateFilterRequest) returns (FilterRule);
+  rpc DeleteFilter(DeleteFilterRequest) returns (StatusResponse);
+}
+
+service AIControlService {
+  rpc ListAIConfigs(ListAIConfigsRequest) returns (ListAIConfigsResponse);
+  rpc CreateAIConfig(CreateAIConfigRequest) returns (AIConfig);
+  rpc UpdateAIConfig(UpdateAIConfigRequest) returns (AIConfig);
+  rpc DeleteAIConfig(DeleteAIConfigRequest) returns (StatusResponse);
+  rpc TestAIRewrite(TestAIRewriteRequest) returns (TestAIRewriteResponse);
+}
+
+service SystemStatusControlService {
+  rpc GetSystemStats(SystemStatsRequest) returns (SystemStatsResponse);
+}

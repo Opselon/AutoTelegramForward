@@ -3,6 +3,16 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# AutoTelegramForward runtime artifacts
+data/
+*.atf
+config.yaml
+.venv/
+__pycache__/
+*.pyc
+api/atf-api.exe
+core/tests/.pytest_cache/
+
 # User-specific files
 *.rsuser
 *.suo

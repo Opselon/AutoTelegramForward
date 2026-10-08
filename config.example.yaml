@@ -1,0 +1,26 @@
+# AutoTelegramForward configuration
+# Copy to config.yaml and fill in your values, or use ATF_* env vars.
+
+# From https://my.telegram.org (API development tools)
+api_id: 12345678
+api_hash: "your_api_hash_here"
+
+# From @BotFather
+bot_token: "123456:ABC-your-bot-token"
+
+# Telegram user IDs allowed to use admin commands (empty = everyone)
+admin_ids: []
+
+# 32+ random chars. Encrypts session strings and API keys at rest.
+# WARNING: changing this makes existing stored sessions unreadable.
+master_key: "change-me-to-a-long-random-string"
+
+# SQLite database file (default). 
+db_path: "data/atf.db"
+
+# gRPC control-plane endpoint (the Go API connects here)
+grpc_host: "0.0.0.0"
+grpc_port: 50051
+
+# Default bot language: en | fa | ru | zh
+language: "en"

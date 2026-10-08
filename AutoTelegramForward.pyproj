@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>c414032d-9da8-41f7-a973-f72e693b2835</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>AutoTelegramForward.py</StartupFile>
+    <StartupFile>core\main.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -21,7 +21,10 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AutoTelegramForward.py" />
+    <Compile Include="core\**\*.py" />
+    <Compile Include="scripts\**\*.py" />
+    <Folder Include="proto\" />
+    <Folder Include="api\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
