@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pyrogram tgcrypto grpcio grpcio-tools protobuf httpx cryptography pyyaml pytest pytest-asyncio
+
+      - name: Run Python tests
+        run: python -m pytest -q
+
+  go-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+
+      - name: Build
+        working-directory: api
+        run: go build ./...
+
+      - name: Vet
+        working-directory: api
+        run: go vet ./...
+
+      - name: Test
+        working-directory: api
+        run: go test ./...
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [python-tests, go-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build core image
+        run: docker build -f Dockerfile.core -t atf-core .
+
+      - name: Build api image
+        run: docker build -f Dockerfile.api -t atf-api .

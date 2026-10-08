@@ -1,0 +1,42 @@
+services:
+  core:
+    build:
+      context: .
+      dockerfile: Dockerfile.core
+    container_name: atf-core
+    restart: unless-stopped
+    environment:
+      ATF_API_ID: ${ATF_API_ID}
+      ATF_API_HASH: ${ATF_API_HASH}
+      ATF_BOT_TOKEN: ${ATF_BOT_TOKEN}
+      ATF_MASTER_KEY: ${ATF_MASTER_KEY}
+      ATF_GRPC_PORT: 50051
+      ATF_DB_PATH: /app/data/atf.db
+    volumes:
+      - atf-data:/app/data
+    networks:
+      - atf-net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: atf-api
+    restart: unless-stopped
+    depends_on:
+      - core
+    environment:
+      ATF_CORE_GRPC: core:50051
+      ATF_API_ADDR: ":8080"
+      ATF_API_KEY: ${ATF_API_KEY:-}
+    ports:
+      - "8080:8080"
+    networks:
+      - atf-net
+
+volumes:
+  atf-data:
+
+networks:
+  atf-net:
+    driver: bridge

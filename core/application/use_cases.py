@@ -44,6 +44,10 @@ class SessionUseCases:
             TelegramSession(phone_number=phone_number, session_string_encrypted=session_string_encrypted)
         )
 
+    def create_sync(self, phone_number: str, session_string_encrypted: str = "") -> TelegramSession:
+        import asyncio
+        return asyncio.run(self.create(phone_number, session_string_encrypted))
+
     async def list_all(self) -> List[TelegramSession]:
         return await self._repo.list_all()
 

@@ -32,7 +32,28 @@ A microservice-based **Telegram auto-forwarder** with a Go REST control API and 
 - ✅ **Session & API-key encryption** at rest (AES-256-GCM)
 - ✅ **Bot-token-only operation** — every command works through the Telegram bot
 
-## Quick Start
+## Quick Start (very easy — one command)
+
+```bash
+# Just paste your bot token when asked. Everything else is automatic.
+python atf.py setup
+python atf.py start      # bot + REST API live
+```
+
+That's it. `setup` creates the venv, installs dependencies, generates an
+encryption master key, and writes `config.yaml`. `start` launches both
+services (Go REST API on :8080 is skipped automatically if Go isn't installed).
+
+Other commands:
+
+```bash
+python atf.py test          # run Python + Go test suites
+python atf.py update        # git pull + dependency refresh
+python atf.py restore x.atf # restore a session backup
+```
+
+<details>
+<summary>Manual setup (advanced)</summary>
 
 ```bash
 # 1. Environment
@@ -50,6 +71,18 @@ cd api && go build -o atf-api.exe . && cd ..
 .venv\Scripts\python.exe -m core.main   # terminal 1 (bot + gRPC)
 cd api && .\atf-api.exe                  # terminal 2 (REST API)
 ```
+
+</details>
+
+<details>
+<summary>Docker</summary>
+
+```bash
+cp .env.example .env        # paste your bot token
+docker compose up -d        # core + api, data persisted in a volume
+```
+
+</details>
 
 ## Telegram Bot Commands
 

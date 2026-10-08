@@ -7,9 +7,12 @@
 data/
 *.atf
 config.yaml
+.env
+atf.py.bak
 .venv/
 __pycache__/
 *.pyc
+api/atf-api
 api/atf-api.exe
 core/tests/.pytest_cache/
 
