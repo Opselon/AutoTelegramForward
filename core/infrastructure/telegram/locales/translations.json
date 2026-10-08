@@ -159,7 +159,8 @@
     "ui_login_fail_cooldown": "⏳ لطفاً {error} ثانیه صبر کنید و دوباره تلاش کنید.",
     "ui_login_fail_send_failed": "❌ ارسال کد شکست خورد ({error}). بعداً دوباره تلاش کنید.",
     "ui_login_fail_flood_wait": "🚫 تلگرام محدودیت گذاشت: {error} ثانیه صبر کنید.",
-    "ui_login_fail_invalid_phone": "❌ شماره نامعتبر است. با + و کد کشور بفرستید."
+    "ui_login_fail_invalid_phone": "❌ شماره نامعتبر است. با + و کد کشور بفرستید.",
+    "ui_internal_error": "⚠️ An internal error occurred. Details were logged. Please try again."
   },
   "fa": {
     "start": "👋 به **AutoTelegramForward** خوش آمدید!\n\nاین ربات فوروارد خودکار بین چت‌های تلگرام شما را مدیریت می‌کند.\n\n• /login — اتصال حساب کاربری\n• /sessions — مدیریت نشست‌ها\n• /rules — قوانین فوروارد (مبدأ → مقصد)\n• /filters — فیلترهای محتوا\n• /ai — تنظیمات هوش مصنوعی\n• /lang — تغییر زبان\n• /backup — پشتیبان‌گیری نشست\n• /restore — بازیابی پشتیبان\n• /stats — آمار زنده\n• /help — راهنما",
@@ -321,7 +322,8 @@
     "ui_login_fail_cooldown": "⏳ {error} ثانیه صبر کنید و دوباره بفرستید.",
     "ui_login_fail_send_failed": "❌ ارسال کد ناموفق بود ({error}). دوباره تلاش کنید.",
     "ui_login_fail_flood_wait": "🚫 تلگرام {error} ثانیه محدود کرد.",
-    "ui_login_fail_invalid_phone": "❌ شماره نامعتبر است."
+    "ui_login_fail_invalid_phone": "❌ شماره نامعتبر است.",
+    "ui_internal_error": "⚠️ خطای داخلی رخ داد. جزئیات در لاگ ذخیره شد. می‌توانید دوباره تلاش کنید."
   },
   "ru": {
     "start": "👋 Добро пожаловать в **AutoTelegramForward**!\n\nЭтот бот управляет авто-пересылкой между вашими чатами Telegram.\n\n• /login — привязать аккаунт\n• /sessions — управление сессиями\n• /rules — правила пересылки (откуда → куда)\n• /filters — фильтры контента\n• /ai — настройки ИИ\n• /lang — сменить язык\n• /backup — резервная копия сессии\n• /restore — восстановить копию\n• /stats — статистика\n• /help — список команд",
@@ -483,7 +485,8 @@
     "ui_login_fail_cooldown": "⏳ Подождите {error} сек и повторите.",
     "ui_login_fail_send_failed": "❌ Не удалось отправить код ({error}).",
     "ui_login_fail_flood_wait": "🚫 Telegram: подождите {error} сек.",
-    "ui_login_fail_invalid_phone": "❌ Неверный номер."
+    "ui_login_fail_invalid_phone": "❌ Неверный номер.",
+    "ui_internal_error": "⚠️ Произошла внутренняя ошибка. Подробности в логах. Попробуйте снова."
   },
   "zh": {
     "start": "👋 欢迎使用 **AutoTelegramForward**！\n\n此机器人管理您 Telegram 聊天之间的自动转发。\n\n• /login — 关联用户账号\n• /sessions — 管理会话\n• /rules — 转发规则（来源 → 目标）\n• /filters — 内容过滤器\n• /ai — AI 重写配置\n• /lang — 更改语言\n• /backup — 导出会话备份\n• /restore — 导入备份\n• /stats — 实时统计\n• /help — 完整命令列表",

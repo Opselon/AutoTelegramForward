@@ -49,6 +49,7 @@ class BotManager:
         credentials=None,
         bot_tokens=None,
         dispatcher=None,
+        ui_state_repo=None,
     ) -> None:
         self.bot = Client(
             "atf_bot", api_id=pool.api_id, api_hash=pool.api_hash,
@@ -65,6 +66,7 @@ class BotManager:
         self._crypto = crypto
         self._credentials = credentials
         self._bot_tokens = bot_tokens
+        self._ui_state_repo = ui_state_repo
         self._dispatcher = dispatcher
         self._login = LoginFlowManager(pool, sessions)
         self._register_handlers()
@@ -97,14 +99,29 @@ class BotManager:
         checker = getattr(self, "ui_step_checker", None)
         if callable(checker):
             try:
-                return bool(checker(uid))
+                if checker(uid):
+                    return True
             except Exception:
                 pass
-        # Fall back to "any active flow means the dashboard is driving".
+        # Any active login flow means the dashboard (or its login manager) is
+        # driving — BotManager must not interject with "unknown command".
         flow = getattr(self, "login_manager", None)
         if flow is not None:
             try:
                 if flow.pending_for(uid) is not None:
+                    return True
+            except Exception:
+                pass
+        # The dashboard persists FSM steps in ui_states; if it has one, the
+        # dashboard owns the conversation even after a restart.
+        repo = getattr(self, "_ui_state_repo", None)
+        db = getattr(repo, "_db", None)
+        if db is not None:
+            try:
+                row = db.query_one(
+                    "SELECT step FROM ui_states WHERE user_id=?", (int(uid),)
+                )
+                if row is not None and row["step"]:
                     return True
             except Exception:
                 pass
@@ -319,6 +336,12 @@ class BotManager:
                     return
             except Exception:
                 pass
+
+        # Fallback: the dashboard's FSM has a persisted step for this user.
+        # This is the fix for "unknown command" appearing next to the button
+        # UI's own reply — both handlers run in pyrogram group 0.
+        if self._ui_owns(uid):
+            return
 
         # Language picker
         if self._awaiting_lang.pop(message.chat.id, None):

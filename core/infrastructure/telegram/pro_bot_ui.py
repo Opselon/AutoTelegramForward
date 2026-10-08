@@ -797,7 +797,31 @@ class ProBotUI:
         # ---------------- free-text FSM router ----------------
         @b.on_message(filters.private & filters.text & ~filters.command(["start", "menu"]))
         async def _text(_, message: Message):
-            await self._route_text(message)
+            # Every step of every flow is traced: if the bot ever goes quiet
+            # again, the log shows exactly which step died and why.
+            uid = message.from_user.id if message.from_user else 0
+            preview = (message.text or "")[:40].replace("\n", " ")
+            step = ""
+            try:
+                step = self._state(uid).step or "<none>"
+            except Exception:
+                pass
+            self._log.info(
+                "bot", "fsm",
+                f"text in from {uid} step={step}: {preview!r}")
+            try:
+                await self._route_text(message)
+            except Exception as exc:
+                self._log.error(
+                    "bot", "fsm",
+                    f"route_text failed for {uid} step={step}: {type(exc).__name__}: {exc}",
+                )
+                try:
+                    await message.reply_text(
+                        self._t("ui_internal_error"),
+                        reply_markup=self._cancel_kbd())
+                except Exception:
+                    pass
 
     # ------------------------------------------------------------------ #
     # error recording

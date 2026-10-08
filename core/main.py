@@ -225,6 +225,7 @@ async def main() -> None:
         credentials=container.get("credentials"),
         bot_tokens=container.get("bot_tokens"),
         dispatcher=container.get("dispatcher"),
+        ui_state_repo=container.get("ui_state_repo"),
     )
     await bot.start()
     logger.info("Bot started. Core is running. Press Ctrl+C to stop.")
