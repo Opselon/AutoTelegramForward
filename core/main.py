@@ -25,8 +25,11 @@ from core.infrastructure.grpc_server import servicers  # noqa: E402
 from core.infrastructure.persistence.database import SqliteDatabase  # noqa: E402
 from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
     SqliteAIConfigRepository,
+    SqliteApiCredentialRepository,
+    SqliteBotTokenRepository,
     SqliteFilterRuleRepository,
     SqliteForwardRuleRepository,
+    SqliteProcessedMessageRepository,
     SqliteSessionRepository,
 )
 from core.infrastructure.security.crypto import CryptoService  # noqa: E402
@@ -50,16 +53,26 @@ def build_container(cfg: Config) -> dict:
     rule_repo = SqliteForwardRuleRepository(db)
     filter_repo = SqliteFilterRuleRepository(db)
     ai_repo = SqliteAIConfigRepository(db, crypto)
+    cred_repo = SqliteApiCredentialRepository(db, crypto)
+    token_repo = SqliteBotTokenRepository(db, crypto)
+    processed_repo = SqliteProcessedMessageRepository(db)
     factory = AIProviderFactory()
 
     sessions = SessionUseCases(session_repo)
     rules = ForwardRuleUseCases(rule_repo)
     filter_rules = FilterRuleUseCases(filter_repo)
     ai_configs = AIConfigUseCases(ai_repo, factory)
+    from core.application.use_cases import (  # noqa: E402
+        ApiCredentialUseCases,
+        BotTokenUseCases,
+    )
+    credentials = ApiCredentialUseCases(cred_repo)
+    bot_tokens = BotTokenUseCases(token_repo)
 
     pipeline = MessageForwardingUseCase(
         rule_repo, filter_repo, ai_repo, factory,
         filter_engine=FilterEngine(), routing_policy=RoutingPolicy(),
+        processed_repo=processed_repo,
     )
     pool = ClientPool(cfg.api_id, cfg.api_hash)
     dispatcher = MessageDispatcher(pool, pipeline)
@@ -69,7 +82,8 @@ def build_container(cfg: Config) -> dict:
     return {
         "config": cfg, "db": db, "crypto": crypto,
         "sessions": sessions, "rules": rules, "filters": filter_rules,
-        "ai": ai_configs, "pipeline": pipeline, "pool": pool,
+        "ai": ai_configs, "credentials": credentials, "bot_tokens": bot_tokens,
+        "processed": processed_repo, "pipeline": pipeline, "pool": pool,
         "dispatcher": dispatcher, "i18n": i18n, "factory": factory,
         "logger_addr": cfg.logger_addr,
     }
@@ -106,15 +120,57 @@ async def serve_grpc(container: dict, cfg: Config):
     return server
 
 
+async def seed_default_credential(container: dict, cfg: Config) -> None:
+    """Persist the config.yaml api_id/api_hash pair into the vault once so
+    sessions created before this update keep working."""
+    try:
+        creds_uc = container.get("credentials")
+        if creds_uc is None or not cfg.api_id or not cfg.api_hash:
+            return
+        existing = await creds_uc.list_all()
+        if any(c.api_id == cfg.api_id for c in existing):
+            return
+        await creds_uc.create(
+            label="default", api_id=cfg.api_id, api_hash=cfg.api_hash,
+            is_default=not any(c.is_default for c in existing),
+        )
+        logger.info("seeded default api credential from config")
+    except Exception:
+        logger.debug("credential seeding skipped", exc_info=True)
+
+
+async def sync_pool_credentials(container: dict) -> None:
+    """Load every vault credential into the in-memory ClientPool registry."""
+    try:
+        creds = await container["credentials"].list_all()
+    except Exception:
+        return
+    pool = container["pool"]
+    for c in creds:
+        try:
+            pool.register_credentials(c.id, c.api_id, c.api_hash)
+            if c.is_default:
+                pool.register_credentials("default", c.api_id, c.api_hash)
+        except Exception:
+            logger.warning("bad credential %s skipped", c.id[:8])
+
+
 async def main() -> None:
     cfg = Config.load()
     if cfg.disable_bot:
         logger.info("ATF_DISABLE_BOT set: gRPC-only mode (no bot, no Telegram).")
         container = build_container(cfg)
         grpc_server = await serve_grpc(container, cfg)
+        await seed_default_credential(container, cfg)
+        await sync_pool_credentials(container)
+        from core.infrastructure.telegram.session_boot import restore_all_sessions  # noqa: E402
+        await restore_all_sessions(container)
         try:
             await asyncio.Event().wait()
         finally:
+            mgr = container.get("boot_manager")
+            if mgr:
+                await mgr.stop_reconciler()
             await grpc_server.stop(grace=2)
             container["db"].close()
             logger.info("Core (gRPC-only) stopped cleanly.")
@@ -129,6 +185,8 @@ async def main() -> None:
 
     container = build_container(cfg)
     grpc_server = await serve_grpc(container, cfg)
+    await seed_default_credential(container, cfg)
+    await sync_pool_credentials(container)
 
     # Non-blocking debug-log feed to the Logger microservice.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -147,9 +205,21 @@ async def main() -> None:
         rules=container["rules"], filter_rules=container["filters"],
         ai_configs=container["ai"], pipeline=container["pipeline"],
         i18n=container["i18n"], crypto=container["crypto"],
+        credentials=container.get("credentials"),
+        bot_tokens=container.get("bot_tokens"),
+        dispatcher=container.get("dispatcher"),
     )
     await bot.start()
     logger.info("Bot started. Core is running. Press Ctrl+C to stop.")
+
+    # Restore saved sessions + bind real-time handlers (the actual forwarder).
+    from core.infrastructure.telegram.session_boot import restore_all_sessions  # noqa: E402
+    try:
+        statuses = await restore_all_sessions(container)
+        live = sum(1 for s in statuses.values() if s == "live")
+        log_client.info("core", "boot", f"sessions restored: {live}/{len(statuses)} live")
+    except Exception as exc:
+        logger.warning("session restore failed: %s", exc)
 
     # Mount the Pro button UI directly onto the live bot client.
     try:
@@ -161,6 +231,10 @@ async def main() -> None:
             pipeline=container["pipeline"], pool=container["pool"],
             login=LoginFlowManager(container["pool"], container["sessions"]),
             log_client=log_client, admin_ids=cfg.admin_ids,
+            credentials=container.get("credentials"),
+            bot_tokens=container.get("bot_tokens"),
+            dispatcher=container.get("dispatcher"),
+            boot_manager=container.get("boot_manager"),
         )
         log_client.info("core", "system", "pro button UI mounted")
     except Exception as exc:
@@ -169,6 +243,9 @@ async def main() -> None:
     try:
         await asyncio.Event().wait()
     finally:
+        mgr = container.get("boot_manager")
+        if mgr:
+            await mgr.stop_reconciler()
         await bot.stop()
         await container["pool"].stop_all()
         await grpc_server.stop(grace=2)

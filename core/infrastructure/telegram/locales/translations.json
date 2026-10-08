@@ -92,7 +92,18 @@
     "ui_logs_recent_title": "🕘 **Recent logs**:",
     "ui_logs_stats": "Log stats",
     "ui_logs_stats_title": "📈 **Log statistics**:",
-    "ui_logs_fail": "❌ Could not load logs: {error}"
+    "ui_logs_fail": "❌ Could not load logs: {error}",
+    "ui_creds": "🔑 API keys",
+    "ui_creds_title": "🔑 <b>API credentials vault</b>\n\nOne account can hold multiple api_id/api_hash pairs. Telegram sessions log in with any of them.",
+    "ui_cred_add": "➕ Add credential",
+    "ui_cred_label": "Send a short label for this credential (e.g. main, backup).",
+    "ui_cred_api_id": "Send the <b>api_id</b> (numeric).",
+    "ui_cred_api_hash": "Send the <b>api_hash</b>.",
+    "ui_cred_done": "✅ Credential <code>{id}</code> saved and is now the default.",
+    "ui_cred_fail": "❌ Failed to save credential: {error}",
+    "ui_cred_set_default": "✅ Credential <code>{id}</code> is now the default.",
+    "ui_creds_list": "",
+    "ui_cred_id": "🔑 Credential ID"
   },
   "fa": {
     "start": "👋 به **AutoTelegramForward** خوش آمدید!\n\nاین ربات فوروارد خودکار بین چت‌های تلگرام شما را مدیریت می‌کند.\n\n• /login — اتصال حساب کاربری\n• /sessions — مدیریت نشست‌ها\n• /rules — قوانین فوروارد (مبدأ → مقصد)\n• /filters — فیلترهای محتوا\n• /ai — تنظیمات هوش مصنوعی\n• /lang — تغییر زبان\n• /backup — پشتیبان‌گیری نشست\n• /restore — بازیابی پشتیبان\n• /stats — آمار زنده\n• /help — راهنما",
@@ -187,7 +198,18 @@
     "ui_logs_recent_title": "🕘 **لاگ‌های اخیر**:",
     "ui_logs_stats": "آمار لاگ",
     "ui_logs_stats_title": "📈 **آمار لاگ**:",
-    "ui_logs_fail": "❌ بارگذاری لاگ ناموفق: {error}"
+    "ui_logs_fail": "❌ بارگذاری لاگ ناموفق: {error}",
+    "ui_creds": "🔑 کلیدهای API",
+    "ui_creds_title": "🔑 <b>مخزن کلیدهای API</b>\n\nهر اکانت می‌تواند چند جفت api_id/api_hash داشته باشد. سشن‌ها با هرکدام وارد می‌شوند.",
+    "ui_cred_add": "➕ افزودن کلید",
+    "ui_cred_label": "یک برچسب کوتاه برای این کلید بفرست (مثلاً main یا backup).",
+    "ui_cred_api_id": "<b>api_id</b> عددی را بفرست.",
+    "ui_cred_api_hash": "<b>api_hash</b> را بفرست.",
+    "ui_cred_done": "✅ کلید <code>{id}</code> ذخیره شد و پیش‌فرض است.",
+    "ui_cred_fail": "❌ ذخیره کلید ناموفق: {error}",
+    "ui_cred_set_default": "✅ کلید <code>{id}</code> پیش‌فرض شد.",
+    "ui_creds_list": "",
+    "ui_cred_id": "🔑 شناسه کلید"
   },
   "ru": {
     "start": "👋 Добро пожаловать в **AutoTelegramForward**!\n\nЭтот бот управляет авто-пересылкой между вашими чатами Telegram.\n\n• /login — привязать аккаунт\n• /sessions — управление сессиями\n• /rules — правила пересылки (откуда → куда)\n• /filters — фильтры контента\n• /ai — настройки ИИ\n• /lang — сменить язык\n• /backup — резервная копия сессии\n• /restore — восстановить копию\n• /stats — статистика\n• /help — список команд",
@@ -282,7 +304,18 @@
     "ui_logs_recent_title": "🕘 **Последние логи**:",
     "ui_logs_stats": "Статистика логов",
     "ui_logs_stats_title": "📈 **Статистика логов**:",
-    "ui_logs_fail": "❌ Не удалось загрузить логи: {error}"
+    "ui_logs_fail": "❌ Не удалось загрузить логи: {error}",
+    "ui_creds": "🔑 API-ключи",
+    "ui_creds_title": "🔑 <b>Хранилище API-ключей</b>\n\nАккаунт может содержать несколько пар api_id/api_hash. Сессии входят с любой из них.",
+    "ui_cred_add": "➕ Добавить ключ",
+    "ui_cred_label": "Отправьте короткое название ключа (например, main, backup).",
+    "ui_cred_api_id": "Отправьте <b>api_id</b> (число).",
+    "ui_cred_api_hash": "Отправьте <b>api_hash</b>.",
+    "ui_cred_done": "✅ Ключ <code>{id}</code> сохранён и выбран по умолчанию.",
+    "ui_cred_fail": "❌ Не удалось сохранить ключ: {error}",
+    "ui_cred_set_default": "✅ Ключ <code>{id}</code> выбран по умолчанию.",
+    "ui_creds_list": "",
+    "ui_cred_id": "🔑 ID ключа"
   },
   "zh": {
     "start": "👋 欢迎使用 **AutoTelegramForward**！\n\n此机器人管理您 Telegram 聊天之间的自动转发。\n\n• /login — 关联用户账号\n• /sessions — 管理会话\n• /rules — 转发规则（来源 → 目标）\n• /filters — 内容过滤器\n• /ai — AI 重写配置\n• /lang — 更改语言\n• /backup — 导出会话备份\n• /restore — 导入备份\n• /stats — 实时统计\n• /help — 完整命令列表",
@@ -377,6 +410,17 @@
     "ui_logs_recent_title": "🕘 **最近日志**：",
     "ui_logs_stats": "日志统计",
     "ui_logs_stats_title": "📈 **日志统计**：",
-    "ui_logs_fail": "❌ 加载日志失败：{error}"
+    "ui_logs_fail": "❌ 加载日志失败：{error}",
+    "ui_creds": "🔑 API 密钥",
+    "ui_creds_title": "🔑 <b>API 密钥库</b>\n\n一个账号可以保存多组 api_id/api_hash，会话可以使用任意一组登录。",
+    "ui_cred_add": "➕ 添加密钥",
+    "ui_cred_label": "发送一个简短的名称（例如 main、backup）。",
+    "ui_cred_api_id": "发送 <b>api_id</b>（数字）。",
+    "ui_cred_api_hash": "发送 <b>api_hash</b>。",
+    "ui_cred_done": "✅ 密钥 <code>{id}</code> 已保存并设为默认。",
+    "ui_cred_fail": "❌ 保存失败：{error}",
+    "ui_cred_set_default": "✅ 密钥 <code>{id}</code> 已设为默认。",
+    "ui_creds_list": "",
+    "ui_cred_id": "🔑 密钥 ID"
   }
 }

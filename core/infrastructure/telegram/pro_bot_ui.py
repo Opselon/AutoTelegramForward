@@ -61,9 +61,15 @@ CB = {
     "ai_add": "aa",
     "ai_test": "at",
     "ai_del": "ad",
+    "ai_provider_pick": "ap",
+    "ai_model_pick": "am",
     "logs_recent": "lr",
     "logs_stats": "ls",
     "lang_set": "lgs",
+    "creds": "cv",
+    "cred_add": "ca",
+    "cred_del": "cd",
+    "cred_default": "cdef",
 }
 
 
@@ -81,6 +87,9 @@ class UiState:
     ai_model: str = ""
     ai_api_key: str = ""
     login_phone: str = ""
+    cred_label: str = ""
+    cred_api_id: str = ""
+    cred_api_hash: str = ""
     buffer: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -100,6 +109,10 @@ class ProBotUI:
         login: LoginFlowManager,
         log_client,
         admin_ids,
+        credentials=None,
+        bot_tokens=None,
+        dispatcher=None,
+        boot_manager=None,
     ) -> None:
         self.bot = bot
         self.i18n = i18n
@@ -112,6 +125,10 @@ class ProBotUI:
         self._login = login
         self._log = log_client
         self._admin_ids = set(admin_ids or [])
+        self._credentials = credentials
+        self._bot_tokens = bot_tokens
+        self._dispatcher = dispatcher
+        self._boot_manager = boot_manager
         self._states: Dict[int, UiState] = {}
         self._register()
 
@@ -135,10 +152,11 @@ class ProBotUI:
     # ------------------------------------------------------------------ #
     def _main_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
-            [("🔗 " + self._t("ui_sessions"), CB["sessions"]), ("📡 " + self._t("ui_rules"), CB["rules"])],
-            [("🧹 " + self._t("ui_filters"), CB["filters"]), ("🤖 " + self._t("ui_ai"), CB["ai"])],
-            [("📊 " + self._t("ui_stats"), CB["stats"]), ("🐛 " + self._t("ui_logs"), CB["logs"])],
-            [("🌐 " + self._t("ui_lang"), CB["lang"]), ("ℹ️ " + self._t("ui_help"), CB["help"])],
+            [(self._t("ui_sessions"), CB["sessions"]), (self._t("ui_rules"), CB["rules"])],
+            [(self._t("ui_filters"), CB["filters"]), (self._t("ui_ai"), CB["ai"])],
+            [(self._t("ui_creds"), CB["creds"]), (self._t("ui_stats"), CB["stats"])],
+            [(self._t("ui_logs"), CB["logs"]), (self._t("ui_lang"), CB["lang"])],
+            [(self._t("ui_help"), CB["help"])],
         ])
 
     def _sessions_menu(self) -> InlineKeyboardMarkup:
@@ -175,7 +193,51 @@ class ProBotUI:
 
     def _lang_menu(self) -> InlineKeyboardMarkup:
         rows = [[(name, f'{CB["lang_set"]}:{code}')] for code, name in LANG_FLAG.items()]
-        rows.append([("⬅️ " + self._t("ui_back"), CB["main"])])
+        rows.append([(self._t("ui_back"), CB["main"])])
+        return self._kbd(rows)
+
+    # ------------------------------------------------------------------ #
+    # API credentials vault
+    # ------------------------------------------------------------------ #
+    def _creds_menu(self) -> InlineKeyboardMarkup:
+        return self._kbd([
+            [(self._t("ui_cred_add"), CB["cred_add"])],
+            [(self._t("ui_back"), CB["main"])],
+        ])
+
+    def _provider_label(self, key: str) -> str:
+        return {
+            "openai": "OpenAI", "anthropic": "Anthropic", "gemini": "Google Gemini",
+            "groq": "Groq", "deepseek": "DeepSeek", "openrouter": "OpenRouter",
+            "9router": "9Router", "ninerouter": "9Router", "xai": "xAI",
+            "mistral": "Mistral", "together": "Together AI", "fireworks": "Fireworks",
+        }.get(key, key or "—")
+
+    def _provider_picker(self) -> InlineKeyboardMarkup:
+        names = self._ai.provider_names() if hasattr(self._ai, "provider_names") else []
+        if not names:
+            names = [p.value for p in AIProviderType]
+        rows: list = []
+        row: list = []
+        for name in names:
+            row.append((self._provider_label(name), f'{CB["ai_provider_pick"]}:{name}'))
+            if len(row) == 2:
+                rows.append(row)
+                row = []
+        if row:
+            rows.append(row)
+        return self._kbd(rows)
+
+    def _model_picker(self, st: UiState, provider: str) -> InlineKeyboardMarkup | None:
+        models = self._ai.models_for(provider) if hasattr(self._ai, "models_for") else []
+        models = list(models or [])[:10]
+        if not models:
+            return None
+        # Index-based callback data keeps payloads far under the 64-byte limit.
+        st.buffer["models"] = models
+        rows: list = []
+        for i, model in enumerate(models):
+            rows.append([(model, f'{CB["ai_model_pick"]}:{i}')])
         return self._kbd(rows)
 
     # ------------------------------------------------------------------ #
@@ -292,6 +354,44 @@ class ProBotUI:
             await cq.edit_message_text(self._t("ui_login_phone"))
             await cq.answer()
 
+        # ---------------- api credentials vault ----------------
+        @b.on_callback_query(filters.regex("^" + CB["creds"] + "$"))
+        async def _cb_creds(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            lines = [self._t("ui_creds_title"), ""]
+            if self._credentials is not None:
+                try:
+                    creds = await self._credentials.list_all()
+                    for c in creds:
+                        mark = "★" if c.is_default else "·"
+                        lines.append(f"{mark} `{c.id[:8]}` {c.label or ''} ({c.api_id})")
+                except Exception as exc:
+                    lines.append("⚠️ " + str(exc))
+            else:
+                lines.append(self._t("ui_none"))
+            await cq.edit_message_text("\n".join(lines), reply_markup=self._creds_menu())
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["cred_add"] + "$"))
+        async def _cb_cred_add(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            st = self._state(cq.from_user.id)
+            st.step = "cred_label"
+            await cq.edit_message_text(self._t("ui_cred_label"))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["cred_default"] + ":"))
+        async def _cb_cred_default(_, cq: CallbackQuery):
+            cid = cq.data.split(":", 1)[1]
+            if self._credentials is not None:
+                try:
+                    await self._credentials.set_default(cid)
+                except Exception as exc:
+                    self._log.info("bot", "cred", f"set_default failed: {exc}")
+            await cq.answer(self._t("ui_cred_set_default", id=cid[:8]))
+
         # ---------------- rule add flow ----------------
         @b.on_callback_query(filters.regex("^" + CB["rule_add"] + "$"))
         async def _cb_rule_add(_, cq: CallbackQuery):
@@ -314,6 +414,36 @@ class ProBotUI:
             st = self._state(cq.from_user.id)
             st.step = "ai_name"
             await cq.edit_message_text(self._t("ui_ai_name"))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["ai_provider_pick"] + ":"))
+        async def _cb_ai_provider_pick(_, cq: CallbackQuery):
+            st = self._state(cq.from_user.id)
+            provider = cq.data.split(":", 1)[1]
+            if provider not in {p.value for p in AIProviderType}:
+                return await cq.answer(self._t("ui_ai_provider_bad"), show_alert=True)
+            st.ai_provider = provider
+            st.step = "ai_model"
+            kb = self._model_picker(st, provider)
+            if kb is not None:
+                await cq.edit_message_text(self._t("ui_ai_model"), reply_markup=kb)
+            else:
+                await cq.edit_message_text(self._t("ui_ai_model"))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["ai_model_pick"] + ":"))
+        async def _cb_ai_model_pick(_, cq: CallbackQuery):
+            st = self._state(cq.from_user.id)
+            if st.step != "ai_model":
+                return await cq.answer()
+            try:
+                idx = int(cq.data.split(":", 1)[1])
+                model = st.buffer.get("models", [])[idx]
+            except (ValueError, IndexError):
+                return await cq.answer(self._t("ui_ai_provider_bad"), show_alert=True)
+            st.ai_model = model
+            st.step = "ai_api_key"
+            await cq.edit_message_text(self._t("ui_ai_key"))
             await cq.answer()
 
         # ---------------- rule delete / toggle ----------------
@@ -477,6 +607,58 @@ class ProBotUI:
             key, _, detail = result.partition(":")
             await message.reply_text(self._t("ui_login_fail", error=detail or key))
 
+    # ---------------- credential FSM ----------------
+    async def _step_cred_label(self, message: Message, st: UiState, text: str) -> None:
+        st.cred_label = text[:64]
+        st.step = "cred_api_id"
+        await message.reply_text(self._t("ui_cred_api_id"))
+
+    async def _step_cred_api_id(self, message: Message, st: UiState, text: str) -> None:
+        try:
+            api_id = int(text.strip())
+        except ValueError:
+            return await message.reply_text(self._t("ui_cred_api_id"))
+        st.cred_api_id = str(api_id)
+        st.step = "cred_api_hash"
+        await message.reply_text(self._t("ui_cred_api_hash"))
+
+    async def _step_cred_api_hash(self, message: Message, st: UiState, text: str) -> None:
+        st.cred_api_hash = text.strip()
+        st.step = ""
+        if self._credentials is None:
+            return await message.reply_text(
+                self._t("ui_cred_fail", error="vault unavailable"),
+                reply_markup=self._creds_menu(),
+            )
+        try:
+            cred = await self._credentials.create(
+                label=st.cred_label or "default",
+                api_id=int(st.cred_api_id),
+                api_hash=st.cred_api_hash,
+                is_default=True,
+            )
+            # Make it visible to the in-memory pool immediately.
+            try:
+                self._pool.register_credentials(cred.id, cred.api_id, cred.api_hash)
+                self._pool.register_credentials("default", cred.api_id, cred.api_hash)
+            except Exception:
+                pass
+            self._log.info("bot", "cred", f"credential {cred.id[:8]} added")
+            await message.reply_text(
+                self._t("ui_cred_done", id=cred.id[:8]),
+                reply_markup=self._creds_menu(),
+            )
+        except Exception as exc:
+            await message.reply_text(
+                self._t("ui_cred_fail", error=str(exc)),
+                reply_markup=self._creds_menu(),
+            )
+        finally:
+            try:
+                await message.delete()
+            except Exception:
+                pass  # api_hash is sensitive — best-effort cleanup only
+
     async def _step_rule_source(self, message: Message, st: UiState, text: str) -> None:
         st.rule_source = text.strip()
         st.step = "rule_target"
@@ -521,7 +703,7 @@ class ProBotUI:
     async def _step_ai_name(self, message: Message, st: UiState, text: str) -> None:
         st.step = "ai_provider"
         st.ai_name = text.strip()
-        await message.reply_text(self._t("ui_ai_provider"))
+        await message.reply_text(self._t("ui_ai_provider"), reply_markup=self._provider_picker())
 
     async def _step_ai_provider(self, message: Message, st: UiState, text: str) -> None:
         provider = text.strip().lower()
@@ -529,7 +711,11 @@ class ProBotUI:
             return await message.reply_text(self._t("ui_ai_provider_bad"))
         st.ai_provider = provider
         st.step = "ai_model"
-        await message.reply_text(self._t("ui_ai_model"))
+        kb = self._model_picker(st, provider)
+        if kb is not None:
+            await message.reply_text(self._t("ui_ai_model"), reply_markup=kb)
+        else:
+            await message.reply_text(self._t("ui_ai_model"))
 
     async def _step_ai_model(self, message: Message, st: UiState, text: str) -> None:
         st.ai_model = text.strip()

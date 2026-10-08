@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 MIGRATIONS = {
     1: """
@@ -78,6 +78,50 @@ MIGRATIONS = {
         detail TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
+    """,
+    2: """
+    -- v2: multi-target rules, flexible scheduling, credential vault.
+    ALTER TABLE forward_rules ADD COLUMN target_chat_ids TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE forward_rules ADD COLUMN delay_seconds REAL NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN skip_history INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE forward_rules ADD COLUMN since_ts INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN ignore_edits INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN trigger_events TEXT NOT NULL DEFAULT 'NEW_MESSAGE';
+    ALTER TABLE forward_rules ADD COLUMN content_mode TEXT NOT NULL DEFAULT 'AUTO';
+    ALTER TABLE forward_rules ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}';
+
+    ALTER TABLE sessions ADD COLUMN api_credential_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE sessions ADD COLUMN proxy TEXT NOT NULL DEFAULT '';
+
+    -- Encrypted credential vault: api_id/api_hash pairs, bot tokens, proxies.
+    CREATE TABLE IF NOT EXISTS api_credentials (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL DEFAULT '',
+        api_id INTEGER NOT NULL DEFAULT 0,
+        api_hash_encrypted TEXT NOT NULL DEFAULT '',
+        proxy TEXT NOT NULL DEFAULT '',
+        is_default INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS bot_tokens (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL DEFAULT '',
+        token_encrypted TEXT NOT NULL DEFAULT '',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS processed_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule_id TEXT NOT NULL,
+        chat_id TEXT NOT NULL,
+        message_id INTEGER NOT NULL,
+        media_group_id TEXT,
+        ts INTEGER NOT NULL,
+        UNIQUE(rule_id, chat_id, message_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_processed_rule ON processed_messages(rule_id, ts);
     """,
 }
 

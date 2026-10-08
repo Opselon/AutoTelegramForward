@@ -45,6 +45,9 @@ class BotManager:
         pipeline: MessageForwardingUseCase,
         i18n: I18n,
         crypto,
+        credentials=None,
+        bot_tokens=None,
+        dispatcher=None,
     ) -> None:
         self.bot = Client(
             "atf_bot", api_id=pool.api_id, api_hash=pool.api_hash,
@@ -59,6 +62,9 @@ class BotManager:
         self._pipeline = pipeline
         self.i18n = i18n
         self._crypto = crypto
+        self._credentials = credentials
+        self._bot_tokens = bot_tokens
+        self._dispatcher = dispatcher
         self._login = LoginFlowManager(pool, sessions)
         self._register_handlers()
 
