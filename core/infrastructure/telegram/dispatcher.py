@@ -24,6 +24,7 @@ from typing import Any
 from ...domain.entities import MessagePayload
 from ...domain.value_objects import ContentMode, ForwardMode
 from .client_pool import ClientPool, payload_from_pyrogram
+from .errors import tg_detail, tg_error, wait_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,10 @@ logger = logging.getLogger(__name__)
 class MessageDispatcher:
     """Registers handlers on live clients and executes sends per rule."""
 
-    def __init__(self, pool: ClientPool, use_case, send_queue_size: int = 2000) -> None:
+    def __init__(
+        self, pool: ClientPool, use_case, send_queue_size: int = 2000,
+        error_log=None, metrics=None, rule_stats=None, log_client=None,
+    ) -> None:
         self._pool = pool
         self._use_case = use_case
         # The pipeline's sender port is this class's `_send` coroutine.
@@ -44,6 +48,61 @@ class MessageDispatcher:
         self._max_per_minute = 25  # Telegram-friendly default per target
         self._bound_sessions: set = set()
         self._album_window = 2.5  # seconds to collect an album before sending
+        self._error_log = error_log
+        self._metrics = metrics
+        self._rule_stats = rule_stats
+        self._log_client = log_client
+
+    # ------------------------------------------------------------------ #
+    # Error + metrics sinks
+    # ------------------------------------------------------------------ #
+    async def _record_send_error(self, payload, rule, target, exc, severity: str) -> None:
+        """Persist the exact Telegram error and bump the counters."""
+        key, _sev, recoverable = tg_error(exc)
+        if self._error_log is not None:
+            try:
+                await self._error_log.record(
+                    category="forward", error_name=type(exc).__name__,
+                    severity=severity, detail=tg_detail(exc),
+                    recoverable=recoverable,
+                    session_id=getattr(rule, "session_id", None),
+                    rule_id=getattr(rule, "id", None),
+                    chat_id=str(target),
+                )
+            except Exception:
+                logger.debug("error_log write failed", exc_info=True)
+        if self._rule_stats is not None:
+            try:
+                await self._rule_stats.bump(getattr(rule, "id", ""), errors=1)
+            except Exception:
+                pass
+        if self._metrics is not None:
+            try:
+                await self._metrics.bump(errors=1)
+            except Exception:
+                pass
+        if self._log_client is not None:
+            try:
+                self._log_client.error(
+                    "core", "forward",
+                    f"{type(exc).__name__}: {tg_detail(exc)}",
+                )
+            except Exception:
+                pass
+
+    async def _record_success(self, payload, rule, target) -> None:
+        """Counters for a successful forward (message dedupe stays in the UC)."""
+        if self._rule_stats is not None:
+            try:
+                await self._rule_stats.bump(
+                    getattr(rule, "id", ""), forwarded=1)
+            except Exception:
+                pass
+        if self._metrics is not None:
+            try:
+                await self._metrics.bump(forwarded=1)
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------ #
     # Binding
@@ -148,8 +207,20 @@ class MessageDispatcher:
             try:
                 if await self._deliver(client, payload, rule, text, target):
                     ok_any = True
-            except Exception:
-                logger.exception("Send to %s failed", target)
+                    await self._record_success(payload, rule, target)
+            except Exception as exc:
+                # Exact Telegram error: keep the exception class + RPC message
+                # in the log so the debug panel shows the real cause.
+                key, sev, recoverable = tg_error(exc)
+                logger.warning(
+                    "send → %s failed: %s (severity=%s recoverable=%s)",
+                    target, tg_detail(exc), sev, recoverable,
+                )
+                await self._record_send_error(payload, rule, target, exc, sev)
+                # FloodWait is not a rule problem: respect the wait before retry.
+                if recoverable:
+                    await asyncio.sleep(min(wait_seconds(exc, default=5) + 1, 300))
+                continue  # a multi-target rule must still try its other targets
         return ok_any
 
     async def _throttle(self, target: Any) -> None:

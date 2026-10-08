@@ -19,6 +19,11 @@ from ...application.repositories import (
     IForwardRuleRepository,
     IProcessedMessageRepository,
     ISessionRepository,
+    IErrorLogRepository,
+    IMetricsRepository,
+    IRuleStatsRepository,
+    IUiStateRepository,
+    IUserRepository,
 )
 from ...domain.entities import AIConfig, FilterRule, ForwardRule, TelegramSession
 from ...domain.value_objects import (
@@ -492,3 +497,184 @@ class SqliteProcessedMessageRepository(IProcessedMessageRepository):
         cutoff = _now() - self.RETENTION_SECONDS
         cur = self._db.execute("DELETE FROM processed_messages WHERE ts < ?", (cutoff,))
         return cur.rowcount
+
+
+# --------------------------------------------------------------------------- #
+# v3: professional state DB — UI state, error log, metrics, rule stats, users
+# --------------------------------------------------------------------------- #
+
+class SqliteUiStateRepository(IUiStateRepository):
+    """Durable UI flows: a restart mid-login resumes where the user stopped."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def get(self, user_id: int) -> Optional[dict]:
+        row = self._db.query_one(
+            "SELECT step, buffer FROM ui_states WHERE user_id=?", (int(user_id),)
+        )
+        if not row:
+            return None
+        return {"step": row["step"] or "", "buffer": SqliteDatabase.loads(row["buffer"], {})}
+
+    async def save(self, user_id: int, step: str, buffer: dict) -> None:
+        self._db.execute(
+            "INSERT INTO ui_states (user_id, step, buffer, updated_at) VALUES (?,?,?,?)"
+            " ON CONFLICT(user_id) DO UPDATE SET step=excluded.step, buffer=excluded.buffer,"
+            " updated_at=excluded.updated_at",
+            (int(user_id), step, SqliteDatabase.dumps(buffer or {}), int(time.time())),
+        )
+
+    async def clear(self, user_id: int) -> None:
+        self._db.execute("DELETE FROM ui_states WHERE user_id=?", (int(user_id),))
+
+
+class SqliteErrorLogRepository(IErrorLogRepository):
+    """Every Telegram RPC error, with the exact exception class kept."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def record(self, category, error_name, severity, detail="",
+                     recoverable=False, user_id=None, session_id=None,
+                     rule_id=None, chat_id=None) -> None:
+        self._db.execute(
+            "INSERT INTO error_log (ts, user_id, session_id, rule_id, category, error_name,"
+            " severity, detail, recoverable, chat_id)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (int(time.time()),
+             int(user_id) if user_id else None, session_id, rule_id,
+             category, error_name, severity, detail[:1000],
+             int(bool(recoverable)), chat_id),
+        )
+
+    async def recent(self, limit: int = 10, severity: Optional[str] = None) -> List[dict]:
+        if severity:
+            rows = self._db.query_all(
+                "SELECT * FROM error_log WHERE severity=? ORDER BY ts DESC LIMIT ?",
+                (severity, int(limit)),
+            )
+        else:
+            rows = self._db.query_all(
+                "SELECT * FROM error_log ORDER BY ts DESC LIMIT ?", (int(limit),)
+            )
+        return [dict(r) for r in rows]
+
+    async def counts_by_severity(self, since_ts: int = 0) -> dict:
+        rows = self._db.query_all(
+            "SELECT severity, COUNT(*) AS n FROM error_log WHERE ts>=?"
+            " GROUP BY severity",
+            (int(since_ts),),
+        )
+        return {r["severity"]: r["n"] for r in rows}
+
+
+class SqliteMetricsRepository(IMetricsRepository):
+    """Hourly throughput buckets — cheap writes, rolling window."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def bump(self, forwarded: int = 0, filtered: int = 0, errors: int = 0) -> None:
+        hour = (int(time.time()) // 3600) * 3600
+        self._db.execute(
+            "INSERT INTO metrics_hourly (ts_hour, forwarded, filtered, errors)"
+            " VALUES (?,?,?,?) ON CONFLICT(ts_hour) DO UPDATE SET"
+            " forwarded=forwarded+excluded.forwarded,"
+            " filtered=filtered+excluded.filtered,"
+            " errors=errors+excluded.errors",
+            (hour, int(forwarded), int(filtered), int(errors)),
+        )
+
+    async def hourly(self, hours: int = 24) -> List[dict]:
+        since = int(time.time()) - int(hours) * 3600
+        rows = self._db.query_all(
+            "SELECT ts_hour, forwarded, filtered, errors FROM metrics_hourly"
+            " WHERE ts_hour>=? ORDER BY ts_hour ASC",
+            (since,),
+        )
+        return [dict(r) for r in rows]
+
+    async def totals(self) -> dict:
+        row = self._db.query_one(
+            "SELECT COALESCE(SUM(forwarded),0) AS f, COALESCE(SUM(filtered),0) AS fl,"
+            " COALESCE(SUM(errors),0) AS e FROM metrics_hourly"
+        )
+        return {"forwarded": row["f"], "filtered": row["fl"], "errors": row["e"]}
+
+    async def total_str(self) -> str:
+        """Human-readable lifetime totals for the dashboard."""
+        t = await self.totals()
+        return f"{t['forwarded']} forwarded / {t['filtered']} filtered / {t['errors']} errors"
+
+    async def prune(self, keep_hours: int = 168) -> int:
+        cutoff = int(time.time()) - int(keep_hours) * 3600
+        cur = self._db.execute("DELETE FROM metrics_hourly WHERE ts_hour<?", (cutoff,))
+        return cur.rowcount
+
+
+class SqliteRuleStatsRepository(IRuleStatsRepository):
+    """Per-rule counters bumped on the hot path without touching rule rows."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def bump(self, rule_id: str, forwarded: int = 0, filtered: int = 0, errors: int = 0) -> None:
+        self._db.execute(
+            "INSERT INTO rule_stats (rule_id, forwarded, filtered, errors, last_forward_ts)"
+            " VALUES (?,?,?, ?,?) ON CONFLICT(rule_id) DO UPDATE SET"
+            " forwarded=forwarded+excluded.forwarded,"
+            " filtered=filtered+excluded.filtered,"
+            " errors=errors+excluded.errors,"
+            " last_forward_ts=excluded.last_forward_ts",
+            (rule_id, int(forwarded), int(filtered), int(errors),
+             int(time.time()) if forwarded else 0),
+        )
+
+    async def get(self, rule_id: str) -> Optional[dict]:
+        row = self._db.query_one(
+            "SELECT * FROM rule_stats WHERE rule_id=?", (rule_id,)
+        )
+        return dict(row) if row else None
+
+    async def top_rules(self, limit: int = 10) -> List[dict]:
+        rows = self._db.query_all(
+            "SELECT * FROM rule_stats ORDER BY forwarded DESC LIMIT ?", (int(limit),)
+        )
+        return [dict(r) for r in rows]
+
+
+class SqliteUserRepository(IUserRepository):
+    """Per-user language, plan, quota."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def get_or_create(self, user_id: int, language: str = "") -> dict:
+        uid = int(user_id)
+        row = self._db.query_one("SELECT * FROM users WHERE user_id=?", (uid,))
+        if row:
+            return dict(row)
+        now = int(time.time())
+        self._db.execute(
+            "INSERT INTO users (user_id, language, is_admin, plan, quota_forwarded,"
+            " quota_reset_at, created_at, updated_at)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            (uid, language, 0, "free", 0, now, now, now),
+        )
+        return {
+            "user_id": uid, "language": language, "is_admin": 0, "plan": "free",
+            "quota_forwarded": 0, "quota_reset_at": now,
+        }
+
+    async def set_language(self, user_id: int, language: str) -> None:
+        self._db.execute(
+            "UPDATE users SET language=?, updated_at=? WHERE user_id=?",
+            (language, int(time.time()), int(user_id)),
+        )
+
+    async def bump_quota(self, user_id: int, by: int = 1) -> None:
+        self._db.execute(
+            "UPDATE users SET quota_forwarded=quota_forwarded+?, updated_at=? WHERE user_id=?",
+            (int(by), int(time.time()), int(user_id)),
+        )

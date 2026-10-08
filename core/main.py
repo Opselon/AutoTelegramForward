@@ -27,10 +27,15 @@ from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
     SqliteAIConfigRepository,
     SqliteApiCredentialRepository,
     SqliteBotTokenRepository,
+    SqliteErrorLogRepository,
     SqliteFilterRuleRepository,
     SqliteForwardRuleRepository,
+    SqliteMetricsRepository,
     SqliteProcessedMessageRepository,
+    SqliteRuleStatsRepository,
     SqliteSessionRepository,
+    SqliteUiStateRepository,
+    SqliteUserRepository,
 )
 from core.infrastructure.security.crypto import CryptoService  # noqa: E402
 from core.infrastructure.telegram.bot_manager import BotManager  # noqa: E402
@@ -56,6 +61,11 @@ def build_container(cfg: Config) -> dict:
     cred_repo = SqliteApiCredentialRepository(db, crypto)
     token_repo = SqliteBotTokenRepository(db, crypto)
     processed_repo = SqliteProcessedMessageRepository(db)
+    ui_state_repo = SqliteUiStateRepository(db)
+    error_log_repo = SqliteErrorLogRepository(db)
+    metrics_repo = SqliteMetricsRepository(db)
+    rule_stats_repo = SqliteRuleStatsRepository(db)
+    user_repo = SqliteUserRepository(db)
     factory = AIProviderFactory()
 
     sessions = SessionUseCases(session_repo)
@@ -75,7 +85,11 @@ def build_container(cfg: Config) -> dict:
         processed_repo=processed_repo,
     )
     pool = ClientPool(cfg.api_id, cfg.api_hash)
-    dispatcher = MessageDispatcher(pool, pipeline)
+    dispatcher = MessageDispatcher(
+        pool, pipeline,
+        error_log=error_log_repo, metrics=metrics_repo,
+        rule_stats=rule_stats_repo,
+    )
     i18n = I18n()
     i18n.set_language(cfg.language)
 
@@ -86,6 +100,9 @@ def build_container(cfg: Config) -> dict:
         "processed": processed_repo, "pipeline": pipeline, "pool": pool,
         "dispatcher": dispatcher, "i18n": i18n, "factory": factory,
         "logger_addr": cfg.logger_addr,
+        "ui_state_repo": ui_state_repo, "error_log": error_log_repo,
+        "metrics": metrics_repo, "rule_stats": rule_stats_repo,
+        "users": user_repo,
     }
 
 
@@ -223,19 +240,28 @@ async def main() -> None:
 
     # Mount the Pro button UI directly onto the live bot client.
     try:
-        from core.infrastructure.telegram.login_flow import LoginFlowManager  # noqa: E402
-        ProBotUI(
+        ui = ProBotUI(
             bot=bot.bot, i18n=container["i18n"],
             sessions=container["sessions"], rules=container["rules"],
             filter_rules=container["filters"], ai_configs=container["ai"],
             pipeline=container["pipeline"], pool=container["pool"],
-            login=LoginFlowManager(container["pool"], container["sessions"]),
+            # Share the SAME login manager as BotManager: two instances would
+            # mean two disjoint pending-login states and codes would never match.
+            login=bot.login_manager,
             log_client=log_client, admin_ids=cfg.admin_ids,
             credentials=container.get("credentials"),
             bot_tokens=container.get("bot_tokens"),
             dispatcher=container.get("dispatcher"),
             boot_manager=container.get("boot_manager"),
+            ui_state_repo=container.get("ui_state_repo"),
+            error_log=container.get("error_log"),
+            metrics=container.get("metrics"),
+            rule_stats=container.get("rule_stats"),
+            users=container.get("users"),
         )
+        # Route ownership: while the button UI has an active step for a user
+        # it answers; otherwise BotManager (commands) answers. No doubles.
+        bot.ui_step_checker = lambda uid: bool(ui._state(uid).step)
         log_client.info("core", "system", "pro button UI mounted")
     except Exception as exc:
         logger.warning("ProBotUI mount failed: %s", exc)

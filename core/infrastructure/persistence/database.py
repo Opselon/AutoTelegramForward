@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 MIGRATIONS = {
     1: """
@@ -122,6 +122,85 @@ MIGRATIONS = {
         UNIQUE(rule_id, chat_id, message_id)
     );
     CREATE INDEX IF NOT EXISTS idx_processed_rule ON processed_messages(rule_id, ts);
+    """,
+    # ------------------------------------------------------------------ #
+    # v3: professional state DB — durable UI flows, metrics, error log,
+    #     per-user settings, rule chains, text replacements.
+    # ------------------------------------------------------------------ #
+    3: """
+    -- Durable per-user UI state: multi-step flows survive a restart.
+    CREATE TABLE IF NOT EXISTS ui_states (
+        user_id INTEGER PRIMARY KEY,
+        step TEXT NOT NULL DEFAULT '',
+        buffer TEXT NOT NULL DEFAULT '{}',
+        updated_at INTEGER NOT NULL
+    );
+
+    -- Per-user preferences + quota/plan state (millions of rows friendly).
+    CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY,
+        language TEXT NOT NULL DEFAULT '',
+        is_admin INTEGER NOT NULL DEFAULT 0,
+        plan TEXT NOT NULL DEFAULT 'free',
+        quota_forwarded INTEGER NOT NULL DEFAULT 0,
+        quota_reset_at INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_users_plan ON users(plan);
+
+    -- Structured error log: exact Telegram RPC error surfaced to the user.
+    CREATE TABLE IF NOT EXISTS error_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        user_id INTEGER,
+        session_id TEXT,
+        rule_id TEXT,
+        category TEXT NOT NULL,          -- login | forward | ai | auth | bot
+        error_name TEXT NOT NULL,        -- exact pyrogram exception class
+        severity TEXT NOT NULL,          -- info | warn | error | auth | fatal
+        detail TEXT NOT NULL DEFAULT '',
+        recoverable INTEGER NOT NULL DEFAULT 0,
+        chat_id TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_error_ts ON error_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_error_category ON error_log(category, severity);
+    CREATE INDEX IF NOT EXISTS idx_error_session ON error_log(session_id);
+
+    -- Rule chaining: A -> B -> C (rule.target may feed another rule's source).
+    ALTER TABLE forward_rules ADD COLUMN chain_of TEXT NOT NULL DEFAULT '';
+    -- Text replacement: words/usernames/URLs to swap before sending.
+    ALTER TABLE forward_rules ADD COLUMN replacements TEXT NOT NULL DEFAULT '{}';
+    -- Header / footer templates.
+    ALTER TABLE forward_rules ADD COLUMN header TEXT NOT NULL DEFAULT '';
+    ALTER TABLE forward_rules ADD COLUMN footer TEXT NOT NULL DEFAULT '';
+    -- Sync mode: replicate edits AND deletes.
+    ALTER TABLE forward_rules ADD COLUMN sync_edits INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE forward_rules ADD COLUMN sync_deletes INTEGER NOT NULL DEFAULT 0;
+    -- Whitelist / blacklist of *senders* (user ids).
+    ALTER TABLE forward_rules ADD COLUMN allow_senders TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE forward_rules ADD COLUMN block_senders TEXT NOT NULL DEFAULT '[]';
+    -- Topic (forum) support: target topic id.
+    ALTER TABLE forward_rules ADD COLUMN target_topic_id INTEGER NOT NULL DEFAULT 0;
+
+    -- Per-rule live counters (hot path: bumped without touching the rule row).
+    CREATE TABLE IF NOT EXISTS rule_stats (
+        rule_id TEXT PRIMARY KEY,
+        forwarded INTEGER NOT NULL DEFAULT 0,
+        filtered INTEGER NOT NULL DEFAULT 0,
+        errors INTEGER NOT NULL DEFAULT 0,
+        last_forward_ts INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (rule_id) REFERENCES forward_rules(id) ON DELETE CASCADE
+    );
+
+    -- Hourly throughput buckets for the dashboard (rolling, TTL-pruned).
+    CREATE TABLE IF NOT EXISTS metrics_hourly (
+        ts_hour INTEGER NOT NULL,
+        forwarded INTEGER NOT NULL DEFAULT 0,
+        filtered INTEGER NOT NULL DEFAULT 0,
+        errors INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (ts_hour)
+    );
     """,
 }
 

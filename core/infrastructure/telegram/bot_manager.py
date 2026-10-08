@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import time
+from typing import Callable, Optional
 
 from pyrogram import Client, filters
 from pyrogram.types import Message
@@ -67,6 +68,15 @@ class BotManager:
         self._dispatcher = dispatcher
         self._login = LoginFlowManager(pool, sessions)
         self._register_handlers()
+        # Set by main.py after ProBotUI mounts: uid -> bool. When the button
+        # UI owns an active flow for a user, BotManager stays silent so the
+        # user never gets double replies / double code sends.
+        self.ui_step_checker: Optional[Callable[[int], bool]] = None
+
+    @property
+    def login_manager(self) -> LoginFlowManager:
+        """Shared login state machine (also used by ProBotUI)."""
+        return self._login
 
     # ------------------------------------------------------------------ #
     def _is_admin(self, message: Message) -> bool:
@@ -254,6 +264,15 @@ class BotManager:
         uid = message.from_user.id if message.from_user else 0
         text = (message.text or "").strip()
 
+        # When the button UI owns an active flow for this user, it handles
+        # the reply — BotManager stays silent to avoid double answers.
+        if callable(self.ui_step_checker):
+            try:
+                if self.ui_step_checker(uid):
+                    return
+            except Exception:
+                pass
+
         # Language picker
         if self._awaiting_lang.pop(message.chat.id, None):
             if text.lower() in SUPPORTED_LANGUAGES:
@@ -263,7 +282,14 @@ class BotManager:
 
         # Login FSM
         state = self._login.pending_for(uid)
-        if state:
+        if state is None:
+            # No login in progress — but the user may just be answering
+            # /login's "send your phone" prompt. Accept it directly.
+            if LoginFlowManager.valid_phone(text):
+                result = await self._login.start(uid, text)
+                await self._login_reply(message, result)
+                return
+        else:
             if state.step == "code":
                 result = await self._login.submit_code(uid, text)
                 await self._login_reply(message, result)
@@ -271,13 +297,6 @@ class BotManager:
             if state.step == "password":
                 result = await self._login.submit_password(uid, text)
                 await self._login_reply(message, result)
-                return
-            if state.step == "phone":
-                if text.startswith("+"):
-                    result = await self._login.start(uid, text)
-                    await message.reply_text(self.i18n.t(result))
-                else:
-                    await message.reply_text(self.i18n.t("send_phone"))
                 return
 
         # Rule add: "source target"
@@ -320,12 +339,18 @@ class BotManager:
 
     async def _login_reply(self, message: Message, result: str):
         if result.startswith("login_success:"):
-            await message.reply_text(self.i18n.t("login_success", phone=""))
+            session_id = result.split(":", 1)[1]
+            try:
+                session = await self._sessions.get(session_id)
+                phone = session.phone_number if session else ""
+            except Exception:
+                phone = ""
+            await message.reply_text(self.i18n.t("login_success", phone=phone))
         elif ":" in result:
             key, _, detail = result.partition(":")
             await message.reply_text(self.i18n.t(key, error=detail))
         else:
-            await message.reply_text(self.i18n.t(result))
+            await message.reply_text(self.i18n.t(result, error=""))
 
     # ------------------------------------------------------------------ #
     async def start(self):

@@ -201,3 +201,92 @@ class IProcessedMessageRepository(ABC):
     @abstractmethod
     async def purge_before(self, rule_id: str, ts: int) -> int:
         ...
+
+
+class IUiStateRepository(ABC):
+    """Durable per-user UI flow state — survives restarts."""
+
+    @abstractmethod
+    async def get(self, user_id: int) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    async def save(self, user_id: int, step: str, buffer: dict) -> None:
+        ...
+
+    @abstractmethod
+    async def clear(self, user_id: int) -> None:
+        ...
+
+
+class IErrorLogRepository(ABC):
+    """Structured Telegram error log (exact RPC error name + severity)."""
+
+    @abstractmethod
+    async def record(
+        self, category: str, error_name: str, severity: str, detail: str = "",
+        recoverable: bool = False, user_id: Optional[int] = None,
+        session_id: Optional[str] = None, rule_id: Optional[str] = None,
+        chat_id: Optional[str] = None,
+    ) -> None:
+        ...
+
+    @abstractmethod
+    async def recent(self, limit: int = 10, severity: Optional[str] = None) -> List[dict]:
+        ...
+
+    @abstractmethod
+    async def counts_by_severity(self, since_ts: int = 0) -> dict:
+        ...
+
+
+class IMetricsRepository(ABC):
+    """Rolling throughput counters for the dashboard."""
+
+    @abstractmethod
+    async def bump(self, forwarded: int = 0, filtered: int = 0, errors: int = 0) -> None:
+        ...
+
+    @abstractmethod
+    async def hourly(self, hours: int = 24) -> List[dict]:
+        ...
+
+    @abstractmethod
+    async def totals(self) -> dict:
+        ...
+
+    @abstractmethod
+    async def prune(self, keep_hours: int = 168) -> int:
+        ...
+
+
+class IRuleStatsRepository(ABC):
+    """Per-rule live counters on the hot path."""
+
+    @abstractmethod
+    async def bump(self, rule_id: str, forwarded: int = 0, filtered: int = 0, errors: int = 0) -> None:
+        ...
+
+    @abstractmethod
+    async def get(self, rule_id: str) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    async def top_rules(self, limit: int = 10) -> List[dict]:
+        ...
+
+
+class IUserRepository(ABC):
+    """Per-user preferences, plan and quota."""
+
+    @abstractmethod
+    async def get_or_create(self, user_id: int, language: str = "") -> dict:
+        ...
+
+    @abstractmethod
+    async def set_language(self, user_id: int, language: str) -> None:
+        ...
+
+    @abstractmethod
+    async def bump_quota(self, user_id: int, by: int = 1) -> None:
+        ...
