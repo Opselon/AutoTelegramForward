@@ -8,16 +8,24 @@ A microservice-based **Telegram auto-forwarder** with a Go REST control API and 
 ┌──────────────┐   HTTP/JSON    ┌─────────────┐     gRPC      ┌──────────────────┐
 │  Dashboard / │ ─────────────► │   Go API    │ ────────────► │   Python Core    │
 │  Client      │                │  (:8080)    │  (:50051)     │ Bot + Forwarder  │
-└──────────────┘                └─────────────┘               │  + SQLite (DDD)  │
-                                                              └──────────────────┘
+└──────────────┘                └──────┬──────┘               │  + SQLite (DDD)  │
+                                       │  gRPC                └────────┬─────────┘
+                                       │  (:50052)                     │ logs
+                                       └─────────────► ┌───────────────▼────────┐
+                                                       │   Logger Service       │
+                                                       │  debug logs + own      │
+                                                       │  SQLite DB             │
+                                                       └────────────────────────┘
 ```
 
 - **`proto/`** — shared protobuf contract (single source of truth)
-- **`api/`** — GoLang control-plane microservice (REST, auth, logging)
+- **`api/`** — GoLang control-plane microservice (REST, auth, logging proxy)
 - **`core/`** — Python service: Telegram Bot UI, MTProto forwarder, AI rewriter, gRPC server
   - `domain/` — pure entities, value objects, filter engine, routing policy
   - `application/` — use cases + repository ports
   - `infrastructure/` — SQLite repos (AES-256-GCM at rest), Pyrogram client pool, multi-provider AI adapters, i18n, gRPC servicers
+- **`logger/`** — Python microservice: debug-log store with its **own SQLite DB**, gRPC `LogControlService`
+- **`install.sh` / `install.ps1`** — one-command installers (Linux/macOS & Windows)
 
 ## Features
 
@@ -25,24 +33,41 @@ A microservice-based **Telegram auto-forwarder** with a Go REST control API and 
 - ✅ **Forward mode**: native forward (keeps author header) or clean copy
 - ✅ **Filters**: keyword whitelist/blacklist, regex, media types, length bounds, link removal
 - ✅ **AI rewrite**: OpenAI, Anthropic, Gemini, Groq, DeepSeek, 9Router, OpenRouter, any OpenAI-compatible endpoint
-- ✅ **In-bot account login** (`/login`): phone → code → 2FA password → encrypted session stored
-- ✅ **Backup / restore** sessions as encrypted `.atf` files (`/backup`, `/restore`)
+- ✅ **Button-driven Pro UI** — everything in Telegram via inline buttons:
+  login (phone → code → 2FA), rules, filters, AI configs, logs, stats, backup
+- ✅ **Logger microservice** — debug logs queryable per-service/level/category,
+  in its own SQLite DB, via bot 📋 Logs panel or `GET /api/v1/logs`
+- ✅ In-bot account login (`/login` or 📱 button): phone → code → 2FA → encrypted session
+- ✅ **Backup / restore** sessions as encrypted `.atf` files
 - ✅ **Multi-language bot UI**: English, فارسی, Русский, 中文 (`/lang`)
 - ✅ **SQLite-first** multi-DB design — repository ports ready for PostgreSQL/MySQL
 - ✅ **Session & API-key encryption** at rest (AES-256-GCM)
 - ✅ **Bot-token-only operation** — every command works through the Telegram bot
 
-## Quick Start (very easy — one command)
+## Install (one command — token only)
+
+**Linux / macOS / WSL:**
 
 ```bash
-# Just paste your bot token when asked. Everything else is automatic.
-python atf.py setup
-python atf.py start      # bot + REST API live
+curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash
 ```
 
-That's it. `setup` creates the venv, installs dependencies, generates an
-encryption master key, and writes `config.yaml`. `start` launches both
-services (Go REST API on :8080 is skipped automatically if Go isn't installed).
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex
+```
+
+Both installers set up git/Python, clone the repo, then hand off to `atf.py setup`,
+which asks **only for your Telegram bot token** (get one from [@BotFather](https://t.me/BotFather)).
+Everything else — venv, dependencies, config, encryption key — is automatic.
+
+```bash
+python atf.py start      # logger + bot + REST API live
+```
+
+`start` launches three services: Logger (:6002) → Python core/bot (gRPC :6001)
+→ Go REST API (:8080, skipped automatically if Go isn't installed).
 
 Other commands:
 
@@ -84,7 +109,23 @@ docker compose up -d        # core + api, data persisted in a volume
 
 </details>
 
-## Telegram Bot Commands
+## Telegram Bot — Pro Button UI
+
+Open the bot and press **🚀 Start Panel** (`/start`). Everything is buttons —
+no typing commands:
+
+| Panel | Does |
+|-------|------|
+| 📱 Login | link a user account: phone → code → 2FA → encrypted session |
+| 🔀 Rules | list / add (source → target, routing, mode) / enable / delete |
+| 🎛 Filters | list / add (type, pattern, action) / delete |
+| 🤖 AI | list / add (provider, model, key, prompt) / delete |
+| 📋 Logs | browse debug logs (filter by service / level), powered by the Logger service |
+| 📊 Stats | live forwarding statistics |
+| 💾 Backup | export encrypted `.atf` session backups |
+| 🌐 Language | switch en / fa / ru / zh |
+
+## Telegram Bot Commands (also available)
 
 | Command | Purpose |
 |---------|---------|
@@ -108,6 +149,7 @@ GET    /api/v1/rules           POST /api/v1/rules            PUT/DELETE /api/v1/
 GET    /api/v1/filters         POST /api/v1/filters          PUT/DELETE /api/v1/filters/{id}
 GET    /api/v1/ai              POST /api/v1/ai               PUT/DELETE /api/v1/ai/{id}
 POST   /api/v1/ai/{id}/test    GET /api/v1/stats
+GET    /api/v1/logs?service=&level=&search=&limit=&since=     GET /api/v1/logs/stats
 ```
 
 Auth: set `ATF_API_KEY` and pass `X-API-Key` (or `Authorization: Bearer`) on every request.
@@ -115,7 +157,7 @@ Auth: set `ATF_API_KEY` and pass `X-API-Key` (or `Authorization: Bearer`) on eve
 ## Tests
 
 ```bash
-.venv\Scripts\python.exe -m pytest -q    # 35 tests: crypto, filters, repos, pipeline, gRPC roundtrip
+.venv\Scripts\python.exe -m pytest core/tests logger/tests -q    # 42 tests: crypto, filters, repos, pipeline, gRPC, logger, pro-UI
 cd api && go test ./...                  # middleware + handler tests
 ```
 

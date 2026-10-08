@@ -1083,3 +1083,161 @@ class SystemStatusControlService:
             timeout,
             metadata,
             _registered_method=True)
+
+
+class LogControlServiceStub:
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.Log = channel.unary_unary(
+                '/autoforward.LogControlService/Log',
+                request_serializer=autoforward__pb2.LogRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.QueryLogs = channel.unary_unary(
+                '/autoforward.LogControlService/QueryLogs',
+                request_serializer=autoforward__pb2.QueryLogsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.QueryLogsResponse.FromString,
+                _registered_method=True)
+        self.LogStats = channel.unary_unary(
+                '/autoforward.LogControlService/LogStats',
+                request_serializer=autoforward__pb2.LogStatsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.LogStatsResponse.FromString,
+                _registered_method=True)
+
+
+class LogControlServiceServicer:
+    """Missing associated documentation comment in .proto file."""
+
+    def Log(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def QueryLogs(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def LogStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_LogControlServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'Log': grpc.unary_unary_rpc_method_handler(
+                    servicer.Log,
+                    request_deserializer=autoforward__pb2.LogRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'QueryLogs': grpc.unary_unary_rpc_method_handler(
+                    servicer.QueryLogs,
+                    request_deserializer=autoforward__pb2.QueryLogsRequest.FromString,
+                    response_serializer=autoforward__pb2.QueryLogsResponse.SerializeToString,
+            ),
+            'LogStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.LogStats,
+                    request_deserializer=autoforward__pb2.LogStatsRequest.FromString,
+                    response_serializer=autoforward__pb2.LogStatsResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'autoforward.LogControlService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('autoforward.LogControlService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class LogControlService:
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def Log(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.LogControlService/Log',
+            autoforward__pb2.LogRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def QueryLogs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.LogControlService/QueryLogs',
+            autoforward__pb2.QueryLogsRequest.SerializeToString,
+            autoforward__pb2.QueryLogsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def LogStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.LogControlService/LogStats',
+            autoforward__pb2.LogStatsRequest.SerializeToString,
+            autoforward__pb2.LogStatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)

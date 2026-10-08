@@ -2289,6 +2289,366 @@ func (x *SystemStatsResponse) GetVersion() string {
 	return ""
 }
 
+type LogEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ts            int64                  `protobuf:"varint,1,opt,name=ts,proto3" json:"ts,omitempty"`
+	Level         string                 `protobuf:"bytes,2,opt,name=level,proto3" json:"level,omitempty"`       // DEBUG | INFO | WARN | ERROR
+	Service       string                 `protobuf:"bytes,3,opt,name=service,proto3" json:"service,omitempty"`   // core | api | logger | bot
+	Category      string                 `protobuf:"bytes,4,opt,name=category,proto3" json:"category,omitempty"` // login | forward | filter | ai | system | rule | session
+	Message       string                 `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`
+	Detail        string                 `protobuf:"bytes,6,opt,name=detail,proto3" json:"detail,omitempty"` // JSON blob with structured context
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogEntry) Reset() {
+	*x = LogEntry{}
+	mi := &file_autoforward_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogEntry) ProtoMessage() {}
+
+func (x *LogEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
+func (*LogEntry) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *LogEntry) GetTs() int64 {
+	if x != nil {
+		return x.Ts
+	}
+	return 0
+}
+
+func (x *LogEntry) GetLevel() string {
+	if x != nil {
+		return x.Level
+	}
+	return ""
+}
+
+func (x *LogEntry) GetService() string {
+	if x != nil {
+		return x.Service
+	}
+	return ""
+}
+
+func (x *LogEntry) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *LogEntry) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *LogEntry) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+type LogRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entry         *LogEntry              `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogRequest) Reset() {
+	*x = LogRequest{}
+	mi := &file_autoforward_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogRequest) ProtoMessage() {}
+
+func (x *LogRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogRequest.ProtoReflect.Descriptor instead.
+func (*LogRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *LogRequest) GetEntry() *LogEntry {
+	if x != nil {
+		return x.Entry
+	}
+	return nil
+}
+
+type QueryLogsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Level         string                 `protobuf:"bytes,1,opt,name=level,proto3" json:"level,omitempty"`
+	Service       string                 `protobuf:"bytes,2,opt,name=service,proto3" json:"service,omitempty"`
+	Category      string                 `protobuf:"bytes,3,opt,name=category,proto3" json:"category,omitempty"`
+	Search        string                 `protobuf:"bytes,4,opt,name=search,proto3" json:"search,omitempty"`
+	Limit         int32                  `protobuf:"varint,5,opt,name=limit,proto3" json:"limit,omitempty"`
+	Since         int64                  `protobuf:"varint,6,opt,name=since,proto3" json:"since,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryLogsRequest) Reset() {
+	*x = QueryLogsRequest{}
+	mi := &file_autoforward_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryLogsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryLogsRequest) ProtoMessage() {}
+
+func (x *QueryLogsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryLogsRequest.ProtoReflect.Descriptor instead.
+func (*QueryLogsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *QueryLogsRequest) GetLevel() string {
+	if x != nil {
+		return x.Level
+	}
+	return ""
+}
+
+func (x *QueryLogsRequest) GetService() string {
+	if x != nil {
+		return x.Service
+	}
+	return ""
+}
+
+func (x *QueryLogsRequest) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *QueryLogsRequest) GetSearch() string {
+	if x != nil {
+		return x.Search
+	}
+	return ""
+}
+
+func (x *QueryLogsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *QueryLogsRequest) GetSince() int64 {
+	if x != nil {
+		return x.Since
+	}
+	return 0
+}
+
+type QueryLogsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Logs          []*LogEntry            `protobuf:"bytes,1,rep,name=logs,proto3" json:"logs,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryLogsResponse) Reset() {
+	*x = QueryLogsResponse{}
+	mi := &file_autoforward_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryLogsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryLogsResponse) ProtoMessage() {}
+
+func (x *QueryLogsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryLogsResponse.ProtoReflect.Descriptor instead.
+func (*QueryLogsResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *QueryLogsResponse) GetLogs() []*LogEntry {
+	if x != nil {
+		return x.Logs
+	}
+	return nil
+}
+
+func (x *QueryLogsResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+type LogStatsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogStatsRequest) Reset() {
+	*x = LogStatsRequest{}
+	mi := &file_autoforward_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogStatsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogStatsRequest) ProtoMessage() {}
+
+func (x *LogStatsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogStatsRequest.ProtoReflect.Descriptor instead.
+func (*LogStatsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{41}
+}
+
+type LogStatsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Total         int64                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
+	ByLevel       map[string]int32       `protobuf:"bytes,2,rep,name=by_level,json=byLevel,proto3" json:"by_level,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	ByCategory    map[string]int32       `protobuf:"bytes,3,rep,name=by_category,json=byCategory,proto3" json:"by_category,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogStatsResponse) Reset() {
+	*x = LogStatsResponse{}
+	mi := &file_autoforward_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogStatsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogStatsResponse) ProtoMessage() {}
+
+func (x *LogStatsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogStatsResponse.ProtoReflect.Descriptor instead.
+func (*LogStatsResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *LogStatsResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *LogStatsResponse) GetByLevel() map[string]int32 {
+	if x != nil {
+		return x.ByLevel
+	}
+	return nil
+}
+
+func (x *LogStatsResponse) GetByCategory() map[string]int32 {
+	if x != nil {
+		return x.ByCategory
+	}
+	return nil
+}
+
 var File_autoforward_proto protoreflect.FileDescriptor
 
 const file_autoforward_proto_rawDesc = "" +
@@ -2456,7 +2816,39 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x18total_messages_rewritten\x18\b \x01(\x03R\x16totalMessagesRewritten\x12!\n" +
 	"\fbot_username\x18\t \x01(\tR\vbotUsername\x12\x18\n" +
 	"\aversion\x18\n" +
-	" \x01(\tR\aversion*n\n" +
+	" \x01(\tR\aversion\"\x98\x01\n" +
+	"\bLogEntry\x12\x0e\n" +
+	"\x02ts\x18\x01 \x01(\x03R\x02ts\x12\x14\n" +
+	"\x05level\x18\x02 \x01(\tR\x05level\x12\x18\n" +
+	"\aservice\x18\x03 \x01(\tR\aservice\x12\x1a\n" +
+	"\bcategory\x18\x04 \x01(\tR\bcategory\x12\x18\n" +
+	"\amessage\x18\x05 \x01(\tR\amessage\x12\x16\n" +
+	"\x06detail\x18\x06 \x01(\tR\x06detail\"9\n" +
+	"\n" +
+	"LogRequest\x12+\n" +
+	"\x05entry\x18\x01 \x01(\v2\x15.autoforward.LogEntryR\x05entry\"\xa2\x01\n" +
+	"\x10QueryLogsRequest\x12\x14\n" +
+	"\x05level\x18\x01 \x01(\tR\x05level\x12\x18\n" +
+	"\aservice\x18\x02 \x01(\tR\aservice\x12\x1a\n" +
+	"\bcategory\x18\x03 \x01(\tR\bcategory\x12\x16\n" +
+	"\x06search\x18\x04 \x01(\tR\x06search\x12\x14\n" +
+	"\x05limit\x18\x05 \x01(\x05R\x05limit\x12\x14\n" +
+	"\x05since\x18\x06 \x01(\x03R\x05since\"T\n" +
+	"\x11QueryLogsResponse\x12)\n" +
+	"\x04logs\x18\x01 \x03(\v2\x15.autoforward.LogEntryR\x04logs\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\x11\n" +
+	"\x0fLogStatsRequest\"\xba\x02\n" +
+	"\x10LogStatsResponse\x12\x14\n" +
+	"\x05total\x18\x01 \x01(\x03R\x05total\x12E\n" +
+	"\bby_level\x18\x02 \x03(\v2*.autoforward.LogStatsResponse.ByLevelEntryR\abyLevel\x12N\n" +
+	"\vby_category\x18\x03 \x03(\v2-.autoforward.LogStatsResponse.ByCategoryEntryR\n" +
+	"byCategory\x1a:\n" +
+	"\fByLevelEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a=\n" +
+	"\x0fByCategoryEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01*n\n" +
 	"\vRoutingType\x12\x13\n" +
 	"\x0fROUTING_UNKNOWN\x10\x00\x12\x16\n" +
 	"\x12CHANNEL_TO_CHANNEL\x10\x01\x12\f\n" +
@@ -2497,7 +2889,11 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x0eDeleteAIConfig\x12\".autoforward.DeleteAIConfigRequest\x1a\x1b.autoforward.StatusResponse\x12V\n" +
 	"\rTestAIRewrite\x12!.autoforward.TestAIRewriteRequest\x1a\".autoforward.TestAIRewriteResponse2q\n" +
 	"\x1aSystemStatusControlService\x12S\n" +
-	"\x0eGetSystemStats\x12\x1f.autoforward.SystemStatsRequest\x1a .autoforward.SystemStatsResponseB%Z#autoforward/api/proto;autoforwardpbb\x06proto3"
+	"\x0eGetSystemStats\x12\x1f.autoforward.SystemStatsRequest\x1a .autoforward.SystemStatsResponse2\xe5\x01\n" +
+	"\x11LogControlService\x12;\n" +
+	"\x03Log\x12\x17.autoforward.LogRequest\x1a\x1b.autoforward.StatusResponse\x12J\n" +
+	"\tQueryLogs\x12\x1d.autoforward.QueryLogsRequest\x1a\x1e.autoforward.QueryLogsResponse\x12G\n" +
+	"\bLogStats\x12\x1c.autoforward.LogStatsRequest\x1a\x1d.autoforward.LogStatsResponseB%Z#autoforward/api/proto;autoforwardpbb\x06proto3"
 
 var (
 	file_autoforward_proto_rawDescOnce sync.Once
@@ -2512,7 +2908,7 @@ func file_autoforward_proto_rawDescGZIP() []byte {
 }
 
 var file_autoforward_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_autoforward_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_autoforward_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_autoforward_proto_goTypes = []any{
 	(RoutingType)(0),                // 0: autoforward.RoutingType
 	(ForwardMode)(0),                // 1: autoforward.ForwardMode
@@ -2553,6 +2949,14 @@ var file_autoforward_proto_goTypes = []any{
 	(*TestAIRewriteResponse)(nil),   // 36: autoforward.TestAIRewriteResponse
 	(*SystemStatsRequest)(nil),      // 37: autoforward.SystemStatsRequest
 	(*SystemStatsResponse)(nil),     // 38: autoforward.SystemStatsResponse
+	(*LogEntry)(nil),                // 39: autoforward.LogEntry
+	(*LogRequest)(nil),              // 40: autoforward.LogRequest
+	(*QueryLogsRequest)(nil),        // 41: autoforward.QueryLogsRequest
+	(*QueryLogsResponse)(nil),       // 42: autoforward.QueryLogsResponse
+	(*LogStatsRequest)(nil),         // 43: autoforward.LogStatsRequest
+	(*LogStatsResponse)(nil),        // 44: autoforward.LogStatsResponse
+	nil,                             // 45: autoforward.LogStatsResponse.ByLevelEntry
+	nil,                             // 46: autoforward.LogStatsResponse.ByCategoryEntry
 }
 var file_autoforward_proto_depIdxs = []int32{
 	3,  // 0: autoforward.ListSessionsResponse.sessions:type_name -> autoforward.SessionInfo
@@ -2567,53 +2971,63 @@ var file_autoforward_proto_depIdxs = []int32{
 	29, // 9: autoforward.CreateAIConfigRequest.config:type_name -> autoforward.AIConfig
 	29, // 10: autoforward.UpdateAIConfigRequest.config:type_name -> autoforward.AIConfig
 	29, // 11: autoforward.ListAIConfigsResponse.configs:type_name -> autoforward.AIConfig
-	4,  // 12: autoforward.SessionControlService.ListSessions:input_type -> autoforward.ListSessionsRequest
-	6,  // 13: autoforward.SessionControlService.StartLogin:input_type -> autoforward.StartLoginRequest
-	8,  // 14: autoforward.SessionControlService.SubmitCode:input_type -> autoforward.SubmitCodeRequest
-	10, // 15: autoforward.SessionControlService.SubmitPassword:input_type -> autoforward.SubmitPasswordRequest
-	12, // 16: autoforward.SessionControlService.BackupSession:input_type -> autoforward.BackupSessionRequest
-	14, // 17: autoforward.SessionControlService.RestoreSession:input_type -> autoforward.RestoreSessionRequest
-	16, // 18: autoforward.SessionControlService.TerminateSession:input_type -> autoforward.TerminateSessionRequest
-	21, // 19: autoforward.ForwardRuleControlService.ListRules:input_type -> autoforward.ListRulesRequest
-	18, // 20: autoforward.ForwardRuleControlService.CreateRule:input_type -> autoforward.CreateRuleRequest
-	19, // 21: autoforward.ForwardRuleControlService.UpdateRule:input_type -> autoforward.UpdateRuleRequest
-	20, // 22: autoforward.ForwardRuleControlService.DeleteRule:input_type -> autoforward.DeleteRuleRequest
-	27, // 23: autoforward.FilterControlService.ListFilters:input_type -> autoforward.ListFiltersRequest
-	24, // 24: autoforward.FilterControlService.CreateFilter:input_type -> autoforward.CreateFilterRequest
-	25, // 25: autoforward.FilterControlService.UpdateFilter:input_type -> autoforward.UpdateFilterRequest
-	26, // 26: autoforward.FilterControlService.DeleteFilter:input_type -> autoforward.DeleteFilterRequest
-	33, // 27: autoforward.AIControlService.ListAIConfigs:input_type -> autoforward.ListAIConfigsRequest
-	30, // 28: autoforward.AIControlService.CreateAIConfig:input_type -> autoforward.CreateAIConfigRequest
-	31, // 29: autoforward.AIControlService.UpdateAIConfig:input_type -> autoforward.UpdateAIConfigRequest
-	32, // 30: autoforward.AIControlService.DeleteAIConfig:input_type -> autoforward.DeleteAIConfigRequest
-	35, // 31: autoforward.AIControlService.TestAIRewrite:input_type -> autoforward.TestAIRewriteRequest
-	37, // 32: autoforward.SystemStatusControlService.GetSystemStats:input_type -> autoforward.SystemStatsRequest
-	5,  // 33: autoforward.SessionControlService.ListSessions:output_type -> autoforward.ListSessionsResponse
-	7,  // 34: autoforward.SessionControlService.StartLogin:output_type -> autoforward.StartLoginResponse
-	9,  // 35: autoforward.SessionControlService.SubmitCode:output_type -> autoforward.SubmitCodeResponse
-	11, // 36: autoforward.SessionControlService.SubmitPassword:output_type -> autoforward.SubmitPasswordResponse
-	13, // 37: autoforward.SessionControlService.BackupSession:output_type -> autoforward.BackupSessionResponse
-	15, // 38: autoforward.SessionControlService.RestoreSession:output_type -> autoforward.RestoreSessionResponse
-	2,  // 39: autoforward.SessionControlService.TerminateSession:output_type -> autoforward.StatusResponse
-	22, // 40: autoforward.ForwardRuleControlService.ListRules:output_type -> autoforward.ListRulesResponse
-	17, // 41: autoforward.ForwardRuleControlService.CreateRule:output_type -> autoforward.ForwardRule
-	17, // 42: autoforward.ForwardRuleControlService.UpdateRule:output_type -> autoforward.ForwardRule
-	2,  // 43: autoforward.ForwardRuleControlService.DeleteRule:output_type -> autoforward.StatusResponse
-	28, // 44: autoforward.FilterControlService.ListFilters:output_type -> autoforward.ListFiltersResponse
-	23, // 45: autoforward.FilterControlService.CreateFilter:output_type -> autoforward.FilterRule
-	23, // 46: autoforward.FilterControlService.UpdateFilter:output_type -> autoforward.FilterRule
-	2,  // 47: autoforward.FilterControlService.DeleteFilter:output_type -> autoforward.StatusResponse
-	34, // 48: autoforward.AIControlService.ListAIConfigs:output_type -> autoforward.ListAIConfigsResponse
-	29, // 49: autoforward.AIControlService.CreateAIConfig:output_type -> autoforward.AIConfig
-	29, // 50: autoforward.AIControlService.UpdateAIConfig:output_type -> autoforward.AIConfig
-	2,  // 51: autoforward.AIControlService.DeleteAIConfig:output_type -> autoforward.StatusResponse
-	36, // 52: autoforward.AIControlService.TestAIRewrite:output_type -> autoforward.TestAIRewriteResponse
-	38, // 53: autoforward.SystemStatusControlService.GetSystemStats:output_type -> autoforward.SystemStatsResponse
-	33, // [33:54] is the sub-list for method output_type
-	12, // [12:33] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	39, // 12: autoforward.LogRequest.entry:type_name -> autoforward.LogEntry
+	39, // 13: autoforward.QueryLogsResponse.logs:type_name -> autoforward.LogEntry
+	45, // 14: autoforward.LogStatsResponse.by_level:type_name -> autoforward.LogStatsResponse.ByLevelEntry
+	46, // 15: autoforward.LogStatsResponse.by_category:type_name -> autoforward.LogStatsResponse.ByCategoryEntry
+	4,  // 16: autoforward.SessionControlService.ListSessions:input_type -> autoforward.ListSessionsRequest
+	6,  // 17: autoforward.SessionControlService.StartLogin:input_type -> autoforward.StartLoginRequest
+	8,  // 18: autoforward.SessionControlService.SubmitCode:input_type -> autoforward.SubmitCodeRequest
+	10, // 19: autoforward.SessionControlService.SubmitPassword:input_type -> autoforward.SubmitPasswordRequest
+	12, // 20: autoforward.SessionControlService.BackupSession:input_type -> autoforward.BackupSessionRequest
+	14, // 21: autoforward.SessionControlService.RestoreSession:input_type -> autoforward.RestoreSessionRequest
+	16, // 22: autoforward.SessionControlService.TerminateSession:input_type -> autoforward.TerminateSessionRequest
+	21, // 23: autoforward.ForwardRuleControlService.ListRules:input_type -> autoforward.ListRulesRequest
+	18, // 24: autoforward.ForwardRuleControlService.CreateRule:input_type -> autoforward.CreateRuleRequest
+	19, // 25: autoforward.ForwardRuleControlService.UpdateRule:input_type -> autoforward.UpdateRuleRequest
+	20, // 26: autoforward.ForwardRuleControlService.DeleteRule:input_type -> autoforward.DeleteRuleRequest
+	27, // 27: autoforward.FilterControlService.ListFilters:input_type -> autoforward.ListFiltersRequest
+	24, // 28: autoforward.FilterControlService.CreateFilter:input_type -> autoforward.CreateFilterRequest
+	25, // 29: autoforward.FilterControlService.UpdateFilter:input_type -> autoforward.UpdateFilterRequest
+	26, // 30: autoforward.FilterControlService.DeleteFilter:input_type -> autoforward.DeleteFilterRequest
+	33, // 31: autoforward.AIControlService.ListAIConfigs:input_type -> autoforward.ListAIConfigsRequest
+	30, // 32: autoforward.AIControlService.CreateAIConfig:input_type -> autoforward.CreateAIConfigRequest
+	31, // 33: autoforward.AIControlService.UpdateAIConfig:input_type -> autoforward.UpdateAIConfigRequest
+	32, // 34: autoforward.AIControlService.DeleteAIConfig:input_type -> autoforward.DeleteAIConfigRequest
+	35, // 35: autoforward.AIControlService.TestAIRewrite:input_type -> autoforward.TestAIRewriteRequest
+	37, // 36: autoforward.SystemStatusControlService.GetSystemStats:input_type -> autoforward.SystemStatsRequest
+	40, // 37: autoforward.LogControlService.Log:input_type -> autoforward.LogRequest
+	41, // 38: autoforward.LogControlService.QueryLogs:input_type -> autoforward.QueryLogsRequest
+	43, // 39: autoforward.LogControlService.LogStats:input_type -> autoforward.LogStatsRequest
+	5,  // 40: autoforward.SessionControlService.ListSessions:output_type -> autoforward.ListSessionsResponse
+	7,  // 41: autoforward.SessionControlService.StartLogin:output_type -> autoforward.StartLoginResponse
+	9,  // 42: autoforward.SessionControlService.SubmitCode:output_type -> autoforward.SubmitCodeResponse
+	11, // 43: autoforward.SessionControlService.SubmitPassword:output_type -> autoforward.SubmitPasswordResponse
+	13, // 44: autoforward.SessionControlService.BackupSession:output_type -> autoforward.BackupSessionResponse
+	15, // 45: autoforward.SessionControlService.RestoreSession:output_type -> autoforward.RestoreSessionResponse
+	2,  // 46: autoforward.SessionControlService.TerminateSession:output_type -> autoforward.StatusResponse
+	22, // 47: autoforward.ForwardRuleControlService.ListRules:output_type -> autoforward.ListRulesResponse
+	17, // 48: autoforward.ForwardRuleControlService.CreateRule:output_type -> autoforward.ForwardRule
+	17, // 49: autoforward.ForwardRuleControlService.UpdateRule:output_type -> autoforward.ForwardRule
+	2,  // 50: autoforward.ForwardRuleControlService.DeleteRule:output_type -> autoforward.StatusResponse
+	28, // 51: autoforward.FilterControlService.ListFilters:output_type -> autoforward.ListFiltersResponse
+	23, // 52: autoforward.FilterControlService.CreateFilter:output_type -> autoforward.FilterRule
+	23, // 53: autoforward.FilterControlService.UpdateFilter:output_type -> autoforward.FilterRule
+	2,  // 54: autoforward.FilterControlService.DeleteFilter:output_type -> autoforward.StatusResponse
+	34, // 55: autoforward.AIControlService.ListAIConfigs:output_type -> autoforward.ListAIConfigsResponse
+	29, // 56: autoforward.AIControlService.CreateAIConfig:output_type -> autoforward.AIConfig
+	29, // 57: autoforward.AIControlService.UpdateAIConfig:output_type -> autoforward.AIConfig
+	2,  // 58: autoforward.AIControlService.DeleteAIConfig:output_type -> autoforward.StatusResponse
+	36, // 59: autoforward.AIControlService.TestAIRewrite:output_type -> autoforward.TestAIRewriteResponse
+	38, // 60: autoforward.SystemStatusControlService.GetSystemStats:output_type -> autoforward.SystemStatsResponse
+	2,  // 61: autoforward.LogControlService.Log:output_type -> autoforward.StatusResponse
+	42, // 62: autoforward.LogControlService.QueryLogs:output_type -> autoforward.QueryLogsResponse
+	44, // 63: autoforward.LogControlService.LogStats:output_type -> autoforward.LogStatsResponse
+	40, // [40:64] is the sub-list for method output_type
+	16, // [16:40] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_autoforward_proto_init() }
@@ -2627,9 +3041,9 @@ func file_autoforward_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_autoforward_proto_rawDesc), len(file_autoforward_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   37,
+			NumMessages:   45,
 			NumExtensions: 0,
-			NumServices:   5,
+			NumServices:   6,
 		},
 		GoTypes:           file_autoforward_proto_goTypes,
 		DependencyIndexes: file_autoforward_proto_depIdxs,

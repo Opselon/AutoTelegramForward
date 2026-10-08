@@ -22,5 +22,8 @@ db_path: "data/atf.db"
 grpc_host: "0.0.0.0"
 grpc_port: 50051
 
+# Logger microservice gRPC address (debug log store, own database)
+logger_addr: "localhost:50052"
+
 # Default bot language: en | fa | ru | zh
 language: "en"

@@ -20,6 +20,7 @@ class Config:
     language: str = "en"
     version: str = "1.0.0"
     disable_bot: bool = False
+    logger_addr: str = "localhost:50052"
 
     @classmethod
     def load(cls, config_path: str = None) -> "Config":
@@ -38,7 +39,7 @@ class Config:
                     yaml_data = yaml.safe_load(fh) or {}
                 break
         for key in ("api_id", "api_hash", "bot_token", "master_key", "db_path",
-                    "grpc_host", "grpc_port", "language", "version"):
+                    "grpc_host", "grpc_port", "language", "version", "logger_addr"):
             if key in yaml_data:
                 setattr(cfg, key, yaml_data[key])
         if "admin_ids" in yaml_data:
@@ -53,6 +54,7 @@ class Config:
             "ATF_GRPC_HOST": ("grpc_host", str),
             "ATF_GRPC_PORT": ("grpc_port", int),
             "ATF_LANGUAGE": ("language", str),
+            "ATF_LOGGER_ADDR": ("logger_addr", str),
         }
         for env_key, (attr, cast) in env_map.items():
             val = os.environ.get(env_key)

@@ -1,10 +1,26 @@
 services:
+  logger:
+    build:
+      context: .
+      dockerfile: Dockerfile.logger
+    container_name: atf-logger
+    restart: unless-stopped
+    environment:
+      ATF_LOGGER_PORT: 50052
+      ATF_LOGGER_DB_PATH: /app/data/logger.db
+    volumes:
+      - atf-data:/app/data
+    networks:
+      - atf-net
+
   core:
     build:
       context: .
       dockerfile: Dockerfile.core
     container_name: atf-core
     restart: unless-stopped
+    depends_on:
+      - logger
     environment:
       ATF_API_ID: ${ATF_API_ID}
       ATF_API_HASH: ${ATF_API_HASH}
@@ -12,6 +28,7 @@ services:
       ATF_MASTER_KEY: ${ATF_MASTER_KEY}
       ATF_GRPC_PORT: 50051
       ATF_DB_PATH: /app/data/atf.db
+      ATF_LOGGER_ADDR: logger:50052
     volumes:
       - atf-data:/app/data
     networks:
@@ -27,6 +44,7 @@ services:
       - core
     environment:
       ATF_CORE_GRPC: core:50051
+      ATF_LOGGER_GRPC: logger:50052
       ATF_API_ADDR: ":8080"
       ATF_API_KEY: ${ATF_API_KEY:-}
     ports:

@@ -24,8 +24,10 @@ type Clients struct {
 	Filters    pb.FilterControlServiceClient
 	AI         pb.AIControlServiceClient
 	System     pb.SystemStatusControlServiceClient
+	Logs       pb.LogControlServiceClient
 }
 
+// NewClients bundles the core service stubs.
 func NewClients(conn *grpc.ClientConn) *Clients {
 	return &Clients{
 		Sessions: pb.NewSessionControlServiceClient(conn),
@@ -34,4 +36,9 @@ func NewClients(conn *grpc.ClientConn) *Clients {
 		AI:       pb.NewAIControlServiceClient(conn),
 		System:   pb.NewSystemStatusControlServiceClient(conn),
 	}
+}
+
+// AttachLogger points the Logs stub at the separate Logger microservice conn.
+func AttachLogger(c *Clients, conn *grpc.ClientConn) {
+	c.Logs = pb.NewLogControlServiceClient(conn)
 }

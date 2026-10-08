@@ -1,0 +1,14 @@
+# Logger microservice — debug log store with its own SQLite database.
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir grpcio protobuf pyyaml
+
+COPY core/ ./core/
+COPY logger/ ./logger/
+
+EXPOSE 50052
+
+CMD ["python", "-m", "logger.main"]

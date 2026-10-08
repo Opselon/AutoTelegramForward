@@ -254,6 +254,45 @@ message SystemStatsResponse {
 }
 
 // -----------------------------------------------------------------------------
+// Logging Service (debug log store)
+// -----------------------------------------------------------------------------
+
+message LogEntry {
+  int64 ts = 1;
+  string level = 2;    // DEBUG | INFO | WARN | ERROR
+  string service = 3;  // core | api | logger | bot
+  string category = 4; // login | forward | filter | ai | system | rule | session
+  string message = 5;
+  string detail = 6;   // JSON blob with structured context
+}
+
+message LogRequest {
+  LogEntry entry = 1;
+}
+
+message QueryLogsRequest {
+  string level = 1;
+  string service = 2;
+  string category = 3;
+  string search = 4;
+  int32 limit = 5;
+  int64 since = 6;
+}
+
+message QueryLogsResponse {
+  repeated LogEntry logs = 1;
+  int32 total = 2;
+}
+
+message LogStatsRequest {}
+
+message LogStatsResponse {
+  int64 total = 1;
+  map<string, int32> by_level = 2;
+  map<string, int32> by_category = 3;
+}
+
+// -----------------------------------------------------------------------------
 // gRPC Services Definition
 // -----------------------------------------------------------------------------
 
@@ -291,4 +330,10 @@ service AIControlService {
 
 service SystemStatusControlService {
   rpc GetSystemStats(SystemStatsRequest) returns (SystemStatsResponse);
+}
+
+service LogControlService {
+  rpc Log(LogRequest) returns (StatusResponse);
+  rpc QueryLogs(QueryLogsRequest) returns (QueryLogsResponse);
+  rpc LogStats(LogStatsRequest) returns (LogStatsResponse);
 }

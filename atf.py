@@ -127,11 +127,20 @@ def cmd_start():
         sys.exit("✗ No config.yaml — run:  python atf.py setup")
     ensure_venv()
     has_api = build_api()
-    env = {**os.environ, "ATF_GRPC_PORT": "6001"}
+    env = {**os.environ, "ATF_GRPC_PORT": "6001",
+           "ATF_LOGGER_PORT": "6002", "ATF_LOGGER_ADDR": "localhost:6002"}
+
+    print("▶ Starting Logger service (debug log store) ...")
+    logger_proc = subprocess.Popen(
+        [str(PY_EXE), "-m", "logger.main"], cwd=ROOT, env=env)
+    procs = [logger_proc]
+
+    import time
+    time.sleep(2)
 
     print("▶ Starting Python core (bot + gRPC) ...")
     core = subprocess.Popen([str(PY_EXE), "-m", "core.main"], cwd=ROOT, env=env)
-    procs = [core]
+    procs.append(core)
 
     if has_api:
         import time

@@ -19,7 +19,7 @@ jobs:
         run: pip install pyrogram tgcrypto grpcio grpcio-tools protobuf httpx cryptography pyyaml pytest pytest-asyncio
 
       - name: Run Python tests
-        run: python -m pytest -q
+        run: python -m pytest -q core/tests logger/tests
 
   go-tests:
     runs-on: ubuntu-latest
@@ -53,3 +53,6 @@ jobs:
 
       - name: Build api image
         run: docker build -f Dockerfile.api -t atf-api .
+
+      - name: Build logger image
+        run: docker build -f Dockerfile.logger -t atf-logger .

@@ -33,6 +33,7 @@ from core.infrastructure.security.crypto import CryptoService  # noqa: E402
 from core.infrastructure.telegram.bot_manager import BotManager  # noqa: E402
 from core.infrastructure.telegram.client_pool import ClientPool  # noqa: E402
 from core.infrastructure.telegram.dispatcher import MessageDispatcher  # noqa: E402
+from core.infrastructure.telegram.pro_bot_ui import ProBotUI  # noqa: E402
 from core.infrastructure.telegram.i18n import I18n  # noqa: E402
 
 logging.basicConfig(
@@ -70,6 +71,7 @@ def build_container(cfg: Config) -> dict:
         "sessions": sessions, "rules": rules, "filters": filter_rules,
         "ai": ai_configs, "pipeline": pipeline, "pool": pool,
         "dispatcher": dispatcher, "i18n": i18n, "factory": factory,
+        "logger_addr": cfg.logger_addr,
     }
 
 
@@ -128,6 +130,17 @@ async def main() -> None:
     container = build_container(cfg)
     grpc_server = await serve_grpc(container, cfg)
 
+    # Non-blocking debug-log feed to the Logger microservice.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from logger.log_client import LogClient  # noqa: E402
+    log_client = LogClient(cfg.logger_addr)
+    try:
+        await log_client.start()
+    except Exception as exc:
+        logger.warning("Logger service unreachable at %s: %s", cfg.logger_addr, exc)
+    container["log_client"] = log_client
+    log_client.info("core", "system", "core started", {"version": cfg.version})
+
     bot = BotManager(
         bot_token=cfg.bot_token, admin_ids=cfg.admin_ids,
         pool=container["pool"], sessions=container["sessions"],
@@ -138,12 +151,31 @@ async def main() -> None:
     await bot.start()
     logger.info("Bot started. Core is running. Press Ctrl+C to stop.")
 
+    # Mount the Pro button UI directly onto the live bot client.
+    try:
+        from core.infrastructure.telegram.login_flow import LoginFlowManager  # noqa: E402
+        ProBotUI(
+            bot=bot.bot, i18n=container["i18n"],
+            sessions=container["sessions"], rules=container["rules"],
+            filter_rules=container["filters"], ai_configs=container["ai"],
+            pipeline=container["pipeline"], pool=container["pool"],
+            login=LoginFlowManager(container["pool"], container["sessions"]),
+            log_client=log_client, admin_ids=cfg.admin_ids,
+        )
+        log_client.info("core", "system", "pro button UI mounted")
+    except Exception as exc:
+        logger.warning("ProBotUI mount failed: %s", exc)
+
     try:
         await asyncio.Event().wait()
     finally:
         await bot.stop()
         await container["pool"].stop_all()
         await grpc_server.stop(grace=2)
+        try:
+            await log_client.close()
+        except Exception:
+            pass
         logger.info("Core stopped cleanly.")
 
 

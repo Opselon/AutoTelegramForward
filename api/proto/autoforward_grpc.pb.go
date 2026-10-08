@@ -1137,3 +1137,181 @@ var SystemStatusControlService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "autoforward.proto",
 }
+
+const (
+	LogControlService_Log_FullMethodName       = "/autoforward.LogControlService/Log"
+	LogControlService_QueryLogs_FullMethodName = "/autoforward.LogControlService/QueryLogs"
+	LogControlService_LogStats_FullMethodName  = "/autoforward.LogControlService/LogStats"
+)
+
+// LogControlServiceClient is the client API for LogControlService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type LogControlServiceClient interface {
+	Log(ctx context.Context, in *LogRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	QueryLogs(ctx context.Context, in *QueryLogsRequest, opts ...grpc.CallOption) (*QueryLogsResponse, error)
+	LogStats(ctx context.Context, in *LogStatsRequest, opts ...grpc.CallOption) (*LogStatsResponse, error)
+}
+
+type logControlServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewLogControlServiceClient(cc grpc.ClientConnInterface) LogControlServiceClient {
+	return &logControlServiceClient{cc}
+}
+
+func (c *logControlServiceClient) Log(ctx context.Context, in *LogRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, LogControlService_Log_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *logControlServiceClient) QueryLogs(ctx context.Context, in *QueryLogsRequest, opts ...grpc.CallOption) (*QueryLogsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryLogsResponse)
+	err := c.cc.Invoke(ctx, LogControlService_QueryLogs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *logControlServiceClient) LogStats(ctx context.Context, in *LogStatsRequest, opts ...grpc.CallOption) (*LogStatsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LogStatsResponse)
+	err := c.cc.Invoke(ctx, LogControlService_LogStats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// LogControlServiceServer is the server API for LogControlService service.
+// All implementations must embed UnimplementedLogControlServiceServer
+// for forward compatibility.
+type LogControlServiceServer interface {
+	Log(context.Context, *LogRequest) (*StatusResponse, error)
+	QueryLogs(context.Context, *QueryLogsRequest) (*QueryLogsResponse, error)
+	LogStats(context.Context, *LogStatsRequest) (*LogStatsResponse, error)
+	mustEmbedUnimplementedLogControlServiceServer()
+}
+
+// UnimplementedLogControlServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedLogControlServiceServer struct{}
+
+func (UnimplementedLogControlServiceServer) Log(context.Context, *LogRequest) (*StatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Log not implemented")
+}
+func (UnimplementedLogControlServiceServer) QueryLogs(context.Context, *QueryLogsRequest) (*QueryLogsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method QueryLogs not implemented")
+}
+func (UnimplementedLogControlServiceServer) LogStats(context.Context, *LogStatsRequest) (*LogStatsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LogStats not implemented")
+}
+func (UnimplementedLogControlServiceServer) mustEmbedUnimplementedLogControlServiceServer() {}
+func (UnimplementedLogControlServiceServer) testEmbeddedByValue()                           {}
+
+// UnsafeLogControlServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to LogControlServiceServer will
+// result in compilation errors.
+type UnsafeLogControlServiceServer interface {
+	mustEmbedUnimplementedLogControlServiceServer()
+}
+
+func RegisterLogControlServiceServer(s grpc.ServiceRegistrar, srv LogControlServiceServer) {
+	// If the following call panics, it indicates UnimplementedLogControlServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&LogControlService_ServiceDesc, srv)
+}
+
+func _LogControlService_Log_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LogControlServiceServer).Log(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LogControlService_Log_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LogControlServiceServer).Log(ctx, req.(*LogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LogControlService_QueryLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryLogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LogControlServiceServer).QueryLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LogControlService_QueryLogs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LogControlServiceServer).QueryLogs(ctx, req.(*QueryLogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LogControlService_LogStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogStatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LogControlServiceServer).LogStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LogControlService_LogStats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LogControlServiceServer).LogStats(ctx, req.(*LogStatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// LogControlService_ServiceDesc is the grpc.ServiceDesc for LogControlService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var LogControlService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "autoforward.LogControlService",
+	HandlerType: (*LogControlServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Log",
+			Handler:    _LogControlService_Log_Handler,
+		},
+		{
+			MethodName: "QueryLogs",
+			Handler:    _LogControlService_QueryLogs_Handler,
+		},
+		{
+			MethodName: "LogStats",
+			Handler:    _LogControlService_LogStats_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "autoforward.proto",
+}

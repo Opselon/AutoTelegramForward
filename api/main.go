@@ -14,6 +14,7 @@ import (
 func main() {
 	addr := getenv("ATF_API_ADDR", ":8080")
 	coreAddr := getenv("ATF_CORE_GRPC", "localhost:50051")
+	loggerAddr := getenv("ATF_LOGGER_GRPC", "localhost:50052")
 	apiKey := getenv("ATF_API_KEY", "")
 
 	conn, err := grpcclient.Dial(coreAddr)
@@ -23,6 +24,12 @@ func main() {
 	defer conn.Close()
 
 	clients := grpcclient.NewClients(conn)
+	if loggerConn, lerr := grpcclient.Dial(loggerAddr); lerr == nil {
+		grpcclient.AttachLogger(clients, loggerConn)
+		log.Printf("connected to logger service at %s", loggerAddr)
+	} else {
+		log.Printf("warning: logger service (%s) unreachable — log endpoints return 502", loggerAddr)
+	}
 	h := handlers.New(clients)
 
 	mux := http.NewServeMux()
@@ -45,6 +52,8 @@ func main() {
 	mux.HandleFunc("DELETE /api/v1/ai/{id}", h.DeleteAIConfig)
 	mux.HandleFunc("POST /api/v1/ai/{id}/test", h.TestAIRewrite)
 	mux.HandleFunc("GET /api/v1/stats", h.GetStats)
+	mux.HandleFunc("GET /api/v1/logs", h.QueryLogs)
+	mux.HandleFunc("GET /api/v1/logs/stats", h.LogStats)
 
 	var handler http.Handler = mux
 	handler = middleware.RequestLogger(handler)

@@ -22,9 +22,24 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="core\**\*.py" />
+    <Compile Include="logger\**\*.py" />
     <Compile Include="scripts\**\*.py" />
+    <Folder Include="core\" />
+    <Folder Include="core\application\" />
+    <Folder Include="core\domain\" />
+    <Folder Include="core\infrastructure\" />
+    <Folder Include="core\infrastructure\ai\" />
+    <Folder Include="core\infrastructure\grpc_server\" />
+    <Folder Include="core\infrastructure\persistence\" />
+    <Folder Include="core\infrastructure\security\" />
+    <Folder Include="core\infrastructure\telegram\" />
+    <Folder Include="core\proto\" />
+    <Folder Include="core\tests\" />
+    <Folder Include="logger\" />
+    <Folder Include="logger\tests\" />
     <Folder Include="proto\" />
     <Folder Include="api\" />
+    <Folder Include="scripts\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
