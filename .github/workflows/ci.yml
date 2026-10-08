@@ -16,7 +16,13 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install pyrogram tgcrypto grpcio grpcio-tools protobuf httpx cryptography pyyaml pytest pytest-asyncio
+        # requirements.txt pins every version. Installing from it — not from
+        # unpinned names — keeps CI testing the same dependency set that runs
+        # in production, and stops an upstream release from silently breaking
+        # CI (or fixing it locally while CI fails).
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run Python tests
         run: python -m pytest -q core/tests logger/tests
