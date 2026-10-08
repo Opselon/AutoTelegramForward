@@ -87,40 +87,77 @@ class BotManager:
     def _t(self, uid: int, key: str, **kw) -> str:
         return self.i18n.t(key, **kw)
 
-    def _register_handlers(self) -> None:
-        b = self.bot
+    def _ui_owns(self, uid: int) -> bool:
+        """True while the button dashboard is driving this user's flow.
 
-        @b.on_message(filters.command("start") & filters.private)
-        async def _start(client, message: Message):
-            await message.reply_text(self.i18n.t("start"))
+        Used as a mutual guard between BotManager and ProBotUI: whoever is
+        currently stepping the flow answers, the other stays silent. Prevents
+        the duplicated old text replies appearing next to the new dashboard.
+        """
+        checker = getattr(self, "ui_step_checker", None)
+        if callable(checker):
+            try:
+                return bool(checker(uid))
+            except Exception:
+                pass
+        # Fall back to "any active flow means the dashboard is driving".
+        flow = getattr(self, "login_manager", None)
+        if flow is not None:
+            try:
+                if flow.pending_for(uid) is not None:
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def _register_handlers(self) -> None:
+        """Command/fallback surface only.
+
+        IMPORTANT: the button-driven dashboard (ProBotUI) is mounted on the
+        same bot client and owns every *presentation* concern — /start, /help,
+        the login flow and all lists. Handlers registered here would fire in
+        the same group and produce duplicate replies, so this class only
+        registers what the dashboard does NOT already own: language picking
+        and the raw-text fallback that answers /login's phone prompt.
+        """
+        # NOTE: /start, /menu, and every presentation command are owned by the
+        # ProBotUI dashboard mounted on the same client. Registering them here
+        # too would make pyrogram fire BOTH handlers, which is exactly what
+        # produced "Welcome to AutoTelegramForward" next to the button menu.
+        # The dashboard is the single source of truth for /start.
+        b = self.bot
 
         @b.on_message(filters.command("help") & filters.private)
         async def _help(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             await message.reply_text(self.i18n.t("help"))
 
         @b.on_message(filters.command("lang") & filters.private)
         async def _lang(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             lines = [f"{code} — {name}" for code, name in LANG_FLAG.items()]
-            await message.reply_text(self.i18n.t("choose_lang") + "\n" + "\n".join(lines))
+            await message.reply_text(
+                self.i18n.t("choose_lang") + "\n" + "\n".join(lines))
             self._awaiting_lang[message.chat.id] = True
 
         self._awaiting_lang = {}
 
         @b.on_message(filters.command("login") & filters.private)
         async def _login(client, message: Message):
+            # The dashboard's login flow is the primary path; this keeps the
+            # command working if the dashboard failed to mount.
+            if self._ui_owns(message.from_user.id):
+                return
             if not self._is_admin(message):
                 return await message.reply_text(self.i18n.t("need_admin"))
             await message.reply_text(self.i18n.t("send_phone"))
 
-        @b.on_message(filters.command("cancel") & filters.private)
-        async def _cancel(client, message: Message):
-            if self._login.cancel(message.from_user.id):
-                await message.reply_text(self.i18n.t("cancelled"))
-            else:
-                await message.reply_text(self.i18n.t("cancelled"))
-
         @b.on_message(filters.command("sessions") & filters.private)
-        async def _sessions(client, message: Message):
+        async def _sessions_cmd(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             sessions = await self._sessions.list_all()
             if not sessions:
                 return await message.reply_text(self.i18n.t("no_sessions"))
@@ -136,6 +173,8 @@ class BotManager:
 
         @b.on_message(filters.command("rules") & filters.private)
         async def _rules_cmd(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             rules = await self._rules.list_all()
             if not rules:
                 await message.reply_text(self.i18n.t("no_rules"))
@@ -155,6 +194,8 @@ class BotManager:
 
         @b.on_message(filters.command("ai") & filters.private)
         async def _ai_cmd(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             cfgs = await self._ai.list_all()
             if not cfgs:
                 await message.reply_text(self.i18n.t("ai_no_configs"))
@@ -172,6 +213,8 @@ class BotManager:
 
         @b.on_message(filters.command("stats") & filters.private)
         async def _stats(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             s = self._pipeline.stats
             await message.reply_text(
                 self.i18n.t(
@@ -183,6 +226,8 @@ class BotManager:
 
         @b.on_message(filters.command("backup") & filters.private)
         async def _backup(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             if not self._is_admin(message):
                 return await message.reply_text(self.i18n.t("need_admin"))
             parts = (message.text or "").split()
@@ -221,6 +266,8 @@ class BotManager:
 
         @b.on_message(filters.command("restore") & filters.private)
         async def _restore(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             if not self._is_admin(message):
                 return await message.reply_text(self.i18n.t("need_admin"))
             if not message.document:

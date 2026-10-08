@@ -925,21 +925,28 @@ class ProBotUI:
     # Step handlers (FSM)
     # ------------------------------------------------------------------ #
     async def _step_login_phone(self, message: Message, st: UiState, text: str) -> None:
+        uid = message.from_user.id
         phone = self._login.normalize_phone(text)
         if not self._login.valid_phone(text):
             return await message.reply_text(
                 self._t("ui_login_phone_bad"), reply_markup=self._cancel_kbd())
+        result = await self._login.start(uid, phone)
+        if result != "send_code":
+            # Stay on the phone step so the user can simply send it again
+            # (this also survives a cooldown or a transient network error).
+            key, _, detail = result.partition(":")
+            try:
+                self._log.error(
+                    "bot", "login",
+                    f"send_code failed for {phone}: {type(self._login).__name__} → {result}")
+            except Exception:
+                pass
+            return await message.reply_text(
+                self._t(f"ui_login_fail_{key}", error=detail),
+                reply_markup=self._cancel_kbd())
         st.step = "login_code"
         st.login_phone = phone
-        result = await self._login.start(message.from_user.id, phone)
-        if result != "send_code":
-            st.step = ""
-            key, _, detail = result.partition(":")
-            return await message.reply_text(
-                self._t("ui_login_fail", error=detail or key),
-                reply_markup=self._main_menu(),
-            )
-        await self._persist(message.from_user.id, st)
+        await self._persist(uid, st)
         try:
             self._log.info("bot", "login", f"login started for {phone}")
         except Exception:
