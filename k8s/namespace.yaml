@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: autoforward
+  labels:
+    app.kubernetes.io/name: autotelegramforward
+    app.kubernetes.io/part-of: atf-platform

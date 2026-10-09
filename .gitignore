@@ -8,6 +8,8 @@ data/
 *.atf
 config.yaml
 .env
+k8s/custom-deploy.yaml
+k8s/secret.yaml
 atf.py.bak
 .venv/
 __pycache__/

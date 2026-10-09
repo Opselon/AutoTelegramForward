@@ -1,0 +1,286 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: autoforward
+  labels:
+    app.kubernetes.io/name: autotelegramforward
+    app.kubernetes.io/part-of: atf-platform
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: atf-data-pvc
+  namespace: autoforward
+  labels:
+    app.kubernetes.io/name: autotelegramforward
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atf-config
+  namespace: autoforward
+  labels:
+    app.kubernetes.io/name: autotelegramforward
+data:
+  ATF_API_ID: "17349"
+  ATF_API_HASH: "344583e45741c457fe1862106095a5eb"
+  ATF_LANGUAGE: "fa"
+  ATF_GRPC_PORT: "50051"
+  ATF_LOGGER_PORT: "50052"
+  ATF_LOGGER_ADDR: "atf-logger:50052"
+  ATF_CORE_GRPC: "atf-core:50051"
+  ATF_LOGGER_GRPC: "atf-logger:50052"
+  ATF_WEB_ADDR: "0.0.0.0:8088"
+  ATF_API_ADDR: ":8080"
+  ATF_DB_PATH: "/app/data/atf.db"
+  ATF_LOGS_DB_PATH: "/app/data/atf_logs.db"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: atf-secret
+  namespace: autoforward
+  labels:
+    app.kubernetes.io/name: autotelegramforward
+type: Opaque
+stringData:
+  # Replace with your actual Telegram bot token and master key
+  ATF_BOT_TOKEN: "CHANGE_ME_BOT_TOKEN"
+  ATF_ADMIN_ID: "0"
+  ATF_MASTER_KEY: "CHANGE_ME_RANDOM_MASTER_KEY_32_CHARS"
+  ATF_API_KEY: ""
+---
+# Logger Microservice
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atf-logger
+  namespace: autoforward
+  labels:
+    app: atf-logger
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: atf-logger
+  template:
+    metadata:
+      labels:
+        app: atf-logger
+    spec:
+      containers:
+        - name: logger
+          image: ghcr.io/opselon/atf-logger:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: atf-config
+          ports:
+            - containerPort: 50052
+              name: grpc
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: atf-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atf-logger
+  namespace: autoforward
+spec:
+  selector:
+    app: atf-logger
+  ports:
+    - port: 50052
+      targetPort: 50052
+      name: grpc
+---
+# Core Bot & gRPC Engine Microservice
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atf-core
+  namespace: autoforward
+  labels:
+    app: atf-core
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: atf-core
+  template:
+    metadata:
+      labels:
+        app: atf-core
+    spec:
+      containers:
+        - name: core
+          image: ghcr.io/opselon/atf-core:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: atf-config
+            - secretRef:
+                name: atf-secret
+          ports:
+            - containerPort: 50051
+              name: grpc
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: atf-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atf-core
+  namespace: autoforward
+spec:
+  selector:
+    app: atf-core
+  ports:
+    - port: 50051
+      targetPort: 50051
+      name: grpc
+---
+# Web Gateway & Dashboard (Rust + Axum & React)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atf-web
+  namespace: autoforward
+  labels:
+    app: atf-web
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: atf-web
+  template:
+    metadata:
+      labels:
+        app: atf-web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/opselon/atf-web:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: atf-config
+          ports:
+            - containerPort: 8088
+              name: http
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: atf-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atf-web
+  namespace: autoforward
+spec:
+  type: ClusterIP
+  selector:
+    app: atf-web
+  ports:
+    - port: 8088
+      targetPort: 8088
+      name: http
+---
+# Go REST API Control Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atf-api
+  namespace: autoforward
+  labels:
+    app: atf-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: atf-api
+  template:
+    metadata:
+      labels:
+        app: atf-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/opselon/atf-api:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: atf-config
+            - secretRef:
+                name: atf-secret
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atf-api
+  namespace: autoforward
+spec:
+  type: ClusterIP
+  selector:
+    app: atf-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http

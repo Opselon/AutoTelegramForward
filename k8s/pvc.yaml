@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: atf-data-pvc
+  namespace: autoforward
+  labels:
+    app.kubernetes.io/name: autotelegramforward
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
