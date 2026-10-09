@@ -15,7 +15,8 @@ data:
   ATF_CORE_GRPC: "atf-core:50051"
   ATF_LOGGER_GRPC: "atf-logger:50052"
   ATF_WEB_ADDR: "0.0.0.0:8088"
-  ATF_API_ADDR: ":8080"
+  ATF_API_ADDR: "http://atf-api:8080"
+  PORT: "8080"
   ATF_DB_PATH: "/app/data/atf.db"
   ATF_LOGS_DB_PATH: "/app/data/atf_logs.db"
 ---

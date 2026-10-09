@@ -144,6 +144,105 @@ func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	for _, rule := range resp.Rules {
+		if rule.Id == id {
+			writeJSON(w, http.StatusOK, rule)
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"error": "Rule not found"})
+}
+
+func (h *Handlers) ToggleRule(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	var target *pb.ForwardRule
+	for _, rule := range resp.Rules {
+		if rule.Id == id {
+			target = rule
+			break
+		}
+	}
+	if target == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Rule not found"})
+		return
+	}
+	target.IsActive = !target.IsActive
+	upResp, err := h.c.Rules.UpdateRule(ctx, &pb.UpdateRuleRequest{Rule: target})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, upResp)
+}
+
+func (h *Handlers) RoutePathQuickSet(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		ForwardMode  string `json:"forward_mode"`
+		CustomHeader string `json:"custom_header"`
+	}
+	if !bind(w, r, &body) {
+		return
+	}
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	var target *pb.ForwardRule
+	for _, rule := range resp.Rules {
+		if rule.Id == id {
+			target = rule
+			break
+		}
+	}
+	if target == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Rule not found"})
+		return
+	}
+	if body.ForwardMode != "" {
+		if val, ok := pb.ForwardMode_value[body.ForwardMode]; ok {
+			target.ForwardMode = pb.ForwardMode(val)
+		} else {
+			switch body.ForwardMode {
+			case "COPY", "copy", "COPY_MESSAGE":
+				target.ForwardMode = pb.ForwardMode_COPY_MESSAGE
+			case "FORWARD", "forward", "DIRECT", "direct", "DIRECT_FORWARD":
+				target.ForwardMode = pb.ForwardMode_DIRECT_FORWARD
+			case "CUSTOM_HEADER", "custom_header", "HEADER", "header", "CUSTOM_HEADER_COPY":
+				target.ForwardMode = pb.ForwardMode_CUSTOM_HEADER_COPY
+			}
+		}
+	}
+	if body.CustomHeader != "" {
+		target.CustomHeader = body.CustomHeader
+	}
+	upResp, err := h.c.Rules.UpdateRule(ctx, &pb.UpdateRuleRequest{Rule: target})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, upResp)
+}
+
 // ------------------------------------------------- smart forwarding rules
 func (h *Handlers) TestRule(w http.ResponseWriter, r *http.Request) {
 	var req struct {

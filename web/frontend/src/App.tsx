@@ -367,7 +367,7 @@ export function App() {
                 AutoTelegramForward <span style={{ color: '#818cf8', fontWeight: 600 }}>PRO GATEWAY</span>
               </h1>
               <span className="badge badge-vip" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>
-                v1.2.0 RELEASE
+                v1.2.1 RELEASE
               </span>
             </div>
             <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 2 }}>
