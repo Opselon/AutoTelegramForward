@@ -398,6 +398,24 @@ class SmartRoutingEngine:
 
         return True, "matched"
 
+    def decide_route(self, payload: MessagePayload, rule: ForwardRule) -> Tuple[RoutingDecision, str]:
+        """Determine concrete routing path according to rule configuration and message provenance."""
+        matched, reason = self.evaluate_rule(payload, rule)
+        if not matched:
+            return RoutingDecision.DROP, reason
+
+        use_mid = bool(getattr(rule, "use_intermediate", False) and rule.intermediate_channel_id)
+        is_vip, vip_reason = self.is_vip_origin(payload, rule)
+        f_mode = getattr(rule.forward_mode, "value", str(rule.forward_mode))
+
+        if use_mid and is_vip:
+            return RoutingDecision.BRANDING_VIA_C, f"VIP matched ({vip_reason}): routed via intermediate C with branding forward"
+        if f_mode == "DIRECT_FORWARD":
+            return RoutingDecision.DIRECT_FORWARD, "Native forward directly from A to B"
+        if f_mode == "CUSTOM_HEADER_COPY" or getattr(rule, "custom_header", None):
+            return RoutingDecision.CUSTOM_HEADER_COPY, "Direct copy with custom header from A to B"
+        return RoutingDecision.DIRECT_COPY, "Direct clean copy from A to B"
+
     def matching_rules(self, payload: MessagePayload, rules: List[ForwardRule]) -> List[ForwardRule]:
         """Returns ordered list of matching rules. Evaluates in priority order
         (highest priority first). Stops at first match unless rule has multi_route=True."""

@@ -380,3 +380,9 @@ build/
 *.spec
 atf.spec
 atf-dir.spec
+
+# Web microservice build artifacts
+web/backend/target/
+web/frontend/node_modules/
+web/frontend/dist/
+
