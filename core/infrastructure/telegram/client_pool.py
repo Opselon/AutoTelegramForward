@@ -27,6 +27,19 @@ from pyrogram.errors import (
 from ...domain.entities import MessagePayload
 from ...domain.value_objects import MediaType
 
+# Compat: Telegram now issues channel IDs beyond pyrogram 2.0.106's
+# hardcoded bounds (e.g. -1002826947877, -1003898966857). With the stock
+# constants get_peer_type() raises ValueError("Peer id invalid"), which
+# escapes Client.handle_updates and permanently kills that client's
+# update-receiver task — after which NO new messages are forwarded at
+# all. Widen the range once, process-wide (same module object every
+# pyrogram Client in this process uses).
+try:
+    from pyrogram import utils as _pyro_utils
+    _pyro_utils.MIN_CHANNEL_ID = -10099999999999
+except Exception:
+    pass
+
 logger = logging.getLogger(__name__)
 
 MEDIA_TYPE_MAP = {
