@@ -208,6 +208,23 @@ class AIConfigUseCases:
         except Exception as exc:  # pragma: no cover - network path
             return False, f"{type(exc).__name__}: {exc}"
 
+    async def health_check(self, config_id: str) -> tuple[bool, str, float]:
+        """Runs health check against provider, returns (is_healthy, response_or_error, latency_ms)."""
+        cfg = await self._repo.get_by_id(config_id)
+        if not cfg:
+            return False, "config_not_found", 0.0
+        try:
+            provider = self._factory.get(cfg)
+            if hasattr(provider, "check_health"):
+                return await provider.check_health(cfg)
+            import time
+            t0 = time.perf_counter()
+            res = await provider.rewrite(cfg, "ping")
+            elapsed = (time.perf_counter() - t0) * 1000
+            return True, res, elapsed
+        except Exception as exc:  # pragma: no cover - network path
+            return False, f"{type(exc).__name__}: {exc}", 0.0
+
 
 # --------------------------------------------------------------------------- #
 # API credentials + bot tokens (live config, encrypted at rest)

@@ -103,6 +103,7 @@ class UiState:
     ai_provider: str = ""
     ai_model: str = ""
     ai_api_key: str = ""
+    ai_base_url: str = ""
     login_phone: str = ""
     cred_label: str = ""
     cred_api_id: str = ""
@@ -118,6 +119,7 @@ class UiState:
             "ai_name": self.ai_name,
             "ai_provider": self.ai_provider,
             "ai_model": self.ai_model,
+            "ai_base_url": self.ai_base_url,
             "login_phone": self.login_phone,
             "cred_label": self.cred_label,
             "cred_api_id": self.cred_api_id,
@@ -147,6 +149,7 @@ class UiState:
             ai_name=cur.get("ai_name", ""),
             ai_provider=cur.get("ai_provider", ""),
             ai_model=cur.get("ai_model", ""),
+            ai_base_url=cur.get("ai_base_url", ""),
             login_phone=cur.get("login_phone", ""),
             cred_label=cur.get("cred_label", ""),
             cred_api_id=str(cur.get("cred_api_id", "")),
@@ -865,11 +868,85 @@ class ProBotUI:
             [("⬅️ " + self._t("ui_back"), CB["main"])],
         ])
 
-    def _ai_menu(self) -> InlineKeyboardMarkup:
-        return self._kbd([
-            [("➕ " + self._t("ui_ai_add"), CB["ai_add"])],
-            [("⬅️ " + self._t("ui_back"), CB["main"])],
-        ])
+    def _ai_menu(self, cfgs: Optional[list] = None) -> InlineKeyboardMarkup:
+        rows: list = []
+        if cfgs:
+            for c in cfgs:
+                status = "🟢" if c.is_enabled else "🔴"
+                prov_val = c.provider.value if hasattr(c.provider, "value") else str(c.provider)
+                prov = self._provider_label(prov_val)
+                label = f"{status} {c.name or 'AI'} [{prov} • {c.model}]"
+                rows.append([(label, f"aid:{c.id}")])
+        rows.append([("➕ " + self._t("ui_ai_add"), CB["ai_add"])])
+        rows.append([("⬅️ " + self._t("ui_back"), CB["main"])])
+        return self._kbd(rows)
+
+    def _render_ai_detail(self, cfg: AIConfig, health_info: Optional[dict] = None) -> Tuple[str, InlineKeyboardMarkup]:
+        status_emoji = "🟢 فعال" if cfg.is_enabled else "🔴 غیرفعال"
+        prov_key = cfg.provider.value if hasattr(cfg.provider, "value") else str(cfg.provider)
+        prov_name = self._provider_label(prov_key)
+
+        key = cfg.api_key or ""
+        if len(key) > 12:
+            masked_key = f"{key[:7]}...{key[-4:]}"
+        elif key:
+            masked_key = "********"
+        else:
+            masked_key = "(تنظیم نشده)"
+
+        from core.infrastructure.ai.providers import OpenAICompatibleProvider
+        base_url = cfg.base_url or OpenAICompatibleProvider.default_base_urls.get(prov_key, "") or "(پیش‌فرض)"
+
+        lines = [
+            "🤖 **جزئیات و وضعیت پیکربندی هوش مصنوعی**",
+            "────────────────────",
+            f"🏷 **نام:** {cfg.name or '—'}",
+            f"🆔 **شناسه:** `{cfg.id}`",
+            f"🔌 **سرویس‌دهنده:** `{prov_name}` (`{prov_key}`)",
+            f"🧠 **مدل فعال:** `{cfg.model}`",
+            f"🌐 **هاست / Base URL:** `{base_url}`",
+            f"🔑 **کلید احراز هویت (API Key):** `{masked_key}`",
+            f"🌡 **دما (Temperature):** `{cfg.temperature}`",
+            f"🔘 **وضعیت سیستم:** {status_emoji}",
+        ]
+
+        if health_info:
+            lines.append("────────────────────")
+            if health_info.get("ok"):
+                lines.append("🩺 **تست سلامت (Health Check):** 🟢 **سالم و متصل**")
+                lines.append(f"⚡ **زمان پاسخ (Latency):** `{health_info.get('latency_ms', 0):.0f}ms`")
+                if health_info.get("reply"):
+                    reply_preview = str(health_info["reply"])[:120].replace("\n", " ")
+                    lines.append(f"💬 **پاسخ نمونه:** `{reply_preview}`")
+            else:
+                lines.append("🩺 **تست سلامت (Health Check):** 🔴 **خطا در برقراری ارتباط**")
+                err_msg = str(health_info.get("error", "unknown"))[:200]
+                lines.append(f"⚠️ **پیام خطا:** `{err_msg}`")
+
+        lines.append("────────────────────")
+        lines.append("👇 یکی از عملیات زیر را انتخاب کنید:")
+        text = "\n".join(lines)
+
+        tog_text = "🔴 غیرفعال‌سازی" if cfg.is_enabled else "🟢 فعال‌سازی"
+        rows = [
+            [
+                ("🩺 تست سلامت (Health Check)", f"ai_hc:{cfg.id}"),
+                ("💬 تست بازنویسی", f"ai_sample:{cfg.id}"),
+            ],
+            [
+                ("🌐 تغییر Host / URL", f"ai_eh:{cfg.id}"),
+                ("🧠 تغییر مدل", f"ai_em:{cfg.id}"),
+            ],
+            [
+                ("🔑 تغییر API Key", f"ai_ek:{cfg.id}"),
+                (tog_text, f"ai_tog:{cfg.id}"),
+            ],
+            [
+                ("🗑 حذف پیکربندی", f"ai_del_ask:{cfg.id}"),
+                ("⬅️ بازگشت به لیست AI", CB["ai"]),
+            ],
+        ]
+        return text, self._kbd(rows)
 
     def _logs_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
@@ -1062,12 +1139,14 @@ class ProBotUI:
             lines = [self._t("ui_ai_title"), ""]
             if not cfgs:
                 lines.append(self._t("ui_none"))
+            else:
+                lines.append("👇 برای بررسی سلامت، تست اتصال یا تغییر تنظیمات، روی هر پیکربندی کلیک کنید:")
             for c in cfgs:
                 status = "🟢" if c.is_enabled else "🔴"
                 lines.append(
                     f"{status} `{c.id[:8]}` {c.name} "
                     f"[{self._provider_label(c.provider.value)}/{c.model}]")
-            await cq.edit_message_text("\n".join(lines), reply_markup=self._ai_menu())
+            await cq.edit_message_text("\n".join(lines), reply_markup=self._ai_menu(cfgs))
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["stats"] + "$"))
@@ -2352,14 +2431,42 @@ class ProBotUI:
             if provider not in {p.value for p in AIProviderType}:
                 return await cq.answer(self._t("ui_ai_provider_bad"), show_alert=True)
             st.ai_provider = provider
-            st.step = "ai_model"
-            kb = self._model_picker(st, provider)
+            st.step = "ai_base_url"
+            from core.infrastructure.ai.providers import OpenAICompatibleProvider
+            default_url = OpenAICompatibleProvider.default_base_urls.get(provider, "")
+            st.buffer["default_base_url"] = default_url
+            prompt_text = (
+                f"🌐 **تنظیم آدرس سرور / هاست ({self._provider_label(provider)}):**\n\n"
+                f"آدرس پیش‌فرض:\n`{default_url or 'ندارد (نیازمند آدرس دستی)'}`\n\n"
+                "✍️ اگر مایلید از هاست اختصاصی یا پورت دیگری استفاده کنید، آدرس آن را ارسال نمایید:\n"
+                "(مثال: `http://sub.legoten.com:4455/v1`)\n\n"
+                "یا برای استفاده از آدرس پیش‌فرض دکمه زیر را لمس کنید:"
+            )
+            kbd = self._kbd([
+                [("✅ استفاده از پیش‌فرض (یا بعدی)", "ai_url_default")],
+                [("❌ " + self._t("ui_cancel"), CB["cancel"])],
+            ])
             await self._persist(cq.from_user.id, st)
+            await cq.edit_message_text(prompt_text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^ai_url_default$"))
+        async def _cb_ai_url_default(_, cq: CallbackQuery):
+            st = self._state(cq.from_user.id)
+            if st.step != "ai_base_url":
+                return await cq.answer()
+            st.ai_base_url = st.buffer.get("default_base_url", "")
+            st.step = "ai_model"
+            kb = self._model_picker(st, st.ai_provider)
+            await self._persist(cq.from_user.id, st)
+            msg_text = (
+                self._t("ui_ai_model")
+                + "\n(از لیست زیر انتخاب کنید یا نام مدل دلخواه مانند `coding` را تایپ کنید):"
+            )
             if kb is not None:
-                await cq.edit_message_text(self._t("ui_ai_model"), reply_markup=kb)
+                await cq.edit_message_text(msg_text, reply_markup=kb)
             else:
-                await cq.edit_message_text(
-                    self._t("ui_ai_model"), reply_markup=self._cancel_kbd())
+                await cq.edit_message_text(msg_text, reply_markup=self._cancel_kbd())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["ai_model_pick"] + ":"))
@@ -2378,24 +2485,160 @@ class ProBotUI:
             await cq.edit_message_text(self._t("ui_ai_key"), reply_markup=self._cancel_kbd())
             await cq.answer()
 
-        @b.on_callback_query(filters.regex("^" + CB["ai_del"] + ":"))
-        async def _cb_ai_del(_, cq: CallbackQuery):
-            aid = cq.data.split(":", 1)[1]
-            await self._ai.delete(aid)
-            await cq.edit_message_text(self._t("ui_done"), reply_markup=self._ai_menu())
+        @b.on_callback_query(filters.regex(r"^aid:(.+)"))
+        async def _cb_ai_detail(_, cq: CallbackQuery):
+            aid = str(cq.data or "").split(":", 1)[1]
+            cfg = await self._ai.get(aid)
+            if not cfg:
+                await cq.answer("❌ این پیکربندی یافت نشد.", show_alert=True)
+                cfgs = await self._ai.list_all()
+                return await cq.edit_message_text(self._t("ui_ai_title"), reply_markup=self._ai_menu(cfgs))
+            text, kbd = self._render_ai_detail(cfg)
+            await cq.edit_message_text(text, reply_markup=kbd)
             await cq.answer()
 
-        @b.on_callback_query(filters.regex("^" + CB["ai_test"] + ":"))
-        async def _cb_ai_test(_, cq: CallbackQuery):
-            aid = cq.data.split(":", 1)[1]
-            await cq.answer(self._t("ui_ai_testing"), show_alert=False)
+        @b.on_callback_query(filters.regex(r"^ai_hc:(.+)"))
+        async def _cb_ai_hc(_, cq: CallbackQuery):
+            aid = str(cq.data or "").split(":", 1)[1]
+            cfg = await self._ai.get(aid)
+            if not cfg:
+                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+            await cq.answer("⏳ در حال بررسی سلامت اتصال و سنجش پینگ...", show_alert=False)
+            ok, reply_or_err, latency = await self._ai.health_check(aid)
+            health_info = {
+                "ok": ok,
+                "latency_ms": latency,
+                "reply": reply_or_err if ok else "",
+                "error": reply_or_err if not ok else "",
+            }
+            text, kbd = self._render_ai_detail(cfg, health_info=health_info)
             try:
-                ok, text = await self._ai.test_rewrite(aid, self._t("ui_ai_sample"))
-                body = text if ok else f"❌ {text}"
-                await cq.message.reply_text(self._t("ui_ai_test_result", result=body[:2000]))
-            except Exception as exc:
-                await self._record_error("ai", exc, user_id=cq.from_user.id)
-                await cq.message.reply_text(self._t("ui_ai_fail", error=tg_detail(exc)))
+                await cq.edit_message_text(text, reply_markup=kbd)
+            except Exception:
+                pass
+
+        @b.on_callback_query(filters.regex(r"^(?:ai_sample|" + CB["ai_test"] + r"):(.+)"))
+        async def _cb_ai_sample(_, cq: CallbackQuery):
+            aid = str(cq.data or "").split(":", 1)[1]
+            cfg = await self._ai.get(aid)
+            if not cfg:
+                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+            await cq.answer("⏳ در حال ارسال متن نمونه جهت بازنویسی...", show_alert=False)
+            sample_text = "سلام! این یک پیام آزمایشی جهت سنجش کارکرد هوش مصنوعی در فوروارد تلگرام است."
+            ok, reply = await self._ai.test_rewrite(aid, sample_text)
+            if ok:
+                body = f"✅ **تست بازنویسی با موفقیت انجام شد:**\n\n📝 **پاسخ مدل ({cfg.model}):**\n`{reply[:1000]}`"
+            else:
+                body = f"❌ **خطا در بازنویسی:**\n\n`{reply[:1000]}`"
+            kbd = self._kbd([[("⬅️ بازگشت به پیکربندی", f"aid:{aid}")]])
+            await cq.edit_message_text(body, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^ai_tog:(.+)"))
+        async def _cb_ai_toggle(_, cq: CallbackQuery):
+            aid = str(cq.data or "").split(":", 1)[1]
+            cfg = await self._ai.get(aid)
+            if not cfg:
+                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+            cfg.is_enabled = not cfg.is_enabled
+            await self._ai.update(cfg)
+            status_text = "فعال شد 🟢" if cfg.is_enabled else "غیرفعال شد 🔴"
+            await cq.answer(f"وضعیت با موفقیت {status_text}", show_alert=False)
+            text, kbd = self._render_ai_detail(cfg)
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^ai_del_ask:(.+)"))
+        async def _cb_ai_del_ask(_, cq: CallbackQuery):
+            aid = str(cq.data or "").split(":", 1)[1]
+            cfg = await self._ai.get(aid)
+            if not cfg:
+                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+            text = (
+                f"⚠️ **آیا از حذف این پیکربندی هوش مصنوعی اطمینان دارید؟**\n\n"
+                f"🏷 نام: `{cfg.name}`\n"
+                f"🆔 شناسه: `{cfg.id[:8]}`"
+            )
+            kbd = self._kbd([
+                [("🗑 بله، حذف شود", f"ai_del_confirm:{aid}")],
+                [("⬅️ انصراف و بازگشت", f"aid:{aid}")],
+            ])
+            await cq.edit_message_text(text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^(?:ai_del_confirm|" + CB["ai_del"] + r"):(.+)"))
+        async def _cb_ai_del_confirm(_, cq: CallbackQuery):
+            aid = str(cq.data or "").split(":", 1)[1]
+            await self._ai.delete(aid)
+            await cq.answer("✅ پیکربندی حذف شد.", show_alert=True)
+            cfgs = await self._ai.list_all()
+            lines = [self._t("ui_ai_title"), "", "✅ پیکربندی با موفقیت حذف گردید."]
+            await cq.edit_message_text("\n".join(lines), reply_markup=self._ai_menu(cfgs))
+
+        @b.on_callback_query(filters.regex(r"^ai_eh:(.+)"))
+        async def _cb_ai_edit_host(_, cq: CallbackQuery):
+            aid = str(cq.data or "").split(":", 1)[1]
+            cfg = await self._ai.get(aid)
+            if not cfg:
+                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+            st = self._state(cq.from_user.id)
+            st.step = "ai_edit_host"
+            st.buffer["ai_edit_id"] = aid
+            await self._persist(cq.from_user.id, st)
+            current = cfg.base_url or "(پیش‌فرض)"
+            text = (
+                f"🌐 **تغییر آدرس سرور / هاست:**\n\n"
+                f"آدرس فعلی: `{current}`\n\n"
+                "✍️ لطفاً آدرس هاست جدید را ارسال کنید:\n"
+                "(مثال: `http://sub.legoten.com:4455/v1`)\n"
+                "یا برای بازنشانی به حالت پیش‌فرض عبارت `default` را بفرستید:"
+            )
+            kbd = self._kbd([
+                [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
+            ])
+            await cq.edit_message_text(text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^ai_em:(.+)"))
+        async def _cb_ai_edit_model(_, cq: CallbackQuery):
+            aid = str(cq.data or "").split(":", 1)[1]
+            cfg = await self._ai.get(aid)
+            if not cfg:
+                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+            st = self._state(cq.from_user.id)
+            st.step = "ai_edit_model"
+            st.buffer["ai_edit_id"] = aid
+            await self._persist(cq.from_user.id, st)
+            text = (
+                f"🧠 **تغییر مدل هوش مصنوعی:**\n\n"
+                f"مدل فعلی: `{cfg.model}`\n\n"
+                "✍️ لطفاً نام مدل جدید را تایپ و ارسال کنید:\n"
+                "(مثال: `coding` یا `gpt-4o-mini`)"
+            )
+            kbd = self._kbd([
+                [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
+            ])
+            await cq.edit_message_text(text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^ai_ek:(.+)"))
+        async def _cb_ai_edit_key(_, cq: CallbackQuery):
+            aid = str(cq.data or "").split(":", 1)[1]
+            cfg = await self._ai.get(aid)
+            if not cfg:
+                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+            st = self._state(cq.from_user.id)
+            st.step = "ai_edit_key"
+            st.buffer["ai_edit_id"] = aid
+            await self._persist(cq.from_user.id, st)
+            text = (
+                f"🔑 **تغییر کلید API:**\n\n"
+                "✍️ لطفاً کلید دسترسی جدید را ارسال کنید:\n"
+                "(پیام حاوی کلید پس از دریافت جهت امنیت حذف خواهد شد)"
+            )
+            kbd = self._kbd([
+                [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
+            ])
+            await cq.edit_message_text(text, reply_markup=kbd)
+            await cq.answer()
 
         # ---------------- backup ----------------
         @b.on_callback_query(filters.regex("^" + CB["backup"] + "$"))
@@ -3440,14 +3683,42 @@ class ProBotUI:
             return await message.reply_text(
                 self._t("ui_ai_provider_bad"), reply_markup=self._cancel_kbd())
         st.ai_provider = provider
-        st.step = "ai_model"
-        kb = self._model_picker(st, provider)
+        st.step = "ai_base_url"
+        from core.infrastructure.ai.providers import OpenAICompatibleProvider
+        default_url = OpenAICompatibleProvider.default_base_urls.get(provider, "")
+        st.buffer["default_base_url"] = default_url
+        prompt_text = (
+            f"🌐 **تنظیم آدرس سرور / هاست ({self._provider_label(provider)}):**\n\n"
+            f"آدرس پیش‌فرض:\n`{default_url or 'ندارد (نیازمند آدرس دستی)'}`\n\n"
+            "✍️ لطفاً آدرس سرور را ارسال کنید (مثال: `http://sub.legoten.com:4455/v1`):\n"
+            "یا برای استفاده از پیش‌فرض دکمه زیر را لمس نمایید:"
+        )
+        kbd = self._kbd([
+            [("✅ استفاده از پیش‌فرض (یا بعدی)", "ai_url_default")],
+            [("❌ " + self._t("ui_cancel"), CB["cancel"])],
+        ])
         await self._persist(message.from_user.id, st)
+        await message.reply_text(prompt_text, reply_markup=kbd)
+
+    async def _step_ai_base_url(self, message: Message, st: UiState, text: str) -> None:
+        url = text.strip()
+        if url.lower() in ("default", "none", "-", "پیش‌فرض", "پیش فرض"):
+            url = str(st.buffer.get("default_base_url", ""))
+        elif not url.startswith("http://") and not url.startswith("https://"):
+            url = "http://" + url
+        st.ai_base_url = url
+        st.step = "ai_model"
+        kb = self._model_picker(st, st.ai_provider)
+        await self._persist(message.from_user.id, st)
+        msg_text = (
+            f"✅ آدرس ذخیره شد: `{url or 'پیش‌فرض'}`\n\n"
+            + self._t("ui_ai_model")
+            + "\n(از لیست زیر انتخاب کنید یا نام مدل دلخواه مانند `coding` را تایپ کنید):"
+        )
         if kb is not None:
-            await message.reply_text(self._t("ui_ai_model"), reply_markup=kb)
+            await message.reply_text(msg_text, reply_markup=kb)
         else:
-            await message.reply_text(
-                self._t("ui_ai_model"), reply_markup=self._cancel_kbd())
+            await message.reply_text(msg_text, reply_markup=self._cancel_kbd())
 
     async def _step_ai_model(self, message: Message, st: UiState, text: str) -> None:
         st.ai_model = text.strip()
@@ -3457,29 +3728,117 @@ class ProBotUI:
 
     async def _step_ai_api_key(self, message: Message, st: UiState, text: str) -> None:
         st.step = ""
+        user_id = message.from_user.id
         try:
             cfg = AIConfig(
                 name=st.ai_name,
                 provider=AIProviderType(st.ai_provider),
                 model=st.ai_model,
+                base_url=st.ai_base_url or "",
                 api_key=text.strip(),
             )
-            await self._ai.create(cfg)
+            created = await self._ai.create(cfg)
             try:
                 self._log.info(
                     "bot", "ai", f"AI config {cfg.name} created ({cfg.provider.value})")
             except Exception:
                 pass
-            await self._persist(message.from_user.id, st)
-            await message.reply_text(
-                self._t("ui_ai_done", name=cfg.name), reply_markup=self._ai_menu())
+            await self._persist(user_id, st)
+
+            # Immediately test health
+            ok, reply_or_err, latency = await self._ai.health_check(created.id)
+            health_info = {
+                "ok": ok,
+                "latency_ms": latency,
+                "reply": reply_or_err if ok else "",
+                "error": reply_or_err if not ok else "",
+            }
+            detail_text, detail_kbd = self._render_ai_detail(created, health_info=health_info)
+            banner = "✅ **پیکربندی هوش مصنوعی با موفقیت ثبت و آزمایش شد!**\n\n" if ok else "⚠️ **پیکربندی ذخیره شد اما تست اتصال با خطا مواجه گردید!**\n\n"
+            await message.reply_text(banner + detail_text, reply_markup=detail_kbd)
         except Exception as exc:
-            await self._record_error("ai", exc, user_id=message.from_user.id)
+            await self._record_error("ai", exc, user_id=user_id)
+            cfgs = await self._ai.list_all()
             await message.reply_text(
                 self._t("ui_ai_fail", error=tg_detail(exc)),
-                reply_markup=self._ai_menu())
+                reply_markup=self._ai_menu(cfgs))
         finally:
             try:
                 await message.delete()
             except Exception:
                 pass  # api key is sensitive — best-effort cleanup
+
+    async def _step_ai_edit_host(self, message: Message, st: UiState, text: str) -> None:
+        aid = str(st.buffer.get("ai_edit_id", ""))
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+        cfg = await self._ai.get(aid) if aid else None
+        if not cfg:
+            cfgs = await self._ai.list_all()
+            await message.reply_text("❌ پیکربندی یافت نشد.", reply_markup=self._ai_menu(cfgs))
+            return
+        new_url = text.strip()
+        if new_url.lower() in ("default", "none", "-", "پیش‌فرض", "پیش فرض"):
+            new_url = ""
+        elif not new_url.startswith("http://") and not new_url.startswith("https://"):
+            new_url = "http://" + new_url
+        cfg.base_url = new_url
+        await self._ai.update(cfg)
+        ok, reply_or_err, latency = await self._ai.health_check(cfg.id)
+        health_info = {
+            "ok": ok,
+            "latency_ms": latency,
+            "reply": reply_or_err if ok else "",
+            "error": reply_or_err if not ok else "",
+        }
+        detail_text, detail_kbd = self._render_ai_detail(cfg, health_info=health_info)
+        await message.reply_text("✅ آدرس هاست به‌روزرسانی شد:\n\n" + detail_text, reply_markup=detail_kbd)
+
+    async def _step_ai_edit_model(self, message: Message, st: UiState, text: str) -> None:
+        aid = str(st.buffer.get("ai_edit_id", ""))
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+        cfg = await self._ai.get(aid) if aid else None
+        if not cfg:
+            cfgs = await self._ai.list_all()
+            await message.reply_text("❌ پیکربندی یافت نشد.", reply_markup=self._ai_menu(cfgs))
+            return
+        cfg.model = text.strip()
+        await self._ai.update(cfg)
+        ok, reply_or_err, latency = await self._ai.health_check(cfg.id)
+        health_info = {
+            "ok": ok,
+            "latency_ms": latency,
+            "reply": reply_or_err if ok else "",
+            "error": reply_or_err if not ok else "",
+        }
+        detail_text, detail_kbd = self._render_ai_detail(cfg, health_info=health_info)
+        await message.reply_text("✅ مدل با موفقیت تغییر کرد:\n\n" + detail_text, reply_markup=detail_kbd)
+
+    async def _step_ai_edit_key(self, message: Message, st: UiState, text: str) -> None:
+        aid = str(st.buffer.get("ai_edit_id", ""))
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        cfg = await self._ai.get(aid) if aid else None
+        if not cfg:
+            cfgs = await self._ai.list_all()
+            await message.reply_text("❌ پیکربندی یافت نشد.", reply_markup=self._ai_menu(cfgs))
+            return
+        cfg.api_key = text.strip()
+        await self._ai.update(cfg)
+        ok, reply_or_err, latency = await self._ai.health_check(cfg.id)
+        health_info = {
+            "ok": ok,
+            "latency_ms": latency,
+            "reply": reply_or_err if ok else "",
+            "error": reply_or_err if not ok else "",
+        }
+        detail_text, detail_kbd = self._render_ai_detail(cfg, health_info=health_info)
+        await message.reply_text("✅ کلید API با موفقیت به‌روزرسانی شد:\n\n" + detail_text, reply_markup=detail_kbd)

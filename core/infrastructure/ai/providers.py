@@ -6,7 +6,9 @@ back to the original text instead of losing the message.
 """
 
 import asyncio
+import json
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import Dict, Type
 
@@ -35,9 +37,20 @@ class IAIProvider(ABC):
     async def health_check(self, config: AIConfig) -> bool:
         ...
 
+    async def check_health(self, config: AIConfig) -> tuple[bool, str, float]:
+        """Returns (is_healthy, response_or_error, latency_ms)."""
+        t0 = time.perf_counter()
+        try:
+            res = await self.rewrite(config, "ping")
+            elapsed = (time.perf_counter() - t0) * 1000
+            return True, res, elapsed
+        except Exception as exc:
+            elapsed = (time.perf_counter() - t0) * 1000
+            return False, f"{type(exc).__name__}: {exc}", elapsed
+
 
 async def _post_json(url: str, *, headers: dict, payload: dict, timeout: float = REQUEST_TIMEOUT) -> dict:
-    """POST JSON with retry on transient failures. Raises on final failure."""
+    """POST JSON with retry on transient failures. Handles both JSON and SSE streams."""
     last_exc: Exception | None = None
     async with httpx.AsyncClient(timeout=timeout) as client:
         for attempt in range(MAX_RETRIES + 1):
@@ -49,7 +62,32 @@ async def _post_json(url: str, *, headers: dict, payload: dict, timeout: float =
                     await asyncio.sleep(wait)
                     continue
                 resp.raise_for_status()
-                return resp.json()
+                try:
+                    return resp.json()
+                except Exception:
+                    # Fallback parser for endpoints that return SSE chunks (data: ...)
+                    raw_text = resp.text.strip()
+                    if "data:" in raw_text:
+                        full_content = []
+                        for line in raw_text.splitlines():
+                            line = line.strip()
+                            if line.startswith("data:") and line != "data: [DONE]":
+                                chunk_str = line[5:].strip()
+                                try:
+                                    chunk = json.loads(chunk_str)
+                                    choices = chunk.get("choices", [])
+                                    if choices:
+                                        delta = choices[0].get("delta", {})
+                                        if "content" in delta and delta["content"]:
+                                            full_content.append(delta["content"])
+                                        msg = choices[0].get("message", {})
+                                        if "content" in msg and msg["content"]:
+                                            full_content.append(msg["content"])
+                                except Exception:
+                                    continue
+                        if full_content:
+                            return {"choices": [{"message": {"content": "".join(full_content)}}]}
+                    raise
             except httpx.TimeoutException as exc:
                 last_exc = exc
                 if attempt < MAX_RETRIES:
@@ -87,10 +125,14 @@ class OpenAICompatibleProvider(IAIProvider):
     }
 
     def base_url(self, config: AIConfig) -> str:
-        if config.base_url:
-            return config.base_url.rstrip("/")
-        key = config.provider.value if hasattr(config.provider, "value") else str(config.provider)
-        return self.default_base_urls.get(key, "").rstrip("/")
+        url = config.base_url.strip() if config.base_url else ""
+        if not url:
+            key = config.provider.value if hasattr(config.provider, "value") else str(config.provider)
+            url = self.default_base_urls.get(key, "")
+        url = url.rstrip("/")
+        if url and not any(url.endswith(suffix) for suffix in ("/v1", "/v1beta", "/v2", "/v3", "/api")):
+            url = f"{url}/v1"
+        return url
 
     def headers(self, config: AIConfig) -> dict:
         headers = {"Authorization": f"Bearer {config.api_key}"}
@@ -114,6 +156,7 @@ class OpenAICompatibleProvider(IAIProvider):
                 {"role": "system", "content": config.system_prompt},
                 {"role": "user", "content": prompt},
             ],
+            "stream": False,
         }
         data = await _post_json(url, headers=self.headers(config), payload=payload)
         try:
@@ -122,11 +165,8 @@ class OpenAICompatibleProvider(IAIProvider):
             raise ValueError(f"unexpected chat-completions response: {exc}")
 
     async def health_check(self, config: AIConfig) -> bool:
-        try:
-            await self.rewrite(config, "ping")
-            return True
-        except Exception:
-            return False
+        ok, _, _ = await self.check_health(config)
+        return ok
 
 
 class AnthropicProvider(IAIProvider):
@@ -155,11 +195,8 @@ class AnthropicProvider(IAIProvider):
             raise ValueError(f"unexpected Anthropic response: {exc}")
 
     async def health_check(self, config: AIConfig) -> bool:
-        try:
-            await self.rewrite(config, "ping")
-            return True
-        except Exception:
-            return False
+        ok, _, _ = await self.check_health(config)
+        return ok
 
 
 class GeminiProvider(IAIProvider):
@@ -184,11 +221,8 @@ class GeminiProvider(IAIProvider):
             raise ValueError(f"unexpected Gemini response: {exc}")
 
     async def health_check(self, config: AIConfig) -> bool:
-        try:
-            await self.rewrite(config, "ping")
-            return True
-        except Exception:
-            return False
+        ok, _, _ = await self.check_health(config)
+        return ok
 
 
 class AIProviderFactory:
@@ -202,13 +236,13 @@ class AIProviderFactory:
         "groq": ["llama-3.3-70b-versatile", "moonshotai/kimi-k2-instruct"],
         "deepseek": ["deepseek-chat", "deepseek-reasoner"],
         "openrouter": ["openai/gpt-5-mini", "anthropic/claude-sonnet-4-5", "google/gemini-2.5-flash"],
-        "9router": ["auto"],
-        "ninerouter": ["auto"],
+        "9router": ["coding", "auto", "gemini/gemini-3.8-flash", "mistral", "Free"],
+        "ninerouter": ["coding", "auto", "gemini/gemini-3.8-flash", "mistral", "Free"],
         "xai": ["grok-4", "grok-3-mini"],
         "mistral": ["mistral-large-latest", "mistral-small-latest"],
         "together": ["meta-llama/Llama-3.3-70B-Instruct-Turbo"],
         "fireworks": ["accounts/fireworks/models/llama-v3p3-70b-instruct"],
-        "custom": ["custom-model"],
+        "custom": ["coding", "gpt-4o-mini", "custom-model"],
     }
 
     def __init__(self) -> None:
