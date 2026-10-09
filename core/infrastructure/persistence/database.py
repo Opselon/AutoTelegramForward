@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 6
 
 MIGRATIONS = {
     1: """
@@ -79,6 +79,202 @@ MIGRATIONS = {
     );
     CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
     """,
+    2: """
+    -- v2: multi-target rules, flexible scheduling, credential vault.
+    ALTER TABLE forward_rules ADD COLUMN target_chat_ids TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE forward_rules ADD COLUMN delay_seconds REAL NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN skip_history INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE forward_rules ADD COLUMN since_ts INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN ignore_edits INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN trigger_events TEXT NOT NULL DEFAULT 'NEW_MESSAGE';
+    ALTER TABLE forward_rules ADD COLUMN content_mode TEXT NOT NULL DEFAULT 'AUTO';
+    ALTER TABLE forward_rules ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}';
+
+    ALTER TABLE sessions ADD COLUMN api_credential_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE sessions ADD COLUMN proxy TEXT NOT NULL DEFAULT '';
+
+    -- Encrypted credential vault: api_id/api_hash pairs, bot tokens, proxies.
+    CREATE TABLE IF NOT EXISTS api_credentials (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL DEFAULT '',
+        api_id INTEGER NOT NULL DEFAULT 0,
+        api_hash_encrypted TEXT NOT NULL DEFAULT '',
+        proxy TEXT NOT NULL DEFAULT '',
+        is_default INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS bot_tokens (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL DEFAULT '',
+        token_encrypted TEXT NOT NULL DEFAULT '',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS processed_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule_id TEXT NOT NULL,
+        chat_id TEXT NOT NULL,
+        message_id INTEGER NOT NULL,
+        media_group_id TEXT,
+        ts INTEGER NOT NULL,
+        UNIQUE(rule_id, chat_id, message_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_processed_rule ON processed_messages(rule_id, ts);
+    """,
+    # ------------------------------------------------------------------ #
+    # v3: professional state DB — durable UI flows, metrics, error log,
+    #     per-user settings, rule chains, text replacements.
+    # ------------------------------------------------------------------ #
+    3: """
+    -- Durable per-user UI state: multi-step flows survive a restart.
+    CREATE TABLE IF NOT EXISTS ui_states (
+        user_id INTEGER PRIMARY KEY,
+        step TEXT NOT NULL DEFAULT '',
+        buffer TEXT NOT NULL DEFAULT '{}',
+        updated_at INTEGER NOT NULL
+    );
+
+    -- Per-user preferences + quota/plan state (millions of rows friendly).
+    CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY,
+        language TEXT NOT NULL DEFAULT '',
+        is_admin INTEGER NOT NULL DEFAULT 0,
+        plan TEXT NOT NULL DEFAULT 'free',
+        quota_forwarded INTEGER NOT NULL DEFAULT 0,
+        quota_reset_at INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_users_plan ON users(plan);
+
+    -- Structured error log: exact Telegram RPC error surfaced to the user.
+    CREATE TABLE IF NOT EXISTS error_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        user_id INTEGER,
+        session_id TEXT,
+        rule_id TEXT,
+        category TEXT NOT NULL,          -- login | forward | ai | auth | bot
+        error_name TEXT NOT NULL,        -- exact pyrogram exception class
+        severity TEXT NOT NULL,          -- info | warn | error | auth | fatal
+        detail TEXT NOT NULL DEFAULT '',
+        recoverable INTEGER NOT NULL DEFAULT 0,
+        chat_id TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_error_ts ON error_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_error_category ON error_log(category, severity);
+    CREATE INDEX IF NOT EXISTS idx_error_session ON error_log(session_id);
+
+    -- Rule chaining: A -> B -> C (rule.target may feed another rule's source).
+    ALTER TABLE forward_rules ADD COLUMN chain_of TEXT NOT NULL DEFAULT '';
+    -- Text replacement: words/usernames/URLs to swap before sending.
+    ALTER TABLE forward_rules ADD COLUMN replacements TEXT NOT NULL DEFAULT '{}';
+    -- Header / footer templates.
+    ALTER TABLE forward_rules ADD COLUMN header TEXT NOT NULL DEFAULT '';
+    ALTER TABLE forward_rules ADD COLUMN footer TEXT NOT NULL DEFAULT '';
+    -- Sync mode: replicate edits AND deletes.
+    ALTER TABLE forward_rules ADD COLUMN sync_edits INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE forward_rules ADD COLUMN sync_deletes INTEGER NOT NULL DEFAULT 0;
+    -- Whitelist / blacklist of *senders* (user ids).
+    ALTER TABLE forward_rules ADD COLUMN allow_senders TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE forward_rules ADD COLUMN block_senders TEXT NOT NULL DEFAULT '[]';
+    -- Topic (forum) support: target topic id.
+    ALTER TABLE forward_rules ADD COLUMN target_topic_id INTEGER NOT NULL DEFAULT 0;
+
+    -- Per-rule live counters (hot path: bumped without touching the rule row).
+    CREATE TABLE IF NOT EXISTS rule_stats (
+        rule_id TEXT PRIMARY KEY,
+        forwarded INTEGER NOT NULL DEFAULT 0,
+        filtered INTEGER NOT NULL DEFAULT 0,
+        errors INTEGER NOT NULL DEFAULT 0,
+        last_forward_ts INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (rule_id) REFERENCES forward_rules(id) ON DELETE CASCADE
+    );
+
+    -- Hourly throughput buckets for the dashboard (rolling, TTL-pruned).
+    CREATE TABLE IF NOT EXISTS metrics_hourly (
+        ts_hour INTEGER NOT NULL,
+        forwarded INTEGER NOT NULL DEFAULT 0,
+        filtered INTEGER NOT NULL DEFAULT 0,
+        errors INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (ts_hour)
+    );
+    """,
+    4: """
+    -- TASK 03 / audit D1: persisted authentication state machine.
+    -- A login in progress must survive a process restart (or at worst
+    -- degrade to a resumable state) instead of vanishing silently.
+    CREATE TABLE IF NOT EXISTS auth_flows (
+        user_id INTEGER PRIMARY KEY,
+        state TEXT NOT NULL,                -- AuthState value
+        phone_number TEXT NOT NULL DEFAULT '',
+        credential_id TEXT NOT NULL DEFAULT 'default',
+        phone_code_hash TEXT NOT NULL DEFAULT '',
+        -- retry counters survive a restart so a crash cannot be used to
+        -- reset the Telegram-side attempt budget
+        code_attempts INTEGER NOT NULL DEFAULT 0,
+        password_attempts INTEGER NOT NULL DEFAULT 0,
+        -- version for optimistic concurrency: idempotent transitions
+        version INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        last_error TEXT NOT NULL DEFAULT '',
+        correlation_id TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_auth_flows_state ON auth_flows(state);
+    CREATE INDEX IF NOT EXISTS idx_auth_flows_expires ON auth_flows(expires_at);
+    """,
+    5: """
+    -- v5: optimistic concurrency / versioning on forward_rules
+    -- protects against lost updates during concurrent edits
+    ALTER TABLE forward_rules ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+    """,
+    6: """
+    -- v6: P0 Data-Plane Reliability
+    -- Persistent message mapping for edit/delete synchronization
+    CREATE TABLE IF NOT EXISTS message_map (
+        id TEXT PRIMARY KEY,
+        rule_id TEXT NOT NULL,
+        source_chat_id TEXT NOT NULL,
+        source_message_id INTEGER NOT NULL,
+        target_chat_id TEXT NOT NULL,
+        target_message_id INTEGER,
+        media_group_id TEXT,
+        delivery_status TEXT NOT NULL DEFAULT 'PENDING',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_msgmap_src ON message_map(source_chat_id, source_message_id);
+    CREATE INDEX IF NOT EXISTS idx_msgmap_tgt ON message_map(target_chat_id, target_message_id);
+    CREATE INDEX IF NOT EXISTS idx_msgmap_rule_src ON message_map(rule_id, source_chat_id, source_message_id);
+    CREATE INDEX IF NOT EXISTS idx_msgmap_media ON message_map(media_group_id);
+
+    -- Durable delivery jobs queue for non-blocking asynchronous workers and restart recovery
+    CREATE TABLE IF NOT EXISTS delivery_jobs (
+        id TEXT PRIMARY KEY,
+        rule_id TEXT NOT NULL,
+        source_chat_id TEXT NOT NULL,
+        source_message_id INTEGER NOT NULL,
+        target_chat_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 5,
+        next_retry_at REAL NOT NULL DEFAULT 0,
+        lease_until REAL NOT NULL DEFAULT 0,
+        worker_id TEXT,
+        error_detail TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_delivery_jobs_poll ON delivery_jobs(status, next_retry_at, lease_until);
+    CREATE INDEX IF NOT EXISTS idx_delivery_jobs_rule ON delivery_jobs(rule_id);
+    """,
 }
 
 
@@ -99,6 +295,11 @@ class SqliteDatabase:
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         self._migrate()
+
+    def get_schema_version(self) -> int:
+        with self._lock:
+            row = self._conn.execute("SELECT version FROM schema_version").fetchone()
+            return int(row["version"]) if row else 0
 
     def _migrate(self) -> None:
         with self._lock:

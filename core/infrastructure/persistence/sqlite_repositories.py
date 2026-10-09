@@ -5,18 +5,72 @@ swapped in the DI container — domain and application layers are untouched.
 """
 
 import json
+import time
+import uuid
 from typing import List, Optional
 
 from ...application.repositories import (
+    ApiCredential,
+    BotToken,
     IAIConfigRepository,
+    IApiCredentialRepository,
+    IBotTokenRepository,
+    IDeliveryQueueRepository,
+    IErrorLogRepository,
     IFilterRuleRepository,
     IForwardRuleRepository,
+    IMessageMapRepository,
+    IMetricsRepository,
+    IProcessedMessageRepository,
+    IRuleStatsRepository,
     ISessionRepository,
+    IUiStateRepository,
+    IUserRepository,
+    IAuthFlowRepository,
 )
-from ...domain.entities import AIConfig, FilterRule, ForwardRule, TelegramSession
-from ...domain.value_objects import AIProviderType, ForwardMode, RoutingType
+from ...domain.entities import (
+    AIConfig,
+    DeliveryJob,
+    DeliveryStatus,
+    FilterRule,
+    ForwardRule,
+    MessageMapping,
+    TelegramSession,
+)
+from ..telegram.auth_state import ACTIVE_STATES, AuthState
+from ...domain.value_objects import (
+    AIProviderType,
+    ContentMode,
+    ForwardMode,
+    RoutingType,
+    TriggerEvent,
+)
 from ..security.crypto import CryptoService
 from .database import SqliteDatabase
+
+
+def _new_id() -> str:
+    return str(uuid.uuid4())
+
+
+def _now() -> int:
+    return int(time.time())
+
+
+def _safe_list(raw, default=None):
+    try:
+        val = json.loads(raw) if raw else default
+        return val if isinstance(val, list) else (default or [])
+    except (json.JSONDecodeError, TypeError):
+        return default or []
+
+
+def _safe_dict(raw, default=None):
+    try:
+        val = json.loads(raw) if raw else default
+        return val if isinstance(val, dict) else (default or {})
+    except (json.JSONDecodeError, TypeError):
+        return default or {}
 
 
 class SqliteSessionRepository(ISessionRepository):
@@ -28,11 +82,13 @@ class SqliteSessionRepository(ISessionRepository):
         enc = self._crypto.encrypt(session.session_string_encrypted) if session.session_string_encrypted else ""
         self._db.execute(
             "INSERT INTO sessions (id, phone_number, session_string_encrypted, user_id, username,"
-            " first_name, is_active, is_authorized, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " first_name, is_active, is_authorized, api_credential_id, proxy,"
+            " created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 session.id, session.phone_number, enc, session.user_id, session.username,
                 session.first_name, int(session.is_active), int(session.is_authorized),
+                session.api_credential_id, json.dumps(session.proxy or {}),
                 session.created_at, session.updated_at,
             ),
         )
@@ -42,10 +98,12 @@ class SqliteSessionRepository(ISessionRepository):
         enc = self._crypto.encrypt(session.session_string_encrypted) if session.session_string_encrypted else ""
         self._db.execute(
             "UPDATE sessions SET phone_number=?, session_string_encrypted=?, user_id=?, username=?,"
-            " first_name=?, is_active=?, is_authorized=?, updated_at=? WHERE id=?",
+            " first_name=?, is_active=?, is_authorized=?, api_credential_id=?, proxy=?,"
+            " updated_at=? WHERE id=?",
             (
                 session.phone_number, enc, session.user_id, session.username,
                 session.first_name, int(session.is_active), int(session.is_authorized),
+                session.api_credential_id, json.dumps(session.proxy or {}),
                 session.updated_at, session.id,
             ),
         )
@@ -53,6 +111,7 @@ class SqliteSessionRepository(ISessionRepository):
 
     def _row_to_entity(self, row) -> TelegramSession:
         enc = row["session_string_encrypted"]
+        cols = set(row.keys())
         return TelegramSession(
             id=row["id"],
             phone_number=row["phone_number"],
@@ -62,6 +121,8 @@ class SqliteSessionRepository(ISessionRepository):
             first_name=row["first_name"],
             is_active=bool(row["is_active"]),
             is_authorized=bool(row["is_authorized"]),
+            api_credential_id=row["api_credential_id"] if "api_credential_id" in cols else "default",
+            proxy=_safe_dict(row["proxy"], {}) if "proxy" in cols and row["proxy"] else None,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
@@ -92,47 +153,164 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         self._db = db
 
     async def add(self, rule: ForwardRule) -> ForwardRule:
-        self._db.execute(
-            "INSERT INTO forward_rules (id, session_id, source_chat_id, source_chat_name, target_chat_id,"
-            " target_chat_name, routing_type, forward_mode, is_active, filter_rule_id, ai_config_id,"
-            " remove_links, custom_caption_template, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                rule.id, rule.session_id, rule.source_chat_id, rule.source_chat_name,
-                rule.target_chat_id, rule.target_chat_name, rule.routing_type.value,
-                rule.forward_mode.value, int(rule.is_active), rule.filter_rule_id,
-                rule.ai_config_id, int(rule.remove_links), rule.custom_caption_template,
-                rule.created_at, rule.updated_at,
-            ),
-        )
+        rule_version = int(getattr(rule, "version", 1) or 1)
+        # Check if version column is present
+        try:
+            self._db.execute(
+                "INSERT INTO forward_rules (id, session_id, source_chat_id, source_chat_name, target_chat_id,"
+                " target_chat_name, target_chat_ids, routing_type, forward_mode, is_active, filter_rule_id,"
+                " ai_config_id, remove_links, custom_caption_template, delay_seconds, skip_history,"
+                " since_ts, ignore_edits, trigger_events, content_mode, metadata, version, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    rule.id, rule.session_id, rule.source_chat_id, rule.source_chat_name,
+                    rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
+                    rule.routing_type.value, rule.forward_mode.value, int(rule.is_active),
+                    rule.filter_rule_id, rule.ai_config_id, int(rule.remove_links),
+                    rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
+                    rule.since_ts, int(rule.ignore_edits),
+                    json.dumps(getattr(rule, "trigger_events", [TriggerEvent.NEW_MESSAGE.value])
+                               if isinstance(getattr(rule, "trigger_events", None), list)
+                               else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
+                    getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
+                    json.dumps(rule.metadata or {}), rule_version, rule.created_at, rule.updated_at,
+                ),
+            )
+        except Exception as exc:
+            # Fallback for old schema without version column
+            if "has no column named version" in str(exc) or "no column named version" in str(exc):
+                self._db.execute(
+                    "INSERT INTO forward_rules (id, session_id, source_chat_id, source_chat_name, target_chat_id,"
+                    " target_chat_name, target_chat_ids, routing_type, forward_mode, is_active, filter_rule_id,"
+                    " ai_config_id, remove_links, custom_caption_template, delay_seconds, skip_history,"
+                    " since_ts, ignore_edits, trigger_events, content_mode, metadata, created_at, updated_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        rule.id, rule.session_id, rule.source_chat_id, rule.source_chat_name,
+                        rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
+                        rule.routing_type.value, rule.forward_mode.value, int(rule.is_active),
+                        rule.filter_rule_id, rule.ai_config_id, int(rule.remove_links),
+                        rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
+                        rule.since_ts, int(rule.ignore_edits),
+                        json.dumps(getattr(rule, "trigger_events", [TriggerEvent.NEW_MESSAGE.value])
+                                   if isinstance(getattr(rule, "trigger_events", None), list)
+                                   else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
+                        getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
+                        json.dumps(rule.metadata or {}), rule.created_at, rule.updated_at,
+                    ),
+                )
+            else:
+                raise
         return rule
 
-    async def update(self, rule: ForwardRule) -> ForwardRule:
-        self._db.execute(
-            "UPDATE forward_rules SET session_id=?, source_chat_id=?, source_chat_name=?, target_chat_id=?,"
-            " target_chat_name=?, routing_type=?, forward_mode=?, is_active=?, filter_rule_id=?, ai_config_id=?,"
-            " remove_links=?, custom_caption_template=?, updated_at=? WHERE id=?",
-            (
-                rule.session_id, rule.source_chat_id, rule.source_chat_name,
-                rule.target_chat_id, rule.target_chat_name, rule.routing_type.value,
-                rule.forward_mode.value, int(rule.is_active), rule.filter_rule_id,
-                rule.ai_config_id, int(rule.remove_links), rule.custom_caption_template,
-                rule.updated_at, rule.id,
-            ),
+    async def update(self, rule: ForwardRule, expected_version: Optional[int] = None) -> ForwardRule:
+        rule_version = int(getattr(rule, "version", 1) or 1)
+        next_version = rule_version + 1
+
+        trigger_json = json.dumps(
+            getattr(rule, "trigger_events", [TriggerEvent.NEW_MESSAGE.value])
+            if isinstance(getattr(rule, "trigger_events", None), list)
+            else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]
         )
+        content_val = getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value)
+        meta_json = json.dumps(rule.metadata or {})
+
+        params = (
+            rule.session_id, rule.source_chat_id, rule.source_chat_name,
+            rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
+            rule.routing_type.value, rule.forward_mode.value, int(rule.is_active),
+            rule.filter_rule_id, rule.ai_config_id, int(rule.remove_links),
+            rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
+            rule.since_ts, int(rule.ignore_edits),
+            trigger_json, content_val, meta_json, next_version, rule.updated_at,
+        )
+
+        from ...application.repositories import ConcurrencyError
+
+        if expected_version is not None:
+            cur = self._db.execute(
+                "UPDATE forward_rules SET session_id=?, source_chat_id=?, source_chat_name=?, target_chat_id=?,"
+                " target_chat_name=?, target_chat_ids=?, routing_type=?, forward_mode=?, is_active=?,"
+                " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
+                " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
+                " content_mode=?, metadata=?, version=?, updated_at=? WHERE id=? AND version=?",
+                (*params, rule.id, int(expected_version)),
+            )
+            if cur.rowcount == 0:
+                # Check if rule exists
+                existing = await self.get_by_id(rule.id)
+                if not existing:
+                    raise ValueError(f"Rule {rule.id} does not exist")
+                raise ConcurrencyError(
+                    f"Concurrency conflict on rule {rule.id}: expected version {expected_version}, "
+                    f"current version is {existing.version}"
+                )
+        else:
+            try:
+                cur = self._db.execute(
+                    "UPDATE forward_rules SET session_id=?, source_chat_id=?, source_chat_name=?, target_chat_id=?,"
+                    " target_chat_name=?, target_chat_ids=?, routing_type=?, forward_mode=?, is_active=?,"
+                    " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
+                    " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
+                    " content_mode=?, metadata=?, version=?, updated_at=? WHERE id=?",
+                    (*params, rule.id),
+                )
+            except Exception as exc:
+                if "no such column: version" in str(exc) or "has no column named version" in str(exc):
+                    # Fallback update without version
+                    cur = self._db.execute(
+                        "UPDATE forward_rules SET session_id=?, source_chat_id=?, source_chat_name=?, target_chat_id=?,"
+                        " target_chat_name=?, target_chat_ids=?, routing_type=?, forward_mode=?, is_active=?,"
+                        " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
+                        " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
+                        " content_mode=?, metadata=?, updated_at=? WHERE id=?",
+                        (
+                            rule.session_id, rule.source_chat_id, rule.source_chat_name,
+                            rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
+                            rule.routing_type.value, rule.forward_mode.value, int(rule.is_active),
+                            rule.filter_rule_id, rule.ai_config_id, int(rule.remove_links),
+                            rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
+                            rule.since_ts, int(rule.ignore_edits),
+                            trigger_json, content_val, meta_json, rule.updated_at, rule.id,
+                        ),
+                    )
+                else:
+                    raise
+
+        rule.version = next_version
         return rule
 
     @staticmethod
     def _row_to_entity(row) -> ForwardRule:
+        cols = set(row.keys())
+        trigger_raw = row["trigger_events"] if "trigger_events" in cols else "NEW_MESSAGE"
+        triggers = _safe_list(trigger_raw, [TriggerEvent.NEW_MESSAGE.value])
+        if isinstance(triggers, str):
+            triggers = [triggers]
+        content_raw = row["content_mode"] if "content_mode" in cols else ContentMode.AUTO.value
+        try:
+            cm = ContentMode(content_raw)
+        except ValueError:
+            cm = ContentMode.AUTO
+        rule_version = int(row["version"]) if ("version" in cols and row["version"] is not None) else 1
         return ForwardRule(
             id=row["id"], session_id=row["session_id"],
             source_chat_id=row["source_chat_id"], source_chat_name=row["source_chat_name"],
             target_chat_id=row["target_chat_id"], target_chat_name=row["target_chat_name"],
+            target_chat_ids=_safe_list(row["target_chat_ids"] if "target_chat_ids" in cols else "[]", []),
             routing_type=RoutingType(row["routing_type"]),
             forward_mode=ForwardMode(row["forward_mode"]),
             is_active=bool(row["is_active"]), filter_rule_id=row["filter_rule_id"],
             ai_config_id=row["ai_config_id"], remove_links=bool(row["remove_links"]),
             custom_caption_template=row["custom_caption_template"],
+            delay_seconds=float(row["delay_seconds"]) if "delay_seconds" in cols else 0.0,
+            skip_history=bool(row["skip_history"]) if "skip_history" in cols else True,
+            since_ts=int(row["since_ts"] or 0) if "since_ts" in cols else 0,
+            ignore_edits=bool(row["ignore_edits"]) if "ignore_edits" in cols else False,
+            trigger_events=triggers,
+            content_mode=cm,
+            metadata=_safe_dict(row["metadata"] if "metadata" in cols else "{}", {}),
+            version=rule_version,
             created_at=row["created_at"], updated_at=row["updated_at"],
         )
 
@@ -277,3 +455,732 @@ class SqliteAIConfigRepository(IAIConfigRepository):
     async def delete(self, config_id: str) -> bool:
         cur = self._db.execute("DELETE FROM ai_configs WHERE id=?", (config_id,))
         return cur.rowcount > 0
+
+
+# --------------------------------------------------------------------------- #
+# Credential vault (api_id/api_hash) + bot tokens + processed-message dedupe
+# --------------------------------------------------------------------------- #
+
+class SqliteApiCredentialRepository(IApiCredentialRepository):
+    def __init__(self, db: SqliteDatabase, crypto: CryptoService) -> None:
+        self._db = db
+        self._crypto = crypto
+
+    async def add(self, cred: ApiCredential) -> ApiCredential:
+        self._db.execute(
+            "INSERT INTO api_credentials (id, label, api_id, api_hash_encrypted, proxy,"
+            " is_default, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                cred.id, cred.label, cred.api_id,
+                self._crypto.encrypt(cred.api_hash) if cred.api_hash else "",
+                cred.proxy, int(cred.is_default), cred.created_at, cred.updated_at,
+            ),
+        )
+        return cred
+
+    async def update(self, cred: ApiCredential) -> ApiCredential:
+        self._db.execute(
+            "UPDATE api_credentials SET label=?, api_id=?, api_hash_encrypted=?, proxy=?,"
+            " is_default=?, updated_at=? WHERE id=?",
+            (
+                cred.label, cred.api_id,
+                self._crypto.encrypt(cred.api_hash) if cred.api_hash else "",
+                cred.proxy, int(cred.is_default), cred.updated_at, cred.id,
+            ),
+        )
+        return cred
+
+    def _row_to_entity(self, row) -> ApiCredential:
+        enc = row["api_hash_encrypted"]
+        return ApiCredential(
+            id=row["id"], label=row["label"], api_id=row["api_id"],
+            api_hash=self._crypto.decrypt(enc) if enc else "",
+            proxy=row["proxy"], is_default=bool(row["is_default"]),
+            created_at=row["created_at"], updated_at=row["updated_at"],
+        )
+
+    async def get_by_id(self, cred_id: str) -> Optional[ApiCredential]:
+        row = self._db.query_one("SELECT * FROM api_credentials WHERE id=?", (cred_id,))
+        return self._row_to_entity(row) if row else None
+
+    async def get_default(self) -> Optional[ApiCredential]:
+        row = self._db.query_one("SELECT * FROM api_credentials WHERE is_default=1 LIMIT 1")
+        return self._row_to_entity(row) if row else None
+
+    async def list_all(self) -> List[ApiCredential]:
+        rows = self._db.query_all("SELECT * FROM api_credentials ORDER BY label")
+        return [self._row_to_entity(r) for r in rows]
+
+    async def delete(self, cred_id: str) -> bool:
+        cur = self._db.execute("DELETE FROM api_credentials WHERE id=?", (cred_id,))
+        return cur.rowcount > 0
+
+
+class SqliteBotTokenRepository(IBotTokenRepository):
+    def __init__(self, db: SqliteDatabase, crypto: CryptoService) -> None:
+        self._db = db
+        self._crypto = crypto
+
+    async def add(self, token: BotToken) -> BotToken:
+        self._db.execute(
+            "INSERT INTO bot_tokens (id, label, token_encrypted, is_active, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                token.id, token.label,
+                self._crypto.encrypt(token.token) if token.token else "",
+                int(token.is_active), token.created_at, token.updated_at,
+            ),
+        )
+        return token
+
+    def _row_to_entity(self, row) -> BotToken:
+        enc = row["token_encrypted"]
+        return BotToken(
+            id=row["id"], label=row["label"],
+            token=self._crypto.decrypt(enc) if enc else "",
+            is_active=bool(row["is_active"]),
+            created_at=row["created_at"], updated_at=row["updated_at"],
+        )
+
+    async def get_by_id(self, token_id: str) -> Optional[BotToken]:
+        row = self._db.query_one("SELECT * FROM bot_tokens WHERE id=?", (token_id,))
+        return self._row_to_entity(row) if row else None
+
+    async def list_all(self) -> List[BotToken]:
+        rows = self._db.query_all("SELECT * FROM bot_tokens ORDER BY created_at")
+        return [self._row_to_entity(r) for r in rows]
+
+    async def list_active(self) -> List[BotToken]:
+        rows = self._db.query_all("SELECT * FROM bot_tokens WHERE is_active=1 ORDER BY created_at")
+        return [self._row_to_entity(r) for r in rows]
+
+    async def delete(self, token_id: str) -> bool:
+        cur = self._db.execute("DELETE FROM bot_tokens WHERE id=?", (token_id,))
+        return cur.rowcount > 0
+
+
+class SqliteProcessedMessageRepository(IProcessedMessageRepository):
+    """Restart-safe dedupe: remembers (rule, chat, message) triples."""
+
+    RETENTION_SECONDS = 60 * 60 * 24 * 30  # keep 30 days of history
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def was_processed(self, rule_id: str, chat_id: str, message_id: int) -> bool:
+        row = self._db.query_one(
+            "SELECT 1 FROM processed_messages WHERE rule_id=? AND chat_id=? AND message_id=?",
+            (rule_id, chat_id, message_id),
+        )
+        return row is not None
+
+    async def mark_processed(
+        self, rule_id: str, chat_id: str, message_id: int, media_group_id: str = ""
+    ) -> None:
+        self._db.execute(
+            "INSERT OR IGNORE INTO processed_messages (rule_id, chat_id, message_id,"
+            " media_group_id, ts) VALUES (?, ?, ?, ?, ?)",
+            (rule_id, chat_id, message_id, media_group_id or "", _now()),
+        )
+
+    async def purge_before(self, rule_id: str, ts: int) -> int:
+        cur = self._db.execute(
+            "DELETE FROM processed_messages WHERE rule_id=? AND ts < ?", (rule_id, ts)
+        )
+        return cur.rowcount
+
+    async def cleanup(self) -> int:
+        cutoff = _now() - self.RETENTION_SECONDS
+        cur = self._db.execute("DELETE FROM processed_messages WHERE ts < ?", (cutoff,))
+        return cur.rowcount
+
+
+# --------------------------------------------------------------------------- #
+# v3: professional state DB — UI state, error log, metrics, rule stats, users
+# --------------------------------------------------------------------------- #
+
+class SqliteAuthFlowRepository(IAuthFlowRepository):
+    """Persisted auth state machine rows (audit D1).
+
+    Every write bumps ``version`` — optimistic concurrency, so a late callback
+    from a previous flow cannot clobber the current one.
+    """
+
+    _COLUMNS = (
+        "user_id", "state", "phone_number", "credential_id", "phone_code_hash",
+        "code_attempts", "password_attempts", "version", "created_at",
+        "updated_at", "expires_at", "last_error", "correlation_id",
+    )
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def get(self, user_id: int) -> Optional[dict]:
+        return self._db.query_one(
+            "SELECT * FROM auth_flows WHERE user_id=?", (int(user_id),)
+        )
+
+    async def save(self, row: dict) -> None:
+        cols = [c for c in self._COLUMNS if c in row]
+        placeholders = ",".join("?" for _ in cols)
+        assignments = ",".join(f"{c}=excluded.{c}" for c in cols)
+        values = [row[c] for c in cols]
+        self._db.execute(
+            f"INSERT INTO auth_flows ({','.join(cols)}) VALUES ({placeholders})"
+            f" ON CONFLICT(user_id) DO UPDATE SET {assignments}",
+            tuple(values),
+        )
+
+    async def delete(self, user_id: int) -> None:
+        self._db.execute("DELETE FROM auth_flows WHERE user_id=?", (int(user_id),))
+
+    async def expired(self) -> list:
+        # only flows that are still waiting on somebody can expire
+        return self._db.query_all(
+            "SELECT * FROM auth_flows WHERE expires_at < ? AND state NOT IN (?,?,?,?)",
+            (
+                int(time.time()),
+                AuthState.AUTHENTICATED.value,
+                AuthState.READY.value,
+                AuthState.SESSION_REVOKED.value,
+                AuthState.AUTH_EXPIRED.value,
+            ),
+        )
+
+    async def active(self) -> list:
+        # one index seek on idx_auth_flows_state per active state
+        marks = ",".join("?" for _ in ACTIVE_STATES)
+        return self._db.query_all(
+            f"SELECT * FROM auth_flows WHERE state IN ({marks})",
+            tuple(s.value for s in ACTIVE_STATES),
+        )
+
+
+class SqliteUiStateRepository(IUiStateRepository):
+    """Durable UI flows: a restart mid-login resumes where the user stopped."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def get(self, user_id: int) -> Optional[dict]:
+        row = self._db.query_one(
+            "SELECT step, buffer FROM ui_states WHERE user_id=?", (int(user_id),)
+        )
+        if not row:
+            return None
+        return {"step": row["step"] or "", "buffer": SqliteDatabase.loads(row["buffer"], {})}
+
+    async def save(self, user_id: int, step: str, buffer: dict) -> None:
+        self._db.execute(
+            "INSERT INTO ui_states (user_id, step, buffer, updated_at) VALUES (?,?,?,?)"
+            " ON CONFLICT(user_id) DO UPDATE SET step=excluded.step, buffer=excluded.buffer,"
+            " updated_at=excluded.updated_at",
+            (int(user_id), step, SqliteDatabase.dumps(buffer or {}), int(time.time())),
+        )
+
+    async def clear(self, user_id: int) -> None:
+        self._db.execute("DELETE FROM ui_states WHERE user_id=?", (int(user_id),))
+
+
+class SqliteErrorLogRepository(IErrorLogRepository):
+    """Every Telegram RPC error, with the exact exception class kept."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def record(self, category, error_name, severity, detail="",
+                     recoverable=False, user_id=None, session_id=None,
+                     rule_id=None, chat_id=None) -> None:
+        self._db.execute(
+            "INSERT INTO error_log (ts, user_id, session_id, rule_id, category, error_name,"
+            " severity, detail, recoverable, chat_id)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (int(time.time()),
+             int(user_id) if user_id else None, session_id, rule_id,
+             category, error_name, severity, detail[:1000],
+             int(bool(recoverable)), chat_id),
+        )
+
+    async def recent(self, limit: int = 10, severity: Optional[str] = None) -> List[dict]:
+        if severity:
+            rows = self._db.query_all(
+                "SELECT * FROM error_log WHERE severity=? ORDER BY ts DESC LIMIT ?",
+                (severity, int(limit)),
+            )
+        else:
+            rows = self._db.query_all(
+                "SELECT * FROM error_log ORDER BY ts DESC LIMIT ?", (int(limit),)
+            )
+        return [dict(r) for r in rows]
+
+    async def counts_by_severity(self, since_ts: int = 0) -> dict:
+        rows = self._db.query_all(
+            "SELECT severity, COUNT(*) AS n FROM error_log WHERE ts>=?"
+            " GROUP BY severity",
+            (int(since_ts),),
+        )
+        return {r["severity"]: r["n"] for r in rows}
+
+
+class SqliteMetricsRepository(IMetricsRepository):
+    """Hourly throughput buckets — cheap writes, rolling window."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def bump(self, forwarded: int = 0, filtered: int = 0, errors: int = 0) -> None:
+        hour = (int(time.time()) // 3600) * 3600
+        self._db.execute(
+            "INSERT INTO metrics_hourly (ts_hour, forwarded, filtered, errors)"
+            " VALUES (?,?,?,?) ON CONFLICT(ts_hour) DO UPDATE SET"
+            " forwarded=forwarded+excluded.forwarded,"
+            " filtered=filtered+excluded.filtered,"
+            " errors=errors+excluded.errors",
+            (hour, int(forwarded), int(filtered), int(errors)),
+        )
+
+    async def hourly(self, hours: int = 24) -> List[dict]:
+        since = int(time.time()) - int(hours) * 3600
+        rows = self._db.query_all(
+            "SELECT ts_hour, forwarded, filtered, errors FROM metrics_hourly"
+            " WHERE ts_hour>=? ORDER BY ts_hour ASC",
+            (since,),
+        )
+        return [dict(r) for r in rows]
+
+    async def totals(self) -> dict:
+        row = self._db.query_one(
+            "SELECT COALESCE(SUM(forwarded),0) AS f, COALESCE(SUM(filtered),0) AS fl,"
+            " COALESCE(SUM(errors),0) AS e FROM metrics_hourly"
+        )
+        return {"forwarded": row["f"], "filtered": row["fl"], "errors": row["e"]}
+
+    async def total_str(self) -> str:
+        """Human-readable lifetime totals for the dashboard."""
+        t = await self.totals()
+        return f"{t['forwarded']} forwarded / {t['filtered']} filtered / {t['errors']} errors"
+
+    async def prune(self, keep_hours: int = 168) -> int:
+        cutoff = int(time.time()) - int(keep_hours) * 3600
+        cur = self._db.execute("DELETE FROM metrics_hourly WHERE ts_hour<?", (cutoff,))
+        return cur.rowcount
+
+
+class SqliteRuleStatsRepository(IRuleStatsRepository):
+    """Per-rule counters bumped on the hot path without touching rule rows."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def bump(self, rule_id: str, forwarded: int = 0, filtered: int = 0, errors: int = 0) -> None:
+        self._db.execute(
+            "INSERT INTO rule_stats (rule_id, forwarded, filtered, errors, last_forward_ts)"
+            " VALUES (?,?,?, ?,?) ON CONFLICT(rule_id) DO UPDATE SET"
+            " forwarded=forwarded+excluded.forwarded,"
+            " filtered=filtered+excluded.filtered,"
+            " errors=errors+excluded.errors,"
+            " last_forward_ts=excluded.last_forward_ts",
+            (rule_id, int(forwarded), int(filtered), int(errors),
+             int(time.time()) if forwarded else 0),
+        )
+
+    async def get(self, rule_id: str) -> Optional[dict]:
+        row = self._db.query_one(
+            "SELECT * FROM rule_stats WHERE rule_id=?", (rule_id,)
+        )
+        return dict(row) if row else None
+
+    async def top_rules(self, limit: int = 10) -> List[dict]:
+        rows = self._db.query_all(
+            "SELECT * FROM rule_stats ORDER BY forwarded DESC LIMIT ?", (int(limit),)
+        )
+        return [dict(r) for r in rows]
+
+
+class SqliteUserRepository(IUserRepository):
+    """Per-user language, plan, quota."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def get_or_create(self, user_id: int, language: str = "") -> dict:
+        uid = int(user_id)
+        row = self._db.query_one("SELECT * FROM users WHERE user_id=?", (uid,))
+        if row:
+            return dict(row)
+        now = int(time.time())
+        self._db.execute(
+            "INSERT INTO users (user_id, language, is_admin, plan, quota_forwarded,"
+            " quota_reset_at, created_at, updated_at)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            (uid, language, 0, "free", 0, now, now, now),
+        )
+        return {
+            "user_id": uid, "language": language, "is_admin": 0, "plan": "free",
+            "quota_forwarded": 0, "quota_reset_at": now,
+        }
+
+    async def set_language(self, user_id: int, language: str) -> None:
+        self._db.execute(
+            "UPDATE users SET language=?, updated_at=? WHERE user_id=?",
+            (language, int(time.time()), int(user_id)),
+        )
+
+    async def bump_quota(self, user_id: int, by: int = 1) -> None:
+        self._db.execute(
+            "UPDATE users SET quota_forwarded=quota_forwarded+?, updated_at=? WHERE user_id=?",
+            (int(by), int(time.time()), int(user_id)),
+        )
+
+
+# --------------------------------------------------------------------------- #
+# v6: P0 Data-Plane Reliability — Message Map & Durable Queue
+# --------------------------------------------------------------------------- #
+
+class SqliteMessageMapRepository(IMessageMapRepository):
+    """SQLite implementation of the persistent message mapping port."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    def _row_to_entity(self, row) -> MessageMapping:
+        status_val = row["delivery_status"]
+        try:
+            status = DeliveryStatus(status_val)
+        except (ValueError, TypeError):
+            status = DeliveryStatus.PENDING
+
+        return MessageMapping(
+            id=row["id"],
+            rule_id=row["rule_id"],
+            source_chat_id=str(row["source_chat_id"]),
+            source_message_id=int(row["source_message_id"]),
+            target_chat_id=str(row["target_chat_id"]),
+            target_message_id=int(row["target_message_id"]) if row["target_message_id"] is not None else None,
+            media_group_id=row["media_group_id"] if row["media_group_id"] else None,
+            delivery_status=status,
+            created_at=int(row["created_at"]),
+            updated_at=int(row["updated_at"]),
+        )
+
+    async def add_or_update(self, mapping: MessageMapping) -> MessageMapping:
+        now = _now()
+        mapping.updated_at = now
+        sql = """
+        INSERT INTO message_map (
+            id, rule_id, source_chat_id, source_message_id, target_chat_id,
+            target_message_id, media_group_id, delivery_status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET
+            target_message_id = COALESCE(excluded.target_message_id, message_map.target_message_id),
+            media_group_id = COALESCE(excluded.media_group_id, message_map.media_group_id),
+            delivery_status = excluded.delivery_status,
+            updated_at = excluded.updated_at
+        """
+        status_str = getattr(mapping.delivery_status, "value", str(mapping.delivery_status))
+        self._db.execute(
+            sql,
+            (
+                mapping.id,
+                mapping.rule_id,
+                str(mapping.source_chat_id),
+                int(mapping.source_message_id),
+                str(mapping.target_chat_id),
+                mapping.target_message_id,
+                mapping.media_group_id or "",
+                status_str,
+                mapping.created_at,
+                mapping.updated_at,
+            ),
+        )
+        return mapping
+
+    async def get_by_source(self, source_chat_id: str, source_message_id: int) -> List[MessageMapping]:
+        rows = self._db.query_all(
+            "SELECT * FROM message_map WHERE source_chat_id=? AND source_message_id=?",
+            (str(source_chat_id), int(source_message_id)),
+        )
+        return [self._row_to_entity(r) for r in rows]
+
+    async def get_by_target(self, target_chat_id: str, target_message_id: int) -> Optional[MessageMapping]:
+        row = self._db.query_one(
+            "SELECT * FROM message_map WHERE target_chat_id=? AND target_message_id=?",
+            (str(target_chat_id), int(target_message_id)),
+        )
+        return self._row_to_entity(row) if row else None
+
+    async def get_by_rule_and_source(
+        self, rule_id: str, source_chat_id: str, source_message_id: int
+    ) -> List[MessageMapping]:
+        rows = self._db.query_all(
+            "SELECT * FROM message_map WHERE rule_id=? AND source_chat_id=? AND source_message_id=?",
+            (rule_id, str(source_chat_id), int(source_message_id)),
+        )
+        return [self._row_to_entity(r) for r in rows]
+
+    async def update_delivery(
+        self,
+        rule_id: str,
+        source_chat_id: str,
+        source_message_id: int,
+        target_chat_id: str,
+        target_message_id: Optional[int],
+        status: DeliveryStatus,
+    ) -> bool:
+        now = _now()
+        status_str = getattr(status, "value", str(status))
+        cur = self._db.execute(
+            """
+            UPDATE message_map SET
+                target_message_id = COALESCE(?, target_message_id),
+                delivery_status = ?,
+                updated_at = ?
+            WHERE rule_id = ? AND source_chat_id = ? AND source_message_id = ? AND target_chat_id = ?
+            """,
+            (
+                target_message_id,
+                status_str,
+                now,
+                rule_id,
+                str(source_chat_id),
+                int(source_message_id),
+                str(target_chat_id),
+            ),
+        )
+        return cur.rowcount > 0
+
+    async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 30) -> int:
+        cutoff = _now() - retention_seconds
+        cur = self._db.execute("DELETE FROM message_map WHERE updated_at < ?", (cutoff,))
+        return cur.rowcount
+
+
+class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
+    """SQLite implementation of the durable delivery jobs queue."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    def _row_to_entity(self, row) -> DeliveryJob:
+        status_val = row["status"]
+        try:
+            status = DeliveryStatus(status_val)
+        except (ValueError, TypeError):
+            status = DeliveryStatus.PENDING
+
+        payload = SqliteDatabase.loads(row["payload_json"], {})
+        return DeliveryJob(
+            id=row["id"],
+            rule_id=row["rule_id"],
+            source_chat_id=str(row["source_chat_id"]),
+            source_message_id=int(row["source_message_id"]),
+            target_chat_id=str(row["target_chat_id"]),
+            payload_data=payload,
+            status=status,
+            attempts=int(row["attempts"]),
+            max_attempts=int(row["max_attempts"]),
+            next_retry_at=float(row["next_retry_at"]),
+            lease_until=float(row["lease_until"]),
+            worker_id=row["worker_id"] if row["worker_id"] else None,
+            error_detail=row["error_detail"] if row["error_detail"] else None,
+            created_at=int(row["created_at"]),
+            updated_at=int(row["updated_at"]),
+        )
+
+    async def enqueue(self, job: DeliveryJob) -> bool:
+        payload_str = SqliteDatabase.dumps(job.payload_data)
+        status_str = getattr(job.status, "value", str(job.status))
+        cur = self._db.execute(
+            """
+            INSERT OR IGNORE INTO delivery_jobs (
+                id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                payload_json, status, attempts, max_attempts, next_retry_at,
+                lease_until, worker_id, error_detail, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job.id,
+                job.rule_id,
+                str(job.source_chat_id),
+                int(job.source_message_id),
+                str(job.target_chat_id),
+                payload_str,
+                status_str,
+                job.attempts,
+                job.max_attempts,
+                job.next_retry_at,
+                job.lease_until,
+                job.worker_id or "",
+                job.error_detail or "",
+                job.created_at,
+                job.updated_at,
+            ),
+        )
+        return cur.rowcount > 0
+
+    async def claim_batch(
+        self, worker_id: str, batch_size: int = 5, lease_duration: float = 30.0
+    ) -> List[DeliveryJob]:
+        now = time.time()
+        claimed: List[DeliveryJob] = []
+        with self._db._lock:
+            # Atomic claim under lock
+            rows = self._db._conn.execute(
+                """
+                SELECT * FROM delivery_jobs
+                WHERE (
+                    status = 'PENDING'
+                    OR status = 'RETRY_WAIT'
+                    OR (status = 'CLAIMED' AND lease_until < ?)
+                )
+                AND next_retry_at <= ?
+                ORDER BY created_at ASC
+                LIMIT ?
+                """,
+                (now, now, int(batch_size)),
+            ).fetchall()
+
+            if not rows:
+                return []
+
+            lease_until = now + lease_duration
+            now_int = int(now)
+            for r in rows:
+                self._db._conn.execute(
+                    """
+                    UPDATE delivery_jobs
+                    SET status = 'CLAIMED', worker_id = ?, lease_until = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (worker_id, lease_until, now_int, r["id"]),
+                )
+            self._db._conn.commit()
+
+            # Re-fetch claimed items
+            for r in rows:
+                job = self._row_to_entity(r)
+                job.status = DeliveryStatus.CLAIMED
+                job.worker_id = worker_id
+                job.lease_until = lease_until
+                claimed.append(job)
+
+        return claimed
+
+    async def mark_sent(self, job_id: str, target_message_id: Optional[int] = None) -> bool:
+        now = _now()
+        cur = self._db.execute(
+            """
+            UPDATE delivery_jobs
+            SET status = 'SENT', lease_until = 0, updated_at = ?
+            WHERE id = ?
+            """,
+            (now, job_id),
+        )
+        return cur.rowcount > 0
+
+    async def mark_retry(self, job_id: str, error: str, backoff_seconds: float) -> bool:
+        now = time.time()
+        row = self._db.query_one("SELECT attempts, max_attempts FROM delivery_jobs WHERE id = ?", (job_id,))
+        if not row:
+            return False
+
+        attempts = int(row["attempts"]) + 1
+        max_attempts = int(row["max_attempts"])
+
+        if attempts >= max_attempts:
+            cur = self._db.execute(
+                """
+                UPDATE delivery_jobs
+                SET status = 'FAILED', attempts = ?, error_detail = ?, lease_until = 0, updated_at = ?
+                WHERE id = ?
+                """,
+                (attempts, error, int(now), job_id),
+            )
+        else:
+            next_retry = now + backoff_seconds
+            cur = self._db.execute(
+                """
+                UPDATE delivery_jobs
+                SET status = 'RETRY_WAIT', attempts = ?, next_retry_at = ?,
+                    error_detail = ?, lease_until = 0, updated_at = ?
+                WHERE id = ?
+                """,
+                (attempts, next_retry, error, int(now), job_id),
+            )
+        return cur.rowcount > 0
+
+    async def mark_failed(self, job_id: str, error: str) -> bool:
+        now = _now()
+        cur = self._db.execute(
+            """
+            UPDATE delivery_jobs
+            SET status = 'FAILED', error_detail = ?, lease_until = 0, updated_at = ?
+            WHERE id = ?
+            """,
+            (error, now, job_id),
+        )
+        return cur.rowcount > 0
+
+    async def mark_unknown(self, job_id: str, error: str) -> bool:
+        now = _now()
+        cur = self._db.execute(
+            """
+            UPDATE delivery_jobs
+            SET status = 'UNKNOWN', error_detail = ?, lease_until = 0, updated_at = ?
+            WHERE id = ?
+            """,
+            (error, now, job_id),
+        )
+        return cur.rowcount > 0
+
+    async def get_pending_count(self) -> int:
+        row = self._db.query_one(
+            "SELECT COUNT(*) as cnt FROM delivery_jobs WHERE status IN ('PENDING', 'CLAIMED', 'RETRY_WAIT')"
+        )
+        return int(row["cnt"]) if row else 0
+
+    async def get_stats(self) -> dict:
+        rows = self._db.query_all("SELECT status, COUNT(*) as cnt FROM delivery_jobs GROUP BY status")
+        res = {s.value: 0 for s in DeliveryStatus}
+        for r in rows:
+            res[r["status"]] = int(r["cnt"])
+        return res
+
+    async def recover_expired_leases(self) -> int:
+        now = time.time()
+        cur = self._db.execute(
+            """
+            UPDATE delivery_jobs
+            SET status = 'RETRY_WAIT', lease_until = 0, updated_at = ?
+            WHERE status = 'CLAIMED' AND lease_until < ?
+            """,
+            (int(now), now),
+        )
+        return cur.rowcount
+
+    async def get_queue_age_metrics(self) -> dict:
+        row = self._db.query_one(
+            """
+            SELECT MIN(created_at) as oldest_ts, COUNT(*) as cnt
+            FROM delivery_jobs
+            WHERE status IN ('PENDING', 'CLAIMED', 'RETRY_WAIT')
+            """
+        )
+        if not row or not row["cnt"]:
+            return {"pending_count": 0, "oldest_job_age_seconds": 0.0}
+        oldest_ts = row["oldest_ts"]
+        age = max(0.0, time.time() - float(oldest_ts)) if oldest_ts else 0.0
+        return {"pending_count": int(row["cnt"]), "oldest_job_age_seconds": round(age, 2)}
+
+    async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 7) -> int:
+        threshold = int(time.time() - retention_seconds)
+        cur = self._db.execute(
+            """
+            DELETE FROM delivery_jobs
+            WHERE status IN ('SENT', 'FAILED') AND updated_at < ?
+            """,
+            (threshold,),
+        )
+        return cur.rowcount
+
+

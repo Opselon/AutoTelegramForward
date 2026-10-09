@@ -15,6 +15,11 @@ URL_REGEX = re.compile(
     re.IGNORECASE,
 )
 
+EMOJI_REGEX = re.compile(
+    r"[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\ufe00-\ufe0f]",
+    flags=re.UNICODE,
+)
+
 
 class FilterEngine:
     """Evaluates a MessagePayload against a FilterRule.
@@ -82,6 +87,59 @@ class FilterEngine:
 
     def remove_links(self, text: str) -> str:
         return URL_REGEX.sub("", text).strip()
+
+    def replace_links(self, text: str, replacement: str) -> str:
+        if not text:
+            return ""
+        return URL_REGEX.sub(replacement, text).strip()
+
+    def remove_emojis(self, text: str) -> str:
+        if not text:
+            return ""
+        return EMOJI_REGEX.sub("", text).strip()
+
+    def replace_text(self, text: str, replacements: dict) -> str:
+        if not text or not replacements:
+            return text
+        res = text
+        for old, new in replacements.items():
+            if old:
+                res = res.replace(old, str(new))
+        return res
+
+    def apply_header_footer(self, text: str, header: str = "", footer: str = "") -> str:
+        parts = []
+        if header and header.strip():
+            parts.append(header.strip())
+        if text and text.strip():
+            parts.append(text.strip())
+        if footer and footer.strip():
+            parts.append(footer.strip())
+        return "\n\n".join(parts)
+
+    def transform_text(self, text: str, rule: ForwardRule) -> str:
+        """Applies configured links, emojis, replacements, and header/footer transforms."""
+        if text is None:
+            text = ""
+        # 1. Link replacement or removal
+        if rule.link_replacement:
+            text = self.replace_links(text, rule.link_replacement)
+        elif rule.remove_links or (isinstance(rule.metadata, dict) and rule.metadata.get("remove_links")):
+            text = self.remove_links(text)
+
+        # 2. Emoji removal
+        if rule.remove_emojis:
+            text = self.remove_emojis(text)
+
+        # 3. Custom text replacements
+        if rule.replacements:
+            text = self.replace_text(text, rule.replacements)
+
+        # 4. Header & Footer
+        if rule.header or rule.footer:
+            text = self.apply_header_footer(text, header=rule.header, footer=rule.footer)
+
+        return text
 
 
 class RoutingPolicy:

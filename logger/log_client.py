@@ -50,14 +50,44 @@ class LogClient:
             self._task = asyncio.create_task(self._pump())
 
     async def _pump(self) -> None:
-        """Drain the queue; reconnect on transient errors."""
+        """Drain the queue; reconnect on transient errors.
+
+        Failures are counted and mirrored to the local logger, never swallowed
+        silently — a broken pipe is the classic reason a service looks "fine"
+        while its logs vanish.
+        """
+        consecutive_errors = 0
         while True:
             entry = await self._queue.get()
             try:
                 await self._stub.Log(_pb().LogRequest(entry=entry))
-            except Exception:
-                # Logging must never break the app; drop and retry next time.
-                pass
+                if consecutive_errors:
+                    logger.info("log client recovered after %d failure(s)", consecutive_errors)
+                consecutive_errors = 0
+            except Exception as exc:
+                consecutive_errors += 1
+                # Keep the entry; the queue is unbounded and the entry will be
+                # retried on the next iteration after a reconnect.
+                if consecutive_errors in (1, 5, 20, 100) or consecutive_errors % 500 == 0:
+                    logger.error(
+                        "log client could not reach %s (%s): dropped %d entries "
+                        "[tail=%s]",
+                        self._address, type(exc).__name__, consecutive_errors,
+                        (entry.message or "")[:120],
+                    )
+                # Recreate the channel only occasionally: recreating on every
+                # failure turns a short outage into a connection storm.
+                if consecutive_errors in (5, 50):
+                    try:
+                        if self._channel is not None:
+                            await self._channel.close()
+                    except Exception:
+                        pass
+                    self._channel = None
+                    self._stub = None
+                    self.connect()
+                # Avoid a tight loop when the server is down.
+                await asyncio.sleep(min(0.25 * consecutive_errors, 2.0))
 
     def log(
         self,

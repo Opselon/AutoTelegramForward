@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import time
+from typing import Callable, Optional
 
 from pyrogram import Client, filters
 from pyrogram.types import Message
@@ -21,6 +22,7 @@ from ...domain.value_objects import (
     ForwardMode,
     RoutingType,
 )
+from .auth_state import AuthStateMachine
 from .client_pool import ClientPool
 from .i18n import I18n, SUPPORTED_LANGUAGES
 from .login_flow import LoginFlowManager
@@ -45,6 +47,11 @@ class BotManager:
         pipeline: MessageForwardingUseCase,
         i18n: I18n,
         crypto,
+        credentials=None,
+        bot_tokens=None,
+        dispatcher=None,
+        ui_state_repo=None,
+        auth_machine=None,
     ) -> None:
         self.bot = Client(
             "atf_bot", api_id=pool.api_id, api_hash=pool.api_hash,
@@ -59,8 +66,21 @@ class BotManager:
         self._pipeline = pipeline
         self.i18n = i18n
         self._crypto = crypto
-        self._login = LoginFlowManager(pool, sessions)
+        self._credentials = credentials
+        self._bot_tokens = bot_tokens
+        self._ui_state_repo = ui_state_repo
+        self._dispatcher = dispatcher
+        self._login = LoginFlowManager(pool, sessions, auth_machine)
         self._register_handlers()
+        # Set by main.py after ProBotUI mounts: uid -> bool. When the button
+        # UI owns an active flow for a user, BotManager stays silent so the
+        # user never gets double replies / double code sends.
+        self.ui_step_checker: Optional[Callable[[int], bool]] = None
+
+    @property
+    def login_manager(self) -> LoginFlowManager:
+        """Shared login state machine (also used by ProBotUI)."""
+        return self._login
 
     # ------------------------------------------------------------------ #
     def _is_admin(self, message: Message) -> bool:
@@ -71,40 +91,92 @@ class BotManager:
     def _t(self, uid: int, key: str, **kw) -> str:
         return self.i18n.t(key, **kw)
 
-    def _register_handlers(self) -> None:
-        b = self.bot
+    def _ui_owns(self, uid: int) -> bool:
+        """True while the button dashboard is driving this user's flow.
 
-        @b.on_message(filters.command("start") & filters.private)
-        async def _start(client, message: Message):
-            await message.reply_text(self.i18n.t("start"))
+        Used as a mutual guard between BotManager and ProBotUI: whoever is
+        currently stepping the flow answers, the other stays silent. Prevents
+        the duplicated old text replies appearing next to the new dashboard.
+        """
+        checker = getattr(self, "ui_step_checker", None)
+        if callable(checker):
+            try:
+                if checker(uid):
+                    return True
+            except Exception:
+                pass
+        # Any active login flow means the dashboard (or its login manager) is
+        # driving — BotManager must not interject with "unknown command".
+        flow = getattr(self, "login_manager", None)
+        if flow is not None:
+            try:
+                if flow.pending_for(uid) is not None:
+                    return True
+            except Exception:
+                pass
+        # The dashboard persists FSM steps in ui_states; if it has one, the
+        # dashboard owns the conversation even after a restart.
+        repo = getattr(self, "_ui_state_repo", None)
+        db = getattr(repo, "_db", None)
+        if db is not None:
+            try:
+                row = db.query_one(
+                    "SELECT step FROM ui_states WHERE user_id=?", (int(uid),)
+                )
+                if row is not None and row["step"]:
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def _register_handlers(self) -> None:
+        """Command/fallback surface only.
+
+        IMPORTANT: the button-driven dashboard (ProBotUI) is mounted on the
+        same bot client and owns every *presentation* concern — /start, /help,
+        the login flow and all lists. Handlers registered here would fire in
+        the same group and produce duplicate replies, so this class only
+        registers what the dashboard does NOT already own: language picking
+        and the raw-text fallback that answers /login's phone prompt.
+        """
+        # NOTE: /start, /menu, and every presentation command are owned by the
+        # ProBotUI dashboard mounted on the same client. Registering them here
+        # too would make pyrogram fire BOTH handlers, which is exactly what
+        # produced "Welcome to AutoTelegramForward" next to the button menu.
+        # The dashboard is the single source of truth for /start.
+        b = self.bot
 
         @b.on_message(filters.command("help") & filters.private)
         async def _help(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             await message.reply_text(self.i18n.t("help"))
 
         @b.on_message(filters.command("lang") & filters.private)
         async def _lang(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             lines = [f"{code} — {name}" for code, name in LANG_FLAG.items()]
-            await message.reply_text(self.i18n.t("choose_lang") + "\n" + "\n".join(lines))
+            await message.reply_text(
+                self.i18n.t("choose_lang") + "\n" + "\n".join(lines))
             self._awaiting_lang[message.chat.id] = True
 
         self._awaiting_lang = {}
 
         @b.on_message(filters.command("login") & filters.private)
         async def _login(client, message: Message):
+            # The dashboard's login flow is the primary path; this keeps the
+            # command working if the dashboard failed to mount.
+            if self._ui_owns(message.from_user.id):
+                return
             if not self._is_admin(message):
                 return await message.reply_text(self.i18n.t("need_admin"))
             await message.reply_text(self.i18n.t("send_phone"))
 
-        @b.on_message(filters.command("cancel") & filters.private)
-        async def _cancel(client, message: Message):
-            if self._login.cancel(message.from_user.id):
-                await message.reply_text(self.i18n.t("cancelled"))
-            else:
-                await message.reply_text(self.i18n.t("cancelled"))
-
         @b.on_message(filters.command("sessions") & filters.private)
-        async def _sessions(client, message: Message):
+        async def _sessions_cmd(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             sessions = await self._sessions.list_all()
             if not sessions:
                 return await message.reply_text(self.i18n.t("no_sessions"))
@@ -120,6 +192,8 @@ class BotManager:
 
         @b.on_message(filters.command("rules") & filters.private)
         async def _rules_cmd(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             rules = await self._rules.list_all()
             if not rules:
                 await message.reply_text(self.i18n.t("no_rules"))
@@ -139,6 +213,8 @@ class BotManager:
 
         @b.on_message(filters.command("ai") & filters.private)
         async def _ai_cmd(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             cfgs = await self._ai.list_all()
             if not cfgs:
                 await message.reply_text(self.i18n.t("ai_no_configs"))
@@ -156,6 +232,8 @@ class BotManager:
 
         @b.on_message(filters.command("stats") & filters.private)
         async def _stats(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             s = self._pipeline.stats
             await message.reply_text(
                 self.i18n.t(
@@ -167,6 +245,8 @@ class BotManager:
 
         @b.on_message(filters.command("backup") & filters.private)
         async def _backup(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             if not self._is_admin(message):
                 return await message.reply_text(self.i18n.t("need_admin"))
             parts = (message.text or "").split()
@@ -205,6 +285,8 @@ class BotManager:
 
         @b.on_message(filters.command("restore") & filters.private)
         async def _restore(client, message: Message):
+            if self._ui_owns(message.from_user.id):
+                return
             if not self._is_admin(message):
                 return await message.reply_text(self.i18n.t("need_admin"))
             if not message.document:
@@ -247,6 +329,28 @@ class BotManager:
     async def _route_text(self, message: Message):
         uid = message.from_user.id if message.from_user else 0
         text = (message.text or "").strip()
+        preview = (text[:30] + "...") if len(text) > 30 else text
+        logger.info("BotManager._route_text: received from uid=%s preview=%r", uid, preview)
+
+        # When the button UI owns an active flow for this user, it handles
+        # the reply — delegate via continue_propagation() so pyrogram executes ProBotUI handler.
+        ui_active = False
+        if callable(self.ui_step_checker):
+            try:
+                ui_active = bool(self.ui_step_checker(uid))
+            except Exception as exc:
+                logger.debug("ui_step_checker failed: %s", exc)
+
+        if not ui_active and self._ui_owns(uid):
+            ui_active = True
+
+        if ui_active:
+            logger.info("BotManager delegating text from uid=%s to ProBotUI (continue_propagation)", uid)
+            try:
+                message.continue_propagation()
+            except Exception:
+                pass
+            return
 
         # Language picker
         if self._awaiting_lang.pop(message.chat.id, None):
@@ -257,7 +361,14 @@ class BotManager:
 
         # Login FSM
         state = self._login.pending_for(uid)
-        if state:
+        if state is None:
+            # No login in progress — but the user may just be answering
+            # /login's "send your phone" prompt. Accept it directly.
+            if LoginFlowManager.valid_phone(text):
+                result = await self._login.start(uid, text)
+                await self._login_reply(message, result)
+                return
+        else:
             if state.step == "code":
                 result = await self._login.submit_code(uid, text)
                 await self._login_reply(message, result)
@@ -265,13 +376,6 @@ class BotManager:
             if state.step == "password":
                 result = await self._login.submit_password(uid, text)
                 await self._login_reply(message, result)
-                return
-            if state.step == "phone":
-                if text.startswith("+"):
-                    result = await self._login.start(uid, text)
-                    await message.reply_text(self.i18n.t(result))
-                else:
-                    await message.reply_text(self.i18n.t("send_phone"))
                 return
 
         # Rule add: "source target"
@@ -314,12 +418,18 @@ class BotManager:
 
     async def _login_reply(self, message: Message, result: str):
         if result.startswith("login_success:"):
-            await message.reply_text(self.i18n.t("login_success", phone=""))
+            session_id = result.split(":", 1)[1]
+            try:
+                session = await self._sessions.get(session_id)
+                phone = session.phone_number if session else ""
+            except Exception:
+                phone = ""
+            await message.reply_text(self.i18n.t("login_success", phone=phone))
         elif ":" in result:
             key, _, detail = result.partition(":")
             await message.reply_text(self.i18n.t(key, error=detail))
         else:
-            await message.reply_text(self.i18n.t(result))
+            await message.reply_text(self.i18n.t(result, error=""))
 
     # ------------------------------------------------------------------ #
     async def start(self):
