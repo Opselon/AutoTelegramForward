@@ -263,6 +263,7 @@ jobs:
   # ------------------------------------------------------------------------ #
   docker:
     needs: meta
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -355,7 +356,7 @@ jobs:
   # Publish: assemble everything into a GitHub Release with notes.
   # ------------------------------------------------------------------------ #
   publish:
-    needs: [meta, binaries, api-binaries, docker, portable]
+    needs: [meta, binaries, api-binaries, portable]
     if: |
       always() &&
       needs.meta.result == 'success' &&
@@ -365,8 +366,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - name: Download compiled binaries
+        uses: actions/download-artifact@v4
         with:
+          pattern: 'bin-*'
+          path: all-assets
+          merge-multiple: true
+
+      - name: Download API binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: 'api-*'
+          path: all-assets
+          merge-multiple: true
+
+      - name: Download portable bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: portable
           path: all-assets
 
       - name: Flatten + merge checksums
