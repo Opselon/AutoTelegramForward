@@ -33,6 +33,11 @@ class IAIProvider(ABC):
     async def rewrite(self, config: AIConfig, text: str) -> str:
         ...
 
+    async def chat_complete(self, config: AIConfig, messages: list, temperature: float = 0.7) -> str:
+        # Default implementation for any provider using rewrite
+        last_user = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
+        return await self.rewrite(config, last_user)
+
     @abstractmethod
     async def health_check(self, config: AIConfig) -> bool:
         ...
@@ -156,6 +161,23 @@ class OpenAICompatibleProvider(IAIProvider):
                 {"role": "system", "content": config.system_prompt},
                 {"role": "user", "content": prompt},
             ],
+            "stream": False,
+        }
+        data = await _post_json(url, headers=self.headers(config), payload=payload)
+        try:
+            return data["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, AttributeError) as exc:
+            raise ValueError(f"unexpected chat-completions response: {exc}")
+
+    async def chat_complete(self, config: AIConfig, messages: list, temperature: float = 0.7) -> str:
+        base = self.base_url(config)
+        if not base:
+            raise ValueError("custom provider requires base_url to be set")
+        url = f"{base}/chat/completions"
+        payload = {
+            "model": config.model,
+            "temperature": temperature,
+            "messages": messages,
             "stream": False,
         }
         data = await _post_json(url, headers=self.headers(config), payload=payload)

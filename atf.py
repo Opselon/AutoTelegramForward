@@ -60,11 +60,15 @@ def ensure_venv():
     venv.create(str(VENV), with_pip=True)
     print(f"{STEPS} Installing dependencies (this takes ~30s) ...")
     py_in_venv("-m", "pip", "install", "--quiet", "--upgrade", "pip")
-    py_in_venv(
-        "-m", "pip", "install", "--quiet",
-        "pyrogram", "tgcrypto", "grpcio", "grpcio-tools", "protobuf",
-        "httpx", "cryptography", "pyyaml", "pytest", "pytest-asyncio",
-    )
+    req_file = ROOT / "requirements.txt"
+    if req_file.exists():
+        py_in_venv("-m", "pip", "install", "--quiet", "-r", str(req_file))
+    else:
+        py_in_venv(
+            "-m", "pip", "install", "--quiet",
+            "pyrogram", "tgcrypto", "grpcio", "grpcio-tools", "protobuf",
+            "httpx", "cryptography", "pyyaml", "pytest", "pytest-asyncio", "asyncpg",
+        )
 
 
 def go_available() -> bool:
@@ -88,18 +92,39 @@ def build_api():
 
 # --------------------------------------------------------------------------- #
 def cmd_setup():
-    print("=" * 62)
-    print("  AutoTelegramForward — Easy Setup")
-    print("=" * 62)
+    import argparse
+    parser = argparse.ArgumentParser(description="AutoTelegramForward Setup")
+    parser.add_argument("--token", help="Telegram Bot Token from @BotFather")
+    parser.add_argument("--admin", default="", help="Telegram user ID for admin rights")
+    parser.add_argument("--lang", default="fa", choices=["en", "fa", "ru", "zh"], help="Default language")
+    parser.add_argument("--service", action="store_true", help="Auto install and start systemd service")
+    parser.add_argument("--non-interactive", action="store_true", help="Do not prompt for input")
+    args, _ = parser.parse_known_args(sys.argv[2:])
 
-    token = input("\n(1/3) Paste your BOT TOKEN (from @BotFather): ").strip()
+    token = args.token or os.environ.get("ATF_BOT_TOKEN")
+    admin = args.admin or os.environ.get("ATF_ADMIN_ID", "")
+    lang = args.lang or os.environ.get("ATF_LANG", "fa")
+
+    if not token and not args.non_interactive and sys.stdin.isatty():
+        print("=" * 62)
+        print("  AutoTelegramForward — Easy Setup")
+        print("=" * 62)
+        token = input("\n(1/3) Paste your BOT TOKEN (from @BotFather): ").strip()
+        if not admin:
+            admin = input("(2/3) Your Telegram user ID for admin rights (Enter to skip): ").strip()
+        print("(3/3) Language: 1=English  2=فارسی  3=Русский  4=中文  (Enter=2)")
+        ans = input("> ").strip()
+        if ans in ("1", "en"):
+            lang = "en"
+        elif ans in ("2", "fa", ""):
+            lang = "fa"
+        elif ans in ("3", "ru"):
+            lang = "ru"
+        elif ans in ("4", "zh"):
+            lang = "zh"
+
     if not token or ":" not in token:
-        sys.exit("✗ Invalid bot token. Get one from @BotFather on Telegram.")
-
-    admin = input("(2/3) Your Telegram user ID for admin rights (Enter to skip): ").strip()
-
-    print("(3/3) Language: 1=English  2=فارسی  3=Русский  4=中文  (Enter=1)")
-    lang = {"1": "en", "2": "fa", "3": "ru", "4": "zh"}.get(input("> ").strip(), "en")
+        sys.exit("✗ Invalid or missing bot token. Provide --token or get one from @BotFather.")
 
     ensure_venv()
     build_api()
@@ -119,7 +144,10 @@ def cmd_setup():
         encoding="utf-8",
     )
     print("\n✅ Setup complete!  config.yaml written (master key auto-generated).")
-    print("▶  Start now with:   python atf.py start\n")
+    if args.service:
+        cmd_service_install()
+    else:
+        print("▶  Start now with:   python atf.py start (or: python atf.py service install)\n")
 
 
 def cmd_start():
@@ -193,9 +221,128 @@ def cmd_restore():
                sys.argv[2])
 
 
+def cmd_service_install():
+    if IS_WIN:
+        print("Systemd service is only supported on Linux.")
+        return
+    ensure_venv()
+    systemd_user_dir = Path.home() / ".config" / "systemd" / "user"
+    systemd_user_dir.mkdir(parents=True, exist_ok=True)
+
+    logger_unit = f"""[Unit]
+Description=AutoTelegramForward Logger Microservice
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={ROOT}
+Environment="ATF_LOGGER_PORT=6002"
+Environment="ATF_LOGGER_HOST=127.0.0.1"
+ExecStart={PY_EXE} -m logger.main
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+"""
+    atf_unit = f"""[Unit]
+Description=AutoTelegramForward Core Service & Bot
+After=network.target atf-logger.service
+Wants=atf-logger.service
+
+[Service]
+Type=simple
+WorkingDirectory={ROOT}
+Environment="ATF_GRPC_PORT=6001"
+Environment="ATF_LOGGER_PORT=6002"
+Environment="ATF_LOGGER_ADDR=localhost:6002"
+ExecStart={PY_EXE} -m core.main
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+"""
+    (systemd_user_dir / "atf-logger.service").write_text(logger_unit, encoding="utf-8")
+    (systemd_user_dir / "atf.service").write_text(atf_unit, encoding="utf-8")
+    print("✅ Systemd user service files created in ~/.config/systemd/user/")
+    sh("systemctl --user daemon-reload")
+    sh("systemctl --user enable --now atf-logger.service atf.service")
+    sh("loginctl enable-linger $(whoami) 2>/dev/null || true")
+    print("🚀 Services enabled and started! Linger enabled.")
+    cmd_service_status()
+
+
+def cmd_service_status():
+    if IS_WIN:
+        print("Systemd service is only supported on Linux.")
+        return
+    sh("systemctl --user status atf.service atf-logger.service --no-pager")
+
+
+def cmd_service_uninstall():
+    if IS_WIN:
+        return
+    sh("systemctl --user disable --now atf.service atf-logger.service 2>/dev/null || true")
+    systemd_user_dir = Path.home() / ".config" / "systemd" / "user"
+    for name in ("atf.service", "atf-logger.service"):
+        f = systemd_user_dir / name
+        if f.exists():
+            f.unlink()
+    sh("systemctl --user daemon-reload")
+    print("🗑 Services disabled and removed.")
+
+
+def cmd_service():
+    sub = sys.argv[2] if len(sys.argv) > 2 else "status"
+    if sub in ("install", "setup"):
+        cmd_service_install()
+    elif sub == "status":
+        cmd_service_status()
+    elif sub == "start":
+        sh("systemctl --user start atf-logger.service atf.service")
+        cmd_service_status()
+    elif sub == "stop":
+        sh("systemctl --user stop atf.service atf-logger.service")
+        print("🛑 Services stopped.")
+    elif sub == "restart":
+        sh("systemctl --user restart atf-logger.service atf.service")
+        cmd_service_status()
+    elif sub in ("logs", "log"):
+        sh("journalctl --user -u atf.service -u atf-logger.service -n 50 --no-pager")
+    elif sub in ("uninstall", "remove"):
+        cmd_service_uninstall()
+    else:
+        print("Usage: python atf.py service [install|status|start|stop|restart|logs|uninstall]")
+
+
+def cmd_health():
+    print("=" * 60)
+    print("  AutoTelegramForward — Health & Diagnostics Check")
+    print("=" * 60)
+    print(f"• Python executable  : {PY_EXE} ({'OK' if PY_EXE.exists() else 'MISSING'})")
+    print(f"• Config file        : {CONFIG} ({'OK' if CONFIG.exists() else 'MISSING'})")
+    db_file = ROOT / "data" / "atf.db"
+    print(f"• SQLite Database    : {db_file} ({'OK' if db_file.exists() else 'MISSING'})")
+    import socket
+    def port_open(p):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            return s.connect_ex(('127.0.0.1', p)) == 0
+    print(f"• Core gRPC port 6001: {'ACTIVE' if port_open(6001) else 'INACTIVE'}")
+    print(f"• Logger port 6002   : {'ACTIVE' if port_open(6002) else 'INACTIVE'}")
+    print("=" * 60)
+
+
 COMMANDS = {
     "setup": cmd_setup,
     "start": cmd_start,
+    "service": cmd_service,
+    "health": cmd_health,
     "test": cmd_test,
     "update": cmd_update,
     "restore": cmd_restore,

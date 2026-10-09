@@ -59,7 +59,8 @@ class SyncEngine:
                 logger.debug("Rule %s has ignore_edits=True, skipping edit sync", rule.id[:8])
                 continue
 
-            if not getattr(rule, "sync_edits", True):
+            if not getattr(rule, "sync_edits", False):
+                logger.debug("Rule %s has sync_edits=False, skipping post-send edit", rule.id[:8])
                 continue
 
             client = self._pool.get(rule.session_id)
@@ -70,18 +71,22 @@ class SyncEngine:
             target = int(m.target_chat_id) if m.target_chat_id.lstrip("-").isdigit() else m.target_chat_id
             target_msg_id = int(m.target_message_id)
 
+            from core.domain.services import FilterEngine
+            filter_engine = FilterEngine()
+            final_text = filter_engine.transform_text(formatted_text or payload.effective_text or "", rule)
+
             try:
                 if payload.has_media:
                     await client.edit_message_caption(
                         chat_id=target,
                         message_id=target_msg_id,
-                        caption=formatted_text or None,
+                        caption=final_text or None,
                     )
                 else:
                     await client.edit_message_text(
                         chat_id=target,
                         message_id=target_msg_id,
-                        text=formatted_text or "...",
+                        text=final_text or "...",
                     )
                 synced_count += 1
                 logger.info(

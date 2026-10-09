@@ -63,7 +63,7 @@ CB = {
     "help": "h",
     "back": "b",
     "rule_add": "ra",
-    "rule_del": "rd",
+    "rule_del": "rdel",
     "rule_toggle": "rt",
     "filter_add": "fa",
     "filter_del": "fd",
@@ -182,6 +182,7 @@ class ProBotUI:
         metrics=None,
         rule_stats=None,
         users=None,
+        pv_responder=None,
     ) -> None:
         self.bot = bot
         self.i18n = i18n
@@ -203,6 +204,7 @@ class ProBotUI:
         self._metrics = metrics
         self._rule_stats = rule_stats
         self._users = users
+        self._pv_responder = pv_responder
         self._states: Dict[int, UiState] = {}
         self._register()
 
@@ -877,6 +879,7 @@ class ProBotUI:
                 prov = self._provider_label(prov_val)
                 label = f"{status} {c.name or 'AI'} [{prov} • {c.model}]"
                 rows.append([(label, f"aid:{c.id}")])
+        rows.append([("💬 پاسخگوی هوشمند پی‌وی (AI PV Assistant)", "pv:menu")])
         rows.append([("➕ " + self._t("ui_ai_add"), CB["ai_add"])])
         rows.append([("⬅️ " + self._t("ui_back"), CB["main"])])
         return self._kbd(rows)
@@ -930,21 +933,80 @@ class ProBotUI:
         tog_text = "🔴 غیرفعال‌سازی" if cfg.is_enabled else "🟢 فعال‌سازی"
         rows = [
             [
-                ("🩺 تست سلامت (Health Check)", f"ai_hc:{cfg.id}"),
-                ("💬 تست بازنویسی", f"ai_sample:{cfg.id}"),
+                ("🩺 تست سلامت (Ping)", f"ai_hc:{cfg.id}"),
+                ("🧪 تست بازنویسی متن", f"ai_sample:{cfg.id}"),
             ],
             [
-                ("🌐 تغییر Host / URL", f"ai_eh:{cfg.id}"),
+                ("✏️ تغییر هاست (Base URL)", f"ai_eh:{cfg.id}"),
                 ("🧠 تغییر مدل", f"ai_em:{cfg.id}"),
             ],
             [
-                ("🔑 تغییر API Key", f"ai_ek:{cfg.id}"),
+                ("🔑 تغییر کلید (API Key)", f"ai_ek:{cfg.id}"),
                 (tog_text, f"ai_tog:{cfg.id}"),
             ],
             [
                 ("🗑 حذف پیکربندی", f"ai_del_ask:{cfg.id}"),
                 ("⬅️ بازگشت به لیست AI", CB["ai"]),
             ],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_pv_menu(self) -> Tuple[str, InlineKeyboardMarkup]:
+        resp = getattr(self, "_pv_responder", None)
+        if not resp:
+            return "❌ ماژول پاسخگوی هوشمند پی‌وی بارگذاری نشده است.", self._kbd([[("⬅️ بازگشت", CB["ai"])]])
+
+        cfg = resp.config
+        status_str = "🟢 فعال" if cfg.enabled else "🔴 غیرفعال"
+
+        persona_preview = (cfg.persona_prompt[:140] + "...") if len(cfg.persona_prompt) > 140 else cfg.persona_prompt
+
+        text = (
+            "🤖 **پاسخگوی فوق‌العاده هوشمند پی‌وی (AI PV Assistant)**\n\n"
+            f"📊 **وضعیت فعالیت:** {status_str}\n"
+            f"⏱ **شبیه‌سازی تایپینگ انسانی:** `{cfg.typing_delay_min:.1f}` تا `{cfg.typing_delay_max:.1f}` ثانیه\n"
+            f"⏳ **کول‌داون ضداسپم:** هر `{cfg.cooldown_seconds}` ثانیه\n"
+            f"🤖 **نادیده‌گرفتن ربات‌ها:** {'✅ بله' if cfg.ignore_bots else '❌ خیر'}\n\n"
+            f"🎭 **لحن و شخصیت فعلی:**\n"
+            f"_{persona_preview}_\n\n"
+            "💡 **ویژگی‌ها:** با اتصال این بخش به هوش مصنوعی، هر پیامی به پی‌وی اکانت شما بیاید با "
+            "شبیه‌سازی اکشنِ Typing و لحنی کاملاً انسانی، جذاب و فارسی پاسخ داده می‌شود بدون اینکه کسی شک کند."
+        )
+
+        tog_btn = "🔴 غیرفعال‌سازی" if cfg.enabled else "🟢 فعال‌سازی"
+        rows = [
+            [(f"🔘 وضعیت: {tog_btn}", "pv:toggle")],
+            [("🎭 تنظیم لحن و پرامپت شخصیت", "pv:persona")],
+            [("⏱ تنظیم زمان تأخیر و تایپینگ", "pv:delays")],
+            [("🧪 تست نمونه پاسخگویی", "pv:test")],
+            [("⬅️ " + self._t("ui_back"), CB["ai"])],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_pv_persona_menu(self) -> Tuple[str, InlineKeyboardMarkup]:
+        text = (
+            "🎭 **تنظیم لحن و شخصیت پاسخگوی پی‌وی:**\n\n"
+            "یکی از سبک‌های آماده زیر را انتخاب کنید یا پرامپت دلخواه بنویسید:"
+        )
+        rows = [
+            [("😃 لحن خودمانی، جذاب و بسیار طبیعی (پیش‌فرض)", "pv:set_p:casual")],
+            [("💼 لحن کاری، مؤدبانه و حرفه‌ای", "pv:set_p:business")],
+            [("⚡ پاسخ‌های بسیار کوتاه و دوستانه", "pv:set_p:short")],
+            [("✏️ نوشتن پرامپت اختصاصی و دلخواه", "pv:set_p:custom")],
+            [("⬅️ بازگشت به تنظیمات پی‌وی", "pv:menu")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_pv_delays_menu(self) -> Tuple[str, InlineKeyboardMarkup]:
+        text = (
+            "⏱ **تنظیم زمان تأخیر شبیه‌سازی تایپ انسانی:**\n\n"
+            "سرعت تایپ و ارسال پاسخ در پی‌وی را مشخص کنید:"
+        )
+        rows = [
+            [("⚡ سریع (۱.۵ تا ۳ ثانیه)", "pv:set_d:fast")],
+            [("🧘 طبیعی و انسانی (۲ تا ۴.۵ ثانیه)", "pv:set_d:normal")],
+            [("🐢 با تأمل و طبیعی (۳.۵ تا ۶.۵ ثانیه)", "pv:set_d:slow")],
+            [("⬅️ بازگشت به تنظیمات پی‌وی", "pv:menu")],
         ]
         return text, self._kbd(rows)
 
@@ -1540,29 +1602,40 @@ class ProBotUI:
         async def _cb_noop(_, cq: CallbackQuery):
             await cq.answer()
 
-        @b.on_callback_query(filters.regex("^" + CB["rule_del"] + ":"))
+        @b.on_callback_query(filters.regex(r"^rdel:(.+)$"))
         async def _cb_rule_del(_, cq: CallbackQuery):
-            rid = cq.data.split(":", 1)[1]
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rid = raw.split(":", 1)[1]
+            rule = await self._rules.get(rid)
+            name = (rule.source_chat_name or rule.source_chat_id) if rule else rid[:8]
+            confirm_text = (
+                f"⚠️ **تأیید حذف قانون**\n\n"
+                f"آیا مطمئن هستید که می‌خواهید قانون «`{name}`» را حذف کنید؟"
+            )
+            confirm_kbd = self._kbd([
+                [("🗑 بله، حذف شود", f"rdelyes:{rid}")],
+                [("❌ انصراف و بازگشت", f"rd:{rid}")],
+            ])
+            await cq.edit_message_text(confirm_text, reply_markup=confirm_kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rdelyes:(.+)$"))
+        async def _cb_rule_del_confirm(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rid = raw.split(":", 1)[1]
             await self._rules.delete(rid)
             try:
                 self._log.info("bot", "rule", f"rule {rid} deleted")
             except Exception:
                 pass
             rules = await self._rules.list_all()
-            lines = [self._t("ui_rules_title"), ""]
-            if not rules:
-                lines.append(self._t("ui_none"))
-            for r in rules:
-                status = "🟢" if r.is_active else "🔴"
-                target = getattr(r, "target_label", None) or (
-                    r.target_chat_name or r.target_chat_id)
-                lines.append(
-                    f"{status} `{r.id[:8]}` **{r.source_chat_name or r.source_chat_id}** ➔ **{target}**")
-                mode = getattr(r.forward_mode, "value", r.forward_mode)
-                delay = float(getattr(r, "delay_seconds", 0) or 0)
-                lines.append(f"     ⚙️ mode={mode} | ⏳ delay={delay:.0f}s")
-            await cq.edit_message_text("\n".join(lines), reply_markup=self._rules_menu(rules))
-            await cq.answer(self._t("ui_rule_deleted"))
+            text, kbd = self._render_rules_list(rules, page=0)
+            await cq.edit_message_text(text, reply_markup=kbd)
+            await cq.answer(self._t("ui_rule_deleted"), show_alert=True)
 
         @b.on_callback_query(filters.regex("^" + CB["rule_toggle"] + ":"))
         async def _cb_rule_toggle(_, cq: CallbackQuery):
@@ -2638,6 +2711,132 @@ class ProBotUI:
                 [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
             ])
             await cq.edit_message_text(text, reply_markup=kbd)
+            await cq.answer()
+
+        # ---------------- PV Responder (AI PV Assistant) ----------------
+        @b.on_callback_query(filters.regex(r"^pv:menu$"))
+        async def _cb_pv_menu(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            await cq.answer()
+            text, kbd = self._render_pv_menu()
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^pv:toggle$"))
+        async def _cb_pv_toggle(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            resp = getattr(self, "_pv_responder", None)
+            if not resp:
+                return await cq.answer("❌ ماژول در دسترس نیست.", show_alert=True)
+            resp.config.enabled = not resp.config.enabled
+            resp.save_config(resp.config)
+            status_msg = "پاسخگوی پی‌وی فعال شد 🟢" if resp.config.enabled else "پاسخگوی پی‌وی غیرفعال شد 🔴"
+            await cq.answer(status_msg)
+            text, kbd = self._render_pv_menu()
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^pv:persona$"))
+        async def _cb_pv_persona(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            await cq.answer()
+            text, kbd = self._render_pv_persona_menu()
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^pv:set_p:(.+)$"))
+        async def _cb_pv_set_persona(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            resp = getattr(self, "_pv_responder", None)
+            if not resp:
+                return await cq.answer("❌ ماژول در دسترس نیست.", show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            p_type = raw.split(":", 2)[2]
+            if p_type == "casual":
+                from core.infrastructure.telegram.pv_responder import DEFAULT_PERSONA
+                resp.config.persona_prompt = DEFAULT_PERSONA
+                resp.save_config(resp.config)
+                await cq.answer("✅ لحن خودمانی و جذاب تنظیم شد.")
+                text, kbd = self._render_pv_menu()
+                await cq.edit_message_text(text, reply_markup=kbd)
+            elif p_type == "business":
+                resp.config.persona_prompt = (
+                    "شما صاحب این اکانت شخصی تلگرام هستید. با لحنی کاملاً مؤدبانه، حرفه‌ای، "
+                    "محترمانه و در عین حال روان و انسانی به زبان فارسی به پیام‌ها پاسخ دهید. "
+                    "هرگز اشاره نکن که هوش مصنوعی یا ربات هستی. پاسخ‌ها موجز و صریح باشند."
+                )
+                resp.save_config(resp.config)
+                await cq.answer("✅ لحن کاری و محترمانه تنظیم شد.")
+                text, kbd = self._render_pv_menu()
+                await cq.edit_message_text(text, reply_markup=kbd)
+            elif p_type == "short":
+                resp.config.persona_prompt = (
+                    "شما صاحب اکانت تلگرام هستید. پیام‌ها را بسیار کوتاه، خودمانی، "
+                    "سریع و حداکثر در یک یا دو جمله جذاب و دوستانه پاسخ بده. "
+                    "اصلاً شبیه ربات نباش و هرگز نگو بات هستی."
+                )
+                resp.save_config(resp.config)
+                await cq.answer("✅ لحن کوتاه و سریع تنظیم شد.")
+                text, kbd = self._render_pv_menu()
+                await cq.edit_message_text(text, reply_markup=kbd)
+            elif p_type == "custom":
+                st = self._state(cq.from_user.id)
+                st.step = "pv_persona_input"
+                await self._persist(cq.from_user.id, st)
+                prompt_text = (
+                    "✍️ **تنظیم پرامپت اختصاصی برای هوش مصنوعی پی‌وی:**\n\n"
+                    "لطفاً دستورالعمل یا شخصیت دلخواه خود را به زبان فارسی ارسال کنید.\n"
+                    "مثال: «مثل یک دوست صمیمی و پرانرژی حرف بزن و بگو فعلاً بیرون هستم و شب پیام میدم»"
+                )
+                await cq.edit_message_text(prompt_text, reply_markup=self._kbd([[("❌ انصراف", "pv:persona")]]))
+                await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^pv:delays$"))
+        async def _cb_pv_delays(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            await cq.answer()
+            text, kbd = self._render_pv_delays_menu()
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^pv:set_d:(.+)$"))
+        async def _cb_pv_set_delay(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            resp = getattr(self, "_pv_responder", None)
+            if not resp:
+                return await cq.answer("❌ ماژول در دسترس نیست.", show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            d_type = raw.split(":", 2)[2]
+            if d_type == "fast":
+                resp.config.typing_delay_min = 1.5
+                resp.config.typing_delay_max = 3.0
+            elif d_type == "normal":
+                resp.config.typing_delay_min = 2.0
+                resp.config.typing_delay_max = 4.5
+            elif d_type == "slow":
+                resp.config.typing_delay_min = 3.5
+                resp.config.typing_delay_max = 6.5
+            resp.save_config(resp.config)
+            await cq.answer("✅ زمان‌بندی تأخیر با موفقیت اعمال شد.")
+            text, kbd = self._render_pv_menu()
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^pv:test$"))
+        async def _cb_pv_test(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            st = self._state(cq.from_user.id)
+            st.step = "pv_test_input"
+            await self._persist(cq.from_user.id, st)
+            prompt = (
+                "🧪 **تست شبیه‌سازی پاسخگوی هوشمند پی‌وی:**\n\n"
+                "یک پیام نمونه که ممکن است مخاطبی برای شما بفرستد ارسال کنید "
+                "(مثلاً: «سلام چطوری؟ کجایی؟» یا «سلام فایل پروژه آماده شد؟»)\n"
+                "تا ببینید هوش مصنوعی با شخصیت انتخابی شما چگونه پاسخ می‌دهد."
+            )
+            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", "pv:menu")]]))
             await cq.answer()
 
         # ---------------- backup ----------------
@@ -3842,3 +4041,79 @@ class ProBotUI:
         }
         detail_text, detail_kbd = self._render_ai_detail(cfg, health_info=health_info)
         await message.reply_text("✅ کلید API با موفقیت به‌روزرسانی شد:\n\n" + detail_text, reply_markup=detail_kbd)
+
+    async def _step_pv_persona_input(self, message: Message, st: UiState, text: str) -> None:
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+        resp = getattr(self, "_pv_responder", None)
+        if not resp:
+            await message.reply_text("❌ ماژول پاسخگوی پی‌وی یافت نشد.", reply_markup=self._main_menu())
+            return
+        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+            text_out, kbd = self._render_pv_menu()
+            await message.reply_text("❌ تنظیم پرامپت لغو شد.", reply_markup=kbd)
+            return
+
+        resp.config.persona_prompt = text.strip()
+        resp.save_config(resp.config)
+        await message.reply_text("✅ پرامپت و شخصیت پاسخگوی پی‌وی با موفقیت ثبت گردید!")
+        text_out, kbd = self._render_pv_menu()
+        await message.reply_text(text_out, reply_markup=kbd)
+
+    async def _step_pv_test_input(self, message: Message, st: UiState, text: str) -> None:
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+        resp = getattr(self, "_pv_responder", None)
+        if not resp:
+            await message.reply_text("❌ ماژول پاسخگوی پی‌وی یافت نشد.", reply_markup=self._main_menu())
+            return
+        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+            text_out, kbd = self._render_pv_menu()
+            await message.reply_text("❌ تست لغو شد.", reply_markup=kbd)
+            return
+
+        ai_cfg = await resp.get_active_ai_config()
+        if not ai_cfg:
+            text_out, kbd = self._render_pv_menu()
+            await message.reply_text("⚠️ هیچ هوش مصنوعی فعالی برای پاسخگویی یافت نشد. لطفاً در بخش AI یک مدل فعال کنید.", reply_markup=kbd)
+            return
+
+        wait_msg = await message.reply_text("⏳ در حال پردازش پیام با شخصیت تنظیم‌شده و شبیه‌سازی تایپینگ...")
+        try:
+            from core.infrastructure.ai.providers import OpenAICompatibleProvider, AIProviderFactory
+            prov_key = ai_cfg.provider.value if hasattr(ai_cfg.provider, "value") else str(ai_cfg.provider)
+            factory = resp._ai_factory or AIProviderFactory()
+            provider_cls = factory._registry.get(prov_key, OpenAICompatibleProvider)
+            provider = provider_cls()
+
+            messages = [
+                {"role": "system", "content": resp.config.persona_prompt},
+                {"role": "user", "content": text.strip()},
+            ]
+            if hasattr(provider, "chat_complete"):
+                reply_text = await provider.chat_complete(ai_cfg, messages, temperature=0.7)
+            else:
+                reply_text = await provider.rewrite(ai_cfg, text.strip())
+
+            body = (
+                "🧪 **نتیجه شبیه‌سازی پاسخگوی هوشمند پی‌وی:**\n\n"
+                f"👤 **پیام ورودی مخاطب:**\n«{text.strip()}»\n\n"
+                f"🤖 **پاسخ شبیه‌سازی‌شده (مدل {ai_cfg.model}):**\n"
+                f"«{reply_text.strip()}»\n\n"
+                f"⏱ تاخیر شبیه‌سازی تایپینگ: `{resp.config.typing_delay_min:.1f}` تا `{resp.config.typing_delay_max:.1f}` ثانیه"
+            )
+            try:
+                await wait_msg.delete()
+            except Exception:
+                pass
+            text_out, kbd = self._render_pv_menu()
+            await message.reply_text(body, reply_markup=kbd)
+        except Exception as exc:
+            try:
+                await wait_msg.delete()
+            except Exception:
+                pass
+            text_out, kbd = self._render_pv_menu()
+            await message.reply_text(f"❌ خطا در اجرای تست هوش مصنوعی: {exc}", reply_markup=kbd)

@@ -451,6 +451,10 @@ class DurableMessagePipeline:
                 return None
             text = ai_transformed
 
+        # Final Replacements & Link clean pass
+        if getattr(rule, "replacements", None):
+            text = self._filter_engine.replace_text(text, rule.replacements)
+
         # Header & Footer
         header = getattr(rule, "header", "") or getattr(rule, "header_text", "")
         footer = getattr(rule, "footer", "") or getattr(rule, "footer_text", "")

@@ -4,7 +4,7 @@ import base64
 import json
 import logging
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from pyrogram import Client, filters
 from pyrogram.types import Message
@@ -76,6 +76,7 @@ class BotManager:
         # UI owns an active flow for a user, BotManager stays silent so the
         # user never gets double replies / double code sends.
         self.ui_step_checker: Optional[Callable[[int], bool]] = None
+        self.bot_ui: Any = None
 
     @property
     def login_manager(self) -> LoginFlowManager:
@@ -312,10 +313,18 @@ class BotManager:
         # Plain text router: FSM (login steps / lang pick / rule add / ai add)
         @b.on_message(filters.private & ~filters.command([
             "start", "help", "lang", "login", "cancel", "sessions",
-            "rules", "ai", "stats", "backup", "restore",
+            "rules", "ai", "stats", "backup", "restore", "menu", "panel", "settings",
         ]))
         async def _text(client, message: Message):
             await self._route_text(message)
+
+        @b.on_message(filters.command(["menu", "panel", "settings"]))
+        async def _cmd_menu(client, message: Message):
+            bot_ui = getattr(self, "bot_ui", None)
+            if bot_ui is not None:
+                await bot_ui._start(client, message)
+            else:
+                await message.reply_text(self.i18n.t("ui_welcome", version="v2.1"))
 
     # ------------------------------------------------------------------ #
     async def _prompt_rule_add(self, message: Message):
@@ -414,7 +423,19 @@ class BotManager:
                 await message.reply_text(self.i18n.t("ai_created", name=cfg.name))
             return
 
-        await message.reply_text(self.i18n.t("unknown_command"))
+        bot_ui = getattr(self, "bot_ui", None)
+        if bot_ui is not None:
+            try:
+                kbd = bot_ui._main_menu()
+                await message.reply_text(
+                    "💡 برای مدیریت فوروارد و دسترسی به امکانات ربات، از دکمه‌های زیر استفاده کنید:",
+                    reply_markup=kbd,
+                )
+                return
+            except Exception:
+                pass
+
+        await message.reply_text(self.i18n.t("help_text"))
 
     async def _login_reply(self, message: Message, result: str):
         if result.startswith("login_success:"):

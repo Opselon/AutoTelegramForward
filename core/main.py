@@ -130,6 +130,9 @@ def build_container(cfg: Config) -> dict:
         ai_transformer=ai_transformer,
         prompt_service=prompt_service,
     )
+    from core.infrastructure.telegram.pv_responder import AIPVResponder  # noqa: E402
+    pv_responder = AIPVResponder(ai_repo=ai_repo, ai_factory=factory, db=db)
+
     dispatcher = MessageDispatcher(
         pool, pipeline,
         error_log=error_log_repo, metrics=metrics_repo,
@@ -137,6 +140,7 @@ def build_container(cfg: Config) -> dict:
         queue_manager=queue_manager,
         sync_engine=sync_engine,
         durable_pipeline=durable_pipeline,
+        pv_responder=pv_responder,
     )
     i18n = I18n()
     i18n.set_language(cfg.language)
@@ -161,6 +165,7 @@ def build_container(cfg: Config) -> dict:
         "prompt_service": prompt_service,
         "ai_transformer": ai_transformer,
         "ai_circuit_registry": ai_circuit_registry,
+        "pv_responder": pv_responder,
     }
 
 
@@ -340,9 +345,11 @@ async def main() -> None:
             metrics=container.get("metrics"),
             rule_stats=container.get("rule_stats"),
             users=container.get("users"),
+            pv_responder=container.get("pv_responder"),
         )
         # Route ownership: while the button UI has an active step for a user
         # it answers; otherwise BotManager (commands) answers. No doubles.
+        bot.bot_ui = ui
         bot.ui_step_checker = lambda uid: bool(ui._state(uid).step)
         log_client.info("core", "system", "pro button UI mounted")
     except Exception as exc:

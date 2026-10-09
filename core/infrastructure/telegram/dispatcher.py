@@ -37,6 +37,7 @@ class MessageDispatcher:
         self, pool: ClientPool, use_case, send_queue_size: int = 2000,
         error_log=None, metrics=None, rule_stats=None, log_client=None,
         queue_manager=None, sync_engine=None, durable_pipeline=None,
+        pv_responder=None,
     ) -> None:
         self._pool = pool
         self._use_case = use_case
@@ -45,6 +46,7 @@ class MessageDispatcher:
         self._use_case.sender = self._send
         self._queue_manager = queue_manager
         self._sync_engine = sync_engine
+        self._pv_responder = pv_responder
         # Album aggregation with bounded LRU & TTL
         self._album_aggregator = AlbumAggregator(flush_callback=self._flush_album, ttl_seconds=2.0, max_active_albums=500)
         # send-rate bookkeeping: target -> deque of timestamps
@@ -182,6 +184,16 @@ class MessageDispatcher:
             except Exception:
                 logger.exception("payload translate failed")
                 return
+
+            # AI PV Auto-Reply for direct messages on user accounts
+            if trigger == "NEW_MESSAGE" and getattr(message, "chat", None) and str(getattr(message.chat, "type", "")).lower().endswith("private"):
+                if self._pv_responder is not None:
+                    try:
+                        replied = await self._pv_responder.handle_message(client, message)
+                        if replied:
+                            return
+                    except Exception as exc:
+                        logger.warning("pv_responder handle_message failed: %s", exc)
 
             # Sync edits propagation
             if trigger == "EDITED_MESSAGE" and self._sync_engine is not None:

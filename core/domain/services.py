@@ -11,7 +11,7 @@ from ..domain.entities import EvaluationResult, FilterRule, ForwardRule, Message
 from ..domain.value_objects import FilterAction, MediaType
 
 URL_REGEX = re.compile(
-    r"(https?://\S+|www\.\S+|t\.me/\S+|@[A-Za-z0-9_]{5,})",
+    r"(https?://[^\s]+|www\.[^\s]+|(?:https?://)?(?:t(?:elegram)?\.(?:me|dog))/[^\s]+|@[A-Za-z0-9_]{3,32})",
     re.IGNORECASE,
 )
 
@@ -86,12 +86,25 @@ class FilterEngine:
         return keyword.lower() in lowered_text
 
     def remove_links(self, text: str) -> str:
-        return URL_REGEX.sub("", text).strip()
+        if not text:
+            return ""
+        # 1. Clean markdown hyperlinks [text](url) -> keep anchor text
+        cleaned = re.sub(r"\[([^\]]+)\]\((?:https?://|www\.|t\.me/|[^\)]+)\)", r"\1", text)
+        # 2. Remove raw URLs, telegram links, and @usernames
+        cleaned = URL_REGEX.sub("", cleaned)
+        # 3. Clean up multiple empty lines and excessive spaces
+        cleaned = re.sub(r"[ \t]+", " ", cleaned)
+        cleaned = re.sub(r"\n\s*\n\s*\n+", "\n\n", cleaned)
+        return cleaned.strip()
 
     def replace_links(self, text: str, replacement: str) -> str:
         if not text:
             return ""
-        return URL_REGEX.sub(replacement, text).strip()
+        cleaned = re.sub(r"\[([^\]]+)\]\((?:https?://|www\.|t\.me/|[^\)]+)\)", replacement, text)
+        cleaned = URL_REGEX.sub(replacement, cleaned)
+        cleaned = re.sub(r"[ \t]+", " ", cleaned)
+        cleaned = re.sub(r"\n\s*\n\s*\n+", "\n\n", cleaned)
+        return cleaned.strip()
 
     def remove_emojis(self, text: str) -> str:
         if not text:
@@ -103,8 +116,17 @@ class FilterEngine:
             return text
         res = text
         for old, new in replacements.items():
-            if old:
-                res = res.replace(old, str(new))
+            if not old:
+                continue
+            old_str = str(old)
+            new_str = str(new)
+            # Exact match first
+            if old_str in res:
+                res = res.replace(old_str, new_str)
+            else:
+                # Case-insensitive match for handles or words
+                pattern = re.compile(re.escape(old_str), re.IGNORECASE)
+                res = pattern.sub(new_str, res)
         return res
 
     def apply_header_footer(self, text: str, header: str = "", footer: str = "") -> str:

@@ -180,7 +180,7 @@ class ForwardRule:
 
     @property
     def sync_edits(self) -> bool:
-        return bool(self.metadata.get("sync_edits", True)) if isinstance(self.metadata, dict) else True
+        return bool(self.metadata.get("sync_edits", False)) if isinstance(self.metadata, dict) else False
 
     @property
     def sync_deletes(self) -> bool:
