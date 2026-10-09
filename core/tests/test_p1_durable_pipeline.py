@@ -19,7 +19,10 @@ import time
 from typing import Any, Dict, List, Optional
 import uuid
 
-import asyncpg
+try:
+    import asyncpg
+except ImportError:
+    asyncpg = None
 import pytest
 
 from core.application.pipeline import (
@@ -141,6 +144,8 @@ def sqlite_db(tmp_path):
 
 @pytest.fixture
 async def pg_conn():
+    if asyncpg is None:
+        pytest.skip("asyncpg is not installed")
     try:
         conn = await asyncpg.connect("postgresql://ubuntu@localhost/atf_test")
     except Exception as exc:
