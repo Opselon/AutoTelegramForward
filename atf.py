@@ -41,8 +41,11 @@ from pathlib import Path
 FROZEN = bool(getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"))
 
 if FROZEN:
-    # The binary lives next to user data (config.yaml, data/).
-    ROOT = Path(sys.executable).resolve().parent
+    # If config.yaml exists in current working directory, prioritize current directory
+    if (Path.cwd() / "config.yaml").exists():
+        ROOT = Path.cwd()
+    else:
+        ROOT = Path(sys.executable).resolve().parent
     BUNDLE = Path(sys._MEIPASS)  # read-only bundled resources
 else:
     ROOT = Path(__file__).resolve().parent
@@ -63,13 +66,17 @@ VERSION_FILE = BUNDLE / "VERSION" if FROZEN else ROOT / "VERSION"
 
 # Candidates for Go REST API binary
 API_CANDIDATES = [
+    BUNDLE / ("atf-api.exe" if IS_WIN else "atf-api"),
     ROOT / ("atf-api.exe" if IS_WIN else "atf-api"),
+    ROOT / "bin" / ("atf-api.exe" if IS_WIN else "atf-api"),
     ROOT / "api" / ("atf-api.exe" if IS_WIN else "atf-api"),
 ]
 
 # Candidates for Rust Web Gateway binary (Axum + React)
 WEB_CANDIDATES = [
+    BUNDLE / ("atf-web-backend.exe" if IS_WIN else "atf-web-backend"),
     ROOT / ("atf-web-backend.exe" if IS_WIN else "atf-web-backend"),
+    ROOT / "bin" / ("atf-web-backend.exe" if IS_WIN else "atf-web-backend"),
     ROOT / "web" / "backend" / "target" / "release" / ("atf-web-backend.exe" if IS_WIN else "atf-web-backend"),
     ROOT / "web" / "backend" / "target" / "debug" / ("atf-web-backend.exe" if IS_WIN else "atf-web-backend"),
 ]
@@ -170,18 +177,27 @@ def write_pids(pids: dict) -> None:
 
 
 def kill_pid(pid: int, name: str) -> None:
+    if not proc_alive(pid):
+        return
     try:
         if IS_WIN:
-            subprocess.run(["taskkill", "/PID", str(pid), "/F"],
-                           capture_output=True)
+            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
         else:
-            os.kill(pid, signal.SIGTERM)
-            for _ in range(20):
+            try:
+                pgid = os.getpgid(pid)
+                os.killpg(pgid, signal.SIGTERM)
+            except OSError:
+                os.kill(pid, signal.SIGTERM)
+            for _ in range(30):
                 if not proc_alive(pid):
                     break
-                time.sleep(0.25)
+                time.sleep(0.1)
             else:
-                os.kill(pid, signal.SIGKILL)
+                try:
+                    pgid = os.getpgid(pid)
+                    os.killpg(pgid, signal.SIGKILL)
+                except OSError:
+                    os.kill(pid, signal.SIGKILL)
     except OSError:
         pass
     print(f"  • {name} (pid {pid}) stopped")
@@ -193,6 +209,38 @@ def port_open(port: int, host: str = "127.0.0.1") -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(0.5)
         return s.connect_ex((host, port)) == 0
+
+
+def wait_for_port(port: int, host: str = "127.0.0.1", timeout: float = 12.0) -> bool:
+    import socket
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.4)
+                if s.connect_ex((host, port)) == 0:
+                    return True
+        except OSError:
+            pass
+        time.sleep(0.2)
+    return False
+
+
+def wait_for_http(url: str, timeout: float = 12.0) -> bool:
+    import urllib.request
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "ATF-Supervisor"})
+            with urllib.request.urlopen(req, timeout=1.0) as resp:
+                if resp.status == 200:
+                    return True
+        except Exception:
+            pass
+        time.sleep(0.2)
+    return False
 
 
 def _systemd_state(unit: str) -> str:
@@ -236,6 +284,11 @@ def go_available() -> bool:
 def find_api() -> "Path | None":
     for cand in API_CANDIDATES:
         if cand.exists():
+            if not IS_WIN:
+                try:
+                    cand.chmod(cand.stat().st_mode | 0o755)
+                except OSError:
+                    pass
             return cand
     return None
 
@@ -244,17 +297,23 @@ def build_api() -> "Path | None":
     found = find_api()
     if found:
         return found
-    if not go_available():
+    if FROZEN or not go_available():
         return None
     step("Building Go control API ...")
-    out = ROOT / "api" / ("atf-api.exe" if IS_WIN else "atf-api")
-    sh(f"go build -o {out.name} .", cwd=ROOT / "api")
+    out = ROOT / "bin" / ("atf-api.exe" if IS_WIN else "atf-api")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    sh(f"go build -o {out} .", cwd=ROOT / "api")
     return out if out.exists() else None
 
 
 def find_web() -> "Path | None":
     for cand in WEB_CANDIDATES:
         if cand.exists():
+            if not IS_WIN:
+                try:
+                    cand.chmod(cand.stat().st_mode | 0o755)
+                except OSError:
+                    pass
             return cand
     return None
 
@@ -263,7 +322,7 @@ def build_web() -> "Path | None":
     found = find_web()
     if found:
         return found
-    if not have("cargo"):
+    if FROZEN or not have("cargo"):
         return None
     step("Building Rust Web Gateway (Axum + React) ...")
     sh("cargo build --release", cwd=ROOT / "web" / "backend")
@@ -389,9 +448,18 @@ def cmd_start(_args=None) -> None:
     if not CONFIG.exists():
         die("No config.yaml found — run: atf setup")
     ensure_venv()
-    api_exe = build_api()
+    api_exe = find_api() or build_api()
     web_exe = find_web() or build_web()
     env = _service_env()
+
+    # Read web_port from config.yaml if present
+    web_port = 8088
+    try:
+        import yaml
+        cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8")) or {}
+        web_port = int(cfg.get("web_port", 8088))
+    except Exception:
+        pass
 
     # Refuse double-start
     pids = {k: v for k, v in read_pids().items() if proc_alive(v)}
@@ -401,63 +469,99 @@ def cmd_start(_args=None) -> None:
         print("Use `atf status` / `atf stop` to manage.")
         return
 
+    # Check port conflicts before launching
+    ports_to_check = [(6002, "Logger gRPC"), (6001, "Core gRPC"), (8080, "Go REST API"), (web_port, "Web Gateway")]
+    for port, label in ports_to_check:
+        if port_open(port):
+            warn(f"Port {port} ({label}) is already occupied by another process.")
+
     new_pids: dict = {}
     log_file = ROOT / "data" / "atf.out.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
     lf = open(log_file, "ab")
 
-    step("Starting Logger microservice (gRPC port 6002) ...")
-    logger_proc = subprocess.Popen(
-        [str(PY_EXE), "-m", "logger.main"] if not FROZEN
-        else [str(PY_EXE), "logger"],
-        cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT)
-    new_pids["logger"] = logger_proc.pid
-    time.sleep(1.5)
+    try:
+        # Step 1: Logger Microservice
+        step("Starting Logger microservice (gRPC port 6002) ...")
+        logger_proc = subprocess.Popen(
+            [str(PY_EXE), "-m", "logger.main"] if not FROZEN else [str(PY_EXE), "logger"],
+            cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT, start_new_session=(not IS_WIN)
+        )
+        new_pids["logger"] = logger_proc.pid
+        if not wait_for_port(6002, timeout=12.0):
+            raise RuntimeError("Logger microservice failed to bind port 6002 within timeout.")
+        ok("Logger microservice is ready (port 6002).")
 
-    step("Starting Core microservice (bot + gRPC port 6001) ...")
-    core = subprocess.Popen(
-        [str(PY_EXE), "-m", "core.main"] if not FROZEN
-        else [str(PY_EXE), "core"],
-        cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT)
-    new_pids["core"] = core.pid
-    time.sleep(1.5)
+        # Step 2: Core Microservice (Telegram MTProto & gRPC)
+        step("Starting Core microservice (bot + gRPC port 6001) ...")
+        core_proc = subprocess.Popen(
+            [str(PY_EXE), "-m", "core.main"] if not FROZEN else [str(PY_EXE), "core"],
+            cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT, start_new_session=(not IS_WIN)
+        )
+        new_pids["core"] = core_proc.pid
+        if not wait_for_port(6001, timeout=15.0):
+            raise RuntimeError("Core microservice failed to bind port 6001 within timeout.")
+        ok("Core microservice is ready (port 6001).")
 
-    if web_exe:
-        step("Starting Rust Web Gateway & Dashboard (port 8088) ...")
-        web_env = {
-            **env,
-            "ATF_WEB_ADDR": "0.0.0.0:8088",
-            "ATF_DB_PATH": str(ROOT / "data" / "atf.db"),
-            "ATF_LOGS_DB_PATH": str(ROOT / "data" / "atf_logs.db"),
-        }
-        web_proc = subprocess.Popen(
-            [str(web_exe)], cwd=ROOT,
-            env=web_env, stdout=lf, stderr=subprocess.STDOUT)
-        new_pids["web"] = web_proc.pid
+        # Step 3: Go REST API Control Plane
+        if api_exe:
+            step("Starting Go REST API Control Plane (http://localhost:8080) ...")
+            api_env = {**env, "ATF_CORE_GRPC": "127.0.0.1:6001", "ATF_LOGGER_ADDR": "127.0.0.1:6002", "PORT": "8080"}
+            api_proc = subprocess.Popen(
+                [str(api_exe)], cwd=ROOT, env=api_env,
+                stdout=lf, stderr=subprocess.STDOUT, start_new_session=(not IS_WIN)
+            )
+            new_pids["api"] = api_proc.pid
+            if not wait_for_http("http://127.0.0.1:8080/healthz", timeout=12.0):
+                raise RuntimeError("Go REST API failed to report healthy on :8080/healthz within timeout.")
+            ok("Go REST API is ready (http://localhost:8080).")
+        else:
+            warn("Go REST API binary not found — API endpoints skipped.")
 
-    if api_exe:
-        step("Starting Go REST API on http://localhost:8080 ...")
-        api_env = {**env, "ATF_CORE_GRPC": "localhost:6001"}
-        api_proc = subprocess.Popen([str(api_exe)], cwd=ROOT / "api",
-                                    env=api_env, stdout=lf, stderr=subprocess.STDOUT)
-        new_pids["api"] = api_proc.pid
+        # Step 4: Rust Axum Web Gateway & Embedded React Dashboard
+        if web_exe:
+            step(f"Starting Rust Web Gateway & Dashboard (port {web_port}) ...")
+            web_env = {
+                **env,
+                "ATF_WEB_ADDR": f"0.0.0.0:{web_port}",
+                "ATF_API_ADDR": "http://127.0.0.1:8080",
+            }
+            web_proc = subprocess.Popen(
+                [str(web_exe)], cwd=ROOT, env=web_env,
+                stdout=lf, stderr=subprocess.STDOUT, start_new_session=(not IS_WIN)
+            )
+            new_pids["web"] = web_proc.pid
+            if not wait_for_http(f"http://127.0.0.1:{web_port}/healthz", timeout=12.0):
+                raise RuntimeError(f"Rust Web Gateway failed to respond on :{web_port}/healthz within timeout.")
+            ok(f"Rust Web Gateway & Dashboard is ready (http://localhost:{web_port}).")
+        else:
+            warn("Web Gateway binary not found — Web UI skipped.")
 
-    write_pids(new_pids)
-    print("\n" + "=" * 64)
-    print("  ✅ All microservices are live and operational!")
-    print(f"  • 🌐 Web Dashboard:    http://localhost:8088")
-    print(f"  • 🤖 Telegram Bot:     Active (core:6001)")
-    print(f"  • 📝 Logger Daemon:    Active (logger:6002)")
-    if api_exe:
-        print(f"  • 🔌 Go REST API:      http://localhost:8080")
-    print(f"  • 📄 Consolidated Log: {log_file}  (or: atf logs)")
-    print("=" * 64 + "\n")
+        write_pids(new_pids)
+        print("\n" + "=" * 64)
+        print("  ✅ All microservices are live and operational!")
+        if web_exe:
+            print(f"  • 🌐 Web Dashboard:    http://localhost:{web_port}")
+        print(f"  • 🤖 Telegram Bot:     Active (core:6001)")
+        print(f"  • 📝 Logger Daemon:    Active (logger:6002)")
+        if api_exe:
+            print(f"  • 🔌 Go REST API:      http://localhost:8080")
+        print(f"  • 📄 Consolidated Log: {log_file}  (or: atf logs)")
+        print("=" * 64 + "\n")
+
+    except Exception as e:
+        print(f"\n❌ Startup failed: {e}")
+        print("Rolling back and stopping already started processes ...")
+        for name, pid in new_pids.items():
+            kill_pid(pid, name)
+        write_pids({})
+        die(f"Aborted startup: {e}")
 
     foreground = os.environ.get("ATF_FOREGROUND") == "1" or "--no-daemonize" in sys.argv
     if foreground:
         try:
             logger_proc.wait()
-            core.wait()
+            core_proc.wait()
         except KeyboardInterrupt:
             cmd_stop()
 
@@ -599,7 +703,8 @@ def cmd_service_install(_args=None) -> None:
 def _service_install_systemd(exe: str) -> None:
     d = Path.home() / ".config" / "systemd" / "user"
     d.mkdir(parents=True, exist_ok=True)
-    web_exe = find_web() or ROOT / "web" / "backend" / "target" / "release" / "atf-web-backend"
+    web_exe = find_web() or ROOT / "bin" / "atf-web-backend"
+    api_exe = find_api() or ROOT / "bin" / "atf-api"
 
     logger_unit = f"""[Unit]
 Description=AutoTelegramForward Logger Microservice
@@ -635,17 +740,34 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 """
-    web_unit = f"""[Unit]
-Description=AutoTelegramForward Web Microservice (Rust + Axum & React)
+    api_unit = f"""[Unit]
+Description=AutoTelegramForward Go REST API Control Plane
 After=network.target atf.service
 Wants=atf.service
 
 [Service]
 Type=simple
 WorkingDirectory={ROOT}
+Environment="ATF_CORE_GRPC=127.0.0.1:6001"
+Environment="ATF_LOGGER_ADDR=127.0.0.1:6002"
+Environment="PORT=8080"
+ExecStart={api_exe if api_exe.exists() else f"{exe} api"}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+"""
+    web_unit = f"""[Unit]
+Description=AutoTelegramForward Web Gateway (Rust Axum + React UI)
+After=network.target atf-api.service
+Wants=atf-api.service
+
+[Service]
+Type=simple
+WorkingDirectory={ROOT}
 Environment="ATF_WEB_ADDR=0.0.0.0:8088"
-Environment="ATF_DB_PATH=data/atf.db"
-Environment="ATF_LOGS_DB_PATH=data/atf_logs.db"
+Environment="ATF_API_ADDR=http://127.0.0.1:8080"
 ExecStart={web_exe if web_exe.exists() else f"{exe} web"}
 Restart=always
 RestartSec=3
@@ -655,12 +777,13 @@ WantedBy=default.target
 """
     (d / "atf-logger.service").write_text(logger_unit, encoding="utf-8")
     (d / "atf.service").write_text(atf_unit, encoding="utf-8")
+    (d / "atf-api.service").write_text(api_unit, encoding="utf-8")
     (d / "atf-web.service").write_text(web_unit, encoding="utf-8")
     ok("Systemd user units written to ~/.config/systemd/user/")
     sh("systemctl --user daemon-reload")
-    sh("systemctl --user enable --now atf-logger.service atf.service atf-web.service")
+    sh("systemctl --user enable --now atf-logger.service atf.service atf-api.service atf-web.service")
     sh("loginctl enable-linger $(whoami) 2>/dev/null || true")
-    ok("Services enabled, started, and linger enabled.")
+    ok("All 4 services enabled, started, and linger enabled.")
     cmd_service_status()
 
 
@@ -931,14 +1054,26 @@ def cmd_logger(_args=None) -> None:
     asyncio.run(main())
 
 
+def cmd_api(_args=None) -> None:
+    api_exe = find_api() or build_api()
+    if not api_exe:
+        die("API binary not found and go not available.")
+    env = {
+        **_service_env(),
+        "ATF_CORE_GRPC": "127.0.0.1:6001",
+        "ATF_LOGGER_ADDR": "127.0.0.1:6002",
+        "PORT": "8080",
+    }
+    subprocess.run([str(api_exe)], cwd=ROOT, env=env)
+
+
 def cmd_web(_args=None) -> None:
     web_exe = find_web() or build_web()
     if not web_exe:
         die("Web binary not found and cargo not available.")
     env = _service_env()
     env["ATF_WEB_ADDR"] = "0.0.0.0:8088"
-    env["ATF_DB_PATH"] = str(ROOT / "data" / "atf.db")
-    env["ATF_LOGS_DB_PATH"] = str(ROOT / "data" / "atf_logs.db")
+    env["ATF_API_ADDR"] = "http://127.0.0.1:8080"
     subprocess.run([str(web_exe)], cwd=ROOT, env=env)
 
 
@@ -961,6 +1096,7 @@ COMMANDS = {
     # Foreground microservice shims
     "core": cmd_core,
     "logger": cmd_logger,
+    "api": cmd_api,
     "web": cmd_web,
 }
 

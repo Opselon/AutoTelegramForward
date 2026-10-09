@@ -1,31 +1,47 @@
 # AutoTelegramForward
 
-A microservice-based **Telegram auto-forwarder** with a Go REST control API and a Python MTProto core.
+A production-grade, microservice-based **Telegram MTProto auto-forwarding & routing suite** with an embedded Rust/React Web Dashboard, Go REST Control API, Python MTProto Core, and dedicated Logger Service.
 
-## Architecture
+## Architecture & Microservice Boundaries
 
 ```
-┌──────────────┐   HTTP/JSON    ┌─────────────┐     gRPC      ┌──────────────────┐
-│  Dashboard / │ ─────────────► │   Go API    │ ────────────► │   Python Core    │
-│  Client      │                │  (:8080)    │  (:50051)     │ Bot + Forwarder  │
-└──────────────┘                └──────┬──────┘               │  + SQLite (DDD)  │
-                                       │  gRPC                └────────┬─────────┘
-                                       │  (:50052)                     │ logs
-                                       └─────────────► ┌───────────────▼────────┐
-                                                       │   Logger Service       │
-                                                       │  debug logs + own      │
-                                                       │  SQLite DB             │
-                                                       └────────────────────────┘
+┌──────────────────┐   HTTP/JSON    ┌──────────────────────┐   HTTP/JSON   ┌───────────────┐
+│ React Dashboard  │ ─────────────► │   Rust Web Gateway   │ ────────────► │    Go API     │
+│   (Browser UI)   │                │   + BFF (:8088)      │               │   (:8080)     │
+└──────────────────┘                └──────────────────────┘               └───────┬───────┘
+                                                                                   │ gRPC
+                                    ┌──────────────────────┐     gRPC              │ (:50051)
+                                    │    Logger Service    │ ◄─────────────────────┼───────┐
+                                    │  (:50052, SQLite DB) │                       │       ▼
+                                    └──────────────────────┘               ┌───────┴──────────┐
+                                                                           │   Python Core    │
+                                                                           │ Bot + Forwarder  │
+                                                                           │  + SQLite (DDD)  │
+                                                                           └──────────────────┘
 ```
 
-- **`proto/`** — shared protobuf contract (single source of truth)
-- **`api/`** — GoLang control-plane microservice (REST, auth, logging proxy)
-- **`core/`** — Python service: Telegram Bot UI, MTProto forwarder, AI rewriter, gRPC server
-  - `domain/` — pure entities, value objects, filter engine, routing policy
-  - `application/` — use cases + repository ports
-  - `infrastructure/` — SQLite repos (AES-256-GCM at rest), Pyrogram client pool, multi-provider AI adapters, i18n, gRPC servicers
-- **`logger/`** — Python microservice: debug-log store with its **own SQLite DB**, gRPC `LogControlService`
-- **`install.sh` / `install.ps1`** — one-command installers (Linux/macOS & Windows)
+1. **Rust Axum Web Gateway & React Dashboard (:8088)**
+   - Zero external static dependencies: React Single-Page Application assets are embedded directly into the Rust binary.
+   - High-performance reverse proxy for all `/api/*` endpoints to the Go Control Plane.
+   - Hardened security headers (`CSP`, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `X-XSS-Protection`).
+   - Dedicated health endpoint (`/healthz`) and gateway metadata (`/api/gateway`).
+
+2. **Go REST API & Control Plane (:8080)**
+   - Authoritative public REST control interface with OpenAPI schemas.
+   - Endpoints for managing forward rules, telegram sessions, stats, and audit logs.
+   - Communicates strictly via gRPC with Python Core and Logger; **no direct database coupling**.
+
+3. **Python Core / Telegram MTProto Engine (:50051)**
+   - Exclusive owner of Telegram sessions, MTProto client pools, and business routing logic.
+   - Domain-Driven Design (DDD): smart routing engine, duplicate message detection, link sanitization, AI rewriting.
+   - Exclusive writer to `data/atf.db` SQLite repository with encrypted credentials (AES-256-GCM).
+
+4. **Python Logger Service (:50052)**
+   - Autonomous observability microservice with dedicated storage (`data/atf_logs.db`).
+   - Retention policy, structured log indexing, queryable via gRPC and REST.
+
+5. **`atf` CLI & Unified Process Supervisor**
+   - Single-file orchestrator that coordinates orderly startup (`logger` → `core` → `api` → `web`), graceful shutdown, crash recovery, and health checks across Linux, macOS, and Windows.
 
 ## Features
 
@@ -44,28 +60,38 @@ A microservice-based **Telegram auto-forwarder** with a Go REST control API and 
 - ✅ **Session & API-key encryption** at rest (AES-256-GCM)
 - ✅ **Bot-token-only operation** — every command works through the Telegram bot
 
-## Download & Install (one file — every service)
+## Download & Install (One Single File — Every Service)
 
 Grab the single `atf` binary for your OS/CPU from
 [**Releases**](https://github.com/Opselon/AutoTelegramForward/releases/latest)
-— one command runs **everything** (core + logger + REST API):
+— one command runs **everything** (Python Core + Logger + Go REST API + Rust/React Web Dashboard):
 
-| File | OS | CPU |
-|---|---|---|
-| `atf-linux-x64` | Linux | x86_64 |
-| `atf-linux-arm64` | Linux | aarch64 (Raspberry Pi 4/5, ARM VPS) |
-| `atf-macos-x64` | macOS Intel | x86_64 |
-| `atf-macos-arm64` | macOS Apple Silicon | arm64 |
-| `atf-windows-x64.exe` | Windows | x86_64 / ARM64 (Prism) |
+| File | OS | CPU | Features |
+|---|---|---|---|
+| `atf-linux-x64` | Linux | x86_64 | Self-contained, zero external runtime |
+| `atf-linux-arm64` | Linux | aarch64 (Raspberry Pi 4/5, ARM VPS) | Self-contained, zero external runtime |
+| `atf-macos-x64` | macOS Intel | x86_64 | Self-contained, zero external runtime |
+| `atf-macos-arm64` | macOS Apple Silicon | arm64 | Self-contained, zero external runtime |
+| `atf-windows-x64.exe` | Windows | x64 / ARM64 (Prism) | Standalone Windows executable |
 
 **Linux / macOS / WSL:**
 
 ```bash
+# 1. Download & grant execute permission
 curl -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-linux-x64 \
   -o atf && chmod +x atf
-./atf setup      # asks ONLY for your bot token
-./atf start      # core + logger + api — all up with one command
-./atf status     # live status of every service
+
+# 2. Easy Setup Wizard (only asks for Bot Token from @BotFather)
+./atf setup
+
+# 3. Start all 4 microservices with one command
+./atf start
+
+# 4. View live status of every microservice
+./atf status
+
+# 5. Access the React Web Dashboard
+# Open http://localhost:8088 in your browser
 ```
 
 Verify integrity: `sha256sum -c SHA256SUMS.txt` (from the release page).
@@ -76,9 +102,11 @@ Verify integrity: `sha256sum -c SHA256SUMS.txt` (from the release page).
 curl.exe -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-windows-x64.exe -o atf.exe
 .\atf.exe setup
 .\atf.exe start
+.\atf.exe status
+# Open http://localhost:8088 in browser
 ```
 
-**Docker (any platform, amd64 + arm64):**
+**Docker Compose (All 4 Microservices, amd64 + arm64):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/docker-compose.yml \
@@ -86,20 +114,27 @@ curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/
 docker compose up -d        # or: atf docker up
 ```
 
+**Kubernetes:**
+
+```bash
+atf k8s apply               # or: kubectl apply -f k8s/all-in-one.yaml
+```
+
 CLI commands (binary or source — identical):
 
 ```bash
-atf setup       # first-time setup (bot token only)
-atf start       # start ALL services (core + logger + api)
-atf stop        # stop everything
-atf restart     # stop + start
-atf status      # live status of every service
-atf logs        # tail recent logs (auto-falls-back to OS journal)
-atf health      # deep health & diagnostics check
-atf service install   # autostart: systemd (Linux) / launchd (macOS) / Task Scheduler (Windows)
-atf docker up   # docker lifecycle: up | down | restart | logs | ps | pull
-atf test        # run the test-suite
-atf version     # print version
+atf setup       # first-time interactive or headless setup
+atf start       # start ALL 4 microservices (logger, core, api, web)
+atf stop        # graceful stop with cleanup
+atf restart     # safe restart
+atf status      # live health & listening port check
+atf health      # deep multi-layer diagnostics (DB, binaries, ports, docker)
+atf logs        # stream service logs in real time
+atf version     # show version and runtime mode (frozen/source)
+atf service install   # install systemd/launchd/TaskScheduler background service
+atf docker up/down    # full Docker Compose management
+atf k8s apply/status  # Kubernetes cluster operations
+atf test        # run the test suite
 ```
 
 <details>

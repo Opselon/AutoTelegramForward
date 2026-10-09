@@ -75,7 +75,7 @@ jobs:
         include:
           - {os: ubuntu-latest,   suffix: linux-x64,    label: Linux x86_64}
           - {os: ubuntu-24.04-arm, suffix: linux-arm64, label: Linux arm64}
-          - {os: macos-latest,    suffix: macos-x64,    label: macOS Intel}
+          - {os: macos-13,        suffix: macos-x64,    label: macOS Intel}
           - {os: macos-latest,    suffix: macos-arm64,  label: macOS Apple Silicon}
           - {os: windows-latest,  suffix: windows-x64,  label: Windows x64}
 
@@ -88,6 +88,19 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install build deps (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -98,6 +111,36 @@ jobs:
       - name: Install build deps (macOS)
         if: runner.os == 'macOS'
         run: brew install libffi openssl || true
+
+      - name: Build Go REST API
+        shell: bash
+        run: |
+          mkdir -p bin
+          cd api
+          go build -trimpath -ldflags "-s -w" -o "../bin/atf-api${{ runner.os == 'Windows' && '.exe' || '' }}" .
+          cd ..
+          ls -la bin/
+
+      - name: Build React Web Frontend
+        shell: bash
+        run: |
+          cd web/frontend
+          npm ci || npm install
+          npm run build
+          cd ../..
+
+      - name: Build Rust Web Gateway
+        shell: bash
+        run: |
+          cd web/backend
+          cargo build --release
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp target/release/atf-web-backend.exe ../../bin/atf-web-backend.exe
+          else
+            cp target/release/atf-web-backend ../../bin/atf-web-backend
+          fi
+          cd ../..
+          ls -la bin/
 
       - name: Install PyInstaller + requirements
         run: |
@@ -128,6 +171,8 @@ jobs:
             --add-data "logger:logger" \
             --add-data "proto:proto" \
             --add-data "config.example.yaml:." \
+            --add-binary "bin/atf-api:." \
+            --add-binary "bin/atf-web-backend:." \
             --hidden-import "pyrogram" \
             --hidden-import "pyrogram.session" \
             --hidden-import "pyrogram.connection" \
@@ -145,26 +190,29 @@ jobs:
 
       - name: Freeze single-file CLI (Windows)
         if: runner.os == 'Windows'
+        shell: bash
         run: |
-          pyinstaller --noconfirm --clean --onefile --name "atf" `
-            --add-data "VERSION;." `
-            --add-data "core/proto;core/proto" `
-            --add-data "logger;logger" `
-            --add-data "proto;proto" `
-            --add-data "config.example.yaml;." `
-            --hidden-import "pyrogram" `
-            --hidden-import "pyrogram.session" `
-            --hidden-import "pyrogram.connection" `
-            --hidden-import "tgcrypto" `
-            --hidden-import "grpc._cython.cygrpc" `
-            --exclude-module "pkg_resources" `
-            --exclude-module "setuptools" `
-            --collect-all "pyrogram" `
-            --collect-all "google.protobuf" `
-            --collect-submodules "grpc" `
+          pyinstaller --noconfirm --clean --onefile --name "atf" \
+            --add-data "VERSION;." \
+            --add-data "core/proto;core/proto" \
+            --add-data "logger;logger" \
+            --add-data "proto;proto" \
+            --add-data "config.example.yaml;." \
+            --add-binary "bin/atf-api.exe;." \
+            --add-binary "bin/atf-web-backend.exe;." \
+            --hidden-import "pyrogram" \
+            --hidden-import "pyrogram.session" \
+            --hidden-import "pyrogram.connection" \
+            --hidden-import "tgcrypto" \
+            --hidden-import "grpc._cython.cygrpc" \
+            --exclude-module "pkg_resources" \
+            --exclude-module "setuptools" \
+            --collect-all "pyrogram" \
+            --collect-all "google.protobuf" \
+            --collect-submodules "grpc" \
             atf.py
-          .\dist\atf.exe version
-          copy dist\atf.exe "assets\atf-${{ matrix.suffix }}.exe"
+          ./dist/atf.exe version
+          cp dist/atf.exe "assets/atf-${{ matrix.suffix }}.exe"
 
       - name: Freeze one-dir bundle (POSIX)
         if: runner.os != 'Windows'
@@ -320,6 +368,17 @@ jobs:
             ghcr.io/${{ steps.repo.outputs.owner }}/atf-api:latest
             ghcr.io/${{ steps.repo.outputs.owner }}/atf-api:${{ needs.meta.outputs.version }}
 
+      - name: Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.web
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo.outputs.owner }}/atf-web:latest
+            ghcr.io/${{ steps.repo.outputs.owner }}/atf-web:${{ needs.meta.outputs.version }}
+
   # ------------------------------------------------------------------------ #
   # Portable source bundle — the no-binary path (any POSIX box).
   # ------------------------------------------------------------------------ #
@@ -336,10 +395,11 @@ jobs:
           tar --exclude='.git' --exclude='.venv' --exclude='__pycache__' \
               --exclude='.pytest_cache' --exclude='data/*.db*' \
               --exclude='*.log' --exclude='dist' --exclude='build' \
-              -cf - atf.py core logger proto api scripts \
+              --exclude='web/frontend/node_modules' --exclude='web/backend/target' \
+              -cf - atf.py core logger proto api web k8s scripts \
                      install.sh install.ps1 requirements.txt VERSION \
                      config.example.yaml docker-compose.yml \
-                     Dockerfile.core Dockerfile.logger Dockerfile.api \
+                     Dockerfile.core Dockerfile.logger Dockerfile.api Dockerfile.web \
                      README.md docs \
               | tar -xf - -C "artifacts/${NAME}"
           tar -czf "artifacts/${NAME}.tar.gz" -C artifacts "${NAME}"
@@ -403,48 +463,113 @@ jobs:
         run: |
           VERSION="${{ needs.meta.outputs.version }}"
           cat > NOTES.md <<EOF
-          ## AutoTelegramForward v${VERSION} — one file, every service
+          ## AutoTelegramForward v${VERSION} — True Single-File Cross-Platform Release
 
-          **یک فایل، همه سرویس‌ها.** باینری \`atf\` هسته، لاگر و REST API رو
-          همگی با هم بالا میاره — نیازی به اجرای چند فایل یا تنظیم جداگانه نیست.
+          **One Single Executable, All 4 Microservices.**
+          AutoTelegramForward is a high-performance Telegram MTProto forwarding and routing suite engineered with clean microservice boundaries. Every platform release is a self-contained, native single executable that embeds and orchestrates all four decoupled services with zero external dependencies (no Python, Go, Rust, Node.js, or compiler toolchains required on host systems):
 
-          ### Quick start (Linux / macOS / WSL)
-          \`\`\`bash
-          curl -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-linux-x64 \\
-            -o atf && chmod +x atf
-          ./atf setup      # only asks for your bot token
-          ./atf start      # core + logger + api — all up
-          ./atf status     # live status of every service
-          \`\`\`
+          1. **Python Core Engine (:6001)** — Telegram MTProto client pool, rule engine, smart routing, link sanitization, and multi-provider AI text transformations.
+          2. **Python Logger Service (:6002)** — Telemetry, queryable structured logs with dedicated SQLite storage.
+          3. **Go REST API (:8080)** — Production control-plane, OpenAPI REST endpoints for rules, sessions, and telemetry.
+          4. **Rust Axum Web Gateway & React Dashboard (:8088)** — Zero-dependency web server embedding the React Single Page App, providing security headers, high-throughput reverse proxying to the Go API, and health metrics.
 
-          ### Windows
+          ---
+
+          ### Quick Start Guide (Linux / macOS / WSL)
+
+          1. **Download the single-file binary:**
+             \`\`\`bash
+             curl -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-linux-x64 -o atf && chmod +x atf
+             \`\`\`
+             *(For Apple Silicon macOS, use \`atf-macos-arm64\`; for macOS Intel, use \`atf-macos-x64\`)*
+
+          2. **Interactive Onboarding & Setup Wizard:**
+             \`\`\`bash
+             ./atf setup
+             \`\`\`
+             *Only asks for your Telegram Bot Token from [@BotFather](https://t.me/BotFather) and optional Admin User ID.*
+             *To run non-interactively (CI/CD):*
+             \`\`\`bash
+             ./atf setup --token "123456:ABC-DEF..." --admin 123456789 --lang en --start
+             \`\`\`
+
+          3. **Start All Services with One Command:**
+             \`\`\`bash
+             ./atf start
+             \`\`\`
+
+          4. **Verify Live Status & Health:**
+             \`\`\`bash
+             ./atf status
+             ./atf health
+             \`\`\`
+
+          5. **Open Web Dashboard:**
+             Open \`http://localhost:8088\` in your browser to access the live React Management Dashboard.
+
+          ---
+
+          ### Windows (PowerShell)
+
           \`\`\`powershell
           curl.exe -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-windows-x64.exe -o atf.exe
           .\\atf.exe setup
           .\\atf.exe start
+          .\\atf.exe status
           \`\`\`
 
-          ### Docker (any platform, amd64 + arm64)
+          ---
+
+          ### Production OS Background Service (Auto-Start on Boot)
+
+          Run all services continuously in the background managed by your operating system:
+
+          \`\`\`bash
+          # Linux (systemd user unit)
+          ./atf service install
+
+          # Check service status
+          ./atf status
+
+          # Tail live service logs
+          ./atf logs
+          \`\`\`
+
+          ---
+
+          ### Docker & Kubernetes Deployments
+
+          **Docker Compose (All 4 Microservices):**
           \`\`\`bash
           curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/docker-compose.yml -o docker-compose.yml
           docker compose up -d
+          # or via CLI:
+          ./atf docker up
           \`\`\`
 
-          ### Available binaries
-          | File | OS | CPU |
-          |---|---|---|
-          | \`atf-linux-x64\` | Linux | x86_64 |
-          | \`atf-linux-arm64\` | Linux | aarch64 (RPi 4/5, ARM VPS) |
-          | \`atf-macos-x64\` | macOS Intel | x86_64 |
-          | \`atf-macos-arm64\` | macOS Apple Silicon | arm64 |
-          | \`atf-windows-x64.exe\` | Windows | x86_64 / ARM64 (Prism) |
-          | \`atf-*-portable.*\` | any | one-dir bundle |
-          | \`autotelegramforward-*-portable.tar.gz\` | POSIX | source bundle |
+          **Kubernetes (Production Cluster Manifests):**
+          \`\`\`bash
+          ./atf k8s apply
+          # or kubectl:
+          kubectl apply -f https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/k8s/all-in-one.yaml
+          \`\`\`
 
-          The Go REST API ships as \`atf-api-<platform>\` next to the CLI; drop it
-          beside the \`atf\` binary and \`atf start\` picks it up automatically.
+          ---
 
-          ### Verify
+          ### Official Single-File Artifacts
+
+          | Binary | Platform | Architecture | Verification |
+          |---|---|---|---|
+          | \`atf-linux-x64\` | Linux | x86_64 | Self-contained single-file executable |
+          | \`atf-linux-arm64\` | Linux | ARM64 / aarch64 | Raspberry Pi 4/5, ARM VPS, Graviton |
+          | \`atf-macos-x64\` | macOS | Intel x86_64 | Self-contained single-file executable |
+          | \`atf-macos-arm64\` | macOS | Apple Silicon (M1/M2/M3/M4) | Self-contained single-file executable |
+          | \`atf-windows-x64.exe\` | Windows | x64 | Windows native standalone executable |
+          | \`atf-*-portable.tar.gz\` | Cross-platform | Portable directory | One-directory portable bundle |
+          | \`autotelegramforward-*-portable.tar.gz\` | Any POSIX | Source bundle | Source distribution |
+
+          ### SHA-256 Checksums Verification
+          Download \`SHA256SUMS.txt\` from the release assets and verify integrity:
           \`\`\`bash
           sha256sum -c SHA256SUMS.txt
           \`\`\`

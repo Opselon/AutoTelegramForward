@@ -59,20 +59,19 @@ services:
     container_name: atf-web
     restart: unless-stopped
     depends_on:
-      - core
-      - logger
+      - api
     environment:
       ATF_WEB_ADDR: "0.0.0.0:8088"
-      ATF_DB_PATH: /app/data/atf.db
-      ATF_LOGS_DB_PATH: /app/data/atf_logs.db
-      ATF_CORE_GRPC: core:50051
-      ATF_LOGGER_GRPC: logger:50052
+      ATF_API_ADDR: "http://api:8080"
     ports:
       - "8088:8088"
-    volumes:
-      - atf-data:/app/data
     networks:
       - atf-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8088/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
 volumes:
   atf-data:
