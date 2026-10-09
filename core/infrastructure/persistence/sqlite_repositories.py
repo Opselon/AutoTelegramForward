@@ -7,7 +7,7 @@ swapped in the DI container — domain and application layers are untouched.
 import json
 import time
 import uuid
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from ...application.repositories import (
     ApiCredential,
@@ -156,6 +156,61 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
     def __init__(self, db: SqliteDatabase) -> None:
         self._db = db
 
+    SMART_RULE_COLUMNS = (
+        "message_category", "intermediate_channel_id", "intermediate_channel_name",
+        "intermediate_target_chat_id", "use_intermediate", "fallback_mode",
+        "fallback_enabled", "detection_criteria", "priority", "execution_order",
+        "multi_route", "media_handling", "dedupe_policy", "max_retries",
+        "retry_backoff_base", "rate_limit_per_minute", "rate_limit_burst",
+        "custom_header", "custom_footer", "header_enabled", "template_text",
+        "template_media", "template_album", "caption_max_length",
+        "preserve_signature", "is_paused", "paused_until",
+        "link_policy", "domain_allowlist", "domain_blocklist",
+        "link_rewrite_map", "allowed_media_types", "split_long_caption",
+    )
+
+    @staticmethod
+    def _smart_params(rule: ForwardRule) -> tuple:
+        return (
+            getattr(rule, "message_category", "ALL") or "ALL",
+            getattr(rule, "intermediate_channel_id", "") or "",
+            getattr(rule, "intermediate_channel_name", "") or "",
+            getattr(rule, "intermediate_target_chat_id", "") or "",
+            int(bool(getattr(rule, "use_intermediate", False))),
+            getattr(getattr(rule, "fallback_mode", None), "value", "COPY_MESSAGE"),
+            int(bool(getattr(rule, "fallback_enabled", True))),
+            json.dumps(getattr(rule, "detection_criteria", {}) or {}),
+            int(getattr(rule, "priority", 10) or 10),
+            int(getattr(rule, "execution_order", 0) or 0),
+            int(bool(getattr(rule, "multi_route", False))),
+            getattr(rule, "media_handling", "AUTO") or "AUTO",
+            getattr(rule, "dedupe_policy", "STRICT") or "STRICT",
+            int(getattr(rule, "max_retries", 3) or 3),
+            float(getattr(rule, "retry_backoff_base", 2.0) or 2.0),
+            int(getattr(rule, "rate_limit_per_minute", 0) or 0),
+            int(getattr(rule, "rate_limit_burst", 0) or 0),
+            getattr(rule, "custom_header", "") or "",
+            getattr(rule, "custom_footer", "") or "",
+            int(bool(getattr(rule, "header_enabled", False))),
+            getattr(rule, "template_text", "") or "",
+            getattr(rule, "template_media", "") or "",
+            getattr(rule, "template_album", "") or "",
+            int(getattr(rule, "caption_max_length", 0) or 0),
+            int(bool(getattr(rule, "preserve_signature", False))),
+            int(bool(getattr(rule, "is_paused", False))),
+            int(getattr(rule, "paused_until", 0) or 0),
+            getattr(rule, "link_policy", "PRESERVE_ALL") or "PRESERVE_ALL",
+            json.dumps(getattr(rule, "domain_allowlist", []) or []),
+            json.dumps(getattr(rule, "domain_blocklist", []) or []),
+            json.dumps(getattr(rule, "link_rewrite_map", {}) or {}),
+            json.dumps(getattr(rule, "allowed_media_types", []) or []),
+            int(bool(getattr(rule, "split_long_caption", True))),
+        )
+
+    @staticmethod
+    def _smart_set_clause() -> str:
+        return ", ".join(f"{c}=?" for c in SqliteForwardRuleRepository.SMART_RULE_COLUMNS)
+
     async def add(self, rule: ForwardRule) -> ForwardRule:
         rule_version = int(getattr(rule, "version", 1) or 1)
         ai_fallback = getattr(getattr(rule, "ai_fallback_policy", AIFallbackPolicy.DROP), "value", AIFallbackPolicy.DROP.value)
@@ -169,8 +224,10 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                 " target_chat_name, target_chat_ids, routing_type, forward_mode, is_active, filter_rule_id,"
                 " ai_config_id, remove_links, custom_caption_template, delay_seconds, skip_history,"
                 " since_ts, ignore_edits, trigger_events, content_mode, metadata, version, created_at, updated_at,"
-                " ai_prompt_version, ai_fallback_policy, ai_timeout_seconds, ai_secondary_config_id)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " ai_prompt_version, ai_fallback_policy, ai_timeout_seconds, ai_secondary_config_id,"
+                f" {', '.join(self.SMART_RULE_COLUMNS)})"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
+                f" {', '.join('?' * len(self.SMART_RULE_COLUMNS))})",
                 (
                     rule.id, rule.session_id, rule.source_chat_id, rule.source_chat_name,
                     rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
@@ -184,6 +241,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                     getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
                     json.dumps(rule.metadata or {}), rule_version, rule.created_at, rule.updated_at,
                     ai_prompt_ver, ai_fallback, ai_timeout, ai_sec,
+                    *self._smart_params(rule),
                 ),
             )
         except Exception as exc:
@@ -239,6 +297,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             rule.since_ts, int(rule.ignore_edits),
             trigger_json, content_val, meta_json, next_version, rule.updated_at,
             ai_prompt_ver, ai_fallback, ai_timeout, ai_sec,
+            *self._smart_params(rule),
         )
 
         from ...application.repositories import ConcurrencyError
@@ -250,7 +309,8 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                 " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
                 " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
                 " content_mode=?, metadata=?, version=?, updated_at=?,"
-                " ai_prompt_version=?, ai_fallback_policy=?, ai_timeout_seconds=?, ai_secondary_config_id=?"
+                " ai_prompt_version=?, ai_fallback_policy=?, ai_timeout_seconds=?, ai_secondary_config_id=?,"
+                f" {self._smart_set_clause()}"
                 " WHERE id=? AND version=?",
                 (*params, rule.id, int(expected_version)),
             )
@@ -271,7 +331,8 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                     " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
                     " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
                     " content_mode=?, metadata=?, version=?, updated_at=?,"
-                    " ai_prompt_version=?, ai_fallback_policy=?, ai_timeout_seconds=?, ai_secondary_config_id=?"
+                    " ai_prompt_version=?, ai_fallback_policy=?, ai_timeout_seconds=?, ai_secondary_config_id=?,"
+                    f" {self._smart_set_clause()}"
                     " WHERE id=?",
                     (*params, rule.id),
                 )
@@ -322,6 +383,16 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         ai_timeout = float(row["ai_timeout_seconds"]) if ("ai_timeout_seconds" in cols and row["ai_timeout_seconds"] is not None) else 15.0
         ai_sec = str(row["ai_secondary_config_id"]) if ("ai_secondary_config_id" in cols and row["ai_secondary_config_id"] is not None) else None
 
+        def _col(name, default=None):
+            return row[name] if name in cols and row[name] is not None else default
+
+        try:
+            fallback_mode = ForwardMode(_col("fallback_mode", ForwardMode.COPY_MESSAGE.value))
+        except Exception:
+            fallback_mode = ForwardMode.COPY_MESSAGE
+
+        detection_criteria = _safe_dict(_col("detection_criteria", "{}"), {})
+
         return ForwardRule(
             id=row["id"], session_id=row["session_id"],
             source_chat_id=row["source_chat_id"], source_chat_name=row["source_chat_name"],
@@ -345,6 +416,40 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             metadata=_safe_dict(row["metadata"] if "metadata" in cols else "{}", {}),
             version=rule_version,
             created_at=row["created_at"], updated_at=row["updated_at"],
+            # Smart Forwarding Rules fields (v8)
+            message_category=_col("message_category", "ALL") or "ALL",
+            intermediate_channel_id=_col("intermediate_channel_id", "") or "",
+            intermediate_channel_name=_col("intermediate_channel_name", "") or "",
+            intermediate_target_chat_id=_col("intermediate_target_chat_id", "") or "",
+            use_intermediate=bool(_col("use_intermediate", 0)),
+            fallback_mode=fallback_mode,
+            fallback_enabled=bool(_col("fallback_enabled", 1)),
+            detection_criteria=detection_criteria,
+            priority=int(_col("priority", 10) or 10),
+            execution_order=int(_col("execution_order", 0) or 0),
+            multi_route=bool(_col("multi_route", 0)),
+            media_handling=_col("media_handling", "AUTO") or "AUTO",
+            dedupe_policy=_col("dedupe_policy", "STRICT") or "STRICT",
+            max_retries=int(_col("max_retries", 3) or 3),
+            retry_backoff_base=float(_col("retry_backoff_base", 2.0) or 2.0),
+            rate_limit_per_minute=int(_col("rate_limit_per_minute", 0) or 0),
+            rate_limit_burst=int(_col("rate_limit_burst", 0) or 0),
+            custom_header=_col("custom_header", "") or "",
+            custom_footer=_col("custom_footer", "") or "",
+            header_enabled=bool(_col("header_enabled", 0)),
+            template_text=_col("template_text", "") or "",
+            template_media=_col("template_media", "") or "",
+            template_album=_col("template_album", "") or "",
+            caption_max_length=int(_col("caption_max_length", 0) or 0),
+            preserve_signature=bool(_col("preserve_signature", 0)),
+            is_paused=bool(_col("is_paused", 0)),
+            paused_until=int(_col("paused_until", 0) or 0),
+            link_policy=_col("link_policy", "PRESERVE_ALL") or "PRESERVE_ALL",
+            domain_allowlist=_safe_list(_col("domain_allowlist", "[]"), []),
+            domain_blocklist=_safe_list(_col("domain_blocklist", "[]"), []),
+            link_rewrite_map=_safe_dict(_col("link_rewrite_map", "{}"), {}),
+            allowed_media_types=_safe_list(_col("allowed_media_types", "[]"), []),
+            split_long_caption=bool(_col("split_long_caption", 1)),
         )
 
     async def get_by_id(self, rule_id: str) -> Optional[ForwardRule]:
@@ -1002,6 +1107,10 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             status = DeliveryStatus.PENDING
 
         payload = SqliteDatabase.loads(row["payload_json"], {})
+        keys = row.keys() if hasattr(row, "keys") else []
+        inter_chat = row["intermediate_chat_id"] if "intermediate_chat_id" in keys else None
+        inter_msg = row["intermediate_message_id"] if "intermediate_message_id" in keys else None
+        deliv_stage = row["delivery_stage"] if "delivery_stage" in keys else "DIRECT"
         return DeliveryJob(
             id=row["id"],
             rule_id=row["rule_id"],
@@ -1018,37 +1127,73 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             error_detail=row["error_detail"] if row["error_detail"] else None,
             created_at=int(row["created_at"]),
             updated_at=int(row["updated_at"]),
+            intermediate_chat_id=str(inter_chat) if inter_chat else None,
+            intermediate_message_id=int(inter_msg) if inter_msg is not None else None,
+            delivery_stage=str(deliv_stage or "DIRECT"),
         )
 
     async def enqueue(self, job: DeliveryJob) -> bool:
         payload_str = SqliteDatabase.dumps(job.payload_data)
         status_str = getattr(job.status, "value", str(job.status))
-        cur = self._db.execute(
-            """
-            INSERT OR IGNORE INTO delivery_jobs (
-                id, rule_id, source_chat_id, source_message_id, target_chat_id,
-                payload_json, status, attempts, max_attempts, next_retry_at,
-                lease_until, worker_id, error_detail, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                job.id,
-                job.rule_id,
-                str(job.source_chat_id),
-                int(job.source_message_id),
-                str(job.target_chat_id),
-                payload_str,
-                status_str,
-                job.attempts,
-                job.max_attempts,
-                job.next_retry_at,
-                job.lease_until,
-                job.worker_id or "",
-                job.error_detail or "",
-                job.created_at,
-                job.updated_at,
-            ),
-        )
+        try:
+            cur = self._db.execute(
+                """
+                INSERT OR IGNORE INTO delivery_jobs (
+                    id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                    payload_json, status, attempts, max_attempts, next_retry_at,
+                    lease_until, worker_id, error_detail, created_at, updated_at,
+                    intermediate_chat_id, intermediate_message_id, delivery_stage
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job.id,
+                    job.rule_id,
+                    str(job.source_chat_id),
+                    int(job.source_message_id),
+                    str(job.target_chat_id),
+                    payload_str,
+                    status_str,
+                    job.attempts,
+                    job.max_attempts,
+                    job.next_retry_at,
+                    job.lease_until,
+                    job.worker_id or "",
+                    job.error_detail or "",
+                    job.created_at,
+                    job.updated_at,
+                    str(job.intermediate_chat_id or "") if job.intermediate_chat_id else None,
+                    job.intermediate_message_id,
+                    job.delivery_stage or "DIRECT",
+                ),
+            )
+        except Exception:
+            # Fallback for tables without v9 columns
+            cur = self._db.execute(
+                """
+                INSERT OR IGNORE INTO delivery_jobs (
+                    id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                    payload_json, status, attempts, max_attempts, next_retry_at,
+                    lease_until, worker_id, error_detail, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job.id,
+                    job.rule_id,
+                    str(job.source_chat_id),
+                    int(job.source_message_id),
+                    str(job.target_chat_id),
+                    payload_str,
+                    status_str,
+                    job.attempts,
+                    job.max_attempts,
+                    job.next_retry_at,
+                    job.lease_until,
+                    job.worker_id or "",
+                    job.error_detail or "",
+                    job.created_at,
+                    job.updated_at,
+                ),
+            )
         return cur.rowcount > 0
 
     async def claim_batch(
@@ -1153,6 +1298,58 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             (error, now, job_id),
         )
         return cur.rowcount > 0
+
+    async def mark_intermediate_copied(self, job_id: str, inter_chat: str, inter_msg_id: int) -> bool:
+        now = _now()
+        try:
+            cur = self._db.execute(
+                """
+                UPDATE delivery_jobs
+                SET status = 'COPIED_TO_C', delivery_stage = 'COPIED_TO_C',
+                    intermediate_chat_id = ?, intermediate_message_id = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (str(inter_chat), int(inter_msg_id), now, job_id),
+            )
+            return cur.rowcount > 0
+        except Exception:
+            return False
+
+    async def mark_dead_letter(self, job_id: str, error: str, category: str = "DELIVERY_EXHAUSTED") -> bool:
+        now = _now()
+        try:
+            self._db.execute(
+                """
+                INSERT OR REPLACE INTO dead_letter_queue (
+                    id, job_id, rule_id, source_chat_id, source_message_id,
+                    target_chat_id, payload_json, error_message, error_category, dead_lettered_at
+                )
+                SELECT ?, id, rule_id, source_chat_id, source_message_id,
+                       target_chat_id, payload_json, ?, ?, ?
+                FROM delivery_jobs WHERE id = ?
+                """,
+                (f"dlq_{job_id}", error, category, now, job_id),
+            )
+        except Exception:
+            pass
+        cur = self._db.execute(
+            """
+            UPDATE delivery_jobs
+            SET status = 'DEAD_LETTER', error_detail = ?, lease_until = 0, updated_at = ?
+            WHERE id = ?
+            """,
+            (error, now, job_id),
+        )
+        return cur.rowcount > 0
+
+    async def get_dead_letter_jobs(self, limit: int = 50) -> List[Dict[str, Any]]:
+        try:
+            rows = self._db.query_all(
+                "SELECT * FROM dead_letter_queue ORDER BY dead_lettered_at DESC LIMIT ?", (int(limit),)
+            )
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
 
     async def mark_unknown(self, job_id: str, error: str) -> bool:
         now = _now()

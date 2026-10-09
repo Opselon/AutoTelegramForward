@@ -112,6 +112,7 @@ enum ForwardMode {
   FORWARD_MODE_UNKNOWN = 0;
   DIRECT_FORWARD = 1; // Telegram native forward (keeps header)
   COPY_MESSAGE = 2;   // Clean copy without sender header
+  CUSTOM_HEADER_COPY = 3; // Copy with admin-defined custom header
 }
 
 message ForwardRule {
@@ -130,6 +131,38 @@ message ForwardRule {
   string custom_caption_template = 13;
   int64 created_at = 14;
   int64 updated_at = 15;
+
+  // ---- Smart Forwarding Rules (v8) ----
+  string name = 16;
+  string description = 17;
+  repeated string target_chat_ids = 18;
+  string message_category = 19;   // ALL | VIP | REGULAR | CHANNEL_POST | USER_MESSAGE
+  string intermediate_channel_id = 20;
+  string intermediate_channel_name = 21;
+  bool use_intermediate = 22;
+  ForwardMode fallback_mode = 23; // MUST be COPY_MESSAGE or DROP, never native forward
+  bool fallback_enabled = 24;
+  string detection_criteria_json = 25;
+  int32 priority = 26;
+  int32 execution_order = 27;
+  bool multi_route = 28;
+  string media_handling = 29;     // AUTO | TEXT_ONLY | MEDIA_ONLY | TEXT_AND_MEDIA
+  string dedupe_policy = 30;      // STRICT | RELAXED | DISABLED
+  int32 max_retries = 31;
+  double retry_backoff_base = 32;
+  int32 rate_limit_per_minute = 33;
+  int32 rate_limit_burst = 34;
+  string custom_header = 35;
+  string custom_footer = 36;
+  bool header_enabled = 37;
+  string template_text = 38;
+  string template_media = 39;
+  string template_album = 40;
+  int32 caption_max_length = 41;
+  bool preserve_signature = 42;
+  bool is_paused = 43;
+  int64 paused_until = 44;
+  int32 version = 45;
 }
 
 message CreateRuleRequest {
@@ -293,6 +326,121 @@ message LogStatsResponse {
 }
 
 // -----------------------------------------------------------------------------
+// Smart Forwarding: rule preview / test, dead-letter queue, live delivery stats
+// -----------------------------------------------------------------------------
+
+message TestRuleRequest {
+  string rule_id = 1;
+  string sample_text = 2;
+  string sample_chat_id = 3;
+  string sample_sender_id = 4;
+  string forward_origin_chat_id = 5;
+  string forward_origin_username = 6;
+  string forward_origin_title = 7;
+  bool sample_has_media = 8;
+  string sample_media_type = 9;   // text | photo | video | document | voice | audio | sticker | animation
+}
+
+message TestRuleResponse {
+  bool matched = 1;
+  string match_reason = 2;
+  string rule_name = 3;
+  string message_category = 4;
+  bool is_vip = 5;
+  string vip_reason = 6;
+  bool loop_detected = 7;
+  string loop_reason = 8;
+  string forward_mode = 9;
+  string fallback_mode = 10;
+  string rendered_text = 11;
+  string rendered_header = 12;
+  string rendered_footer = 13;
+  repeated string delivery_targets = 14;
+  string intermediate_channel_id = 15;
+  bool use_intermediate = 16;
+}
+
+message ListDeadLetterRequest {
+  string rule_id = 1;
+  int32 limit = 2;
+  int64 since = 3;
+}
+
+message DeadLetterEntry {
+  string id = 1;
+  string rule_id = 2;
+  string source_chat_id = 3;
+  int64 source_message_id = 4;
+  string target_chat_id = 5;
+  int32 attempts = 6;
+  string last_error = 7;
+  string error_category = 8;
+  int64 dead_lettered_at = 9;
+}
+
+message ListDeadLetterResponse {
+  repeated DeadLetterEntry entries = 1;
+  int32 total = 2;
+}
+
+message ReplayDeadLetterRequest {
+  string id = 1;
+}
+
+message PurgeDeadLetterRequest {
+  string rule_id = 1;
+  int64 older_than = 2;   // epoch seconds; 0 = all
+}
+
+message DeliveryStatsRequest {}
+
+message DeliveryStatsResponse {
+  int64 processed_total = 1;
+  int64 forwarded_total = 2;
+  int64 failed_total = 3;
+  int64 dedup_skipped_total = 4;
+  int64 filtered_total = 5;
+  int64 in_queue = 6;
+  int64 dead_lettered_total = 7;
+  int64 retry_total = 8;
+  repeated RuleLiveStat rules = 9;
+  repeated RecentError errors = 10;
+}
+
+message RuleLiveStat {
+  string rule_id = 1;
+  string rule_name = 2;
+  bool is_active = 3;
+  bool is_paused = 4;
+  int64 forwarded = 5;
+  int64 filtered = 6;
+  int64 errors = 7;
+  int64 last_forward_ts = 8;
+  string last_error = 9;
+}
+
+message RecentError {
+  int64 ts = 1;
+  string rule_id = 2;
+  string category = 3;
+  string error_name = 4;
+  string severity = 5;
+  string detail = 6;
+  string chat_id = 7;
+}
+
+message PauseRuleRequest {
+  string rule_id = 1;
+  int64 until = 2;   // epoch seconds; 0 = indefinite
+}
+
+message RuleActionResponse {
+  bool success = 1;
+  string message = 2;
+  string error_code = 3;
+}
+
+// -----------------------------------------------------------------------------
 // gRPC Services Definition
 // -----------------------------------------------------------------------------
 
@@ -311,6 +459,16 @@ service ForwardRuleControlService {
   rpc CreateRule(CreateRuleRequest) returns (ForwardRule);
   rpc UpdateRule(UpdateRuleRequest) returns (ForwardRule);
   rpc DeleteRule(DeleteRuleRequest) returns (StatusResponse);
+  rpc TestRule(TestRuleRequest) returns (TestRuleResponse);
+  rpc PauseRule(PauseRuleRequest) returns (RuleActionResponse);
+  rpc ResumeRule(PauseRuleRequest) returns (RuleActionResponse);
+}
+
+service DeliveryControlService {
+  rpc GetDeliveryStats(DeliveryStatsRequest) returns (DeliveryStatsResponse);
+  rpc ListDeadLetter(ListDeadLetterRequest) returns (ListDeadLetterResponse);
+  rpc ReplayDeadLetter(ReplayDeadLetterRequest) returns (RuleActionResponse);
+  rpc PurgeDeadLetter(PurgeDeadLetterRequest) returns (RuleActionResponse);
 }
 
 service FilterControlService {

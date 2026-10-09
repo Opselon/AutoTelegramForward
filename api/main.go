@@ -55,6 +55,15 @@ func main() {
 	mux.HandleFunc("GET /api/v1/logs", h.QueryLogs)
 	mux.HandleFunc("GET /api/v1/logs/stats", h.LogStats)
 
+	// Smart Forwarding Rules: rule testing, pause/resume, delivery diagnostics
+	mux.HandleFunc("POST /api/v1/rules/test", h.TestRule)
+	mux.HandleFunc("POST /api/v1/rules/{id}/pause", h.PauseRule)
+	mux.HandleFunc("POST /api/v1/rules/{id}/resume", h.ResumeRule)
+	mux.HandleFunc("GET /api/v1/delivery/stats", h.DeliveryStats)
+	mux.HandleFunc("GET /api/v1/delivery/dead-letter", h.ListDeadLetter)
+	mux.HandleFunc("POST /api/v1/delivery/dead-letter/{id}/replay", h.ReplayDeadLetter)
+	mux.HandleFunc("POST /api/v1/delivery/dead-letter/purge", h.PurgeDeadLetter)
+
 	var handler http.Handler = mux
 	handler = middleware.RequestLogger(handler)
 	if apiKey != "" {

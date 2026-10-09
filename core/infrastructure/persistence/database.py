@@ -310,6 +310,68 @@ MIGRATIONS = {
     ALTER TABLE forward_rules ADD COLUMN ai_timeout_seconds REAL NOT NULL DEFAULT 15.0;
     ALTER TABLE forward_rules ADD COLUMN ai_secondary_config_id TEXT;
     """,
+    8: """
+    -- v8: Smart Forwarding Rules — routing policy, detection, fallback, queue policy
+    -- Smart routing fields on forward_rules (kept optional so existing rules stay valid)
+    ALTER TABLE forward_rules ADD COLUMN message_category TEXT NOT NULL DEFAULT 'ALL';
+    ALTER TABLE forward_rules ADD COLUMN intermediate_channel_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE forward_rules ADD COLUMN intermediate_channel_name TEXT NOT NULL DEFAULT '';
+    ALTER TABLE forward_rules ADD COLUMN intermediate_target_chat_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE forward_rules ADD COLUMN use_intermediate INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN fallback_mode TEXT NOT NULL DEFAULT 'COPY_MESSAGE';
+    ALTER TABLE forward_rules ADD COLUMN fallback_enabled INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE forward_rules ADD COLUMN detection_criteria TEXT NOT NULL DEFAULT '{}';
+    ALTER TABLE forward_rules ADD COLUMN priority INTEGER NOT NULL DEFAULT 10;
+    ALTER TABLE forward_rules ADD COLUMN execution_order INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN multi_route INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN media_handling TEXT NOT NULL DEFAULT 'AUTO';
+    ALTER TABLE forward_rules ADD COLUMN dedupe_policy TEXT NOT NULL DEFAULT 'STRICT';
+    ALTER TABLE forward_rules ADD COLUMN max_retries INTEGER NOT NULL DEFAULT 3;
+    ALTER TABLE forward_rules ADD COLUMN retry_backoff_base REAL NOT NULL DEFAULT 2.0;
+    ALTER TABLE forward_rules ADD COLUMN rate_limit_per_minute INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN rate_limit_burst INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN custom_header TEXT NOT NULL DEFAULT '';
+    ALTER TABLE forward_rules ADD COLUMN custom_footer TEXT NOT NULL DEFAULT '';
+    ALTER TABLE forward_rules ADD COLUMN header_enabled INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN template_text TEXT NOT NULL DEFAULT '';
+    ALTER TABLE forward_rules ADD COLUMN template_media TEXT NOT NULL DEFAULT '';
+    ALTER TABLE forward_rules ADD COLUMN template_album TEXT NOT NULL DEFAULT '';
+    ALTER TABLE forward_rules ADD COLUMN caption_max_length INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN preserve_signature INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN is_paused INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN paused_until INTEGER NOT NULL DEFAULT 0;
+
+    -- Dead-letter queue: messages that exhausted the retry policy
+    CREATE TABLE IF NOT EXISTS dead_letter_queue (
+        id TEXT PRIMARY KEY,
+        job_id TEXT,
+        rule_id TEXT NOT NULL,
+        source_chat_id TEXT NOT NULL,
+        source_message_id INTEGER NOT NULL,
+        target_chat_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL DEFAULT '',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT NOT NULL DEFAULT '',
+        error_category TEXT NOT NULL DEFAULT '',
+        dead_lettered_at INTEGER NOT NULL,
+        UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_dlq_rule ON dead_letter_queue(rule_id, dead_lettered_at);
+    CREATE INDEX IF NOT EXISTS idx_dlq_ts ON dead_letter_queue(dead_lettered_at);
+    """,
+    9: """
+    -- v9: Link Management, Media Routing & Crash-Resilient Delivery State Machine
+    ALTER TABLE forward_rules ADD COLUMN link_policy TEXT NOT NULL DEFAULT 'PRESERVE_ALL';
+    ALTER TABLE forward_rules ADD COLUMN domain_allowlist TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE forward_rules ADD COLUMN domain_blocklist TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE forward_rules ADD COLUMN link_rewrite_map TEXT NOT NULL DEFAULT '{}';
+    ALTER TABLE forward_rules ADD COLUMN allowed_media_types TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE forward_rules ADD COLUMN split_long_caption INTEGER NOT NULL DEFAULT 1;
+
+    ALTER TABLE delivery_jobs ADD COLUMN intermediate_chat_id TEXT;
+    ALTER TABLE delivery_jobs ADD COLUMN intermediate_message_id INTEGER;
+    ALTER TABLE delivery_jobs ADD COLUMN delivery_stage TEXT NOT NULL DEFAULT 'DIRECT';
+    """,
 }
 
 

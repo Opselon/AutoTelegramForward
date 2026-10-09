@@ -27,7 +27,7 @@ from ..domain.entities import (
     MessageMapping,
     MessagePayload,
 )
-from ..domain.services import FilterEngine, RoutingPolicy
+from ..domain.services import FilterEngine, LinkManagementEngine, RoutingPolicy, TransformationService
 from ..domain.value_objects import (
     AIFallbackPolicy,
     ContentMode,
@@ -426,12 +426,15 @@ class DurableMessagePipeline:
     ) -> Optional[str]:
         text = payload.effective_text or ""
 
-        # Link removal or replacement
-        if getattr(rule, "link_replacement", None):
+        # Link Management Engine (Entity-aware, domain allowlist/blocklist, SSRF protected)
+        link_policy = getattr(rule, "link_policy", "PRESERVE_ALL")
+        if (link_policy and link_policy != "PRESERVE_ALL") or getattr(rule, "remove_links", False):
+            clean_text, updated_ents, links_mod = LinkManagementEngine.apply_to_payload(payload, rule)
+            text = clean_text
+            if links_mod:
+                evaluation.links_removed = True
+        elif getattr(rule, "link_replacement", None):
             text = self._filter_engine.replace_links(text, rule.link_replacement)
-            evaluation.links_removed = True
-        elif getattr(rule, "remove_links", False) or (isinstance(rule.metadata, dict) and rule.metadata.get("remove_links")):
-            text = self._filter_engine.remove_links(text)
             evaluation.links_removed = True
 
         # Emoji removal

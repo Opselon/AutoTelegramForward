@@ -367,11 +367,25 @@ def payload_from_pyrogram(message) -> MessagePayload:
     )
     sender = getattr(message, "from_user", None)
     sender_chat = getattr(message, "sender_chat", None)
+
+    sender_name = None
+    if sender:
+        name_parts = [p for p in [getattr(sender, "first_name", ""), getattr(sender, "last_name", "")] if p]
+        sender_name = getattr(sender, "username", "") or " ".join(name_parts) or str(sender.id)
+    elif sender_chat:
+        sender_name = getattr(sender_chat, "username", "") or getattr(sender_chat, "title", "") or str(sender_chat.id)
+
+    chat_username = getattr(chat, "username", None) if chat else None
+    chat_title = getattr(chat, "title", None) if chat else None
+
     return MessagePayload(
         message_id=message.id,
         chat_id=str(message.chat.id),
         chat_type=type_name,
         sender_id=str(sender.id) if sender else (str(sender_chat.id) if sender_chat else None),
+        sender_name=sender_name,
+        chat_username=chat_username,
+        chat_title=chat_title,
         text=message.text or "",
         caption=message.caption or "",
         media_type=media_type,
@@ -383,6 +397,9 @@ def payload_from_pyrogram(message) -> MessagePayload:
         forward_origin=_forward_origin(message),
         media_group_id=getattr(message, "media_group_id", None),
         views=getattr(message, "views", 0) or 0,
+        entities=getattr(message, "entities", None),
+        caption_entities=getattr(message, "caption_entities", None),
+        reply_markup=getattr(message, "reply_markup", None),
     )
 
 
@@ -396,27 +413,71 @@ def _is_edit_message(message) -> bool:
 
 def _forward_origin(message) -> Optional[dict]:
     fwd = getattr(message, "forward_origin", None)
-    if fwd is None:
-        return None
-    name = ""
-    sender = getattr(fwd, "sender_user", None)
-    chat = getattr(fwd, "sender_chat_name", getattr(fwd, "chat", None))
-    if sender is not None:
-        name = (
-            getattr(sender, "username", None)
-            or getattr(sender, "first_name", "")
-            or str(getattr(sender, "id", ""))
-        )
-    elif chat is not None:
-        name = (
-            getattr(chat, "username", None)
-            or getattr(chat, "title", "")
-            or str(getattr(chat, "id", ""))
-        )
-    return {
-        "type": type(fwd).__name__,
-        "from_chat_id": str(getattr(fwd, "from_chat_id", "") or ""),
-        "from_message_id": getattr(fwd, "from_message_id", 0),
-        "date": int(getattr(fwd, "date", 0) or 0),
-        "sender_name": name,
-    }
+    if fwd is not None:
+        name = ""
+        sender = getattr(fwd, "sender_user", None)
+        chat = getattr(fwd, "sender_chat_name", getattr(fwd, "chat", None))
+        if sender is not None:
+            name = (
+                getattr(sender, "username", None)
+                or getattr(sender, "first_name", "")
+                or str(getattr(sender, "id", ""))
+            )
+        elif chat is not None:
+            name = (
+                getattr(chat, "username", None)
+                or getattr(chat, "title", "")
+                or str(getattr(chat, "id", ""))
+            )
+        return {
+            "type": type(fwd).__name__,
+            "from_chat_id": str(getattr(fwd, "from_chat_id", "") or getattr(getattr(fwd, "chat", None), "id", "") or ""),
+            "from_message_id": getattr(fwd, "from_message_id", 0),
+            "date": int(getattr(fwd, "date", 0) or 0),
+            "sender_name": name,
+        }
+
+    # Standard Pyrogram forward attributes
+    fwd_chat = getattr(message, "forward_from_chat", None)
+    fwd_user = getattr(message, "forward_from", None)
+    fwd_name = getattr(message, "forward_sender_name", None)
+    fwd_msg_id = getattr(message, "forward_from_message_id", 0) or 0
+    fwd_date = getattr(message, "forward_date", None)
+    date_ts = int(fwd_date.timestamp()) if (fwd_date is not None and hasattr(fwd_date, "timestamp")) else (int(fwd_date) if fwd_date else 0)
+
+    if fwd_chat is not None:
+        name = getattr(fwd_chat, "username", "") or getattr(fwd_chat, "title", "") or str(fwd_chat.id)
+        return {
+            "type": "channel",
+            "from_chat_id": str(fwd_chat.id),
+            "from_chat_username": getattr(fwd_chat, "username", "") or "",
+            "from_chat_title": getattr(fwd_chat, "title", "") or "",
+            "from_message_id": fwd_msg_id,
+            "date": date_ts,
+            "sender_name": name,
+        }
+
+    if fwd_user is not None:
+        name = getattr(fwd_user, "username", "") or f"{getattr(fwd_user, 'first_name', '')} {getattr(fwd_user, 'last_name', '')}".strip() or str(fwd_user.id)
+        return {
+            "type": "user",
+            "from_chat_id": str(fwd_user.id),
+            "from_chat_username": getattr(fwd_user, "username", "") or "",
+            "from_chat_title": "",
+            "from_message_id": fwd_msg_id,
+            "date": date_ts,
+            "sender_name": name,
+        }
+
+    if fwd_name:
+        return {
+            "type": "hidden_user",
+            "from_chat_id": "",
+            "from_chat_username": "",
+            "from_chat_title": "",
+            "from_message_id": fwd_msg_id,
+            "date": date_ts,
+            "sender_name": str(fwd_name),
+        }
+
+    return None
