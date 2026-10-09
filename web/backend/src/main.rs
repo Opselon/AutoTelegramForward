@@ -96,7 +96,7 @@ async fn health_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse
         StatusCode::OK,
         Json(json!({
             "service": "atf-web-gateway",
-            "version": "1.2.1",
+            "version": "1.2.2",
             "status": "healthy",
             "upstream_api": state.api_upstream,
             "upstream_connected": upstream_ok
@@ -211,18 +211,27 @@ async fn static_handler(uri: Uri) -> impl IntoResponse {
     match FrontendAssets::get(path) {
         Some(content) => {
             let mime = mime_guess::from_path(path).first_or_octet_stream();
+            let cache_control = if path == "index.html" {
+                "no-cache, no-store, must-revalidate"
+            } else {
+                "public, max-age=31536000, immutable"
+            };
             Response::builder()
                 .header(header::CONTENT_TYPE, mime.as_ref())
-                .header(header::CACHE_CONTROL, "public, max-age=3600")
+                .header(header::CACHE_CONTROL, cache_control)
                 .body(axum::body::Body::from(content.data))
                 .unwrap()
         }
         None => {
-            // SPA fallback: return index.html for unknown routes
+            // Never return index.html for missing assets/files with extension!
+            if path.starts_with("assets/") || path.contains('.') {
+                return (StatusCode::NOT_FOUND, format!("Asset not found: {}", path)).into_response();
+            }
+            // SPA fallback: return index.html with NO CACHE for clean navigation routes
             match FrontendAssets::get("index.html") {
                 Some(content) => Response::builder()
                     .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-                    .header(header::CACHE_CONTROL, "no-cache")
+                    .header(header::CACHE_CONTROL, "no-cache, no-store, must-revalidate")
                     .body(axum::body::Body::from(content.data))
                     .unwrap(),
                 None => (

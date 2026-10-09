@@ -43,6 +43,7 @@ import type {
   SimulateResponse,
   StatsResponse,
   LogItem,
+  LogStats,
 } from './types'
 
 export function App() {
@@ -57,6 +58,12 @@ export function App() {
   const [gatewayInfo, setGatewayInfo] = useState<GatewaySystemInfo | null>(null)
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [logs, setLogs] = useState<LogItem[]>([])
+  const [logFilterService, setLogFilterService] = useState<string>('all')
+  const [logFilterLevel, setLogFilterLevel] = useState<string>('all')
+  const [logSearch, setLogSearch] = useState<string>('')
+  const [logAutoRefresh, setLogAutoRefresh] = useState<boolean>(true)
+  const [logStats, setLogStats] = useState<LogStats | null>(null)
+  const [copiedLogId, setCopiedLogId] = useState<string | number | null>(null)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -104,15 +111,15 @@ export function App() {
         api.getStats().catch(() => null),
         api.getLogs().catch(() => []),
       ])
-      setRules(r)
-      setSessions(s)
-      setAiConfigs(ai)
-      setFilterRules(f)
-      setQueueJobs(q)
-      setDlqJobs(dlq)
+      setRules(Array.isArray(r) ? r : [])
+      setSessions(Array.isArray(s) ? s : [])
+      setAiConfigs(Array.isArray(ai) ? ai : [])
+      setFilterRules(Array.isArray(f) ? f : [])
+      setQueueJobs(Array.isArray(q) ? q : [])
+      setDlqJobs(Array.isArray(dlq) ? dlq : [])
       setGatewayInfo(gw)
       setStats(st)
-      setLogs(l)
+      setLogs(Array.isArray(l) ? l : [])
       if (r.length > 0 && !simSelectedRuleId) {
         setSimSelectedRuleId(r[0].id)
       }
@@ -123,6 +130,21 @@ export function App() {
     }
   }
 
+  const fetchLogs = async (srv = logFilterService, lvl = logFilterLevel, srch = logSearch) => {
+    try {
+      const params: any = { limit: 100 }
+      if (srv !== 'all') params.service = srv
+      if (lvl !== 'all') params.level = lvl
+      if (srch.trim()) params.search = srch.trim()
+      const [fetchedLogs, stats] = await Promise.all([
+        api.getLogs(params).catch(() => []),
+        api.getLogStats().catch(() => null),
+      ])
+      setLogs(Array.isArray(fetchedLogs) ? fetchedLogs : [])
+      if (stats) setLogStats(stats)
+    } catch {}
+  }
+
   useEffect(() => {
     loadData()
     const timer = setInterval(() => {
@@ -131,6 +153,17 @@ export function App() {
     }, 10000)
     return () => clearInterval(timer)
   }, [])
+
+  // Proactive live log stream polling when on devops tab and auto-refresh enabled
+  useEffect(() => {
+    if (activeTab !== 'devops') return
+    fetchLogs(logFilterService, logFilterLevel, logSearch)
+    if (!logAutoRefresh) return
+    const logTimer = setInterval(() => {
+      fetchLogs(logFilterService, logFilterLevel, logSearch)
+    }, 3000)
+    return () => clearInterval(logTimer)
+  }, [activeTab, logAutoRefresh, logFilterService, logFilterLevel, logSearch])
 
   // Rules Handlers
   const handleToggleRule = async (id: string) => {
@@ -307,6 +340,8 @@ export function App() {
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} style={{ padding: '24px 20px', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* User bar */}
+      <UserBar lang={lang} />
       {/* Toast Notification */}
       {toast && (
         <div
@@ -699,7 +734,7 @@ export function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 20 }}>
-            {rules.map((rule) => {
+            {(Array.isArray(rules) ? rules : []).map((rule) => {
               const isVipHop = rule.use_intermediate && rule.message_category === 'VIP_ONLY'
               const isDirectCopy = !rule.use_intermediate && rule.forward_mode !== 'DIRECT_FORWARD'
               const isNative = !rule.use_intermediate && rule.forward_mode === 'DIRECT_FORWARD'
@@ -940,7 +975,7 @@ export function App() {
                 onChange={(e) => setSimSelectedRuleId(e.target.value)}
                 className="input-field"
               >
-                {rules.map((r) => (
+                {(Array.isArray(rules) ? rules : []).map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.source_chat_name || r.source_chat_id} ➔ {r.target_chat_name || r.target_chat_id} (
                     {r.use_intermediate ? 'VIP Hop via C' : r.forward_mode})
@@ -1120,7 +1155,7 @@ export function App() {
                     {isRtl ? 'گام‌های عملیاتی پایپ‌لاین:' : 'Pipeline Execution Steps:'}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {simResult.action_steps.map((st, idx) => (
+                    {(Array.isArray(simResult?.action_steps) ? simResult.action_steps : []).map((st, idx) => (
                       <div
                         key={idx}
                         style={{
@@ -1205,7 +1240,7 @@ export function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
-            {aiConfigs.map((ai) => (
+            {(Array.isArray(aiConfigs) ? aiConfigs : []).map((ai) => (
               <div key={ai.id} className="glass-panel" style={{ padding: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                   <div>
@@ -1298,7 +1333,7 @@ export function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
-            {filterRules.map((f) => (
+            {(Array.isArray(filterRules) ? filterRules : []).map((f) => (
               <div key={f.id} className="glass-panel" style={{ padding: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                   <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>{f.name}</h3>
@@ -1329,7 +1364,7 @@ export function App() {
                       {isRtl ? 'کلمات مسدود (Blacklist):' : 'Blacklist:'}
                     </span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {f.blacklist_keywords.map((w, idx) => (
+                      {(Array.isArray(f?.blacklist_keywords) ? f.blacklist_keywords : []).map((w, idx) => (
                         <span key={idx} style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#fca5a5', padding: '2px 6px', borderRadius: 4 }}>
                           {w}
                         </span>
@@ -1342,7 +1377,7 @@ export function App() {
                       {isRtl ? 'رسانه‌های مجاز:' : 'Allowed Media:'}
                     </span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {f.allowed_media_types.map((m, idx) => (
+                      {(Array.isArray(f?.allowed_media_types) ? f.allowed_media_types : []).map((m, idx) => (
                         <span key={idx} style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#6ee7b7', padding: '2px 6px', borderRadius: 4 }}>
                           {m}
                         </span>
@@ -1371,7 +1406,7 @@ export function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
-            {sessions.map((sess) => (
+            {(Array.isArray(sessions) ? sessions : []).map((sess) => (
               <div key={sess.id} className="glass-panel" style={{ padding: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1445,7 +1480,7 @@ export function App() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {queueJobs.map((q) => (
+                  {(Array.isArray(queueJobs) ? queueJobs : []).map((q) => (
                     <div
                       key={q.id}
                       style={{
@@ -1483,7 +1518,7 @@ export function App() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {dlqJobs.map((dlq) => (
+                  {(Array.isArray(dlqJobs) ? dlqJobs : []).map((dlq) => (
                     <div
                       key={dlq.id}
                       style={{
@@ -1515,90 +1550,394 @@ export function App() {
         </div>
       )}
 
-      {/* TAB 7: DEVOPS GATEWAY & LOGS */}
+      {/* TAB 7: DEVOPS GATEWAY & PRO ACTIVE LOGGER */}
       {activeTab === 'devops' && (
         <div>
-          <div style={{ marginBottom: 20 }}>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-              {isRtl ? 'مرکز فرماندهی DevOps و لاگ‌های سیستم' : 'DevOps Unified Command Center'}
-            </h2>
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
-              {isRtl
-                ? 'وضعیت میکروسرویس‌ها، پورت‌ها، سلامت سرور و لاگ‌های رویداد زنده'
-                : 'Microservice topology, ports, health checks, and live audit logs'}
-            </p>
+          <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Terminal size={22} color="#818cf8" />
+                <span>{isRtl ? 'مرکز لاگر پیشرفته و مانیتورینگ زنده (Pro Active Logger)' : 'Pro Active Logger & Diagnostics'}</span>
+              </h2>
+              <p style={{ fontSize: '0.825rem', color: '#94a3b8', marginTop: 4 }}>
+                {isRtl
+                  ? 'سرویس لاگر مستقل بر بستر gRPC پورت 6002 با پایگاه داده SQLite WAL، فیلترینگ چندسطحی و استریم زنده'
+                  : 'High-throughput independent Logger microservice on gRPC :6002 with live auto-refresh and multi-tier filtering'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                onClick={() => setLogAutoRefresh(!logAutoRefresh)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  border: logAutoRefresh ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  background: logAutoRefresh ? 'rgba(16, 185, 129, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                  color: logAutoRefresh ? '#34d399' : '#94a3b8',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: logAutoRefresh ? '#10b981' : '#64748b',
+                    boxShadow: logAutoRefresh ? '0 0 8px #10b981' : 'none',
+                  }}
+                />
+                <span>{logAutoRefresh ? (isRtl ? 'استریم زنده فعال (۳ ثانیه)' : 'Live Stream Active (3s)') : (isRtl ? 'استریم متوقف' : 'Live Stream Paused')}</span>
+              </button>
+
+              <button
+                onClick={() => fetchLogs()}
+                className="btn btn-secondary"
+                style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                title={isRtl ? 'بروزرسانی دستی' : 'Refresh Now'}
+              >
+                <RefreshCw size={14} />
+                <span>{isRtl ? 'بروزرسانی' : 'Refresh'}</span>
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-            <div className="glass-panel" style={{ padding: 18 }}>
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>ATF Core Service (Python)</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#34d399', marginTop: 4 }}>
-                Active & Running (Port 6001)
+          {/* Microservices Topology & Statistics */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 20 }}>
+            <div className="glass-panel" style={{ padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>ATF Logger Microservice</span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+              </div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#34d399', marginTop: 4 }}>
+                Port 6002 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>gRPC</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>
+                {logStats ? `${logStats.total} ${isRtl ? 'لاگ ثبت‌شده' : 'events logged'}` : 'SQLite WAL Engine'}
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Python Core & MTProto</span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: stats?.atf_core_online ? '#10b981' : '#ef4444', boxShadow: '0 0 8px #10b981' }} />
+              </div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', marginTop: 4 }}>
+                Port 6001 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>Core</span>
               </div>
               <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf.service</div>
             </div>
 
-            <div className="glass-panel" style={{ padding: 18 }}>
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Logging Daemon (Python/gRPC)</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#34d399', marginTop: 4 }}>
-                Active & Running (Port 6002)
+            <div className="glass-panel" style={{ padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Go REST Control Plane</span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf-logger.service</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#a855f7', marginTop: 4 }}>
+                Port 8080 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>REST</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf-api.service</div>
             </div>
 
-            <div className="glass-panel" style={{ padding: 18 }}>
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Unified Web Gateway (Rust + Axum)</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#34d399', marginTop: 4 }}>
-                Active & Running (Port 8088)
+            <div className="glass-panel" style={{ padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Rust Axum Web Gateway</span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>
-                Version: {gatewayInfo?.version ?? '1.2.0'} | Port: {gatewayInfo?.web_port ?? 8088}
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f59e0b', marginTop: 4 }}>
+                Port 8088 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>v{gatewayInfo?.version ?? '1.2.2'}</span>
               </div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf-web.service</div>
             </div>
           </div>
 
-          {/* Recent Audit / Error Logs */}
+          {/* Pro Active Log Explorer */}
           <div className="glass-panel" style={{ padding: 20 }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Terminal size={18} color="#818cf8" />
-              <span>{isRtl ? 'لاگ‌های رخداد و پایپ‌لاین (Live Logs)' : 'Recent Pipeline & Audit Logs'}</span>
-            </h3>
+            {/* Filter & Search Bar */}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 12,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 16,
+                paddingBottom: 14,
+                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
+            >
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                {/* Service Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'سرویس:' : 'Service:'}</span>
+                  <select
+                    value={logFilterService}
+                    onChange={(e) => {
+                      setLogFilterService(e.target.value)
+                      fetchLogs(e.target.value, logFilterLevel, logSearch)
+                    }}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#e2e8f0',
+                      borderRadius: 8,
+                      padding: '5px 10px',
+                      fontSize: '0.8rem',
+                    }}
+                  >
+                    <option value="all">{isRtl ? 'همه سرویس‌ها' : 'All Services'}</option>
+                    <option value="core">core (پایتون هسته)</option>
+                    <option value="bot">bot (ربات تلگرام)</option>
+                    <option value="api">api (کنترل پلین Go)</option>
+                    <option value="pipeline">pipeline (پایپ‌لاین فوروارد)</option>
+                    <option value="boot">boot (راه‌اندازی سشن‌ها)</option>
+                  </select>
+                </div>
 
-            <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8' }}>
-                    <th style={{ padding: '8px 12px', textAlign: isRtl ? 'right' : 'left' }}>Time</th>
-                    <th style={{ padding: '8px 12px', textAlign: isRtl ? 'right' : 'left' }}>Category</th>
-                    <th style={{ padding: '8px 12px', textAlign: isRtl ? 'right' : 'left' }}>Severity</th>
-                    <th style={{ padding: '8px 12px', textAlign: isRtl ? 'right' : 'left' }}>Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} style={{ padding: 20, textAlign: 'center', color: '#64748b' }}>
-                        {isRtl ? 'هیچ لاگ خطایی ثبت نشده است ✓' : 'No error logs recorded ✓'}
-                      </td>
-                    </tr>
-                  ) : (
-                    logs.map((l) => (
-                      <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                        <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: '#94a3b8' }}>
-                          {new Date(l.ts * 1000).toLocaleTimeString()}
-                        </td>
-                        <td style={{ padding: '8px 12px' }}>
-                          <span className="badge badge-gray">{l.category}</span>
-                        </td>
-                        <td style={{ padding: '8px 12px' }}>
-                          <span style={{ color: l.severity === 'ERROR' ? '#ef4444' : '#fbbf24' }}>{l.severity}</span>
-                        </td>
-                        <td style={{ padding: '8px 12px', color: '#cbd5e1' }}>{l.detail}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                {/* Level Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'سطح لاگ:' : 'Level:'}</span>
+                  <select
+                    value={logFilterLevel}
+                    onChange={(e) => {
+                      setLogFilterLevel(e.target.value)
+                      fetchLogs(logFilterService, e.target.value, logSearch)
+                    }}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#e2e8f0',
+                      borderRadius: 8,
+                      padding: '5px 10px',
+                      fontSize: '0.8rem',
+                    }}
+                  >
+                    <option value="all">{isRtl ? 'همه سطوح' : 'All Levels'}</option>
+                    <option value="ERROR">❌ ERROR</option>
+                    <option value="WARN">⚠️ WARN</option>
+                    <option value="INFO">ℹ️ INFO</option>
+                    <option value="DEBUG">🔍 DEBUG</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Text Search Input */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260, flex: 1, maxWidth: 380 }}>
+                <input
+                  type="text"
+                  placeholder={isRtl ? 'جستجوی زنده در پیام و متن لاگ...' : 'Search logs live...'}
+                  value={logSearch}
+                  onChange={(e) => {
+                    setLogSearch(e.target.value)
+                    fetchLogs(logFilterService, logFilterLevel, e.target.value)
+                  }}
+                  className="input-field"
+                  style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                />
+                {logSearch && (
+                  <button
+                    onClick={() => {
+                      setLogSearch('')
+                      fetchLogs(logFilterService, logFilterLevel, '')
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      padding: 4,
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Metrics Badges */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, fontSize: '0.75rem' }}>
+              <span className="badge badge-gray">
+                {isRtl ? 'تعداد نمایش داده شده:' : 'Showing:'} {Array.isArray(logs) ? logs.length : 0}
+              </span>
+              {logStats && (
+                <>
+                  <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399' }}>
+                    INFO: {logStats.by_level?.INFO ?? 0}
+                  </span>
+                  <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>
+                    WARN: {logStats.by_level?.WARN ?? 0}
+                  </span>
+                  <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
+                    ERROR: {logStats.by_level?.ERROR ?? 0}
+                  </span>
+                  <span className="badge badge-vip">
+                    TOTAL ARCHIVE: {logStats.total}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* Terminal Log Console */}
+            <div
+              style={{
+                background: '#070b14',
+                borderRadius: 12,
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: '12px 14px',
+                fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace",
+                fontSize: '0.8rem',
+                lineHeight: 1.6,
+                maxHeight: 520,
+                overflowY: 'auto',
+                boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.6)',
+              }}
+            >
+              {(!Array.isArray(logs) || logs.length === 0) ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
+                  <div>{isRtl ? 'هیچ لاگی با فیلترهای جاری یافت نشد.' : 'No log events matching current filters.'}</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {logs.map((l, idx) => {
+                    const lvl = (l.level || l.severity || 'INFO').toUpperCase()
+                    const isErr = lvl === 'ERROR'
+                    const isWarn = lvl === 'WARN'
+                    const isDbg = lvl === 'DEBUG'
+                    const logId = l.id ?? `${l.ts}-${idx}`
+
+                    const lvlColor = isErr ? '#ef4444' : isWarn ? '#f59e0b' : isDbg ? '#38bdf8' : '#10b981'
+                    const lvlBg = isErr
+                      ? 'rgba(239, 68, 68, 0.18)'
+                      : isWarn
+                      ? 'rgba(245, 158, 11, 0.18)'
+                      : isDbg
+                      ? 'rgba(56, 189, 248, 0.18)'
+                      : 'rgba(16, 185, 129, 0.18)'
+
+                    const timeStr = l.ts ? new Date(l.ts * 1000).toLocaleTimeString() : '--:--:--'
+                    const logLineText = `[${timeStr}] [${lvl}] [${l.service || 'core'}/${l.category || 'sys'}] ${l.message || l.detail || ''}`
+
+                    return (
+                      <div
+                        key={logId}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 6,
+                          background: isErr ? 'rgba(239, 68, 68, 0.06)' : 'rgba(255, 255, 255, 0.015)',
+                          borderLeft: isRtl ? 'none' : `3px solid ${lvlColor}`,
+                          borderRight: isRtl ? `3px solid ${lvlColor}` : 'none',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, flex: 1 }}>
+                          {/* Time */}
+                          <span style={{ color: '#64748b', fontSize: '0.75rem', flexShrink: 0 }}>
+                            {timeStr}
+                          </span>
+
+                          {/* Level Badge */}
+                          <span
+                            style={{
+                              background: lvlBg,
+                              color: lvlColor,
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              fontWeight: 700,
+                              fontSize: '0.7rem',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {lvl}
+                          </span>
+
+                          {/* Service & Category */}
+                          <span
+                            style={{
+                              color: '#818cf8',
+                              background: 'rgba(99, 102, 241, 0.1)',
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              fontSize: '0.7rem',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {l.service || 'core'}
+                            {l.category ? `:${l.category}` : ''}
+                          </span>
+
+                          {/* Message */}
+                          <span style={{ color: isErr ? '#fca5a5' : '#f1f5f9', fontWeight: isErr ? 600 : 400 }}>
+                            {l.message || l.detail}
+                          </span>
+
+                          {/* Additional Detail (if message and detail are both present) */}
+                          {l.message && l.detail && l.detail !== l.message && (
+                            <div
+                              dir="ltr"
+                              style={{
+                                width: '100%',
+                                marginTop: 4,
+                                padding: '4px 8px',
+                                borderRadius: 4,
+                                background: 'rgba(0, 0, 0, 0.4)',
+                                color: '#94a3b8',
+                                fontSize: '0.72rem',
+                                whiteSpace: 'pre-wrap',
+                                textAlign: 'left',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              {l.detail}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Copy Line Button */}
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(logLineText)
+                            setCopiedLogId(logId)
+                            setTimeout(() => setCopiedLogId(null), 2000)
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: copiedLogId === logId ? '#34d399' : '#64748b',
+                            cursor: 'pointer',
+                            padding: '2px 4px',
+                            borderRadius: 4,
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            fontSize: '0.7rem',
+                          }}
+                          title={isRtl ? 'کپی خط لاگ' : 'Copy log line'}
+                        >
+                          {copiedLogId === logId ? (
+                            <>
+                              <Check size={12} />
+                              <span style={{ fontSize: '0.65rem' }}>{isRtl ? 'کپی شد' : 'Copied'}</span>
+                            </>
+                          ) : (
+                            <Copy size={12} />
+                          )}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1983,6 +2322,67 @@ export function App() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function UserBar({ lang }: { lang: 'fa' | 'en' }) {
+  const [user, setUser] = useState<{ username: string; is_admin: boolean } | null>(null)
+
+  useEffect(() => {
+    api.me().then(setUser).catch(() => {})
+  }, [])
+
+  const handleLogout = () => {
+    api.logout()
+    try {
+      localStorage.removeItem('auth_token')
+    } catch {}
+    window.dispatchEvent(new Event('auth_required'))
+  }
+
+  if (!user) return null
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '8px 16px',
+        marginBottom: 16,
+        background: 'rgba(15, 23, 42, 0.6)',
+        borderRadius: 12,
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        fontSize: '0.85rem',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+        <span style={{ color: '#e2e8f0', fontWeight: 600 }}>
+          {user.is_admin ? '👑 ' : '👤 '}
+          {user.username}
+        </span>
+        {user.is_admin && (
+          <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4, background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8' }}>
+            ADMIN
+          </span>
+        )}
+      </div>
+      <button
+        onClick={handleLogout}
+        style={{
+          padding: '4px 12px',
+          borderRadius: 8,
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          background: 'rgba(239, 68, 68, 0.1)',
+          cursor: 'pointer',
+          fontSize: '0.8rem',
+          color: '#f87171',
+          fontWeight: 600,
+        }}
+      >
+        {lang === 'fa' ? 'خروج از حساب' : 'Logout'}
+      </button>
     </div>
   )
 }

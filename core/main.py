@@ -145,6 +145,9 @@ def build_container(cfg: Config) -> dict:
     i18n = I18n()
     i18n.set_language(cfg.language)
 
+    from core.infrastructure.grpc_server.account_servicer import AccountControlServicer
+    account_servicer = AccountControlServicer(db, users=user_repo, is_admin_user=cfg.admin_ids)
+
     return {
         "config": cfg, "db": db, "crypto": crypto,
         "sessions": sessions, "rules": rules, "filters": filter_rules,
@@ -166,6 +169,7 @@ def build_container(cfg: Config) -> dict:
         "ai_transformer": ai_transformer,
         "ai_circuit_registry": ai_circuit_registry,
         "pv_responder": pv_responder,
+        "account_servicer": account_servicer,
     }
 
 
@@ -198,6 +202,11 @@ async def serve_grpc(container: dict, cfg: Config):
             container["db"], container["rules"], container.get("pipeline"),
         ),
         server,
+    )
+    from core.infrastructure.grpc_server.account_servicer import AccountControlServicer
+
+    pb_grpc.add_AccountControlServiceServicer_to_server(
+        AccountControlServicer(container["db"]), server,
     )
     addr = f"{cfg.grpc_host}:{cfg.grpc_port}"
     server.add_insecure_port(addr)
@@ -352,6 +361,8 @@ async def main() -> None:
             rule_stats=container.get("rule_stats"),
             users=container.get("users"),
             pv_responder=container.get("pv_responder"),
+            web_url=cfg.web_url,
+            account_servicer=container.get("account_servicer"),
         )
         # Route ownership: while the button UI has an active step for a user
         # it answers; otherwise BotManager (commands) answers. No doubles.

@@ -28,9 +28,12 @@ message SessionInfo {
   bool is_authorized = 7;
   int64 created_at = 8;
   int64 updated_at = 9;
+  int64 owner_user_id = 10;   // telegram account owning this session (0 = legacy/unowned)
 }
 
-message ListSessionsRequest {}
+message ListSessionsRequest {
+  int64 owner_user_id = 1;    // scope to one account (0 = all, admin/legacy)
+}
 
 message ListSessionsResponse {
   repeated SessionInfo sessions = 1;
@@ -84,6 +87,7 @@ message BackupSessionResponse {
 
 message RestoreSessionRequest {
   string encrypted_session_data = 1;
+  int64 owner_user_id = 2;
 }
 
 message RestoreSessionResponse {
@@ -94,6 +98,7 @@ message RestoreSessionResponse {
 
 message TerminateSessionRequest {
   string session_id = 1;
+  int64 owner_user_id = 2;
 }
 
 // -----------------------------------------------------------------------------
@@ -163,6 +168,7 @@ message ForwardRule {
   bool is_paused = 43;
   int64 paused_until = 44;
   int32 version = 45;
+  int64 owner_user_id = 46;   // owning telegram/web account (0 = legacy shared rule)
 }
 
 message CreateRuleRequest {
@@ -179,6 +185,7 @@ message DeleteRuleRequest {
 
 message ListRulesRequest {
   string session_id = 1;
+  int64 owner_user_id = 2;    // scope results to one account (0 = all, admins only)
 }
 
 message ListRulesResponse {
@@ -271,7 +278,9 @@ message TestAIRewriteResponse {
 // System Status & Statistics
 // -----------------------------------------------------------------------------
 
-message SystemStatsRequest {}
+message SystemStatsRequest {
+  int64 owner_user_id = 1;
+}
 
 message SystemStatsResponse {
   bool core_running = 1;
@@ -494,4 +503,85 @@ service LogControlService {
   rpc Log(LogRequest) returns (StatusResponse);
   rpc QueryLogs(QueryLogsRequest) returns (QueryLogsResponse);
   rpc LogStats(LogStatsRequest) returns (LogStatsResponse);
+}
+
+// -----------------------------------------------------------------------------
+// Web Accounts — unified per-user identity for Telegram bot + Web dashboard.
+// One account per Telegram user; the web dashboard authenticates with
+// username/password and receives a JWT. All rules/sessions are owner-scoped.
+// -----------------------------------------------------------------------------
+
+message WebAccount {
+  int64 user_id = 1;          // telegram user id (primary identity)
+  string username = 2;
+  string display_name = 3;
+  bool is_admin = 4;
+  string plan = 5;
+  int64 created_at = 6;
+}
+
+message RegisterAccountRequest {
+  int64 user_id = 1;
+  string username = 2;
+  string password = 3;
+  string display_name = 4;
+  bool is_admin = 5;
+}
+
+message RegisterAccountResponse {
+  bool success = 1;
+  string message = 2;
+  string error_code = 3;      // USERNAME_TAKEN | WEAK_PASSWORD | ...
+  WebAccount account = 4;
+}
+
+message LoginAccountRequest {
+  string username = 1;
+  string password = 2;
+  int64 telegram_user_id = 3; // optional link-proof when issued from the bot
+}
+
+message LoginAccountResponse {
+  bool success = 1;
+  string message = 2;
+  string error_code = 3;      // INVALID_CREDENTIALS | ...
+  string token = 4;           // JWT (HS256), 7-day expiry
+  int64 expires_at = 5;       // unix seconds
+  WebAccount account = 6;
+}
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  int64 user_id = 2;
+  string username = 3;
+  bool is_admin = 4;
+  string error = 5;
+}
+
+message IssueWebTokenRequest {
+  int64 user_id = 1;          // bot -> core: mint a dashboard token for this user
+}
+
+message ChangePasswordRequest {
+  int64 user_id = 1;
+  string old_password = 2;
+  string new_password = 3;
+}
+
+service AccountControlService {
+  rpc RegisterAccount(RegisterAccountRequest) returns (RegisterAccountResponse);
+  rpc LoginAccount(LoginAccountRequest) returns (LoginAccountResponse);
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc IssueWebToken(IssueWebTokenRequest) returns (LoginAccountResponse);
+  rpc ChangePassword(ChangePasswordRequest) returns (StatusResponse);
+  rpc GetAccount(GetAccountRequest) returns (WebAccount);
+}
+
+message GetAccountRequest {
+  int64 user_id = 1;
+  string username = 2;        // either user_id or username
 }

@@ -15,6 +15,7 @@ def _session_info(s) -> pb.SessionInfo:
         username=s.username, first_name=s.first_name,
         is_active=s.is_active, is_authorized=s.is_authorized,
         created_at=s.created_at, updated_at=s.updated_at,
+        owner_user_id=int(getattr(s, "owner_user_id", 0) or 0),
     )
 
 
@@ -121,7 +122,10 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
         self._pool = pool
 
     async def ListSessions(self, request, context):
-        rows = await self._sessions.list_all()
+        if request.owner_user_id:
+            rows = await self._sessions.list_by_owner(request.owner_user_id)
+        else:
+            rows = await self._sessions.list_all()
         return pb.ListSessionsResponse(sessions=[_session_info(s) for s in rows])
 
     async def StartLogin(self, request, context):
@@ -163,11 +167,12 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         self._rules = rules
 
     async def ListRules(self, request, context):
-        rows = (
-            await self._rules.list_by_session(request.session_id)
-            if request.session_id
-            else await self._rules.list_all()
-        )
+        if request.session_id:
+            rows = await self._rules.list_by_session(request.session_id, request.owner_user_id)
+        elif request.owner_user_id:
+            rows = await self._rules.list_by_owner(request.owner_user_id)
+        else:
+            rows = await self._rules.list_all()
         return pb.ListRulesResponse(rules=[_rule_pb(r) for r in rows])
 
     async def CreateRule(self, request, context):
@@ -214,6 +219,7 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             preserve_signature=bool(r.preserve_signature),
             is_paused=bool(r.is_paused),
             paused_until=int(r.paused_until or 0),
+            owner_user_id=int(r.owner_user_id or 0),
         )
         created = await self._rules.create(entity)
         return _rule_pb(created)
@@ -682,13 +688,17 @@ class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):
 
     async def GetSystemStats(self, request, context):
         s = self._pipeline.stats
-        active = await self._sessions.list_active()
-        all_rules = await self._rules.list_all()
+        owner = int(request.owner_user_id or 0)
+        if owner:
+            rules_q = await self._rules.list_by_owner(owner)
+        else:
+            rules_q = await self._rules.list_all()
+        active = [r for r in rules_q if r.is_active]
         return pb.SystemStatsResponse(
             core_running=True,
             uptime_seconds=int(time.time()) - s.started_at,
             active_sessions_count=len(active),
-            active_rules_count=sum(1 for r in all_rules if r.is_active),
+            active_rules_count=len(active),
             total_messages_processed=s.processed,
             total_messages_forwarded=s.forwarded,
             total_messages_filtered=s.filtered,

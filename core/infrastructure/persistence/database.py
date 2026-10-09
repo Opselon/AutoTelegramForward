@@ -372,6 +372,38 @@ MIGRATIONS = {
     ALTER TABLE delivery_jobs ADD COLUMN intermediate_message_id INTEGER;
     ALTER TABLE delivery_jobs ADD COLUMN delivery_stage TEXT NOT NULL DEFAULT 'DIRECT';
     """,
+    10: """
+    -- v10: Unified per-user accounts (Telegram bot + Web dashboard share identity).
+    -- Passwords stored as PBKDF2-SHA256 (iterations stored per-row for upgrades).
+    CREATE TABLE IF NOT EXISTS web_accounts (
+        user_id INTEGER PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        password_algo TEXT NOT NULL DEFAULT 'pbkdf2_sha256',
+        password_iter INTEGER NOT NULL DEFAULT 240000,
+        salt TEXT NOT NULL,
+        display_name TEXT NOT NULL DEFAULT '',
+        is_admin INTEGER NOT NULL DEFAULT 0,
+        plan TEXT NOT NULL DEFAULT 'free',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_web_accounts_username ON web_accounts(username);
+
+    -- Ownership scoping: every session & rule belongs to one account.
+    ALTER TABLE sessions ADD COLUMN owner_user_id INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN owner_user_id INTEGER NOT NULL DEFAULT 0;
+    CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_user_id);
+    CREATE INDEX IF NOT EXISTS idx_rules_owner ON forward_rules(owner_user_id);
+
+    -- One-time dashboard login tokens minted by the Telegram bot (short TTL).
+    CREATE TABLE IF NOT EXISTS web_tokens (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_web_tokens_expiry ON web_tokens(expires_at);
+    """,
 }
 
 

@@ -31,12 +31,20 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) ListSessions(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Sessions.ListSessions(ctx, &pb.ListSessionsRequest{})
+	id := identity(r)
+	resp, err := h.c.Sessions.ListSessions(ctx, &pb.ListSessionsRequest{OwnerUserId: id.UserID})
 	if err != nil {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	sessions := resp.Sessions
+	if sessions == nil {
+		sessions = []*pb.SessionInfo{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sessions": sessions,
+		"total":    len(sessions),
+	})
 }
 
 type backupReq struct {
@@ -63,13 +71,17 @@ type restoreReq struct {
 }
 
 func (h *Handlers) RestoreSession(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
 	var req restoreReq
 	if !bind(w, r, &req) {
 		return
 	}
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Sessions.RestoreSession(ctx, &pb.RestoreSessionRequest{EncryptedSessionData: req.EncryptedData})
+	resp, err := h.c.Sessions.RestoreSession(ctx, &pb.RestoreSessionRequest{
+		EncryptedSessionData: req.EncryptedData,
+		OwnerUserId:          id.UserID,
+	})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -78,10 +90,12 @@ func (h *Handlers) RestoreSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) TerminateSession(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id := identity(r)
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Sessions.TerminateSession(ctx, &pb.TerminateSessionRequest{SessionId: id})
+	resp, err := h.c.Sessions.TerminateSession(ctx, &pb.TerminateSessionRequest{
+		SessionId: r.PathValue("id"), OwnerUserId: id.UserID,
+	})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -93,20 +107,32 @@ func (h *Handlers) TerminateSession(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
+	id := identity(r)
 	sessionID := r.URL.Query().Get("session_id")
-	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{SessionId: sessionID})
+	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{
+		SessionId: sessionID, OwnerUserId: id.UserID,
+	})
 	if err != nil {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	rules := resp.Rules
+	if rules == nil {
+		rules = []*pb.ForwardRule{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rules": rules,
+		"total": len(rules),
+	})
 }
 
 func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
 	var rule pb.ForwardRule
 	if !bindPB(w, r, &rule) {
 		return
 	}
+	rule.OwnerUserId = id.UserID
 	ctx, cancel := withTimeout(r)
 	defer cancel()
 	resp, err := h.c.Rules.CreateRule(ctx, &pb.CreateRuleRequest{Rule: &rule})
@@ -118,11 +144,13 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
 	var rule pb.ForwardRule
 	if !bindPB(w, r, &rule) {
 		return
 	}
 	rule.Id = r.PathValue("id")
+	rule.OwnerUserId = id.UserID
 	ctx, cancel := withTimeout(r)
 	defer cancel()
 	resp, err := h.c.Rules.UpdateRule(ctx, &pb.UpdateRuleRequest{Rule: &rule})
@@ -134,8 +162,26 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
 	ctx, cancel := withTimeout(r)
 	defer cancel()
+	// Ownership check via scoped list first
+	listResp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{OwnerUserId: id.UserID})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	owned := false
+	for _, rule := range listResp.Rules {
+		if rule.Id == r.PathValue("id") {
+			owned = true
+			break
+		}
+	}
+	if !owned {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
+		return
+	}
 	resp, err := h.c.Rules.DeleteRule(ctx, &pb.DeleteRuleRequest{Id: r.PathValue("id")})
 	if err != nil {
 		grpcError(w, err)
@@ -145,16 +191,16 @@ func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id := identity(r)
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{})
+	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{OwnerUserId: id.UserID})
 	if err != nil {
 		grpcError(w, err)
 		return
 	}
 	for _, rule := range resp.Rules {
-		if rule.Id == id {
+		if rule.Id == r.PathValue("id") {
 			writeJSON(w, http.StatusOK, rule)
 			return
 		}
@@ -163,17 +209,17 @@ func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) ToggleRule(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id := identity(r)
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{})
+	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{OwnerUserId: id.UserID})
 	if err != nil {
 		grpcError(w, err)
 		return
 	}
 	var target *pb.ForwardRule
 	for _, rule := range resp.Rules {
-		if rule.Id == id {
+		if rule.Id == r.PathValue("id") {
 			target = rule
 			break
 		}
@@ -192,7 +238,7 @@ func (h *Handlers) ToggleRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) RoutePathQuickSet(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id := identity(r)
 	var body struct {
 		ForwardMode  string `json:"forward_mode"`
 		CustomHeader string `json:"custom_header"`
@@ -202,14 +248,14 @@ func (h *Handlers) RoutePathQuickSet(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{})
+	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{OwnerUserId: id.UserID})
 	if err != nil {
 		grpcError(w, err)
 		return
 	}
 	var target *pb.ForwardRule
 	for _, rule := range resp.Rules {
-		if rule.Id == id {
+		if rule.Id == r.PathValue("id") {
 			target = rule
 			break
 		}
@@ -262,15 +308,15 @@ func (h *Handlers) TestRule(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
 	resp, err := h.c.Rules.TestRule(ctx, &pb.TestRuleRequest{
-		RuleId:              req.RuleId,
-		SampleText:          req.SampleText,
-		SampleChatId:        req.SampleChatId,
-		SampleSenderId:      req.SampleSenderId,
-		ForwardOriginChatId: req.ForwardOriginChatId,
+		RuleId:               req.RuleId,
+		SampleText:           req.SampleText,
+		SampleChatId:         req.SampleChatId,
+		SampleSenderId:       req.SampleSenderId,
+		ForwardOriginChatId:  req.ForwardOriginChatId,
 		ForwardOriginUsername: req.ForwardOriginUser,
-		ForwardOriginTitle:  req.ForwardOriginTitle,
-		SampleHasMedia:      req.SampleHasMedia,
-		SampleMediaType:     req.SampleMediaType,
+		ForwardOriginTitle:   req.ForwardOriginTitle,
+		SampleHasMedia:       req.SampleHasMedia,
+		SampleMediaType:      req.SampleMediaType,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -288,7 +334,7 @@ func (h *Handlers) PauseRule(w http.ResponseWriter, r *http.Request) {
 	_ = bind(w, r, &body)
 	resp, err := h.c.Rules.PauseRule(ctx, &pb.PauseRuleRequest{
 		RuleId: r.PathValue("id"),
-		Until: body.Until,
+		Until:  body.Until,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -344,7 +390,15 @@ func (h *Handlers) ListDeadLetter(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	entries := resp.Entries
+	if entries == nil {
+		entries = []*pb.DeadLetterEntry{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"jobs":  entries,
+		"entries": entries,
+		"total": len(entries),
+	})
 }
 
 func (h *Handlers) ReplayDeadLetter(w http.ResponseWriter, r *http.Request) {
@@ -389,7 +443,14 @@ func (h *Handlers) ListFilters(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	filters := resp.Filters
+	if filters == nil {
+		filters = []*pb.FilterRule{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"filters": filters,
+		"total":   len(filters),
+	})
 }
 
 func (h *Handlers) CreateFilter(w http.ResponseWriter, r *http.Request) {
@@ -443,7 +504,14 @@ func (h *Handlers) ListAIConfigs(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	configs := resp.Configs
+	if configs == nil {
+		configs = []*pb.AIConfig{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"configs": configs,
+		"total":   len(configs),
+	})
 }
 
 func (h *Handlers) CreateAIConfig(w http.ResponseWriter, r *http.Request) {
@@ -513,12 +581,29 @@ func (h *Handlers) TestAIRewrite(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.System.GetSystemStats(ctx, &pb.SystemStatsRequest{})
+	id := identity(r)
+	resp, err := h.c.System.GetSystemStats(ctx, &pb.SystemStatsRequest{OwnerUserId: id.UserID})
 	if err != nil {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"core_running":             resp.CoreRunning,
+		"atf_core_online":          resp.CoreRunning,
+		"atf_logger_online":        h.c.Logs != nil,
+		"uptime_seconds":           resp.UptimeSeconds,
+		"active_sessions_count":    resp.ActiveSessionsCount,
+		"active_sessions":          resp.ActiveSessionsCount,
+		"active_rules_count":       resp.ActiveRulesCount,
+		"active_rules":             resp.ActiveRulesCount,
+		"total_messages_processed": resp.TotalMessagesProcessed,
+		"total_messages_forwarded": resp.TotalMessagesForwarded,
+		"total_forwarded_24h":      resp.TotalMessagesForwarded,
+		"total_messages_filtered":  resp.TotalMessagesFiltered,
+		"total_messages_rewritten": resp.TotalMessagesRewritten,
+		"bot_username":             resp.BotUsername,
+		"version":                  resp.Version,
+	})
 }
 
 // ------------------------------------------------------------------ logs
@@ -526,7 +611,7 @@ func (h *Handlers) QueryLogs(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
 	q := r.URL.Query()
-	limit := int32(50)
+	limit := int32(100)
 	if h.c.Logs == nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{
 			"error": "logger service unavailable",
@@ -552,7 +637,14 @@ func (h *Handlers) QueryLogs(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	logs := resp.Logs
+	if logs == nil {
+		logs = []*pb.LogEntry{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"logs":  logs,
+		"total": len(logs),
+	})
 }
 
 func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
@@ -573,6 +665,15 @@ func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // ------------------------------------------------------------- internals
+func identity(r *http.Request) *Identity {
+	if v := r.Context().Value(identityKey{}); v != nil {
+		if id, ok := v.(*Identity); ok && id != nil {
+			return id
+		}
+	}
+	return &Identity{}
+}
+
 func withTimeout(r *http.Request) (context.Context, func()) {
 	return context.WithTimeout(r.Context(), 15*time.Second)
 }

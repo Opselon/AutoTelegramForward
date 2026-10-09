@@ -44,6 +44,7 @@ class TelegramSession:
     proxy: Optional[dict] = None
     created_at: int = field(default_factory=_now)
     updated_at: int = field(default_factory=_now)
+    owner_user_id: int = 0
 
     def mark_updated(self) -> None:
         self.updated_at = _now()
@@ -113,6 +114,7 @@ class ForwardRule:
     link_rewrite_map: Dict[str, str] = field(default_factory=dict)
     allowed_media_types: List[str] = field(default_factory=list)
     split_long_caption: bool = True
+    owner_user_id: int = 0
     album_aggregation_window_seconds: float = 0.8
     custom_caption_template: str = ""
     # Delay (seconds) before forwarding — anti-detection / scheduling.

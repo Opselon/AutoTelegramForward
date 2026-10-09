@@ -85,6 +85,9 @@ CB = {
     "debug": "dbg",
     "refresh": "rf",
     "perf": "pf",
+    "dashboard": "dsh",
+    "webpass": "wp",
+    "webpass_reset": "wpr",
 }
 
 SEV_ICON = {"info": "ℹ️", "warn": "⚠️", "error": "❌", "auth": "🔐", "fatal": "💀"}
@@ -183,6 +186,8 @@ class ProBotUI:
         rule_stats=None,
         users=None,
         pv_responder=None,
+        web_url: str = "",
+        account_servicer=None,
     ) -> None:
         self.bot = bot
         self.i18n = i18n
@@ -205,6 +210,8 @@ class ProBotUI:
         self._rule_stats = rule_stats
         self._users = users
         self._pv_responder = pv_responder
+        self._web_url = (web_url or "").rstrip("/")
+        self._accounts = account_servicer
         self._states: Dict[int, UiState] = {}
         self._register()
 
@@ -299,6 +306,7 @@ class ProBotUI:
             [("🧹 " + self._t("ui_filters"), CB["filters"]), ("🤖 " + self._t("ui_ai"), CB["ai"])],
             [("📊 " + self._t("ui_stats"), CB["stats"]), ("🔑 " + self._t("ui_creds"), CB["creds"])],
             [("🛠 " + self._t("ui_debug"), CB["debug"]), ("🌐 " + self._t("ui_lang"), CB["lang"])],
+            [("💻 " + self._t("ui_dashboard"), CB["dashboard"])],
             [("📚 " + self._t("ui_help"), CB["help"])],
         ])
 
@@ -910,6 +918,7 @@ class ProBotUI:
                 target_chat_name=target_title,
                 routing_type=RoutingType.CHANNEL_TO_CHANNEL,
                 forward_mode=ForwardMode.COPY_MESSAGE,
+                owner_user_id=uid,
             )
             await self._rules.create(rule)
             try:
@@ -1229,7 +1238,7 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             logger.info("Executing _cb_sessions for uid=%s", uid)
             try:
-                sessions = await self._sessions.list_all()
+                sessions = await (self._sessions.list_all() if self._is_admin(uid) else self._sessions.list_by_owner(uid))
                 lines = [self._t("ui_sessions_title"), ""]
                 if not sessions:
                     lines.append(self._t("ui_none"))
@@ -1251,7 +1260,8 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["rules"] + "$"))
         async def _cb_rules(_, cq: CallbackQuery):
-            rules = await self._rules.list_all()
+            uid = cq.from_user.id if cq.from_user else 0
+            rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             text, kbd = self._render_rules_list(rules, page=0)
             await cq.edit_message_text(text, reply_markup=kbd)
             await cq.answer()
@@ -1340,6 +1350,19 @@ class ProBotUI:
         async def _cb_help(_, cq: CallbackQuery):
             await cq.edit_message_text(self._t("ui_help_body"), reply_markup=self._main_menu())
             await cq.answer()
+
+        # ---------------------------------------------------------- web dashboard
+        @b.on_callback_query(filters.regex("^" + CB["dashboard"] + "$"))
+        async def _cb_dashboard(_, cq: CallbackQuery):
+            await self._show_dashboard(cq, force_reset=False)
+
+        @b.on_callback_query(filters.regex("^" + CB["webpass"] + "$"))
+        async def _cb_webpass(_, cq: CallbackQuery):
+            await self._show_dashboard(cq, force_reset=False)
+
+        @b.on_callback_query(filters.regex("^" + CB["webpass_reset"] + "$"))
+        async def _cb_webpass_reset(_, cq: CallbackQuery):
+            await self._show_dashboard(cq, force_reset=True)
 
         @b.on_callback_query(filters.regex("^" + CB["back"] + "$"))
         async def _cb_back(_, cq: CallbackQuery):
@@ -3458,6 +3481,109 @@ class ProBotUI:
             except Exception:
                 pass
         return "\n".join(lines)
+
+    # -------------------------------------------------------------- web access
+    def _web_base_url(self) -> str:
+        return self._web_url or "http://localhost:8088"
+
+    async def _mint_web_token(self, user_id: int) -> Optional[str]:
+        """Mint a JWT for this Telegram user via the Account servicer."""
+        if self._accounts is None:
+            return None
+        try:
+            from core.proto import pb
+            resp = await self._accounts.IssueWebToken(
+                pb.IssueWebTokenRequest(user_id=user_id), None
+            )
+            if getattr(resp, "success", False):
+                return resp.token
+        except Exception:
+            return None
+        return None
+
+    async def _show_dashboard(self, cq: CallbackQuery, force_reset: bool = False) -> None:
+        """Dashboard button: delivers secure Username, Password, and 1-tap Login button."""
+        uid = cq.from_user.id
+        first_name = getattr(cq.from_user, "first_name", "") or ""
+        base = self._web_base_url()
+
+        username = f"tg_{uid}"
+        password = ""
+        token = ""
+        if self._accounts:
+            try:
+                username, password, token = await self._accounts.get_or_create_credentials(
+                    uid, display_name=first_name, force_reset=force_reset
+                )
+            except Exception as e:
+                logger.error("Failed to provision credentials for %s: %s", uid, e)
+                token = await self._mint_web_token(uid) or ""
+
+        magic_link = f"{base}/?token=" + token if token else base
+
+        lines = [
+            self._t("ui_dashboard_body"),
+            "",
+            f"👤 {self._t('ui_webpass_username')}: <code>{username}</code>",
+        ]
+        if password and not password.startswith("("):
+            lines.append(f"🔑 {self._t('ui_webpass_password')}: <code>{password}</code>")
+        elif password:
+            lines.append(f"🔑 {self._t('ui_webpass_password')}: <i>{password}</i>")
+        lines.append(f"🌐 {self._t('ui_webpass_url')}: <code>{base}</code>")
+        lines.append("")
+        lines.append(self._t("ui_dashboard_tip"))
+
+        text = "\n".join(lines)
+        buttons = [
+            [InlineKeyboardButton("🌐 " + self._t("ui_dashboard_open"), url=magic_link)],
+            [InlineKeyboardButton("🔄 " + self._t("ui_webpass_reset_btn"), callback_data=CB["webpass_reset"])],
+            [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])],
+        ]
+        kbd = InlineKeyboardMarkup(buttons)
+        try:
+            await cq.edit_message_text(text, reply_markup=kbd, disable_web_page_preview=True)
+        except Exception:
+            try:
+                await cq.message.reply_text(text, reply_markup=kbd, disable_web_page_preview=True)
+            except Exception:
+                pass
+        try:
+            self._log.info("bot", "system", f"web dashboard link and credentials issued to {uid}")
+        except Exception:
+            pass
+        await cq.answer()
+
+    async def _issue_web_credentials(self, cq: CallbackQuery) -> None:
+        """Create / refresh the web account credentials for this Telegram user."""
+        uid = cq.from_user.id
+        if self._accounts is None:
+            await cq.answer(self._t("ui_dashboard_offline"), show_alert=True)
+            return
+        try:
+            from core.proto import pb
+            resp = await self._accounts.IssueWebToken(
+                pb.IssueWebTokenRequest(user_id=uid), None
+            )
+            if getattr(resp, "success", False) and resp.account:
+                acc = resp.account
+                body = (
+                    self._t("ui_webpass_body") + "\n\n"
+                    f"👤 {self._t('ui_webpass_username')}: `{acc.username}`\n"
+                    f"🆔 {self._t('ui_webpass_userid')}: `{acc.user_id}`\n\n"
+                    + self._t("ui_webpass_note")
+                )
+                await cq.edit_message_text(body, reply_markup=self._main_menu())
+                try:
+                    self._log.info("bot", "system",
+                                   f"web credentials issued to {uid} ({acc.username})")
+                except Exception:
+                    pass
+                await cq.answer()
+                return
+            await cq.answer(resp.message or self._t("ui_webpass_fail"), show_alert=True)
+        except Exception as exc:
+            await cq.answer(str(exc)[:180], show_alert=True)
 
     async def _perf_body(self) -> str:
         s = self._pipeline.stats

@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Async loaded in index.html to prevent render-blocking on mobile */
+
 
 :root {
   --bg-main: #0b0f19;

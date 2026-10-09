@@ -48,6 +48,11 @@ class SessionUseCases:
         import asyncio
         return asyncio.run(self.create(phone_number, session_string_encrypted))
 
+    async def list_by_owner(self, owner_user_id: int) -> List[TelegramSession]:
+        if hasattr(self._repo, "list_by_owner"):
+            return await self._repo.list_by_owner(owner_user_id)
+        return [s for s in await self._repo.list_all() if getattr(s, "owner_user_id", 0) == owner_user_id]
+
     async def list_all(self) -> List[TelegramSession]:
         return await self._repo.list_all()
 
@@ -111,8 +116,16 @@ class ForwardRuleUseCases:
     async def get(self, rule_id: str) -> Optional[ForwardRule]:
         return await self._repo.get_by_id(rule_id)
 
-    async def list_by_session(self, session_id: str) -> List[ForwardRule]:
-        return await self._repo.list_by_session(session_id)
+    async def list_by_session(self, session_id: str, owner_user_id: int = 0) -> List[ForwardRule]:
+        return await self._repo.list_by_session(session_id, owner_user_id)
+
+    async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
+        return await self._repo.list_by_owner(owner_user_id)
+
+    async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
+        if hasattr(self._repo, "list_by_owner"):
+            return await self._repo.list_by_owner(owner_user_id)
+        return [r for r in await self._repo.list_all() if getattr(r, "owner_user_id", 0) == owner_user_id]
 
     async def list_all(self) -> List[ForwardRule]:
         return await self._repo.list_all()

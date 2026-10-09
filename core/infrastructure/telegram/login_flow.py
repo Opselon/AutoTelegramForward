@@ -369,6 +369,7 @@ class LoginFlowManager:
             session.username = me.username or ""
             session.first_name = me.first_name or ""
             session.api_credential_id = state.credential_id or "default"
+            session.owner_user_id = int(user_id)
             session.activate()
             await self._sessions._repo.update(session)
             await self._pool.start_with_session_string(
