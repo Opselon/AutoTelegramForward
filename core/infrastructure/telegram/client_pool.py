@@ -138,6 +138,10 @@ class ClientPool:
                 session_string=session_string,
                 in_memory=True,
                 no_updates=False,
+                device_model="Desktop",
+                system_version="Windows 11",
+                app_version="5.6.3 x64",
+                lang_code="en",
             )
             t0 = time.monotonic()
             await client.start()
@@ -167,6 +171,10 @@ class ClientPool:
             api_id=api_id,
             api_hash=api_hash,
             in_memory=True,
+            device_model="Desktop",
+            system_version="Windows 11",
+            app_version="5.6.3 x64",
+            lang_code="en",
         )
         await client.connect()
         return client
@@ -217,7 +225,7 @@ class ClientPool:
         other name (e.g. legacy "channel_post") maps onto "message", because
         pyrogram already delivers channel posts to MessageHandler.
         """
-        if event_type not in ("message", "edited_message"):
+        if event_type not in ("message", "edited_message", "deleted_messages"):
             event_type = "message"  # channel posts arrive via MessageHandler
         self._handlers.setdefault(session_id, []).append(
             {"handler": handler, "event_type": event_type}
@@ -238,9 +246,15 @@ class ClientPool:
             state.handler_ids.clear()
 
     def _attach(self, state: ClientState, handler: Callable, event_type: str) -> None:
-        from pyrogram.handlers.edited_message_handler import EditedMessageHandler
-        from pyrogram.handlers.message_handler import MessageHandler
-        cls = EditedMessageHandler if event_type == "edited_message" else MessageHandler
+        if event_type == "deleted_messages":
+            from pyrogram.handlers.deleted_messages_handler import DeletedMessagesHandler
+            cls = DeletedMessagesHandler
+        elif event_type == "edited_message":
+            from pyrogram.handlers.edited_message_handler import EditedMessageHandler
+            cls = EditedMessageHandler
+        else:
+            from pyrogram.handlers.message_handler import MessageHandler
+            cls = MessageHandler
         try:
             handler_obj = cls(handler)
             state.client.add_handler(handler_obj)

@@ -23,6 +23,7 @@ from typing import Any
 
 from ...domain.entities import MessagePayload
 from ...domain.value_objects import ContentMode, ForwardMode
+from .album_aggregator import AlbumAggregator
 from .client_pool import ClientPool, payload_from_pyrogram
 from .errors import tg_detail, tg_error, wait_seconds
 
@@ -35,14 +36,16 @@ class MessageDispatcher:
     def __init__(
         self, pool: ClientPool, use_case, send_queue_size: int = 2000,
         error_log=None, metrics=None, rule_stats=None, log_client=None,
+        queue_manager=None, sync_engine=None,
     ) -> None:
         self._pool = pool
         self._use_case = use_case
         # The pipeline's sender port is this class's `_send` coroutine.
         self._use_case.sender = self._send
-        # (session_id, chat_id, message_id) -> asyncio.Event for album dedupe
-        self._album_pending: dict = {}
-        self._album_lock = asyncio.Lock()
+        self._queue_manager = queue_manager
+        self._sync_engine = sync_engine
+        # Album aggregation with bounded LRU & TTL
+        self._album_aggregator = AlbumAggregator(flush_callback=self._flush_album, ttl_seconds=2.0, max_active_albums=500)
         # send-rate bookkeeping: target -> deque of timestamps
         self._rate: dict = defaultdict(deque)
         self._max_per_minute = 25  # Telegram-friendly default per target
@@ -125,6 +128,7 @@ class MessageDispatcher:
             # chat type. EditedMessageHandler covers message/channel edits.
             (self._make_handler("NEW_MESSAGE"), "message"),
             (self._make_handler("EDITED_MESSAGE"), "edited_message"),
+            (self._make_deleted_handler(), "deleted_messages"),
         ]
         for handler, event_type in handlers:
             try:
@@ -152,6 +156,24 @@ class MessageDispatcher:
     # ------------------------------------------------------------------ #
     # Incoming events
     # ------------------------------------------------------------------ #
+    def _make_deleted_handler(self):
+        async def _del_handler(client, messages):
+            if self._sync_engine is None or not messages:
+                return
+            try:
+                chat_id = ""
+                msg_ids = []
+                for m in messages:
+                    if hasattr(m, "chat") and m.chat:
+                        chat_id = str(m.chat.id)
+                    if hasattr(m, "id"):
+                        msg_ids.append(int(m.id))
+                if chat_id and msg_ids:
+                    await self._sync_engine.handle_delete(chat_id, msg_ids)
+            except Exception:
+                logger.exception("Error in deleted_messages handler")
+        return _del_handler
+
     def _make_handler(self, trigger: str):
         async def _handler(client, message):
             try:
@@ -159,16 +181,21 @@ class MessageDispatcher:
             except Exception:
                 logger.exception("payload translate failed")
                 return
-            # Album: only the first message of a media_group triggers the
-            # pipeline; the rest are swallowed as duplicates of the same send.
-            if payload.media_group_id:
-                key = (str(client), payload.chat_id, payload.media_group_id)
-                async with self._album_lock:
-                    if key in self._album_pending and trigger == "NEW_MESSAGE":
-                        return  # already queued by the first media of the album
-                    self._album_pending[key] = time.monotonic()
-                # schedule cleanup of the album marker
-                asyncio.create_task(self._release_album(key))
+
+            # Sync edits propagation
+            if trigger == "EDITED_MESSAGE" and self._sync_engine is not None:
+                try:
+                    await self._sync_engine.handle_edit(payload, payload.effective_text)
+                except Exception:
+                    logger.exception("sync_engine handle_edit failed")
+
+            # Album: bounded LRU aggregator with TTL
+            if payload.media_group_id and trigger == "NEW_MESSAGE":
+                sid = getattr(client, "session_id", str(client))
+                is_first = await self._album_aggregator.ingest(sid, payload)
+                if not is_first:
+                    return
+
             try:
                 await self._use_case.process_message(payload, trigger=trigger)
             except Exception:
@@ -176,10 +203,11 @@ class MessageDispatcher:
         _handler.__name__ = f"atf_{trigger.lower()}_handler"
         return _handler
 
-    async def _release_album(self, key) -> None:
-        await asyncio.sleep(self._album_window)
-        async with self._album_lock:
-            self._album_pending.pop(key, None)
+    async def _flush_album(self, first_msg: MessagePayload, all_msgs: list) -> None:
+        try:
+            await self._use_case.process_message(first_msg, trigger="NEW_MESSAGE")
+        except Exception:
+            logger.exception("Failed to process flushed album")
 
     # Back-compat: the original API returned a single handler. Keep it.
     def register_handler(self, filter_cb=None):
@@ -194,6 +222,16 @@ class MessageDispatcher:
         if not targets:
             logger.warning("rule %s has no targets", getattr(rule, "id", "?")[:8])
             return False
+
+        # If durable queue manager is active, delegate delivery non-blockingly!
+        if self._queue_manager is not None:
+            any_queued = False
+            for target in targets:
+                ok = await self._queue_manager.enqueue_delivery(rule, payload, str(target), text, evaluation)
+                if ok:
+                    any_queued = True
+            return any_queued
+
         client = self._pool.get(rule.session_id)
         if client is None:
             logger.warning("No live client for session %s", rule.session_id)
@@ -235,44 +273,44 @@ class MessageDispatcher:
             await asyncio.sleep(min(wait, 65))
         window.append(time.monotonic())
 
-    async def _deliver(self, client, payload: MessagePayload, rule, text: str, target: Any) -> bool:
+    async def _deliver(self, client, payload: MessagePayload, rule, text: str, target: Any) -> Any:
         """Send one copy of the message to one target, honoring content mode."""
         mode = getattr(rule, "content_mode", ContentMode.AUTO)
         mode_val = getattr(mode, "value", mode)
         caption_tmpl = rule.custom_caption_template or None
 
         if rule.forward_mode == ForwardMode.DIRECT_FORWARD:
-            await client.forward_messages(
+            res = await client.forward_messages(
                 chat_id=target, from_chat_id=int(payload.chat_id),
                 message_ids=[payload.message_id],
             )
-            return True
+            return res[0] if isinstance(res, list) and res else (res or True)
 
         # COPY_MESSAGE path
         if mode_val == "TEXT_ONLY":
             if text:
-                await client.send_message(chat_id=target, text=text)
-                return True
+                res = await client.send_message(chat_id=target, text=text)
+                return res or True
             return False
         if mode_val == "MEDIA_ONLY":
             if payload.has_media:
-                await client.copy_message(
+                res = await client.copy_message(
                     chat_id=target, from_chat_id=int(payload.chat_id),
                     message_id=payload.message_id,
                 )
-                return True
+                return res or True
             return False
         if payload.has_media:
-            await client.copy_message(
+            res = await client.copy_message(
                 chat_id=target, from_chat_id=int(payload.chat_id),
                 message_id=payload.message_id,
                 caption=(text or None) if mode_val != "MEDIA_ONLY" else None,
             )
             if mode_val == "TEXT_AND_MEDIA" and text:
                 await client.send_message(chat_id=target, text=text)
-            return True
+            return res or True
         body = text or caption_tmpl
         if not body:
             return False
-        await client.send_message(chat_id=target, text=body)
-        return True
+        res = await client.send_message(chat_id=target, text=body)
+        return res or True

@@ -83,12 +83,30 @@ class ForwardRuleUseCases:
     def __init__(self, repo: IForwardRuleRepository) -> None:
         self._repo = repo
 
+    def validate_endpoints(self, source_chat_id: str, target_chat_id: str) -> tuple[bool, str]:
+        """Validate source and target chat IDs to prevent loops and empty routing."""
+        s = str(source_chat_id or "").strip()
+        t = str(target_chat_id or "").strip()
+        if not s:
+            return False, "source_empty"
+        if not t:
+            return False, "target_empty"
+        if s == t:
+            return False, "loop_detected"
+        return True, "ok"
+
     async def create(self, rule: ForwardRule) -> ForwardRule:
+        ok, err = self.validate_endpoints(rule.source_chat_id, rule.target_chat_id)
+        if not ok:
+            raise ValueError(f"Invalid rule endpoints: {err}")
         return await self._repo.add(rule)
 
-    async def update(self, rule: ForwardRule) -> ForwardRule:
+    async def update(self, rule: ForwardRule, expected_version: Optional[int] = None) -> ForwardRule:
+        ok, err = self.validate_endpoints(rule.source_chat_id, rule.target_chat_id)
+        if not ok:
+            raise ValueError(f"Invalid rule endpoints: {err}")
         rule.mark_updated()
-        return await self._repo.update(rule)
+        return await self._repo.update(rule, expected_version=expected_version)
 
     async def get(self, rule_id: str) -> Optional[ForwardRule]:
         return await self._repo.get_by_id(rule_id)
@@ -349,7 +367,7 @@ class MessageForwardingUseCase:
         if payload.is_edit and getattr(rule, "ignore_edits", False):
             return PipelineOutcome(False, "edit_ignored")
         # --- restart-safe dedupe --------------------------------------
-        if self._processed is not None and getattr(rule, "skip_history", True):
+        if not payload.is_edit and self._processed is not None and getattr(rule, "skip_history", True):
             seen = await self._processed.was_processed(rule.id, payload.chat_id, payload.message_id)
             if seen:
                 return PipelineOutcome(False, "duplicate")
@@ -364,10 +382,26 @@ class MessageForwardingUseCase:
         if evaluation.action.name == "DROP":
             return PipelineOutcome(False, evaluation.reason, evaluation)
 
+        # --- media blocks (voice / stickers) --------------------------
+        m_type = str(getattr(payload.media_type, "value", payload.media_type)).lower()
+        if rule.block_voice and m_type in ("voice", "audio"):
+            return PipelineOutcome(False, "voice_blocked", evaluation)
+        if rule.block_stickers and m_type in ("sticker",):
+            return PipelineOutcome(False, "sticker_blocked", evaluation)
+
         text = payload.effective_text
-        if rule.remove_links:
+        if rule.link_replacement:
+            text = self._filter_engine.replace_links(text, rule.link_replacement)
+            evaluation.links_removed = True
+        elif rule.remove_links or (isinstance(rule.metadata, dict) and rule.metadata.get("remove_links")):
             text = self._filter_engine.remove_links(text)
             evaluation.links_removed = True
+
+        if rule.remove_emojis:
+            text = self._filter_engine.remove_emojis(text)
+
+        if rule.replacements:
+            text = self._filter_engine.replace_text(text, rule.replacements)
 
         ai_cfg = (
             await self._ai_repo.get_by_id(rule.ai_config_id)
@@ -383,6 +417,9 @@ class MessageForwardingUseCase:
                 self.stats.rewritten += 1
             except Exception as exc:
                 logger.warning("AI rewrite failed, sending original: %s", exc)
+
+        if rule.header or rule.footer:
+            text = self._filter_engine.apply_header_footer(text, header=rule.header, footer=rule.footer)
 
         if not self.sender:
             return PipelineOutcome(False, "no_sender_registered", evaluation)

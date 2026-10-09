@@ -15,18 +15,28 @@ from ...application.repositories import (
     IAIConfigRepository,
     IApiCredentialRepository,
     IBotTokenRepository,
+    IDeliveryQueueRepository,
+    IErrorLogRepository,
     IFilterRuleRepository,
     IForwardRuleRepository,
-    IProcessedMessageRepository,
-    ISessionRepository,
-    IErrorLogRepository,
+    IMessageMapRepository,
     IMetricsRepository,
+    IProcessedMessageRepository,
     IRuleStatsRepository,
+    ISessionRepository,
     IUiStateRepository,
     IUserRepository,
     IAuthFlowRepository,
 )
-from ...domain.entities import AIConfig, FilterRule, ForwardRule, TelegramSession
+from ...domain.entities import (
+    AIConfig,
+    DeliveryJob,
+    DeliveryStatus,
+    FilterRule,
+    ForwardRule,
+    MessageMapping,
+    TelegramSession,
+)
 from ..telegram.auth_state import ACTIVE_STATES, AuthState
 from ...domain.value_objects import (
     AIProviderType,
@@ -143,49 +153,131 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         self._db = db
 
     async def add(self, rule: ForwardRule) -> ForwardRule:
-        self._db.execute(
-            "INSERT INTO forward_rules (id, session_id, source_chat_id, source_chat_name, target_chat_id,"
-            " target_chat_name, target_chat_ids, routing_type, forward_mode, is_active, filter_rule_id,"
-            " ai_config_id, remove_links, custom_caption_template, delay_seconds, skip_history,"
-            " since_ts, ignore_edits, trigger_events, content_mode, metadata, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                rule.id, rule.session_id, rule.source_chat_id, rule.source_chat_name,
-                rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
-                rule.routing_type.value, rule.forward_mode.value, int(rule.is_active),
-                rule.filter_rule_id, rule.ai_config_id, int(rule.remove_links),
-                rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
-                rule.since_ts, int(rule.ignore_edits),
-                json.dumps(getattr(rule, "trigger_events", [TriggerEvent.NEW_MESSAGE.value])
-                           if isinstance(getattr(rule, "trigger_events", None), list)
-                           else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
-                getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
-                json.dumps(rule.metadata or {}), rule.created_at, rule.updated_at,
-            ),
-        )
+        rule_version = int(getattr(rule, "version", 1) or 1)
+        # Check if version column is present
+        try:
+            self._db.execute(
+                "INSERT INTO forward_rules (id, session_id, source_chat_id, source_chat_name, target_chat_id,"
+                " target_chat_name, target_chat_ids, routing_type, forward_mode, is_active, filter_rule_id,"
+                " ai_config_id, remove_links, custom_caption_template, delay_seconds, skip_history,"
+                " since_ts, ignore_edits, trigger_events, content_mode, metadata, version, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    rule.id, rule.session_id, rule.source_chat_id, rule.source_chat_name,
+                    rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
+                    rule.routing_type.value, rule.forward_mode.value, int(rule.is_active),
+                    rule.filter_rule_id, rule.ai_config_id, int(rule.remove_links),
+                    rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
+                    rule.since_ts, int(rule.ignore_edits),
+                    json.dumps(getattr(rule, "trigger_events", [TriggerEvent.NEW_MESSAGE.value])
+                               if isinstance(getattr(rule, "trigger_events", None), list)
+                               else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
+                    getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
+                    json.dumps(rule.metadata or {}), rule_version, rule.created_at, rule.updated_at,
+                ),
+            )
+        except Exception as exc:
+            # Fallback for old schema without version column
+            if "has no column named version" in str(exc) or "no column named version" in str(exc):
+                self._db.execute(
+                    "INSERT INTO forward_rules (id, session_id, source_chat_id, source_chat_name, target_chat_id,"
+                    " target_chat_name, target_chat_ids, routing_type, forward_mode, is_active, filter_rule_id,"
+                    " ai_config_id, remove_links, custom_caption_template, delay_seconds, skip_history,"
+                    " since_ts, ignore_edits, trigger_events, content_mode, metadata, created_at, updated_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        rule.id, rule.session_id, rule.source_chat_id, rule.source_chat_name,
+                        rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
+                        rule.routing_type.value, rule.forward_mode.value, int(rule.is_active),
+                        rule.filter_rule_id, rule.ai_config_id, int(rule.remove_links),
+                        rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
+                        rule.since_ts, int(rule.ignore_edits),
+                        json.dumps(getattr(rule, "trigger_events", [TriggerEvent.NEW_MESSAGE.value])
+                                   if isinstance(getattr(rule, "trigger_events", None), list)
+                                   else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
+                        getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
+                        json.dumps(rule.metadata or {}), rule.created_at, rule.updated_at,
+                    ),
+                )
+            else:
+                raise
         return rule
 
-    async def update(self, rule: ForwardRule) -> ForwardRule:
-        self._db.execute(
-            "UPDATE forward_rules SET session_id=?, source_chat_id=?, source_chat_name=?, target_chat_id=?,"
-            " target_chat_name=?, target_chat_ids=?, routing_type=?, forward_mode=?, is_active=?,"
-            " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
-            " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
-            " content_mode=?, metadata=?, updated_at=? WHERE id=?",
-            (
-                rule.session_id, rule.source_chat_id, rule.source_chat_name,
-                rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
-                rule.routing_type.value, rule.forward_mode.value, int(rule.is_active),
-                rule.filter_rule_id, rule.ai_config_id, int(rule.remove_links),
-                rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
-                rule.since_ts, int(rule.ignore_edits),
-                json.dumps(getattr(rule, "trigger_events", [TriggerEvent.NEW_MESSAGE.value])
-                           if isinstance(getattr(rule, "trigger_events", None), list)
-                           else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
-                getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
-                json.dumps(rule.metadata or {}), rule.updated_at, rule.id,
-            ),
+    async def update(self, rule: ForwardRule, expected_version: Optional[int] = None) -> ForwardRule:
+        rule_version = int(getattr(rule, "version", 1) or 1)
+        next_version = rule_version + 1
+
+        trigger_json = json.dumps(
+            getattr(rule, "trigger_events", [TriggerEvent.NEW_MESSAGE.value])
+            if isinstance(getattr(rule, "trigger_events", None), list)
+            else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]
         )
+        content_val = getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value)
+        meta_json = json.dumps(rule.metadata or {})
+
+        params = (
+            rule.session_id, rule.source_chat_id, rule.source_chat_name,
+            rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
+            rule.routing_type.value, rule.forward_mode.value, int(rule.is_active),
+            rule.filter_rule_id, rule.ai_config_id, int(rule.remove_links),
+            rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
+            rule.since_ts, int(rule.ignore_edits),
+            trigger_json, content_val, meta_json, next_version, rule.updated_at,
+        )
+
+        from ...application.repositories import ConcurrencyError
+
+        if expected_version is not None:
+            cur = self._db.execute(
+                "UPDATE forward_rules SET session_id=?, source_chat_id=?, source_chat_name=?, target_chat_id=?,"
+                " target_chat_name=?, target_chat_ids=?, routing_type=?, forward_mode=?, is_active=?,"
+                " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
+                " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
+                " content_mode=?, metadata=?, version=?, updated_at=? WHERE id=? AND version=?",
+                (*params, rule.id, int(expected_version)),
+            )
+            if cur.rowcount == 0:
+                # Check if rule exists
+                existing = await self.get_by_id(rule.id)
+                if not existing:
+                    raise ValueError(f"Rule {rule.id} does not exist")
+                raise ConcurrencyError(
+                    f"Concurrency conflict on rule {rule.id}: expected version {expected_version}, "
+                    f"current version is {existing.version}"
+                )
+        else:
+            try:
+                cur = self._db.execute(
+                    "UPDATE forward_rules SET session_id=?, source_chat_id=?, source_chat_name=?, target_chat_id=?,"
+                    " target_chat_name=?, target_chat_ids=?, routing_type=?, forward_mode=?, is_active=?,"
+                    " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
+                    " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
+                    " content_mode=?, metadata=?, version=?, updated_at=? WHERE id=?",
+                    (*params, rule.id),
+                )
+            except Exception as exc:
+                if "no such column: version" in str(exc) or "has no column named version" in str(exc):
+                    # Fallback update without version
+                    cur = self._db.execute(
+                        "UPDATE forward_rules SET session_id=?, source_chat_id=?, source_chat_name=?, target_chat_id=?,"
+                        " target_chat_name=?, target_chat_ids=?, routing_type=?, forward_mode=?, is_active=?,"
+                        " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
+                        " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
+                        " content_mode=?, metadata=?, updated_at=? WHERE id=?",
+                        (
+                            rule.session_id, rule.source_chat_id, rule.source_chat_name,
+                            rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
+                            rule.routing_type.value, rule.forward_mode.value, int(rule.is_active),
+                            rule.filter_rule_id, rule.ai_config_id, int(rule.remove_links),
+                            rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
+                            rule.since_ts, int(rule.ignore_edits),
+                            trigger_json, content_val, meta_json, rule.updated_at, rule.id,
+                        ),
+                    )
+                else:
+                    raise
+
+        rule.version = next_version
         return rule
 
     @staticmethod
@@ -200,6 +292,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             cm = ContentMode(content_raw)
         except ValueError:
             cm = ContentMode.AUTO
+        rule_version = int(row["version"]) if ("version" in cols and row["version"] is not None) else 1
         return ForwardRule(
             id=row["id"], session_id=row["session_id"],
             source_chat_id=row["source_chat_id"], source_chat_name=row["source_chat_name"],
@@ -217,6 +310,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             trigger_events=triggers,
             content_mode=cm,
             metadata=_safe_dict(row["metadata"] if "metadata" in cols else "{}", {}),
+            version=rule_version,
             created_at=row["created_at"], updated_at=row["updated_at"],
         )
 
@@ -737,3 +831,330 @@ class SqliteUserRepository(IUserRepository):
             "UPDATE users SET quota_forwarded=quota_forwarded+?, updated_at=? WHERE user_id=?",
             (int(by), int(time.time()), int(user_id)),
         )
+
+
+# --------------------------------------------------------------------------- #
+# v6: P0 Data-Plane Reliability — Message Map & Durable Queue
+# --------------------------------------------------------------------------- #
+
+class SqliteMessageMapRepository(IMessageMapRepository):
+    """SQLite implementation of the persistent message mapping port."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    def _row_to_entity(self, row) -> MessageMapping:
+        status_val = row["delivery_status"]
+        try:
+            status = DeliveryStatus(status_val)
+        except (ValueError, TypeError):
+            status = DeliveryStatus.PENDING
+
+        return MessageMapping(
+            id=row["id"],
+            rule_id=row["rule_id"],
+            source_chat_id=str(row["source_chat_id"]),
+            source_message_id=int(row["source_message_id"]),
+            target_chat_id=str(row["target_chat_id"]),
+            target_message_id=int(row["target_message_id"]) if row["target_message_id"] is not None else None,
+            media_group_id=row["media_group_id"] if row["media_group_id"] else None,
+            delivery_status=status,
+            created_at=int(row["created_at"]),
+            updated_at=int(row["updated_at"]),
+        )
+
+    async def add_or_update(self, mapping: MessageMapping) -> MessageMapping:
+        now = _now()
+        mapping.updated_at = now
+        sql = """
+        INSERT INTO message_map (
+            id, rule_id, source_chat_id, source_message_id, target_chat_id,
+            target_message_id, media_group_id, delivery_status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET
+            target_message_id = COALESCE(excluded.target_message_id, message_map.target_message_id),
+            media_group_id = COALESCE(excluded.media_group_id, message_map.media_group_id),
+            delivery_status = excluded.delivery_status,
+            updated_at = excluded.updated_at
+        """
+        status_str = getattr(mapping.delivery_status, "value", str(mapping.delivery_status))
+        self._db.execute(
+            sql,
+            (
+                mapping.id,
+                mapping.rule_id,
+                str(mapping.source_chat_id),
+                int(mapping.source_message_id),
+                str(mapping.target_chat_id),
+                mapping.target_message_id,
+                mapping.media_group_id or "",
+                status_str,
+                mapping.created_at,
+                mapping.updated_at,
+            ),
+        )
+        return mapping
+
+    async def get_by_source(self, source_chat_id: str, source_message_id: int) -> List[MessageMapping]:
+        rows = self._db.query_all(
+            "SELECT * FROM message_map WHERE source_chat_id=? AND source_message_id=?",
+            (str(source_chat_id), int(source_message_id)),
+        )
+        return [self._row_to_entity(r) for r in rows]
+
+    async def get_by_target(self, target_chat_id: str, target_message_id: int) -> Optional[MessageMapping]:
+        row = self._db.query_one(
+            "SELECT * FROM message_map WHERE target_chat_id=? AND target_message_id=?",
+            (str(target_chat_id), int(target_message_id)),
+        )
+        return self._row_to_entity(row) if row else None
+
+    async def get_by_rule_and_source(
+        self, rule_id: str, source_chat_id: str, source_message_id: int
+    ) -> List[MessageMapping]:
+        rows = self._db.query_all(
+            "SELECT * FROM message_map WHERE rule_id=? AND source_chat_id=? AND source_message_id=?",
+            (rule_id, str(source_chat_id), int(source_message_id)),
+        )
+        return [self._row_to_entity(r) for r in rows]
+
+    async def update_delivery(
+        self,
+        rule_id: str,
+        source_chat_id: str,
+        source_message_id: int,
+        target_chat_id: str,
+        target_message_id: Optional[int],
+        status: DeliveryStatus,
+    ) -> bool:
+        now = _now()
+        status_str = getattr(status, "value", str(status))
+        cur = self._db.execute(
+            """
+            UPDATE message_map SET
+                target_message_id = COALESCE(?, target_message_id),
+                delivery_status = ?,
+                updated_at = ?
+            WHERE rule_id = ? AND source_chat_id = ? AND source_message_id = ? AND target_chat_id = ?
+            """,
+            (
+                target_message_id,
+                status_str,
+                now,
+                rule_id,
+                str(source_chat_id),
+                int(source_message_id),
+                str(target_chat_id),
+            ),
+        )
+        return cur.rowcount > 0
+
+    async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 30) -> int:
+        cutoff = _now() - retention_seconds
+        cur = self._db.execute("DELETE FROM message_map WHERE updated_at < ?", (cutoff,))
+        return cur.rowcount
+
+
+class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
+    """SQLite implementation of the durable delivery jobs queue."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    def _row_to_entity(self, row) -> DeliveryJob:
+        status_val = row["status"]
+        try:
+            status = DeliveryStatus(status_val)
+        except (ValueError, TypeError):
+            status = DeliveryStatus.PENDING
+
+        payload = SqliteDatabase.loads(row["payload_json"], {})
+        return DeliveryJob(
+            id=row["id"],
+            rule_id=row["rule_id"],
+            source_chat_id=str(row["source_chat_id"]),
+            source_message_id=int(row["source_message_id"]),
+            target_chat_id=str(row["target_chat_id"]),
+            payload_data=payload,
+            status=status,
+            attempts=int(row["attempts"]),
+            max_attempts=int(row["max_attempts"]),
+            next_retry_at=float(row["next_retry_at"]),
+            lease_until=float(row["lease_until"]),
+            worker_id=row["worker_id"] if row["worker_id"] else None,
+            error_detail=row["error_detail"] if row["error_detail"] else None,
+            created_at=int(row["created_at"]),
+            updated_at=int(row["updated_at"]),
+        )
+
+    async def enqueue(self, job: DeliveryJob) -> bool:
+        payload_str = SqliteDatabase.dumps(job.payload_data)
+        status_str = getattr(job.status, "value", str(job.status))
+        cur = self._db.execute(
+            """
+            INSERT OR IGNORE INTO delivery_jobs (
+                id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                payload_json, status, attempts, max_attempts, next_retry_at,
+                lease_until, worker_id, error_detail, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job.id,
+                job.rule_id,
+                str(job.source_chat_id),
+                int(job.source_message_id),
+                str(job.target_chat_id),
+                payload_str,
+                status_str,
+                job.attempts,
+                job.max_attempts,
+                job.next_retry_at,
+                job.lease_until,
+                job.worker_id or "",
+                job.error_detail or "",
+                job.created_at,
+                job.updated_at,
+            ),
+        )
+        return cur.rowcount > 0
+
+    async def claim_batch(
+        self, worker_id: str, batch_size: int = 5, lease_duration: float = 30.0
+    ) -> List[DeliveryJob]:
+        now = time.time()
+        claimed: List[DeliveryJob] = []
+        with self._db._lock:
+            # Atomic claim under lock
+            rows = self._db._conn.execute(
+                """
+                SELECT * FROM delivery_jobs
+                WHERE (
+                    status = 'PENDING'
+                    OR status = 'RETRY_WAIT'
+                    OR (status = 'CLAIMED' AND lease_until < ?)
+                )
+                AND next_retry_at <= ?
+                ORDER BY created_at ASC
+                LIMIT ?
+                """,
+                (now, now, int(batch_size)),
+            ).fetchall()
+
+            if not rows:
+                return []
+
+            lease_until = now + lease_duration
+            now_int = int(now)
+            for r in rows:
+                self._db._conn.execute(
+                    """
+                    UPDATE delivery_jobs
+                    SET status = 'CLAIMED', worker_id = ?, lease_until = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (worker_id, lease_until, now_int, r["id"]),
+                )
+            self._db._conn.commit()
+
+            # Re-fetch claimed items
+            for r in rows:
+                job = self._row_to_entity(r)
+                job.status = DeliveryStatus.CLAIMED
+                job.worker_id = worker_id
+                job.lease_until = lease_until
+                claimed.append(job)
+
+        return claimed
+
+    async def mark_sent(self, job_id: str, target_message_id: Optional[int] = None) -> bool:
+        now = _now()
+        cur = self._db.execute(
+            """
+            UPDATE delivery_jobs
+            SET status = 'SENT', lease_until = 0, updated_at = ?
+            WHERE id = ?
+            """,
+            (now, job_id),
+        )
+        return cur.rowcount > 0
+
+    async def mark_retry(self, job_id: str, error: str, backoff_seconds: float) -> bool:
+        now = time.time()
+        row = self._db.query_one("SELECT attempts, max_attempts FROM delivery_jobs WHERE id = ?", (job_id,))
+        if not row:
+            return False
+
+        attempts = int(row["attempts"]) + 1
+        max_attempts = int(row["max_attempts"])
+
+        if attempts >= max_attempts:
+            cur = self._db.execute(
+                """
+                UPDATE delivery_jobs
+                SET status = 'FAILED', attempts = ?, error_detail = ?, lease_until = 0, updated_at = ?
+                WHERE id = ?
+                """,
+                (attempts, error, int(now), job_id),
+            )
+        else:
+            next_retry = now + backoff_seconds
+            cur = self._db.execute(
+                """
+                UPDATE delivery_jobs
+                SET status = 'RETRY_WAIT', attempts = ?, next_retry_at = ?,
+                    error_detail = ?, lease_until = 0, updated_at = ?
+                WHERE id = ?
+                """,
+                (attempts, next_retry, error, int(now), job_id),
+            )
+        return cur.rowcount > 0
+
+    async def mark_failed(self, job_id: str, error: str) -> bool:
+        now = _now()
+        cur = self._db.execute(
+            """
+            UPDATE delivery_jobs
+            SET status = 'FAILED', error_detail = ?, lease_until = 0, updated_at = ?
+            WHERE id = ?
+            """,
+            (error, now, job_id),
+        )
+        return cur.rowcount > 0
+
+    async def mark_unknown(self, job_id: str, error: str) -> bool:
+        now = _now()
+        cur = self._db.execute(
+            """
+            UPDATE delivery_jobs
+            SET status = 'UNKNOWN', error_detail = ?, lease_until = 0, updated_at = ?
+            WHERE id = ?
+            """,
+            (error, now, job_id),
+        )
+        return cur.rowcount > 0
+
+    async def get_pending_count(self) -> int:
+        row = self._db.query_one(
+            "SELECT COUNT(*) as cnt FROM delivery_jobs WHERE status IN ('PENDING', 'CLAIMED', 'RETRY_WAIT')"
+        )
+        return int(row["cnt"]) if row else 0
+
+    async def get_stats(self) -> dict:
+        rows = self._db.query_all("SELECT status, COUNT(*) as cnt FROM delivery_jobs GROUP BY status")
+        res = {s.value: 0 for s in DeliveryStatus}
+        for r in rows:
+            res[r["status"]] = int(r["cnt"])
+        return res
+
+    async def recover_expired_leases(self) -> int:
+        now = time.time()
+        cur = self._db.execute(
+            """
+            UPDATE delivery_jobs
+            SET status = 'RETRY_WAIT', lease_until = 0, updated_at = ?
+            WHERE status = 'CLAIMED' AND lease_until < ?
+            """,
+            (int(now), now),
+        )
+        return cur.rowcount
+

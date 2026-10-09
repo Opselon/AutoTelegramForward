@@ -59,3 +59,13 @@ class AIProviderType(str, Enum):
 class FilterAction(str, Enum):
     ALLOW = "ALLOW"
     DROP = "DROP"
+
+
+class DeliveryStatus(str, Enum):
+    PENDING = "PENDING"
+    CLAIMED = "CLAIMED"
+    SENDING = "SENDING"
+    SENT = "SENT"
+    RETRY_WAIT = "RETRY_WAIT"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"

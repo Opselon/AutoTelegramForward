@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 
 MIGRATIONS = {
     1: """
@@ -227,6 +227,54 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_auth_flows_state ON auth_flows(state);
     CREATE INDEX IF NOT EXISTS idx_auth_flows_expires ON auth_flows(expires_at);
     """,
+    5: """
+    -- v5: optimistic concurrency / versioning on forward_rules
+    -- protects against lost updates during concurrent edits
+    ALTER TABLE forward_rules ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+    """,
+    6: """
+    -- v6: P0 Data-Plane Reliability
+    -- Persistent message mapping for edit/delete synchronization
+    CREATE TABLE IF NOT EXISTS message_map (
+        id TEXT PRIMARY KEY,
+        rule_id TEXT NOT NULL,
+        source_chat_id TEXT NOT NULL,
+        source_message_id INTEGER NOT NULL,
+        target_chat_id TEXT NOT NULL,
+        target_message_id INTEGER,
+        media_group_id TEXT,
+        delivery_status TEXT NOT NULL DEFAULT 'PENDING',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_msgmap_src ON message_map(source_chat_id, source_message_id);
+    CREATE INDEX IF NOT EXISTS idx_msgmap_tgt ON message_map(target_chat_id, target_message_id);
+    CREATE INDEX IF NOT EXISTS idx_msgmap_rule_src ON message_map(rule_id, source_chat_id, source_message_id);
+    CREATE INDEX IF NOT EXISTS idx_msgmap_media ON message_map(media_group_id);
+
+    -- Durable delivery jobs queue for non-blocking asynchronous workers and restart recovery
+    CREATE TABLE IF NOT EXISTS delivery_jobs (
+        id TEXT PRIMARY KEY,
+        rule_id TEXT NOT NULL,
+        source_chat_id TEXT NOT NULL,
+        source_message_id INTEGER NOT NULL,
+        target_chat_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 5,
+        next_retry_at REAL NOT NULL DEFAULT 0,
+        lease_until REAL NOT NULL DEFAULT 0,
+        worker_id TEXT,
+        error_detail TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_delivery_jobs_poll ON delivery_jobs(status, next_retry_at, lease_until);
+    CREATE INDEX IF NOT EXISTS idx_delivery_jobs_rule ON delivery_jobs(rule_id);
+    """,
 }
 
 
@@ -247,6 +295,11 @@ class SqliteDatabase:
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         self._migrate()
+
+    def get_schema_version(self) -> int:
+        with self._lock:
+            row = self._conn.execute("SELECT version FROM schema_version").fetchone()
+            return int(row["version"]) if row else 0
 
     def _migrate(self) -> None:
         with self._lock:

@@ -26,23 +26,27 @@ from core.infrastructure.persistence.database import SqliteDatabase  # noqa: E40
 from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
     SqliteAIConfigRepository,
     SqliteApiCredentialRepository,
+    SqliteAuthFlowRepository,
     SqliteBotTokenRepository,
+    SqliteDeliveryQueueRepository,
     SqliteErrorLogRepository,
     SqliteFilterRuleRepository,
     SqliteForwardRuleRepository,
+    SqliteMessageMapRepository,
     SqliteMetricsRepository,
     SqliteProcessedMessageRepository,
     SqliteRuleStatsRepository,
     SqliteSessionRepository,
     SqliteUiStateRepository,
     SqliteUserRepository,
-    SqliteAuthFlowRepository,
 )
 from core.infrastructure.security.crypto import CryptoService  # noqa: E402
 from core.infrastructure.telegram.bot_manager import BotManager  # noqa: E402
 from core.infrastructure.telegram.login_flow import LOGIN_TTL  # noqa: E402
 from core.infrastructure.telegram.client_pool import ClientPool  # noqa: E402
 from core.infrastructure.telegram.dispatcher import MessageDispatcher  # noqa: E402
+from core.infrastructure.telegram.durable_queue import DurableQueueManager  # noqa: E402
+from core.infrastructure.telegram.sync_engine import SyncEngine  # noqa: E402
 from core.infrastructure.telegram.pro_bot_ui import ProBotUI  # noqa: E402
 from core.infrastructure.telegram.i18n import I18n  # noqa: E402
 
@@ -69,6 +73,8 @@ def build_container(cfg: Config) -> dict:
     metrics_repo = SqliteMetricsRepository(db)
     rule_stats_repo = SqliteRuleStatsRepository(db)
     user_repo = SqliteUserRepository(db)
+    msg_map_repo = SqliteMessageMapRepository(db)
+    queue_repo = SqliteDeliveryQueueRepository(db)
     factory = AIProviderFactory()
 
     sessions = SessionUseCases(session_repo)
@@ -88,10 +94,20 @@ def build_container(cfg: Config) -> dict:
         processed_repo=processed_repo,
     )
     pool = ClientPool(cfg.api_id, cfg.api_hash)
+    sync_engine = SyncEngine(msg_map_repo, rule_repo, pool)
+    queue_manager = DurableQueueManager(
+        queue_repo=queue_repo,
+        message_map_repo=msg_map_repo,
+        client_pool=pool,
+        num_workers=3,
+        metrics_repo=metrics_repo,
+    )
     dispatcher = MessageDispatcher(
         pool, pipeline,
         error_log=error_log_repo, metrics=metrics_repo,
         rule_stats=rule_stats_repo,
+        queue_manager=queue_manager,
+        sync_engine=sync_engine,
     )
     i18n = I18n()
     i18n.set_language(cfg.language)
@@ -107,6 +123,10 @@ def build_container(cfg: Config) -> dict:
         "error_log": error_log_repo,
         "metrics": metrics_repo, "rule_stats": rule_stats_repo,
         "users": user_repo,
+        "msg_map": msg_map_repo,
+        "queue_repo": queue_repo,
+        "queue_manager": queue_manager,
+        "sync_engine": sync_engine,
     }
 
 
@@ -240,7 +260,11 @@ async def main() -> None:
         auth_machine=auth_machine,
     )
     await bot.start()
-    logger.info("Bot started. Core is running. Press Ctrl+C to stop.")
+
+    queue_mgr = container.get("queue_manager")
+    if queue_mgr:
+        await queue_mgr.start()
+    logger.info("Bot started and durable queue workers active. Core is running.")
 
     # Restore saved sessions + bind real-time handlers (the actual forwarder).
     from core.infrastructure.telegram.session_boot import restore_all_sessions  # noqa: E402
@@ -292,6 +316,9 @@ async def main() -> None:
     try:
         await asyncio.Event().wait()
     finally:
+        queue_mgr = container.get("queue_manager")
+        if queue_mgr:
+            await queue_mgr.stop()
         mgr = container.get("boot_manager")
         if mgr:
             await mgr.stop_reconciler()

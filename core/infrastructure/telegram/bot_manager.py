@@ -329,20 +329,27 @@ class BotManager:
     async def _route_text(self, message: Message):
         uid = message.from_user.id if message.from_user else 0
         text = (message.text or "").strip()
+        preview = (text[:30] + "...") if len(text) > 30 else text
+        logger.info("BotManager._route_text: received from uid=%s preview=%r", uid, preview)
 
         # When the button UI owns an active flow for this user, it handles
-        # the reply — BotManager stays silent to avoid double answers.
+        # the reply — delegate via continue_propagation() so pyrogram executes ProBotUI handler.
+        ui_active = False
         if callable(self.ui_step_checker):
             try:
-                if self.ui_step_checker(uid):
-                    return
+                ui_active = bool(self.ui_step_checker(uid))
+            except Exception as exc:
+                logger.debug("ui_step_checker failed: %s", exc)
+
+        if not ui_active and self._ui_owns(uid):
+            ui_active = True
+
+        if ui_active:
+            logger.info("BotManager delegating text from uid=%s to ProBotUI (continue_propagation)", uid)
+            try:
+                message.continue_propagation()
             except Exception:
                 pass
-
-        # Fallback: the dashboard's FSM has a persisted step for this user.
-        # This is the fix for "unknown command" appearing next to the button
-        # UI's own reply — both handlers run in pyrogram group 0.
-        if self._ui_owns(uid):
             return
 
         # Language picker

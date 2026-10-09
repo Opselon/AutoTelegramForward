@@ -273,3 +273,193 @@ async def test_log_client_reports_delivery_failures(monkeypatch):
     record = str(errors[0])
     assert "localhost:1" in record
     assert "RuntimeError" in record
+
+
+# --------------------------------------------------------------------------- #
+# 5. Login code anti-phishing keypad and input sanitization
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_login_code_spaced_and_dashed_cleaning():
+    """Telegram blocks raw consecutive digits shared in bot chats.
+    Users can enter codes with spaces or dashes, and the bot cleans them.
+    """
+    from core.infrastructure.telegram.pro_bot_ui import ProBotUI, UiState
+
+    ui = object.__new__(ProBotUI)
+    ui._login = MagicMock()
+    ui._login.submit_code = AsyncMock(return_value="login_success:sess1")
+    ui._submit_code_flow = ProBotUI._submit_code_flow.__get__(ui, ProBotUI)
+    ui._finish_login = AsyncMock()
+    ui._step_login_code = ProBotUI._step_login_code.__get__(ui, ProBotUI)
+
+    msg = SimpleNamespace(
+        from_user=SimpleNamespace(id=ADMIN),
+        chat=SimpleNamespace(id=ADMIN),
+        reply_text=AsyncMock(),
+    )
+    st = UiState(step="login_code", buffer={})
+
+    # Spaced input: "9 2 2 1 1"
+    await ui._step_login_code(msg, st, "9 2 2 1 1")  # type: ignore[arg-type]
+    ui._login.submit_code.assert_called_with(ADMIN, "92211")
+
+    # Dashed input: "9-2-2-1-1"
+    ui._login.submit_code.reset_mock()
+    await ui._step_login_code(msg, st, "9-2-2-1-1")  # type: ignore[arg-type]
+    ui._login.submit_code.assert_called_with(ADMIN, "92211")
+
+    # Attached mycode prefix: "mycode73737"
+    ui._login.submit_code.reset_mock()
+    await ui._step_login_code(msg, st, "mycode73737")  # type: ignore[arg-type]
+    ui._login.submit_code.assert_called_with(ADMIN, "73737")
+
+    # 6-digit mycode prefix: "mycode737373"
+    ui._login.submit_code.reset_mock()
+    await ui._step_login_code(msg, st, "mycode737373")  # type: ignore[arg-type]
+    ui._login.submit_code.assert_called_with(ADMIN, "737373")
+
+    # Persian digits with mycode prefix: "mycode۷۳۷۳۷"
+    ui._login.submit_code.reset_mock()
+    await ui._step_login_code(msg, st, "mycode۷۳۷۳۷")  # type: ignore[arg-type]
+    ui._login.submit_code.assert_called_with(ADMIN, "73737")
+
+
+@pytest.mark.asyncio
+async def test_login_code_numeric_keypad_submission():
+    """The inline keypad collects 5 digits one by one and submits on the 5th."""
+    from core.infrastructure.telegram.pro_bot_ui import ProBotUI, UiState
+
+    ui = object.__new__(ProBotUI)
+    st = UiState(step="login_code", buffer={})
+    ui._state = MagicMock(return_value=st)
+    ui._persist = AsyncMock()
+    ui._login_code_text = MagicMock(return_value="text")
+    ui._code_keypad = MagicMock(return_value="kbd")
+    ui._submit_code_flow = AsyncMock()
+    ui._cb_keypad = ProBotUI._cb_keypad.__get__(ui, ProBotUI)
+
+    for digit in ["5", "4", "3", "2"]:
+        cq = SimpleNamespace(
+            from_user=SimpleNamespace(id=ADMIN),
+            data=f"k:{digit}",
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+            message=SimpleNamespace(),
+        )
+        await ui._cb_keypad(cq)  # type: ignore[arg-type]
+
+    assert st.buffer["code_digits"] == "5432"
+    assert not ui._submit_code_flow.called
+
+    # 5th digit triggers submission
+    cq5 = SimpleNamespace(
+        from_user=SimpleNamespace(id=ADMIN),
+        data="k:1",
+        answer=AsyncMock(),
+        edit_message_text=AsyncMock(),
+        message=SimpleNamespace(),
+    )
+    await ui._cb_keypad(cq5)  # type: ignore[arg-type]
+    ui._submit_code_flow.assert_called_once_with(cq5.message, st, "54321", uid=ADMIN)
+
+
+@pytest.mark.asyncio
+async def test_render_chat_picker_pagination():
+    """Chat picker properly partitions dialogs into pages with inline buttons."""
+    from core.infrastructure.telegram.pro_bot_ui import ProBotUI, UiState
+
+    ui = object.__new__(ProBotUI)
+    ui._t = lambda key, **kw: key
+    ui._kbd = lambda rows: rows
+
+    st = UiState(
+        step="rule_source",
+        buffer={
+            "chats": [
+                {"id": f"-100{i}", "title": f"Chan {i}", "emoji": "📢", "kind": "channel", "username": f"chan{i}"}
+                for i in range(1, 13)
+            ],
+            "page": 0,
+        },
+    )
+
+    text_p0, kbd_p0 = ui._render_chat_picker(st, role="source", page=0)
+    assert "**1. Chan 1**" in text_p0
+    assert "**5. Chan 5**" in text_p0
+    assert "**6. Chan 6**" not in text_p0
+    # 5 items + 1 nav row + 1 action row = 7 rows
+    assert len(kbd_p0) == 7  # type: ignore[arg-type]
+
+    text_p1, kbd_p1 = ui._render_chat_picker(st, role="source", page=1)
+    assert "**6. Chan 6**" in text_p1
+    assert "**10. Chan 10**" in text_p1
+    assert "**1. Chan 1**" not in text_p1
+
+
+@pytest.mark.asyncio
+async def test_step_rule_source_matched_from_cached_dialogs():
+    """Entering username or ID resolves title from cached dialogs."""
+    from core.infrastructure.telegram.pro_bot_ui import ProBotUI, UiState
+
+    ui = object.__new__(ProBotUI)
+    ui._t = lambda key, **kw: key
+    ui._kbd = lambda rows: rows
+    ui._persist = AsyncMock()
+    ui._pool = MagicMock()
+    ui._sessions = MagicMock()
+
+    st = UiState(
+        step="rule_source",
+        buffer={
+            "chats": [
+                {"id": "-100888", "title": "Forex VIP", "emoji": "📢", "kind": "channel", "username": "forex_vip"},
+            ],
+            "page": 0,
+        },
+    )
+
+    msg = SimpleNamespace(
+        from_user=SimpleNamespace(id=ADMIN),
+        reply_text=AsyncMock(),
+    )
+
+    await ui._step_rule_source(msg, st, "@forex_vip")  # type: ignore[arg-type]
+    assert st.rule_source == "-100888"
+    assert "Forex VIP" in st.buffer["source_name"]
+    assert st.step == "rule_target"
+
+
+@pytest.mark.asyncio
+async def test_finish_rule_creation_flow():
+    """Finishing rule creation persists ForwardRule and clears buffer."""
+    from core.infrastructure.telegram.pro_bot_ui import ProBotUI, UiState
+
+    ui = object.__new__(ProBotUI)
+    ui._t = lambda key, **kw: key
+    ui._kbd = lambda rows: rows
+    ui._persist = AsyncMock()
+    ui._sessions = MagicMock()
+    ui._sessions.list_all = AsyncMock(return_value=[SimpleNamespace(id="sess-active")])
+    ui._rules = MagicMock()
+    ui._rules.create = AsyncMock()
+    ui._log = MagicMock()
+
+    st = UiState(
+        step="rule_target",
+        rule_source="-100111",
+        rule_target="-100222",
+        buffer={"source_name": "📢 Source Chan", "chats": []},
+    )
+
+    cq = SimpleNamespace(
+        from_user=SimpleNamespace(id=ADMIN),
+        edit_message_text=AsyncMock(),
+    )
+
+    await ui._finish_rule_creation(cq, st, "📢 Source Chan", "📢 Target Chan")
+    assert st.step == ""
+    assert len(st.buffer) == 0
+    ui._rules.create.assert_called_once()
+    created = ui._rules.create.call_args[0][0]
+    assert created.source_chat_id == "-100111"
+    assert created.target_chat_id == "-100222"

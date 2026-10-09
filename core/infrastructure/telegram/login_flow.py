@@ -72,6 +72,9 @@ class LoginFlowResult:
     message: str = ""
 
 
+_DIGIT_MAP = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
 class LoginFlowManager:
     """State machine for linking user accounts inside the bot chat."""
 
@@ -179,7 +182,8 @@ class LoginFlowManager:
     @staticmethod
     def normalize_phone(raw: str) -> str:
         """Accept '+98...', '989...', '09...' (IR), spaces/dashes → +E164."""
-        digits = re.sub(r"[^\d+]", "", (raw or "").strip())
+        translated = (raw or "").translate(_DIGIT_MAP)
+        digits = re.sub(r"[^\d+]", "", translated.strip())
         if digits.startswith("00"):
             digits = "+" + digits[2:]
         if digits.startswith("09") and len(digits) >= 10:
@@ -224,20 +228,29 @@ class LoginFlowManager:
             logger.warning("login client flood for %s: wait %ds", phone, wait)
             return f"flood_wait:{wait}"
         except Exception as exc:
-            logger.exception("create login client failed for %s", phone)
-            return f"send_failed:{type(exc).__name__}"
+            logger.exception("create login client failed for %s: %s", phone, exc)
+            return f"send_failed:{type(exc).__name__}: {exc}"
         state.client = client
         try:
+            logger.info("Calling client.send_code for %s ...", phone[:4] + "****")
             sent = await client.send_code(phone)
+            logger.info(
+                "send_code succeeded for %s: type=%s next_type=%s timeout=%s",
+                phone[:4] + "****",
+                getattr(sent, "type", "unknown"),
+                getattr(sent, "next_type", "unknown"),
+                getattr(sent, "timeout", "unknown"),
+            )
         except PhoneNumberInvalid:
+            logger.warning("PhoneNumberInvalid from Telegram for %s", phone)
             return "invalid_phone"
         except FloodWait as exc:
             wait = int(getattr(exc, "value", 60) or 60)
             logger.warning("send_code flood for %s: wait %ds", phone, wait)
             return f"flood_wait:{wait}"
         except Exception as exc:
-            logger.exception("send_code failed for %s", phone)
-            return f"send_failed:{type(exc).__name__}"
+            logger.exception("send_code failed for %s: %s", phone, exc)
+            return f"send_failed:{type(exc).__name__}: {exc}"
         state.phone_code_hash = sent.phone_code_hash
         state.step = "code"
         state.last_code_sent_at = now
@@ -287,7 +300,8 @@ class LoginFlowManager:
         if state.client is None:
             return "no_pending_login"
         state.touch()
-        clean = re.sub(r"\D", "", code or "")
+        translated = (code or "").translate(_DIGIT_MAP)
+        clean = re.sub(r"\D", "", translated)
         if not clean:
             return "invalid_code"
         if state.code_attempts >= MAX_ATTEMPTS:

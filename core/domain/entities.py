@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from .value_objects import (
     AIProviderType,
     ContentMode,
+    DeliveryStatus,
     FilterAction,
     ForwardMode,
     MediaType,
@@ -91,6 +92,8 @@ class ForwardRule:
     proxy: Optional[dict] = None
     # free-form metadata for future flexibility
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # version for optimistic concurrency control (prevents lost updates)
+    version: int = 1
     created_at: int = field(default_factory=_now)
     updated_at: int = field(default_factory=_now)
 
@@ -134,8 +137,140 @@ class ForwardRule:
             return self.target_chat_name or targets[0]
         return f"{len(targets)} targets"
 
+    @property
+    def replacements(self) -> Dict[str, str]:
+        if not isinstance(self.metadata, dict):
+            return {}
+        reps = self.metadata.get("replacements")
+        return reps if isinstance(reps, dict) else {}
+
+    @property
+    def header(self) -> str:
+        return str(self.metadata.get("header") or "") if isinstance(self.metadata, dict) else ""
+
+    @property
+    def footer(self) -> str:
+        return str(self.metadata.get("footer") or "") if isinstance(self.metadata, dict) else ""
+
+    @property
+    def block_voice(self) -> bool:
+        return bool(self.metadata.get("block_voice", False)) if isinstance(self.metadata, dict) else False
+
+    @property
+    def block_stickers(self) -> bool:
+        return bool(self.metadata.get("block_stickers", False)) if isinstance(self.metadata, dict) else False
+
+    @property
+    def remove_emojis(self) -> bool:
+        return bool(self.metadata.get("remove_emojis", False)) if isinstance(self.metadata, dict) else False
+
+    @property
+    def sync_edits(self) -> bool:
+        return bool(self.metadata.get("sync_edits", True)) if isinstance(self.metadata, dict) else True
+
+    @property
+    def sync_deletes(self) -> bool:
+        return bool(self.metadata.get("sync_deletes", False)) if isinstance(self.metadata, dict) else False
+
+    @property
+    def album_mode(self) -> str:
+        return str(self.metadata.get("album_mode") or "album") if isinstance(self.metadata, dict) else "album"
+
+    @property
+    def link_replacement(self) -> str:
+        return str(self.metadata.get("link_replacement") or "") if isinstance(self.metadata, dict) else ""
+
     def matches_source(self, chat_id: str) -> bool:
         return self.is_active and self.source_chat_id == str(chat_id)
+
+    def to_draft(self) -> Dict[str, Any]:
+        """Produce an editable dictionary representation of all rule parameters."""
+        f_mode = getattr(self.forward_mode, "value", str(self.forward_mode))
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "source_chat_id": self.source_chat_id,
+            "source_chat_name": self.source_chat_name,
+            "target_chat_id": self.target_chat_id,
+            "target_chat_name": self.target_chat_name,
+            "forward_mode": f_mode,
+            "is_active": bool(self.is_active),
+            "remove_links": bool(self.remove_links),
+            "block_voice": bool(self.block_voice),
+            "block_stickers": bool(self.block_stickers),
+            "remove_emojis": bool(self.remove_emojis),
+            "ignore_edits": bool(self.ignore_edits),
+            "sync_deletes": bool(self.sync_deletes),
+            "album_mode": str(self.album_mode),
+            "header": str(self.header),
+            "footer": str(self.footer),
+            "replacements": dict(self.replacements),
+            "version": int(getattr(self, "version", 1)),
+        }
+
+    def apply_draft(self, draft: Dict[str, Any]) -> None:
+        """Apply draft modifications into the rule entity with validation."""
+        if not isinstance(draft, dict):
+            return
+
+        if "source_chat_id" in draft and draft["source_chat_id"]:
+            self.source_chat_id = str(draft["source_chat_id"])
+        if "source_name" in draft and draft["source_name"] is not None:
+            self.source_chat_name = str(draft["source_name"])
+        elif "source_chat_name" in draft and draft["source_chat_name"] is not None:
+            self.source_chat_name = str(draft["source_chat_name"])
+
+        if "target_chat_id" in draft and draft["target_chat_id"]:
+            self.target_chat_id = str(draft["target_chat_id"])
+        if "target_name" in draft and draft["target_name"] is not None:
+            self.target_chat_name = str(draft["target_name"])
+        elif "target_chat_name" in draft and draft["target_chat_name"] is not None:
+            self.target_chat_name = str(draft["target_chat_name"])
+
+        if "forward_mode" in draft:
+            try:
+                self.forward_mode = ForwardMode(draft["forward_mode"])
+            except (ValueError, TypeError):
+                pass
+
+        if "is_active" in draft:
+            self.is_active = bool(draft["is_active"])
+
+        if "ignore_edits" in draft:
+            self.ignore_edits = bool(draft["ignore_edits"])
+
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+
+        if "remove_links" in draft:
+            self.remove_links = bool(draft["remove_links"])
+            self.metadata["remove_links"] = self.remove_links
+
+        if "block_voice" in draft:
+            self.metadata["block_voice"] = bool(draft["block_voice"])
+
+        if "block_stickers" in draft:
+            self.metadata["block_stickers"] = bool(draft["block_stickers"])
+
+        if "remove_emojis" in draft:
+            self.metadata["remove_emojis"] = bool(draft["remove_emojis"])
+
+        if "sync_deletes" in draft:
+            self.metadata["sync_deletes"] = bool(draft["sync_deletes"])
+
+        if "album_mode" in draft:
+            self.metadata["album_mode"] = str(draft["album_mode"])
+
+        if "header" in draft:
+            self.metadata["header"] = str(draft["header"] or "")
+
+        if "footer" in draft:
+            self.metadata["footer"] = str(draft["footer"] or "")
+
+        if "replacements" in draft and isinstance(draft["replacements"], dict):
+            self.metadata["replacements"] = dict(draft["replacements"])
+
+        self.mark_updated()
 
 
 @dataclass
@@ -211,3 +346,48 @@ class EvaluationResult:
     reason: str = ""
     rewritten_text: Optional[str] = None
     links_removed: bool = False
+
+
+@dataclass
+class MessageMapping:
+    """Persistent mapping between a source Telegram message and target message.
+
+    Used for sync_edits and sync_deletes propagation.
+    """
+
+    id: str = field(default_factory=_new_id)
+    rule_id: str = ""
+    source_chat_id: str = ""
+    source_message_id: int = 0
+    target_chat_id: str = ""
+    target_message_id: Optional[int] = None
+    media_group_id: Optional[str] = None
+    delivery_status: DeliveryStatus = DeliveryStatus.PENDING
+    created_at: int = field(default_factory=_now)
+    updated_at: int = field(default_factory=_now)
+
+
+@dataclass
+class DeliveryJob:
+    """Durable unit of work for non-blocking asynchronous message delivery.
+
+    Survives restarts, supports atomic lease claiming, per-target rate limiting,
+    and exponential backoff retry.
+    """
+
+    id: str = field(default_factory=_new_id)
+    rule_id: str = ""
+    source_chat_id: str = ""
+    source_message_id: int = 0
+    target_chat_id: str = ""
+    payload_data: Dict[str, Any] = field(default_factory=dict)
+    status: DeliveryStatus = DeliveryStatus.PENDING
+    attempts: int = 0
+    max_attempts: int = 5
+    next_retry_at: float = 0.0
+    lease_until: float = 0.0
+    worker_id: Optional[str] = None
+    error_detail: Optional[str] = None
+    created_at: int = field(default_factory=_now)
+    updated_at: int = field(default_factory=_now)
+

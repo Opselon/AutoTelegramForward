@@ -4,7 +4,20 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional
 
-from ..domain.entities import AIConfig, FilterRule, ForwardRule, TelegramSession
+from ..domain.entities import (
+    AIConfig,
+    DeliveryJob,
+    DeliveryStatus,
+    FilterRule,
+    ForwardRule,
+    MessageMapping,
+    TelegramSession,
+)
+
+
+class ConcurrencyError(Exception):
+    """Raised when an update fails due to a version conflict (optimistic lock)."""
+    pass
 
 
 @dataclass
@@ -69,7 +82,7 @@ class IForwardRuleRepository(ABC):
         ...
 
     @abstractmethod
-    async def update(self, rule: ForwardRule) -> ForwardRule:
+    async def update(self, rule: ForwardRule, expected_version: Optional[int] = None) -> ForwardRule:
         ...
 
     @abstractmethod
@@ -320,3 +333,84 @@ class IUserRepository(ABC):
     @abstractmethod
     async def bump_quota(self, user_id: int, by: int = 1) -> None:
         ...
+
+
+class IMessageMapRepository(ABC):
+    """Stores source -> target message mappings for edit/delete synchronization."""
+
+    @abstractmethod
+    async def add_or_update(self, mapping: MessageMapping) -> MessageMapping:
+        ...
+
+    @abstractmethod
+    async def get_by_source(self, source_chat_id: str, source_message_id: int) -> List[MessageMapping]:
+        ...
+
+    @abstractmethod
+    async def get_by_target(self, target_chat_id: str, target_message_id: int) -> Optional[MessageMapping]:
+        ...
+
+    @abstractmethod
+    async def get_by_rule_and_source(
+        self, rule_id: str, source_chat_id: str, source_message_id: int
+    ) -> List[MessageMapping]:
+        ...
+
+    @abstractmethod
+    async def update_delivery(
+        self,
+        rule_id: str,
+        source_chat_id: str,
+        source_message_id: int,
+        target_chat_id: str,
+        target_message_id: Optional[int],
+        status: DeliveryStatus,
+    ) -> bool:
+        ...
+
+    @abstractmethod
+    async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 30) -> int:
+        ...
+
+
+class IDeliveryQueueRepository(ABC):
+    """Durable queue for asynchronous, restart-safe, non-blocking delivery workers."""
+
+    @abstractmethod
+    async def enqueue(self, job: DeliveryJob) -> bool:
+        ...
+
+    @abstractmethod
+    async def claim_batch(
+        self, worker_id: str, batch_size: int = 5, lease_duration: float = 30.0
+    ) -> List[DeliveryJob]:
+        ...
+
+    @abstractmethod
+    async def mark_sent(self, job_id: str, target_message_id: Optional[int] = None) -> bool:
+        ...
+
+    @abstractmethod
+    async def mark_retry(self, job_id: str, error: str, backoff_seconds: float) -> bool:
+        ...
+
+    @abstractmethod
+    async def mark_failed(self, job_id: str, error: str) -> bool:
+        ...
+
+    @abstractmethod
+    async def mark_unknown(self, job_id: str, error: str) -> bool:
+        ...
+
+    @abstractmethod
+    async def get_pending_count(self) -> int:
+        ...
+
+    @abstractmethod
+    async def get_stats(self) -> dict:
+        ...
+
+    @abstractmethod
+    async def recover_expired_leases(self) -> int:
+        ...
+
