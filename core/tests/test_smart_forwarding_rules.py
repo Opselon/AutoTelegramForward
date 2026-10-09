@@ -253,16 +253,16 @@ def test_smart_bot_ui_menu_rendering():
 
     assert "مسیریابی هوشمند و VIP" in text
     assert "VIP Intermediate" in text or "-1002222222222" in text
-    assert "فقط پیام‌های VIP" in text
-    assert "CUSTOM_HEADER_COPY" in text or "کپی با هدر اختصاصی" in text
+    assert "مسیر ۲" in text
     assert "💎 VIP SIGNAL" in text
 
     # Verify buttons present
-    button_callbacks = [b.callback_data for row in kbd.inline_keyboard for b in row]
-    assert any("rsmc:rule_test_12345678" in cb for cb in button_callbacks)
-    assert any("rsmt:rule_test_12345678" in cb for cb in button_callbacks)
+    button_callbacks = [str(b.callback_data or "") for row in kbd.inline_keyboard for b in row]
+    assert any("rsmpth:rule_test_12345678" in cb for cb in button_callbacks)
+    assert any("rsmmod:rule_test_12345678" in cb for cb in button_callbacks)
     assert any("rsmw:rule_test_12345678" in cb for cb in button_callbacks)
-    assert any("rsmm:rule_test_12345678" in cb for cb in button_callbacks)
+    assert any("rsmtx:rule_test_12345678" in cb for cb in button_callbacks)
+    assert any("rsmrx:rule_test_12345678" in cb for cb in button_callbacks)
     assert any("rsmh:rule_test_12345678" in cb for cb in button_callbacks)
     assert any("rsmtst:rule_test_12345678" in cb for cb in button_callbacks)
     assert any("rd:rule_test_12345678" in cb for cb in button_callbacks)

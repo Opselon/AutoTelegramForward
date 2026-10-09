@@ -38,7 +38,7 @@ from ...application.use_cases import (
     SessionUseCases,
 )
 from ...domain.entities import AIConfig, FilterRule, ForwardRule
-from ...domain.value_objects import AIProviderType, ForwardMode, RoutingType
+from ...domain.value_objects import AIProviderType, ForwardMode, RoutingType, RoutingDecision
 from .client_pool import ClientPool
 from .errors import SEV_ERROR, SEV_FATAL, tg_detail, tg_error
 from .i18n import I18n
@@ -644,62 +644,66 @@ class ProBotUI:
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
 
-        cat = getattr(rule, "message_category", "ALL")
-        cat_map = {
-            "ALL": ("🌟 همه پیام‌ها", "ارسال تمام پیام‌های عادی و VIP"),
-            "VIP_ONLY": ("💎 فقط پیام‌های VIP", "تفکیک هوشمند فقط پیام‌های دارای متادیتای معتبر VIP"),
-            "NORMAL_ONLY": ("👤 فقط پیام‌های عادی", "انتقال پیام‌های عمومی کاربران بدون برچسب VIP"),
-        }
-        cat_title, cat_desc = cat_map.get(cat, (cat, "حالت سفارشی"))
-
         use_mid = bool(getattr(rule, "use_intermediate", False))
         mid_id = getattr(rule, "intermediate_channel_id", "") or ""
         mid_name = getattr(rule, "intermediate_channel_name", "") or ""
         mid_display = f"`{mid_name or mid_id}`" if mid_id else "❌ تنظیم نشده"
-        mid_status = "🟢 فعال" if (use_mid and mid_id) else ("⚠️ غیرفعال (کانال خالی)" if use_mid else "🔴 غیرفعال")
+
+        cat = getattr(rule, "message_category", "ALL")
+        crit = getattr(rule, "detection_criteria", {}) or {}
+        match_mode = (crit.get("match_mode") or "ANY").upper()
+        keywords = crit.get("text_contains") or crit.get("keywords") or []
+        kw_display = ", ".join(f"`{k}`" for k in keywords) if keywords else "❌ تعیین نشده"
+        regex_p = crit.get("regex_pattern") or crit.get("text_regex") or ""
+        regex_display = f"`{regex_p}`" if regex_p else "❌ تعیین نشده"
 
         f_mode = getattr(rule, "forward_mode", ForwardMode.COPY_MESSAGE)
         mode_val = getattr(f_mode, "value", str(f_mode))
-        mode_map = {
-            "COPY_MESSAGE": "📋 کپی بدون تگ (Clean Copy)",
-            "DIRECT_FORWARD": "↗️ فوروارد با تگ تلگرام (Native Forward)",
-            "CUSTOM_HEADER_COPY": "🏷 کپی با هدر اختصاصی (Custom Header Copy)",
-            "REWRITE_AI": "🤖 بازنویسی با هوش مصنوعی",
-        }
-        mode_label = mode_map.get(mode_val, mode_val)
+
+        # Determine active routing path
+        if use_mid and mid_id and cat in ("VIP", "VIP_ONLY"):
+            path_desc = "💎 **مسیر ۲: برندینگ واسط (A ➔ C ➔ B)**\n*(فقط پیام‌های منتخب VIP ابتدا در C ایجاد و با هدر C به B فوروارد می‌شوند)*"
+            path_tag = "مسیر ۲ (A ➔ C ➔ B)"
+        elif mode_val == "DIRECT_FORWARD":
+            path_desc = "↗️ **مسیر ۳: فوروارد رسمی مستقیم (A ➔ B)**\n*(پیام‌ها با تگ فوروارد کانال مبدأ A به B ارسال می‌شوند)*"
+            path_tag = "مسیر ۳ (Native A ➔ B)"
+        else:
+            path_desc = "📋 **مسیر ۱: مستقیم و تمیز (A ➔ B)**\n*(پیام‌های عادی، نظرات و چت بدون دخالت C مستقیم به B کپی می‌شوند)*"
+            path_tag = "مسیر ۱ (مستقیم A ➔ B)"
 
         chdr = getattr(rule, "custom_header", "") or ""
-        hdr_display = f"`{chdr[:20]}…`" if len(chdr) > 20 else (f"`{chdr}`" if chdr else "❌ تنظیم نشده")
-
+        hdr_display = f"`{chdr[:25]}…`" if len(chdr) > 25 else (f"`{chdr}`" if chdr else "❌ تنظیم نشده")
         prio = int(getattr(rule, "priority", 10) or 10)
 
         lines = [
-            "💎 **تنظیمات پیشرفته مسیریابی هوشمند و VIP (Smart Rules)**\n",
+            "💎 **کنترل پنل مسیریابی هوشمند و VIP (Smart Routing Engine)**\n",
             f"قانون: **{src_label} ➔ {dst_label}**\n",
             "────────────────────",
-            f"🔀 **دسته پیام:** {cat_title}",
-            f"ℹ️ *{cat_desc}*\n",
-            f"🔄 **مسیر کانال واسط VIP:** {mid_status}",
-            f"📡 **کانال واسط:** {mid_display}",
-            f"⚡ **حالت ارسال:** {mode_label}",
+            f"🛣 **مسیر فعال جریان پیام:**\n{path_desc}\n",
+            f"📡 **کانال واسط C:** {mid_display}",
+            f"🧩 **منطق ترکیب شروط VIP:** `{match_mode}` ({'الزام همزمان همه شروط' if match_mode == 'ALL' else 'تحقق حداقل یک شرط'})",
+            f"🔎 **کلیدواژه‌های متنی:** {kw_display}",
+            f"🔣 **الگوی Regex:** {regex_display}",
             f"🏷 **هدر اختصاصی کپی:** {hdr_display}",
-            f"🎯 **اولویت بررسی قانون:** `{prio}` (قوانین با اولویت بالاتر زودتر اجرا می‌شوند)",
-            "🛡 **سیاست Fallback:** تنزل خودکار به Copy Message در صورت محدودیت کپی‌رایت/فوروارد تلگرام",
-            "🔒 **ضد لوپ و دابل‌سند:** فعال با بررسی متادیتای chat_id, message_id و forward_origin\n",
+            f"🎯 **اولویت اجرای قانون:** `{prio}` (قوانین با اولویت بالاتر اول اجرا می‌شوند)",
+            "🛡 **سیاست محتوای قفل/حفاظت‌شده:** فعال (Clean Copy & Re-upload در صورت محدودیت تلگرام)",
+            "🔒 **ضد لوپ و ضد دابل‌سند:** فعال با بررسی Idempotency Key و منشأ پیام\n",
             "👇 جهت تغییر تنظیمات، گزینه‌های زیر را لمس کنید:"
         ]
 
-        # Compact toggle buttons (keeping callbacks <= 64 bytes)
-        twi_icon = "🟢 واسط فعال" if use_mid else "🔴 واسط خاموش"
+        # Buttons
         rows: List[List[Tuple[str, str]]] = [
-            [("🔀 تغییر دسته: " + cat_title[:14], f"rsmc:{rule.id}")],
+            [("🛣 تغییر مسیر: " + path_tag[:20], f"rsmpth:{rule.id}")],
             [
-                (twi_icon, f"rsmt:{rule.id}"),
-                ("📡 تنظیم کانال واسط", f"rsmw:{rule.id}"),
+                ("🧩 منطق: " + match_mode, f"rsmmod:{rule.id}"),
+                ("📡 کانال واسط C", f"rsmw:{rule.id}"),
             ],
-            [("⚡ حالت: " + mode_val[:14], f"rsmm:{rule.id}")],
             [
-                ("📝 تنظیم هدر اختصاصی", f"rsmh:{rule.id}"),
+                ("🔎 تنظیم کلیدواژه", f"rsmtx:{rule.id}"),
+                ("🔣 تنظیم Regex", f"rsmrx:{rule.id}"),
+            ],
+            [
+                ("🏷 هدر اختصاصی", f"rsmh:{rule.id}"),
                 ("🗑 حذف هدر", f"rsmhd:{rule.id}"),
             ],
             [
@@ -2561,6 +2565,114 @@ class ProBotUI:
             await cq.edit_message_text(text, reply_markup=kbd)
             await cq.answer()
 
+        @b.on_callback_query(filters.regex(r"^rsmpth:(.+)$"))
+        async def _cb_smart_toggle_route_path(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+
+            use_mid = bool(getattr(rule, "use_intermediate", False))
+            cat = getattr(rule, "message_category", "ALL")
+            f_mode = getattr(rule.forward_mode, "value", str(rule.forward_mode))
+
+            if not use_mid and f_mode != "DIRECT_FORWARD":
+                # Currently Route 1 -> Switch to Route 2 (VIP Hop A -> C -> B)
+                rule.use_intermediate = True
+                rule.message_category = "VIP_ONLY"
+                rule.forward_mode = ForwardMode.CUSTOM_HEADER_COPY
+                ans = "💎 تغییر به مسیر ۲ (A ➔ C ➔ B)"
+            elif use_mid:
+                # Currently Route 2 -> Switch to Route 3 (Native A -> B)
+                rule.use_intermediate = False
+                rule.message_category = "ALL"
+                rule.forward_mode = ForwardMode.DIRECT_FORWARD
+                ans = "↗️ تغییر به مسیر ۳ (Native Forward A ➔ B)"
+            else:
+                # Currently Route 3 -> Switch to Route 1 (Direct Copy A -> B)
+                rule.use_intermediate = False
+                rule.message_category = "ALL"
+                rule.forward_mode = ForwardMode.COPY_MESSAGE
+                ans = "📋 تغییر به مسیر ۱ (Direct Copy A ➔ B)"
+
+            if not isinstance(rule.metadata, dict):
+                rule.metadata = {}
+            rule.metadata["use_intermediate"] = rule.use_intermediate
+            rule.metadata["message_category"] = rule.message_category
+            await self._rules.update(rule)
+            await cq.answer(ans)
+            text, kbd = self._render_smart_menu(rule)
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmmod:(.+)$"))
+        async def _cb_smart_toggle_match_mode(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+
+            if not isinstance(rule.detection_criteria, dict):
+                rule.detection_criteria = {}
+            cur = (rule.detection_criteria.get("match_mode") or "ANY").upper()
+            nxt = "ALL" if cur == "ANY" else "ANY"
+            rule.detection_criteria["match_mode"] = nxt
+            if not isinstance(rule.metadata, dict):
+                rule.metadata = {}
+            rule.metadata["detection_criteria"] = rule.detection_criteria
+            await self._rules.update(rule)
+            await cq.answer(f"منطق شروط: {nxt} ({'همه شروط' if nxt == 'ALL' else 'حداقل یکی'})")
+            text, kbd = self._render_smart_menu(rule)
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmtx:(.+)$"))
+        async def _cb_smart_set_text_prompt(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            st = self._state(cq.from_user.id)
+            st.step = "smart_set_keywords"
+            st.buffer = {"rule_id": rule_id}
+            await self._persist(cq.from_user.id, st)
+            prompt = (
+                "🔎 **تنظیم کلیدواژه‌های متنی (VIP Text Keywords):**\n\n"
+                "کلمات یا عبارات مورد نظر را با کاما (virgool) جدا کرده و ارسال کنید.\n"
+                "نمونه:\n"
+                "`VIP, SIGNAL, GOLD, تحلیل اختصاصی`\n\n"
+                "برای حذف تمام کلیدواژه‌ها عبارت `حذف` را ارسال کنید.\n"
+                "برای انصراف دکمه زیر را لمس نمایید:"
+            )
+            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rsmrx:(.+)$"))
+        async def _cb_smart_set_regex_prompt(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            st = self._state(cq.from_user.id)
+            st.step = "smart_set_regex"
+            st.buffer = {"rule_id": rule_id}
+            await self._persist(cq.from_user.id, st)
+            prompt = (
+                "🔣 **تنظیم الگوی رجکس (Regex Pattern):**\n\n"
+                "الگوی Regex مورد نظر برای تطبیق متن پیام‌های VIP را ارسال کنید.\n"
+                "نمونه‌ها:\n"
+                "• `(?i)TP\\d+\\s+HIT`\n"
+                "• `(?i)(gold|xauusd)\\s+(buy|sell)`\n\n"
+                "برای حذف Regex عبارت `حذف` را ارسال کنید.\n"
+                "برای انصراف دکمه زیر را لمس نمایید:"
+            )
+            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
+            await cq.answer()
+
         @b.on_callback_query(filters.regex(r"^rsmc:(.+)$"))
         async def _cb_smart_toggle_category(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
@@ -4231,6 +4343,101 @@ class ProBotUI:
         m_text, m_kbd = self._render_smart_menu(rule)
         await message.reply_text(m_text, reply_markup=m_kbd)
 
+    async def _step_smart_set_keywords(self, message: Message, st: UiState, text: str) -> None:
+        rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
+        rule = await self._rules.get(rule_id) if rule_id else None
+        if not rule:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            return
+
+        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            m_text, m_kbd = self._render_smart_menu(rule)
+            await message.reply_text("❌ تنظیم کلیدواژه‌ها لغو شد.", reply_markup=m_kbd)
+            return
+
+        raw = text.strip()
+        if not isinstance(rule.detection_criteria, dict):
+            rule.detection_criteria = {}
+
+        if raw in ("حذف", "پاک", "none", "clear", "حذف همه"):
+            rule.detection_criteria.pop("text_contains", None)
+            rule.detection_criteria.pop("keywords", None)
+            ans = "🗑 کلیدواژه‌های متنی حذف شدند."
+        else:
+            kws = [k.strip() for k in raw.replace("،", ",").split(",") if k.strip()]
+            rule.detection_criteria["text_contains"] = kws
+            rule.detection_criteria["keywords"] = kws
+            ans = f"✅ {len(kws)} کلیدواژه ذخیره شد: " + ", ".join(f"`{k}`" for k in kws)
+
+        if not isinstance(rule.metadata, dict):
+            rule.metadata = {}
+        rule.metadata["detection_criteria"] = rule.detection_criteria
+        await self._rules.update(rule)
+
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+
+        await message.reply_text(ans)
+        m_text, m_kbd = self._render_smart_menu(rule)
+        await message.reply_text(m_text, reply_markup=m_kbd)
+
+    async def _step_smart_set_regex(self, message: Message, st: UiState, text: str) -> None:
+        rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
+        rule = await self._rules.get(rule_id) if rule_id else None
+        if not rule:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            return
+
+        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            m_text, m_kbd = self._render_smart_menu(rule)
+            await message.reply_text("❌ تنظیم Regex لغو شد.", reply_markup=m_kbd)
+            return
+
+        raw = text.strip()
+        if not isinstance(rule.detection_criteria, dict):
+            rule.detection_criteria = {}
+
+        if raw in ("حذف", "پاک", "none", "clear"):
+            rule.detection_criteria.pop("regex_pattern", None)
+            rule.detection_criteria.pop("text_regex", None)
+            ans = "🗑 الگوی Regex حذف شد."
+        else:
+            import re
+            try:
+                re.compile(raw)
+            except re.error as exc:
+                await message.reply_text(f"❌ الگوی Regex نامعتبر است:\n`{exc}`\n\nلطفاً یک الگوی معتبر بفرستید یا /cancel را ارسال کنید.")
+                return
+            rule.detection_criteria["regex_pattern"] = raw
+            rule.detection_criteria["text_regex"] = raw
+            ans = f"✅ الگوی Regex با موفقیت ذخیره شد:\n`{raw}`"
+
+        if not isinstance(rule.metadata, dict):
+            rule.metadata = {}
+        rule.metadata["detection_criteria"] = rule.detection_criteria
+        await self._rules.update(rule)
+
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+
+        await message.reply_text(ans)
+        m_text, m_kbd = self._render_smart_menu(rule)
+        await message.reply_text(m_text, reply_markup=m_kbd)
+
     async def _step_smart_test_rule(self, message: Message, st: UiState, text: str) -> None:
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
         rule = await self._rules.get(rule_id) if rule_id else None
@@ -4283,32 +4490,53 @@ class ProBotUI:
             }
 
         engine = SmartRoutingEngine()
+        decision, route_reason = engine.decide_route(payload, rule)
         matched, reason = engine.evaluate_rule(payload, rule)
         is_vip, vip_reason = engine.is_vip_origin(payload, rule)
-        detected_cat = "VIP" if is_vip else "NORMAL"
-        cat_labels = {"ALL": "🌟 عمومی", "VIP": "💎 VIP", "NORMAL": "👤 عادی"}
+        detected_cat = "VIP" if is_vip else ("NORMAL" if not payload.forward_origin else "UNKNOWN_ORIGIN")
+        cat_labels = {"ALL": "🌟 عمومی", "VIP": "💎 VIP", "NORMAL": "👤 عادی (بدون فوروارد)", "UNKNOWN_ORIGIN": "❓ منشأ ناشناخته"}
+
+        crit = getattr(rule, "detection_criteria", {}) or {}
+        m_mode = (crit.get("match_mode") or "ANY").upper()
+        kws = crit.get("text_contains") or crit.get("keywords") or []
+        rx = crit.get("regex_pattern") or crit.get("text_regex") or ""
+
+        route_label = {
+            RoutingDecision.BRANDING_VIA_C: "💎 مسیر ۲: برندینگ واسط (A ➔ C ➔ B)",
+            RoutingDecision.DIRECT_COPY: "📋 مسیر ۱: ارسال مستقیم و تمیز (A ➔ B)",
+            RoutingDecision.DIRECT_FORWARD: "↗️ مسیر ۳: فوروارد رسمی مستقیم (A ➔ B)",
+            RoutingDecision.CUSTOM_HEADER_COPY: "🏷 کپی با هدر اختصاصی (A ➔ B)",
+            RoutingDecision.DROP: "⛔ عدم ارسال (عدم تطبیق با قانون)",
+        }.get(decision, str(decision))
 
         action_lines = []
-        if matched:
-            if rule.use_intermediate and rule.intermediate_channel_id:
-                action_lines.append(f"1️⃣ هوپ واسط VIP ➔ `{rule.intermediate_channel_name or rule.intermediate_channel_id}`")
-                action_lines.append(f"2️⃣ تحویل نهایی ➔ `{rule.target_chat_name or rule.target_chat_id}` با حالت `{rule.forward_mode.value}`")
+        if matched and decision != RoutingDecision.DROP:
+            if decision == RoutingDecision.BRANDING_VIA_C:
+                action_lines.append(f"1️⃣ کپی بدون تگ یا Re-upload به C ➔ `{rule.intermediate_channel_name or rule.intermediate_channel_id}`")
+                action_lines.append(f"2️⃣ فوروارد نیتیو اختصاصی از C به B ➔ `{rule.target_chat_name or rule.target_chat_id}`")
+            elif decision == RoutingDecision.DIRECT_FORWARD:
+                action_lines.append(f"• فوروارد مستقیم از A به B ➔ `{rule.target_chat_name or rule.target_chat_id}`")
             else:
-                action_lines.append(f"• ارسال مستقیم ➔ `{rule.target_chat_name or rule.target_chat_id}` با حالت `{rule.forward_mode.value}`")
+                action_lines.append(f"• کپی مستقیم از A به B ➔ `{rule.target_chat_name or rule.target_chat_id}`")
         else:
-            action_lines.append("• هیچ ارسالی انجام نخواهد شد (عدم تطبیق با قانون یا فیلتر رده).")
+            action_lines.append("• هیچ پیامی ارسال نخواهد شد (عدم تطبیق با شروط).")
 
         result_text = (
-            "🧪 **نتیجه شبیه‌سازی و تست هوشمند قانون:**\n"
+            "🧪 **نتیجه شبیه‌سازی و تست زنده روتینگ هوشمند (Dry Run):**\n"
             "────────────────────\n"
-            f"📋 **قانون:** `{rule.id[:8]}` ({rule.source_chat_name or rule.source_chat_id} ➔ {rule.target_chat_name or rule.target_chat_id})\n"
-            f"🎯 **وضعیت تطبیق:** {'✅ تطبیق دارد' if matched else '❌ تطبیق ندارد'}\n"
-            f"🏷 **رده پیام تشخیص‌داده‌شده:** {cat_labels.get(detected_cat, detected_cat)}\n"
-            f"🔍 **دلیل تصمیم موتور:** `{reason}`\n\n"
-            "🚀 **عملیات مسیریابی محاسبه‌شده:**\n" +
+            f"📋 **قانون مورد تست:** `{rule.id[:8]}` ({rule.source_chat_name or rule.source_chat_id} ➔ {rule.target_chat_name or rule.target_chat_id})\n"
+            f"🎯 **وضعیت تطبیق کلی:** {'✅ تطبیق موفق' if matched else '❌ عدم تطبیق'}\n"
+            f"🏷 **رده پیام ورودی:** {cat_labels.get(detected_cat, detected_cat)}\n"
+            f"🛣 **مسیر انتخابی روتینگ:**\n**{route_label}**\n\n"
+            f"🔍 **تحلیل شروط موتور:**\n"
+            f"• منطق ترکیب شروط: `{m_mode}`\n"
+            f"• فیلتر کلیدواژه‌ها: `{', '.join(kws) if kws else 'تعیین نشده'}`\n"
+            f"• فیلتر Regex: `{rx if rx else 'تعیین نشده'}`\n"
+            f"• دلیل تصمیم: `{route_reason or reason}`\n\n"
+            "🚀 **مراحل عملیات اجرایی:**\n" +
             "\n".join(action_lines) + "\n\n"
-            "🛡 **بررسی ضد لوپ:** ایمن (بدون تکرار یا حلقه)\n"
-            "🔒 **وضعیت Fallback:** در صورت محدودیت تلگرام به Copy تنزل می‌یابد."
+            "🛡 **سیاست محتوای قفل:** در صورت Restricted بودن فوروارد، دانلود و Clean Copy خودکار انجام می‌شود.\n"
+            "🔒 **کنترل ضد لوپ:** پیام ارسالی به عنوان پیام ورودی جدید پردازش نخواهد شد."
         )
         await message.reply_text(result_text)
         m_text, m_kbd = self._render_smart_menu(rule)
