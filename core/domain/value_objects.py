@@ -69,3 +69,17 @@ class DeliveryStatus(str, Enum):
     RETRY_WAIT = "RETRY_WAIT"
     FAILED = "FAILED"
     UNKNOWN = "UNKNOWN"
+
+
+class AIFallbackPolicy(str, Enum):
+    SEND_ORIGINAL = "SEND_ORIGINAL"
+    DROP = "DROP"
+    RETRY = "RETRY"
+    QUARANTINE = "QUARANTINE"
+
+
+class CircuitState(str, Enum):
+    CLOSED = "CLOSED"
+    OPEN = "OPEN"
+    HALF_OPEN = "HALF_OPEN"
+

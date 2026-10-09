@@ -35,11 +35,16 @@ from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
     SqliteMessageMapRepository,
     SqliteMetricsRepository,
     SqliteProcessedMessageRepository,
+    SqlitePromptRepository,
     SqliteRuleStatsRepository,
     SqliteSessionRepository,
     SqliteUiStateRepository,
     SqliteUserRepository,
 )
+from core.application.prompt_service import PromptService  # noqa: E402
+from core.infrastructure.ai.circuit_breaker import CircuitBreakerRegistry  # noqa: E402
+from core.infrastructure.ai.transformer import AITransformer  # noqa: E402
+from core.infrastructure.ai.validator import AIOutputValidator  # noqa: E402
 from core.infrastructure.security.crypto import CryptoService  # noqa: E402
 from core.infrastructure.telegram.bot_manager import BotManager  # noqa: E402
 from core.infrastructure.telegram.login_flow import LOGIN_TTL  # noqa: E402
@@ -75,7 +80,18 @@ def build_container(cfg: Config) -> dict:
     user_repo = SqliteUserRepository(db)
     msg_map_repo = SqliteMessageMapRepository(db)
     queue_repo = SqliteDeliveryQueueRepository(db)
+    prompt_repo = SqlitePromptRepository(db)
     factory = AIProviderFactory()
+
+    prompt_service = PromptService(prompt_repo)
+    ai_circuit_registry = CircuitBreakerRegistry()
+    ai_validator = AIOutputValidator()
+    ai_transformer = AITransformer(
+        ai_config_repo=ai_repo,
+        circuit_registry=ai_circuit_registry,
+        validator=ai_validator,
+        provider_factory=factory,
+    )
 
     sessions = SessionUseCases(session_repo)
     rules = ForwardRuleUseCases(rule_repo)
@@ -111,6 +127,8 @@ def build_container(cfg: Config) -> dict:
         processed_repo=processed_repo,
         ai_factory=factory,
         ai_repo=ai_repo,
+        ai_transformer=ai_transformer,
+        prompt_service=prompt_service,
     )
     dispatcher = MessageDispatcher(
         pool, pipeline,
@@ -139,6 +157,10 @@ def build_container(cfg: Config) -> dict:
         "queue_manager": queue_manager,
         "sync_engine": sync_engine,
         "durable_pipeline": durable_pipeline,
+        "prompt_repo": prompt_repo,
+        "prompt_service": prompt_service,
+        "ai_transformer": ai_transformer,
+        "ai_circuit_registry": ai_circuit_registry,
     }
 
 
@@ -240,6 +262,7 @@ async def main() -> None:
     grpc_server = await serve_grpc(container, cfg)
     await seed_default_credential(container, cfg)
     await sync_pool_credentials(container)
+    await container["prompt_service"].init_defaults()
 
     # Non-blocking debug-log feed to the Logger microservice.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

@@ -777,9 +777,9 @@ async def test_migration_v5_to_v6_and_restart(tmp_path):
     conn.commit()
     conn.close()
 
-    # 2. Boot SqliteDatabase, which triggers migrations to v6
+    # 2. Boot SqliteDatabase, which triggers migrations
     db = SqliteDatabase(db_path)
-    assert db.get_schema_version() == 6
+    assert db.get_schema_version() >= 6
 
     # Verify existing rule is preserved with correct OCC version!
     rule_repo = SqliteForwardRuleRepository(db)
@@ -807,7 +807,7 @@ async def test_migration_v5_to_v6_and_restart(tmp_path):
     # 3. Simulate process restart: close and reopen database
     db.close()
     restarted_db = SqliteDatabase(db_path)
-    assert restarted_db.get_schema_version() == 6
+    assert restarted_db.get_schema_version() >= 6
 
     restarted_rule_repo = SqliteForwardRuleRepository(restarted_db)
     restarted_rule = await restarted_rule_repo.get_by_id("legacy-rule-1")

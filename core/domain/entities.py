@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from .value_objects import (
+    AIFallbackPolicy,
     AIProviderType,
     ContentMode,
     DeliveryStatus,
@@ -90,6 +91,11 @@ class ForwardRule:
     content_mode: Any = None  # resolved to ContentMode.AUTO in __post_init__
     # optional per-rule proxy override (same shape as session proxy)
     proxy: Optional[dict] = None
+    # AI Transformation configuration (P2)
+    ai_fallback_policy: Any = AIFallbackPolicy.DROP  # resolved in __post_init__
+    ai_prompt_version: int = 0  # 0 = latest active version
+    ai_timeout_seconds: float = 15.0
+    ai_secondary_config_id: Optional[str] = None
     # free-form metadata for future flexibility
     metadata: Dict[str, Any] = field(default_factory=dict)
     # version for optimistic concurrency control (prevents lost updates)
@@ -106,6 +112,14 @@ class ForwardRule:
                 self.content_mode = ContentMode(self.content_mode)
             except ValueError:
                 self.content_mode = ContentMode.AUTO
+        # Normalize ai_fallback_policy: accept AIFallbackPolicy | str | None.
+        if self.ai_fallback_policy is None:
+            self.ai_fallback_policy = AIFallbackPolicy.DROP
+        elif isinstance(self.ai_fallback_policy, str):
+            try:
+                self.ai_fallback_policy = AIFallbackPolicy(self.ai_fallback_policy)
+            except ValueError:
+                self.ai_fallback_policy = AIFallbackPolicy.DROP
         # Normalize trigger_events: accept List[str] | str | None.
         if self.trigger_events is None:
             self.trigger_events = [TriggerEvent.NEW_MESSAGE.value]
@@ -307,6 +321,37 @@ class AIConfig:
     temperature: float = 0.7
     is_enabled: bool = True
     target_language: str = "en"
+
+
+@dataclass
+class PromptTemplate:
+    """Aggregate root for reusable system & user prompt templates."""
+
+    id: str = field(default_factory=_new_id)
+    name: str = ""
+    description: str = ""
+    system_prompt: str = ""
+    user_prompt_template: str = "{text}"
+    target_language: str = "en"
+    current_version: int = 1
+    is_system: bool = False
+    created_at: int = field(default_factory=_now)
+    updated_at: int = field(default_factory=_now)
+
+
+@dataclass
+class PromptVersion:
+    """Immutable historic snapshot of a prompt template for auditing and rollback."""
+
+    id: str = field(default_factory=_new_id)
+    prompt_id: str = ""
+    version: int = 1
+    system_prompt: str = ""
+    user_prompt_template: str = "{text}"
+    change_summary: str = ""
+    is_active: bool = True
+    created_at: int = field(default_factory=_now)
+
 
 
 @dataclass

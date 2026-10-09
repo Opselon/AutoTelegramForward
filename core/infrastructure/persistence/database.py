@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 MIGRATIONS = {
     1: """
@@ -275,6 +275,41 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_poll ON delivery_jobs(status, next_retry_at, lease_until);
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_rule ON delivery_jobs(rule_id);
     """,
+    7: """
+    -- v7: Production-Grade AI Message Transformation Engine (P2)
+    CREATE TABLE IF NOT EXISTS prompt_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        system_prompt TEXT NOT NULL,
+        user_prompt_template TEXT NOT NULL DEFAULT '{text}',
+        target_language TEXT NOT NULL DEFAULT 'en',
+        current_version INTEGER NOT NULL DEFAULT 1,
+        is_system INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_prompt_name ON prompt_templates(name);
+
+    CREATE TABLE IF NOT EXISTS prompt_versions (
+        id TEXT PRIMARY KEY,
+        prompt_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        system_prompt TEXT NOT NULL,
+        user_prompt_template TEXT NOT NULL,
+        change_summary TEXT NOT NULL DEFAULT '',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        UNIQUE(prompt_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS idx_prompt_ver ON prompt_versions(prompt_id, version);
+    CREATE INDEX IF NOT EXISTS idx_prompt_active ON prompt_versions(prompt_id, is_active);
+
+    ALTER TABLE forward_rules ADD COLUMN ai_fallback_policy TEXT NOT NULL DEFAULT 'DROP';
+    ALTER TABLE forward_rules ADD COLUMN ai_prompt_version INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN ai_timeout_seconds REAL NOT NULL DEFAULT 15.0;
+    ALTER TABLE forward_rules ADD COLUMN ai_secondary_config_id TEXT;
+    """,
 }
 
 
@@ -294,7 +329,28 @@ class SqliteDatabase:
         )
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
+        self._apply_pragmas()
         self._migrate()
+
+    def _apply_pragmas(self) -> None:
+        """Apply high-performance, low-resource pragmas optimal for low-spec servers."""
+        with self._lock:
+            # WAL mode allows non-blocking concurrent reads during writes
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            # NORMAL sync reduces fsyncs by ~95% in WAL mode; safe against crash
+            self._conn.execute("PRAGMA synchronous=NORMAL")
+            # Busy timeout prevents locks under concurrency without high CPU usage
+            self._conn.execute("PRAGMA busy_timeout=10000")
+            # Temp store in memory avoids disk I/O on slow VPS storage
+            self._conn.execute("PRAGMA temp_store=MEMORY")
+            # Cache size of -16000 (~16MB) is lightweight but achieves high hit-rates
+            self._conn.execute("PRAGMA cache_size=-16000")
+            # Memory-mapped I/O for fast zero-copy reads
+            try:
+                self._conn.execute("PRAGMA mmap_size=67108864")
+            except Exception:
+                pass
+            self._conn.execute("PRAGMA foreign_keys=ON")
 
     def get_schema_version(self) -> int:
         with self._lock:
@@ -303,8 +359,6 @@ class SqliteDatabase:
 
     def _migrate(self) -> None:
         with self._lock:
-            self._conn.execute("PRAGMA journal_mode=WAL")
-            self._conn.execute("PRAGMA foreign_keys=ON")
             self._conn.execute(
                 "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)"
             )
