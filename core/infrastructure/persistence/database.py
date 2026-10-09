@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 MIGRATIONS = {
     1: """
@@ -274,6 +274,40 @@ MIGRATIONS = {
     );
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_poll ON delivery_jobs(status, next_retry_at, lease_until);
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_rule ON delivery_jobs(rule_id);
+    """,
+    7: """
+    -- v7: Production-Grade AI Message Transformation Engine (P2)
+    CREATE TABLE IF NOT EXISTS prompt_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        system_prompt TEXT NOT NULL,
+        user_prompt_template TEXT NOT NULL DEFAULT '{text}',
+        target_language TEXT NOT NULL DEFAULT 'en',
+        current_version INTEGER NOT NULL DEFAULT 1,
+        is_system INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_prompt_name ON prompt_templates(name);
+
+    CREATE TABLE IF NOT EXISTS prompt_versions (
+        id TEXT PRIMARY KEY,
+        prompt_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        system_prompt TEXT NOT NULL,
+        user_prompt_template TEXT NOT NULL,
+        change_summary TEXT NOT NULL DEFAULT '',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        UNIQUE(prompt_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS idx_prompt_ver ON prompt_versions(prompt_id, version);
+
+    ALTER TABLE forward_rules ADD COLUMN ai_fallback_policy TEXT NOT NULL DEFAULT 'DROP';
+    ALTER TABLE forward_rules ADD COLUMN ai_prompt_version INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN ai_timeout_seconds REAL NOT NULL DEFAULT 15.0;
+    ALTER TABLE forward_rules ADD COLUMN ai_secondary_config_id TEXT;
     """,
 }
 

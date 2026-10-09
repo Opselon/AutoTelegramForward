@@ -22,6 +22,7 @@ from ...application.repositories import (
     IMessageMapRepository,
     IMetricsRepository,
     IProcessedMessageRepository,
+    IPromptRepository,
     IRuleStatsRepository,
     ISessionRepository,
     IUiStateRepository,
@@ -35,10 +36,13 @@ from ...domain.entities import (
     FilterRule,
     ForwardRule,
     MessageMapping,
+    PromptTemplate,
+    PromptVersion,
     TelegramSession,
 )
 from ..telegram.auth_state import ACTIVE_STATES, AuthState
 from ...domain.value_objects import (
+    AIFallbackPolicy,
     AIProviderType,
     ContentMode,
     ForwardMode,
@@ -154,14 +158,19 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
 
     async def add(self, rule: ForwardRule) -> ForwardRule:
         rule_version = int(getattr(rule, "version", 1) or 1)
-        # Check if version column is present
+        ai_fallback = getattr(getattr(rule, "ai_fallback_policy", AIFallbackPolicy.DROP), "value", AIFallbackPolicy.DROP.value)
+        ai_prompt_ver = int(getattr(rule, "ai_prompt_version", 0) or 0)
+        ai_timeout = float(getattr(rule, "ai_timeout_seconds", 15.0) or 15.0)
+        ai_sec = getattr(rule, "ai_secondary_config_id", None)
+        # Check if version & AI columns are present
         try:
             self._db.execute(
                 "INSERT INTO forward_rules (id, session_id, source_chat_id, source_chat_name, target_chat_id,"
                 " target_chat_name, target_chat_ids, routing_type, forward_mode, is_active, filter_rule_id,"
                 " ai_config_id, remove_links, custom_caption_template, delay_seconds, skip_history,"
-                " since_ts, ignore_edits, trigger_events, content_mode, metadata, version, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " since_ts, ignore_edits, trigger_events, content_mode, metadata, version, created_at, updated_at,"
+                " ai_prompt_version, ai_fallback_policy, ai_timeout_seconds, ai_secondary_config_id)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     rule.id, rule.session_id, rule.source_chat_id, rule.source_chat_name,
                     rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
@@ -174,11 +183,12 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                                else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
                     getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
                     json.dumps(rule.metadata or {}), rule_version, rule.created_at, rule.updated_at,
+                    ai_prompt_ver, ai_fallback, ai_timeout, ai_sec,
                 ),
             )
         except Exception as exc:
             # Fallback for old schema without version column
-            if "has no column named version" in str(exc) or "no column named version" in str(exc):
+            if "has no column named version" in str(exc) or "no column named version" in str(exc) or "no column named ai_prompt_version" in str(exc):
                 self._db.execute(
                     "INSERT INTO forward_rules (id, session_id, source_chat_id, source_chat_name, target_chat_id,"
                     " target_chat_name, target_chat_ids, routing_type, forward_mode, is_active, filter_rule_id,"
@@ -215,6 +225,11 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         content_val = getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value)
         meta_json = json.dumps(rule.metadata or {})
 
+        ai_fallback = getattr(getattr(rule, "ai_fallback_policy", AIFallbackPolicy.DROP), "value", AIFallbackPolicy.DROP.value)
+        ai_prompt_ver = int(getattr(rule, "ai_prompt_version", 0) or 0)
+        ai_timeout = float(getattr(rule, "ai_timeout_seconds", 15.0) or 15.0)
+        ai_sec = getattr(rule, "ai_secondary_config_id", None)
+
         params = (
             rule.session_id, rule.source_chat_id, rule.source_chat_name,
             rule.target_chat_id, rule.target_chat_name, json.dumps(rule.target_chat_ids),
@@ -223,6 +238,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             rule.custom_caption_template, rule.delay_seconds, int(rule.skip_history),
             rule.since_ts, int(rule.ignore_edits),
             trigger_json, content_val, meta_json, next_version, rule.updated_at,
+            ai_prompt_ver, ai_fallback, ai_timeout, ai_sec,
         )
 
         from ...application.repositories import ConcurrencyError
@@ -233,7 +249,9 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                 " target_chat_name=?, target_chat_ids=?, routing_type=?, forward_mode=?, is_active=?,"
                 " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
                 " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
-                " content_mode=?, metadata=?, version=?, updated_at=? WHERE id=? AND version=?",
+                " content_mode=?, metadata=?, version=?, updated_at=?,"
+                " ai_prompt_version=?, ai_fallback_policy=?, ai_timeout_seconds=?, ai_secondary_config_id=?"
+                " WHERE id=? AND version=?",
                 (*params, rule.id, int(expected_version)),
             )
             if cur.rowcount == 0:
@@ -252,7 +270,9 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                     " target_chat_name=?, target_chat_ids=?, routing_type=?, forward_mode=?, is_active=?,"
                     " filter_rule_id=?, ai_config_id=?, remove_links=?, custom_caption_template=?,"
                     " delay_seconds=?, skip_history=?, since_ts=?, ignore_edits=?, trigger_events=?,"
-                    " content_mode=?, metadata=?, version=?, updated_at=? WHERE id=?",
+                    " content_mode=?, metadata=?, version=?, updated_at=?,"
+                    " ai_prompt_version=?, ai_fallback_policy=?, ai_timeout_seconds=?, ai_secondary_config_id=?"
+                    " WHERE id=?",
                     (*params, rule.id),
                 )
             except Exception as exc:
@@ -293,6 +313,15 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         except ValueError:
             cm = ContentMode.AUTO
         rule_version = int(row["version"]) if ("version" in cols and row["version"] is not None) else 1
+        fb_raw = row["ai_fallback_policy"] if "ai_fallback_policy" in cols else AIFallbackPolicy.DROP.value
+        try:
+            fb_policy = AIFallbackPolicy(fb_raw)
+        except ValueError:
+            fb_policy = AIFallbackPolicy.DROP
+        ai_ver = int(row["ai_prompt_version"]) if ("ai_prompt_version" in cols and row["ai_prompt_version"] is not None) else 0
+        ai_timeout = float(row["ai_timeout_seconds"]) if ("ai_timeout_seconds" in cols and row["ai_timeout_seconds"] is not None) else 15.0
+        ai_sec = str(row["ai_secondary_config_id"]) if ("ai_secondary_config_id" in cols and row["ai_secondary_config_id"] is not None) else None
+
         return ForwardRule(
             id=row["id"], session_id=row["session_id"],
             source_chat_id=row["source_chat_id"], source_chat_name=row["source_chat_name"],
@@ -309,6 +338,10 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             ignore_edits=bool(row["ignore_edits"]) if "ignore_edits" in cols else False,
             trigger_events=triggers,
             content_mode=cm,
+            ai_fallback_policy=fb_policy,
+            ai_prompt_version=ai_ver,
+            ai_timeout_seconds=ai_timeout,
+            ai_secondary_config_id=ai_sec,
             metadata=_safe_dict(row["metadata"] if "metadata" in cols else "{}", {}),
             version=rule_version,
             created_at=row["created_at"], updated_at=row["updated_at"],
@@ -1182,5 +1215,154 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             (threshold,),
         )
         return cur.rowcount
+
+
+class SqlitePromptRepository(IPromptRepository):
+    """Production-grade SQLite repository for prompt templates and historic versions."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def add_template(self, template: PromptTemplate) -> PromptTemplate:
+        self._db.execute(
+            """
+            INSERT INTO prompt_templates (id, name, description, system_prompt, user_prompt_template,
+                target_language, current_version, is_system, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                template.id, template.name, template.description, template.system_prompt,
+                template.user_prompt_template, template.target_language, template.current_version,
+                int(template.is_system), template.created_at, template.updated_at,
+            ),
+        )
+        return template
+
+    async def update_template(self, template: PromptTemplate) -> PromptTemplate:
+        template.updated_at = int(time.time())
+        self._db.execute(
+            """
+            UPDATE prompt_templates
+            SET name=?, description=?, system_prompt=?, user_prompt_template=?,
+                target_language=?, current_version=?, is_system=?, updated_at=?
+            WHERE id=?
+            """,
+            (
+                template.name, template.description, template.system_prompt,
+                template.user_prompt_template, template.target_language,
+                template.current_version, int(template.is_system),
+                template.updated_at, template.id,
+            ),
+        )
+        return template
+
+    async def get_template(self, template_id: str) -> Optional[PromptTemplate]:
+        row = self._db.query_one("SELECT * FROM prompt_templates WHERE id=?", (template_id,))
+        if not row:
+            return None
+        return PromptTemplate(
+            id=row["id"], name=row["name"], description=row["description"],
+            system_prompt=row["system_prompt"], user_prompt_template=row["user_prompt_template"],
+            target_language=row["target_language"], current_version=int(row["current_version"]),
+            is_system=bool(row["is_system"]), created_at=row["created_at"], updated_at=row["updated_at"],
+        )
+
+    async def list_templates(self) -> List[PromptTemplate]:
+        rows = self._db.query_all("SELECT * FROM prompt_templates ORDER BY created_at ASC")
+        return [
+            PromptTemplate(
+                id=r["id"], name=r["name"], description=r["description"],
+                system_prompt=r["system_prompt"], user_prompt_template=r["user_prompt_template"],
+                target_language=r["target_language"], current_version=int(r["current_version"]),
+                is_system=bool(r["is_system"]), created_at=r["created_at"], updated_at=r["updated_at"],
+            )
+            for r in rows
+        ]
+
+    async def delete_template(self, template_id: str) -> bool:
+        cur = self._db.execute("DELETE FROM prompt_templates WHERE id=?", (template_id,))
+        self._db.execute("DELETE FROM prompt_versions WHERE prompt_id=?", (template_id,))
+        return cur.rowcount > 0
+
+    async def add_version(self, version: PromptVersion) -> PromptVersion:
+        self._db.execute(
+            """
+            INSERT INTO prompt_versions (id, prompt_id, version, system_prompt,
+                user_prompt_template, change_summary, is_active, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                version.id, version.prompt_id, version.version, version.system_prompt,
+                version.user_prompt_template, version.change_summary,
+                int(version.is_active), version.created_at,
+            ),
+        )
+        return version
+
+    async def get_version(self, prompt_id: str, version: int) -> Optional[PromptVersion]:
+        row = self._db.query_one(
+            "SELECT * FROM prompt_versions WHERE prompt_id=? AND version=?",
+            (prompt_id, version),
+        )
+        if not row:
+            return None
+        return PromptVersion(
+            id=row["id"], prompt_id=row["prompt_id"], version=int(row["version"]),
+            system_prompt=row["system_prompt"], user_prompt_template=row["user_prompt_template"],
+            change_summary=row["change_summary"], is_active=bool(row["is_active"]),
+            created_at=row["created_at"],
+        )
+
+    async def list_versions(self, prompt_id: str) -> List[PromptVersion]:
+        rows = self._db.query_all(
+            "SELECT * FROM prompt_versions WHERE prompt_id=? ORDER BY version DESC",
+            (prompt_id,),
+        )
+        return [
+            PromptVersion(
+                id=r["id"], prompt_id=r["prompt_id"], version=int(r["version"]),
+                system_prompt=r["system_prompt"], user_prompt_template=r["user_prompt_template"],
+                change_summary=r["change_summary"], is_active=bool(r["is_active"]),
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+
+    async def activate_version(self, prompt_id: str, version: int) -> bool:
+        ver = await self.get_version(prompt_id, version)
+        if not ver:
+            return False
+        self._db.execute(
+            """
+            UPDATE prompt_templates
+            SET system_prompt=?, user_prompt_template=?, current_version=?, updated_at=?
+            WHERE id=?
+            """,
+            (ver.system_prompt, ver.user_prompt_template, version, int(time.time()), prompt_id),
+        )
+        self._db.execute(
+            "UPDATE prompt_versions SET is_active = (version = ?) WHERE prompt_id=?",
+            (version, prompt_id),
+        )
+        return True
+
+    async def get_active_version(self, prompt_id: str) -> Optional[PromptVersion]:
+        row = self._db.query_one(
+            "SELECT * FROM prompt_versions WHERE prompt_id=? AND is_active=1 LIMIT 1",
+            (prompt_id,),
+        )
+        if not row:
+            return None
+        return PromptVersion(
+            id=row["id"],
+            prompt_id=row["prompt_id"],
+            version=int(row["version"]),
+            system_prompt=row["system_prompt"],
+            user_prompt_template=row["user_prompt_template"],
+            change_summary=row["change_summary"],
+            is_active=bool(row["is_active"]),
+            created_at=row["created_at"],
+        )
+
 
 

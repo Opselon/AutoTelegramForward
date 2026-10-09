@@ -28,7 +28,13 @@ from ..domain.entities import (
     MessagePayload,
 )
 from ..domain.services import FilterEngine, RoutingPolicy
-from ..domain.value_objects import ContentMode, FilterAction, ForwardMode, MediaType
+from ..domain.value_objects import (
+    AIFallbackPolicy,
+    ContentMode,
+    FilterAction,
+    ForwardMode,
+    MediaType,
+)
 
 logger = logging.getLogger("atf.pipeline")
 
@@ -96,6 +102,13 @@ class PipelineMetrics:
     failed_total: int = 0
     unknown_total: int = 0
     backpressure_drops: int = 0
+    ai_transforms_total: int = 0
+    ai_transforms_success: int = 0
+    ai_transforms_failed: int = 0
+    ai_fallback_send_original: int = 0
+    ai_fallback_drops: int = 0
+    ai_fallback_retries: int = 0
+    ai_fallback_quarantine: int = 0
 
     def snapshot(self) -> dict:
         return {
@@ -110,6 +123,13 @@ class PipelineMetrics:
             "failed_total": self.failed_total,
             "unknown_total": self.unknown_total,
             "backpressure_drops": self.backpressure_drops,
+            "ai_transforms_total": self.ai_transforms_total,
+            "ai_transforms_success": self.ai_transforms_success,
+            "ai_transforms_failed": self.ai_transforms_failed,
+            "ai_fallback_send_original": self.ai_fallback_send_original,
+            "ai_fallback_drops": self.ai_fallback_drops,
+            "ai_fallback_retries": self.ai_fallback_retries,
+            "ai_fallback_quarantine": self.ai_fallback_quarantine,
         }
 
 
@@ -209,6 +229,8 @@ class DurableMessagePipeline:
         routing_policy: Optional[RoutingPolicy] = None,
         ai_factory: Optional[Any] = None,
         ai_repo: Optional[Any] = None,
+        ai_transformer: Optional[Any] = None,
+        prompt_service: Optional[Any] = None,
     ) -> None:
         self._rules = rule_repo
         self._filters = filter_repo
@@ -219,6 +241,8 @@ class DurableMessagePipeline:
         self._routing = routing_policy or RoutingPolicy()
         self._ai_factory = ai_factory
         self._ai_repo = ai_repo
+        self._ai_transformer = ai_transformer
+        self._prompt_service = prompt_service
         self.metrics = PipelineMetrics()
 
     # -----------------------------------------------------------------
@@ -336,6 +360,10 @@ class DurableMessagePipeline:
         t0 = time.monotonic()
         try:
             transformed = await self._apply_transforms(ctx, payload, rule, eval_res)
+            if transformed is None:
+                # Message was dropped or deferred by transform policy (e.g. AI fallback DROP or RETRY)
+                self.metrics.failed_total += 1
+                return
             # Output validation: validate max length
             max_limit = 1024 if payload.has_media else 4096
             if len(transformed) > max_limit:
@@ -395,7 +423,7 @@ class DurableMessagePipeline:
 
     async def _apply_transforms(
         self, ctx: PipelineContext, payload: MessagePayload, rule: ForwardRule, evaluation: EvaluationResult
-    ) -> str:
+    ) -> Optional[str]:
         text = payload.effective_text or ""
 
         # Link removal or replacement
@@ -414,19 +442,14 @@ class DurableMessagePipeline:
         if getattr(rule, "replacements", None):
             text = self._filter_engine.replace_text(text, rule.replacements)
 
-        # AI Transformation (Interface extensible)
+        # AI Transformation (Modular, non-blocking, multi-layer defended)
         ai_cfg_id = getattr(rule, "ai_config_id", None)
-        if ai_cfg_id and self._ai_repo and self._ai_factory:
-            try:
-                ai_cfg = await self._ai_repo.get_by_id(ai_cfg_id)
-                if ai_cfg and ai_cfg.is_enabled:
-                    provider = self._ai_factory.get(ai_cfg)
-                    rewritten = await provider.rewrite(ai_cfg, text)
-                    if rewritten:
-                        text = rewritten
-                        evaluation.rewritten_text = rewritten
-            except Exception as exc:
-                logger.warning("[%s] AI transformation failed (continuing with original): %s", ctx.correlation_id, exc)
+        if ai_cfg_id:
+            ai_transformed = await self._run_ai_transform(ctx, text, rule, payload, evaluation)
+            if ai_transformed is None:
+                # Dropped or quarantined according to fallback policy
+                return None
+            text = ai_transformed
 
         # Header & Footer
         header = getattr(rule, "header", "") or getattr(rule, "header_text", "")
@@ -435,3 +458,154 @@ class DurableMessagePipeline:
             text = self._filter_engine.apply_header_footer(text, header=header, footer=footer)
 
         return text
+
+    async def _run_ai_transform(
+        self,
+        ctx: PipelineContext,
+        text: str,
+        rule: ForwardRule,
+        payload: MessagePayload,
+        evaluation: EvaluationResult,
+    ) -> Optional[str]:
+        self.metrics.ai_transforms_total += 1
+
+        # Check if production AITransformer is available
+        if self._ai_transformer is None:
+            # Fallback legacy provider if available
+            if self._ai_repo and self._ai_factory:
+                try:
+                    ai_cfg = await self._ai_repo.get_by_id(rule.ai_config_id)
+                    if ai_cfg and ai_cfg.is_enabled:
+                        provider = self._ai_factory.get(ai_cfg)
+                        rewritten = await provider.rewrite(ai_cfg, text)
+                        if rewritten:
+                            evaluation.rewritten_text = rewritten
+                            self.metrics.ai_transforms_success += 1
+                            return rewritten
+                except Exception as exc:
+                    logger.warning("[%s] Legacy AI transform failed: %s", ctx.correlation_id, exc)
+            return self._handle_ai_fallback(ctx, text, rule, "AI_UNAVAILABLE", "AI transformer not initialized")
+
+        # Resolve Prompt Template and Version Pinning
+        system_prompt = ""
+        user_template = "{text}"
+        prompt_ver = getattr(rule, "ai_prompt_version", 0) or 0
+        prompt_id = ""
+        if isinstance(rule.metadata, dict) and rule.metadata.get("prompt_id"):
+            prompt_id = str(rule.metadata.get("prompt_id"))
+
+        if self._prompt_service and prompt_id:
+            try:
+                preview = await self._prompt_service.preview_prompt(
+                    prompt_id, text, version=prompt_ver if prompt_ver > 0 else None
+                )
+                system_prompt = preview.get("system_prompt", "")
+                user_template = preview.get("rendered_user_prompt", "{text}")
+                prompt_ver = preview.get("version", prompt_ver or 1)
+            except Exception as exc:
+                logger.warning("[%s] Could not resolve prompt '%s': %s", ctx.correlation_id, prompt_id, exc)
+
+        from ..infrastructure.ai.transformer import AIRequest
+
+        req = AIRequest(
+            text=text,
+            system_prompt=system_prompt,
+            user_template=user_template,
+            prompt_id=prompt_id,
+            prompt_version=prompt_ver or 1,
+            target_language="auto",
+            max_length=1024 if payload.has_media else 4096,
+            timeout_seconds=getattr(rule, "ai_timeout_seconds", 15.0) or 15.0,
+            correlation_id=ctx.correlation_id,
+            is_caption=payload.has_media,
+        )
+
+        resp = await self._ai_transformer.transform(
+            req,
+            primary_config_id=rule.ai_config_id,
+            secondary_config_id=getattr(rule, "ai_secondary_config_id", None),
+        )
+
+        if resp.success:
+            self.metrics.ai_transforms_success += 1
+            evaluation.rewritten_text = resp.transformed_text
+            return resp.transformed_text
+
+        # AI Transformation Failed -> Execute fallback policy
+        self.metrics.ai_transforms_failed += 1
+        return self._handle_ai_fallback(ctx, text, rule, resp.error_code, resp.error_message)
+
+    def _handle_ai_fallback(
+        self,
+        ctx: PipelineContext,
+        original_text: str,
+        rule: ForwardRule,
+        error_code: str,
+        error_message: str,
+    ) -> Optional[str]:
+        policy = getattr(rule, "ai_fallback_policy", AIFallbackPolicy.DROP)
+        if isinstance(policy, str):
+            try:
+                policy = AIFallbackPolicy(policy)
+            except ValueError:
+                policy = AIFallbackPolicy.DROP
+
+        if policy == AIFallbackPolicy.SEND_ORIGINAL:
+            self.metrics.ai_fallback_send_original += 1
+            logger.warning(
+                "[%s] AI transform failed (%s: %s). Policy: SEND_ORIGINAL. Forwarding original.",
+                ctx.correlation_id,
+                error_code,
+                error_message,
+            )
+            return original_text
+
+        if policy == AIFallbackPolicy.DROP:
+            self.metrics.ai_fallback_drops += 1
+            logger.warning(
+                "[%s] AI transform failed (%s: %s). Policy: DROP. Dropping message.",
+                ctx.correlation_id,
+                error_code,
+                error_message,
+            )
+            ctx.record_stage(
+                PipelineStage.TRANSFORM,
+                False,
+                reason=f"ai_drop:{error_code}",
+                error=error_message,
+            )
+            return None
+
+        if policy == AIFallbackPolicy.RETRY:
+            self.metrics.ai_fallback_retries += 1
+            logger.warning(
+                "[%s] AI transform failed (%s: %s). Policy: RETRY.",
+                ctx.correlation_id,
+                error_code,
+                error_message,
+            )
+            ctx.record_stage(
+                PipelineStage.TRANSFORM,
+                False,
+                reason=f"ai_retry:{error_code}",
+                error=error_message,
+            )
+            return None
+
+        if policy == AIFallbackPolicy.QUARANTINE:
+            self.metrics.ai_fallback_quarantine += 1
+            logger.warning(
+                "[%s] AI transform failed (%s: %s). Policy: QUARANTINE.",
+                ctx.correlation_id,
+                error_code,
+                error_message,
+            )
+            ctx.record_stage(
+                PipelineStage.TRANSFORM,
+                False,
+                reason=f"ai_quarantine:{error_code}",
+                error=error_message,
+            )
+            return None
+
+        return None

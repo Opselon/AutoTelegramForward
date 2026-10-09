@@ -17,6 +17,7 @@ from ...application.repositories import (
     IDeliveryQueueRepository,
     IForwardRuleRepository,
     IMessageMapRepository,
+    IPromptRepository,
 )
 from ...domain.entities import (
     ContentMode,
@@ -25,9 +26,12 @@ from ...domain.entities import (
     ForwardMode,
     ForwardRule,
     MessageMapping,
+    PromptTemplate,
+    PromptVersion,
     RoutingType,
     TriggerEvent,
 )
+from ...domain.value_objects import AIFallbackPolicy
 
 
 class PostgresConnection(Protocol):
@@ -316,6 +320,15 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
         except ValueError:
             cm = ContentMode.AUTO
 
+        fb_raw = d.get("ai_fallback_policy", AIFallbackPolicy.DROP.value)
+        try:
+            fb_policy = AIFallbackPolicy(fb_raw)
+        except ValueError:
+            fb_policy = AIFallbackPolicy.DROP
+        ai_ver = int(d.get("ai_prompt_version", 0) or 0)
+        ai_timeout = float(d.get("ai_timeout_seconds", 15.0) or 15.0)
+        ai_sec = str(d.get("ai_secondary_config_id")) if d.get("ai_secondary_config_id") else None
+
         return ForwardRule(
             id=d["id"],
             session_id=d["session_id"],
@@ -337,6 +350,10 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             ignore_edits=bool(d.get("ignore_edits", False)),
             trigger_events=[str(t) for t in triggers],
             content_mode=cm,
+            ai_fallback_policy=fb_policy,
+            ai_prompt_version=ai_ver,
+            ai_timeout_seconds=ai_timeout,
+            ai_secondary_config_id=ai_sec,
             metadata=_safe_dict(d.get("metadata"), {}),
             version=int(d.get("version", 1) or 1),
             created_at=d["created_at"],
@@ -713,5 +730,196 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
             return int(res.split()[-1])
         count = getattr(res, "rowcount", None)
         return count if count is not None else 0
+
+
+class PostgresPromptRepository(IPromptRepository):
+    """Production-grade PostgreSQL repository for prompt templates and historic versions."""
+
+    DDL_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS prompt_templates (
+        id VARCHAR(64) PRIMARY KEY,
+        name VARCHAR(128) NOT NULL,
+        description TEXT DEFAULT '',
+        system_prompt TEXT NOT NULL,
+        user_prompt_template TEXT NOT NULL DEFAULT '{text}',
+        target_language VARCHAR(32) DEFAULT 'en',
+        current_version INTEGER NOT NULL DEFAULT 1,
+        is_system BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pg_prompt_name ON prompt_templates (name);
+
+    CREATE TABLE IF NOT EXISTS prompt_versions (
+        id VARCHAR(64) PRIMARY KEY,
+        prompt_id VARCHAR(64) NOT NULL REFERENCES prompt_templates(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        system_prompt TEXT NOT NULL,
+        user_prompt_template TEXT NOT NULL,
+        change_summary TEXT DEFAULT '',
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at BIGINT NOT NULL,
+        UNIQUE(prompt_id, version)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pg_prompt_ver ON prompt_versions (prompt_id, version);
+    """
+
+    def __init__(self, db: PostgresConnection) -> None:
+        self._db = db
+
+    async def init_schema(self) -> None:
+        if hasattr(self._db, "execute"):
+            for stmt in self.DDL_SCHEMA.strip().split(";"):
+                stmt = stmt.strip()
+                if stmt:
+                    await _execute_db(self._db, stmt)
+
+    async def add_template(self, template: PromptTemplate) -> PromptTemplate:
+        query = """
+        INSERT INTO prompt_templates (
+            id, name, description, system_prompt, user_prompt_template,
+            target_language, current_version, is_system, created_at, updated_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        params = (
+            template.id, template.name, template.description, template.system_prompt,
+            template.user_prompt_template, template.target_language, template.current_version,
+            bool(template.is_system), int(template.created_at), int(template.updated_at),
+        )
+        await _execute_db(self._db, query, params)
+        return template
+
+    async def update_template(self, template: PromptTemplate) -> PromptTemplate:
+        template.updated_at = int(time.time())
+        query = """
+        UPDATE prompt_templates
+        SET name = %s, description = %s, system_prompt = %s, user_prompt_template = %s,
+            target_language = %s, current_version = %s, is_system = %s, updated_at = %s
+        WHERE id = %s
+        """
+        params = (
+            template.name, template.description, template.system_prompt,
+            template.user_prompt_template, template.target_language,
+            template.current_version, bool(template.is_system),
+            template.updated_at, template.id,
+        )
+        await _execute_db(self._db, query, params)
+        return template
+
+    async def get_template(self, template_id: str) -> Optional[PromptTemplate]:
+        query = "SELECT * FROM prompt_templates WHERE id = %s"
+        row = await _fetch_one_db(self._db, query, (template_id,))
+        if not row:
+            return None
+        d = dict(row) if hasattr(row, "keys") else row
+        return PromptTemplate(
+            id=d["id"], name=d["name"], description=d.get("description", ""),
+            system_prompt=d["system_prompt"], user_prompt_template=d.get("user_prompt_template", "{text}"),
+            target_language=d.get("target_language", "en"), current_version=int(d["current_version"]),
+            is_system=bool(d["is_system"]), created_at=int(d["created_at"]), updated_at=int(d["updated_at"]),
+        )
+
+    async def list_templates(self) -> List[PromptTemplate]:
+        query = "SELECT * FROM prompt_templates ORDER BY created_at ASC"
+        rows = await _fetch_all_db(self._db, query, ())
+        res = []
+        for r in rows:
+            d = dict(r) if hasattr(r, "keys") else r
+            res.append(PromptTemplate(
+                id=d["id"], name=d["name"], description=d.get("description", ""),
+                system_prompt=d["system_prompt"], user_prompt_template=d.get("user_prompt_template", "{text}"),
+                target_language=d.get("target_language", "en"), current_version=int(d["current_version"]),
+                is_system=bool(d["is_system"]), created_at=int(d["created_at"]), updated_at=int(d["updated_at"]),
+            ))
+        return res
+
+    async def delete_template(self, template_id: str) -> bool:
+        await _execute_db(self._db, "DELETE FROM prompt_versions WHERE prompt_id = %s", (template_id,))
+        res = await _execute_db(self._db, "DELETE FROM prompt_templates WHERE id = %s", (template_id,))
+        if isinstance(res, str) and res.startswith("DELETE "):
+            return int(res.split()[-1]) > 0
+        count = getattr(res, "rowcount", None)
+        return count > 0 if count is not None else True
+
+    async def add_version(self, version: PromptVersion) -> PromptVersion:
+        query = """
+        INSERT INTO prompt_versions (
+            id, prompt_id, version, system_prompt, user_prompt_template,
+            change_summary, is_active, created_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        params = (
+            version.id, version.prompt_id, version.version, version.system_prompt,
+            version.user_prompt_template, version.change_summary,
+            bool(version.is_active), int(version.created_at),
+        )
+        await _execute_db(self._db, query, params)
+        return version
+
+    async def get_version(self, prompt_id: str, version: int) -> Optional[PromptVersion]:
+        query = "SELECT * FROM prompt_versions WHERE prompt_id = %s AND version = %s"
+        row = await _fetch_one_db(self._db, query, (prompt_id, version))
+        if not row:
+            return None
+        d = dict(row) if hasattr(row, "keys") else row
+        return PromptVersion(
+            id=d["id"], prompt_id=d["prompt_id"], version=int(d["version"]),
+            system_prompt=d["system_prompt"], user_prompt_template=d["user_prompt_template"],
+            change_summary=d.get("change_summary", ""), is_active=bool(d["is_active"]),
+            created_at=int(d["created_at"]),
+        )
+
+    async def list_versions(self, prompt_id: str) -> List[PromptVersion]:
+        query = "SELECT * FROM prompt_versions WHERE prompt_id = %s ORDER BY version DESC"
+        rows = await _fetch_all_db(self._db, query, (prompt_id,))
+        res = []
+        for r in rows:
+            d = dict(r) if hasattr(r, "keys") else r
+            res.append(PromptVersion(
+                id=d["id"], prompt_id=d["prompt_id"], version=int(d["version"]),
+                system_prompt=d["system_prompt"], user_prompt_template=d["user_prompt_template"],
+                change_summary=d.get("change_summary", ""), is_active=bool(d["is_active"]),
+                created_at=int(d["created_at"]),
+            ))
+        return res
+
+    async def activate_version(self, prompt_id: str, version: int) -> bool:
+        ver = await self.get_version(prompt_id, version)
+        if not ver:
+            return False
+        now = int(time.time())
+        await _execute_db(
+            self._db,
+            """
+            UPDATE prompt_templates
+            SET system_prompt = %s, user_prompt_template = %s, current_version = %s, updated_at = %s
+            WHERE id = %s
+            """,
+            (ver.system_prompt, ver.user_prompt_template, version, now, prompt_id),
+        )
+        await _execute_db(
+            self._db,
+            "UPDATE prompt_versions SET is_active = (version = %s) WHERE prompt_id = %s",
+            (version, prompt_id),
+        )
+        return True
+
+    async def get_active_version(self, prompt_id: str) -> Optional[PromptVersion]:
+        query = "SELECT * FROM prompt_versions WHERE prompt_id = %s AND is_active = TRUE LIMIT 1"
+        row = await _fetch_one_db(self._db, query, (prompt_id,))
+        if not row:
+            return None
+        d = dict(row)
+        return PromptVersion(
+            id=d["id"],
+            prompt_id=d["prompt_id"],
+            version=int(d["version"]),
+            system_prompt=d["system_prompt"],
+            user_prompt_template=d["user_prompt_template"],
+            change_summary=d.get("change_summary", ""),
+            is_active=bool(d["is_active"]),
+            created_at=int(d["created_at"]),
+        )
+
 
 

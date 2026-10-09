@@ -11,6 +11,8 @@ from ..domain.entities import (
     FilterRule,
     ForwardRule,
     MessageMapping,
+    PromptTemplate,
+    PromptVersion,
     TelegramSession,
 )
 
@@ -148,6 +150,49 @@ class IAIConfigRepository(ABC):
     @abstractmethod
     async def delete(self, config_id: str) -> bool:
         ...
+
+
+class IPromptRepository(ABC):
+    @abstractmethod
+    async def add_template(self, template: PromptTemplate) -> PromptTemplate:
+        ...
+
+    @abstractmethod
+    async def update_template(self, template: PromptTemplate) -> PromptTemplate:
+        ...
+
+    @abstractmethod
+    async def get_template(self, template_id: str) -> Optional[PromptTemplate]:
+        ...
+
+    @abstractmethod
+    async def list_templates(self) -> List[PromptTemplate]:
+        ...
+
+    @abstractmethod
+    async def delete_template(self, template_id: str) -> bool:
+        ...
+
+    @abstractmethod
+    async def add_version(self, version: PromptVersion) -> PromptVersion:
+        ...
+
+    @abstractmethod
+    async def get_version(self, prompt_id: str, version: int) -> Optional[PromptVersion]:
+        ...
+
+    @abstractmethod
+    async def list_versions(self, prompt_id: str) -> List[PromptVersion]:
+        ...
+
+    @abstractmethod
+    async def activate_version(self, prompt_id: str, version: int) -> bool:
+        ...
+
+    @abstractmethod
+    async def get_active_version(self, prompt_id: str) -> Optional[PromptVersion]:
+        ...
+
 
 
 class IApiCredentialRepository(ABC):
