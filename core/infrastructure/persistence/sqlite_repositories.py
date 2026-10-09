@@ -1158,3 +1158,29 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
         )
         return cur.rowcount
 
+    async def get_queue_age_metrics(self) -> dict:
+        row = self._db.query_one(
+            """
+            SELECT MIN(created_at) as oldest_ts, COUNT(*) as cnt
+            FROM delivery_jobs
+            WHERE status IN ('PENDING', 'CLAIMED', 'RETRY_WAIT')
+            """
+        )
+        if not row or not row["cnt"]:
+            return {"pending_count": 0, "oldest_job_age_seconds": 0.0}
+        oldest_ts = row["oldest_ts"]
+        age = max(0.0, time.time() - float(oldest_ts)) if oldest_ts else 0.0
+        return {"pending_count": int(row["cnt"]), "oldest_job_age_seconds": round(age, 2)}
+
+    async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 7) -> int:
+        threshold = int(time.time() - retention_seconds)
+        cur = self._db.execute(
+            """
+            DELETE FROM delivery_jobs
+            WHERE status IN ('SENT', 'FAILED') AND updated_at < ?
+            """,
+            (threshold,),
+        )
+        return cur.rowcount
+
+

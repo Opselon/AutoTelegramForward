@@ -36,10 +36,11 @@ class MessageDispatcher:
     def __init__(
         self, pool: ClientPool, use_case, send_queue_size: int = 2000,
         error_log=None, metrics=None, rule_stats=None, log_client=None,
-        queue_manager=None, sync_engine=None,
+        queue_manager=None, sync_engine=None, durable_pipeline=None,
     ) -> None:
         self._pool = pool
         self._use_case = use_case
+        self._durable_pipeline = durable_pipeline
         # The pipeline's sender port is this class's `_send` coroutine.
         self._use_case.sender = self._send
         self._queue_manager = queue_manager
@@ -197,7 +198,10 @@ class MessageDispatcher:
                     return
 
             try:
-                await self._use_case.process_message(payload, trigger=trigger)
+                if self._durable_pipeline is not None:
+                    await self._durable_pipeline.process(payload, trigger=trigger)
+                else:
+                    await self._use_case.process_message(payload, trigger=trigger)
             except Exception:
                 logger.exception("Failed to process incoming message")
         _handler.__name__ = f"atf_{trigger.lower()}_handler"
@@ -205,7 +209,10 @@ class MessageDispatcher:
 
     async def _flush_album(self, first_msg: MessagePayload, all_msgs: list) -> None:
         try:
-            await self._use_case.process_message(first_msg, trigger="NEW_MESSAGE")
+            if self._durable_pipeline is not None:
+                await self._durable_pipeline.process(first_msg, trigger="NEW_MESSAGE")
+            else:
+                await self._use_case.process_message(first_msg, trigger="NEW_MESSAGE")
         except Exception:
             logger.exception("Failed to process flushed album")
 

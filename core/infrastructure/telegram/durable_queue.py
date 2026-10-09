@@ -71,6 +71,10 @@ class DurableQueueManager:
             "floodwait_hits": 0,
             "backpressure_drops": 0,
         }
+        self.recovered_after_restart_count: int = 0
+        self.target_stats: Dict[str, Dict[str, int]] = {}
+        self.total_dispatch_duration_ms: float = 0.0
+        self.total_dispatches: int = 0
 
     async def start(self) -> None:
         """Start worker tasks and lease watchdog."""
@@ -79,6 +83,15 @@ class DurableQueueManager:
         self._running = True
         self._stop_event.clear()
         self._notify_event.clear()
+
+        # Immediate recovery of orphaned jobs on startup / restart
+        try:
+            initial_recovered = await self._queue.recover_expired_leases()
+            if initial_recovered > 0:
+                self.recovered_after_restart_count += initial_recovered
+                logger.info("Startup recovery: restored %d claimed jobs from prior run.", initial_recovered)
+        except Exception as exc:
+            logger.warning("Startup recovery failed: %s", exc)
 
         for i in range(self._num_workers):
             task = asyncio.create_task(self._worker_loop(f"worker-{i+1}"))
@@ -234,16 +247,23 @@ class DurableQueueManager:
     async def _process_job(self, worker_id: str, job: DeliveryJob) -> None:
         """Process a single delivery job with rate limiting, error classification, and mapping confirmation."""
         target = job.target_chat_id
+        def _bump_target(k: str) -> None:
+            if target not in self.target_stats:
+                self.target_stats[target] = {"sent": 0, "failed": 0, "retried": 0, "unknown": 0}
+            self.target_stats[target][k] += 1
+
         # Check per-target throttling
         rate_wait = await self._check_target_rate(target)
         if rate_wait > 0:
             # Target is throttled: schedule next attempt for this job and yield worker immediately
+            _bump_target("retried")
             await self._queue.mark_retry(job.id, "Target rate-limited", backoff_seconds=rate_wait)
             return
 
         session_id = job.payload_data.get("session_id")
         client = self._pool.get(session_id)
         if client is None:
+            _bump_target("retried")
             await self._queue.mark_retry(job.id, f"No live client for session {session_id}", backoff_seconds=1.0)
             return
 
@@ -252,6 +272,9 @@ class DurableQueueManager:
         try:
             target_msg_id = await self._dispatch_to_telegram(client, job)
             send_duration = time.monotonic() - t0
+            self.total_dispatch_duration_ms += send_duration * 1000
+            self.total_dispatches += 1
+            _bump_target("sent")
 
             # Delivery confirmed!
             await self._queue.mark_sent(job.id, target_msg_id)
@@ -282,6 +305,8 @@ class DurableQueueManager:
 
         except Exception as exc:
             send_duration = time.monotonic() - t0
+            self.total_dispatch_duration_ms += send_duration * 1000
+            self.total_dispatches += 1
             key, sev, recoverable = tg_error(exc)
             err_msg = tg_detail(exc)
 
@@ -293,6 +318,7 @@ class DurableQueueManager:
             )
             if is_timeout:
                 self.stats["unknown"] += 1
+                _bump_target("unknown")
                 logger.error(
                     "[%s] Telegram call timed out on %s (result UNKNOWN). Marking job UNKNOWN to prevent duplicates.",
                     worker_id,
@@ -314,6 +340,7 @@ class DurableQueueManager:
                 wait_sec = float(wait_seconds(exc, default=5) + random.uniform(0.5, 2.0))
                 self.stats["floodwait_hits"] += 1
                 self.stats["retried"] += 1
+                _bump_target("retried")
                 logger.warning(
                     "[%s] FloodWait on %s: waiting %.1fs. Rule=%s src=%s:%s",
                     worker_id,
@@ -335,11 +362,35 @@ class DurableQueueManager:
                 return
 
             # 3. Permanent or other transient error
-            is_permanent = sev == "CRITICAL" or any(
-                p in err_msg for p in ("ChatWriteForbidden", "UserBannedInChannel", "ChatAdminRequired", "PeerIdInvalid")
+            exc_name = str(type(exc).__name__)
+            is_permanent = (
+                sev == "CRITICAL"
+                or any(
+                    p in err_msg.upper()
+                    for p in (
+                        "CHAT_WRITE_FORBIDDEN",
+                        "USER_BANNED_IN_CHANNEL",
+                        "CHAT_ADMIN_REQUIRED",
+                        "PEER_ID_INVALID",
+                        "CHANNEL_PRIVATE",
+                        "CHAT_RESTRICTED",
+                    )
+                )
+                or any(
+                    p in exc_name
+                    for p in (
+                        "ChatWriteForbidden",
+                        "UserBannedInChannel",
+                        "ChatAdminRequired",
+                        "PeerIdInvalid",
+                        "ChannelPrivate",
+                        "ChatRestricted",
+                    )
+                )
             )
             if is_permanent:
                 self.stats["failed"] += 1
+                _bump_target("failed")
                 logger.error(
                     "[%s] Permanent failure delivering to %s: %s. Marking job FAILED.",
                     worker_id,
@@ -360,6 +411,7 @@ class DurableQueueManager:
                 attempts = job.attempts + 1
                 backoff = min(60.0, (2.0 ** attempts) + random.uniform(0.5, 3.0))
                 self.stats["retried"] += 1
+                _bump_target("retried")
                 logger.warning(
                     "[%s] Transient send error on %s (attempt %d): %s. Retrying in %.1fs.",
                     worker_id,
@@ -446,6 +498,7 @@ class DurableQueueManager:
 
     async def _watchdog_loop(self) -> None:
         """Periodically recovers expired leases and cleans up message maps."""
+        cleanup_counter = 0
         while not self._stop_event.is_set():
             try:
                 await asyncio.sleep(10.0)
@@ -453,7 +506,55 @@ class DurableQueueManager:
                 if recovered > 0:
                     logger.warning("Lease watchdog recovered %d abandoned jobs.", recovered)
                     self._notify_event.set()
+
+                cleanup_counter += 1
+                if cleanup_counter >= 360:  # Every 1 hour (360 * 10s)
+                    cleanup_counter = 0
+                    try:
+                        await self._queue.cleanup()
+                        await self._map.cleanup()
+                    except Exception:
+                        logger.debug("Periodic retention cleanup failed", exc_info=True)
             except asyncio.CancelledError:
                 break
             except Exception:
                 logger.debug("Lease watchdog check failed", exc_info=True)
+
+    async def get_observability_metrics(self) -> dict:
+        """Extract structured observability metrics per P1 specification."""
+        db_stats = await self._queue.get_stats()
+        age_metrics = await self._queue.get_queue_age_metrics()
+        avg_dispatch_ms = (
+            self.total_dispatch_duration_ms / self.total_dispatches
+            if self.total_dispatches > 0
+            else 0.0
+        )
+
+        per_target = {}
+        for tgt, counts in self.target_stats.items():
+            tot = counts["sent"] + counts["failed"] + counts["unknown"]
+            rate = (counts["sent"] / tot) if tot > 0 else 1.0
+            per_target[tgt] = {
+                "sent": counts["sent"],
+                "failed": counts["failed"],
+                "retried": counts["retried"],
+                "unknown": counts["unknown"],
+                "success_rate": round(rate, 4),
+            }
+
+        return {
+            "pending_jobs": db_stats.get(DeliveryStatus.PENDING.value, 0),
+            "processing_jobs": db_stats.get(DeliveryStatus.CLAIMED.value, 0),
+            "retry_wait_jobs": db_stats.get(DeliveryStatus.RETRY_WAIT.value, 0),
+            "sent_jobs": db_stats.get(DeliveryStatus.SENT.value, 0),
+            "failed_jobs": db_stats.get(DeliveryStatus.FAILED.value, 0),
+            "unknown_jobs": db_stats.get(DeliveryStatus.UNKNOWN.value, 0),
+            "queue_depth": age_metrics.get("pending_count", 0),
+            "oldest_job_age_seconds": age_metrics.get("oldest_job_age_seconds", 0.0),
+            "recovered_after_restart": self.recovered_after_restart_count,
+            "avg_dispatch_duration_ms": round(avg_dispatch_ms, 2),
+            "floodwait_hits": self.stats["floodwait_hits"],
+            "backpressure_drops": self.stats["backpressure_drops"],
+            "targets": per_target,
+        }
+

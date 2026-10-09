@@ -414,3 +414,13 @@ class IDeliveryQueueRepository(ABC):
     async def recover_expired_leases(self) -> int:
         ...
 
+    @abstractmethod
+    async def get_queue_age_metrics(self) -> dict:
+        """Return {'pending_count': int, 'oldest_job_age_seconds': float}."""
+        ...
+
+    @abstractmethod
+    async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 7) -> int:
+        """Purge terminal jobs (SENT, FAILED) older than retention_seconds."""
+        ...
+

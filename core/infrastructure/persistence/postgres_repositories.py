@@ -7,6 +7,7 @@ optimistic concurrency control (OCC) using the `version` column.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any, Callable, Dict, List, Optional, Protocol
@@ -78,42 +79,58 @@ def _format_sql(query: str, db: Any) -> str:
     return query
 
 
+_CONN_LOCKS: dict = {}
+
+
+def _get_db_lock(db: Any) -> asyncio.Lock:
+    db_id = id(db)
+    if db_id not in _CONN_LOCKS:
+        _CONN_LOCKS[db_id] = asyncio.Lock()
+    return _CONN_LOCKS[db_id]
+
+
 async def _execute_db(db: Any, query: str, params: tuple | list = ()) -> Any:
     formatted = _format_sql(query, db)
     is_asyncpg = "asyncpg" in type(db).__module__ or hasattr(db, "_protocol")
-    if is_asyncpg:
-        return await db.execute(formatted, *params)
-    return await db.execute(formatted, params)
+    lock = _get_db_lock(db)
+    async with lock:
+        if is_asyncpg:
+            return await db.execute(formatted, *params)
+        return await db.execute(formatted, params)
 
 
 async def _fetch_one_db(db: Any, query: str, params: tuple | list = ()) -> Any:
     formatted = _format_sql(query, db)
     is_asyncpg = "asyncpg" in type(db).__module__ or hasattr(db, "_protocol")
-    if is_asyncpg:
+    lock = _get_db_lock(db)
+    async with lock:
+        if is_asyncpg:
+            if hasattr(db, "fetchrow"):
+                return await db.fetchrow(formatted, *params)
+            if hasattr(db, "fetchone"):
+                return await db.fetchone(formatted, *params)
+        if hasattr(db, "fetchone"):
+            return await db.fetchone(formatted, params)
         if hasattr(db, "fetchrow"):
             return await db.fetchrow(formatted, *params)
-        if hasattr(db, "fetchone"):
-            return await db.fetchone(formatted, *params)
-    if hasattr(db, "fetchone"):
-        return await db.fetchone(formatted, params)
-    if hasattr(db, "fetchrow"):
-        return await db.fetchrow(formatted, *params)
-    return None
+        return None
 
 
 async def _fetch_all_db(db: Any, query: str, params: tuple | list = ()) -> List[Any]:
     formatted = _format_sql(query, db)
     is_asyncpg = "asyncpg" in type(db).__module__ or hasattr(db, "_protocol")
-    if is_asyncpg:
+    lock = _get_db_lock(db)
+    async with lock:
+        if is_asyncpg:
+            if hasattr(db, "fetch"):
+                return await db.fetch(formatted, *params)
+            if hasattr(db, "fetchall"):
+                return await db.fetchall(formatted, *params)
+        if hasattr(db, "fetchall"):
+            return await db.fetchall(formatted, params)
         if hasattr(db, "fetch"):
             return await db.fetch(formatted, *params)
-        if hasattr(db, "fetchall"):
-            return await db.fetchall(formatted, *params)
-    if hasattr(db, "fetchall"):
-        return await db.fetchall(formatted, params)
-    if hasattr(db, "fetch"):
-        return await db.fetch(formatted, *params)
-    return []
+        return []
 
 
 class PostgresForwardRuleRepository(IForwardRuleRepository):
@@ -672,4 +689,29 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
             return int(res.split()[-1])
         count = getattr(res, "rowcount", None)
         return count if count is not None else 0
+
+    async def get_queue_age_metrics(self) -> dict:
+        query = """
+        SELECT MIN(created_at) as oldest_ts, COUNT(*) as cnt
+        FROM delivery_jobs
+        WHERE status IN ('PENDING', 'CLAIMED', 'RETRY_WAIT')
+        """
+        row = await self._fetch_one(query, ())
+        if not row:
+            return {"pending_count": 0, "oldest_job_age_seconds": 0.0}
+        d = dict(row) if hasattr(row, "keys") else row
+        cnt = int(d.get("cnt", 0) or 0)
+        oldest_ts = d.get("oldest_ts")
+        age = max(0.0, time.time() - float(oldest_ts)) if oldest_ts else 0.0
+        return {"pending_count": cnt, "oldest_job_age_seconds": round(age, 2)}
+
+    async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 7) -> int:
+        threshold = int(time.time() - retention_seconds)
+        query = "DELETE FROM delivery_jobs WHERE status IN ('SENT', 'FAILED') AND updated_at < %s"
+        res = await _execute_db(self._db, query, (threshold,))
+        if isinstance(res, str) and res.startswith("DELETE "):
+            return int(res.split()[-1])
+        count = getattr(res, "rowcount", None)
+        return count if count is not None else 0
+
 

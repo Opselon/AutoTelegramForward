@@ -102,12 +102,23 @@ def build_container(cfg: Config) -> dict:
         num_workers=3,
         metrics_repo=metrics_repo,
     )
+    from core.application.pipeline import DurableMessagePipeline  # noqa: E402
+    durable_pipeline = DurableMessagePipeline(
+        rule_repo=rule_repo,
+        filter_repo=filter_repo,
+        queue_manager=queue_manager,
+        msg_map_repo=msg_map_repo,
+        processed_repo=processed_repo,
+        ai_factory=factory,
+        ai_repo=ai_repo,
+    )
     dispatcher = MessageDispatcher(
         pool, pipeline,
         error_log=error_log_repo, metrics=metrics_repo,
         rule_stats=rule_stats_repo,
         queue_manager=queue_manager,
         sync_engine=sync_engine,
+        durable_pipeline=durable_pipeline,
     )
     i18n = I18n()
     i18n.set_language(cfg.language)
@@ -127,6 +138,7 @@ def build_container(cfg: Config) -> dict:
         "queue_repo": queue_repo,
         "queue_manager": queue_manager,
         "sync_engine": sync_engine,
+        "durable_pipeline": durable_pipeline,
     }
 
 
