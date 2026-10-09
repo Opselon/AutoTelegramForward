@@ -762,6 +762,7 @@ class PostgresPromptRepository(IPromptRepository):
         UNIQUE(prompt_id, version)
     );
     CREATE INDEX IF NOT EXISTS idx_pg_prompt_ver ON prompt_versions (prompt_id, version);
+    CREATE INDEX IF NOT EXISTS idx_pg_prompt_active ON prompt_versions (prompt_id, is_active);
     """
 
     def __init__(self, db: PostgresConnection) -> None:
