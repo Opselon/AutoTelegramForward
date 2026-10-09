@@ -78,7 +78,6 @@ jobs:
           - {os: macos-latest,    suffix: macos-x64,    label: macOS Intel}
           - {os: macos-latest,    suffix: macos-arm64,  label: macOS Apple Silicon}
           - {os: windows-latest,  suffix: windows-x64,  label: Windows x64}
-          - {os: windows-11-arm,  suffix: windows-arm64, label: Windows ARM64}
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -281,16 +280,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Metadata
-        id: docker_meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/${{ github.repository_owner }}/atf-core
-            ghcr.io/${{ github.repository_owner }}/atf-logger
-            ghcr.io/${{ github.repository_owner }}/atf-api
+      - name: Resolve lowercase repository owner
+        id: repo
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
 
-      - name: Build & push (all three services, both arches)
+      - name: Build & push core image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -298,8 +294,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/atf-core:latest
-            ghcr.io/${{ github.repository_owner }}/atf-core:${{ needs.meta.outputs.version }}
+            ghcr.io/${{ steps.repo.outputs.owner }}/atf-core:latest
+            ghcr.io/${{ steps.repo.outputs.owner }}/atf-core:${{ needs.meta.outputs.version }}
 
       - name: Logger image
         uses: docker/build-push-action@v6
@@ -309,8 +305,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/atf-logger:latest
-            ghcr.io/${{ github.repository_owner }}/atf-logger:${{ needs.meta.outputs.version }}
+            ghcr.io/${{ steps.repo.outputs.owner }}/atf-logger:latest
+            ghcr.io/${{ steps.repo.outputs.owner }}/atf-logger:${{ needs.meta.outputs.version }}
 
       - name: API image
         uses: docker/build-push-action@v6
@@ -320,8 +316,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/atf-api:latest
-            ghcr.io/${{ github.repository_owner }}/atf-api:${{ needs.meta.outputs.version }}
+            ghcr.io/${{ steps.repo.outputs.owner }}/atf-api:latest
+            ghcr.io/${{ steps.repo.outputs.owner }}/atf-api:${{ needs.meta.outputs.version }}
 
   # ------------------------------------------------------------------------ #
   # Portable source bundle — the no-binary path (any POSIX box).
@@ -360,6 +356,11 @@ jobs:
   # ------------------------------------------------------------------------ #
   publish:
     needs: [meta, binaries, api-binaries, docker, portable]
+    if: |
+      always() &&
+      needs.meta.result == 'success' &&
+      (needs.binaries.result == 'success' || needs.binaries.result == 'skipped') &&
+      (needs.api-binaries.result == 'success' || needs.api-binaries.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -419,8 +420,7 @@ jobs:
           | \`atf-linux-arm64\` | Linux | aarch64 (RPi 4/5, ARM VPS) |
           | \`atf-macos-x64\` | macOS Intel | x86_64 |
           | \`atf-macos-arm64\` | macOS Apple Silicon | arm64 |
-          | \`atf-windows-x64.exe\` | Windows | x86_64 |
-          | \`atf-windows-arm64.exe\` | Windows on ARM | ARM64 |
+          | \`atf-windows-x64.exe\` | Windows | x86_64 / ARM64 (Prism) |
           | \`atf-*-portable.*\` | any | one-dir bundle |
           | \`autotelegramforward-*-portable.tar.gz\` | POSIX | source bundle |
 

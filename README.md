@@ -56,8 +56,7 @@ Grab the single `atf` binary for your OS/CPU from
 | `atf-linux-arm64` | Linux | aarch64 (Raspberry Pi 4/5, ARM VPS) |
 | `atf-macos-x64` | macOS Intel | x86_64 |
 | `atf-macos-arm64` | macOS Apple Silicon | arm64 |
-| `atf-windows-x64.exe` | Windows | x86_64 |
-| `atf-windows-arm64.exe` | Windows on ARM | ARM64 |
+| `atf-windows-x64.exe` | Windows | x86_64 / ARM64 (Prism) |
 
 **Linux / macOS / WSL:**
 
