@@ -44,7 +44,67 @@ A microservice-based **Telegram auto-forwarder** with a Go REST control API and 
 - ✅ **Session & API-key encryption** at rest (AES-256-GCM)
 - ✅ **Bot-token-only operation** — every command works through the Telegram bot
 
-## Install (one command — token only)
+## Download & Install (one file — every service)
+
+Grab the single `atf` binary for your OS/CPU from
+[**Releases**](https://github.com/Opselon/AutoTelegramForward/releases/latest)
+— one command runs **everything** (core + logger + REST API):
+
+| File | OS | CPU |
+|---|---|---|
+| `atf-linux-x64` | Linux | x86_64 |
+| `atf-linux-arm64` | Linux | aarch64 (Raspberry Pi 4/5, ARM VPS) |
+| `atf-macos-x64` | macOS Intel | x86_64 |
+| `atf-macos-arm64` | macOS Apple Silicon | arm64 |
+| `atf-windows-x64.exe` | Windows | x86_64 |
+| `atf-windows-arm64.exe` | Windows on ARM | ARM64 |
+
+**Linux / macOS / WSL:**
+
+```bash
+curl -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-linux-x64 \
+  -o atf && chmod +x atf
+./atf setup      # asks ONLY for your bot token
+./atf start      # core + logger + api — all up with one command
+./atf status     # live status of every service
+```
+
+Verify integrity: `sha256sum -c SHA256SUMS.txt` (from the release page).
+
+**Windows (PowerShell):**
+
+```powershell
+curl.exe -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-windows-x64.exe -o atf.exe
+.\atf.exe setup
+.\atf.exe start
+```
+
+**Docker (any platform, amd64 + arm64):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/docker-compose.yml \
+  -o docker-compose.yml
+docker compose up -d        # or: atf docker up
+```
+
+CLI commands (binary or source — identical):
+
+```bash
+atf setup       # first-time setup (bot token only)
+atf start       # start ALL services (core + logger + api)
+atf stop        # stop everything
+atf restart     # stop + start
+atf status      # live status of every service
+atf logs        # tail recent logs (auto-falls-back to OS journal)
+atf health      # deep health & diagnostics check
+atf service install   # autostart: systemd (Linux) / launchd (macOS) / Task Scheduler (Windows)
+atf docker up   # docker lifecycle: up | down | restart | logs | ps | pull
+atf test        # run the test-suite
+atf version     # print version
+```
+
+<details>
+<summary>Install from source (advanced)</summary>
 
 **Linux / macOS / WSL:**
 
@@ -58,7 +118,7 @@ curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/
 irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex
 ```
 
-Both installers set up git/Python, clone the repo, then hand off to `atf.py setup`,
+Both installers set up git/Python, clone the repo, then hand off to `atf setup`,
 which asks **only for your Telegram bot token** (get one from [@BotFather](https://t.me/BotFather)).
 Everything else — venv, dependencies, config, encryption key — is automatic.
 

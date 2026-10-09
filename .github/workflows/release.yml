@@ -1,0 +1,445 @@
+# AutoTelegramForward — cross-platform release pipeline.
+#
+# Produces, for every tag (v*) and every manual dispatch:
+#   * self-contained single-file `atf` binaries — the ONE entry point that
+#     manages every service (core + logger + api) — for
+#     Linux / macOS / Windows on x86_64 + arm64
+#   * the Go REST API as a static binary for the same matrix
+#   * a multi-arch (amd64 + arm64) Docker image per service
+#   * a portable source tarball (no toolchain needed to *download* it)
+#   * SHA256SUMS.txt covering every artifact + a GitHub Release
+#
+# Single source of truth for the version number: the VERSION file at the
+# repo root (also read by core/config.py and atf.py at runtime).
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      make_tag:
+        description: "Create a tag from this commit and release it"
+        required: false
+        default: "true"
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  PYTHON_VERSION: "3.11"
+  GO_VERSION: "1.27"
+
+jobs:
+  # ------------------------------------------------------------------------ #
+  # Resolve the version once; every artifact inherits it.
+  # ------------------------------------------------------------------------ #
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: v
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          if [ -z "${VERSION}" ]; then
+            echo "VERSION file is empty"; exit 1
+          fi
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            if [ "${TAG#v}" != "${VERSION}" ]; then
+              echo "Tag ${TAG} does not match VERSION ${VERSION}"; exit 1
+            fi
+          else
+            TAG="v${VERSION}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${TAG}"
+
+  # ------------------------------------------------------------------------ #
+  # Single-file binaries. PyInstaller freezes the whole app + interpreter into
+  # one executable; the CLI supervises every microservice from inside it.
+  # ------------------------------------------------------------------------ #
+  binaries:
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest,   suffix: linux-x64,    label: Linux x86_64}
+          - {os: ubuntu-24.04-arm, suffix: linux-arm64, label: Linux arm64}
+          - {os: macos-latest,    suffix: macos-x64,    label: macOS Intel}
+          - {os: macos-latest,    suffix: macos-arm64,  label: macOS Apple Silicon}
+          - {os: windows-latest,  suffix: windows-x64,  label: Windows x64}
+          - {os: windows-11-arm,  suffix: windows-arm64, label: Windows ARM64}
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install build deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libffi-dev libssl-dev patchelf
+
+      - name: Install build deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install libffi openssl || true
+
+      - name: Install PyInstaller + requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+
+      - name: Ensure protobuf python stubs exist
+        run: |
+          if [ ! -f core/proto/autoforward_pb2.py ]; then
+            python -m pip install --quiet grpcio-tools
+            python scripts/gen_proto.py || true
+          fi
+        shell: bash
+
+      - name: Stamp version into the bundle
+        shell: bash
+        run: |
+          mkdir -p assets
+          cp VERSION assets/VERSION
+
+      - name: Freeze single-file CLI (POSIX)
+        if: runner.os != 'Windows'
+        run: |
+          pyinstaller --noconfirm --clean --onefile --name "atf" \
+            --add-data "VERSION:." \
+            --add-data "core/proto:core/proto" \
+            --add-data "logger:logger" \
+            --add-data "proto:proto" \
+            --add-data "config.example.yaml:." \
+            --hidden-import "pyrogram" \
+            --hidden-import "pyrogram.session" \
+            --hidden-import "pyrogram.connection" \
+            --hidden-import "tgcrypto" \
+            --hidden-import "grpc._cython.cygrpc" \
+            --exclude-module "pkg_resources" \
+            --exclude-module "setuptools" \
+            --collect-all "pyrogram" \
+            --collect-all "google.protobuf" \
+            --collect-submodules "grpc" \
+            atf.py
+          chmod +x dist/atf
+          ./dist/atf version
+          cp dist/atf "assets/atf-${{ matrix.suffix }}"
+
+      - name: Freeze single-file CLI (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller --noconfirm --clean --onefile --name "atf" `
+            --add-data "VERSION;." `
+            --add-data "core/proto;core/proto" `
+            --add-data "logger;logger" `
+            --add-data "proto;proto" `
+            --add-data "config.example.yaml;." `
+            --hidden-import "pyrogram" `
+            --hidden-import "pyrogram.session" `
+            --hidden-import "pyrogram.connection" `
+            --hidden-import "tgcrypto" `
+            --hidden-import "grpc._cython.cygrpc" `
+            --exclude-module "pkg_resources" `
+            --exclude-module "setuptools" `
+            --collect-all "pyrogram" `
+            --collect-all "google.protobuf" `
+            --collect-submodules "grpc" `
+            atf.py
+          .\dist\atf.exe version
+          copy dist\atf.exe "assets\atf-${{ matrix.suffix }}.exe"
+
+      - name: Freeze one-dir bundle (POSIX)
+        if: runner.os != 'Windows'
+        run: |
+          pyinstaller --noconfirm --onedir --name "atf" \
+            --add-data "VERSION:." \
+            --add-data "core/proto:core/proto" \
+            --add-data "logger:logger" \
+            --add-data "proto:proto" \
+            --add-data "config.example.yaml:." \
+            --hidden-import "pyrogram" \
+            --hidden-import "pyrogram.session" \
+            --hidden-import "pyrogram.connection" \
+            --hidden-import "tgcrypto" \
+            --hidden-import "grpc._cython.cygrpc" \
+            --exclude-module "pkg_resources" \
+            --exclude-module "setuptools" \
+            --collect-all "pyrogram" \
+            --collect-all "google.protobuf" \
+            --collect-submodules "grpc" \
+            atf.py
+          tar -czf "assets/atf-${{ matrix.suffix }}-portable.tar.gz" -C dist atf
+
+      - name: Freeze one-dir bundle (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller --noconfirm --onedir --name "atf" `
+            --add-data "VERSION;." `
+            --add-data "core/proto;core/proto" `
+            --add-data "logger;logger" `
+            --add-data "proto;proto" `
+            --add-data "config.example.yaml;." `
+            --hidden-import "pyrogram" `
+            --hidden-import "pyrogram.session" `
+            --hidden-import "pyrogram.connection" `
+            --hidden-import "tgcrypto" `
+            --hidden-import "grpc._cython.cygrpc" `
+            --exclude-module "pkg_resources" `
+            --exclude-module "setuptools" `
+            --collect-all "pyrogram" `
+            --collect-all "google.protobuf" `
+            --collect-submodules "grpc" `
+            atf.py
+          7z a "assets\atf-${{ matrix.suffix }}-portable.zip" .\dist\atf
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.suffix }}
+          path: assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  # ------------------------------------------------------------------------ #
+  # Go REST API binary — tiny, static, every platform.
+  # ------------------------------------------------------------------------ #
+  api-binaries:
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, goos: linux,   goarch: amd64, suffix: linux-x64}
+          - {os: ubuntu-latest, goos: linux,   goarch: arm64, suffix: linux-arm64}
+          - {os: macos-latest,  goos: darwin,  goarch: amd64, suffix: macos-x64}
+          - {os: macos-latest,  goos: darwin,  goarch: arm64, suffix: macos-arm64}
+          - {os: windows-latest, goos: windows, goarch: amd64, suffix: windows-x64}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build static API binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        shell: bash
+        run: |
+          cd api
+          go build -trimpath -ldflags "-s -w" -o "../atf-api-${{ matrix.suffix }}${{ matrix.goos == 'windows' && '.exe' || '' }}" .
+          cd ..
+          ls -la atf-api-*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-${{ matrix.suffix }}
+          path: atf-api-*
+          if-no-files-found: error
+          retention-days: 14
+
+  # ------------------------------------------------------------------------ #
+  # Multi-arch Docker images — the "runs anywhere" path (k8s, NAS, VPS).
+  # ------------------------------------------------------------------------ #
+  docker:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Metadata
+        id: docker_meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/atf-core
+            ghcr.io/${{ github.repository_owner }}/atf-logger
+            ghcr.io/${{ github.repository_owner }}/atf-api
+
+      - name: Build & push (all three services, both arches)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.core
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/atf-core:latest
+            ghcr.io/${{ github.repository_owner }}/atf-core:${{ needs.meta.outputs.version }}
+
+      - name: Logger image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.logger
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/atf-logger:latest
+            ghcr.io/${{ github.repository_owner }}/atf-logger:${{ needs.meta.outputs.version }}
+
+      - name: API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.api
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/atf-api:latest
+            ghcr.io/${{ github.repository_owner }}/atf-api:${{ needs.meta.outputs.version }}
+
+  # ------------------------------------------------------------------------ #
+  # Portable source bundle — the no-binary path (any POSIX box).
+  # ------------------------------------------------------------------------ #
+  portable:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build portable tarball
+        run: |
+          NAME="autotelegramforward-${{ needs.meta.outputs.version }}-portable"
+          mkdir -p "artifacts/${NAME}"
+          tar --exclude='.git' --exclude='.venv' --exclude='__pycache__' \
+              --exclude='.pytest_cache' --exclude='data/*.db*' \
+              --exclude='*.log' --exclude='dist' --exclude='build' \
+              -cf - atf.py core logger proto api scripts \
+                     install.sh install.ps1 requirements.txt VERSION \
+                     config.example.yaml docker-compose.yml \
+                     Dockerfile.core Dockerfile.logger Dockerfile.api \
+                     README.md docs \
+              | tar -xf - -C "artifacts/${NAME}"
+          tar -czf "artifacts/${NAME}.tar.gz" -C artifacts "${NAME}"
+          sha256sum "artifacts/${NAME}.tar.gz" > "artifacts/${NAME}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portable
+          path: artifacts/*.tar.gz*
+          if-no-files-found: error
+          retention-days: 14
+
+  # ------------------------------------------------------------------------ #
+  # Publish: assemble everything into a GitHub Release with notes.
+  # ------------------------------------------------------------------------ #
+  publish:
+    needs: [meta, binaries, api-binaries, docker, portable]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: all-assets
+
+      - name: Flatten + merge checksums
+        shell: bash
+        run: |
+          mkdir -p release
+          find all-assets -type f -name 'atf*' -exec cp {} release/ \;
+          find all-assets -type f -name 'autotelegramforward*' -exec cp {} release/ \;
+          cd release
+          sha256sum * > SHA256SUMS.txt
+          ls -la
+          echo "--- SHA256SUMS.txt ---"
+          cat SHA256SUMS.txt
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          VERSION="${{ needs.meta.outputs.version }}"
+          cat > NOTES.md <<EOF
+          ## AutoTelegramForward v${VERSION} — one file, every service
+
+          **یک فایل، همه سرویس‌ها.** باینری \`atf\` هسته، لاگر و REST API رو
+          همگی با هم بالا میاره — نیازی به اجرای چند فایل یا تنظیم جداگانه نیست.
+
+          ### Quick start (Linux / macOS / WSL)
+          \`\`\`bash
+          curl -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-linux-x64 \\
+            -o atf && chmod +x atf
+          ./atf setup      # only asks for your bot token
+          ./atf start      # core + logger + api — all up
+          ./atf status     # live status of every service
+          \`\`\`
+
+          ### Windows
+          \`\`\`powershell
+          curl.exe -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-windows-x64.exe -o atf.exe
+          .\\atf.exe setup
+          .\\atf.exe start
+          \`\`\`
+
+          ### Docker (any platform, amd64 + arm64)
+          \`\`\`bash
+          curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/docker-compose.yml -o docker-compose.yml
+          docker compose up -d
+          \`\`\`
+
+          ### Available binaries
+          | File | OS | CPU |
+          |---|---|---|
+          | \`atf-linux-x64\` | Linux | x86_64 |
+          | \`atf-linux-arm64\` | Linux | aarch64 (RPi 4/5, ARM VPS) |
+          | \`atf-macos-x64\` | macOS Intel | x86_64 |
+          | \`atf-macos-arm64\` | macOS Apple Silicon | arm64 |
+          | \`atf-windows-x64.exe\` | Windows | x86_64 |
+          | \`atf-windows-arm64.exe\` | Windows on ARM | ARM64 |
+          | \`atf-*-portable.*\` | any | one-dir bundle |
+          | \`autotelegramforward-*-portable.tar.gz\` | POSIX | source bundle |
+
+          The Go REST API ships as \`atf-api-<platform>\` next to the CLI; drop it
+          beside the \`atf\` binary and \`atf start\` picks it up automatically.
+
+          ### Verify
+          \`\`\`bash
+          sha256sum -c SHA256SUMS.txt
+          \`\`\`
+          EOF
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: AutoTelegramForward v${{ needs.meta.outputs.version }}
+          body_path: NOTES.md
+          draft: false
+          prerelease: false
+          files: release/*
+          generate_release_notes: true

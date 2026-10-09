@@ -374,3 +374,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# PyInstaller release artifacts
+dist/
+build/
+*.spec
+atf.spec
+atf-dir.spec
