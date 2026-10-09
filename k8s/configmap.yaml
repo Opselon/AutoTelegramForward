@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atf-config
+  namespace: autoforward
+  labels:
+    app.kubernetes.io/name: autotelegramforward
+data:
+  ATF_API_ID: "17349"
+  ATF_API_HASH: "344583e45741c457fe1862106095a5eb"
+  ATF_LANGUAGE: "fa"
+  ATF_GRPC_PORT: "50051"
+  ATF_LOGGER_PORT: "50052"
+  ATF_LOGGER_ADDR: "atf-logger:50052"
+  ATF_CORE_GRPC: "atf-core:50051"
+  ATF_LOGGER_GRPC: "atf-logger:50052"
+  ATF_WEB_ADDR: "0.0.0.0:8088"
+  ATF_API_ADDR: ":8080"
+  ATF_DB_PATH: "/app/data/atf.db"
+  ATF_LOGS_DB_PATH: "/app/data/atf_logs.db"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: atf-secret
+  namespace: autoforward
+  labels:
+    app.kubernetes.io/name: autotelegramforward
+type: Opaque
+stringData:
+  # Replace with your actual Telegram bot token and master key
+  ATF_BOT_TOKEN: "CHANGE_ME_BOT_TOKEN"
+  ATF_ADMIN_ID: "0"
+  ATF_MASTER_KEY: "CHANGE_ME_RANDOM_MASTER_KEY_32_CHARS"
+  ATF_API_KEY: ""

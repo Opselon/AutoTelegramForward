@@ -1,21 +1,23 @@
 #!/usr/bin/env python
-"""AutoTelegramForward — single-file CLI that runs EVERYTHING.
+"""AutoTelegramForward PRO — single-file CLI that runs EVERYTHING.
 
-One binary / one script manages all microservices (core + logger + api):
+One binary / one script manages all microservices (core + logger + web + api):
 
-    atf setup     first-time setup (asks only for your bot token)
-    atf start     start core + logger + api (all services, one command)
+    atf setup     interactive easy setup wizard (bot token, admin ID, web port)
+    atf start     start core + logger + web dashboard + api (all services in 1 cmd)
     atf stop      stop everything started by `atf start`
-    atf restart   stop + start
-    atf status    live status of every service
-    atf logs      tail recent logs of every service
-    atf health    deep health & diagnostics check
+    atf restart   stop + start all microservices
+    atf status    live status & ports of every service + dashboard URL
+    atf logs      tail recent logs of all services
+    atf health    deep health, diagnostic & connectivity check
     atf service   install OS service (systemd / launchd / Task Scheduler)
-    atf docker    docker compose lifecycle (up/down/logs/ps)
-    atf test      run the test-suite
+    atf docker    docker compose lifecycle (up/down/restart/logs/ps)
+    atf k8s       kubernetes lifecycle & deployment (apply/status/logs/generate)
+    atf test      run the test-suite (pytest + go)
     atf update    git pull + refresh dependencies
     atf restore   restore a session backup file
     atf version   print version
+    atf web       run web gateway in foreground
 
 Works in two modes:
   * source mode   — `python atf.py ...`  (creates .venv on first run)
@@ -59,11 +61,17 @@ CONFIG = ROOT / "config.yaml"
 PID_FILE = ROOT / "data" / "atf.pids"
 VERSION_FILE = BUNDLE / "VERSION" if FROZEN else ROOT / "VERSION"
 
-# `atf-api` (Go REST API) is an optional sidecar: prefer a binary sitting
-# next to us (release bundles ship it), else build from source if Go exists.
+# Candidates for Go REST API binary
 API_CANDIDATES = [
     ROOT / ("atf-api.exe" if IS_WIN else "atf-api"),
     ROOT / "api" / ("atf-api.exe" if IS_WIN else "atf-api"),
+]
+
+# Candidates for Rust Web Gateway binary (Axum + React)
+WEB_CANDIDATES = [
+    ROOT / ("atf-web-backend.exe" if IS_WIN else "atf-web-backend"),
+    ROOT / "web" / "backend" / "target" / "release" / ("atf-web-backend.exe" if IS_WIN else "atf-web-backend"),
+    ROOT / "web" / "backend" / "target" / "debug" / ("atf-web-backend.exe" if IS_WIN else "atf-web-backend"),
 ]
 
 # Public api_id/api_hash from the open-source Telegram Desktop client.
@@ -101,7 +109,7 @@ APP_VERSION = _detect_version()
 
 
 # --------------------------------------------------------------------------- #
-# Small helpers
+# Helpers & process management
 # --------------------------------------------------------------------------- #
 def run(cmd, **kw):
     kw.setdefault("cwd", ROOT)
@@ -130,12 +138,9 @@ def warn(msg: str) -> None:
     print(f"⚠️  {msg}")
 
 
-def die(msg: str, code: int = 1) -> "typing.NoReturn":  # noqa: F821
+def die(msg: str, code: int = 1):
     print(f"✗ {msg}")
     raise SystemExit(code)
-
-
-import typing  # noqa: E402  (kept late: cheap stdlib import)
 
 
 def proc_alive(pid: int) -> bool:
@@ -206,24 +211,22 @@ def _systemd_state(unit: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Environment bootstrap (source mode only)
+# Environment & toolchain bootstrapping
 # --------------------------------------------------------------------------- #
 def ensure_venv() -> None:
     if FROZEN:
-        return  # everything is baked into the binary
+        return
     if PY_EXE.exists():
         return
     import venv
 
-    step("Creating virtual environment ...")
+    step("Creating virtual environment (.venv) ...")
     venv.create(str(ROOT / ".venv"), with_pip=True)
-    step("Installing dependencies (this takes ~30s) ...")
-    run([str(PY_EXE), "-m", "pip", "install", "--quiet",
-         "--upgrade", "pip"])
+    step("Installing Python requirements (pip) ...")
+    run([str(PY_EXE), "-m", "pip", "install", "--quiet", "--upgrade", "pip"])
     req = ROOT / "requirements.txt"
     if req.exists():
-        run([str(PY_EXE), "-m", "pip", "install", "--quiet",
-             "-r", str(req)])
+        run([str(PY_EXE), "-m", "pip", "install", "--quiet", "-r", str(req)])
 
 
 def go_available() -> bool:
@@ -242,8 +245,6 @@ def build_api() -> "Path | None":
     if found:
         return found
     if not go_available():
-        print("[api] Go toolchain not found — REST API skipped "
-              "(bot still works 100%).")
         return None
     step("Building Go control API ...")
     out = ROOT / "api" / ("atf-api.exe" if IS_WIN else "atf-api")
@@ -251,51 +252,85 @@ def build_api() -> "Path | None":
     return out if out.exists() else None
 
 
+def find_web() -> "Path | None":
+    for cand in WEB_CANDIDATES:
+        if cand.exists():
+            return cand
+    return None
+
+
+def build_web() -> "Path | None":
+    found = find_web()
+    if found:
+        return found
+    if not have("cargo"):
+        return None
+    step("Building Rust Web Gateway (Axum + React) ...")
+    sh("cargo build --release", cwd=ROOT / "web" / "backend")
+    return find_web()
+
+
 # --------------------------------------------------------------------------- #
-# setup
+# Easy Setup Wizard (`atf setup`)
 # --------------------------------------------------------------------------- #
 def cmd_setup(_args=None) -> None:
-    p = argparse.ArgumentParser(description="AutoTelegramForward Setup")
+    p = argparse.ArgumentParser(description="AutoTelegramForward PRO Setup Wizard")
     p.add_argument("--token", help="Telegram Bot Token from @BotFather")
-    p.add_argument("--admin", default="",
-                   help="Telegram user ID for admin rights")
-    p.add_argument("--lang", default="fa",
-                   choices=["en", "fa", "ru", "zh"],
-                   help="Default language")
-    p.add_argument("--service", action="store_true",
-                   help="Auto install and start OS service")
-    p.add_argument("--non-interactive", action="store_true",
-                   help="Do not prompt for input")
+    p.add_argument("--admin", default="", help="Telegram user ID for admin rights")
+    p.add_argument("--lang", default="fa", choices=["en", "fa", "ru", "zh"], help="Default language")
+    p.add_argument("--web-port", type=int, default=8088, help="Web dashboard gateway port")
+    p.add_argument("--service", action="store_true", help="Auto install and start OS service")
+    p.add_argument("--start", action="store_true", help="Start all microservices immediately after setup")
+    p.add_argument("--non-interactive", action="store_true", help="Do not prompt for interactive input")
     args, _ = p.parse_known_args(sys.argv[2:])
 
     token = args.token or os.environ.get("ATF_BOT_TOKEN")
     admin = args.admin or os.environ.get("ATF_ADMIN_ID", "")
     lang = args.lang or os.environ.get("ATF_LANG", "fa")
+    web_port = args.web_port or int(os.environ.get("ATF_WEB_PORT", "8088"))
 
     if not token and not args.non_interactive and sys.stdin.isatty():
-        print("=" * 62)
-        print("  AutoTelegramForward — Easy Setup")
-        print("=" * 62)
-        token = input("\n(1/3) Paste your BOT TOKEN (from @BotFather): ").strip()
+        print("\n" + "=" * 68)
+        print("  🚀 AutoTelegramForward PRO — Easy Setup Wizard")
+        print("  Unified Cross-Platform Telegram Forwarding Microservice Platform")
+        print("=" * 68)
+        print("  راهنمای راه‌اندازی سریع و آسان — فقط در چند ثانیه:\n")
+
+        while not token:
+            print("▶ [۱/۴] توکن ربات تلگرام خود را وارد کنید:")
+            print("   (دریافت از بات رسمی تلگرام: @BotFather)")
+            token = input("   BOT TOKEN: ").strip()
+            if not token or ":" not in token:
+                print("   ⚠️ توکن نامعتبر است! توکن تلگرام باید شامل ':' باشد (مانند: 123456789:ABC...).")
+                token = ""
+
         if not admin:
-            admin = input("(2/3) Your Telegram user ID for admin rights "
-                          "(Enter to skip): ").strip()
-        print("(3/3) Language: 1=English  2=فارسی  3=Русский  4=中文  (Enter=2)")
-        ans = input("> ").strip()
-        lang = {"1": "en", "en": "en", "3": "ru", "ru": "ru",
-                "4": "zh", "zh": "zh"}.get(ans, "fa")
+            print("\n▶ [۲/۴] شناسه کاربری عددی ادمین (Admin User ID):")
+            print("   (دریافت شناسه از @userinfobot — برای رد شدن Enter بزنید)")
+            admin = input("   Admin ID [اختیاری]: ").strip()
+
+        print("\n▶ [۳/۴] زبان پیش‌فرض پنل و ربات (Language):")
+        print("   1) فارسی (پیش‌فرض)  |  2) English  |  3) Русский  |  4) 中文")
+        ans = input("   انتخاب [1]: ").strip()
+        lang = {"1": "fa", "fa": "fa", "2": "en", "en": "en", "3": "ru", "ru": "ru", "4": "zh", "zh": "zh"}.get(ans, "fa")
+
+        print(f"\n▶ [۴/۴] پورت درگاه وب و داشبورد کنترل: [پیش‌فرض: {web_port}]")
+        port_ans = input(f"   Port [{web_port}]: ").strip()
+        if port_ans.isdigit():
+            web_port = int(port_ans)
 
     if not token or ":" not in token:
-        die("Invalid or missing bot token. Provide --token or get one "
-            "from @BotFather.")
+        die("Invalid or missing bot token. Provide --token or get one from @BotFather.")
 
     ensure_venv()
     build_api()
+    build_web()
 
     import secrets
-
     master_key = secrets.token_urlsafe(32)
-    CONFIG.write_text(
+
+    config_content = (
+        f"# AutoTelegramForward PRO Configuration\n"
         f"api_id: {DEFAULT_API_ID}\n"
         f'api_hash: "{DEFAULT_API_HASH}"\n'
         f'bot_token: "{token}"\n'
@@ -304,35 +339,61 @@ def cmd_setup(_args=None) -> None:
         f'db_path: "data/atf.db"\n'
         f'grpc_host: "127.0.0.1"\n'
         f'grpc_port: 6001\n'
-        f'language: "{lang}"\n',
-        encoding="utf-8",
+        f'language: "{lang}"\n'
+        f'web_port: {web_port}\n'
+        f'web_addr: "0.0.0.0:{web_port}"\n'
     )
-    ok("Setup complete!  config.yaml written (master key auto-generated).")
+    CONFIG.write_text(config_content, encoding="utf-8")
+    ok("Setup complete! config.yaml written (master encryption key auto-generated).")
+
+    print("\n" + "-" * 68)
+    print("  🎉 تنظیمات با موفقیت ذخیره شد! سیستم آماده اجراست.")
+    print(f"  • وب‌داشبورد کنترل:  http://localhost:{web_port}")
+    print(f"  • هسته gRPC تلگرام: localhost:6001")
+    print(f"  • سرویس لاگ‌گیری:   localhost:6002")
+    print("-" * 68 + "\n")
+
     if args.service:
         cmd_service_install()
+        return
+
+    should_start = args.start
+    if not should_start and not args.non_interactive and sys.stdin.isatty():
+        launch_ans = input("▶ آیا مایلید همه میکروسرویس‌ها همین الان با هم اجرا شوند؟ [Y/n]: ").strip().lower()
+        if launch_ans in ("", "y", "yes"):
+            should_start = True
+
+    if should_start:
+        cmd_start()
     else:
-        print("▶  Start now with:   atf start "
-              "(or:  atf service install for autostart)\n")
+        print("▶ برای اجرای همه سرویس‌ها با هم:     atf start")
+        print("▶ برای نصب سرویس سیستم عامل:        atf service install")
+        print("▶ برای اجرا با کانتینرهای داکر:     atf docker up")
+        print("▶ برای استقرار روی کوبرنتس:         atf k8s apply\n")
 
 
 # --------------------------------------------------------------------------- #
-# start / stop / restart / status / logs  (single command, all services)
+# start / stop / restart / status / logs (all 4 microservices unified)
 # --------------------------------------------------------------------------- #
 def _service_env() -> dict:
-    return {**os.environ,
-            "ATF_GRPC_PORT": "6001",
-            "ATF_LOGGER_PORT": "6002",
-            "ATF_LOGGER_ADDR": "localhost:6002"}
+    return {
+        **os.environ,
+        "ATF_GRPC_PORT": "6001",
+        "ATF_LOGGER_PORT": "6002",
+        "ATF_LOGGER_ADDR": "localhost:6002",
+        "ATF_CORE_GRPC": "localhost:6001",
+    }
 
 
 def cmd_start(_args=None) -> None:
     if not CONFIG.exists():
-        die("No config.yaml — run:  atf setup")
+        die("No config.yaml found — run: atf setup")
     ensure_venv()
     api_exe = build_api()
+    web_exe = find_web() or build_web()
     env = _service_env()
 
-    # Refuse double-start.
+    # Refuse double-start
     pids = {k: v for k, v in read_pids().items() if proc_alive(v)}
     if pids:
         print("Already running: " +
@@ -345,41 +406,54 @@ def cmd_start(_args=None) -> None:
     log_file.parent.mkdir(parents=True, exist_ok=True)
     lf = open(log_file, "ab")
 
-    step("Starting Logger service (debug log store) ...")
+    step("Starting Logger microservice (gRPC port 6002) ...")
     logger_proc = subprocess.Popen(
         [str(PY_EXE), "-m", "logger.main"] if not FROZEN
         else [str(PY_EXE), "logger"],
         cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT)
     new_pids["logger"] = logger_proc.pid
-    time.sleep(2)
+    time.sleep(1.5)
 
-    step("Starting Python core (bot + gRPC) ...")
+    step("Starting Core microservice (bot + gRPC port 6001) ...")
     core = subprocess.Popen(
         [str(PY_EXE), "-m", "core.main"] if not FROZEN
         else [str(PY_EXE), "core"],
         cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT)
     new_pids["core"] = core.pid
+    time.sleep(1.5)
+
+    if web_exe:
+        step("Starting Rust Web Gateway & Dashboard (port 8088) ...")
+        web_env = {
+            **env,
+            "ATF_WEB_ADDR": "0.0.0.0:8088",
+            "ATF_DB_PATH": str(ROOT / "data" / "atf.db"),
+            "ATF_LOGS_DB_PATH": str(ROOT / "data" / "atf_logs.db"),
+        }
+        web_proc = subprocess.Popen(
+            [str(web_exe)], cwd=ROOT,
+            env=web_env, stdout=lf, stderr=subprocess.STDOUT)
+        new_pids["web"] = web_proc.pid
 
     if api_exe:
-        time.sleep(3)
+        step("Starting Go REST API on http://localhost:8080 ...")
         api_env = {**env, "ATF_CORE_GRPC": "localhost:6001"}
-        step("Starting Go API on http://localhost:8080 ...")
-        api = subprocess.Popen([str(api_exe)], cwd=ROOT / "api",
-                               env=api_env, stdout=lf, stderr=subprocess.STDOUT)
-        new_pids["api"] = api.pid
-        print("\n✅ Running!  Bot is live;  REST API: http://localhost:8080")
-    else:
-        print("\n✅ Running!  Bot is live (REST API skipped — no Go toolchain).")
+        api_proc = subprocess.Popen([str(api_exe)], cwd=ROOT / "api",
+                                    env=api_env, stdout=lf, stderr=subprocess.STDOUT)
+        new_pids["api"] = api_proc.pid
 
     write_pids(new_pids)
-    print(f"   Logs: {log_file}  (or: atf logs)")
-    print("   Manage: atf status | atf stop | atf restart\n")
+    print("\n" + "=" * 64)
+    print("  ✅ All microservices are live and operational!")
+    print(f"  • 🌐 Web Dashboard:    http://localhost:8088")
+    print(f"  • 🤖 Telegram Bot:     Active (core:6001)")
+    print(f"  • 📝 Logger Daemon:    Active (logger:6002)")
+    if api_exe:
+        print(f"  • 🔌 Go REST API:      http://localhost:8080")
+    print(f"  • 📄 Consolidated Log: {log_file}  (or: atf logs)")
+    print("=" * 64 + "\n")
 
-    # Foreground supervision: `atf start --no-daemonize` (systemd/launchd/
-    # Task Scheduler) or ATF_FOREGROUND=1 must NOT return — the supervisor
-    # treats an early exit as a crash and restart-loops.
-    foreground = os.environ.get("ATF_FOREGROUND") == "1" or \
-        "--no-daemonize" in sys.argv
+    foreground = os.environ.get("ATF_FOREGROUND") == "1" or "--no-daemonize" in sys.argv
     if foreground:
         try:
             logger_proc.wait()
@@ -392,7 +466,6 @@ def cmd_stop(_args=None) -> None:
     pids = read_pids()
     live = {k: v for k, v in pids.items() if proc_alive(v)}
     if not live:
-        # Fall back to OS-service stop when nothing was started via `atf start`.
         print("Nothing started via `atf start` is running.")
         return
     step("Stopping all services ...")
@@ -409,21 +482,27 @@ def cmd_restart(_args=None) -> None:
 
 
 def _describe() -> "list[tuple[str, str, str]]":
-    """(name, state, detail) rows for status output."""
     rows = []
     pids = read_pids()
-    for name in ("logger", "core", "api"):
+    for name in ("logger", "core", "web", "api"):
         pid = pids.get(name)
         if pid and proc_alive(pid):
             rows.append((name, "RUNNING", f"pid {pid}"))
         elif pid:
             rows.append((name, "DEAD", f"pid {pid} exited"))
         else:
-            # No `atf start` record — maybe the OS service runs it.
-            # (The Go API has no OS unit: its liveness is the :8080 port.)
             if name == "api":
                 rows.append((name, "RUNNING" if port_open(8080) else "STOPPED",
-                             "port :8080" if port_open(8080) else "—"))
+                             "http://localhost:8080" if port_open(8080) else "—"))
+                continue
+            if name == "web":
+                svc_state = _systemd_state("atf-web.service") if not IS_WIN and not IS_MAC else ""
+                if svc_state == "active" or port_open(8088):
+                    rows.append((name, "RUNNING", "http://localhost:8088"))
+                elif svc_state:
+                    rows.append((name, "STOPPED", f"os service: {svc_state}"))
+                else:
+                    rows.append((name, "STOPPED", "—"))
                 continue
             svc_state = _systemd_state(
                 "atf-logger.service" if name == "logger" else "atf.service"
@@ -434,22 +513,20 @@ def _describe() -> "list[tuple[str, str, str]]":
                 rows.append((name, "STOPPED", f"os service: {svc_state}"))
             else:
                 rows.append((name, "STOPPED", "—"))
-    rows.append(("core gRPC :6001",
-                 "LISTENING" if port_open(6001) else "CLOSED", ""))
-    rows.append(("logger :6002",
-                 "LISTENING" if port_open(6002) else "CLOSED", ""))
-    rows.append(("api :8080",
-                 "LISTENING" if port_open(8080) else "CLOSED", ""))
+    rows.append(("core gRPC :6001", "LISTENING" if port_open(6001) else "CLOSED", ""))
+    rows.append(("logger :6002", "LISTENING" if port_open(6002) else "CLOSED", ""))
+    rows.append(("web :8088", "LISTENING" if port_open(8088) else "CLOSED", "http://localhost:8088"))
+    rows.append(("api :8080", "LISTENING" if port_open(8080) else "CLOSED", "http://localhost:8080"))
     return rows
 
 
 def cmd_status(_args=None) -> None:
-    print(f"\n  AutoTelegramForward v{APP_VERSION} — service status")
-    print("  " + "-" * 44)
+    print(f"\n  AutoTelegramForward v{APP_VERSION} — Unified Microservices Status")
+    print("  " + "-" * 56)
     for name, state, detail in _describe():
         mark = "🟢" if state in ("RUNNING", "LISTENING") else \
                "🔴" if state in ("DEAD", "CLOSED") else "⚪"
-        print(f"  {mark} {name:<16} {state:<9} {detail}")
+        print(f"  {mark} {name:<18} {state:<9} {detail}")
     print()
 
 
@@ -460,7 +537,7 @@ def cmd_logs(_args=None) -> None:
                    help="Read from the OS service journal instead")
     args, _ = p.parse_known_args(sys.argv[2:])
     if args.service and not IS_WIN:
-        sh("journalctl --user -u atf.service -u atf-logger.service "
+        sh("journalctl --user -u atf.service -u atf-logger.service -u atf-web.service "
            f"-n {args.lines} --no-pager")
         return
     log_file = ROOT / "data" / "atf.out.log"
@@ -468,48 +545,43 @@ def cmd_logs(_args=None) -> None:
         if IS_WIN or IS_MAC or not _systemd_state("atf.service"):
             print("No logs yet — start services first (`atf start`).")
             return
-        # OS-service mode: fall through to the journal automatically.
         print("(local log empty — reading OS service journal …)")
         args.service = True
     if args.service and not IS_WIN:
-        sh("journalctl --user -u atf.service -u atf-logger.service "
+        sh("journalctl --user -u atf.service -u atf-logger.service -u atf-web.service "
            f"-n {args.lines} --no-pager")
         return
-    lines = log_file.read_text(encoding="utf-8",
-                               errors="replace").splitlines()
+    lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
     print("\n".join(lines[-args.lines:]))
 
 
-# --------------------------------------------------------------------------- #
-# health
-# --------------------------------------------------------------------------- #
 def cmd_health(_args=None) -> None:
-    print("=" * 60)
-    print(f"  AutoTelegramForward v{APP_VERSION} — Health & Diagnostics")
-    print("=" * 60)
+    print("=" * 64)
+    print(f"  AutoTelegramForward v{APP_VERSION} — Health & Diagnostics Check")
+    print("=" * 64)
     print(f"• Mode               : {'frozen binary' if FROZEN else 'source'}")
-    print(f"• Python executable  : {PY_EXE} "
-          f"({'OK' if Path(PY_EXE).exists() else 'MISSING'})")
-    print(f"• Config file        : {CONFIG} "
-          f"({'OK' if CONFIG.exists() else 'MISSING'})")
+    print(f"• Python executable  : {PY_EXE} ({'OK' if Path(PY_EXE).exists() else 'MISSING'})")
+    print(f"• Config file        : {CONFIG} ({'OK' if CONFIG.exists() else 'MISSING'})")
     db_file = ROOT / "data" / "atf.db"
-    print(f"• SQLite Database    : {db_file} "
-          f"({'OK' if db_file.exists() else 'MISSING'})")
+    print(f"• SQLite Database    : {db_file} ({'OK' if db_file.exists() else 'MISSING'})")
+    print(f"• Web Gateway binary : {find_web() or 'built in web/backend (Axum)'}")
     print(f"• Go API binary      : {find_api() or 'not built (optional)'}")
     print(f"• Core gRPC port 6001: {'ACTIVE' if port_open(6001) else 'INACTIVE'}")
     print(f"• Logger port 6002   : {'ACTIVE' if port_open(6002) else 'INACTIVE'}")
-    print(f"• REST API port 8080 : {'ACTIVE' if port_open(8080) else 'INACTIVE'}")
-    print(f"• Docker             : {'available' if have('docker') else 'not installed'}")
-    print("=" * 60)
+    print(f"• Web Gateway :8088  : {'ACTIVE (http://localhost:8088)' if port_open(8088) else 'INACTIVE'}")
+    print(f"• REST API port 8080 : {'ACTIVE (http://localhost:8080)' if port_open(8080) else 'INACTIVE'}")
+    print(f"• Docker Engine      : {'available' if have('docker') else 'not installed'}")
+    print(f"• Kubernetes kubectl : {'available' if have('kubectl') else 'not installed'}")
+    print("=" * 64)
 
 
 def cmd_version(_args=None) -> None:
-    print(f"atf {APP_VERSION} ({platform.system()}/{platform.machine()})"
+    print(f"atf v{APP_VERSION} ({platform.system()}/{platform.machine()})"
           f"{' [frozen]' if FROZEN else ''}")
 
 
 # --------------------------------------------------------------------------- #
-# OS service install (systemd / launchd / Task Scheduler)
+# OS Service Management (systemd / launchd / Task Scheduler)
 # --------------------------------------------------------------------------- #
 def cmd_service_install(_args=None) -> None:
     ensure_venv()
@@ -527,6 +599,8 @@ def cmd_service_install(_args=None) -> None:
 def _service_install_systemd(exe: str) -> None:
     d = Path.home() / ".config" / "systemd" / "user"
     d.mkdir(parents=True, exist_ok=True)
+    web_exe = find_web() or ROOT / "web" / "backend" / "target" / "release" / "atf-web-backend"
+
     logger_unit = f"""[Unit]
 Description=AutoTelegramForward Logger Microservice
 After=network.target
@@ -554,7 +628,25 @@ WorkingDirectory={ROOT}
 Environment="ATF_GRPC_PORT=6001"
 Environment="ATF_LOGGER_PORT=6002"
 Environment="ATF_LOGGER_ADDR=localhost:6002"
-ExecStart={exe} start --no-daemonize
+ExecStart={exe} core
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+"""
+    web_unit = f"""[Unit]
+Description=AutoTelegramForward Web Microservice (Rust + Axum & React)
+After=network.target atf.service
+Wants=atf.service
+
+[Service]
+Type=simple
+WorkingDirectory={ROOT}
+Environment="ATF_WEB_ADDR=0.0.0.0:8088"
+Environment="ATF_DB_PATH=data/atf.db"
+Environment="ATF_LOGS_DB_PATH=data/atf_logs.db"
+ExecStart={web_exe if web_exe.exists() else f"{exe} web"}
 Restart=always
 RestartSec=3
 
@@ -563,9 +655,10 @@ WantedBy=default.target
 """
     (d / "atf-logger.service").write_text(logger_unit, encoding="utf-8")
     (d / "atf.service").write_text(atf_unit, encoding="utf-8")
+    (d / "atf-web.service").write_text(web_unit, encoding="utf-8")
     ok("Systemd user units written to ~/.config/systemd/user/")
     sh("systemctl --user daemon-reload")
-    sh("systemctl --user enable --now atf-logger.service atf.service")
+    sh("systemctl --user enable --now atf-logger.service atf.service atf-web.service")
     sh("loginctl enable-linger $(whoami) 2>/dev/null || true")
     ok("Services enabled, started, and linger enabled.")
     cmd_service_status()
@@ -598,7 +691,6 @@ def _service_install_launchd(exe: str) -> None:
 
 
 def _service_install_windows(exe: str) -> None:
-    # Autostart via Task Scheduler (no admin rights needed for logon tasks).
     task = "AutoTelegramForward"
     sh(f'schtasks /delete /tn "{task}" /f 2>NUL || exit 0')
     rc = sh(f'schtasks /create /tn "{task}" /tr "\\"{exe}\\" start" '
@@ -612,10 +704,8 @@ def _service_install_windows(exe: str) -> None:
 
 def cmd_service_status(_args=None) -> None:
     cmd_status()
-    if not IS_WIN:
-        if (Path.home() / ".config/systemd/user/atf.service").exists():
-            sh("systemctl --user status atf.service atf-logger.service "
-               "--no-pager 2>/dev/null || true")
+    if not IS_WIN and not IS_MAC:
+        sh("systemctl --user status atf.service atf-logger.service atf-web.service --no-pager 2>/dev/null || true")
 
 
 def cmd_service_uninstall(_args=None) -> None:
@@ -627,10 +717,9 @@ def cmd_service_uninstall(_args=None) -> None:
         if f.exists():
             f.unlink()
     else:
-        sh("systemctl --user disable --now atf.service atf-logger.service "
-           "2>/dev/null || true")
+        sh("systemctl --user disable --now atf.service atf-logger.service atf-web.service 2>/dev/null || true")
         d = Path.home() / ".config" / "systemd" / "user"
-        for name in ("atf.service", "atf-logger.service"):
+        for name in ("atf.service", "atf-logger.service", "atf-web.service"):
             f = d / name
             if f.exists():
                 f.unlink()
@@ -648,19 +737,19 @@ def cmd_service(_args=None) -> None:
         if IS_WIN or IS_MAC:
             cmd_start()
         else:
-            sh("systemctl --user start atf-logger.service atf.service")
+            sh("systemctl --user start atf-logger.service atf.service atf-web.service")
             cmd_service_status()
     elif sub == "stop":
         if IS_WIN or IS_MAC:
             cmd_stop()
         else:
-            sh("systemctl --user stop atf.service atf-logger.service")
+            sh("systemctl --user stop atf.service atf-logger.service atf-web.service")
             print("🛑 Services stopped.")
     elif sub == "restart":
         if IS_WIN or IS_MAC:
             cmd_restart()
         else:
-            sh("systemctl --user restart atf-logger.service atf.service")
+            sh("systemctl --user restart atf-logger.service atf.service atf-web.service")
             cmd_service_status()
     elif sub in ("logs", "log"):
         cmd_logs(["--service"])
@@ -671,7 +760,7 @@ def cmd_service(_args=None) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# docker lifecycle — one file to rule the containers too
+# Docker compose lifecycle
 # --------------------------------------------------------------------------- #
 def _compose_file() -> Path:
     for cand in (ROOT / "docker-compose.yml", ROOT / "docker-compose.yaml"):
@@ -681,12 +770,11 @@ def _compose_file() -> Path:
 
 
 def _compose_base() -> "list[str]":
-    if have("docker") and sh("docker compose version",
-                             capture_output=True).returncode == 0:
+    if have("docker") and sh("docker compose version", capture_output=True).returncode == 0:
         return ["docker", "compose"]
     if have("docker-compose"):
         return ["docker-compose"]
-    die("Docker is not installed. Get it at https://docs.docker.com/get-docker/")
+    die("Docker is not installed. Please install Docker first: https://docs.docker.com/get-docker/")
 
 
 def cmd_docker(_args=None) -> None:
@@ -695,10 +783,10 @@ def cmd_docker(_args=None) -> None:
     base = _compose_base()
 
     if sub == "up":
-        step("Building + starting all containers (multi-arch images) ...")
+        step("Building & launching microservices containers (core + logger + web + api) ...")
         run([*base, "-f", str(compose), "up", "-d", "--build"])
         run([*base, "-f", str(compose), "ps"])
-        ok("Containers up. API: http://localhost:8080")
+        ok("All containers started!\n  • Web Dashboard: http://localhost:8088\n  • REST API:      http://localhost:8080")
     elif sub == "down":
         run([*base, "-f", str(compose), "down"])
         ok("Containers stopped and removed.")
@@ -707,8 +795,7 @@ def cmd_docker(_args=None) -> None:
         ok("Containers restarted.")
     elif sub in ("logs", "log"):
         svc = sys.argv[3] if len(sys.argv) > 3 else None
-        run([*base, "-f", str(compose), "logs", "--tail=100", "-f"]
-            + ([svc] if svc else []))
+        run([*base, "-f", str(compose), "logs", "--tail=100", "-f"] + ([svc] if svc else []))
     elif sub == "ps":
         run([*base, "-f", str(compose), "ps"])
     elif sub == "pull":
@@ -719,15 +806,77 @@ def cmd_docker(_args=None) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Kubernetes lifecycle (`atf k8s`)
+# --------------------------------------------------------------------------- #
+def cmd_k8s(_args=None) -> None:
+    sub = sys.argv[2] if len(sys.argv) > 2 else "status"
+    k8s_dir = ROOT / "k8s"
+    all_in_one = k8s_dir / "all-in-one.yaml"
+
+    if not have("kubectl"):
+        warn("`kubectl` command line tool not found in PATH.")
+        print("Install kubectl: https://kubernetes.io/docs/tasks/tools/")
+
+    if sub == "apply":
+        if not all_in_one.exists():
+            die(f"Manifest not found at {all_in_one}")
+        step("Deploying AutoTelegramForward microservices to Kubernetes ...")
+        sh(f"kubectl apply -f {all_in_one}")
+        ok("Kubernetes manifests applied. Checking pod status in namespace `autoforward` ...")
+        time.sleep(2)
+        sh("kubectl get pods,svc,pvc -n autoforward")
+    elif sub == "status":
+        step("Kubernetes microservices status in namespace `autoforward`:")
+        sh("kubectl get all,pvc -n autoforward")
+    elif sub in ("logs", "log"):
+        svc = sys.argv[3] if len(sys.argv) > 3 else "core"
+        sh(f"kubectl logs -n autoforward -l app=atf-{svc} --tail=100 -f")
+    elif sub == "delete":
+        if not all_in_one.exists():
+            die(f"Manifest not found at {all_in_one}")
+        step("Deleting AutoTelegramForward from Kubernetes ...")
+        sh(f"kubectl delete -f {all_in_one}")
+        ok("Kubernetes resources removed.")
+    elif sub == "generate":
+        step("Generating custom Kubernetes deployment manifest from config.yaml ...")
+        token = "CHANGE_ME_BOT_TOKEN"
+        admin = "0"
+        master_key = "CHANGE_ME_MASTER_KEY"
+        if CONFIG.exists():
+            try:
+                import yaml
+                data = yaml.safe_load(CONFIG.read_text(encoding="utf-8")) or {}
+                token = data.get("bot_token", token)
+                admin_ids = data.get("admin_ids", [0])
+                admin = str(admin_ids[0]) if admin_ids else "0"
+                master_key = data.get("master_key", master_key)
+            except Exception:
+                pass
+        custom_out = k8s_dir / "custom-deploy.yaml"
+        raw_manifest = (k8s_dir / "all-in-one.yaml").read_text(encoding="utf-8")
+        raw_manifest = raw_manifest.replace("CHANGE_ME_BOT_TOKEN", token)
+        raw_manifest = raw_manifest.replace("CHANGE_ME_RANDOM_MASTER_KEY_32_CHARS", master_key)
+        raw_manifest = raw_manifest.replace('ATF_ADMIN_ID: "0"', f'ATF_ADMIN_ID: "{admin}"')
+        custom_out.write_text(raw_manifest, encoding="utf-8")
+        ok(f"Generated ready-to-apply manifest with your secrets: {custom_out}")
+        print("Apply it anytime with:   kubectl apply -f k8s/custom-deploy.yaml")
+    else:
+        print("Usage: atf k8s [apply|status|logs [core|logger|web|api]|delete|generate]")
+
+
+# --------------------------------------------------------------------------- #
 # test / update / restore
 # --------------------------------------------------------------------------- #
 def cmd_test(_args=None) -> None:
     ensure_venv()
-    print("▶ Python tests ...")
+    print("▶ Running Python test-suite ...")
     run([str(PY_EXE), "-m", "pytest", "-q", *sys.argv[2:]])
     if go_available() and (ROOT / "api").exists():
-        print("▶ Go tests ...")
+        print("▶ Running Go API test-suite ...")
         sh("go test ./...", cwd=ROOT / "api")
+    if have("cargo") and (ROOT / "web" / "backend").exists():
+        print("▶ Running Rust Web tests ...")
+        sh("cargo test", cwd=ROOT / "web" / "backend")
     ok("All tests passed.")
 
 
@@ -742,6 +891,8 @@ def cmd_update(_args=None) -> None:
          "pyrogram", "tgcrypto", "grpcio", "httpx", "cryptography", "pyyaml"])
     if find_api():
         build_api()
+    if find_web():
+        build_web()
     ok("Updated.")
 
 
@@ -757,8 +908,7 @@ def cmd_restore(_args=None) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Frozen-mode service shims: `atf core` / `atf logger` run one service in the
-# foreground (used by systemd units, launchd, Task Scheduler AND by `start`).
+# Foreground service shims (`atf core` / `atf logger` / `atf web`)
 # --------------------------------------------------------------------------- #
 def cmd_core(_args=None) -> None:
     os.environ.setdefault("ATF_GRPC_PORT", "6001")
@@ -781,6 +931,17 @@ def cmd_logger(_args=None) -> None:
     asyncio.run(main())
 
 
+def cmd_web(_args=None) -> None:
+    web_exe = find_web() or build_web()
+    if not web_exe:
+        die("Web binary not found and cargo not available.")
+    env = _service_env()
+    env["ATF_WEB_ADDR"] = "0.0.0.0:8088"
+    env["ATF_DB_PATH"] = str(ROOT / "data" / "atf.db")
+    env["ATF_LOGS_DB_PATH"] = str(ROOT / "data" / "atf_logs.db")
+    subprocess.run([str(web_exe)], cwd=ROOT, env=env)
+
+
 # --------------------------------------------------------------------------- #
 COMMANDS = {
     "setup": cmd_setup,
@@ -793,12 +954,14 @@ COMMANDS = {
     "version": cmd_version,
     "service": cmd_service,
     "docker": cmd_docker,
+    "k8s": cmd_k8s,
     "test": cmd_test,
     "update": cmd_update,
     "restore": cmd_restore,
-    # frozen-mode shims (also handy for debugging single services)
+    # Foreground microservice shims
     "core": cmd_core,
     "logger": cmd_logger,
+    "web": cmd_web,
 }
 
 
