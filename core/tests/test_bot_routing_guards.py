@@ -463,3 +463,55 @@ async def test_finish_rule_creation_flow():
     created = ui._rules.create.call_args[0][0]
     assert created.source_chat_id == "-100111"
     assert created.target_chat_id == "-100222"
+
+
+@pytest.mark.asyncio
+async def test_chat_picker_cancellation_and_back_routes():
+    """Chat picker during rule creation must have r_cancel (not stale rule_id edit callbacks)
+    and rule_target must have r_back_source."""
+    from core.infrastructure.telegram.pro_bot_ui import ProBotUI, UiState
+
+    ui = object.__new__(ProBotUI)
+    ui._t = lambda key, **kw: key
+    ui._kbd = lambda rows: rows
+
+    # Case 1: rule_source with leftover buffer from another rule edit
+    st_src = UiState(
+        step="rule_source",
+        buffer={"rule_id": "stale_rule_999", "in_draft": True, "chats": [
+            {"id": "-1001", "title": "Chan", "emoji": "📢", "kind": "channel", "username": "chan"}
+        ], "page": 0},
+    )
+    _, kbd_src = ui._render_chat_picker(st_src, role="source", page=0)
+    # The last row must contain cancel button with "r_cancel"
+    bottom_row_src = kbd_src[-1]  # type: ignore[index]
+    callbacks_src = [cb for _, cb in bottom_row_src]
+    assert "r_cancel" in callbacks_src
+    assert "re:stale_rule_999" not in callbacks_src
+    assert "rd:stale_rule_999" not in callbacks_src
+
+    # Case 2: rule_target must have r_back_source and r_cancel
+    st_tgt = UiState(
+        step="rule_target",
+        rule_source="-1001",
+        buffer={"source_name": "Chan", "chats": [
+            {"id": "-1002", "title": "Target", "emoji": "📢", "kind": "channel", "username": "tgt"}
+        ], "page": 0},
+    )
+    _, kbd_tgt = ui._render_chat_picker(st_tgt, role="target", page=0)
+    bottom_row_tgt = kbd_tgt[-1]  # type: ignore[index]
+    callbacks_tgt = [cb for _, cb in bottom_row_tgt]
+    assert "r_back_source" in callbacks_tgt
+    assert "r_cancel" in callbacks_tgt
+
+    # Case 3: rule_edit_source with legitimate rule_id in draft
+    st_edit = UiState(
+        step="rule_edit_source",
+        buffer={"rule_id": "real_rule_123", "in_draft": True, "chats": [
+            {"id": "-1001", "title": "Chan", "emoji": "📢", "kind": "channel", "username": "chan"}
+        ], "page": 0},
+    )
+    _, kbd_edit = ui._render_chat_picker(st_edit, role="source", page=0)
+    bottom_row_edit = kbd_edit[-1]  # type: ignore[index]
+    callbacks_edit = [cb for _, cb in bottom_row_edit]
+    assert "re:real_rule_123" in callbacks_edit

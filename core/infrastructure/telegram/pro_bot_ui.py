@@ -635,10 +635,14 @@ class ProBotUI:
                 return ""
             return str(text).replace("*", "").replace("_", " ").replace("`", "'").replace("[", "(").replace("]", ")")
 
-        cancel_cb = CB["cancel"]
-        if isinstance(st.buffer, dict) and st.buffer.get("rule_id"):
+        is_edit = str(st.step).startswith("rule_edit_")
+        if is_edit and isinstance(st.buffer, dict) and st.buffer.get("rule_id"):
             rid = st.buffer.get("rule_id")
             cancel_cb = f"re:{rid}" if st.buffer.get("in_draft") else f"rd:{rid}"
+        elif st.step in ("rule_source", "rule_target"):
+            cancel_cb = "r_cancel"
+        else:
+            cancel_cb = CB["cancel"]
 
         if chats:
             total_items = len(chats)
@@ -689,10 +693,13 @@ class ProBotUI:
                 nav_row.append(("بعدی ▶️", f"pg:{rc}:{page + 1}"))
             rows.append(nav_row)
 
-            rows.append([
+            bottom_row: List[Tuple[str, str]] = [
                 ("🔄 تازه‌سازی لیست", f"rfc:{rc}"),
-                ("❌ انصراف", cancel_cb),
-            ])
+            ]
+            if st.step == "rule_target":
+                bottom_row.append(("⬅️ تغییر مبدأ", "r_back_source"))
+            bottom_row.append(("❌ انصراف", cancel_cb))
+            rows.append(bottom_row)
             return text, self._kbd(rows)
 
         # Fallback when no chats could be fetched automatically
@@ -716,10 +723,12 @@ class ProBotUI:
                 "👈 مثلاً: `-1009876543210` یا `@target_channel`"
             )
 
-        fallback_rows = [
+        fallback_rows: List[List[Tuple[str, str]]] = [
             [("🔄 تلاش مجدد برای دریافت لیست", f"rfc:{rc}")],
-            [("❌ انصراف", cancel_cb)],
         ]
+        if st.step == "rule_target":
+            fallback_rows.append([("⬅️ تغییر مبدأ", "r_back_source")])
+        fallback_rows.append([("❌ انصراف", cancel_cb)])
         return text, self._kbd(fallback_rows)
 
     async def _fetch_dialogs(self) -> List[Dict[str, Any]]:
@@ -1115,12 +1124,20 @@ class ProBotUI:
         async def _cb_cancel(_, cq: CallbackQuery):
             uid = cq.from_user.id
             st = self._state(uid)
+            old_step = str(st.step or "")
             st.step = ""
+            st.rule_source = ""
+            st.rule_target = ""
             if isinstance(st.buffer, dict):
                 st.buffer.clear()
             await self._persist(uid, st)
             self._login.cancel(uid)
-            await cq.edit_message_text(self._t("ui_cancelled"), reply_markup=self._main_menu())
+            if old_step.startswith("rule_"):
+                rules = await self._rules.list_all()
+                text, kbd = self._render_rules_list(rules, page=0)
+                await cq.edit_message_text(text, reply_markup=kbd)
+            else:
+                await cq.edit_message_text(self._t("ui_cancelled"), reply_markup=self._main_menu())
             await cq.answer()
 
         # ---------------- login flow ----------------
@@ -1239,8 +1256,7 @@ class ProBotUI:
             st.step = "rule_source"
             st.rule_source = ""
             st.rule_target = ""
-            if not isinstance(st.buffer, dict):
-                st.buffer = {}
+            st.buffer = {}
 
             try:
                 await cq.answer("⏳ در حال دریافت لیست گفتگوها...")
@@ -1409,6 +1425,38 @@ class ProBotUI:
             text, markup = self._render_chat_picker(st, role=role, page=0)
             await cq.edit_message_text(text, reply_markup=markup)
 
+        @b.on_callback_query(filters.regex(r"^r_cancel$"))
+        async def _cb_rule_cancel(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id
+            st = self._state(uid)
+            st.step = ""
+            st.rule_source = ""
+            st.rule_target = ""
+            if isinstance(st.buffer, dict):
+                st.buffer.clear()
+            await self._persist(uid, st)
+            rules = await self._rules.list_all()
+            text, kbd = self._render_rules_list(rules, page=0)
+            await cq.edit_message_text(text, reply_markup=kbd)
+            await cq.answer("❌ عملیات ایجاد قانون لغو شد")
+
+        @b.on_callback_query(filters.regex(r"^r_back_source$"))
+        async def _cb_rule_back_source(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id
+            st = self._state(uid)
+            st.step = "rule_source"
+            st.rule_target = ""
+            if isinstance(st.buffer, dict):
+                st.buffer["page"] = 0
+            await self._persist(uid, st)
+            text, markup = self._render_chat_picker(st, role="source", page=0)
+            await cq.edit_message_text(text, reply_markup=markup)
+            await cq.answer("⬅️ بازگشت به انتخاب مبدأ")
+
         @b.on_callback_query(filters.regex(r"^noop$"))
         async def _cb_noop(_, cq: CallbackQuery):
             await cq.answer()
@@ -1470,7 +1518,18 @@ class ProBotUI:
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                st = self._state(cq.from_user.id)
+                st.step = ""
+                if isinstance(st.buffer, dict):
+                    st.buffer.clear()
+                await self._persist(cq.from_user.id, st)
+                rules = await self._rules.list_all()
+                text, kbd = self._render_rules_list(rules, page=0)
+                try:
+                    await cq.edit_message_text(text, reply_markup=kbd)
+                except Exception:
+                    pass
+                return await cq.answer("❌ این قانون یافت نشد یا ممکن است حذف شده باشد.", show_alert=True)
             text, kbd = self._render_rule_detail(rule)
             await cq.edit_message_text(text, reply_markup=kbd)
             await cq.answer()
@@ -1828,6 +1887,17 @@ class ProBotUI:
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
+                st = self._state(cq.from_user.id)
+                st.step = ""
+                if isinstance(st.buffer, dict):
+                    st.buffer.clear()
+                await self._persist(cq.from_user.id, st)
+                rules = await self._rules.list_all()
+                text, kbd = self._render_rules_list(rules, page=0)
+                try:
+                    await cq.edit_message_text(text, reply_markup=kbd)
+                except Exception:
+                    pass
                 return await cq.answer("❌ این قانون یافت نشد یا ممکن است حذف شده باشد.", show_alert=True)
 
             uid = cq.from_user.id
