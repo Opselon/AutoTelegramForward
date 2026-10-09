@@ -396,6 +396,21 @@ class ForwardRuleControlServiceStub:
                 request_serializer=autoforward__pb2.DeleteRuleRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.StatusResponse.FromString,
                 _registered_method=True)
+        self.TestRule = channel.unary_unary(
+                '/autoforward.ForwardRuleControlService/TestRule',
+                request_serializer=autoforward__pb2.TestRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.TestRuleResponse.FromString,
+                _registered_method=True)
+        self.PauseRule = channel.unary_unary(
+                '/autoforward.ForwardRuleControlService/PauseRule',
+                request_serializer=autoforward__pb2.PauseRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.RuleActionResponse.FromString,
+                _registered_method=True)
+        self.ResumeRule = channel.unary_unary(
+                '/autoforward.ForwardRuleControlService/ResumeRule',
+                request_serializer=autoforward__pb2.PauseRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.RuleActionResponse.FromString,
+                _registered_method=True)
 
 
 class ForwardRuleControlServiceServicer:
@@ -425,6 +440,24 @@ class ForwardRuleControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def TestRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PauseRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ResumeRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ForwardRuleControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -447,6 +480,21 @@ def add_ForwardRuleControlServiceServicer_to_server(servicer, server):
                     servicer.DeleteRule,
                     request_deserializer=autoforward__pb2.DeleteRuleRequest.FromString,
                     response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'TestRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.TestRule,
+                    request_deserializer=autoforward__pb2.TestRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.TestRuleResponse.SerializeToString,
+            ),
+            'PauseRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.PauseRule,
+                    request_deserializer=autoforward__pb2.PauseRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.RuleActionResponse.SerializeToString,
+            ),
+            'ResumeRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.ResumeRule,
+                    request_deserializer=autoforward__pb2.PauseRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.RuleActionResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -557,6 +605,288 @@ class ForwardRuleControlService:
             '/autoforward.ForwardRuleControlService/DeleteRule',
             autoforward__pb2.DeleteRuleRequest.SerializeToString,
             autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def TestRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ForwardRuleControlService/TestRule',
+            autoforward__pb2.TestRuleRequest.SerializeToString,
+            autoforward__pb2.TestRuleResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PauseRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ForwardRuleControlService/PauseRule',
+            autoforward__pb2.PauseRuleRequest.SerializeToString,
+            autoforward__pb2.RuleActionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ResumeRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ForwardRuleControlService/ResumeRule',
+            autoforward__pb2.PauseRuleRequest.SerializeToString,
+            autoforward__pb2.RuleActionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class DeliveryControlServiceStub:
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.GetDeliveryStats = channel.unary_unary(
+                '/autoforward.DeliveryControlService/GetDeliveryStats',
+                request_serializer=autoforward__pb2.DeliveryStatsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.DeliveryStatsResponse.FromString,
+                _registered_method=True)
+        self.ListDeadLetter = channel.unary_unary(
+                '/autoforward.DeliveryControlService/ListDeadLetter',
+                request_serializer=autoforward__pb2.ListDeadLetterRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListDeadLetterResponse.FromString,
+                _registered_method=True)
+        self.ReplayDeadLetter = channel.unary_unary(
+                '/autoforward.DeliveryControlService/ReplayDeadLetter',
+                request_serializer=autoforward__pb2.ReplayDeadLetterRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.RuleActionResponse.FromString,
+                _registered_method=True)
+        self.PurgeDeadLetter = channel.unary_unary(
+                '/autoforward.DeliveryControlService/PurgeDeadLetter',
+                request_serializer=autoforward__pb2.PurgeDeadLetterRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.RuleActionResponse.FromString,
+                _registered_method=True)
+
+
+class DeliveryControlServiceServicer:
+    """Missing associated documentation comment in .proto file."""
+
+    def GetDeliveryStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListDeadLetter(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReplayDeadLetter(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PurgeDeadLetter(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_DeliveryControlServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'GetDeliveryStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDeliveryStats,
+                    request_deserializer=autoforward__pb2.DeliveryStatsRequest.FromString,
+                    response_serializer=autoforward__pb2.DeliveryStatsResponse.SerializeToString,
+            ),
+            'ListDeadLetter': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListDeadLetter,
+                    request_deserializer=autoforward__pb2.ListDeadLetterRequest.FromString,
+                    response_serializer=autoforward__pb2.ListDeadLetterResponse.SerializeToString,
+            ),
+            'ReplayDeadLetter': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReplayDeadLetter,
+                    request_deserializer=autoforward__pb2.ReplayDeadLetterRequest.FromString,
+                    response_serializer=autoforward__pb2.RuleActionResponse.SerializeToString,
+            ),
+            'PurgeDeadLetter': grpc.unary_unary_rpc_method_handler(
+                    servicer.PurgeDeadLetter,
+                    request_deserializer=autoforward__pb2.PurgeDeadLetterRequest.FromString,
+                    response_serializer=autoforward__pb2.RuleActionResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'autoforward.DeliveryControlService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('autoforward.DeliveryControlService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class DeliveryControlService:
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def GetDeliveryStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.DeliveryControlService/GetDeliveryStats',
+            autoforward__pb2.DeliveryStatsRequest.SerializeToString,
+            autoforward__pb2.DeliveryStatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListDeadLetter(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.DeliveryControlService/ListDeadLetter',
+            autoforward__pb2.ListDeadLetterRequest.SerializeToString,
+            autoforward__pb2.ListDeadLetterResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReplayDeadLetter(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.DeliveryControlService/ReplayDeadLetter',
+            autoforward__pb2.ReplayDeadLetterRequest.SerializeToString,
+            autoforward__pb2.RuleActionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PurgeDeadLetter(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.DeliveryControlService/PurgeDeadLetter',
+            autoforward__pb2.PurgeDeadLetterRequest.SerializeToString,
+            autoforward__pb2.RuleActionResponse.FromString,
             options,
             channel_credentials,
             insecure,

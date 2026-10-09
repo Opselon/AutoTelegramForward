@@ -25,6 +25,7 @@ type Clients struct {
 	AI         pb.AIControlServiceClient
 	System     pb.SystemStatusControlServiceClient
 	Logs       pb.LogControlServiceClient
+	Delivery   pb.DeliveryControlServiceClient
 }
 
 // NewClients bundles the core service stubs.
@@ -35,6 +36,7 @@ func NewClients(conn *grpc.ClientConn) *Clients {
 		Filters:  pb.NewFilterControlServiceClient(conn),
 		AI:       pb.NewAIControlServiceClient(conn),
 		System:   pb.NewSystemStatusControlServiceClient(conn),
+		Delivery: pb.NewDeliveryControlServiceClient(conn),
 	}
 }
 

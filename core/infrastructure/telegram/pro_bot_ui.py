@@ -410,6 +410,14 @@ class ProBotUI:
         }
         alb_badge = album_names.get(rule.album_mode, "🖼 آلبوم کامل")
 
+        # Smart routing summary
+        smart_cat = getattr(rule, "message_category", "ALL")
+        cat_labels = {"ALL": "🌟 همه پیام‌ها", "VIP_ONLY": "💎 فقط VIP", "NORMAL_ONLY": "👤 فقط عادی"}
+        cat_badge = cat_labels.get(smart_cat, smart_cat)
+        use_mid = bool(getattr(rule, "use_intermediate", False))
+        mid_id = getattr(rule, "intermediate_channel_id", "") or ""
+        mid_badge = f"🟢 فعال (`{mid_id[:12]}`)" if (use_mid and mid_id) else "🔴 غیرفعال"
+
         text = (
             "⚙️ **تنظیمات پیشرفته قانون انتقال**\n\n"
             f"📡 **مبدأ:** `{src_label}` (`{rule.source_chat_id}`)\n"
@@ -417,6 +425,7 @@ class ProBotUI:
             f"📊 **وضعیت:** {status_str}\n"
             f"⚡ **حالت ارسال:** {mode_title}\n"
             "────────────────────\n"
+            f"💎 **رده هوشمند:** {cat_badge} | **واسط VIP:** {mid_badge}\n"
             f"🔤 **جایگزینی متن:** {reps_badge}\n"
             f"📝 **هدر:** {hdr_badge} | **فوتر:** {ftr_badge}\n"
             f"🔗 **لینک:** {lk_badge} | 🎙 **ویس:** {vc_badge}\n"
@@ -432,6 +441,7 @@ class ProBotUI:
                 ("📡 تغییر مبدأ", f"res:{rule.id}"),
                 ("🎯 تغییر مقصد", f"ret:{rule.id}"),
             ],
+            [("💎 مسیریابی هوشمند و VIP (Smart Rules)", f"rsm:{rule.id}")],
             [("🔤 جایگزینی متن (Text Replace)", f"rtx:{rule.id}")],
             [("📝 تنظیم هدر و فوتر", f"rhf:{rule.id}")],
             [
@@ -625,6 +635,78 @@ class ProBotUI:
                 ("✏️ تنظیم فوتر", f"rf_s:{rule.id}"),
                 ("🗑 حذف فوتر", f"rf_d:{rule.id}"),
             ],
+            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+        ]
+        return "\n".join(lines), self._kbd(rows)
+
+    def _render_smart_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render dedicated smart routing, VIP channel, and deduplication menu."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+
+        cat = getattr(rule, "message_category", "ALL")
+        cat_map = {
+            "ALL": ("🌟 همه پیام‌ها", "ارسال تمام پیام‌های عادی و VIP"),
+            "VIP_ONLY": ("💎 فقط پیام‌های VIP", "تفکیک هوشمند فقط پیام‌های دارای متادیتای معتبر VIP"),
+            "NORMAL_ONLY": ("👤 فقط پیام‌های عادی", "انتقال پیام‌های عمومی کاربران بدون برچسب VIP"),
+        }
+        cat_title, cat_desc = cat_map.get(cat, (cat, "حالت سفارشی"))
+
+        use_mid = bool(getattr(rule, "use_intermediate", False))
+        mid_id = getattr(rule, "intermediate_channel_id", "") or ""
+        mid_name = getattr(rule, "intermediate_channel_name", "") or ""
+        mid_display = f"`{mid_name or mid_id}`" if mid_id else "❌ تنظیم نشده"
+        mid_status = "🟢 فعال" if (use_mid and mid_id) else ("⚠️ غیرفعال (کانال خالی)" if use_mid else "🔴 غیرفعال")
+
+        f_mode = getattr(rule, "forward_mode", ForwardMode.COPY_MESSAGE)
+        mode_val = getattr(f_mode, "value", str(f_mode))
+        mode_map = {
+            "COPY_MESSAGE": "📋 کپی بدون تگ (Clean Copy)",
+            "DIRECT_FORWARD": "↗️ فوروارد با تگ تلگرام (Native Forward)",
+            "CUSTOM_HEADER_COPY": "🏷 کپی با هدر اختصاصی (Custom Header Copy)",
+            "REWRITE_AI": "🤖 بازنویسی با هوش مصنوعی",
+        }
+        mode_label = mode_map.get(mode_val, mode_val)
+
+        chdr = getattr(rule, "custom_header", "") or ""
+        hdr_display = f"`{chdr[:20]}…`" if len(chdr) > 20 else (f"`{chdr}`" if chdr else "❌ تنظیم نشده")
+
+        prio = int(getattr(rule, "priority", 10) or 10)
+
+        lines = [
+            "💎 **تنظیمات پیشرفته مسیریابی هوشمند و VIP (Smart Rules)**\n",
+            f"قانون: **{src_label} ➔ {dst_label}**\n",
+            "────────────────────",
+            f"🔀 **دسته پیام:** {cat_title}",
+            f"ℹ️ *{cat_desc}*\n",
+            f"🔄 **مسیر کانال واسط VIP:** {mid_status}",
+            f"📡 **کانال واسط:** {mid_display}",
+            f"⚡ **حالت ارسال:** {mode_label}",
+            f"🏷 **هدر اختصاصی کپی:** {hdr_display}",
+            f"🎯 **اولویت بررسی قانون:** `{prio}` (قوانین با اولویت بالاتر زودتر اجرا می‌شوند)",
+            "🛡 **سیاست Fallback:** تنزل خودکار به Copy Message در صورت محدودیت کپی‌رایت/فوروارد تلگرام",
+            "🔒 **ضد لوپ و دابل‌سند:** فعال با بررسی متادیتای chat_id, message_id و forward_origin\n",
+            "👇 جهت تغییر تنظیمات، گزینه‌های زیر را لمس کنید:"
+        ]
+
+        # Compact toggle buttons (keeping callbacks <= 64 bytes)
+        twi_icon = "🟢 واسط فعال" if use_mid else "🔴 واسط خاموش"
+        rows: List[List[Tuple[str, str]]] = [
+            [("🔀 تغییر دسته: " + cat_title[:14], f"rsmc:{rule.id}")],
+            [
+                (twi_icon, f"rsmt:{rule.id}"),
+                ("📡 تنظیم کانال واسط", f"rsmw:{rule.id}"),
+            ],
+            [("⚡ حالت: " + mode_val[:14], f"rsmm:{rule.id}")],
+            [
+                ("📝 تنظیم هدر اختصاصی", f"rsmh:{rule.id}"),
+                ("🗑 حذف هدر", f"rsmhd:{rule.id}"),
+            ],
+            [
+                ("➕ اولویت (+10)", f"rsmpu:{rule.id}"),
+                ("➖ اولویت (-10)", f"rsmpd:{rule.id}"),
+            ],
+            [("🧪 تست و شبیه‌سازی زنده قانون (Dry Run)", f"rsmtst:{rule.id}")],
             [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
         ]
         return "\n".join(lines), self._kbd(rows)
@@ -2465,6 +2547,210 @@ class ProBotUI:
             text, kbd = self._render_draft_editor(rule, draft)
             await cq.edit_message_text(text, reply_markup=kbd)
 
+        # ---------------- smart routing & VIP controls ----------------
+        @b.on_callback_query(filters.regex(r"^rsm:(.+)$"))
+        async def _cb_smart_rule_menu(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            text, kbd = self._render_smart_menu(rule)
+            await cq.edit_message_text(text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rsmc:(.+)$"))
+        async def _cb_smart_toggle_category(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            cur = getattr(rule, "message_category", "ALL")
+            cycle = {"ALL": "VIP_ONLY", "VIP_ONLY": "NORMAL_ONLY", "NORMAL_ONLY": "ALL"}
+            nxt = cycle.get(cur, "ALL")
+            rule.message_category = nxt
+            if not isinstance(rule.metadata, dict):
+                rule.metadata = {}
+            rule.metadata["message_category"] = nxt
+            await self._rules.update(rule)
+            labels = {"ALL": "🌟 همه پیام‌ها", "VIP_ONLY": "💎 فقط VIP", "NORMAL_ONLY": "👤 فقط عادی"}
+            await cq.answer(f"دسته پیام: {labels.get(nxt, nxt)}")
+            text, kbd = self._render_smart_menu(rule)
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmt:(.+)$"))
+        async def _cb_smart_toggle_intermediate(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            cur = bool(getattr(rule, "use_intermediate", False))
+            rule.use_intermediate = not cur
+            if not isinstance(rule.metadata, dict):
+                rule.metadata = {}
+            rule.metadata["use_intermediate"] = rule.use_intermediate
+            await self._rules.update(rule)
+            ans = "🟢 ارسال به کانال واسط فعال شد" if rule.use_intermediate else "🔴 ارسال به کانال واسط خاموش شد"
+            await cq.answer(ans)
+            text, kbd = self._render_smart_menu(rule)
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmm:(.+)$"))
+        async def _cb_smart_toggle_mode(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            cur = getattr(rule.forward_mode, "value", str(rule.forward_mode))
+            cycle = {
+                "COPY_MESSAGE": ForwardMode.DIRECT_FORWARD,
+                "DIRECT_FORWARD": ForwardMode.CUSTOM_HEADER_COPY,
+                "CUSTOM_HEADER_COPY": ForwardMode.COPY_MESSAGE,
+                "REWRITE_AI": ForwardMode.COPY_MESSAGE,
+            }
+            nxt_mode = cycle.get(cur, ForwardMode.COPY_MESSAGE)
+            rule.forward_mode = nxt_mode
+            await self._rules.update(rule)
+            names = {
+                ForwardMode.COPY_MESSAGE: "📋 کپی بدون تگ",
+                ForwardMode.DIRECT_FORWARD: "↗️ فوروارد با تگ",
+                ForwardMode.CUSTOM_HEADER_COPY: "🏷 کپی با هدر اختصاصی",
+            }
+            await cq.answer(f"حالت: {names.get(nxt_mode, str(nxt_mode))}")
+            text, kbd = self._render_smart_menu(rule)
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmpu:(.+)$"))
+        async def _cb_smart_priority_up(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.priority = int(getattr(rule, "priority", 10) or 10) + 10
+            if not isinstance(rule.metadata, dict):
+                rule.metadata = {}
+            rule.metadata["priority"] = rule.priority
+            await self._rules.update(rule)
+            await cq.answer(f"اولویت: {rule.priority}")
+            text, kbd = self._render_smart_menu(rule)
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmpd:(.+)$"))
+        async def _cb_smart_priority_down(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            cur = int(getattr(rule, "priority", 10) or 10)
+            rule.priority = max(0, cur - 10)
+            if not isinstance(rule.metadata, dict):
+                rule.metadata = {}
+            rule.metadata["priority"] = rule.priority
+            await self._rules.update(rule)
+            await cq.answer(f"اولویت: {rule.priority}")
+            text, kbd = self._render_smart_menu(rule)
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmhd:(.+)$"))
+        async def _cb_smart_clear_header(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.custom_header = ""
+            if not isinstance(rule.metadata, dict):
+                rule.metadata = {}
+            rule.metadata["custom_header"] = ""
+            await self._rules.update(rule)
+            await cq.answer("🗑 هدر اختصاصی حذف شد")
+            text, kbd = self._render_smart_menu(rule)
+            await cq.edit_message_text(text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmw:(.+)$"))
+        async def _cb_smart_set_intermediate_prompt(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            st = self._state(cq.from_user.id)
+            st.step = "smart_set_intermediate"
+            st.buffer = {"rule_id": rule_id}
+            await self._persist(cq.from_user.id, st)
+            prompt = (
+                "🔄 **تنظیم کانال واسط VIP (Intermediate Channel):**\n\n"
+                "لطفاً شناسه عددی، یوزرنیم، یا لینک دعوت کانال واسط را ارسال کنید:\n"
+                "نمونه‌ها:\n"
+                "• `-1001234567890`\n"
+                "• `@my_intermediate_channel`\n"
+                "• `https://t.me/+uVg1efOFMEc2NTNk`\n\n"
+                "⚠️ *نکته ضد لوپ: کانال واسط نباید با کانال مبدأ یا مقصد یکسان باشد.*\n\n"
+                "برای انصراف دکمه زیر را لمس کنید:"
+            )
+            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rsmh:(.+)$"))
+        async def _cb_smart_set_header_prompt(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            st = self._state(cq.from_user.id)
+            st.step = "smart_set_header"
+            st.buffer = {"rule_id": rule_id}
+            await self._persist(cq.from_user.id, st)
+            prompt = (
+                "🏷 **تنظیم هدر اختصاصی کپی (Custom Header):**\n\n"
+                "متنی که می‌خواهید به عنوان هدر ویژه در ابتدای پیام‌های کپی‌شده قرار گیرد را ارسال کنید.\n"
+                "نمونه:\n"
+                "💎 `VIP Alert | تحلیل طلایی اختصاصی`\n\n"
+                "برای انصراف دکمه زیر را لمس کنید:"
+            )
+            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rsmtst:(.+)$"))
+        async def _cb_smart_test_prompt(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            st = self._state(cq.from_user.id)
+            st.step = "smart_test_rule"
+            st.buffer = {"rule_id": rule_id}
+            await self._persist(cq.from_user.id, st)
+            prompt = (
+                "🧪 **شبیه‌ساز و تست زنده قانون (Dry Run / Test):**\n\n"
+                "یک متن یا پیام تستی ارسال کنید تا موتور هوشمند بدون ایجاد تغییر یا ارسال واقعی، ارزیابی کند:\n"
+                "1. تشخیص نوع پیام (VIP یا کاربر عادی)\n"
+                "2. تطبیق با قانون و اولویت مسیر\n"
+                "3. مسیر انتقال (مستقیم یا کانال واسط)\n"
+                "4. متن پیش‌نمایش به همراه هدرها و فیلترها\n\n"
+                "برای انصراف دکمه زیر را لمس کنید:"
+            )
+            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
+            await cq.answer()
+
         # ---------------- filter add flow ----------------
         @b.on_callback_query(filters.regex("^" + CB["filter_add"] + "$"))
         async def _cb_filter_add(_, cq: CallbackQuery):
@@ -3836,6 +4122,197 @@ class ProBotUI:
         await message.reply_text("✅ **فوتر با موفقیت تنظیم شد.**")
         menu_text, menu_kbd = self._render_header_footer_menu(rule)
         await message.reply_text(menu_text, reply_markup=menu_kbd)
+
+    # ---------------- smart routing FSM steps ----------------
+    async def _step_smart_set_intermediate(self, message: Message, st: UiState, text: str) -> None:
+        rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
+        rule = await self._rules.get(rule_id) if rule_id else None
+        if not rule:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            return
+
+        raw_input = text.strip()
+        if raw_input.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            m_text, m_kbd = self._render_smart_menu(rule)
+            await message.reply_text("❌ تنظیم کانال واسط لغو شد.", reply_markup=m_kbd)
+            return
+
+        # Loop prevention check
+        norm_input = raw_input.replace("https://t.me/", "").replace("t.me/", "")
+        if (raw_input == str(rule.source_chat_id) or norm_input == str(rule.source_chat_name or "").lstrip("@") or
+                raw_input == str(rule.target_chat_id) or norm_input == str(rule.target_chat_name or "").lstrip("@")):
+            await message.reply_text(
+                "⚠️ **خطای ضد لوپ (Loop Prevention):**\n"
+                "کانال واسط نمی‌تواند با کانال مبدأ یا مقصد یکسان باشد!\n"
+                "لطفاً یک کانال یا گروه واسط متفاوت وارد کنید یا دکمه انصراف را لمس نمایید.",
+                reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule.id}")]])
+            )
+            return
+
+        # Resolve peer info if client available
+        resolved_name = raw_input
+        try:
+            clients = self._pool.all_clients()
+            client = next(iter(clients.values()), None) if clients else None
+            if client and hasattr(client, "is_connected") and client.is_connected:
+                peer = raw_input
+                if peer.startswith("https://t.me/+") or peer.startswith("t.me/+"):
+                    pass
+                else:
+                    if peer.startswith("@"):
+                        chat = await client.get_chat(peer)
+                    elif peer.startswith("-100") or (peer.startswith("-") and peer[1:].isdigit()):
+                        chat = await client.get_chat(int(peer))
+                    else:
+                        chat = await client.get_chat(peer)
+                    if chat:
+                        raw_input = str(chat.id)
+                        resolved_name = getattr(chat, "title", None) or getattr(chat, "username", None) or str(chat.id)
+        except Exception:
+            pass
+
+        rule.intermediate_channel_id = str(raw_input)
+        rule.intermediate_channel_name = str(resolved_name)
+        rule.use_intermediate = True
+        if not isinstance(rule.metadata, dict):
+            rule.metadata = {}
+        rule.metadata["intermediate_channel_id"] = str(raw_input)
+        rule.metadata["intermediate_channel_name"] = str(resolved_name)
+        rule.metadata["use_intermediate"] = True
+        await self._rules.update(rule)
+
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+
+        await message.reply_text(
+            f"✅ **کانال واسط VIP تنظیم و فعال شد:**\n"
+            f"📡 نام/شناسه: `{resolved_name}`\n"
+            f"🆔 آیدی مسیر: `{raw_input}`"
+        )
+        m_text, m_kbd = self._render_smart_menu(rule)
+        await message.reply_text(m_text, reply_markup=m_kbd)
+
+    async def _step_smart_set_header(self, message: Message, st: UiState, text: str) -> None:
+        rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
+        rule = await self._rules.get(rule_id) if rule_id else None
+        if not rule:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            return
+
+        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            m_text, m_kbd = self._render_smart_menu(rule)
+            await message.reply_text("❌ تنظیم هدر اختصاصی لغو شد.", reply_markup=m_kbd)
+            return
+
+        rule.custom_header = text.strip()
+        if not isinstance(rule.metadata, dict):
+            rule.metadata = {}
+        rule.metadata["custom_header"] = text.strip()
+        await self._rules.update(rule)
+
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+
+        await message.reply_text("✅ **هدر اختصاصی کپی با موفقیت ذخیره شد.**")
+        m_text, m_kbd = self._render_smart_menu(rule)
+        await message.reply_text(m_text, reply_markup=m_kbd)
+
+    async def _step_smart_test_rule(self, message: Message, st: UiState, text: str) -> None:
+        rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
+        rule = await self._rules.get(rule_id) if rule_id else None
+        if not rule:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            return
+
+        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            m_text, m_kbd = self._render_smart_menu(rule)
+            await message.reply_text("❌ تست هوشمند لغو شد.", reply_markup=m_kbd)
+            return
+
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+
+        from ...domain.services import SmartRoutingEngine
+        from ...domain.entities import MessagePayload
+
+        # Build simulated payload
+        payload = MessagePayload(
+            message_id=999999,
+            chat_id=str(rule.source_chat_id),
+            text=text.strip(),
+            date=int(time.time()),
+        )
+
+        # Check if forwarded message attributes were present in user's test message
+        f_origin = getattr(message, "forward_origin", None)
+        f_chat = getattr(message, "forward_from_chat", None)
+        if f_origin:
+            chat_obj = getattr(f_origin, "chat", None)
+            payload.forward_origin = {
+                "type": getattr(f_origin, "type", "channel"),
+                "from_chat_id": str(chat_obj.id) if chat_obj else "",
+                "from_chat_title": getattr(chat_obj, "title", ""),
+                "sender_name": getattr(f_origin, "sender_user_name", ""),
+            }
+        elif f_chat:
+            payload.forward_origin = {
+                "type": "channel",
+                "from_chat_id": str(f_chat.id),
+                "from_chat_title": getattr(f_chat, "title", ""),
+            }
+
+        engine = SmartRoutingEngine()
+        matched, reason = engine.evaluate_rule(payload, rule)
+        is_vip, vip_reason = engine.is_vip_origin(payload, rule)
+        detected_cat = "VIP" if is_vip else "NORMAL"
+        cat_labels = {"ALL": "🌟 عمومی", "VIP": "💎 VIP", "NORMAL": "👤 عادی"}
+
+        action_lines = []
+        if matched:
+            if rule.use_intermediate and rule.intermediate_channel_id:
+                action_lines.append(f"1️⃣ هوپ واسط VIP ➔ `{rule.intermediate_channel_name or rule.intermediate_channel_id}`")
+                action_lines.append(f"2️⃣ تحویل نهایی ➔ `{rule.target_chat_name or rule.target_chat_id}` با حالت `{rule.forward_mode.value}`")
+            else:
+                action_lines.append(f"• ارسال مستقیم ➔ `{rule.target_chat_name or rule.target_chat_id}` با حالت `{rule.forward_mode.value}`")
+        else:
+            action_lines.append("• هیچ ارسالی انجام نخواهد شد (عدم تطبیق با قانون یا فیلتر رده).")
+
+        result_text = (
+            "🧪 **نتیجه شبیه‌سازی و تست هوشمند قانون:**\n"
+            "────────────────────\n"
+            f"📋 **قانون:** `{rule.id[:8]}` ({rule.source_chat_name or rule.source_chat_id} ➔ {rule.target_chat_name or rule.target_chat_id})\n"
+            f"🎯 **وضعیت تطبیق:** {'✅ تطبیق دارد' if matched else '❌ تطبیق ندارد'}\n"
+            f"🏷 **رده پیام تشخیص‌داده‌شده:** {cat_labels.get(detected_cat, detected_cat)}\n"
+            f"🔍 **دلیل تصمیم موتور:** `{reason}`\n\n"
+            "🚀 **عملیات مسیریابی محاسبه‌شده:**\n" +
+            "\n".join(action_lines) + "\n\n"
+            "🛡 **بررسی ضد لوپ:** ایمن (بدون تکرار یا حلقه)\n"
+            "🔒 **وضعیت Fallback:** در صورت محدودیت تلگرام به Copy تنزل می‌یابد."
+        )
+        await message.reply_text(result_text)
+        m_text, m_kbd = self._render_smart_menu(rule)
+        await message.reply_text(m_text, reply_markup=m_kbd)
 
     # ---------------- filter FSM ----------------
     async def _step_filter_name(self, message: Message, st: UiState, text: str) -> None:

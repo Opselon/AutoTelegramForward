@@ -144,6 +144,143 @@ func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// ------------------------------------------------- smart forwarding rules
+func (h *Handlers) TestRule(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RuleId              string `json:"rule_id"`
+		SampleText          string `json:"sample_text"`
+		SampleChatId        string `json:"sample_chat_id"`
+		SampleSenderId      string `json:"sample_sender_id"`
+		ForwardOriginChatId string `json:"forward_origin_chat_id"`
+		ForwardOriginUser   string `json:"forward_origin_username"`
+		ForwardOriginTitle  string `json:"forward_origin_title"`
+		SampleHasMedia      bool   `json:"sample_has_media"`
+		SampleMediaType     string `json:"sample_media_type"`
+	}
+	if !bind(w, r, &req) {
+		return
+	}
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.Rules.TestRule(ctx, &pb.TestRuleRequest{
+		RuleId:              req.RuleId,
+		SampleText:          req.SampleText,
+		SampleChatId:        req.SampleChatId,
+		SampleSenderId:      req.SampleSenderId,
+		ForwardOriginChatId: req.ForwardOriginChatId,
+		ForwardOriginUsername: req.ForwardOriginUser,
+		ForwardOriginTitle:  req.ForwardOriginTitle,
+		SampleHasMedia:      req.SampleHasMedia,
+		SampleMediaType:     req.SampleMediaType,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handlers) PauseRule(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	var body struct {
+		Until int64 `json:"until"`
+	}
+	_ = bind(w, r, &body)
+	resp, err := h.c.Rules.PauseRule(ctx, &pb.PauseRuleRequest{
+		RuleId: r.PathValue("id"),
+		Until: body.Until,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handlers) ResumeRule(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.Rules.ResumeRule(ctx, &pb.PauseRuleRequest{RuleId: r.PathValue("id")})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// ------------------------------------------------------------- delivery
+func (h *Handlers) DeliveryStats(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.Delivery.GetDeliveryStats(ctx, &pb.DeliveryStatsRequest{})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handlers) ListDeadLetter(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	limit := 50
+	if n := r.URL.Query().Get("limit"); n != "" {
+		if v, err := strconv.Atoi(n); err == nil && v > 0 {
+			limit = v
+		}
+	}
+	var since int64
+	if n := r.URL.Query().Get("since"); n != "" {
+		if v, err := strconv.ParseInt(n, 10, 64); err == nil {
+			since = v
+		}
+	}
+	resp, err := h.c.Delivery.ListDeadLetter(ctx, &pb.ListDeadLetterRequest{
+		RuleId: r.URL.Query().Get("rule_id"),
+		Limit:  int32(limit),
+		Since:  since,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handlers) ReplayDeadLetter(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.Delivery.ReplayDeadLetter(ctx, &pb.ReplayDeadLetterRequest{Id: r.PathValue("id")})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handlers) PurgeDeadLetter(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	var body struct {
+		RuleId    string `json:"rule_id"`
+		OlderThan int64  `json:"older_than"`
+	}
+	_ = bind(w, r, &body)
+	if body.RuleId == "" {
+		body.RuleId = r.URL.Query().Get("rule_id")
+	}
+	resp, err := h.c.Delivery.PurgeDeadLetter(ctx, &pb.PurgeDeadLetterRequest{
+		RuleId:    body.RuleId,
+		OlderThan: body.OlderThan,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // --------------------------------------------------------------- filters
 func (h *Handlers) ListFilters(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)

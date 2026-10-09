@@ -193,6 +193,12 @@ async def serve_grpc(container: dict, cfg: Config):
         ),
         server,
     )
+    pb_grpc.add_DeliveryControlServiceServicer_to_server(
+        servicers.DeliveryControlServicer(
+            container["db"], container["rules"], container.get("pipeline"),
+        ),
+        server,
+    )
     addr = f"{cfg.grpc_host}:{cfg.grpc_port}"
     server.add_insecure_port(addr)
     await server.start()

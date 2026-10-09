@@ -169,7 +169,40 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
         metadata JSONB DEFAULT '{}'::jsonb,
         version INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        message_category VARCHAR(32) DEFAULT 'ALL',
+        intermediate_channel_id VARCHAR(128) DEFAULT '',
+        intermediate_channel_name TEXT DEFAULT '',
+        intermediate_target_chat_id VARCHAR(128) DEFAULT '',
+        use_intermediate BOOLEAN DEFAULT FALSE,
+        fallback_mode VARCHAR(32) DEFAULT 'COPY_MESSAGE',
+        fallback_enabled BOOLEAN DEFAULT TRUE,
+        detection_criteria JSONB DEFAULT '{}'::jsonb,
+        priority INTEGER DEFAULT 10,
+        execution_order INTEGER DEFAULT 0,
+        multi_route BOOLEAN DEFAULT FALSE,
+        media_handling VARCHAR(32) DEFAULT 'AUTO',
+        dedupe_policy VARCHAR(32) DEFAULT 'STRICT',
+        max_retries INTEGER DEFAULT 3,
+        retry_backoff_base REAL DEFAULT 2.0,
+        rate_limit_per_minute INTEGER DEFAULT 0,
+        rate_limit_burst INTEGER DEFAULT 0,
+        custom_header TEXT DEFAULT '',
+        custom_footer TEXT DEFAULT '',
+        header_enabled BOOLEAN DEFAULT FALSE,
+        template_text TEXT DEFAULT '',
+        template_media TEXT DEFAULT '',
+        template_album TEXT DEFAULT '',
+        caption_max_length INTEGER DEFAULT 0,
+        preserve_signature BOOLEAN DEFAULT FALSE,
+        is_paused BOOLEAN DEFAULT FALSE,
+        paused_until BIGINT DEFAULT 0,
+        link_policy VARCHAR(64) DEFAULT 'PRESERVE_ALL',
+        domain_allowlist JSONB DEFAULT '[]'::jsonb,
+        domain_blocklist JSONB DEFAULT '[]'::jsonb,
+        link_rewrite_map JSONB DEFAULT '{}'::jsonb,
+        allowed_media_types JSONB DEFAULT '[]'::jsonb,
+        split_long_caption BOOLEAN DEFAULT TRUE
     );
     CREATE INDEX IF NOT EXISTS idx_pg_fwd_source ON forward_rules (source_chat_id, is_active);
     CREATE INDEX IF NOT EXISTS idx_pg_fwd_session ON forward_rules (session_id);
@@ -358,6 +391,39 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             version=int(d.get("version", 1) or 1),
             created_at=d["created_at"],
             updated_at=d["updated_at"],
+            message_category=d.get("message_category", "ALL") or "ALL",
+            intermediate_channel_id=str(d.get("intermediate_channel_id") or ""),
+            intermediate_channel_name=str(d.get("intermediate_channel_name") or ""),
+            intermediate_target_chat_id=str(d.get("intermediate_target_chat_id") or ""),
+            use_intermediate=bool(d.get("use_intermediate", False)),
+            fallback_mode=ForwardMode(d["fallback_mode"]) if d.get("fallback_mode") in ForwardMode._value2member_map_ else ForwardMode.COPY_MESSAGE,
+            fallback_enabled=bool(d.get("fallback_enabled", True)),
+            detection_criteria=_safe_dict(d.get("detection_criteria"), {}),
+            priority=int(d.get("priority", 10) or 10),
+            execution_order=int(d.get("execution_order", 0) or 0),
+            multi_route=bool(d.get("multi_route", False)),
+            media_handling=d.get("media_handling", "AUTO") or "AUTO",
+            dedupe_policy=d.get("dedupe_policy", "STRICT") or "STRICT",
+            max_retries=int(d.get("max_retries", 3) or 3),
+            retry_backoff_base=float(d.get("retry_backoff_base", 2.0) or 2.0),
+            rate_limit_per_minute=int(d.get("rate_limit_per_minute", 0) or 0),
+            rate_limit_burst=int(d.get("rate_limit_burst", 0) or 0),
+            custom_header=str(d.get("custom_header") or ""),
+            custom_footer=str(d.get("custom_footer") or ""),
+            header_enabled=bool(d.get("header_enabled", False)),
+            template_text=str(d.get("template_text") or ""),
+            template_media=str(d.get("template_media") or ""),
+            template_album=str(d.get("template_album") or ""),
+            caption_max_length=int(d.get("caption_max_length", 0) or 0),
+            preserve_signature=bool(d.get("preserve_signature", False)),
+            is_paused=bool(d.get("is_paused", False)),
+            paused_until=int(d.get("paused_until", 0) or 0),
+            link_policy=d.get("link_policy", "PRESERVE_ALL") or "PRESERVE_ALL",
+            domain_allowlist=_safe_list(d.get("domain_allowlist"), []),
+            domain_blocklist=_safe_list(d.get("domain_blocklist"), []),
+            link_rewrite_map=_safe_dict(d.get("link_rewrite_map"), {}),
+            allowed_media_types=_safe_list(d.get("allowed_media_types"), []),
+            split_long_caption=bool(d.get("split_long_caption", True)),
         )
 
 
@@ -528,6 +594,9 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
             error_detail=d.get("error_detail"),
             created_at=int(d.get("created_at", 0) or 0),
             updated_at=int(d.get("updated_at", 0) or 0),
+            intermediate_chat_id=str(d.get("intermediate_chat_id")) if d.get("intermediate_chat_id") else None,
+            intermediate_message_id=int(d["intermediate_message_id"]) if d.get("intermediate_message_id") is not None else None,
+            delivery_stage=str(d.get("delivery_stage") or "DIRECT"),
         )
 
     async def _fetch_all(self, query: str, params: tuple = ()) -> list:
@@ -670,6 +739,44 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
         query = "UPDATE delivery_jobs SET status = 'FAILED', error_detail = %s, lease_until = 0, updated_at = %s WHERE id = %s"
         await _execute_db(self._db, query, (error, now, job_id))
         return True
+
+    async def mark_intermediate_copied(self, job_id: str, inter_chat: str, inter_msg_id: int) -> bool:
+        now = int(time.time())
+        query = """
+        UPDATE delivery_jobs
+        SET status = 'COPIED_TO_C', delivery_stage = 'COPIED_TO_C',
+            intermediate_chat_id = %s, intermediate_message_id = %s, updated_at = %s
+        WHERE id = %s
+        """
+        res = await _execute_db(self._db, query, (str(inter_chat), int(inter_msg_id), now, job_id))
+        return True
+
+    async def mark_dead_letter(self, job_id: str, error: str, category: str = "DELIVERY_EXHAUSTED") -> bool:
+        now = int(time.time())
+        try:
+            ins_query = """
+            INSERT INTO dead_letter_queue (
+                id, job_id, rule_id, source_chat_id, source_message_id,
+                target_chat_id, payload_json, error_message, error_category, dead_lettered_at
+            )
+            SELECT %s, id, rule_id, source_chat_id, source_message_id,
+                   target_chat_id, payload_json, %s, %s, %s
+            FROM delivery_jobs WHERE id = %s
+            ON CONFLICT (id) DO UPDATE SET error_message = EXCLUDED.error_message, dead_lettered_at = EXCLUDED.dead_lettered_at
+            """
+            await _execute_db(self._db, ins_query, (f"dlq_{job_id}", error, category, now, job_id))
+        except Exception:
+            pass
+        query = "UPDATE delivery_jobs SET status = 'DEAD_LETTER', error_detail = %s, lease_until = 0, updated_at = %s WHERE id = %s"
+        await _execute_db(self._db, query, (error, now, job_id))
+        return True
+
+    async def get_dead_letter_jobs(self, limit: int = 50) -> List[Dict[str, Any]]:
+        try:
+            rows = await self._fetch_all("SELECT * FROM dead_letter_queue ORDER BY dead_lettered_at DESC LIMIT %s", (int(limit),))
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
 
     async def mark_unknown(self, job_id: str, error: str) -> bool:
         now = int(time.time())
