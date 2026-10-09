@@ -6,7 +6,7 @@ use axum::{
     extract::{Path, State},
     http::{Method, StatusCode},
     response::{Html, IntoResponse, Json},
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use std::net::SocketAddr;
@@ -35,7 +35,7 @@ async fn main() {
         )
         .init();
 
-    info!("Starting AutoTelegramForward Web Microservice (Rust + Axum)...");
+    info!("Starting AutoTelegramForward Unified Gateway Web Service (Rust + Axum)...");
 
     let db_path = std::env::var("ATF_DB_PATH").unwrap_or_else(|_| "data/atf.db".to_string());
     let logs_db_path = std::env::var("ATF_LOGS_DB_PATH").unwrap_or_else(|_| "data/atf_logs.db".to_string());
@@ -87,12 +87,20 @@ async fn main() {
 
     let api_routes = Router::new()
         .route("/health", get(health_handler))
+        .route("/gateway", get(gateway_info_handler))
         .route("/stats", get(stats_handler))
         .route("/rules", get(list_rules_handler).post(save_rule_handler))
         .route("/rules/:id", get(get_rule_handler).delete(delete_rule_handler))
         .route("/rules/:id/toggle", post(toggle_rule_handler))
         .route("/rules/:id/route-path", post(route_path_handler))
         .route("/sessions", get(list_sessions_handler))
+        .route("/ai-configs", get(list_ai_configs_handler).post(save_ai_config_handler))
+        .route("/ai-configs/:id", delete(delete_ai_config_handler))
+        .route("/filters", get(list_filters_handler).post(save_filter_handler))
+        .route("/filters/:id", delete(delete_filter_handler))
+        .route("/queue", get(queue_jobs_handler))
+        .route("/dlq", get(dlq_jobs_handler).delete(purge_dlq_handler))
+        .route("/dlq/:id/retry", post(retry_dlq_handler))
         .route("/simulate", post(simulate_handler))
         .route("/logs", get(logs_handler))
         .with_state(state.clone());
@@ -122,7 +130,7 @@ async fn main() {
     let bind_addr = std::env::var("ATF_WEB_ADDR").unwrap_or_else(|_| "0.0.0.0:8088".to_string());
     let addr: SocketAddr = bind_addr.parse().expect("Invalid ATF_WEB_ADDR format");
 
-    info!("🚀 Web microservice listening on http://{}", addr);
+    info!("🚀 Web microservice gateway listening on http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
@@ -135,9 +143,13 @@ async fn health_handler() -> impl IntoResponse {
     Json(serde_json::json!({
         "status": "healthy",
         "service": "atf-web-backend",
-        "version": "1.0.0",
+        "version": "1.2.0",
         "timestamp": chrono::Utc::now().timestamp(),
     }))
+}
+
+async fn gateway_info_handler(State(state): State<Arc<AppState>>) -> Result<Json<GatewaySystemInfo>, (StatusCode, String)> {
+    state.db.get_gateway_info().map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
 async fn stats_handler(State(state): State<Arc<AppState>>) -> Result<Json<StatsResponse>, (StatusCode, String)> {
@@ -196,6 +208,79 @@ async fn list_sessions_handler(State(state): State<Arc<AppState>>) -> Result<Jso
     state.db.get_sessions().map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
+// AI Config Handlers
+async fn list_ai_configs_handler(State(state): State<Arc<AppState>>) -> Result<Json<Vec<AIConfigModel>>, (StatusCode, String)> {
+    state.db.get_all_ai_configs().map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn save_ai_config_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SaveAIConfigRequest>,
+) -> Result<Json<AIConfigModel>, (StatusCode, String)> {
+    state.db.save_ai_config(&payload).map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn delete_ai_config_handler(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    match state.db.delete_ai_config(&id) {
+        Ok(true) => Ok(Json(serde_json::json!({ "success": true, "id": id }))),
+        Ok(false) => Err((StatusCode::NOT_FOUND, "AI Config not found".to_string())),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e)),
+    }
+}
+
+// Filter Rule Handlers
+async fn list_filters_handler(State(state): State<Arc<AppState>>) -> Result<Json<Vec<FilterRuleModel>>, (StatusCode, String)> {
+    state.db.get_all_filter_rules().map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn save_filter_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SaveFilterRuleRequest>,
+) -> Result<Json<FilterRuleModel>, (StatusCode, String)> {
+    state.db.save_filter_rule(&payload).map(Json).map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn delete_filter_handler(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    match state.db.delete_filter_rule(&id) {
+        Ok(true) => Ok(Json(serde_json::json!({ "success": true, "id": id }))),
+        Ok(false) => Err((StatusCode::NOT_FOUND, "Filter Rule not found".to_string())),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e)),
+    }
+}
+
+// Queue & DLQ Handlers
+async fn queue_jobs_handler(State(state): State<Arc<AppState>>) -> Result<Json<Vec<DeliveryJobModel>>, (StatusCode, String)> {
+    state.db.get_delivery_jobs(50).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn dlq_jobs_handler(State(state): State<Arc<AppState>>) -> Result<Json<Vec<DeadLetterJobModel>>, (StatusCode, String)> {
+    state.db.get_dead_letter_queue(50).map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn retry_dlq_handler(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    match state.db.retry_dead_letter_job(&id) {
+        Ok(true) => Ok(Json(serde_json::json!({ "success": true, "retried_id": id }))),
+        Ok(false) => Err((StatusCode::NOT_FOUND, "DLQ entry not found".to_string())),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e)),
+    }
+}
+
+async fn purge_dlq_handler(State(state): State<Arc<AppState>>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    match state.db.purge_dead_letter_queue() {
+        Ok(count) => Ok(Json(serde_json::json!({ "success": true, "purged_count": count }))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e)),
+    }
+}
+
 async fn simulate_handler(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SimulateRequest>,
@@ -224,6 +309,16 @@ async fn simulate_handler(
             custom_header: r_override.custom_header.clone().unwrap_or_default(),
             custom_footer: r_override.custom_footer.clone().unwrap_or_default(),
             split_long_caption: r_override.split_long_caption.unwrap_or(true),
+            filter_rule_id: r_override.filter_rule_id.clone(),
+            ai_config_id: r_override.ai_config_id.clone(),
+            remove_links: r_override.remove_links.unwrap_or(false),
+            delay_seconds: r_override.delay_seconds.unwrap_or(0.0),
+            rate_limit_per_minute: r_override.rate_limit_per_minute.unwrap_or(0),
+            max_retries: r_override.max_retries.unwrap_or(3),
+            replacements: r_override.replacements.clone().unwrap_or_else(|| serde_json::json!({})),
+            domain_allowlist: r_override.domain_allowlist.clone().unwrap_or_default(),
+            domain_blocklist: r_override.domain_blocklist.clone().unwrap_or_default(),
+            link_rewrite_map: r_override.link_rewrite_map.clone().unwrap_or_else(|| serde_json::json!({})),
             created_at: 0,
             updated_at: 0,
         }

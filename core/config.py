@@ -18,7 +18,7 @@ class Config:
     grpc_host: str = "0.0.0.0"
     grpc_port: int = 50051
     language: str = "en"
-    version: str = "1.1.2"
+    version: str = "1.2.0"
     disable_bot: bool = False
     logger_addr: str = "localhost:50052"
 

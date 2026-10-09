@@ -30,6 +30,16 @@ export interface ForwardRule {
   custom_header: string
   custom_footer: string
   split_long_caption: boolean
+  filter_rule_id?: string | null
+  ai_config_id?: string | null
+  remove_links?: boolean
+  delay_seconds?: number
+  rate_limit_per_minute?: number
+  max_retries?: number
+  replacements?: Record<string, string>
+  domain_allowlist?: string[]
+  domain_blocklist?: string[]
+  link_rewrite_map?: Record<string, string>
   created_at: number
   updated_at: number
 }
@@ -57,6 +67,16 @@ export interface SaveRuleRequest {
   custom_header?: string
   custom_footer?: string
   split_long_caption?: boolean
+  filter_rule_id?: string | null
+  ai_config_id?: string | null
+  remove_links?: boolean
+  delay_seconds?: number
+  rate_limit_per_minute?: number
+  max_retries?: number
+  replacements?: Record<string, string>
+  domain_allowlist?: string[]
+  domain_blocklist?: string[]
+  link_rewrite_map?: Record<string, string>
 }
 
 export interface RoutePathQuickSetRequest {
@@ -77,8 +97,104 @@ export interface Session {
   first_name: string
   is_active: boolean
   is_authorized: boolean
+  proxy?: string
   created_at: number
   updated_at: number
+}
+
+export interface AIConfig {
+  id: string
+  name: string
+  provider: string
+  model: string
+  api_key_masked: string
+  base_url: string
+  system_prompt: string
+  user_prompt_template: string
+  temperature: number
+  is_enabled: boolean
+  target_language: string
+}
+
+export interface SaveAIConfigRequest {
+  id?: string
+  name: string
+  provider: string
+  model: string
+  api_key?: string
+  base_url?: string
+  system_prompt: string
+  user_prompt_template?: string
+  temperature?: number
+  is_enabled?: boolean
+  target_language?: string
+}
+
+export interface FilterRule {
+  id: string
+  name: string
+  whitelist_keywords: string[]
+  blacklist_keywords: string[]
+  regex_patterns: string[]
+  allowed_media_types: string[]
+  blocked_media_types: string[]
+  drop_service_messages: boolean
+  min_message_length: number
+  max_message_length: number
+}
+
+export interface SaveFilterRuleRequest {
+  id?: string
+  name: string
+  whitelist_keywords?: string[]
+  blacklist_keywords?: string[]
+  regex_patterns?: string[]
+  allowed_media_types?: string[]
+  blocked_media_types?: string[]
+  drop_service_messages?: boolean
+  min_message_length?: number
+  max_message_length?: number
+}
+
+export interface DeliveryJob {
+  id: string
+  rule_id: string
+  source_chat_id: string
+  source_message_id: number
+  target_chat_id: string
+  status: string
+  attempts: number
+  max_attempts: number
+  error_detail?: string | null
+  delivery_stage: string
+  created_at: number
+}
+
+export interface DeadLetterJob {
+  id: string
+  job_id?: string | null
+  rule_id: string
+  source_chat_id: string
+  source_message_id: number
+  target_chat_id: string
+  attempts: number
+  last_error: string
+  error_category: string
+  dead_lettered_at: number
+}
+
+export interface GatewaySystemInfo {
+  atf_core_online: boolean
+  atf_logger_online: boolean
+  atf_web_online: boolean
+  uptime_seconds: number
+  grpc_port: number
+  logger_port: number
+  web_port: number
+  version: string
+  db_size_bytes: number
+  total_rules: number
+  total_sessions: number
 }
 
 export interface SimulateRequest {
