@@ -234,6 +234,19 @@ export interface GatewaySystemInfo {
   total_sessions: number
 }
 
+export interface ServiceHealth {
+  name: string
+  online: boolean
+  detail: string
+  latency_ms: number
+}
+
+export interface ServicesHealthResponse {
+  status: 'healthy' | 'degraded'
+  time: string
+  services: ServiceHealth[]
+}
+
 export interface SimulateRequest {
   rule_id?: string
   test_text: string

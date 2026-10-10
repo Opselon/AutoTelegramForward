@@ -35,6 +35,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.Health)
 	mux.HandleFunc("GET /health", h.Health)
+	mux.HandleFunc("GET /api/v1/health/services", h.ServicesHealth)
 
 	// Public authentication endpoints (no Bearer [REDACTED] required).
 	authMux := http.NewServeMux()
@@ -79,6 +80,7 @@ func main() {
 	dashMux.HandleFunc("POST /rules/{id}/resume", h.ResumeRule)
 	dashMux.HandleFunc("GET /logs", h.QueryLogs)
 	dashMux.HandleFunc("GET /logs/stats", h.LogStats)
+	dashMux.HandleFunc("GET /health/services", h.ServicesHealth)
 	mux.Handle("/api/", h.RequireAuth(dashMux))
 
 	// v1 Routes — internal/operator surface, kept as-is.
@@ -115,6 +117,9 @@ func main() {
 
 	var handler http.Handler = mux
 	handler = middleware.RequestLogger(handler)
+	// Mirror every 4xx/5xx into the central logger so the dashboard Log
+	// Explorer shows API failures without ssh/journalctl.
+	handler = middleware.ErrorLogger(&middleware.ErrorLogSink{Client: clients.Logs}, handler)
 	if apiKey != "" {
 		handler = middleware.APIKeyAuth(apiKey, handler)
 	}

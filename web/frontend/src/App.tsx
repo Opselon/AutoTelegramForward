@@ -30,6 +30,8 @@ import {
   X,
   Check,
   MessageSquare,
+  HeartPulse,
+  Cable,
 } from 'lucide-react'
 import { api } from './api'
 import type {
@@ -50,6 +52,7 @@ import type {
   StatsResponse,
   LogItem,
   LogStats,
+  ServicesHealthResponse,
   PVResponderConfig,
 } from './types'
 
@@ -83,6 +86,7 @@ export function App() {
   const [logAutoRefresh, setLogAutoRefresh] = useState<boolean>(true)
   const [logStats, setLogStats] = useState<LogStats | null>(null)
   const [copiedLogId, setCopiedLogId] = useState<string | number | null>(null)
+  const [servicesHealth, setServicesHealth] = useState<ServicesHealthResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -224,11 +228,16 @@ export function App() {
   useEffect(() => {
     if (activeTab !== 'devops') return
     fetchLogs(logFilterService, logFilterLevel, logSearch)
+    // Service-topology health: probe all 4 services through the API layer.
+    api.getServicesHealth().then(setServicesHealth).catch(() => setServicesHealth(null))
     if (!logAutoRefresh) return
     const logTimer = setInterval(() => {
       fetchLogs(logFilterService, logFilterLevel, logSearch)
     }, 3000)
-    return () => clearInterval(logTimer)
+    const healthTimer = setInterval(() => {
+      api.getServicesHealth().then(setServicesHealth).catch(() => setServicesHealth(null))
+    }, 10000)
+    return () => { clearInterval(logTimer); clearInterval(healthTimer) }
   }, [activeTab, logAutoRefresh, logFilterService, logFilterLevel, logSearch])
 
   // Rules Handlers
@@ -2473,54 +2482,118 @@ export function App() {
             </div>
           </div>
 
-          {/* Microservices Topology & Statistics */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 20 }}>
-            <div className="glass-panel" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>ATF Logger Microservice</span>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#34d399', marginTop: 4 }}>
-                Port 6002 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>gRPC</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>
-                {logStats ? `${logStats.total} ${isRtl ? 'لاگ ثبت‌شده' : 'events logged'}` : 'SQLite WAL Engine'}
-              </div>
-            </div>
+          {/* Microservices Topology — live probed health + connection map */}
+          {(() => {
+            const hmap: Record<string, { online: boolean; detail: string; latency_ms: number } | undefined> = {}
+            for (const s of servicesHealth?.services || []) hmap[s.name] = s
+            const nodes = [
+              { key: 'web', title: isRtl ? 'درگاه وب (Rust)' : 'Web Gateway', sub: 'atf-web · :8088', color: '#f59e0b' },
+              { key: 'api', title: isRtl ? 'کنترل‌پلین REST (Go)' : 'REST Control Plane', sub: 'atf-api · :8080', color: '#a855f7' },
+              { key: 'core', title: isRtl ? 'هسته پایتون + MTProto' : 'Python Core & MTProto', sub: 'atf · gRPC :6001', color: '#38bdf8' },
+              { key: 'logger', title: isRtl ? 'لاگر مرکزی' : 'Central Logger', sub: 'atf-logger · gRPC :6002', color: '#34d399' },
+            ]
+            const svc = (k: string) => hmap[k]
+            return (
+              <div className="glass-panel" style={{ padding: 18, marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <HeartPulse size={17} color={servicesHealth?.status === 'healthy' ? '#34d399' : '#ef4444'} />
+                    <span>{isRtl ? 'توپولوژی سرویس‌ها و سلامت زنده' : 'Services Topology & Live Health'}</span>
+                  </h3>
+                  <span
+                    className="badge"
+                    style={{
+                      background: servicesHealth?.status === 'healthy' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                      color: servicesHealth?.status === 'healthy' ? '#34d399' : '#f87171',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {servicesHealth
+                      ? servicesHealth.status === 'healthy'
+                        ? isRtl ? '✅ همه سرویس‌ها سالم' : '✅ All services healthy'
+                        : isRtl ? '⚠️ سرویس ناسالم' : '⚠️ Degraded'
+                      : isRtl ? '… در حال بررسی' : '… probing'}
+                  </span>
+                </div>
 
-            <div className="glass-panel" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Python Core & MTProto</span>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: stats?.atf_core_online ? '#10b981' : '#ef4444', boxShadow: '0 0 8px #10b981' }} />
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', marginTop: 4 }}>
-                Port 6001 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>Core</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf.service</div>
-            </div>
+                {/* Node chain: Web → API → Core → Logger, connection arrows labelled */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {nodes.map((n, i) => {
+                    const s = svc(n.key)
+                    const online = s?.online ?? false
+                    return (
+                      <React.Fragment key={n.key}>
+                        {i > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 0 2px 22px', height: 26 }} dir="ltr">
+                            <div style={{ width: 2, height: '100%', minHeight: 18, background: online ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.4)', borderRadius: 2 }} />
+                            <Cable size={12} color={online ? '#34d399' : '#ef4444'} />
+                            <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                              {i === 1
+                                ? isRtl ? 'پروکسی REST + JWT' : 'REST proxy + JWT'
+                                : i === 2
+                                ? isRtl ? 'gRPC کنترل' : 'gRPC control'
+                                : isRtl ? 'gRPC لاگ' : 'gRPC logs'}
+                            </span>
+                          </div>
+                        )}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 8,
+                            padding: '10px 14px',
+                            borderRadius: 10,
+                            border: `1px solid ${online ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.35)'}`,
+                            background: online ? 'rgba(16,185,129,0.05)' : 'rgba(239,68,68,0.07)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            <span
+                              style={{
+                                width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                                background: online ? '#10b981' : '#ef4444',
+                                boxShadow: online ? '0 0 10px #10b981' : '0 0 10px #ef4444',
+                                animation: online ? 'none' : 'none',
+                              }}
+                            />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: n.color }}>{n.title}</div>
+                              <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }} dir="ltr">{n.sub}</div>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right', minWidth: 0, maxWidth: '100%' }} dir="ltr">
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: online ? '#34d399' : '#f87171' }}>
+                              {online ? (isRtl ? 'آنلاین' : 'ONLINE') : (isRtl ? 'خاموش' : 'DOWN')}
+                              {s && s.latency_ms > 0 ? ` · ${s.latency_ms}ms` : ''}
+                            </div>
+                            {s?.detail && (
+                              <div style={{ fontSize: '0.66rem', color: '#64748b', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {s.detail}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    )
+                  })}
+                </div>
 
-            <div className="glass-panel" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Go REST Control Plane</span>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+                {/* Degraded-service hint — tell the operator which systemctl to poke */}
+                {servicesHealth && servicesHealth.status !== 'healthy' && (
+                  <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', fontSize: '0.75rem', color: '#f87171' }}>
+                    {isRtl ? 'سرویس‌های خاموش: ' : 'Down services: '}
+                    {servicesHealth.services.filter((x) => !x.online).map((x) => x.name).join(', ')}
+                    <span style={{ color: '#94a3b8' }}>
+                      {' — '}systemctl --user restart {servicesHealth.services.filter((x) => !x.online).map((x) => x.name === 'core' ? 'atf' : x.name === 'logger' ? 'atf-logger' : x.name === 'api' ? 'atf-api' : 'atf-web').join(' ')}
+                    </span>
+                  </div>
+                )}
               </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#a855f7', marginTop: 4 }}>
-                Port 8080 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>REST</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf-api.service</div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Rust Axum Web Gateway</span>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f59e0b', marginTop: 4 }}>
-                Port 8088 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>v{gatewayInfo?.version ?? '1.2.2'}</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf-web.service</div>
-            </div>
-          </div>
+            )
+          })()}
 
           {/* Pro Active Log Explorer */}
           <div className="glass-panel" style={{ padding: 20 }}>

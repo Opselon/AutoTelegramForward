@@ -18,6 +18,7 @@ import type {
   StatsResponse,
   LogItem,
   LogStats,
+  ServicesHealthResponse,
   AuthResponse,
   PVResponderConfig,
 } from './types'
@@ -286,6 +287,9 @@ export const api = {
   },
   getLogStats: async (): Promise<LogStats> => {
     return fetchJson<LogStats>(`${API_BASE}/logs/stats`)
+  },
+  getServicesHealth: async (): Promise<ServicesHealthResponse> => {
+    return fetchJson<ServicesHealthResponse>(`${API_BASE}/health/services`)
   },
 
   // ------------------------------------------------- Authentication & Identity
