@@ -89,6 +89,7 @@ def _rule_pb(r) -> pb.ForwardRule:
         is_paused=bool(getattr(r, "is_paused", False)),
         paused_until=int(getattr(r, "paused_until", 0) or 0),
         version=int(getattr(r, "version", 1) or 1),
+        custom_metadata_json=_json.dumps(getattr(r, "metadata", {}) or {}),
     )
 
 
@@ -308,6 +309,15 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             existing.is_paused = bool(r.is_paused)
         if r.paused_until:
             existing.paused_until = int(r.paused_until)
+        if r.custom_metadata_json:
+            try:
+                merged = _json.loads(r.custom_metadata_json)
+                if isinstance(merged, dict):
+                    if not isinstance(existing.metadata, dict):
+                        existing.metadata = {}
+                    existing.metadata.update(merged)
+            except Exception:
+                pass
 
         existing.mark_updated()
         updated = await self._rules.update(existing)

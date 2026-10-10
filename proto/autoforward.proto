@@ -169,6 +169,10 @@ message ForwardRule {
   int64 paused_until = 44;
   int32 version = 45;
   int64 owner_user_id = 46;   // owning telegram/web account (0 = legacy shared rule)
+  // Bot-side UX toggles that live in the entity metadata dict (block_voice,
+  // block_stickers, remove_emojis, sync_deletes, album_mode, ...). Round-tripped
+  // as JSON so the web dashboard can read AND edit every bot feature.
+  string custom_metadata_json = 47;
 }
 
 message CreateRuleRequest {

@@ -81,10 +81,15 @@ export const api = {
   },
   getRule: (id: string) => fetchJson<ForwardRule>(`${API_BASE}/rules/${id}`),
   saveRule: (req: SaveRuleRequest) =>
-    fetchJson<ForwardRule>(`${API_BASE}/rules`, {
-      method: 'POST',
-      body: JSON.stringify(req),
-    }),
+    fetchJson<ForwardRule>(
+      req.id
+        ? `${API_BASE}/rules/${encodeURIComponent(req.id)}`
+        : `${API_BASE}/rules`,
+      {
+        method: req.id ? 'PUT' : 'POST',
+        body: JSON.stringify(req),
+      },
+    ),
   deleteRule: (id: string) =>
     fetchJson<{ success: boolean; id: string }>(`${API_BASE}/rules/${id}`, {
       method: 'DELETE',

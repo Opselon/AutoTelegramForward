@@ -77,6 +77,8 @@ export function App() {
   // Rule Modal
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false)
   const [ruleFormData, setRuleFormData] = useState<Partial<SaveRuleRequest>>({})
+  // Bot-parity toggles that live inside rule metadata (block_voice, album_mode, …)
+  const [ruleMeta, setRuleMeta] = useState<Record<string, any>>({})
 
   // AI Modal
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
@@ -236,7 +238,10 @@ export function App() {
         showToast(isRtl ? 'لطفا شناسه‌های مبدا و مقصد را وارد کنید' : 'Source and target IDs are required')
         return
       }
-      const saved = await api.saveRule(ruleFormData as SaveRuleRequest)
+      const saved = await api.saveRule({
+        ...ruleFormData,
+        custom_metadata_json: JSON.stringify(ruleMeta),
+      } as SaveRuleRequest)
       setRules((prev) => {
         const idx = prev.findIndex((r) => r.id === saved.id)
         if (idx >= 0) {
@@ -843,6 +848,7 @@ export function App() {
                     forward_origin_chat_ids: ['-1001111111111'],
                   },
                 })
+                setRuleMeta({})
                 setIsRuleModalOpen(true)
               }}
               className="btn btn-primary"
@@ -959,6 +965,11 @@ export function App() {
                       <button
                         onClick={() => {
                           setRuleFormData({ ...rule })
+                          try {
+                            setRuleMeta(JSON.parse((rule as any).custom_metadata_json || '{}'))
+                          } catch {
+                            setRuleMeta({})
+                          }
                           setIsRuleModalOpen(true)
                         }}
                         className="btn btn-secondary"
@@ -2409,6 +2420,64 @@ export function App() {
                     className="input-field"
                     placeholder="@usdjp"
                   />
+                </div>
+              </div>
+
+              {/* Bot-parity media toggles (stored in rule metadata) */}
+              <div
+                style={{
+                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                  background: 'rgba(99, 102, 241, 0.06)',
+                  padding: 16,
+                  borderRadius: 10,
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#a5b4fc', marginBottom: 10 }}>
+                  {isRtl ? 'تنظیمات رسانه و سینک (مشابه ربات)' : 'Media & Sync Settings (bot parity)'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+                  {([
+                    ['block_voice', '🎙', isRtl ? 'مسدود کردن ویس' : 'Block Voice'],
+                    ['block_stickers', '🎭', isRtl ? 'مسدود کردن استیکر' : 'Block Stickers'],
+                    ['remove_emojis', '😀', isRtl ? 'پاکسازی ایموجی' : 'Strip Emojis'],
+                    ['sync_deletes', '🗑', isRtl ? 'همگام‌سازی حذف‌ها' : 'Sync Deletes'],
+                    ['ignore_edits', '✏️', isRtl ? 'نادیده گرفتن ادیت' : 'Ignore Edits'],
+                  ] as const).map(([key, icon, label]) => (
+                    <label
+                      key={key}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                        fontSize: '0.78rem', color: '#cbd5e1',
+                        background: 'rgba(255,255,255,0.04)',
+                        padding: '8px 10px', borderRadius: 8,
+                        border: ruleMeta[key] ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!ruleMeta[key]}
+                        onChange={(e) => setRuleMeta({ ...ruleMeta, [key]: e.target.checked })}
+                        style={{ accentColor: '#6366f1' }}
+                      />
+                      <span>{icon} {label}</span>
+                    </label>
+                  ))}
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                    {isRtl ? 'حالت آلبوم:' : 'Album Mode:'}
+                  </label>
+                  <select
+                    value={ruleMeta.album_mode || 'album'}
+                    onChange={(e) => setRuleMeta({ ...ruleMeta, album_mode: e.target.value })}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                  >
+                    <option value="album">{isRtl ? '🖼 آلبوم کامل' : 'Full album'}</option>
+                    <option value="first">{isRtl ? '۱️⃣ فقط اولین مدیا' : 'First media only'}</option>
+                    <option value="split">{isRtl ? '🔀 تفکیک پیام‌ها' : 'Split messages'}</option>
+                  </select>
                 </div>
               </div>
 

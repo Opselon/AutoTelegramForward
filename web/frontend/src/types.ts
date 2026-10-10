@@ -42,6 +42,7 @@ export interface ForwardRule {
   link_rewrite_map?: Record<string, string>
   created_at: number
   updated_at: number
+  custom_metadata_json?: string
 }
 
 export interface SaveRuleRequest {
@@ -77,6 +78,7 @@ export interface SaveRuleRequest {
   domain_allowlist?: string[]
   domain_blocklist?: string[]
   link_rewrite_map?: Record<string, string>
+  custom_metadata_json?: string
 }
 
 export interface RoutePathQuickSetRequest {

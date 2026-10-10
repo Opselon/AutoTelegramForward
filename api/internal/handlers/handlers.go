@@ -3,12 +3,15 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	pb "autoforward/proto"
 	"autoforward/internal/grpcclient"
@@ -124,9 +127,53 @@ func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
 	if rules == nil {
 		rules = []*pb.ForwardRule{}
 	}
+	out := make([]map[string]any, 0, len(rules))
+	for _, rl := range rules {
+		out = append(out, map[string]any{
+			"id":                        rl.Id,
+			"session_id":                rl.SessionId,
+			"source_chat_id":            rl.SourceChatId,
+			"source_chat_name":          rl.SourceChatName,
+			"target_chat_id":            rl.TargetChatId,
+			"target_chat_name":          rl.TargetChatName,
+			"routing_type":              pb.RoutingType_name[int32(rl.RoutingType)],
+			"forward_mode":              pb.ForwardMode_name[int32(rl.ForwardMode)],
+			"is_active":                 rl.IsActive,
+			"filter_rule_id":            rl.FilterRuleId,
+			"ai_config_id":              rl.AiConfigId,
+			"remove_links":              rl.RemoveLinks,
+			"custom_caption_template":   rl.CustomCaptionTemplate,
+			"created_at":                rl.CreatedAt,
+			"updated_at":                rl.UpdatedAt,
+			"name":                      rl.Name,
+			"description":               rl.Description,
+			"target_chat_ids":           rl.TargetChatIds,
+			"message_category":          rl.MessageCategory,
+			"intermediate_channel_id":   rl.IntermediateChannelId,
+			"intermediate_channel_name": rl.IntermediateChannelName,
+			"use_intermediate":          rl.UseIntermediate,
+			"fallback_mode":             pb.ForwardMode_name[int32(rl.FallbackMode)],
+			"fallback_enabled":          rl.FallbackEnabled,
+			"detection_criteria":        json.Unmarshal([]byte(rl.DetectionCriteriaJson), &map[string]any{}),
+			"detection_criteria_json":   rl.DetectionCriteriaJson,
+			"priority":                  rl.Priority,
+			"execution_order":           rl.ExecutionOrder,
+			"multi_route":               rl.MultiRoute,
+			"media_handling":            rl.MediaHandling,
+			"dedupe_policy":             rl.DedupePolicy,
+			"max_retries":               rl.MaxRetries,
+			"rate_limit_per_minute":     rl.RateLimitPerMinute,
+			"custom_header":             rl.CustomHeader,
+			"custom_footer":             rl.CustomFooter,
+			"header_enabled":            rl.HeaderEnabled,
+			"is_paused":                 rl.IsPaused,
+			"version":                   rl.Version,
+			"custom_metadata_json":      rl.CustomMetadataJson,
+		})
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"rules": rules,
-		"total": len(rules),
+		"rules": out,
+		"total": len(out),
 	})
 }
 
@@ -797,6 +844,21 @@ func bind(w http.ResponseWriter, r *http.Request, target any) bool {
 }
 
 func bindPB(w http.ResponseWriter, r *http.Request, target any) bool {
+	// protojson accepts both enum names ("COPY_MESSAGE") and numbers, while
+	// encoding/json rejects names entirely — the frontend sends names.
+	if msg, ok := target.(proto.Message); ok {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
+			return false
+		}
+		opts := protojson.UnmarshalOptions{DiscardUnknown: true}
+		if err := opts.Unmarshal(body, msg); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+			return false
+		}
+		return true
+	}
 	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
 		return false
