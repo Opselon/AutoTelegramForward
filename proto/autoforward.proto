@@ -173,6 +173,12 @@ message ForwardRule {
   // block_stickers, remove_emojis, sync_deletes, album_mode, ...). Round-tripped
   // as JSON so the web dashboard can read AND edit every bot feature.
   string custom_metadata_json = 47;
+  // AI Rewrite (P2): policy on AI failure (SEND_ORIGINAL | DROP | RETRY |
+  // QUARANTINE), pinned prompt version (0 = latest active), per-call AI timeout.
+  // The effective prompt id rides inside custom_metadata_json as "prompt_id".
+  string ai_fallback_policy = 48;
+  int32 ai_prompt_version = 49;
+  double ai_timeout_seconds = 50;
 }
 
 message CreateRuleRequest {
@@ -298,6 +304,60 @@ message TestAIRewriteResponse {
   bool success = 1;
   string rewritten_text = 2;
   string error_message = 3;
+}
+
+// -----------------------------------------------------------------------------
+// Prompt Templates (AI Rewrite prompt management — shared by bot & dashboard)
+// -----------------------------------------------------------------------------
+
+message PromptTemplate {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string system_prompt = 4;
+  string user_prompt_template = 5;
+  string target_language = 6;
+  int32 current_version = 7;
+  bool is_system = 8;
+  int64 created_at = 9;
+  int64 updated_at = 10;
+  string owner_user_id = 11;
+}
+
+message ListPromptTemplatesRequest {
+  string owner_user_id = 1;
+}
+
+message ListPromptTemplatesResponse {
+  repeated PromptTemplate templates = 1;
+}
+
+message SavePromptTemplateRequest {
+  PromptTemplate template = 1;
+  int32 expected_version = 2; // OCC guard; 0 = skip check
+}
+
+message DeletePromptTemplateRequest {
+  string id = 1;
+}
+
+message TestPromptRequest {
+  string prompt_id = 1;
+  string ai_config_id = 2;
+  string sample_text = 3;
+  int32 version = 4; // 0 = active version
+}
+
+message TestPromptResponse {
+  bool success = 1;
+  string transformed_text = 2;
+  string error_message = 3;
+  string error_code = 4;
+  double execution_duration_ms = 5;
+  string provider_used = 6;
+  string model_used = 7;
+  int32 prompt_version_used = 8;
+  string circuit_state = 9;
 }
 
 // -----------------------------------------------------------------------------
@@ -520,6 +580,12 @@ service AIControlService {
   rpc UpdateAIConfig(UpdateAIConfigRequest) returns (AIConfig);
   rpc DeleteAIConfig(DeleteAIConfigRequest) returns (StatusResponse);
   rpc TestAIRewrite(TestAIRewriteRequest) returns (TestAIRewriteResponse);
+  // Prompt template management (AI Rewrite prompts) — shared surface for the
+  // Telegram bot and the web dashboard.
+  rpc ListPromptTemplates(ListPromptTemplatesRequest) returns (ListPromptTemplatesResponse);
+  rpc SavePromptTemplate(SavePromptTemplateRequest) returns (PromptTemplate);
+  rpc DeletePromptTemplate(DeletePromptTemplateRequest) returns (StatusResponse);
+  rpc TestPrompt(TestPromptRequest) returns (TestPromptResponse);
 }
 
 service SystemStatusControlService {

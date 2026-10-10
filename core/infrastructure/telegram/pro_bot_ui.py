@@ -89,6 +89,19 @@ CB = {
     "dashboard": "dsh",
     "webpass": "wp",
     "webpass_reset": "wpr",
+    # AI Rewrite (per-rule): pick AI config / prompt / fallback policy / test
+    "r_ai": "rai",
+    "r_ai_cfg": "raic",
+    "r_ai_prompt": "raip",
+    "r_ai_policy": "raif",
+    "r_ai_test": "rait",
+    "r_ai_ttxt": "raix",
+    # Global prompt management (bot side)
+    "p_list": "pl",
+    "p_new": "pn",
+    "p_edit": "pe",
+    "p_del": "pd",
+    "p_test": "pt",
 }
 
 SEV_ICON = {"info": "ℹ️", "warn": "⚠️", "error": "❌", "auth": "🔐", "fatal": "💀"}
@@ -186,6 +199,8 @@ class ProBotUI:
         metrics=None,
         rule_stats=None,
         users=None,
+        prompt_service=None,
+        ai_transformer=None,
         pv_responder=None,
         web_url: str = "",
         account_servicer=None,
@@ -210,6 +225,8 @@ class ProBotUI:
         self._metrics = metrics
         self._rule_stats = rule_stats
         self._users = users
+        self._prompts = prompt_service
+        self._ai_transformer = ai_transformer
         self._pv_responder = pv_responder
         self._web_url = (web_url or "").rstrip("/")
         self._accounts = account_servicer
@@ -621,6 +638,9 @@ class ProBotUI:
             [
                 (f"🖼 آلبوم: {alb_badge}", f"ed_mg:{rule.id}"),
                 (f"🔤 جایگزینی ({reps_count})", f"rtx:{rule.id}"),
+            ],
+            [
+                (f"🤖 AI Rewrite: {draft.get('ai_status_badge', '❌ خاموش')}", f"r_ai:{rule.id}"),
             ],
             [
                 ("📝 تنظیم هدر و فوتر", f"rhf:{rule.id}"),
@@ -2327,6 +2347,217 @@ class ProBotUI:
             await cq.answer("💾 تغییرات قانون با موفقیت ذخیره و اعمال شدند", show_alert=True)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
+
+        # ---------------------------------------------------------------
+        # AI Rewrite per-rule menu (pipeline stage — off by default)
+        # ---------------------------------------------------------------
+        def _ai_badge(draft: Dict[str, Any]) -> str:
+            if not draft.get("ai_config_id"):
+                return "❌ خاموش"
+            pol = str(draft.get("ai_fallback_policy") or "DROP")
+            return f"🟢 {pol}"
+
+        async def _render_ai_menu(rule_id: str, draft: Dict[str, Any]) -> Tuple[str, InlineKeyboardMarkup]:
+            cfg_id = str(draft.get("ai_config_id") or "")
+            prompt_id = str(draft.get("prompt_id") or "")
+            pol = str(draft.get("ai_fallback_policy") or "DROP")
+            tmo = draft.get("ai_timeout_seconds") or 15.0
+            lines = ["🤖 **بازنویسی هوشمند پیام (AI Rewrite)**", ""]
+            if cfg_id:
+                try:
+                    cfg = await self._ai.get(cfg_id)
+                    lines.append(f"🧠 پیکربندی: `{cfg.name}` [{self._provider_label(cfg.provider.value)}/{cfg.model}]" if cfg else f"🧠 پیکربندی: `{cfg_id[:8]}` (یافت نشد!)")
+                except Exception:
+                    lines.append(f"🧠 پیکربندی: `{cfg_id[:8]}`")
+            else:
+                lines.append("🧠 پیکربندی: ❌ خاموش (پیام‌ها بدون تغییر فوروارد می‌شوند)")
+            if prompt_id and self._prompts:
+                try:
+                    tpl = await self._prompts.get_template(prompt_id)
+                    lines.append(f"📝 پرامپت: {tpl.name} (v{tpl.current_version})" if tpl else f"📝 پرامپت: `{prompt_id[:8]}` (یافت نشد!)")
+                except Exception:
+                    pass
+            lines += [
+                f"⚠️ رفتار خطا: **{pol}**" + (" (ارسال متن اصلی)" if pol == "SEND_ORIGINAL" else " (عدم ارسال)" if pol == "DROP" else ""),
+                f"⏱ Timeout: {tmo}s",
+                "",
+                "💡 این مرحله فقط وقتی پیکربندی AI انتخاب شده باشد اجرا می‌شود.",
+            ]
+            rows: List[List[Tuple[str, str]]] = [
+                [("🧠 انتخاب پیکربندی AI", f"r_ai_cfg:{rule_id}")],
+                [("📝 انتخاب پرامپت", f"r_ai_prompt:{rule_id}")],
+                [("⚠️ تغییر رفتار خطا", f"r_ai_policy:{rule_id}")],
+                [("🧪 تست با متن نمونه", f"r_ai_test:{rule_id}")],
+                [("⬅️ بازگشت به ادیتور", f"rd:{rule_id}")],
+            ]
+            return "\n".join(lines), self._kbd(rows)
+
+        @b.on_callback_query(filters.regex(r"^r_ai:(.+)$"))
+        async def _cb_rule_ai_menu(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id
+            st = self._state(uid)
+            rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
+            draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
+            if not isinstance(draft, dict) or st.buffer.get("rule_id") != rule_id:
+                rule = await self._rules.get(rule_id)
+                if not rule:
+                    return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                draft = rule.to_draft()
+            draft["ai_status_badge"] = _ai_badge(draft)
+            text, kbd = await _render_ai_menu(rule_id, draft)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^r_ai_cfg:(.+)$"))
+        async def _cb_rule_ai_pick_cfg(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id
+            st = self._state(uid)
+            rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
+            draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else {}
+            cfgs = await self._ai.list_all()
+            current = str(draft.get("ai_config_id") or "")
+            rows: List[List[Tuple[str, str]]] = [
+                [("❌ خاموش (بدون بازنویسی)", f"r_aicset:{rule_id}:")],
+            ]
+            for c in cfgs:
+                mark = "✅" if c.id == current else ("🟢" if c.is_enabled else "🔴")
+                rows.append([(f"{mark} {c.name} [{self._provider_label(c.provider.value)}/{c.model}]", f"r_aicset:{rule_id}:{c.id}")])
+            rows.append([("⬅️ بازگشت", f"r_ai:{rule_id}")])
+            await self._safe_edit(cq, "🧠 انتخاب پیکربندی AI برای بازنویسی:", reply_markup=self._kbd(rows))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^r_aicset:(.+?):(.*)$"))
+        async def _cb_rule_ai_set_cfg(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id
+            st = self._state(uid)
+            raw = cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)
+            _, rule_id, cfg_id = raw.split(":", 2)
+            draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
+            if not isinstance(draft, dict):
+                return await cq.answer("⚠️ پیش‌نویس منقضی شده", show_alert=True)
+            draft["ai_config_id"] = cfg_id or ""
+            draft["ai_status_badge"] = _ai_badge(draft)
+            await self._persist(uid, st)
+            text, kbd = await _render_ai_menu(rule_id, draft)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer("✅ پیکربندی AI ثبت شد (در Save نهایی می‌آید)")
+
+        @b.on_callback_query(filters.regex(r"^r_ai_prompt:(.+)$"))
+        async def _cb_rule_ai_pick_prompt(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id
+            st = self._state(uid)
+            rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
+            draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else {}
+            current = str(draft.get("prompt_id") or "")
+            rows: List[List[Tuple[str, str]]] = [
+                [("⬜ بدون پرامپت سیستمی", f"r_aipset:{rule_id}:")],
+            ]
+            if self._prompts:
+                for t in await self._prompts.list_templates():
+                    mark = "✅" if t.id == current else ("⭐" if t.is_system else "👤")
+                    rows.append([(f"{mark} {t.name} (v{t.current_version})", f"r_aipset:{rule_id}:{t.id}")])
+            rows.append([("⬅️ بازگشت", f"r_ai:{rule_id}")])
+            await self._safe_edit(cq, "📝 انتخاب پرامپت بازنویسی (هر دو رابط بات و داشبورد همین‌ها را می‌بینند):", reply_markup=self._kbd(rows))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^r_aipset:(.+?):(.*)$"))
+        async def _cb_rule_ai_set_prompt(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id
+            st = self._state(uid)
+            raw = cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)
+            _, rule_id, prompt_id = raw.split(":", 2)
+            draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
+            if not isinstance(draft, dict):
+                return await cq.answer("⚠️ پیش‌نویس منقضی شده", show_alert=True)
+            draft["prompt_id"] = prompt_id or ""
+            await self._persist(uid, st)
+            text, kbd = await _render_ai_menu(rule_id, draft)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer("✅ پرامپت ثبت شد (در Save نهایی می‌آید)")
+
+        @b.on_callback_query(filters.regex(r"^r_ai_policy:(.+)$"))
+        async def _cb_rule_ai_pick_policy(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
+            rows: List[List[Tuple[str, str]]] = [
+                [("🟢 SEND_ORIGINAL — ارسال متن اصلی", f"r_aifset:{rule_id}:SEND_ORIGINAL")],
+                [("🔴 DROP — عدم ارسال (Fail Closed)", f"r_aifset:{rule_id}:DROP")],
+                [("🔁 RETRY — تلاش مجدد", f"r_aifset:{rule_id}:RETRY")],
+                [("🔒 QUARANTINE — قرنطینه", f"r_aifset:{rule_id}:QUARANTINE")],
+                [("⬅️ بازگشت", f"r_ai:{rule_id}")],
+            ]
+            await self._safe_edit(cq, "⚠️ اگر AI در دسترس نباشد یا خروجی نامعتبر باشد چه اتفاقی بیفتد؟", reply_markup=self._kbd(rows))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^r_aifset:(.+?):(.+)$"))
+        async def _cb_rule_ai_set_policy(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id
+            st = self._state(uid)
+            raw = cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)
+            _, rule_id, policy = raw.split(":", 2)
+            draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
+            if not isinstance(draft, dict):
+                return await cq.answer("⚠️ پیش‌نویس منقضی شده", show_alert=True)
+            draft["ai_fallback_policy"] = policy
+            draft["ai_status_badge"] = _ai_badge(draft)
+            await self._persist(uid, st)
+            text, kbd = await _render_ai_menu(rule_id, draft)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer(f"✅ رفتار خطا: {policy}")
+
+        @b.on_callback_query(filters.regex(r"^r_ai_test:(.+)$"))
+        async def _cb_rule_ai_test(_, cq: CallbackQuery):
+            """Dry-run: uses the real prompt+config pipeline, sends nothing."""
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id
+            st = self._state(uid)
+            rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
+            draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else {}
+            cfg_id = str(draft.get("ai_config_id") or "")
+            if not cfg_id:
+                return await cq.answer("⚠️ اول یک پیکربندی AI انتخاب کنید", show_alert=True)
+            sample = str(draft.get("ai_test_text") or "💎 XAUUSD SIGNAL: BUY NOW @ 2655 | TP 2680 | SL 2640 https://t.me/signal #gold")
+            await self._safe_edit(cq, f"⏳ در حال تست بازنویسی…\n\nمتن نمونه:\n{sample[:200]}", reply_markup=self._kbd([[("⬅️ بازگشت", f"r_ai:{rule_id}")]]))
+            try:
+                prompt_id = str(draft.get("prompt_id") or "")
+                if prompt_id and self._prompts and self._ai_transformer:
+                    result = await self._prompts.test_prompt(prompt_id, sample, cfg_id, self._ai_transformer)
+                else:
+                    ok, text_out = await self._ai.test_rewrite(cfg_id, sample)
+                    result = {"success": ok, "transformed_text": text_out if ok else "", "error_message": "" if ok else text_out,
+                              "execution_duration_ms": 0.0, "model_used": "", "prompt_version_used": 0}
+            except Exception as exc:
+                result = {"success": False, "transformed_text": "", "error_message": f"{type(exc).__name__}: {exc}",
+                          "execution_duration_ms": 0.0, "model_used": "", "prompt_version_used": 0}
+            if result.get("success"):
+                body = (
+                    "✅ **نتیجه تست بازنویسی:**\n\n"
+                    f"{result.get('transformed_text') or '(خالی)'}\n\n"
+                    f"⏱ {result.get('execution_duration_ms', 0):.0f}ms"
+                    + (f" | 🧠 {result.get('model_used')}" if result.get("model_used") else "")
+                    + (f" | 📝 v{result.get('prompt_version_used')}" if result.get("prompt_version_used") else "")
+                )
+            else:
+                body = f"❌ **خطا در تست:**\n`{result.get('error_message') or 'unknown'}`"
+            await self._safe_edit(cq, body, reply_markup=self._kbd([
+                [("🔄 تست مجدد", f"r_ai_test:{rule_id}")],
+                [("⬅️ بازگشت", f"r_ai:{rule_id}")],
+            ]))
+            await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ed_can:(.+)$"))
         async def _cb_rule_draft_cancel(_, cq: CallbackQuery):

@@ -1151,11 +1151,15 @@ var FilterControlService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AIControlService_ListAIConfigs_FullMethodName  = "/autoforward.AIControlService/ListAIConfigs"
-	AIControlService_CreateAIConfig_FullMethodName = "/autoforward.AIControlService/CreateAIConfig"
-	AIControlService_UpdateAIConfig_FullMethodName = "/autoforward.AIControlService/UpdateAIConfig"
-	AIControlService_DeleteAIConfig_FullMethodName = "/autoforward.AIControlService/DeleteAIConfig"
-	AIControlService_TestAIRewrite_FullMethodName  = "/autoforward.AIControlService/TestAIRewrite"
+	AIControlService_ListAIConfigs_FullMethodName        = "/autoforward.AIControlService/ListAIConfigs"
+	AIControlService_CreateAIConfig_FullMethodName       = "/autoforward.AIControlService/CreateAIConfig"
+	AIControlService_UpdateAIConfig_FullMethodName       = "/autoforward.AIControlService/UpdateAIConfig"
+	AIControlService_DeleteAIConfig_FullMethodName       = "/autoforward.AIControlService/DeleteAIConfig"
+	AIControlService_TestAIRewrite_FullMethodName        = "/autoforward.AIControlService/TestAIRewrite"
+	AIControlService_ListPromptTemplates_FullMethodName  = "/autoforward.AIControlService/ListPromptTemplates"
+	AIControlService_SavePromptTemplate_FullMethodName   = "/autoforward.AIControlService/SavePromptTemplate"
+	AIControlService_DeletePromptTemplate_FullMethodName = "/autoforward.AIControlService/DeletePromptTemplate"
+	AIControlService_TestPrompt_FullMethodName           = "/autoforward.AIControlService/TestPrompt"
 )
 
 // AIControlServiceClient is the client API for AIControlService service.
@@ -1167,6 +1171,12 @@ type AIControlServiceClient interface {
 	UpdateAIConfig(ctx context.Context, in *UpdateAIConfigRequest, opts ...grpc.CallOption) (*AIConfig, error)
 	DeleteAIConfig(ctx context.Context, in *DeleteAIConfigRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 	TestAIRewrite(ctx context.Context, in *TestAIRewriteRequest, opts ...grpc.CallOption) (*TestAIRewriteResponse, error)
+	// Prompt template management (AI Rewrite prompts) — shared surface for the
+	// Telegram bot and the web dashboard.
+	ListPromptTemplates(ctx context.Context, in *ListPromptTemplatesRequest, opts ...grpc.CallOption) (*ListPromptTemplatesResponse, error)
+	SavePromptTemplate(ctx context.Context, in *SavePromptTemplateRequest, opts ...grpc.CallOption) (*PromptTemplate, error)
+	DeletePromptTemplate(ctx context.Context, in *DeletePromptTemplateRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	TestPrompt(ctx context.Context, in *TestPromptRequest, opts ...grpc.CallOption) (*TestPromptResponse, error)
 }
 
 type aIControlServiceClient struct {
@@ -1227,6 +1237,46 @@ func (c *aIControlServiceClient) TestAIRewrite(ctx context.Context, in *TestAIRe
 	return out, nil
 }
 
+func (c *aIControlServiceClient) ListPromptTemplates(ctx context.Context, in *ListPromptTemplatesRequest, opts ...grpc.CallOption) (*ListPromptTemplatesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPromptTemplatesResponse)
+	err := c.cc.Invoke(ctx, AIControlService_ListPromptTemplates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIControlServiceClient) SavePromptTemplate(ctx context.Context, in *SavePromptTemplateRequest, opts ...grpc.CallOption) (*PromptTemplate, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromptTemplate)
+	err := c.cc.Invoke(ctx, AIControlService_SavePromptTemplate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIControlServiceClient) DeletePromptTemplate(ctx context.Context, in *DeletePromptTemplateRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, AIControlService_DeletePromptTemplate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIControlServiceClient) TestPrompt(ctx context.Context, in *TestPromptRequest, opts ...grpc.CallOption) (*TestPromptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestPromptResponse)
+	err := c.cc.Invoke(ctx, AIControlService_TestPrompt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AIControlServiceServer is the server API for AIControlService service.
 // All implementations must embed UnimplementedAIControlServiceServer
 // for forward compatibility.
@@ -1236,6 +1286,12 @@ type AIControlServiceServer interface {
 	UpdateAIConfig(context.Context, *UpdateAIConfigRequest) (*AIConfig, error)
 	DeleteAIConfig(context.Context, *DeleteAIConfigRequest) (*StatusResponse, error)
 	TestAIRewrite(context.Context, *TestAIRewriteRequest) (*TestAIRewriteResponse, error)
+	// Prompt template management (AI Rewrite prompts) — shared surface for the
+	// Telegram bot and the web dashboard.
+	ListPromptTemplates(context.Context, *ListPromptTemplatesRequest) (*ListPromptTemplatesResponse, error)
+	SavePromptTemplate(context.Context, *SavePromptTemplateRequest) (*PromptTemplate, error)
+	DeletePromptTemplate(context.Context, *DeletePromptTemplateRequest) (*StatusResponse, error)
+	TestPrompt(context.Context, *TestPromptRequest) (*TestPromptResponse, error)
 	mustEmbedUnimplementedAIControlServiceServer()
 }
 
@@ -1260,6 +1316,18 @@ func (UnimplementedAIControlServiceServer) DeleteAIConfig(context.Context, *Dele
 }
 func (UnimplementedAIControlServiceServer) TestAIRewrite(context.Context, *TestAIRewriteRequest) (*TestAIRewriteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TestAIRewrite not implemented")
+}
+func (UnimplementedAIControlServiceServer) ListPromptTemplates(context.Context, *ListPromptTemplatesRequest) (*ListPromptTemplatesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPromptTemplates not implemented")
+}
+func (UnimplementedAIControlServiceServer) SavePromptTemplate(context.Context, *SavePromptTemplateRequest) (*PromptTemplate, error) {
+	return nil, status.Error(codes.Unimplemented, "method SavePromptTemplate not implemented")
+}
+func (UnimplementedAIControlServiceServer) DeletePromptTemplate(context.Context, *DeletePromptTemplateRequest) (*StatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeletePromptTemplate not implemented")
+}
+func (UnimplementedAIControlServiceServer) TestPrompt(context.Context, *TestPromptRequest) (*TestPromptResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestPrompt not implemented")
 }
 func (UnimplementedAIControlServiceServer) mustEmbedUnimplementedAIControlServiceServer() {}
 func (UnimplementedAIControlServiceServer) testEmbeddedByValue()                          {}
@@ -1372,6 +1440,78 @@ func _AIControlService_TestAIRewrite_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIControlService_ListPromptTemplates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPromptTemplatesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIControlServiceServer).ListPromptTemplates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIControlService_ListPromptTemplates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIControlServiceServer).ListPromptTemplates(ctx, req.(*ListPromptTemplatesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIControlService_SavePromptTemplate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SavePromptTemplateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIControlServiceServer).SavePromptTemplate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIControlService_SavePromptTemplate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIControlServiceServer).SavePromptTemplate(ctx, req.(*SavePromptTemplateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIControlService_DeletePromptTemplate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeletePromptTemplateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIControlServiceServer).DeletePromptTemplate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIControlService_DeletePromptTemplate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIControlServiceServer).DeletePromptTemplate(ctx, req.(*DeletePromptTemplateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIControlService_TestPrompt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestPromptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIControlServiceServer).TestPrompt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIControlService_TestPrompt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIControlServiceServer).TestPrompt(ctx, req.(*TestPromptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AIControlService_ServiceDesc is the grpc.ServiceDesc for AIControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1398,6 +1538,22 @@ var AIControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TestAIRewrite",
 			Handler:    _AIControlService_TestAIRewrite_Handler,
+		},
+		{
+			MethodName: "ListPromptTemplates",
+			Handler:    _AIControlService_ListPromptTemplates_Handler,
+		},
+		{
+			MethodName: "SavePromptTemplate",
+			Handler:    _AIControlService_SavePromptTemplate_Handler,
+		},
+		{
+			MethodName: "DeletePromptTemplate",
+			Handler:    _AIControlService_DeletePromptTemplate_Handler,
+		},
+		{
+			MethodName: "TestPrompt",
+			Handler:    _AIControlService_TestPrompt_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

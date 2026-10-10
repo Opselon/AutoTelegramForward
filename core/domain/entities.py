@@ -382,6 +382,12 @@ class ForwardRule:
             "custom_footer": str(self.custom_footer),
             "replacements": dict(self.replacements),
             "version": int(getattr(self, "version", 1)),
+            # AI Rewrite settings (pipeline stage, off by default)
+            "ai_config_id": str(self.ai_config_id or ""),
+            "ai_fallback_policy": getattr(getattr(self, "ai_fallback_policy", None), "value", str(getattr(self, "ai_fallback_policy", "DROP"))),
+            "ai_prompt_version": int(getattr(self, "ai_prompt_version", 0) or 0),
+            "ai_timeout_seconds": float(getattr(self, "ai_timeout_seconds", 15.0) or 15.0),
+            "prompt_id": str((self.metadata or {}).get("prompt_id", "") or ""),
         }
 
     def apply_draft(self, draft: Dict[str, Any]) -> None:
@@ -420,6 +426,32 @@ class ForwardRule:
             self.custom_header = str(draft["custom_header"])
         if "custom_footer" in draft and draft["custom_footer"] is not None:
             self.custom_footer = str(draft["custom_footer"])
+        # AI Rewrite (pipeline stage)
+        if "ai_config_id" in draft:
+            self.ai_config_id = str(draft.get("ai_config_id") or "") or None
+        if "ai_fallback_policy" in draft and draft["ai_fallback_policy"]:
+            try:
+                self.ai_fallback_policy = AIFallbackPolicy(str(draft["ai_fallback_policy"]).upper())
+            except ValueError:
+                pass
+        if "ai_prompt_version" in draft and draft["ai_prompt_version"] is not None:
+            try:
+                self.ai_prompt_version = max(0, int(draft["ai_prompt_version"]))
+            except (ValueError, TypeError):
+                pass
+        if "ai_timeout_seconds" in draft and draft["ai_timeout_seconds"] is not None:
+            try:
+                self.ai_timeout_seconds = min(120.0, max(1.0, float(draft["ai_timeout_seconds"])))
+            except (ValueError, TypeError):
+                pass
+        if "prompt_id" in draft:
+            if not isinstance(self.metadata, dict):
+                self.metadata = {}
+            pid = str(draft.get("prompt_id") or "")
+            if pid:
+                self.metadata["prompt_id"] = pid
+            else:
+                self.metadata.pop("prompt_id", None)
 
         if "source_chat_id" in draft and draft["source_chat_id"]:
             self.source_chat_id = str(draft["source_chat_id"])

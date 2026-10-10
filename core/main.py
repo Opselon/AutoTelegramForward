@@ -190,7 +190,12 @@ async def serve_grpc(container: dict, cfg: Config):
         servicers.FilterControlServicer(container["filters"]), server
     )
     pb_grpc.add_AIControlServiceServicer_to_server(
-        servicers.AIControlServicer(container["ai"]), server
+        servicers.AIControlServicer(
+            container["ai"],
+            prompt_service=container["prompt_service"],
+            ai_transformer=container["ai_transformer"],
+        ),
+        server,
     )
     pb_grpc.add_SystemStatusControlServiceServicer_to_server(
         servicers.SystemStatusControlServicer(
@@ -371,6 +376,8 @@ async def main() -> None:
             metrics=container.get("metrics"),
             rule_stats=container.get("rule_stats"),
             users=container.get("users"),
+            prompt_service=container.get("prompt_service"),
+            ai_transformer=container.get("ai_transformer"),
             pv_responder=container.get("pv_responder"),
             web_url=cfg.web_url,
             account_servicer=container.get("account_servicer"),

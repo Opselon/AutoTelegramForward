@@ -263,6 +263,9 @@ func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
 			"is_active":                 rl.IsActive,
 			"filter_rule_id":            rl.FilterRuleId,
 			"ai_config_id":              rl.AiConfigId,
+			"ai_fallback_policy":        rl.AiFallbackPolicy,
+			"ai_prompt_version":         rl.AiPromptVersion,
+			"ai_timeout_seconds":        rl.AiTimeoutSeconds,
 			"remove_links":              rl.RemoveLinks,
 			"custom_caption_template":   rl.CustomCaptionTemplate,
 			"created_at":                rl.CreatedAt,
@@ -1027,12 +1030,154 @@ type testAIReq struct {
 	SampleText string `json:"sample_text"`
 }
 
+// ---------------------------------------------------------------------------
+// Prompt templates (AI Rewrite) — shared by bot & dashboard
+// ---------------------------------------------------------------------------
+
+func promptToPb(t *promptTemplateDTO) *pb.PromptTemplate {
+	return &pb.PromptTemplate{
+		Id: t.Id, Name: t.Name, Description: t.Description,
+		SystemPrompt: t.SystemPrompt, UserPromptTemplate: t.UserPromptTemplate,
+		TargetLanguage: t.TargetLanguage, CurrentVersion: t.CurrentVersion,
+		IsSystem: t.IsSystem, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+	}
+}
+
+type promptTemplateDTO struct {
+	Id                 string `json:"id,omitempty"`
+	Name               string `json:"name"`
+	Description        string `json:"description,omitempty"`
+	SystemPrompt       string `json:"system_prompt"`
+	UserPromptTemplate string `json:"user_prompt_template,omitempty"`
+	TargetLanguage     string `json:"target_language,omitempty"`
+	CurrentVersion     int32  `json:"current_version,omitempty"`
+	IsSystem           bool   `json:"is_system,omitempty"`
+	CreatedAt          int64  `json:"created_at,omitempty"`
+	UpdatedAt          int64  `json:"updated_at,omitempty"`
+}
+
+type savePromptReq struct {
+	Template        *promptTemplateDTO `json:"template"`
+	ExpectedVersion int32              `json:"expected_version"`
+}
+
+func (h *Handlers) ListPromptTemplates(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.AI.ListPromptTemplates(ctx, &pb.ListPromptTemplatesRequest{})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	templates := resp.Templates
+	if templates == nil {
+		templates = []*pb.PromptTemplate{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"templates": templates, "total": len(templates)})
+}
+
+func (h *Handlers) CreatePromptTemplate(w http.ResponseWriter, r *http.Request) {
+	var req savePromptReq
+	if !bind(w, r, &req) || req.Template == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "template required"})
+		return
+	}
+	if req.Template.IsSystem {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "cannot create system prompts", "code": "system_prompt_immutable"})
+		return
+	}
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.AI.SavePromptTemplate(ctx, &pb.SavePromptTemplateRequest{Template: promptToPb(req.Template)})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if resp.Id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "prompt validation failed or duplicate name"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+func (h *Handlers) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request) {
+	var req savePromptReq
+	if !bind(w, r, &req) || req.Template == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "template required"})
+		return
+	}
+	req.Template.Id = r.PathValue("id")
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.AI.SavePromptTemplate(ctx, &pb.SavePromptTemplateRequest{
+		Template: promptToPb(req.Template), ExpectedVersion: req.ExpectedVersion,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if resp.Id == "" {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "update failed (system prompt, OCC conflict, or validation)", "code": "prompt_update_conflict"})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handlers) DeletePromptTemplate(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.AI.DeletePromptTemplate(ctx, &pb.DeletePromptTemplateRequest{Id: r.PathValue("id")})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if !resp.Success {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": resp.Message})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+type testPromptReq struct {
+	PromptId   string `json:"prompt_id"`
+	AiConfigId string `json:"ai_config_id"`
+	SampleText string `json:"sample_text"`
+	Version    int32  `json:"version"`
+}
+
+func (h *Handlers) TestPrompt(w http.ResponseWriter, r *http.Request) {
+	var req testPromptReq
+	if !bind(w, r, &req) {
+		return
+	}
+	if req.PromptId == "" || req.AiConfigId == "" || req.SampleText == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "prompt_id, ai_config_id and sample_text are required"})
+		return
+	}
+	ctx, cancel := withAITimeout(r)
+	defer cancel()
+	// Ownership guard: the AI config must belong to the caller.
+	if !h.ownsAIConfig(ctx, req.AiConfigId, identity(r).UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "AI config not found"})
+		return
+	}
+	resp, err := h.c.AI.TestPrompt(ctx, &pb.TestPromptRequest{
+		PromptId: req.PromptId, AiConfigId: req.AiConfigId,
+		SampleText: req.SampleText, Version: req.Version,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (h *Handlers) TestAIRewrite(w http.ResponseWriter, r *http.Request) {
 	var req testAIReq
 	if !bind(w, r, &req) {
 		return
 	}
-	ctx, cancel := withTimeout(r)
+	ctx, cancel := withAITimeout(r)
 	defer cancel()
 	resp, err := h.c.AI.TestAIRewrite(ctx, &pb.TestAIRewriteRequest{
 		AiConfigId: r.PathValue("id"), SampleText: req.SampleText,
@@ -1161,6 +1306,14 @@ func identity(r *http.Request) *Identity {
 
 func withTimeout(r *http.Request) (context.Context, func()) {
 	return context.WithTimeout(r.Context(), 15*time.Second)
+}
+
+// withAITimeout is used by handlers that call LLM providers: model latency can
+// comfortably exceed the default 15s request budget, and a client-side deadline
+// races the provider's own timeout (see AITransformer), surfacing as a confusing
+// "Deadline Exceeded" instead of the real result.
+func withAITimeout(r *http.Request) (context.Context, func()) {
+	return context.WithTimeout(r.Context(), 90*time.Second)
 }
 
 func grpcError(w http.ResponseWriter, err error) {

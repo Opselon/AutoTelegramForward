@@ -40,6 +40,8 @@ import type {
   Session,
   AIConfig,
   SaveAIConfigRequest,
+  PromptTemplate,
+  TestPromptResponse,
   FilterRule,
   SaveFilterRuleRequest,
   DeliveryJob,
@@ -63,6 +65,7 @@ export function App() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
   const [filterRules, setFilterRules] = useState<FilterRule[]>([])
+  const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([])
   const [queueJobs, setQueueJobs] = useState<DeliveryJob[]>([])
   const [dlqJobs, setDlqJobs] = useState<DeadLetterJob[]>([])
   const [deliveryStats, setDeliveryStats] = useState<DeliveryStats | null>(null)
@@ -133,10 +136,11 @@ export function App() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [r, s, ai, f, q, dlq, gw, st, l, ds, pv] = await Promise.all([
+      const [r, s, ai, pt, f, q, dlq, gw, st, l, ds, pv] = await Promise.all([
         api.getRules().catch(() => []),
         api.getSessions().catch(() => []),
         api.getAIConfigs().catch(() => []),
+        api.getPromptTemplates().catch(() => []),
         api.getFilters().catch(() => []),
         api.getQueueJobs().catch(() => []),
         api.getDLQJobs().catch(() => []),
@@ -149,6 +153,7 @@ export function App() {
       setRules(Array.isArray(r) ? r : [])
       setSessions(Array.isArray(s) ? s : [])
       setAiConfigs(Array.isArray(ai) ? ai : [])
+      setPromptTemplates(Array.isArray(pt) ? pt : [])
       setFilterRules(Array.isArray(f) ? f : [])
       setQueueJobs(Array.isArray(q) ? q : [])
       setDlqJobs(Array.isArray(dlq) ? dlq : [])
@@ -1790,6 +1795,16 @@ export function App() {
         </div>
       )}
 
+      {/* PROMPT EDITOR & TESTER (AI Rewrite) */}
+      {activeTab === 'ai' && (
+        <PromptEditorPanel
+          prompts={Array.isArray(promptTemplates) ? promptTemplates : []}
+          aiConfigs={Array.isArray(aiConfigs) ? aiConfigs : []}
+          onSaved={async () => setPromptTemplates(await api.getPromptTemplates().catch(() => []))}
+          isRtl={isRtl}
+        />
+      )}
+
       {/* TAB: AI PV ASSISTANT */}
       {activeTab === 'pv' && (
         <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
@@ -3241,6 +3256,86 @@ export function App() {
                 </div>
               </div>
 
+              {/* AI Rewrite (per-rule) */}
+              <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#c084fc', marginBottom: 10 }}>
+                  🤖 {isRtl ? 'بازنویسی هوشمند پیام (AI Rewrite)' : 'AI Message Rewrite'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      {isRtl ? 'پیکربندی AI:' : 'AI Config:'}
+                    </label>
+                    <select
+                      value={ruleFormData.ai_config_id || ''}
+                      onChange={(e) => setRuleFormData({ ...ruleFormData, ai_config_id: e.target.value || undefined })}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">{isRtl ? '❌ غیرفعال (بدون بازنویسی)' : '❌ Disabled (no rewrite)'}</option>
+                      {(Array.isArray(aiConfigs) ? aiConfigs : []).map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.is_enabled ? '🟢' : '🔴'} {a.name} [{a.provider}/{a.model}]
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      {isRtl ? 'پرامپت بازنویسی:' : 'Rewrite Prompt:'}
+                    </label>
+                    <select
+                      value={ruleMeta.prompt_id || ''}
+                      onChange={(e) => setRuleMeta({ ...ruleMeta, prompt_id: e.target.value || undefined })}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">{isRtl ? 'پیش‌فرض (بدون پرامپت سیستمی)' : 'Default (no system prompt)'}</option>
+                      {(Array.isArray(promptTemplates) ? promptTemplates : []).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.is_system ? '⭐' : '👤'} {p.name} (v{p.current_version})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      {isRtl ? 'رفتار در خطای AI:' : 'On AI Failure:'}
+                    </label>
+                    <select
+                      value={ruleFormData.ai_fallback_policy || 'DROP'}
+                      onChange={(e) => setRuleFormData({ ...ruleFormData, ai_fallback_policy: e.target.value })}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                    >
+                      <option value="SEND_ORIGINAL">{isRtl ? '🟢 ارسال متن اصلی (Fail Open)' : '🟢 Send original (Fail Open)'}</option>
+                      <option value="DROP">{isRtl ? '🔴 عدم ارسال (Fail Closed)' : '🔴 Drop (Fail Closed)'}</option>
+                      <option value="RETRY">{isRtl ? '🔁 تلاش مجدد (Retry)' : '🔁 Retry'}</option>
+                      <option value="QUARANTINE">{isRtl ? '🔒 قرنطینه' : '🔒 Quarantine'}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      {isRtl ? 'Timeout (ثانیه):' : 'Timeout (s):'}
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      value={ruleFormData.ai_timeout_seconds ?? 15}
+                      onChange={(e) => setRuleFormData({ ...ruleFormData, ai_timeout_seconds: Number(e.target.value) || 15 })}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 8 }}>
+                  {isRtl
+                    ? '💡 در حالت Fail Open، اگر AI در دسترس نباشد پیام اصلی بدون تغییر ارسال می‌شود و رویداد در لاگ ثبت می‌گردد.'
+                    : '💡 Fail Open sends the original text if AI fails, and logs the fallback event.'}
+                </div>
+              </div>
+
               <div className="modal-sheet-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
                 <button type="button" onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary">
                   {isRtl ? 'انصراف' : 'Cancel'}
@@ -3534,3 +3629,234 @@ function UserBar({ lang }: { lang: 'fa' | 'en' }) {
   )
 }
 export default App
+
+// ===========================================================================
+// AI Rewrite Prompt Editor & Tester (shared bot + dashboard logic via API)
+// ===========================================================================
+function PromptEditorPanel({ prompts, aiConfigs, onSaved, isRtl }: {
+  prompts: PromptTemplate[]
+  aiConfigs: AIConfig[]
+  onSaved: () => Promise<void>
+  isRtl: boolean
+}) {
+  const [selected, setSelected] = useState<PromptTemplate | null>(null)
+  const [form, setForm] = useState({ name: '', description: '', system_prompt: '', user_prompt_template: '{text}', target_language: 'auto' })
+  const [testText, setTestText] = useState('💎 XAUUSD SIGNAL: BUY NOW @ 2655 | TP 2680 | SL 2640 https://t.me/signal #gold')
+  const [testResult, setTestResult] = useState<TestPromptResponse | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const openEditor = (p: PromptTemplate | null) => {
+    setSelected(p)
+    setTestResult(null)
+    setForm(p ? {
+      name: p.name, description: p.description || '',
+      system_prompt: p.system_prompt,
+      user_prompt_template: p.user_prompt_template || '{text}',
+      target_language: p.target_language || 'auto',
+    } : { name: '', description: '', system_prompt: '', user_prompt_template: '{text}', target_language: 'auto' })
+  }
+
+  const handleSave = async () => {
+    if (!form.system_prompt.trim()) return
+    setSaving(true)
+    try {
+      await api.savePromptTemplate({ ...form, id: selected?.id, current_version: selected?.current_version } as any)
+      showToast(isRtl ? 'پرامپت ذخیره شد' : 'Prompt saved')
+      await onSaved()
+      openEditor(null)
+    } catch (e: any) {
+      showToast(e.message || 'Error saving prompt')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deletePromptTemplate(id)
+      showToast(isRtl ? 'پرامپت حذف شد' : 'Prompt deleted')
+      await onSaved()
+      if (selected?.id === id) openEditor(null)
+    } catch (e: any) {
+      showToast(e.message || 'Cannot delete system prompt')
+    }
+  }
+
+  const handleTest = async () => {
+    if (!selected || !aiConfigs.length) return
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const r = await api.testPrompt({
+        prompt_id: selected.id,
+        ai_config_id: aiConfigs[0].id,
+        sample_text: testText,
+        version: 0,
+      })
+      setTestResult(r)
+    } catch (e: any) {
+      showToast(e.message || 'Test failed')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <div className="glass-panel" style={{ padding: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
+            ✍️ {isRtl ? 'پرامپت‌های بازنویسی (AI Rewrite Prompts)' : 'Rewrite Prompt Editor'}
+          </h2>
+          <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
+            {isRtl
+              ? 'پرامپت‌های قابل استفاده در قوانین فوروارد. پرامپت‌های ⭐ سیستمی هستند و فقط قابل مشاهده.'
+              : 'Reusable rewrite prompts for forward rules. ⭐ = system prompts (read-only).'}
+          </p>
+        </div>
+        <button onClick={() => openEditor(null)} className="btn btn-primary" style={{ padding: '8px 14px' }}>
+          + {isRtl ? 'پرامپت جدید' : 'New Prompt'}
+        </button>
+      </div>
+
+      {/* Prompt list */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, marginBottom: 20 }}>
+        {(Array.isArray(prompts) ? prompts : []).map((p) => (
+          <div key={p.id} style={{
+            background: 'rgba(15, 23, 42, 0.6)', border: selected?.id === p.id ? '1px solid rgba(168,85,247,0.6)' : '1px solid rgba(255,255,255,0.06)',
+            borderRadius: 10, padding: 14, cursor: 'pointer',
+          }} onClick={() => openEditor(p)}>
+            <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 4 }}>
+              {p.is_system ? '⭐' : '👤'} {p.name} <span style={{ color: '#64748b', fontWeight: 400 }}>v{p.current_version}</span>
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+              {p.description || p.system_prompt.slice(0, 100)}
+            </div>
+            {!p.is_system && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(p.id) }}
+                className="btn btn-danger icon-btn" style={{ padding: 4, marginTop: 8, float: 'right' }}
+                title={isRtl ? 'حذف' : 'Delete'}
+              >
+                🗑
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Editor form */}
+      {form && (selected === null || selected !== null) && form.system_prompt !== undefined && (
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                {isRtl ? 'نام:' : 'Name:'} *
+              </label>
+              <input className="input-field" style={{ width: '100%' }} value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={isRtl ? 'مثلاً: بازنویسی رسمی' : 'e.g. Formal Rewrite'} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                {isRtl ? 'زبان خروجی:' : 'Output Language:'}
+              </label>
+              <select className="input-field" style={{ width: '100%' }} value={form.target_language}
+                onChange={(e) => setForm({ ...form, target_language: e.target.value })}>
+                <option value="auto">Auto</option>
+                <option value="fa">فارسی</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+              {isRtl ? 'توضیحات:' : 'Description:'}
+            </label>
+            <input className="input-field" style={{ width: '100%' }} value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+              {isRtl ? 'System Prompt (دستور اصلی به AI):' : 'System Prompt:'} *
+              {selected?.is_system && <span style={{ color: '#f59e0b' }}> — {isRtl ? 'سیستمی، فقط‌خواندنی' : 'system, read-only'}</span>}
+            </label>
+            <textarea
+              className="input-field"
+              style={{ width: '100%', minHeight: 110, resize: 'vertical', fontFamily: 'monospace', fontSize: '0.78rem' }}
+              value={form.system_prompt}
+              readOnly={!!selected?.is_system}
+              onChange={(e) => setForm({ ...form, system_prompt: e.target.value })}
+              placeholder={isRtl
+                ? 'متن را با حفظ اعداد، لینک‌ها و نام‌ها بازنویسی کن. اطلاعات جدید اختراع نکن. فقط متن بازنویسی‌شده را برگردان.'
+                : 'Rewrite the text preserving numbers, links, and names. Never invent facts. Return only the rewritten text.'}
+            />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+              {isRtl ? 'قالب پیام کاربر (User Template):' : 'User Prompt Template:'}
+            </label>
+            <input className="input-field" style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.78rem' }}
+              value={form.user_prompt_template} readOnly={!!selected?.is_system}
+              onChange={(e) => setForm({ ...form, user_prompt_template: e.target.value })} placeholder="{text}" />
+            <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 4 }}>
+              {isRtl ? 'متغیر {text} جای متن پیام قرار می‌گیرد.' : '{text} is replaced with the message body.'}
+            </div>
+          </div>
+
+          {/* Test panel */}
+          <div style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: 10, padding: 14, border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#a5b4fc', marginBottom: 8 }}>
+              🧪 {isRtl ? 'تست پرامپت (بدون ارسال پیام)' : 'Prompt Test (no message sent)'}
+            </div>
+            <textarea className="input-field" style={{ width: '100%', minHeight: 60, marginBottom: 8, fontSize: '0.78rem' }}
+              value={testText} onChange={(e) => setTestText(e.target.value)} />
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button
+                onClick={handleTest}
+                disabled={testing || !selected || !aiConfigs.length}
+                className="btn btn-secondary" style={{ padding: '6px 12px' }}
+              >
+                {testing ? '⏳' : '▶'} {isRtl ? 'تست با AI' : 'Run AI Test'}
+              </button>
+              {!aiConfigs.length && <span style={{ fontSize: '0.72rem', color: '#f87171' }}>
+                {isRtl ? 'اول یک پیکربندی AI بسازید' : 'Create an AI config first'}
+              </span>}
+            </div>
+            {testResult && (
+              <div style={{ marginTop: 10 }}>
+                {testResult.success ? (
+                  <div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 4 }}>
+                      ✅ {testResult.model_used} | {testResult.execution_duration_ms.toFixed(0)}ms | v{testResult.prompt_version_used}
+                    </div>
+                    <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 8, padding: 10, fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
+                      {testResult.transformed_text}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ color: '#f87171', fontSize: '0.78rem' }}>
+                    ❌ {testResult.error_code}: {testResult.error_message}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {!selected?.is_system && form.system_prompt && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+              <button onClick={handleSave} disabled={saving || !form.name.trim()} className="btn btn-primary" style={{ padding: '8px 16px' }}>
+                💾 {saving ? (isRtl ? 'در حال ذخیره…' : 'Saving…') : (isRtl ? 'ذخیره پرامپت' : 'Save Prompt')}
+              </button>
+              {selected && (
+                <button onClick={() => openEditor(null)} className="btn btn-secondary" style={{ padding: '8px 16px' }}>
+                  {isRtl ? 'انصراف' : 'Cancel'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

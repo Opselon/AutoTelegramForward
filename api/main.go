@@ -81,6 +81,14 @@ func main() {
 	dashMux.HandleFunc("GET /logs", h.QueryLogs)
 	dashMux.HandleFunc("GET /logs/stats", h.LogStats)
 	dashMux.HandleFunc("GET /health/services", h.ServicesHealth)
+	// AI Rewrite prompt templates — authenticated + ownership-scoped (same surface
+	// as /ai-configs). NOT on /api/v1/*: that prefix bypasses RequireAuth, so
+	// identity() would be empty and the ownership guard would always 404.
+	dashMux.HandleFunc("GET /prompts", h.ListPromptTemplates)
+	dashMux.HandleFunc("POST /prompts", h.CreatePromptTemplate)
+	dashMux.HandleFunc("PUT /prompts/{id}", h.UpdatePromptTemplate)
+	dashMux.HandleFunc("DELETE /prompts/{id}", h.DeletePromptTemplate)
+	dashMux.HandleFunc("POST /prompts/test", h.TestPrompt)
 	mux.Handle("/api/", h.RequireAuth(dashMux))
 
 	// v1 Routes — internal/operator surface, kept as-is.
@@ -104,6 +112,11 @@ func main() {
 	mux.HandleFunc("PUT /api/v1/ai/{id}", h.UpdateAIConfig)
 	mux.HandleFunc("DELETE /api/v1/ai/{id}", h.DeleteAIConfig)
 	mux.HandleFunc("POST /api/v1/ai/{id}/test", h.TestAIRewrite)
+	mux.HandleFunc("GET /api/v1/prompts", h.ListPromptTemplates)
+	mux.HandleFunc("POST /api/v1/prompts", h.CreatePromptTemplate)
+	mux.HandleFunc("PUT /api/v1/prompts/{id}", h.UpdatePromptTemplate)
+	mux.HandleFunc("DELETE /api/v1/prompts/{id}", h.DeletePromptTemplate)
+	mux.HandleFunc("POST /api/v1/prompts/test", h.TestPrompt)
 	mux.HandleFunc("GET /api/v1/stats", h.GetStats)
 	mux.HandleFunc("GET /api/v1/logs", h.QueryLogs)
 	mux.HandleFunc("GET /api/v1/logs/stats", h.LogStats)
