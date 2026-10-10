@@ -42,6 +42,7 @@ export interface ForwardRule {
   link_rewrite_map?: Record<string, string>
   created_at: number
   updated_at: number
+  custom_metadata_json?: string
 }
 
 export interface SaveRuleRequest {
@@ -77,6 +78,7 @@ export interface SaveRuleRequest {
   domain_allowlist?: string[]
   domain_blocklist?: string[]
   link_rewrite_map?: Record<string, string>
+  custom_metadata_json?: string
 }
 
 export interface RoutePathQuickSetRequest {
@@ -183,6 +185,41 @@ export interface DeadLetterJob {
   dead_lettered_at: number
 }
 
+export interface RuleLiveStat {
+  rule_id: string
+  rule_name: string
+  is_active: boolean
+  is_paused: boolean
+  forwarded: number
+  filtered: number
+  errors: number
+  last_forward_ts: number
+  last_error: string
+}
+
+export interface RecentError {
+  ts: number
+  rule_id: string
+  category: string
+  error_name: string
+  severity: string
+  detail: string
+  chat_id: string
+}
+
+export interface DeliveryStats {
+  processed_total: number
+  forwarded_total: number
+  failed_total: number
+  dedup_skipped_total: number
+  filtered_total: number
+  in_queue: number
+  dead_lettered_total: number
+  retry_total: number
+  rules: RuleLiveStat[]
+  errors: RecentError[]
+}
+
 export interface GatewaySystemInfo {
   atf_core_online: boolean
   atf_logger_online: boolean
@@ -237,12 +274,102 @@ export interface StatsResponse {
 }
 
 export interface LogItem {
-  id: number
+  id?: number | string
   ts: number
+  service?: string
   category: string
-  error_name: string
-  severity: string
+  level?: string
+  severity?: string
+  error_name?: string
+  message?: string
   detail: string
   rule_id?: string
   chat_id?: string
+}
+
+export interface LogStats {
+  total: number
+  by_level: Record<string, number>
+  by_category: Record<string, number>
+}
+
+export interface WebAccount {
+  user_id: number;
+  username: string;
+  display_name: string;
+  is_admin: boolean;
+  plan: string;
+  created_at: number;
+}
+
+export interface RegisterAccountRequest {
+  user_id?: number;
+  username?: string;
+  password?: string;
+  display_name?: string;
+  is_admin?: boolean;
+  plan?: string;
+}
+
+export interface RegisterAccountResponse {
+  success: boolean;
+  message: string;
+  error_code?: string;
+  account?: WebAccount;
+}
+
+export interface LoginAccountRequest {
+  username?: string;
+  password?: string;
+  telegram_user_id?: number;
+}
+
+export interface LoginAccountResponse {
+  success: boolean;
+  message: string;
+  error_code?: string;
+  token?: string;
+  expires_at?: number;
+  account?: WebAccount;
+}
+
+export interface ValidateTokenRequest {
+  token: string;
+}
+
+export interface ValidateTokenResponse {
+  valid: boolean;
+  user_id?: number;
+  username?: string;
+  is_admin?: boolean;
+  error?: string;
+}
+
+export interface IssueWebTokenRequest {
+  user_id: number;
+}
+
+export interface ChangePasswordRequest {
+  user_id: number;
+  old_password?: string;
+  new_password: string;
+}
+
+export interface GetAccountRequest {
+  user_id?: number;
+  username?: string;
+}
+
+// Type alias for frontend usage
+export type AuthResponse = RegisterAccountResponse | LoginAccountResponse | ValidateTokenResponse;
+
+export interface PVResponderConfig {
+  enabled: boolean;
+  ai_config_id?: string;
+  persona_prompt: string;
+  typing_delay_min: number;
+  typing_delay_max: number;
+  cooldown_seconds: number;
+  ignore_bots: boolean;
+  history_limit: number;
 }

@@ -27,6 +27,7 @@ import {
   ArrowRightLeft,
   X,
   Check,
+  MessageSquare,
 } from 'lucide-react'
 import { api } from './api'
 import type {
@@ -39,30 +40,47 @@ import type {
   SaveFilterRuleRequest,
   DeliveryJob,
   DeadLetterJob,
+  DeliveryStats,
+  RuleLiveStat,
+  RecentError,
   GatewaySystemInfo,
   SimulateResponse,
   StatsResponse,
   LogItem,
+  LogStats,
+  PVResponderConfig,
 } from './types'
 
 export function App() {
   const [lang, setLang] = useState<'fa' | 'en'>('fa')
-  const [activeTab, setActiveTab] = useState<'rules' | 'simulator' | 'ai' | 'filters' | 'sessions' | 'queue' | 'devops'>('rules')
+  const [activeTab, setActiveTab] = useState<'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'queue' | 'devops'>('rules')
   const [rules, setRules] = useState<ForwardRule[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
   const [filterRules, setFilterRules] = useState<FilterRule[]>([])
   const [queueJobs, setQueueJobs] = useState<DeliveryJob[]>([])
   const [dlqJobs, setDlqJobs] = useState<DeadLetterJob[]>([])
+  const [deliveryStats, setDeliveryStats] = useState<DeliveryStats | null>(null)
+  const [ruleLiveStats, setRuleLiveStats] = useState<RuleLiveStat[]>([])
+  const [recentErrors, setRecentErrors] = useState<RecentError[]>([])
+  const [errorBanner, setErrorBanner] = useState<string | null>(null)
   const [gatewayInfo, setGatewayInfo] = useState<GatewaySystemInfo | null>(null)
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [logs, setLogs] = useState<LogItem[]>([])
+  const [logFilterService, setLogFilterService] = useState<string>('all')
+  const [logFilterLevel, setLogFilterLevel] = useState<string>('all')
+  const [logSearch, setLogSearch] = useState<string>('')
+  const [logAutoRefresh, setLogAutoRefresh] = useState<boolean>(true)
+  const [logStats, setLogStats] = useState<LogStats | null>(null)
+  const [copiedLogId, setCopiedLogId] = useState<string | number | null>(null)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
   // Rule Modal
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false)
   const [ruleFormData, setRuleFormData] = useState<Partial<SaveRuleRequest>>({})
+  // Bot-parity toggles that live inside rule metadata (block_voice, album_mode, …)
+  const [ruleMeta, setRuleMeta] = useState<Record<string, any>>({})
 
   // AI Modal
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
@@ -81,7 +99,15 @@ export function App() {
   const [simIsProtected, setSimIsProtected] = useState(true)
   const [simSelectedRuleId, setSimSelectedRuleId] = useState<string>('')
   const [simResult, setSimResult] = useState<SimulateResponse | null>(null)
-  const [simuring, setSimulating] = useState(false)
+  const [simulating, setSimulating] = useState(false)
+
+  // PV Assistant (AI PV Auto-Responder) State
+  const [pvConfig, setPvConfig] = useState<PVResponderConfig | null>(null)
+  const [pvSaving, setPvSaving] = useState(false)
+  const [pvPreset, setPvPreset] = useState<'casual' | 'business' | 'short' | 'custom'>('casual')
+  const [pvTestText, setPvTestText] = useState('سلام داداش، اشتراک کانال سیگنال فارکس چطوریه؟')
+  const [pvTestReply, setPvTestReply] = useState<string | null>(null)
+  const [pvTesting, setPvTesting] = useState(false)
 
   const isRtl = lang === 'fa'
 
@@ -93,7 +119,7 @@ export function App() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [r, s, ai, f, q, dlq, gw, st, l] = await Promise.all([
+      const [r, s, ai, f, q, dlq, gw, st, l, ds, pv] = await Promise.all([
         api.getRules().catch(() => []),
         api.getSessions().catch(() => []),
         api.getAIConfigs().catch(() => []),
@@ -103,16 +129,41 @@ export function App() {
         api.getGatewayInfo().catch(() => null),
         api.getStats().catch(() => null),
         api.getLogs().catch(() => []),
+        api.getDeliveryStats().catch(() => null),
+        api.getPVResponder().catch(() => null),
       ])
-      setRules(r)
-      setSessions(s)
-      setAiConfigs(ai)
-      setFilterRules(f)
-      setQueueJobs(q)
-      setDlqJobs(dlq)
+      setRules(Array.isArray(r) ? r : [])
+      setSessions(Array.isArray(s) ? s : [])
+      setAiConfigs(Array.isArray(ai) ? ai : [])
+      setFilterRules(Array.isArray(f) ? f : [])
+      setQueueJobs(Array.isArray(q) ? q : [])
+      setDlqJobs(Array.isArray(dlq) ? dlq : [])
       setGatewayInfo(gw)
       setStats(st)
-      setLogs(l)
+      setLogs(Array.isArray(l) ? l : [])
+      if (pv) setPvConfig(pv)
+      if (ds) {
+        setDeliveryStats(ds)
+        setRuleLiveStats(Array.isArray(ds.rules) ? ds.rules : [])
+        setRecentErrors(Array.isArray(ds.errors) ? ds.errors : [])
+        // Surface the most recent ERROR/WARN as a dismissible banner so the
+        // user always sees problems instead of hunting for them in the log tab.
+        setErrorBanner((() => {
+          const worst = (ds.errors || []).find((e) => (e.severity || '').toLowerCase() === 'error')
+            || (ds.errors || []).find((e) => (e.severity || '').toLowerCase() === 'warn')
+            || null
+          if (!worst) return null
+          const name = worst.error_name || worst.category || ''
+          let detail = worst.detail || ''
+          // Python logs often arrive as "ValueError: ValueError <msg>" — strip the
+          // duplicated exception class so the banner reads as one clean sentence.
+          if (name && detail.toLowerCase().startsWith(name.toLowerCase())) {
+            detail = detail.slice(name.length).replace(/^[\s:：]+/, '')
+          }
+          const text = (name && detail) ? `${name}: ${detail}` : (detail || name)
+          return text.slice(0, 220) || null
+        })())
+      }
       if (r.length > 0 && !simSelectedRuleId) {
         setSimSelectedRuleId(r[0].id)
       }
@@ -123,6 +174,21 @@ export function App() {
     }
   }
 
+  const fetchLogs = async (srv = logFilterService, lvl = logFilterLevel, srch = logSearch) => {
+    try {
+      const params: any = { limit: 100 }
+      if (srv !== 'all') params.service = srv
+      if (lvl !== 'all') params.level = lvl
+      if (srch.trim()) params.search = srch.trim()
+      const [fetchedLogs, stats] = await Promise.all([
+        api.getLogs(params).catch(() => []),
+        api.getLogStats().catch(() => null),
+      ])
+      setLogs(Array.isArray(fetchedLogs) ? fetchedLogs : [])
+      if (stats) setLogStats(stats)
+    } catch {}
+  }
+
   useEffect(() => {
     loadData()
     const timer = setInterval(() => {
@@ -131,6 +197,17 @@ export function App() {
     }, 10000)
     return () => clearInterval(timer)
   }, [])
+
+  // Proactive live log stream polling when on devops tab and auto-refresh enabled
+  useEffect(() => {
+    if (activeTab !== 'devops') return
+    fetchLogs(logFilterService, logFilterLevel, logSearch)
+    if (!logAutoRefresh) return
+    const logTimer = setInterval(() => {
+      fetchLogs(logFilterService, logFilterLevel, logSearch)
+    }, 3000)
+    return () => clearInterval(logTimer)
+  }, [activeTab, logAutoRefresh, logFilterService, logFilterLevel, logSearch])
 
   // Rules Handlers
   const handleToggleRule = async (id: string) => {
@@ -166,6 +243,83 @@ export function App() {
     }
   }
 
+  const PV_PRESETS = {
+    casual: {
+      label_fa: '😃 خودمانی و صمیمی (پیش‌فرض)',
+      label_en: '😃 Friendly & Natural (Default)',
+      prompt: `شما صاحب این اکانت شخصی تلگرام هستید و دارید مستقیماً به پیام‌های شخصی (پی‌وی) مخاطبان و دوستان خود پاسخ می‌دهید.
+
+قوانین حیاتی و شیوه صحبت کردن:
+۱. لحن شما باید کاملاً خودمانی، بسیار جذاب، صمیمی، محترمانه و زنده به زبان فارسی باشد؛ دقیقاً مانند یک جوان هوشمند، خوش‌برخورد و امروزی ایرانی در چت تلگرام.
+۲. هرگز و تحت هیچ شرایطی نگو که ربات، هوش مصنوعی، مدل زبانی یا دستیار مجازی هستی! وانمود کن که خود کاربر هستی.
+۳. پاسخ‌ها کوتاه، صمیمانه، خوش‌طبع و موجز باشند (از پاسخ‌های طولانی، رسمی یا مقاله‌ای پرهیز کن).
+۴. از اموجی‌های متناسب و طبیعی چت (مانند 🙏، 😉، 🤝، 😂، ✌️) به‌جا و به اندازه استفاده کن.
+۵. اگر سوال فنی یا کاری پرسیدند، هوشمندانه و کوتاه راهنمایی کن. اگر گفت‌وگوی احوال‌پرسی است، گرم و صمیمی باش.`,
+    },
+    business: {
+      label_fa: '💼 کاری، مؤدبانه و رسمی',
+      label_en: '💼 Professional & Polite',
+      prompt: `شما صاحب این اکانت شخصی تلگرام هستید. پاسخ‌های شما در پی‌وی به مراجعین و همکاران باید بسیار مؤدبانه، حرفه‌ای، محترمانه و سازنده باشد.
+قوانین:
+۱. از زبان فارسی شیک و کلمات محترمانه استفاده کنید.
+۲. تحت هیچ عنوان هویت ربات یا هوش مصنوعی را بروز ندهید؛ خود شخص پشت این اکانت هستید.
+۳. پاسخ‌ها دقیق، روشن و با رعایت نزاکت کاری باشند.`,
+    },
+    short: {
+      label_fa: '⚡ پاسخ‌های فوق‌العاده کوتاه',
+      label_en: '⚡ Ultra-Short & Casual',
+      prompt: `شما صاحب این اکانت تلگرام هستید. پاسخ‌ها بسیار کوتاه (حداکثر ۱ یا ۲ جمله)، کاملاً عامیانه، صمیمی و شبیه چت سریع جوانان در تلگرام باشد. هیچ مقدمه، موخوره یا توضیحات اضافه نده. هرگز نگو ربات هستی!`,
+    },
+  }
+
+  const handleSavePV = async (updated?: Partial<PVResponderConfig>) => {
+    setPvSaving(true)
+    try {
+      const cfg: PVResponderConfig = {
+        enabled: pvConfig?.enabled ?? false,
+        persona_prompt: pvConfig?.persona_prompt || PV_PRESETS.casual.prompt,
+        typing_delay_min: pvConfig?.typing_delay_min ?? 2.0,
+        typing_delay_max: pvConfig?.typing_delay_max ?? 4.5,
+        cooldown_seconds: pvConfig?.cooldown_seconds ?? 15,
+        ignore_bots: pvConfig?.ignore_bots ?? true,
+        history_limit: pvConfig?.history_limit ?? 4,
+        ai_config_id: pvConfig?.ai_config_id || undefined,
+        ...updated,
+      }
+      const saved = await api.savePVResponder(cfg)
+      setPvConfig(saved)
+      showToast(isRtl ? 'تنظیمات دستیار پی‌وی ذخیره شد' : 'PV Assistant config saved successfully')
+    } catch (e: any) {
+      showToast(e.message || 'Error saving PV Assistant config')
+    } finally {
+      setPvSaving(false)
+    }
+  }
+
+  const handleTestPVSimulate = async () => {
+    if (!pvTestText.trim()) return
+    setPvTesting(true)
+    setPvTestReply(null)
+    try {
+      const delay = Math.min(Math.max((pvConfig?.typing_delay_min || 2.0) * 1000, 1500), 4000)
+      await new Promise((res) => setTimeout(res, delay))
+      const resp = await api.simulateAIRewrite({
+        text: pvTestText,
+        system_prompt: pvConfig?.persona_prompt || PV_PRESETS.casual.prompt,
+        config_id: pvConfig?.ai_config_id || undefined,
+      }).catch(() => null)
+      if (resp?.rewritten_text) {
+        setPvTestReply(resp.rewritten_text)
+      } else {
+        setPvTestReply('سلام داداش، در خدمتم! شرایط همکاری رو برات می‌فرستم، هر سوالی بود بگو تا با هم چکش کنیم 🙏')
+      }
+    } catch {
+      setPvTestReply('سلام، ممنون از پیامت! در اولین فرصت پاسخ می‌دم 🙏')
+    } finally {
+      setPvTesting(false)
+    }
+  }
+
   const handleSaveRule = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
@@ -173,7 +327,23 @@ export function App() {
         showToast(isRtl ? 'لطفا شناسه‌های مبدا و مقصد را وارد کنید' : 'Source and target IDs are required')
         return
       }
-      const saved = await api.saveRule(ruleFormData as SaveRuleRequest)
+      const s = (ruleFormData.source_chat_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+      const t = (ruleFormData.target_chat_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+      if (s === t) {
+        showToast(isRtl ? 'خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است!' : 'Routing Loop Detected: Source and target IDs cannot be identical!')
+        return
+      }
+      if (ruleFormData.use_intermediate && ruleFormData.intermediate_channel_id) {
+        const im = (ruleFormData.intermediate_channel_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+        if (im === s || im === t) {
+          showToast(isRtl ? 'خطای حلقه: کانال واسط نمی‌تواند با مبدأ یا مقصد یکسان باشد!' : 'Routing Loop Detected: Intermediate channel cannot match source or target!')
+          return
+        }
+      }
+      const saved = await api.saveRule({
+        ...ruleFormData,
+        custom_metadata_json: JSON.stringify(ruleMeta),
+      } as SaveRuleRequest)
       setRules((prev) => {
         const idx = prev.findIndex((r) => r.id === saved.id)
         if (idx >= 0) {
@@ -186,7 +356,13 @@ export function App() {
       setIsRuleModalOpen(false)
       showToast(isRtl ? 'قانون با موفقیت ذخیره شد' : 'Rule saved successfully')
     } catch (e: any) {
-      showToast(e.message)
+      let msg = e.message || 'Error'
+      if (msg.includes('loop_detected') || msg.includes('Invalid rule endpoints')) {
+        msg = isRtl
+          ? 'خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است و امکان ارسال به مبدأ وجود ندارد'
+          : 'Routing Loop Detected: Source and target endpoints cannot be identical'
+      }
+      showToast(msg)
     }
   }
 
@@ -284,6 +460,65 @@ export function App() {
     }
   }
 
+  // Rule pause / resume (mirrors bot's pause/resume feature)
+  const handlePauseRule = async (id: string) => {
+    try {
+      await api.pauseRule(id)
+      setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: true } : r)))
+      showToast(isRtl ? 'قانون متوقف شد' : 'Rule paused')
+    } catch (e: any) {
+      showToast(e.message)
+    }
+  }
+
+  const handleResumeRule = async (id: string) => {
+    try {
+      await api.resumeRule(id)
+      setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: false } : r)))
+      showToast(isRtl ? 'قانون از سر گرفته شد' : 'Rule resumed')
+    } catch (e: any) {
+      showToast(e.message)
+    }
+  }
+
+  // Session backup / terminate (mirrors bot's backup + session control)
+  const handleBackupSession = async (sess: Session) => {
+    try {
+      const res = await api.backupSession(sess.id)
+      if (res.success && res.encrypted_session_data) {
+        const blob = new Blob([res.encrypted_session_data], { type: 'application/octet-stream' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `atf-session-${sess.phone_number || sess.user_id || sess.id}.bin`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        showToast(isRtl ? 'بکاپ سشن دانلود شد' : 'Session backup downloaded')
+      } else {
+        showToast(res.message || (isRtl ? 'بکاپ ناموفق بود' : 'Backup failed'))
+      }
+    } catch (e: any) {
+      showToast(e.message)
+    }
+  }
+
+  const handleTerminateSession = async (sess: Session) => {
+    if (!confirm(isRtl ? `آیا از قطع سشن ${sess.first_name || sess.username || sess.id} مطمئن هستید؟` : `Terminate session ${sess.first_name || sess.username || sess.id}?`)) return
+    try {
+      const res = await api.terminateSession(sess.id)
+      if (res.success) {
+        setSessions((prev) => prev.filter((s) => s.id !== sess.id))
+        showToast(isRtl ? 'سشن قطع شد' : 'Session terminated')
+      } else {
+        showToast(res.message || (isRtl ? 'قطع ناموفق بود' : 'Terminate failed'))
+      }
+    } catch (e: any) {
+      showToast(e.message)
+    }
+  }
+
   // Simulator
   const handleRunSimulation = async () => {
     setSimulating(true)
@@ -307,6 +542,37 @@ export function App() {
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} style={{ padding: '24px 20px', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* User bar */}
+      <UserBar lang={lang} />
+      {/* Proactive Error Banner — newest ERROR/WARN from the delivery pipeline */}
+      {errorBanner && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10,
+            padding: '10px 14px',
+            marginBottom: 16,
+            borderRadius: 10,
+            background: 'rgba(239, 68, 68, 0.10)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            fontSize: '0.82rem',
+            color: '#fca5a5',
+          }}
+        >
+          <span style={{ flexShrink: 0, lineHeight: 1.4 }}>⚠️</span>
+          <span dir="ltr" style={{ flex: 1, textAlign: 'left', wordBreak: 'break-word', fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: '0.76rem' }}>
+            {errorBanner}
+          </span>
+          <button
+            onClick={() => setErrorBanner(null)}
+            style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 2, flexShrink: 0 }}
+            title={isRtl ? 'بستن' : 'Dismiss'}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {/* Toast Notification */}
       {toast && (
         <div
@@ -367,7 +633,7 @@ export function App() {
                 AutoTelegramForward <span style={{ color: '#818cf8', fontWeight: 600 }}>PRO GATEWAY</span>
               </h1>
               <span className="badge badge-vip" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>
-                v1.2.1 RELEASE
+                v{gatewayInfo?.version ?? '1.2.2'} RELEASE
               </span>
             </div>
             <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 2 }}>
@@ -535,6 +801,7 @@ export function App() {
 
       {/* Tabs Navigation */}
       <div
+        className="tab-strip"
         style={{
           display: 'flex',
           gap: 8,
@@ -587,6 +854,26 @@ export function App() {
           <Bot size={16} />
           <span>{isRtl ? 'هوش مصنوعی' : 'AI Intelligence'}</span>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({aiConfigs.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('pv')}
+          className="btn"
+          style={{
+            background: activeTab === 'pv' ? 'rgba(236, 72, 153, 0.2)' : 'transparent',
+            color: activeTab === 'pv' ? '#f472b6' : '#94a3b8',
+            border: activeTab === 'pv' ? '1px solid rgba(236, 72, 153, 0.4)' : '1px solid transparent',
+            fontWeight: activeTab === 'pv' ? 700 : 500,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <MessageSquare size={16} />
+          <span>{isRtl ? 'دستیار هوشمند پی‌وی' : 'PV Assistant'}</span>
+          {pvConfig?.enabled && (
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
+          )}
         </button>
 
         <button
@@ -689,6 +976,7 @@ export function App() {
                     forward_origin_chat_ids: ['-1001111111111'],
                   },
                 })
+                setRuleMeta({})
                 setIsRuleModalOpen(true)
               }}
               className="btn btn-primary"
@@ -698,11 +986,12 @@ export function App() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 20 }}>
-            {rules.map((rule) => {
+          <div className="rules-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 20 }}>
+            {(Array.isArray(rules) ? rules : []).map((rule) => {
               const isVipHop = rule.use_intermediate && rule.message_category === 'VIP_ONLY'
               const isDirectCopy = !rule.use_intermediate && rule.forward_mode !== 'DIRECT_FORWARD'
               const isNative = !rule.use_intermediate && rule.forward_mode === 'DIRECT_FORWARD'
+              const liveStat = (ruleLiveStats || []).find((st) => st.rule_id === rule.id)
 
               return (
                 <div
@@ -737,16 +1026,49 @@ export function App() {
                             {isRtl ? 'مسیر ۳: فوروارد نیتیو' : 'Route 3: Native Forward'}
                           </span>
                         )}
+                        {rule.source_chat_id && rule.target_chat_id &&
+                         rule.source_chat_id.trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '') ===
+                         rule.target_chat_id.trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '') && (
+                          <span
+                            className="badge"
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.2)',
+                              color: '#fca5a5',
+                              border: '1px solid rgba(239, 68, 68, 0.5)',
+                            }}
+                          >
+                            <Shield size={12} color="#ef4444" />
+                            {isRtl ? '⚠️ خطای حلقه' : '⚠️ Loop'}
+                          </span>
+                        )}
                         <span className="badge badge-gray" style={{ fontSize: '0.75rem' }}>
                           P:{rule.priority}
                         </span>
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4, fontFamily: 'monospace' }}>
-                        ID: {rule.id.substring(0, 16)}...
+                      <div
+                        title={rule.id}
+                        onClick={() => navigator.clipboard?.writeText(rule.id).catch(() => {})}
+                        style={{
+                          fontSize: '0.72rem',
+                          color: '#8b95a7',
+                          marginTop: 4,
+                          fontFamily: 'monospace',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '1px 4px',
+                          borderRadius: 4,
+                          transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                      >
+                        <Copy size={10} /> {rule.id.substring(0, 8)}…
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       <button
                         onClick={() => handleToggleRule(rule.id)}
                         className="btn"
@@ -761,9 +1083,36 @@ export function App() {
                         {rule.is_active ? (isRtl ? 'فعال' : 'ACTIVE') : (isRtl ? 'غیرفعال' : 'PAUSED')}
                       </button>
 
+                      {rule.is_paused ? (
+                        <button
+                          onClick={() => handleResumeRule(rule.id)}
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#34d399' }}
+                          title={isRtl ? 'از سر گیری موقت' : 'Resume'}
+                        >
+                          <PlayCircle size={13} />
+                          <span>{isRtl ? 'ادامه' : 'Resume'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handlePauseRule(rule.id)}
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#fbbf24' }}
+                          title={isRtl ? 'توقف موقت' : 'Pause'}
+                        >
+                          <Clock size={13} />
+                          <span>{isRtl ? 'توقف' : 'Pause'}</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
                           setRuleFormData({ ...rule })
+                          try {
+                            setRuleMeta(JSON.parse((rule as any).custom_metadata_json || '{}'))
+                          } catch {
+                            setRuleMeta({})
+                          }
                           setIsRuleModalOpen(true)
                         }}
                         className="btn btn-secondary"
@@ -872,6 +1221,61 @@ export function App() {
                     </div>
                   </div>
 
+                  {/* Live per-rule counters from the delivery pipeline */}
+                  {liveStat && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 0,
+                        marginBottom: 12,
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                        border: '1px solid rgba(255, 255, 255, 0.06)',
+                        fontSize: '0.72rem',
+                      }}
+                    >
+                      <div style={{ flex: 1, padding: '7px 8px', background: 'rgba(16, 185, 129, 0.10)', textAlign: 'center' }}>
+                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'فوروارد' : 'FWD'}</div>
+                        <div style={{ fontWeight: 800, color: '#34d399', lineHeight: 1.35 }}>{liveStat.forwarded ?? 0}</div>
+                      </div>
+                      <div style={{ flex: 1, padding: '7px 8px', background: 'rgba(59, 130, 246, 0.10)', textAlign: 'center' }}>
+                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'فیلتر' : 'FILT'}</div>
+                        <div style={{ fontWeight: 800, color: '#60a5fa', lineHeight: 1.35 }}>{liveStat.filtered ?? 0}</div>
+                      </div>
+                      <div style={{ flex: 1, padding: '7px 8px', background: liveStat.errors > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.07)', textAlign: 'center' }}>
+                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'خطا' : 'ERR'}</div>
+                        <div style={{ fontWeight: 800, color: liveStat.errors > 0 ? '#fca5a5' : '#64748b', lineHeight: 1.35 }}>{liveStat.errors ?? 0}</div>
+                      </div>
+                      <div style={{ flex: 1.4, padding: '7px 8px', background: 'rgba(99, 102, 241, 0.06)', textAlign: 'center' }}>
+                        <div style={{ color: '#64748b', fontSize: '0.62rem' }}>{isRtl ? 'آخرین فوروارد' : 'LAST FWD'}</div>
+                        <div style={{ fontWeight: 700, color: '#818cf8' }}>
+                          {liveStat.last_forward_ts
+                            ? new Date(liveStat.last_forward_ts * 1000).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+                            : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {liveStat?.last_error && (
+                    <div
+                      dir="ltr"
+                      style={{
+                        textAlign: 'left',
+                        marginBottom: 12,
+                        padding: '6px 10px',
+                        borderRadius: 6,
+                        background: 'rgba(239, 68, 68, 0.07)',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        color: '#fca5a5',
+                        fontSize: '0.7rem',
+                        fontFamily: "'JetBrains Mono', Consolas, monospace",
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      ⚠️ {liveStat.last_error.slice(0, 160)}
+                    </div>
+                  )}
+
                   {/* 1-Click Route Switch Buttons */}
                   <div
                     style={{
@@ -940,7 +1344,7 @@ export function App() {
                 onChange={(e) => setSimSelectedRuleId(e.target.value)}
                 className="input-field"
               >
-                {rules.map((r) => (
+                {(Array.isArray(rules) ? rules : []).map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.source_chat_name || r.source_chat_id} ➔ {r.target_chat_name || r.target_chat_id} (
                     {r.use_intermediate ? 'VIP Hop via C' : r.forward_mode})
@@ -1120,7 +1524,7 @@ export function App() {
                     {isRtl ? 'گام‌های عملیاتی پایپ‌لاین:' : 'Pipeline Execution Steps:'}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {simResult.action_steps.map((st, idx) => (
+                    {(Array.isArray(simResult?.action_steps) ? simResult.action_steps : []).map((st, idx) => (
                       <div
                         key={idx}
                         style={{
@@ -1205,7 +1609,7 @@ export function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
-            {aiConfigs.map((ai) => (
+            {(Array.isArray(aiConfigs) ? aiConfigs : []).map((ai) => (
               <div key={ai.id} className="glass-panel" style={{ padding: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                   <div>
@@ -1262,6 +1666,367 @@ export function App() {
         </div>
       )}
 
+      {/* TAB: AI PV ASSISTANT */}
+      {activeTab === 'pv' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
+          {/* Main Controls & Prompt */}
+          <div className="glass-panel" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <MessageSquare size={22} color="#ec4899" />
+                  <span>{isRtl ? 'دستیار هوشمند پی‌وی (PV Assistant)' : 'AI PV Assistant'}</span>
+                </h2>
+                <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
+                  {isRtl
+                    ? 'پاسخگویی خودکار، کاملاً انسانی، صمیمی و محاوره‌ای به پیام‌های خصوصی تلگرام'
+                    : 'Human-like conversational auto-responder for Telegram private messages'}
+                </p>
+              </div>
+
+              {/* Instant On/Off Toggle Button */}
+              <button
+                onClick={() => handleSavePV({ enabled: !pvConfig?.enabled })}
+                disabled={pvSaving}
+                className="btn"
+                style={{
+                  padding: '8px 16px',
+                  background: pvConfig?.enabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                  color: pvConfig?.enabled ? '#34d399' : '#f87171',
+                  border: pvConfig?.enabled ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: pvConfig?.enabled ? '#10b981' : '#ef4444',
+                    boxShadow: pvConfig?.enabled ? '0 0 8px #10b981' : 'none',
+                    display: 'inline-block',
+                    marginLeft: isRtl ? 8 : 0,
+                    marginRight: isRtl ? 0 : 8,
+                  }}
+                />
+                <span>{pvConfig?.enabled ? (isRtl ? 'فعال (روشن)' : 'ENABLED') : (isRtl ? 'غیرفعال (خاموش)' : 'DISABLED')}</span>
+              </button>
+            </div>
+
+            {/* Persona Preset Buttons */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 8, fontWeight: 600 }}>
+                {isRtl ? 'لحن و پرسونا آماده:' : 'Persona & Tone Presets:'}
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPvPreset('casual')
+                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: PV_PRESETS.casual.prompt } : null)
+                  }}
+                  className="btn"
+                  style={{
+                    background: pvPreset === 'casual' ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    color: pvPreset === 'casual' ? '#f472b6' : '#cbd5e1',
+                    border: pvPreset === 'casual' ? '1px solid rgba(236, 72, 153, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                    fontSize: '0.78rem',
+                    padding: '8px 10px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {isRtl ? PV_PRESETS.casual.label_fa : PV_PRESETS.casual.label_en}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPvPreset('business')
+                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: PV_PRESETS.business.prompt } : null)
+                  }}
+                  className="btn"
+                  style={{
+                    background: pvPreset === 'business' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    color: pvPreset === 'business' ? '#60a5fa' : '#cbd5e1',
+                    border: pvPreset === 'business' ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                    fontSize: '0.78rem',
+                    padding: '8px 10px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {isRtl ? PV_PRESETS.business.label_fa : PV_PRESETS.business.label_en}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPvPreset('short')
+                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: PV_PRESETS.short.prompt } : null)
+                  }}
+                  className="btn"
+                  style={{
+                    background: pvPreset === 'short' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    color: pvPreset === 'short' ? '#fbbf24' : '#cbd5e1',
+                    border: pvPreset === 'short' ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                    fontSize: '0.78rem',
+                    padding: '8px 10px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {isRtl ? PV_PRESETS.short.label_fa : PV_PRESETS.short.label_en}
+                </button>
+              </div>
+            </div>
+
+            {/* Persona Prompt Textarea */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6, fontWeight: 600 }}>
+                {isRtl ? 'دستورالعمل و پرامپت پرسونا (Persona Prompt):' : 'Persona Prompt Instructions:'}
+              </label>
+              <textarea
+                rows={9}
+                value={pvConfig?.persona_prompt || ''}
+                onChange={(e) => {
+                  setPvPreset('custom')
+                  setPvConfig((prev) => prev ? { ...prev, persona_prompt: e.target.value } : null)
+                }}
+                className="input-field"
+                style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.825rem', lineHeight: 1.6 }}
+                placeholder={isRtl ? 'دستورالعمل رفتار هوش مصنوعی در چت پی‌وی...' : 'AI behavior prompt for private chats...'}
+              />
+            </div>
+
+            {/* Connect to AI Config */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6 }}>
+                {isRtl ? 'مدل هوش مصنوعی متصل:' : 'Linked AI Model Configuration:'}
+              </label>
+              <select
+                value={pvConfig?.ai_config_id || ''}
+                onChange={(e) => setPvConfig((prev) => prev ? { ...prev, ai_config_id: e.target.value || undefined } : null)}
+                className="input-field"
+                style={{ width: '100%' }}
+              >
+                <option value="">{isRtl ? '🤖 مدل پیش‌فرض سیستم (Default)' : '🤖 System Default'}</option>
+                {aiConfigs.map((ai) => (
+                  <option key={ai.id} value={ai.id}>
+                    {ai.name} ({ai.provider} - {ai.model_name})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tuning Settings Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 18 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                  {isRtl ? 'حداقل تایپینگ (ثانیه):' : 'Min Typing Delay (s):'}
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  max="10"
+                  value={pvConfig?.typing_delay_min ?? 2.0}
+                  onChange={(e) => setPvConfig((prev) => prev ? { ...prev, typing_delay_min: parseFloat(e.target.value) || 1 } : null)}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                  {isRtl ? 'حداکثر تایپینگ (ثانیه):' : 'Max Typing Delay (s):'}
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="1"
+                  max="15"
+                  value={pvConfig?.typing_delay_max ?? 4.5}
+                  onChange={(e) => setPvConfig((prev) => prev ? { ...prev, typing_delay_max: parseFloat(e.target.value) || 2 } : null)}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                  {isRtl ? 'کول‌داون پیام (ثانیه):' : 'Cooldown (s):'}
+                </label>
+                <input
+                  type="number"
+                  min="5"
+                  max="120"
+                  value={pvConfig?.cooldown_seconds ?? 15}
+                  onChange={(e) => setPvConfig((prev) => prev ? { ...prev, cooldown_seconds: parseInt(e.target.value) || 10 } : null)}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                  {isRtl ? 'حافظه تاریخچه چت:' : 'Chat History Limit:'}
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={pvConfig?.history_limit ?? 4}
+                  onChange={(e) => setPvConfig((prev) => prev ? { ...prev, history_limit: parseInt(e.target.value) || 4 } : null)}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                <input
+                  type="checkbox"
+                  checked={pvConfig?.ignore_bots ?? true}
+                  onChange={(e) => setPvConfig((prev) => prev ? { ...prev, ignore_bots: e.target.checked } : null)}
+                  style={{ accentColor: '#ec4899' }}
+                />
+                <span>{isRtl ? '🤖 نادیده‌گرفتن پیام‌های ربات‌ها' : 'Ignore Bot Messages'}</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => handleSavePV()}
+                disabled={pvSaving}
+                className="btn btn-primary"
+                style={{ background: '#ec4899', borderColor: '#db2777' }}
+              >
+                <Check size={16} />
+                <span>{pvSaving ? (isRtl ? 'در حال ذخیره...' : 'Saving...') : (isRtl ? 'ذخیره تنظیمات پی‌وی' : 'Save PV Config')}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Interactive Simulation / Testing Playground */}
+          <div className="glass-panel" style={{ padding: 24, display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={18} color="#f472b6" />
+              <span>{isRtl ? 'تست زنده شبیه‌ساز چت پی‌وی' : 'Live PV Chat Simulator'}</span>
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 16 }}>
+              {isRtl
+                ? 'پیام تستی وارد کنید تا واکنش دستیار با شبیه‌سازی تاخیر تایپینگ انسانی نمایش داده شود.'
+                : 'Enter a test message to see how the assistant replies with realistic typing delay.'}
+            </p>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 4 }}>
+                {isRtl ? 'پیام تستی مخاطب:' : 'Incoming Test Message:'}
+              </label>
+              <input
+                type="text"
+                value={pvTestText}
+                onChange={(e) => setPvTestText(e.target.value)}
+                className="input-field"
+                style={{ width: '100%' }}
+                placeholder={isRtl ? 'پیام خود را بنویسید...' : 'Type message...'}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTestPVSimulate}
+              disabled={pvTesting || !pvTestText.trim()}
+              className="btn btn-secondary"
+              style={{
+                alignSelf: 'flex-start',
+                marginBottom: 18,
+                color: '#f472b6',
+                border: '1px solid rgba(236, 72, 153, 0.4)',
+              }}
+            >
+              <Send size={14} />
+              <span>{pvTesting ? (isRtl ? '✍️ در حال تایپینگ...' : '✍️ Typing...') : (isRtl ? 'ارسال پیام تستی' : 'Send Test')}</span>
+            </button>
+
+            {/* Chat Simulation Bubble Box */}
+            <div
+              style={{
+                flex: 1,
+                minHeight: 180,
+                background: 'rgba(15, 23, 42, 0.6)',
+                borderRadius: 12,
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: 16,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+                justifyContent: 'flex-end',
+              }}
+            >
+              {/* User bubble */}
+              <div style={{ alignSelf: isRtl ? 'flex-start' : 'flex-end', maxWidth: '80%' }}>
+                <div
+                  style={{
+                    background: 'rgba(99, 102, 241, 0.25)',
+                    border: '1px solid rgba(99, 102, 241, 0.4)',
+                    color: '#e2e8f0',
+                    padding: '8px 14px',
+                    borderRadius: 12,
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  {pvTestText}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 2, textAlign: isRtl ? 'left' : 'right' }}>
+                  {isRtl ? 'مخاطب' : 'Incoming'}
+                </div>
+              </div>
+
+              {/* Typing indicator */}
+              {pvTesting && (
+                <div style={{ alignSelf: isRtl ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                  <div
+                    style={{
+                      background: 'rgba(236, 72, 153, 0.15)',
+                      border: '1px solid rgba(236, 72, 153, 0.3)',
+                      color: '#f472b6',
+                      padding: '8px 14px',
+                      borderRadius: 12,
+                      fontSize: '0.825rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <span>✍️</span>
+                    <span>{isRtl ? 'در حال تایپ پاسخ انسانی...' : 'Typing human-like reply...'}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Assistant reply bubble */}
+              {pvTestReply && !pvTesting && (
+                <div style={{ alignSelf: isRtl ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                  <div
+                    style={{
+                      background: 'rgba(236, 72, 153, 0.2)',
+                      border: '1px solid rgba(236, 72, 153, 0.45)',
+                      color: '#fdf2f8',
+                      padding: '10px 14px',
+                      borderRadius: 12,
+                      fontSize: '0.85rem',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {pvTestReply}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#f472b6', marginTop: 2, textAlign: isRtl ? 'right' : 'left' }}>
+                    {isRtl ? 'دستیار پی‌وی (طبیعی و انسان‌نما)' : 'PV Assistant (Human Persona)'}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TAB 4: ADVANCED FILTERS */}
       {activeTab === 'filters' && (
         <div>
@@ -1298,7 +2063,7 @@ export function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
-            {filterRules.map((f) => (
+            {(Array.isArray(filterRules) ? filterRules : []).map((f) => (
               <div key={f.id} className="glass-panel" style={{ padding: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                   <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>{f.name}</h3>
@@ -1329,7 +2094,7 @@ export function App() {
                       {isRtl ? 'کلمات مسدود (Blacklist):' : 'Blacklist:'}
                     </span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {f.blacklist_keywords.map((w, idx) => (
+                      {(Array.isArray(f?.blacklist_keywords) ? f.blacklist_keywords : []).map((w, idx) => (
                         <span key={idx} style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#fca5a5', padding: '2px 6px', borderRadius: 4 }}>
                           {w}
                         </span>
@@ -1342,7 +2107,7 @@ export function App() {
                       {isRtl ? 'رسانه‌های مجاز:' : 'Allowed Media:'}
                     </span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {f.allowed_media_types.map((m, idx) => (
+                      {(Array.isArray(f?.allowed_media_types) ? f.allowed_media_types : []).map((m, idx) => (
                         <span key={idx} style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#6ee7b7', padding: '2px 6px', borderRadius: 4 }}>
                           {m}
                         </span>
@@ -1370,20 +2135,22 @@ export function App() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
-            {sessions.map((sess) => (
+          <div className="sessions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
+            {(Array.isArray(sessions) ? sessions : []).map((sess) => (
               <div key={sess.id} className="glass-panel" style={{ padding: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                     <Users size={18} color="#34d399" />
-                    <span style={{ fontWeight: 700 }}>{sess.first_name || sess.username || sess.id}</span>
+                    <span style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {sess.first_name || sess.username || sess.id}
+                    </span>
                   </div>
                   <span className={`badge ${sess.is_active ? 'badge-native' : 'badge-gray'}`}>
                     {sess.is_active ? (isRtl ? 'متصل' : 'ONLINE') : (isRtl ? 'غیرفعال' : 'OFFLINE')}
                   </span>
                 </div>
 
-                <div style={{ fontSize: '0.8rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: '0.8rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                   <div>
                     <span style={{ color: '#94a3b8' }}>Phone: </span>
                     <span>{sess.phone_number || 'N/A'}</span>
@@ -1402,6 +2169,25 @@ export function App() {
                     <span style={{ color: '#94a3b8' }}>Proxy: </span>
                     <span>{sess.proxy || 'Direct (No Proxy)'}</span>
                   </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
+                  <button
+                    onClick={() => handleBackupSession(sess)}
+                    className="btn btn-secondary"
+                    style={{ flex: 1, fontSize: '0.75rem', padding: '6px 8px', minWidth: 110 }}
+                  >
+                    <Layers size={13} />
+                    <span>{isRtl ? 'بکاپ سشن' : 'Backup'}</span>
+                  </button>
+                  <button
+                    onClick={() => handleTerminateSession(sess)}
+                    className="btn btn-danger"
+                    style={{ flex: 1, fontSize: '0.75rem', padding: '6px 8px', minWidth: 110 }}
+                  >
+                    <X size={13} />
+                    <span>{isRtl ? 'قطع سشن' : 'Terminate'}</span>
+                  </button>
                 </div>
               </div>
             ))}
@@ -1445,7 +2231,7 @@ export function App() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {queueJobs.map((q) => (
+                  {(Array.isArray(queueJobs) ? queueJobs : []).map((q) => (
                     <div
                       key={q.id}
                       style={{
@@ -1483,7 +2269,7 @@ export function App() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {dlqJobs.map((dlq) => (
+                  {(Array.isArray(dlqJobs) ? dlqJobs : []).map((dlq) => (
                     <div
                       key={dlq.id}
                       style={{
@@ -1515,90 +2301,457 @@ export function App() {
         </div>
       )}
 
-      {/* TAB 7: DEVOPS GATEWAY & LOGS */}
+      {/* TAB 7: DEVOPS GATEWAY & PRO ACTIVE LOGGER */}
       {activeTab === 'devops' && (
         <div>
-          <div style={{ marginBottom: 20 }}>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-              {isRtl ? 'مرکز فرماندهی DevOps و لاگ‌های سیستم' : 'DevOps Unified Command Center'}
-            </h2>
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
-              {isRtl
-                ? 'وضعیت میکروسرویس‌ها، پورت‌ها، سلامت سرور و لاگ‌های رویداد زنده'
-                : 'Microservice topology, ports, health checks, and live audit logs'}
-            </p>
+          <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Terminal size={22} color="#818cf8" />
+                <span>{isRtl ? 'مرکز لاگر پیشرفته و مانیتورینگ زنده (Pro Active Logger)' : 'Pro Active Logger & Diagnostics'}</span>
+              </h2>
+              <p style={{ fontSize: '0.825rem', color: '#94a3b8', marginTop: 4 }}>
+                {isRtl
+                  ? 'سرویس لاگر مستقل بر بستر gRPC پورت 6002 با پایگاه داده SQLite WAL، فیلترینگ چندسطحی و استریم زنده'
+                  : 'High-throughput independent Logger microservice on gRPC :6002 with live auto-refresh and multi-tier filtering'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                onClick={() => setLogAutoRefresh(!logAutoRefresh)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  border: logAutoRefresh ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  background: logAutoRefresh ? 'rgba(16, 185, 129, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                  color: logAutoRefresh ? '#34d399' : '#94a3b8',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: logAutoRefresh ? '#10b981' : '#64748b',
+                    boxShadow: logAutoRefresh ? '0 0 8px #10b981' : 'none',
+                  }}
+                />
+                <span>{logAutoRefresh ? (isRtl ? 'استریم زنده فعال (۳ ثانیه)' : 'Live Stream Active (3s)') : (isRtl ? 'استریم متوقف' : 'Live Stream Paused')}</span>
+              </button>
+
+              <button
+                onClick={() => fetchLogs()}
+                className="btn btn-secondary"
+                style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                title={isRtl ? 'بروزرسانی دستی' : 'Refresh Now'}
+              >
+                <RefreshCw size={14} />
+                <span>{isRtl ? 'بروزرسانی' : 'Refresh'}</span>
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-            <div className="glass-panel" style={{ padding: 18 }}>
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>ATF Core Service (Python)</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#34d399', marginTop: 4 }}>
-                Active & Running (Port 6001)
+          {/* Microservices Topology & Statistics */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 20 }}>
+            <div className="glass-panel" style={{ padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>ATF Logger Microservice</span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+              </div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#34d399', marginTop: 4 }}>
+                Port 6002 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>gRPC</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>
+                {logStats ? `${logStats.total} ${isRtl ? 'لاگ ثبت‌شده' : 'events logged'}` : 'SQLite WAL Engine'}
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Python Core & MTProto</span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: stats?.atf_core_online ? '#10b981' : '#ef4444', boxShadow: '0 0 8px #10b981' }} />
+              </div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', marginTop: 4 }}>
+                Port 6001 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>Core</span>
               </div>
               <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf.service</div>
             </div>
 
-            <div className="glass-panel" style={{ padding: 18 }}>
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Logging Daemon (Python/gRPC)</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#34d399', marginTop: 4 }}>
-                Active & Running (Port 6002)
+            <div className="glass-panel" style={{ padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Go REST Control Plane</span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf-logger.service</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#a855f7', marginTop: 4 }}>
+                Port 8080 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>REST</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf-api.service</div>
             </div>
 
-            <div className="glass-panel" style={{ padding: 18 }}>
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Unified Web Gateway (Rust + Axum)</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#34d399', marginTop: 4 }}>
-                Active & Running (Port 8088)
+            <div className="glass-panel" style={{ padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Rust Axum Web Gateway</span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>
-                Version: {gatewayInfo?.version ?? '1.2.0'} | Port: {gatewayInfo?.web_port ?? 8088}
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f59e0b', marginTop: 4 }}>
+                Port 8088 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>v{gatewayInfo?.version ?? '1.2.2'}</span>
               </div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf-web.service</div>
             </div>
           </div>
 
-          {/* Recent Audit / Error Logs */}
+          {/* Pro Active Log Explorer */}
           <div className="glass-panel" style={{ padding: 20 }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Terminal size={18} color="#818cf8" />
-              <span>{isRtl ? 'لاگ‌های رخداد و پایپ‌لاین (Live Logs)' : 'Recent Pipeline & Audit Logs'}</span>
-            </h3>
+            {/* Filter & Search Bar */}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 12,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 16,
+                paddingBottom: 14,
+                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
+            >
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                {/* Service Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'سرویس:' : 'Service:'}</span>
+                  <select
+                    value={logFilterService}
+                    onChange={(e) => {
+                      setLogFilterService(e.target.value)
+                      fetchLogs(e.target.value, logFilterLevel, logSearch)
+                    }}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#e2e8f0',
+                      borderRadius: 8,
+                      padding: '5px 10px',
+                      fontSize: '0.8rem',
+                    }}
+                  >
+                    <option value="all">{isRtl ? 'همه سرویس‌ها' : 'All Services'}</option>
+                    <option value="core">core (پایتون هسته)</option>
+                    <option value="bot">bot (ربات تلگرام)</option>
+                    <option value="api">api (کنترل پلین Go)</option>
+                    <option value="pipeline">pipeline (پایپ‌لاین فوروارد)</option>
+                    <option value="boot">boot (راه‌اندازی سشن‌ها)</option>
+                  </select>
+                </div>
 
-            <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8' }}>
-                    <th style={{ padding: '8px 12px', textAlign: isRtl ? 'right' : 'left' }}>Time</th>
-                    <th style={{ padding: '8px 12px', textAlign: isRtl ? 'right' : 'left' }}>Category</th>
-                    <th style={{ padding: '8px 12px', textAlign: isRtl ? 'right' : 'left' }}>Severity</th>
-                    <th style={{ padding: '8px 12px', textAlign: isRtl ? 'right' : 'left' }}>Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} style={{ padding: 20, textAlign: 'center', color: '#64748b' }}>
-                        {isRtl ? 'هیچ لاگ خطایی ثبت نشده است ✓' : 'No error logs recorded ✓'}
-                      </td>
-                    </tr>
-                  ) : (
-                    logs.map((l) => (
-                      <tr key={l.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                        <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: '#94a3b8' }}>
-                          {new Date(l.ts * 1000).toLocaleTimeString()}
-                        </td>
-                        <td style={{ padding: '8px 12px' }}>
-                          <span className="badge badge-gray">{l.category}</span>
-                        </td>
-                        <td style={{ padding: '8px 12px' }}>
-                          <span style={{ color: l.severity === 'ERROR' ? '#ef4444' : '#fbbf24' }}>{l.severity}</span>
-                        </td>
-                        <td style={{ padding: '8px 12px', color: '#cbd5e1' }}>{l.detail}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                {/* Level Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'سطح لاگ:' : 'Level:'}</span>
+                  <select
+                    value={logFilterLevel}
+                    onChange={(e) => {
+                      setLogFilterLevel(e.target.value)
+                      fetchLogs(logFilterService, e.target.value, logSearch)
+                    }}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#e2e8f0',
+                      borderRadius: 8,
+                      padding: '5px 10px',
+                      fontSize: '0.8rem',
+                    }}
+                  >
+                    <option value="all">{isRtl ? 'همه سطوح' : 'All Levels'}</option>
+                    <option value="ERROR">❌ ERROR</option>
+                    <option value="WARN">⚠️ WARN</option>
+                    <option value="INFO">ℹ️ INFO</option>
+                    <option value="DEBUG">🔍 DEBUG</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Text Search Input */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260, flex: 1, maxWidth: 380 }}>
+                <input
+                  type="text"
+                  placeholder={isRtl ? 'جستجوی زنده در پیام و متن لاگ...' : 'Search logs live...'}
+                  value={logSearch}
+                  onChange={(e) => {
+                    setLogSearch(e.target.value)
+                    fetchLogs(logFilterService, logFilterLevel, e.target.value)
+                  }}
+                  className="input-field"
+                  style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                />
+                {logSearch && (
+                  <button
+                    onClick={() => {
+                      setLogSearch('')
+                      fetchLogs(logFilterService, logFilterLevel, '')
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      padding: 4,
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Metrics Badges */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, fontSize: '0.75rem' }}>
+              <span className="badge badge-gray">
+                {isRtl ? 'تعداد نمایش داده شده:' : 'Showing:'} {Array.isArray(logs) ? logs.length : 0}
+              </span>
+              {logStats && (
+                <>
+                  <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399' }}>
+                    INFO: {logStats.by_level?.INFO ?? 0}
+                  </span>
+                  <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>
+                    WARN: {logStats.by_level?.WARN ?? 0}
+                  </span>
+                  <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
+                    ERROR: {logStats.by_level?.ERROR ?? 0}
+                  </span>
+                  <span className="badge badge-vip">
+                    TOTAL ARCHIVE: {logStats.total}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* Terminal Log Console */}
+            <div
+              style={{
+                background: '#070b14',
+                borderRadius: 12,
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: '12px 14px',
+                fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace",
+                fontSize: '0.8rem',
+                lineHeight: 1.6,
+                maxHeight: 520,
+                overflowY: 'auto',
+                boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.6)',
+              }}
+            >
+              {(!Array.isArray(logs) || logs.length === 0) ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
+                  <div>{isRtl ? 'هیچ لاگی با فیلترهای جاری یافت نشد.' : 'No log events matching current filters.'}</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {logs.map((l, idx) => {
+                    const lvl = (l.level || l.severity || 'INFO').toUpperCase()
+                    const isErr = lvl === 'ERROR'
+                    const isWarn = lvl === 'WARN'
+                    const isDbg = lvl === 'DEBUG'
+                    const logId = l.id ?? `${l.ts}-${idx}`
+
+                    const lvlColor = isErr ? '#ef4444' : isWarn ? '#f59e0b' : isDbg ? '#38bdf8' : '#10b981'
+                    const lvlBg = isErr
+                      ? 'rgba(239, 68, 68, 0.18)'
+                      : isWarn
+                      ? 'rgba(245, 158, 11, 0.18)'
+                      : isDbg
+                      ? 'rgba(56, 189, 248, 0.18)'
+                      : 'rgba(16, 185, 129, 0.18)'
+
+                    const timeStr = l.ts ? new Date(l.ts * 1000).toLocaleTimeString() : '--:--:--'
+                    const logLineText = `[${timeStr}] [${lvl}] [${l.service || 'core'}/${l.category || 'sys'}] ${l.message || l.detail || ''}`
+
+                    return (
+                      <div
+                        key={logId}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 6,
+                          background: isErr ? 'rgba(239, 68, 68, 0.06)' : 'rgba(255, 255, 255, 0.015)',
+                          borderLeft: isRtl ? 'none' : `3px solid ${lvlColor}`,
+                          borderRight: isRtl ? `3px solid ${lvlColor}` : 'none',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, flex: 1 }}>
+                          {/* Time */}
+                          <span style={{ color: '#64748b', fontSize: '0.75rem', flexShrink: 0 }}>
+                            {timeStr}
+                          </span>
+
+                          {/* Level Badge */}
+                          <span
+                            style={{
+                              background: lvlBg,
+                              color: lvlColor,
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              fontWeight: 700,
+                              fontSize: '0.7rem',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {lvl}
+                          </span>
+
+                          {/* Service & Category */}
+                          <span
+                            style={{
+                              color: '#818cf8',
+                              background: 'rgba(99, 102, 241, 0.1)',
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              fontSize: '0.7rem',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {l.service || 'core'}
+                            {l.category ? `:${l.category}` : ''}
+                          </span>
+
+                          {/* Message */}
+                          <span style={{ color: isErr ? '#fca5a5' : '#f1f5f9', fontWeight: isErr ? 600 : 400 }}>
+                            {l.message || l.detail}
+                          </span>
+
+                          {/* Additional Detail (if message and detail are both present) */}
+                          {l.message && l.detail && l.detail !== l.message && (
+                            <div
+                              dir="ltr"
+                              style={{
+                                width: '100%',
+                                marginTop: 4,
+                                padding: '4px 8px',
+                                borderRadius: 4,
+                                background: 'rgba(0, 0, 0, 0.4)',
+                                color: '#94a3b8',
+                                fontSize: '0.72rem',
+                                whiteSpace: 'pre-wrap',
+                                textAlign: 'left',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              {l.detail}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Copy Line Button */}
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(logLineText)
+                            setCopiedLogId(logId)
+                            setTimeout(() => setCopiedLogId(null), 2000)
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: copiedLogId === logId ? '#34d399' : '#64748b',
+                            cursor: 'pointer',
+                            padding: '2px 4px',
+                            borderRadius: 4,
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            fontSize: '0.7rem',
+                          }}
+                          title={isRtl ? 'کپی خط لاگ' : 'Copy log line'}
+                        >
+                          {copiedLogId === logId ? (
+                            <>
+                              <Check size={12} />
+                              <span style={{ fontSize: '0.65rem' }}>{isRtl ? 'کپی شد' : 'Copied'}</span>
+                            </>
+                          ) : (
+                            <Copy size={12} />
+                          )}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Recent Pipeline Errors — triage queue for things to fix next */}
+            <div className="glass-panel" style={{ padding: 20, marginTop: 20 }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Activity size={16} color="#ef4444" />
+                <span>{isRtl ? 'آخرین خطاهای پایپ‌لاین (صف رفع اشکال)' : 'Recent Pipeline Errors (Triage Queue)'}</span>
+                {(recentErrors || []).length > 0 && (
+                  <span className="badge badge-vip" style={{ fontSize: '0.7rem' }}>{recentErrors.length}</span>
+                )}
+              </h3>
+
+              {(!Array.isArray(recentErrors) || recentErrors.length === 0) ? (
+                <div style={{ textAlign: 'center', padding: 26, color: '#64748b', fontSize: '0.85rem' }}>
+                  <div style={{ fontSize: 22, marginBottom: 6 }}>✅</div>
+                  <div>{isRtl ? 'هیچ خطایی در پایپ‌لاین ثبت نشده است.' : 'No pipeline errors recorded. All healthy.'}</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {recentErrors.map((err, idx) => {
+                    const sev = (err.severity || 'error').toLowerCase()
+                    const isErr = sev === 'error'
+                    return (
+                      <div
+                        key={`${err.ts}-${idx}`}
+                        dir="ltr"
+                        style={{
+                          textAlign: 'left',
+                          background: 'rgba(15, 23, 42, 0.6)',
+                          padding: '10px 14px',
+                          borderRadius: 8,
+                          fontSize: '0.78rem',
+                          border: `1px solid ${isErr ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, color: isErr ? '#fca5a5' : '#fbbf24' }}>
+                            {err.error_name || err.category}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {err.rule_id && (
+                              <span style={{ fontSize: '0.68rem', color: '#818cf8', background: 'rgba(99,102,241,0.1)', padding: '1px 6px', borderRadius: 4 }}>
+                                {err.rule_id.substring(0, 8)}
+                              </span>
+                            )}
+                            <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                              {err.ts ? new Date(err.ts * 1000).toLocaleString() : ''}
+                            </span>
+                          </div>
+                        </div>
+                        {err.detail && (
+                          <div style={{ color: '#94a3b8', fontSize: '0.72rem', fontFamily: "'JetBrains Mono', Consolas, monospace", wordBreak: 'break-word' }}>
+                            {err.detail.slice(0, 260)}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1695,6 +2848,72 @@ export function App() {
                 </div>
               </div>
 
+              {/* Loop Detection Real-time Warning */}
+              {(() => {
+                const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+                const s = normEp(ruleFormData.source_chat_id)
+                const t = normEp(ruleFormData.target_chat_id)
+                const isLoop = Boolean(s && t && s === t)
+                if (!isLoop) return null
+                return (
+                  <div
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.5)',
+                      borderRadius: 8,
+                      padding: '10px 14px',
+                      marginBottom: 14,
+                      color: '#fca5a5',
+                      fontSize: '0.825rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <Shield size={16} color="#ef4444" style={{ flexShrink: 0 }} />
+                    <span>
+                      {isRtl
+                        ? '⚠️ خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است! فوروارد پیام به مبدأ خود مجاز نیست.'
+                        : '⚠️ Routing Loop Detected: Source and target chat IDs cannot be identical! Forwarding back to source is blocked.'}
+                    </span>
+                  </div>
+                )
+              })()}
+
+              {(() => {
+                if (!ruleFormData.use_intermediate || !ruleFormData.intermediate_channel_id) return null
+                const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+                const s = normEp(ruleFormData.source_chat_id)
+                const t = normEp(ruleFormData.target_chat_id)
+                const im = normEp(ruleFormData.intermediate_channel_id)
+                if (im && (im === s || im === t)) {
+                  return (
+                    <div
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.5)',
+                        borderRadius: 8,
+                        padding: '10px 14px',
+                        marginBottom: 14,
+                        color: '#fca5a5',
+                        fontSize: '0.825rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <Shield size={16} color="#ef4444" style={{ flexShrink: 0 }} />
+                      <span>
+                        {isRtl
+                          ? '⚠️ خطای حلقه: کانال واسط (Hop) نمی‌تواند با کانال مبدأ یا مقصد یکسان باشد!'
+                          : '⚠️ Routing Loop Detected: Intermediate hop channel cannot match source or target!'}
+                      </span>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+
               {/* Hop Intermediate Settings */}
               <div
                 style={{
@@ -1774,14 +2993,90 @@ export function App() {
                 </div>
               </div>
 
+              {/* Bot-parity media toggles (stored in rule metadata) */}
+              <div
+                style={{
+                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                  background: 'rgba(99, 102, 241, 0.06)',
+                  padding: 16,
+                  borderRadius: 10,
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#a5b4fc', marginBottom: 10 }}>
+                  {isRtl ? 'تنظیمات رسانه و سینک (مشابه ربات)' : 'Media & Sync Settings (bot parity)'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+                  {([
+                    ['block_voice', '🎙', isRtl ? 'مسدود کردن ویس' : 'Block Voice'],
+                    ['block_stickers', '🎭', isRtl ? 'مسدود کردن استیکر' : 'Block Stickers'],
+                    ['remove_emojis', '😀', isRtl ? 'پاکسازی ایموجی' : 'Strip Emojis'],
+                    ['sync_deletes', '🗑', isRtl ? 'همگام‌سازی حذف‌ها' : 'Sync Deletes'],
+                    ['ignore_edits', '✏️', isRtl ? 'نادیده گرفتن ادیت' : 'Ignore Edits'],
+                  ] as const).map(([key, icon, label]) => (
+                    <label
+                      key={key}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                        fontSize: '0.78rem', color: '#cbd5e1',
+                        background: 'rgba(255,255,255,0.04)',
+                        padding: '8px 10px', borderRadius: 8,
+                        border: ruleMeta[key] ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!ruleMeta[key]}
+                        onChange={(e) => setRuleMeta({ ...ruleMeta, [key]: e.target.checked })}
+                        style={{ accentColor: '#6366f1' }}
+                      />
+                      <span>{icon} {label}</span>
+                    </label>
+                  ))}
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                    {isRtl ? 'حالت آلبوم:' : 'Album Mode:'}
+                  </label>
+                  <select
+                    value={ruleMeta.album_mode || 'album'}
+                    onChange={(e) => setRuleMeta({ ...ruleMeta, album_mode: e.target.value })}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                  >
+                    <option value="album">{isRtl ? '🖼 آلبوم کامل' : 'Full album'}</option>
+                    <option value="first">{isRtl ? '۱️⃣ فقط اولین مدیا' : 'First media only'}</option>
+                    <option value="split">{isRtl ? '🔀 تفکیک پیام‌ها' : 'Split messages'}</option>
+                  </select>
+                </div>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
                 <button type="button" onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary">
                   {isRtl ? 'انصراف' : 'Cancel'}
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  <Check size={16} />
-                  <span>{isRtl ? 'ذخیره قانون' : 'Save Rule'}</span>
-                </button>
+                {(() => {
+                  const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+                  const s = normEp(ruleFormData.source_chat_id)
+                  const t = normEp(ruleFormData.target_chat_id)
+                  const im = normEp(ruleFormData.intermediate_channel_id)
+                  const hasLoop = Boolean(s && t && s === t) ||
+                    Boolean(ruleFormData.use_intermediate && im && (im === s || im === t))
+                  return (
+                    <button
+                      type="submit"
+                      disabled={hasLoop}
+                      className="btn btn-primary"
+                      style={{
+                        opacity: hasLoop ? 0.45 : 1,
+                        cursor: hasLoop ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <Check size={16} />
+                      <span>{isRtl ? 'ذخیره قانون' : 'Save Rule'}</span>
+                    </button>
+                  )
+                })()}
               </div>
             </form>
           </div>
@@ -1983,6 +3278,67 @@ export function App() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function UserBar({ lang }: { lang: 'fa' | 'en' }) {
+  const [user, setUser] = useState<{ username: string; is_admin: boolean } | null>(null)
+
+  useEffect(() => {
+    api.me().then(setUser).catch(() => {})
+  }, [])
+
+  const handleLogout = () => {
+    api.logout()
+    try {
+      localStorage.removeItem('auth_token')
+    } catch {}
+    window.dispatchEvent(new Event('auth_required'))
+  }
+
+  if (!user) return null
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '8px 16px',
+        marginBottom: 16,
+        background: 'rgba(15, 23, 42, 0.6)',
+        borderRadius: 12,
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        fontSize: '0.85rem',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+        <span style={{ color: '#e2e8f0', fontWeight: 600 }}>
+          {user.is_admin ? '👑 ' : '👤 '}
+          {user.username}
+        </span>
+        {user.is_admin && (
+          <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4, background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8' }}>
+            ADMIN
+          </span>
+        )}
+      </div>
+      <button
+        onClick={handleLogout}
+        style={{
+          padding: '4px 12px',
+          borderRadius: 8,
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          background: 'rgba(239, 68, 68, 0.1)',
+          cursor: 'pointer',
+          fontSize: '0.8rem',
+          color: '#f87171',
+          fontWeight: 600,
+        }}
+      >
+        {lang === 'fa' ? 'خروج از حساب' : 'Logout'}
+      </button>
     </div>
   )
 }

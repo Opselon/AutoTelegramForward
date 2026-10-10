@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Async loaded in index.html to prevent render-blocking on mobile */
+
 
 :root {
   --bg-main: #0b0f19;
@@ -206,4 +207,59 @@ body {
 
 .glow-active {
   animation: pulse-glow 3s infinite ease-in-out;
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive layout — mobile-first.                                  */
+/* Breakpoints: <480px small phones, <768px large phones, >=1024 desk  */
+/* ------------------------------------------------------------------ */
+
+/* Tablets and below: tighten the outer padding so content isn't crushed
+   against the viewport edge, and drop the max-width constraint. */
+@media (max-width: 768px) {
+  #root {
+    max-width: 100%;
+  }
+}
+
+/* Small phones: give cards breathing room, make the tab bar a smooth
+   horizontal scroller with visible affordance, and enlarge tap targets. */
+@media (max-width: 480px) {
+  .btn {
+    padding: 9px 14px;
+    font-size: 0.85rem;
+  }
+
+  .glass-panel {
+    border-radius: var(--radius-sm);
+  }
+
+  /* Tab strip: horizontal scroll with a fade at the trailing edge so
+     users can see there is more to scroll to. */
+  .tab-strip {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    position: relative;
+    mask-image: linear-gradient(90deg, #000 92%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent);
+  }
+
+  .tab-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-strip > * {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+  }
+}
+
+/* Desktop: restore the wide grid gutters for the rules/sessions layouts. */
+@media (min-width: 1024px) {
+  .rules-grid,
+  .sessions-grid {
+    grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+  }
 }

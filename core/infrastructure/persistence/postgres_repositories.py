@@ -314,9 +314,19 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
         row = await self._db.fetchone(query, (rule_id,))
         return self._row_to_entity(row) if row else None
 
-    async def list_by_session(self, session_id: str) -> List[ForwardRule]:
-        query = "SELECT * FROM forward_rules WHERE session_id = %s ORDER BY created_at ASC"
-        rows = await self._db.fetchall(query, (session_id,))
+    async def list_by_session(self, session_id: str, owner_user_id: int = 0) -> List[ForwardRule]:
+        if owner_user_id:
+            query = ("SELECT * FROM forward_rules WHERE session_id = %s AND owner_user_id = %s"
+                     " ORDER BY created_at ASC")
+            rows = await self._db.fetchall(query, (session_id, int(owner_user_id)))
+        else:
+            query = "SELECT * FROM forward_rules WHERE session_id = %s ORDER BY created_at ASC"
+            rows = await self._db.fetchall(query, (session_id,))
+        return [self._row_to_entity(r) for r in rows]
+
+    async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
+        query = "SELECT * FROM forward_rules WHERE owner_user_id = %s ORDER BY created_at ASC"
+        rows = await self._db.fetchall(query, (int(owner_user_id),))
         return [self._row_to_entity(r) for r in rows]
 
     async def list_all(self) -> List[ForwardRule]:

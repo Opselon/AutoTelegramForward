@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 11
 
 MIGRATIONS = {
     1: """
@@ -372,7 +372,81 @@ MIGRATIONS = {
     ALTER TABLE delivery_jobs ADD COLUMN intermediate_message_id INTEGER;
     ALTER TABLE delivery_jobs ADD COLUMN delivery_stage TEXT NOT NULL DEFAULT 'DIRECT';
     """,
+    10: """
+    -- v10: Unified per-user accounts (Telegram bot + Web dashboard share identity).
+    -- Passwords stored as PBKDF2-SHA256 (iterations stored per-row for upgrades).
+    CREATE TABLE IF NOT EXISTS web_accounts (
+        user_id INTEGER PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        password_algo TEXT NOT NULL DEFAULT 'pbkdf2_sha256',
+        password_iter INTEGER NOT NULL DEFAULT 240000,
+        salt TEXT NOT NULL,
+        display_name TEXT NOT NULL DEFAULT '',
+        is_admin INTEGER NOT NULL DEFAULT 0,
+        plan TEXT NOT NULL DEFAULT 'free',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_web_accounts_username ON web_accounts(username);
+
+    -- Ownership scoping: every session & rule belongs to one account.
+    ALTER TABLE sessions ADD COLUMN owner_user_id INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE forward_rules ADD COLUMN owner_user_id INTEGER NOT NULL DEFAULT 0;
+    CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_user_id);
+    CREATE INDEX IF NOT EXISTS idx_rules_owner ON forward_rules(owner_user_id);
+
+    -- One-time dashboard login tokens minted by the Telegram bot (short TTL).
+    CREATE TABLE IF NOT EXISTS web_tokens (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_web_tokens_expiry ON web_tokens(expires_at);
+    """,
+    11: """
+    -- v11: Ownership scoping for AI configs and filter rules.
+    -- Without this, any authenticated tenant could read another tenant's
+    -- LLM provider API key via GET /api/ai-configs.
+    -- The tables are (re)declared IF NOT EXISTS because a database restored
+    -- from a pre-v6 backup may jump straight into this migration; the owner
+    -- column is part of the declaration so a fresh table needs no ALTER.
+    CREATE TABLE IF NOT EXISTS ai_configs (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL DEFAULT '',
+        api_key_encrypted TEXT NOT NULL DEFAULT '',
+        base_url TEXT NOT NULL DEFAULT '',
+        system_prompt TEXT NOT NULL DEFAULT '',
+        user_prompt_template TEXT NOT NULL DEFAULT '{text}',
+        temperature REAL NOT NULL DEFAULT 0.7,
+        is_enabled INTEGER NOT NULL DEFAULT 1,
+        target_language TEXT NOT NULL DEFAULT 'en',
+        owner_user_id INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS filter_rules (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT '',
+        whitelist_keywords TEXT NOT NULL DEFAULT '[]',
+        blacklist_keywords TEXT NOT NULL DEFAULT '[]',
+        regex_patterns TEXT NOT NULL DEFAULT '[]',
+        allowed_media_types TEXT NOT NULL DEFAULT '[]',
+        blocked_media_types TEXT NOT NULL DEFAULT '[]',
+        drop_service_messages INTEGER NOT NULL DEFAULT 1,
+        min_message_length INTEGER NOT NULL DEFAULT 0,
+        max_message_length INTEGER NOT NULL DEFAULT 0,
+        owner_user_id INTEGER NOT NULL DEFAULT 0
+    );
+    """,
 }
+
+# Columns added by additive migrations that must also work on a table carried
+# over from an older schema (v11 runs the guarded ALTER in _apply_additive_columns).
+_ADDITIVE_COLUMNS = (
+    ("ai_configs", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_ai_configs_owner"),
+    ("filter_rules", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_filter_rules_owner"),
+)
 
 
 class SqliteDatabase:
@@ -440,7 +514,42 @@ class SqliteDatabase:
                 self._conn.execute(
                     "INSERT INTO schema_version (version) VALUES (?)", (current,)
                 )
+            self._apply_additive_columns()
             self._conn.commit()
+
+    def _apply_additive_columns(self) -> None:
+        """Idempotently add columns introduced by additive migrations.
+
+        A table carried over from an older schema version (for example a
+        database restored from a pre-v6 backup) can jump several migrations at
+        once; the IF NOT EXISTS table declarations in v11 only help when the
+        table is absent, so additive columns still need a guarded ALTER here.
+        Indexes are created after the column so the script never runs before
+        the column exists.
+        """
+        for table, column, decl, index in _ADDITIVE_COLUMNS:
+            try:
+                cols = {
+                    str(r["name"])
+                    for r in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+                }
+            except Exception:
+                continue
+            if not cols:
+                continue
+            if column not in cols:
+                try:
+                    self._conn.execute(
+                        f"ALTER TABLE {table} ADD COLUMN {column} {decl}"
+                    )
+                except Exception:
+                    continue
+            try:
+                self._conn.execute(
+                    f"CREATE INDEX IF NOT EXISTS {index} ON {table}({column})"
+                )
+            except Exception:
+                pass
 
     @property
     def connection(self) -> sqlite3.Connection:

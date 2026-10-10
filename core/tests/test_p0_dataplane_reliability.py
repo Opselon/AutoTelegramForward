@@ -719,6 +719,24 @@ async def test_migration_v5_to_v6_and_restart(tmp_path):
 
     # 1. Initialize a legacy v5 database manually
     conn = sqlite3.connect(db_path)
+    # Minimal-but-complete v5 schema: migrations v6+ ALTER core tables created in v1,
+    # so a realistic v5 database must already contain them.
+    conn.execute("""
+        CREATE TABLE sessions (
+            id TEXT PRIMARY KEY,
+            phone_number TEXT NOT NULL DEFAULT '',
+            session_string_encrypted TEXT NOT NULL DEFAULT '',
+            user_id TEXT NOT NULL DEFAULT '',
+            username TEXT NOT NULL DEFAULT '',
+            first_name TEXT NOT NULL DEFAULT '',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            is_authorized INTEGER NOT NULL DEFAULT 0,
+            api_credential_id TEXT,
+            proxy TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+    """)
     conn.execute("""
         CREATE TABLE forward_rules (
             id TEXT PRIMARY KEY,

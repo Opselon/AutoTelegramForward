@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from . import autoforward_pb2 as autoforward__pb2
+import autoforward_pb2 as autoforward__pb2
 
 GRPC_GENERATED_VERSION = '1.84.0'
 GRPC_VERSION = grpc.__version__
@@ -1562,6 +1562,293 @@ class LogControlService:
             '/autoforward.LogControlService/LogStats',
             autoforward__pb2.LogStatsRequest.SerializeToString,
             autoforward__pb2.LogStatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class AccountControlServiceStub:
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.RegisterAccount = channel.unary_unary(
+                '/autoforward.AccountControlService/RegisterAccount',
+                request_serializer=autoforward__pb2.RegisterAccountRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.RegisterAccountResponse.FromString,
+                _registered_method=True)
+        self.LoginAccount = channel.unary_unary(
+                '/autoforward.AccountControlService/LoginAccount',
+                request_serializer=autoforward__pb2.LoginAccountRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.LoginAccountResponse.FromString,
+                _registered_method=True)
+        self.ValidateToken = channel.unary_unary(
+                '/autoforward.AccountControlService/ValidateToken',
+                request_serializer=autoforward__pb2.ValidateTokenRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ValidateTokenResponse.FromString,
+                _registered_method=True)
+        self.IssueWebToken = channel.unary_unary(
+                '/autoforward.AccountControlService/IssueWebToken',
+                request_serializer=autoforward__pb2.IssueWebTokenRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.LoginAccountResponse.FromString,
+                _registered_method=True)
+        self.ChangePassword = channel.unary_unary(
+                '/autoforward.AccountControlService/ChangePassword',
+                request_serializer=autoforward__pb2.ChangePasswordRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.GetAccount = channel.unary_unary(
+                '/autoforward.AccountControlService/GetAccount',
+                request_serializer=autoforward__pb2.GetAccountRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.WebAccount.FromString,
+                _registered_method=True)
+
+
+class AccountControlServiceServicer:
+    """Missing associated documentation comment in .proto file."""
+
+    def RegisterAccount(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def LoginAccount(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ValidateToken(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def IssueWebToken(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ChangePassword(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetAccount(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_AccountControlServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'RegisterAccount': grpc.unary_unary_rpc_method_handler(
+                    servicer.RegisterAccount,
+                    request_deserializer=autoforward__pb2.RegisterAccountRequest.FromString,
+                    response_serializer=autoforward__pb2.RegisterAccountResponse.SerializeToString,
+            ),
+            'LoginAccount': grpc.unary_unary_rpc_method_handler(
+                    servicer.LoginAccount,
+                    request_deserializer=autoforward__pb2.LoginAccountRequest.FromString,
+                    response_serializer=autoforward__pb2.LoginAccountResponse.SerializeToString,
+            ),
+            'ValidateToken': grpc.unary_unary_rpc_method_handler(
+                    servicer.ValidateToken,
+                    request_deserializer=autoforward__pb2.ValidateTokenRequest.FromString,
+                    response_serializer=autoforward__pb2.ValidateTokenResponse.SerializeToString,
+            ),
+            'IssueWebToken': grpc.unary_unary_rpc_method_handler(
+                    servicer.IssueWebToken,
+                    request_deserializer=autoforward__pb2.IssueWebTokenRequest.FromString,
+                    response_serializer=autoforward__pb2.LoginAccountResponse.SerializeToString,
+            ),
+            'ChangePassword': grpc.unary_unary_rpc_method_handler(
+                    servicer.ChangePassword,
+                    request_deserializer=autoforward__pb2.ChangePasswordRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'GetAccount': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAccount,
+                    request_deserializer=autoforward__pb2.GetAccountRequest.FromString,
+                    response_serializer=autoforward__pb2.WebAccount.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'autoforward.AccountControlService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('autoforward.AccountControlService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class AccountControlService:
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def RegisterAccount(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AccountControlService/RegisterAccount',
+            autoforward__pb2.RegisterAccountRequest.SerializeToString,
+            autoforward__pb2.RegisterAccountResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def LoginAccount(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AccountControlService/LoginAccount',
+            autoforward__pb2.LoginAccountRequest.SerializeToString,
+            autoforward__pb2.LoginAccountResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ValidateToken(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AccountControlService/ValidateToken',
+            autoforward__pb2.ValidateTokenRequest.SerializeToString,
+            autoforward__pb2.ValidateTokenResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def IssueWebToken(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AccountControlService/IssueWebToken',
+            autoforward__pb2.IssueWebTokenRequest.SerializeToString,
+            autoforward__pb2.LoginAccountResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ChangePassword(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AccountControlService/ChangePassword',
+            autoforward__pb2.ChangePasswordRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetAccount(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AccountControlService/GetAccount',
+            autoforward__pb2.GetAccountRequest.SerializeToString,
+            autoforward__pb2.WebAccount.FromString,
             options,
             channel_credentials,
             insecure,

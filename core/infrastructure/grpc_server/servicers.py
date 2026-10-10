@@ -2,6 +2,8 @@
 
 import time
 
+import grpc
+
 from ...proto import pb, pb_grpc  # noqa: F401
 
 
@@ -15,6 +17,7 @@ def _session_info(s) -> pb.SessionInfo:
         username=s.username, first_name=s.first_name,
         is_active=s.is_active, is_authorized=s.is_authorized,
         created_at=s.created_at, updated_at=s.updated_at,
+        owner_user_id=int(getattr(s, "owner_user_id", 0) or 0),
     )
 
 
@@ -88,6 +91,7 @@ def _rule_pb(r) -> pb.ForwardRule:
         is_paused=bool(getattr(r, "is_paused", False)),
         paused_until=int(getattr(r, "paused_until", 0) or 0),
         version=int(getattr(r, "version", 1) or 1),
+        custom_metadata_json=_json.dumps(getattr(r, "metadata", {}) or {}),
     )
 
 
@@ -102,6 +106,7 @@ def _filter_pb(f) -> pb.FilterRule:
         drop_service_messages=f.drop_service_messages,
         min_message_length=f.min_message_length,
         max_message_length=f.max_message_length,
+        owner_user_id=int(getattr(f, "owner_user_id", 0) or 0),
     )
 
 
@@ -112,6 +117,7 @@ def _ai_pb(c, mask_key: bool = True) -> pb.AIConfig:
         api_key=key, base_url=c.base_url, system_prompt=c.system_prompt,
         user_prompt_template=c.user_prompt_template, temperature=c.temperature,
         is_enabled=c.is_enabled, target_language=c.target_language,
+        owner_user_id=int(getattr(c, "owner_user_id", 0) or 0),
     )
 
 
@@ -121,7 +127,10 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
         self._pool = pool
 
     async def ListSessions(self, request, context):
-        rows = await self._sessions.list_all()
+        if request.owner_user_id:
+            rows = await self._sessions.list_by_owner(request.owner_user_id)
+        else:
+            rows = await self._sessions.list_all()
         return pb.ListSessionsResponse(sessions=[_session_info(s) for s in rows])
 
     async def StartLogin(self, request, context):
@@ -163,11 +172,12 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         self._rules = rules
 
     async def ListRules(self, request, context):
-        rows = (
-            await self._rules.list_by_session(request.session_id)
-            if request.session_id
-            else await self._rules.list_all()
-        )
+        if request.session_id:
+            rows = await self._rules.list_by_session(request.session_id, request.owner_user_id)
+        elif request.owner_user_id:
+            rows = await self._rules.list_by_owner(request.owner_user_id)
+        else:
+            rows = await self._rules.list_all()
         return pb.ListRulesResponse(rules=[_rule_pb(r) for r in rows])
 
     async def CreateRule(self, request, context):
@@ -214,8 +224,13 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             preserve_signature=bool(r.preserve_signature),
             is_paused=bool(r.is_paused),
             paused_until=int(r.paused_until or 0),
+            owner_user_id=int(r.owner_user_id or 0),
         )
-        created = await self._rules.create(entity)
+        try:
+            created = await self._rules.create(entity)
+        except ValueError as exc:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+            return pb.ForwardRule()
         return _rule_pb(created)
 
     async def UpdateRule(self, request, context):
@@ -302,9 +317,22 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             existing.is_paused = bool(r.is_paused)
         if r.paused_until:
             existing.paused_until = int(r.paused_until)
+        if r.custom_metadata_json:
+            try:
+                merged = _json.loads(r.custom_metadata_json)
+                if isinstance(merged, dict):
+                    if not isinstance(existing.metadata, dict):
+                        existing.metadata = {}
+                    existing.metadata.update(merged)
+            except Exception:
+                pass
 
         existing.mark_updated()
-        updated = await self._rules.update(existing)
+        try:
+            updated = await self._rules.update(existing)
+        except ValueError as exc:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+            return pb.ForwardRule()
         return _rule_pb(updated)
 
     async def DeleteRule(self, request, context):
@@ -577,7 +605,10 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
         self._filters = filters_uc
 
     async def ListFilters(self, request, context):
-        rows = await self._filters.list_all()
+        if request.owner_user_id:
+            rows = await self._filters.list_by_owner(request.owner_user_id)
+        else:
+            rows = await self._filters.list_all()
         return pb.ListFiltersResponse(filters=[_filter_pb(f) for f in rows])
 
     async def CreateFilter(self, request, context):
@@ -593,6 +624,7 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
             drop_service_messages=f.drop_service_messages,
             min_message_length=f.min_message_length,
             max_message_length=f.max_message_length,
+            owner_user_id=int(f.owner_user_id or 0),
         )
         created = await self._filters.create(entity)
         return _filter_pb(created)
@@ -611,6 +643,7 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
         existing.drop_service_messages = f.drop_service_messages
         existing.min_message_length = f.min_message_length
         existing.max_message_length = f.max_message_length
+        existing.owner_user_id = int(f.owner_user_id or existing.owner_user_id or 0)
         updated = await self._filters.update(existing)
         return _filter_pb(updated)
 
@@ -624,7 +657,10 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         self._ai = ai_uc
 
     async def ListAIConfigs(self, request, context):
-        rows = await self._ai.list_all()
+        if request.owner_user_id:
+            rows = await self._ai.list_by_owner(request.owner_user_id)
+        else:
+            rows = await self._ai.list_all()
         return pb.ListAIConfigsResponse(configs=[_ai_pb(c) for c in rows])
 
     async def CreateAIConfig(self, request, context):
@@ -637,6 +673,7 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
             system_prompt=c.system_prompt, user_prompt_template=c.user_prompt_template or "{text}",
             temperature=c.temperature or 0.7, is_enabled=c.is_enabled or True,
             target_language=c.target_language or "en",
+            owner_user_id=int(c.owner_user_id or 0),
         )
         created = await self._ai.create(entity)
         return _ai_pb(created)
@@ -660,6 +697,7 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         existing.is_enabled = c.is_enabled
         if c.target_language:
             existing.target_language = c.target_language
+        existing.owner_user_id = int(c.owner_user_id or existing.owner_user_id or 0)
         updated = await self._ai.update(existing)
         return _ai_pb(updated)
 
@@ -682,13 +720,17 @@ class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):
 
     async def GetSystemStats(self, request, context):
         s = self._pipeline.stats
-        active = await self._sessions.list_active()
-        all_rules = await self._rules.list_all()
+        owner = int(request.owner_user_id or 0)
+        if owner:
+            rules_q = await self._rules.list_by_owner(owner)
+        else:
+            rules_q = await self._rules.list_all()
+        active = [r for r in rules_q if r.is_active]
         return pb.SystemStatsResponse(
             core_running=True,
             uptime_seconds=int(time.time()) - s.started_at,
             active_sessions_count=len(active),
-            active_rules_count=sum(1 for r in all_rules if r.is_active),
+            active_rules_count=len(active),
             total_messages_processed=s.processed,
             total_messages_forwarded=s.forwarded,
             total_messages_filtered=s.filtered,

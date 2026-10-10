@@ -48,6 +48,11 @@ class SessionUseCases:
         import asyncio
         return asyncio.run(self.create(phone_number, session_string_encrypted))
 
+    async def list_by_owner(self, owner_user_id: int) -> List[TelegramSession]:
+        if hasattr(self._repo, "list_by_owner"):
+            return await self._repo.list_by_owner(owner_user_id)
+        return [s for s in await self._repo.list_all() if getattr(s, "owner_user_id", 0) == owner_user_id]
+
     async def list_all(self) -> List[TelegramSession]:
         return await self._repo.list_all()
 
@@ -83,7 +88,21 @@ class ForwardRuleUseCases:
     def __init__(self, repo: IForwardRuleRepository) -> None:
         self._repo = repo
 
-    def validate_endpoints(self, source_chat_id: str, target_chat_id: str) -> tuple[bool, str]:
+    @staticmethod
+    def _normalize_chat_id(val: str) -> str:
+        s = str(val or "").strip().lower()
+        for prefix in ("https://t.me/", "http://t.me/", "t.me/", "@"):
+            if s.startswith(prefix):
+                s = s[len(prefix):]
+        return s.strip()
+
+    def validate_endpoints(
+        self,
+        source_chat_id: str,
+        target_chat_id: str,
+        intermediate_channel_id: str = "",
+        use_intermediate: bool = False,
+    ) -> tuple[bool, str]:
         """Validate source and target chat IDs to prevent loops and empty routing."""
         s = str(source_chat_id or "").strip()
         t = str(target_chat_id or "").strip()
@@ -91,18 +110,34 @@ class ForwardRuleUseCases:
             return False, "source_empty"
         if not t:
             return False, "target_empty"
-        if s == t:
+        sn = self._normalize_chat_id(s)
+        tn = self._normalize_chat_id(t)
+        if sn == tn:
             return False, "loop_detected"
+        if use_intermediate and intermediate_channel_id:
+            inter = self._normalize_chat_id(intermediate_channel_id)
+            if inter and (inter == sn or inter == tn):
+                return False, "loop_detected"
         return True, "ok"
 
     async def create(self, rule: ForwardRule) -> ForwardRule:
-        ok, err = self.validate_endpoints(rule.source_chat_id, rule.target_chat_id)
+        ok, err = self.validate_endpoints(
+            rule.source_chat_id,
+            rule.target_chat_id,
+            getattr(rule, "intermediate_channel_id", "") or "",
+            bool(getattr(rule, "use_intermediate", False)),
+        )
         if not ok:
             raise ValueError(f"Invalid rule endpoints: {err}")
         return await self._repo.add(rule)
 
     async def update(self, rule: ForwardRule, expected_version: Optional[int] = None) -> ForwardRule:
-        ok, err = self.validate_endpoints(rule.source_chat_id, rule.target_chat_id)
+        ok, err = self.validate_endpoints(
+            rule.source_chat_id,
+            rule.target_chat_id,
+            getattr(rule, "intermediate_channel_id", "") or "",
+            bool(getattr(rule, "use_intermediate", False)),
+        )
         if not ok:
             raise ValueError(f"Invalid rule endpoints: {err}")
         rule.mark_updated()
@@ -111,8 +146,16 @@ class ForwardRuleUseCases:
     async def get(self, rule_id: str) -> Optional[ForwardRule]:
         return await self._repo.get_by_id(rule_id)
 
-    async def list_by_session(self, session_id: str) -> List[ForwardRule]:
-        return await self._repo.list_by_session(session_id)
+    async def list_by_session(self, session_id: str, owner_user_id: int = 0) -> List[ForwardRule]:
+        return await self._repo.list_by_session(session_id, owner_user_id)
+
+    async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
+        return await self._repo.list_by_owner(owner_user_id)
+
+    async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
+        if hasattr(self._repo, "list_by_owner"):
+            return await self._repo.list_by_owner(owner_user_id)
+        return [r for r in await self._repo.list_all() if getattr(r, "owner_user_id", 0) == owner_user_id]
 
     async def list_all(self) -> List[ForwardRule]:
         return await self._repo.list_all()
@@ -148,6 +191,9 @@ class FilterRuleUseCases:
 
     async def list_all(self) -> List[FilterRule]:
         return await self._repo.list_all()
+
+    async def list_by_owner(self, owner_user_id: int) -> List[FilterRule]:
+        return await self._repo.list_by_owner(owner_user_id)
 
     async def delete(self, filter_id: str) -> bool:
         return await self._repo.delete(filter_id)
@@ -194,6 +240,9 @@ class AIConfigUseCases:
 
     async def list_all(self) -> List[AIConfig]:
         return await self._repo.list_all()
+
+    async def list_by_owner(self, owner_user_id: int) -> List[AIConfig]:
+        return await self._repo.list_by_owner(owner_user_id)
 
     async def delete(self, config_id: str) -> bool:
         return await self._repo.delete(config_id)

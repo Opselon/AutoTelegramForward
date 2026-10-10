@@ -74,7 +74,25 @@ class AIPVResponder:
         self._ai_factory = ai_factory
         self._db = db
         self._last_replied_ts: Dict[str, float] = {}
-        self.config: PVResponderConfig = self._load_config()
+        self._cached_config: PVResponderConfig = self._load_config()
+        self._config_mtime: float = CONFIG_PATH.stat().st_mtime if CONFIG_PATH.exists() else 0.0
+
+    @property
+    def config(self) -> PVResponderConfig:
+        try:
+            if CONFIG_PATH.exists():
+                mtime = CONFIG_PATH.stat().st_mtime
+                if mtime != self._config_mtime:
+                    self._config_mtime = mtime
+                    data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+                    self._cached_config = PVResponderConfig.from_dict(data)
+        except Exception as exc:
+            logger.warning("Failed to refresh PV responder config from file: %s", exc)
+        return self._cached_config
+
+    @config.setter
+    def config(self, cfg: PVResponderConfig) -> None:
+        self._cached_config = cfg
 
     def _load_config(self) -> PVResponderConfig:
         try:
@@ -86,10 +104,11 @@ class AIPVResponder:
         return PVResponderConfig()
 
     def save_config(self, cfg: PVResponderConfig) -> None:
-        self.config = cfg
+        self._cached_config = cfg
         try:
             CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
             CONFIG_PATH.write_text(json.dumps(cfg.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+            self._config_mtime = CONFIG_PATH.stat().st_mtime
         except Exception as exc:
             logger.error("Failed to save PV responder config to file: %s", exc)
 

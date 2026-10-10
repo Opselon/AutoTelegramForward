@@ -87,12 +87,13 @@ class SqliteSessionRepository(ISessionRepository):
         self._db.execute(
             "INSERT INTO sessions (id, phone_number, session_string_encrypted, user_id, username,"
             " first_name, is_active, is_authorized, api_credential_id, proxy,"
-            " created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " owner_user_id, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 session.id, session.phone_number, enc, session.user_id, session.username,
                 session.first_name, int(session.is_active), int(session.is_authorized),
                 session.api_credential_id, json.dumps(session.proxy or {}),
+                int(getattr(session, "owner_user_id", 0) or 0),
                 session.created_at, session.updated_at,
             ),
         )
@@ -103,11 +104,12 @@ class SqliteSessionRepository(ISessionRepository):
         self._db.execute(
             "UPDATE sessions SET phone_number=?, session_string_encrypted=?, user_id=?, username=?,"
             " first_name=?, is_active=?, is_authorized=?, api_credential_id=?, proxy=?,"
-            " updated_at=? WHERE id=?",
+            " owner_user_id=?, updated_at=? WHERE id=?",
             (
                 session.phone_number, enc, session.user_id, session.username,
                 session.first_name, int(session.is_active), int(session.is_authorized),
                 session.api_credential_id, json.dumps(session.proxy or {}),
+                int(getattr(session, "owner_user_id", 0) or 0),
                 session.updated_at, session.id,
             ),
         )
@@ -129,6 +131,7 @@ class SqliteSessionRepository(ISessionRepository):
             proxy=_safe_dict(row["proxy"], {}) if "proxy" in cols and row["proxy"] else None,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            owner_user_id=int(row["owner_user_id"]) if "owner_user_id" in cols and row["owner_user_id"] else 0,
         )
 
     async def get_by_id(self, session_id: str) -> Optional[TelegramSession]:
@@ -139,8 +142,22 @@ class SqliteSessionRepository(ISessionRepository):
         row = self._db.query_one("SELECT * FROM sessions WHERE phone_number=?", (phone,))
         return self._row_to_entity(row) if row else None
 
+    async def list_by_owner(self, owner_user_id: int) -> List[TelegramSession]:
+        rows = self._db.query_all(
+            "SELECT * FROM sessions WHERE owner_user_id=? ORDER BY created_at",
+            (int(owner_user_id),)
+        )
+        return [self._row_to_entity(r) for r in rows]
+
     async def list_all(self) -> List[TelegramSession]:
         rows = self._db.query_all("SELECT * FROM sessions ORDER BY created_at")
+        return [self._row_to_entity(r) for r in rows]
+
+    async def list_by_owner(self, owner_user_id: int) -> List[TelegramSession]:
+        rows = self._db.query_all(
+            "SELECT * FROM sessions WHERE owner_user_id=? ORDER BY created_at",
+            (int(owner_user_id),)
+        )
         return [self._row_to_entity(r) for r in rows]
 
     async def list_active(self) -> List[TelegramSession]:
@@ -225,8 +242,9 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                 " ai_config_id, remove_links, custom_caption_template, delay_seconds, skip_history,"
                 " since_ts, ignore_edits, trigger_events, content_mode, metadata, version, created_at, updated_at,"
                 " ai_prompt_version, ai_fallback_policy, ai_timeout_seconds, ai_secondary_config_id,"
+                " owner_user_id,"
                 f" {', '.join(self.SMART_RULE_COLUMNS)})"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
                 f" {', '.join('?' * len(self.SMART_RULE_COLUMNS))})",
                 (
                     rule.id, rule.session_id, rule.source_chat_id, rule.source_chat_name,
@@ -241,6 +259,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                     getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
                     json.dumps(rule.metadata or {}), rule_version, rule.created_at, rule.updated_at,
                     ai_prompt_ver, ai_fallback, ai_timeout, ai_sec,
+                    int(getattr(rule, "owner_user_id", 0) or 0),
                     *self._smart_params(rule),
                 ),
             )
@@ -450,15 +469,29 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             link_rewrite_map=_safe_dict(_col("link_rewrite_map", "{}"), {}),
             allowed_media_types=_safe_list(_col("allowed_media_types", "[]"), []),
             split_long_caption=bool(_col("split_long_caption", 1)),
+            owner_user_id=int(_col("owner_user_id", 0) or 0),
         )
 
     async def get_by_id(self, rule_id: str) -> Optional[ForwardRule]:
         row = self._db.query_one("SELECT * FROM forward_rules WHERE id=?", (rule_id,))
         return self._row_to_entity(row) if row else None
 
-    async def list_by_session(self, session_id: str) -> List[ForwardRule]:
+    async def list_by_session(self, session_id: str, owner_user_id: int = 0) -> List[ForwardRule]:
+        if owner_user_id:
+            rows = self._db.query_all(
+                "SELECT * FROM forward_rules WHERE session_id=? AND owner_user_id=?"
+                " ORDER BY created_at", (session_id, int(owner_user_id))
+            )
+        else:
+            rows = self._db.query_all(
+                "SELECT * FROM forward_rules WHERE session_id=? ORDER BY created_at", (session_id,)
+            )
+        return [self._row_to_entity(r) for r in rows]
+
+    async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
         rows = self._db.query_all(
-            "SELECT * FROM forward_rules WHERE session_id=? ORDER BY created_at", (session_id,)
+            "SELECT * FROM forward_rules WHERE owner_user_id=? ORDER BY created_at",
+            (int(owner_user_id),)
         )
         return [self._row_to_entity(r) for r in rows]
 
@@ -490,13 +523,14 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
             json.dumps(fr.regex_patterns), json.dumps(fr.allowed_media_types),
             json.dumps(fr.blocked_media_types), int(fr.drop_service_messages),
             fr.min_message_length, fr.max_message_length,
+            int(getattr(fr, "owner_user_id", 0) or 0),
         )
 
     async def add(self, filter_rule: FilterRule) -> FilterRule:
         self._db.execute(
             "INSERT INTO filter_rules (id, name, whitelist_keywords, blacklist_keywords, regex_patterns,"
             " allowed_media_types, blocked_media_types, drop_service_messages, min_message_length,"
-            " max_message_length) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " max_message_length, owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             self._cols(filter_rule),
         )
         return filter_rule
@@ -505,7 +539,7 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
         self._db.execute(
             "UPDATE filter_rules SET name=?, whitelist_keywords=?, blacklist_keywords=?, regex_patterns=?,"
             " allowed_media_types=?, blocked_media_types=?, drop_service_messages=?, min_message_length=?,"
-            " max_message_length=? WHERE id=?",
+            " max_message_length=?, owner_user_id=? WHERE id=?",
             (*self._cols(filter_rule)[1:], filter_rule.id),
         )
         return filter_rule
@@ -522,6 +556,7 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
             drop_service_messages=bool(row["drop_service_messages"]),
             min_message_length=row["min_message_length"],
             max_message_length=row["max_message_length"],
+            owner_user_id=int(row["owner_user_id"]) if "owner_user_id" in row.keys() and row["owner_user_id"] else 0,
         )
 
     async def get_by_id(self, filter_id: str) -> Optional[FilterRule]:
@@ -530,6 +565,13 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
 
     async def list_all(self) -> List[FilterRule]:
         rows = self._db.query_all("SELECT * FROM filter_rules ORDER BY name")
+        return [self._row_to_entity(r) for r in rows]
+
+    async def list_by_owner(self, owner_user_id: int) -> List[FilterRule]:
+        rows = self._db.query_all(
+            "SELECT * FROM filter_rules WHERE owner_user_id=? ORDER BY name",
+            (int(owner_user_id),),
+        )
         return [self._row_to_entity(r) for r in rows]
 
     async def delete(self, filter_id: str) -> bool:
@@ -545,13 +587,14 @@ class SqliteAIConfigRepository(IAIConfigRepository):
     async def add(self, config: AIConfig) -> AIConfig:
         self._db.execute(
             "INSERT INTO ai_configs (id, name, provider, model, api_key_encrypted, base_url, system_prompt,"
-            " user_prompt_template, temperature, is_enabled, target_language)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " user_prompt_template, temperature, is_enabled, target_language, owner_user_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 config.id, config.name, config.provider.value, config.model,
                 self._crypto.encrypt(config.api_key) if config.api_key else "",
                 config.base_url, config.system_prompt, config.user_prompt_template,
                 config.temperature, int(config.is_enabled), config.target_language,
+                int(getattr(config, "owner_user_id", 0) or 0),
             ),
         )
         return config
@@ -559,13 +602,14 @@ class SqliteAIConfigRepository(IAIConfigRepository):
     async def update(self, config: AIConfig) -> AIConfig:
         self._db.execute(
             "UPDATE ai_configs SET name=?, provider=?, model=?, api_key_encrypted=?, base_url=?,"
-            " system_prompt=?, user_prompt_template=?, temperature=?, is_enabled=?, target_language=?"
-            " WHERE id=?",
+            " system_prompt=?, user_prompt_template=?, temperature=?, is_enabled=?, target_language=?,"
+            " owner_user_id=? WHERE id=?",
             (
                 config.name, config.provider.value, config.model,
                 self._crypto.encrypt(config.api_key) if config.api_key else "",
                 config.base_url, config.system_prompt, config.user_prompt_template,
-                config.temperature, int(config.is_enabled), config.target_language, config.id,
+                config.temperature, int(config.is_enabled), config.target_language,
+                int(getattr(config, "owner_user_id", 0) or 0), config.id,
             ),
         )
         return config
@@ -580,6 +624,7 @@ class SqliteAIConfigRepository(IAIConfigRepository):
             user_prompt_template=row["user_prompt_template"],
             temperature=row["temperature"], is_enabled=bool(row["is_enabled"]),
             target_language=row["target_language"],
+            owner_user_id=int(row["owner_user_id"]) if "owner_user_id" in row.keys() and row["owner_user_id"] else 0,
         )
 
     async def get_by_id(self, config_id: str) -> Optional[AIConfig]:
@@ -588,6 +633,13 @@ class SqliteAIConfigRepository(IAIConfigRepository):
 
     async def list_all(self) -> List[AIConfig]:
         rows = self._db.query_all("SELECT * FROM ai_configs ORDER BY name")
+        return [self._row_to_entity(r) for r in rows]
+
+    async def list_by_owner(self, owner_user_id: int) -> List[AIConfig]:
+        rows = self._db.query_all(
+            "SELECT * FROM ai_configs WHERE owner_user_id=? ORDER BY name",
+            (int(owner_user_id),),
+        )
         return [self._row_to_entity(r) for r in rows]
 
     async def delete(self, config_id: str) -> bool:

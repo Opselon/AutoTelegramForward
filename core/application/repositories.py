@@ -65,8 +65,15 @@ class ISessionRepository(ABC):
     async def get_by_phone(self, phone: str) -> Optional[TelegramSession]:
         ...
 
+    async def list_by_owner(self, owner_user_id: int) -> List[TelegramSession]:
+        return [s for s in await self.list_all() if getattr(s, "owner_user_id", 0) == owner_user_id]
+
     @abstractmethod
     async def list_all(self) -> List[TelegramSession]:
+        ...
+
+    @abstractmethod
+    async def list_by_owner(self, owner_user_id: int) -> List[TelegramSession]:
         ...
 
     @abstractmethod
@@ -92,7 +99,11 @@ class IForwardRuleRepository(ABC):
         ...
 
     @abstractmethod
-    async def list_by_session(self, session_id: str) -> List[ForwardRule]:
+    async def list_by_session(self, session_id: str, owner_user_id: int = 0) -> List[ForwardRule]:
+        ...
+
+    @abstractmethod
+    async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
         ...
 
     @abstractmethod
@@ -126,6 +137,10 @@ class IFilterRuleRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_by_owner(self, owner_user_id: int) -> List[FilterRule]:
+        ...
+
+    @abstractmethod
     async def delete(self, filter_id: str) -> bool:
         ...
 
@@ -145,6 +160,10 @@ class IAIConfigRepository(ABC):
 
     @abstractmethod
     async def list_all(self) -> List[AIConfig]:
+        ...
+
+    @abstractmethod
+    async def list_by_owner(self, owner_user_id: int) -> List[AIConfig]:
         ...
 
     @abstractmethod

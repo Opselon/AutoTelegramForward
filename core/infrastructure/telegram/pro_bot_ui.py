@@ -85,6 +85,9 @@ CB = {
     "debug": "dbg",
     "refresh": "rf",
     "perf": "pf",
+    "dashboard": "dsh",
+    "webpass": "wp",
+    "webpass_reset": "wpr",
 }
 
 SEV_ICON = {"info": "ℹ️", "warn": "⚠️", "error": "❌", "auth": "🔐", "fatal": "💀"}
@@ -183,6 +186,8 @@ class ProBotUI:
         rule_stats=None,
         users=None,
         pv_responder=None,
+        web_url: str = "",
+        account_servicer=None,
     ) -> None:
         self.bot = bot
         self.i18n = i18n
@@ -205,6 +210,8 @@ class ProBotUI:
         self._rule_stats = rule_stats
         self._users = users
         self._pv_responder = pv_responder
+        self._web_url = (web_url or "").rstrip("/")
+        self._accounts = account_servicer
         self._states: Dict[int, UiState] = {}
         self._register()
 
@@ -293,12 +300,63 @@ class ProBotUI:
     # ------------------------------------------------------------------ #
     # Menus
     # ------------------------------------------------------------------ #
+    async def _main_text(self, uid: int) -> str:
+        """Main-menu header: live overview banner + the standard title.
+
+        Mirrors the web dashboard's stat badges so both surfaces show the
+        same numbers. Falls back gracefully to the plain title when the
+        repositories are unavailable (e.g. during startup).
+        """
+        lines = [self._t("ui_main_title")]
+        try:
+            rules = await self._rules.list_by_owner(uid)
+            sessions = await self._sessions.list_by_owner(uid)
+            active_rules = sum(1 for r in rules if getattr(r, "is_active", False))
+            live_sessions = sum(1 for s in sessions if getattr(s, "is_active", False))
+            fwd_24h = await self._forwarded_24h(uid)
+            dlq = await self._dlq_count()
+            lines.append("")
+            lines.append(self._t("ui_overview_title"))
+            lines.append(f"⚡ {self._t('ui_overview_rules')}: {active_rules}/{len(rules)}")
+            lines.append(f"📱 {self._t('ui_overview_sessions')}: {live_sessions}/{len(sessions)}")
+            lines.append(f"📤 {self._t('ui_overview_forwarded')}: {fwd_24h}")
+            if dlq > 0:
+                lines.append(f"❌ {self._t('ui_overview_dlq')}: {dlq}")
+        except Exception:
+            logger.debug("overview banner unavailable", exc_info=True)
+        return "\n".join(lines)
+
+    async def _forwarded_24h(self, uid: int) -> int:
+        """Forwarded message count in the trailing 24h.
+
+        The metrics table is global (per-process), so this sums the hourly
+        buckets rather than trying to attribute to a single owner.
+        """
+        if self._metrics is None:
+            return 0
+        try:
+            buckets = await self._metrics.hourly(24)
+            return sum(int(b.get("forwarded") or 0) for b in (buckets or []))
+        except Exception:
+            return 0
+
+    async def _dlq_count(self) -> int:
+        """Failed messages sitting in the dead-letter queue."""
+        if self._error_log is None:
+            return 0
+        try:
+            counts = await self._error_log.counts_by_severity()
+            return int(counts.get("error", 0) or 0)
+        except Exception:
+            return 0
+
     def _main_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
             [("📱 " + self._t("ui_sessions"), CB["sessions"]), ("⚡ " + self._t("ui_rules"), CB["rules"])],
             [("🧹 " + self._t("ui_filters"), CB["filters"]), ("🤖 " + self._t("ui_ai"), CB["ai"])],
             [("📊 " + self._t("ui_stats"), CB["stats"]), ("🔑 " + self._t("ui_creds"), CB["creds"])],
             [("🛠 " + self._t("ui_debug"), CB["debug"]), ("🌐 " + self._t("ui_lang"), CB["lang"])],
+            [("💻 " + self._t("ui_dashboard"), CB["dashboard"])],
             [("📚 " + self._t("ui_help"), CB["help"])],
         ])
 
@@ -885,6 +943,34 @@ class ProBotUI:
     async def _finish_rule_creation(self, event: Any, st: UiState, source_title: str, target_title: str) -> None:
         """Persist ForwardRule and present the completion card."""
         uid: int = int(event.from_user.id if getattr(event, "from_user", None) else (event.chat.id if getattr(event, "chat", None) else 0))
+
+        def _norm_ep(s: str) -> str:
+            s = (s or "").strip().lower()
+            for p in ("https://t.me/", "http://t.me/", "t.me/", "@"):
+                if s.startswith(p):
+                    s = s[len(p):]
+            return s.strip()
+
+        if _norm_ep(st.rule_source) and _norm_ep(st.rule_source) == _norm_ep(st.rule_target):
+            st.step = ""
+            if isinstance(st.buffer, dict):
+                st.buffer.clear()
+            await self._persist(uid, st)
+            err_text = (
+                "⚠️ **خطای حلقه (Loop Detected)!**\n\n"
+                "شناسه کانال مبدأ و مقصد قانون نمی‌تواند یکسان باشد. فوروارد پیام از یک چت به خودش مجاز نیست.\n"
+                "لطفاً مجدداً با مبدأ یا مقصد متفاوت تلاش کنید."
+            )
+            markup = self._kbd([
+                [("➕ تلاش مجدد", CB["rule_add"])],
+                [("🏠 منوی اصلی", CB["main"])],
+            ])
+            if hasattr(event, "edit_message_text"):
+                await event.edit_message_text(err_text, reply_markup=markup)
+            else:
+                await event.reply_text(err_text, reply_markup=markup)
+            return
+
         sessions = await self._sessions.list_all()
         if not sessions:
             st.step = ""
@@ -910,6 +996,7 @@ class ProBotUI:
                 target_chat_name=target_title,
                 routing_type=RoutingType.CHANNEL_TO_CHANNEL,
                 forward_mode=ForwardMode.COPY_MESSAGE,
+                owner_user_id=uid,
             )
             await self._rules.create(rule)
             try:
@@ -1221,7 +1308,10 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["main"] + "$"))
         async def _cb_main(_, cq: CallbackQuery):
-            await cq.edit_message_text(self._t("ui_main_title"), reply_markup=self._main_menu())
+            await cq.edit_message_text(
+                await self._main_text(cq.from_user.id if cq.from_user else 0),
+                reply_markup=self._main_menu(),
+            )
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["sessions"] + "$"))
@@ -1229,7 +1319,7 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             logger.info("Executing _cb_sessions for uid=%s", uid)
             try:
-                sessions = await self._sessions.list_all()
+                sessions = await (self._sessions.list_all() if self._is_admin(uid) else self._sessions.list_by_owner(uid))
                 lines = [self._t("ui_sessions_title"), ""]
                 if not sessions:
                     lines.append(self._t("ui_none"))
@@ -1251,18 +1341,18 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["rules"] + "$"))
         async def _cb_rules(_, cq: CallbackQuery):
-            rules = await self._rules.list_all()
+            uid = cq.from_user.id if cq.from_user else 0
+            rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             text, kbd = self._render_rules_list(rules, page=0)
             await cq.edit_message_text(text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_pg:(\d+)$"))
         async def _cb_rules_page(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             page = int(raw.split(":", 1)[1])
-            rules = await self._rules.list_all()
+            rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             text, kbd = self._render_rules_list(rules, page=page)
             try:
                 await cq.edit_message_text(text, reply_markup=kbd)
@@ -1340,6 +1430,19 @@ class ProBotUI:
         async def _cb_help(_, cq: CallbackQuery):
             await cq.edit_message_text(self._t("ui_help_body"), reply_markup=self._main_menu())
             await cq.answer()
+
+        # ---------------------------------------------------------- web dashboard
+        @b.on_callback_query(filters.regex("^" + CB["dashboard"] + "$"))
+        async def _cb_dashboard(_, cq: CallbackQuery):
+            await self._show_dashboard(cq, force_reset=False)
+
+        @b.on_callback_query(filters.regex("^" + CB["webpass"] + "$"))
+        async def _cb_webpass(_, cq: CallbackQuery):
+            await self._show_dashboard(cq, force_reset=False)
+
+        @b.on_callback_query(filters.regex("^" + CB["webpass_reset"] + "$"))
+        async def _cb_webpass_reset(_, cq: CallbackQuery):
+            await self._show_dashboard(cq, force_reset=True)
 
         @b.on_callback_query(filters.regex("^" + CB["back"] + "$"))
         async def _cb_back(_, cq: CallbackQuery):
@@ -1709,29 +1812,40 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^rdelyes:(.+)$"))
         async def _cb_rule_del_confirm(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rid = raw.split(":", 1)[1]
+            rule = await self._rules.get(rid)
+            if not rule:
+                return await cq.answer(self._t("ui_none"), show_alert=True)
+            if not (self._is_admin(uid) or rule.owner_user_id == uid):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             await self._rules.delete(rid)
             try:
                 self._log.info("bot", "rule", f"rule {rid} deleted")
             except Exception:
                 pass
-            rules = await self._rules.list_all()
+            rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             text, kbd = self._render_rules_list(rules, page=0)
             await cq.edit_message_text(text, reply_markup=kbd)
             await cq.answer(self._t("ui_rule_deleted"), show_alert=True)
 
         @b.on_callback_query(filters.regex("^" + CB["rule_toggle"] + ":"))
         async def _cb_rule_toggle(_, cq: CallbackQuery):
-            rid = cq.data.split(":", 1)[1]
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rid = raw.split(":", 1)[1]
+            rule = await self._rules.get(rid)
+            if not rule:
+                return await cq.answer(self._t("ui_none"), show_alert=True)
+            if not (self._is_admin(uid) or rule.owner_user_id == uid):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             await self._rules.toggle(rid)
             try:
                 self._log.info("bot", "rule", f"rule {rid} toggled")
             except Exception:
                 pass
-            rules = await self._rules.list_all()
+            rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             lines = [self._t("ui_rules_title"), ""]
             if not rules:
                 lines.append(self._t("ui_none"))
@@ -1750,10 +1864,14 @@ class ProBotUI:
         # ---------------- rule detailed settings & controls ----------------
         @b.on_callback_query(filters.regex(r"^rd:(.+)$"))
         async def _cb_rule_detail(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer(self._t("ui_none"), show_alert=True)
+            if not (self._is_admin(uid) or rule.owner_user_id == uid):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             rule = await self._rules.get(rule_id)
             if not rule:
                 st = self._state(cq.from_user.id)
@@ -3458,6 +3576,109 @@ class ProBotUI:
             except Exception:
                 pass
         return "\n".join(lines)
+
+    # -------------------------------------------------------------- web access
+    def _web_base_url(self) -> str:
+        return self._web_url or "http://localhost:8088"
+
+    async def _mint_web_token(self, user_id: int) -> Optional[str]:
+        """Mint a JWT for this Telegram user via the Account servicer."""
+        if self._accounts is None:
+            return None
+        try:
+            from core.proto import pb
+            resp = await self._accounts.IssueWebToken(
+                pb.IssueWebTokenRequest(user_id=user_id), None
+            )
+            if getattr(resp, "success", False):
+                return resp.token
+        except Exception:
+            return None
+        return None
+
+    async def _show_dashboard(self, cq: CallbackQuery, force_reset: bool = False) -> None:
+        """Dashboard button: delivers secure Username, Password, and 1-tap Login button."""
+        uid = cq.from_user.id
+        first_name = getattr(cq.from_user, "first_name", "") or ""
+        base = self._web_base_url()
+
+        username = f"tg_{uid}"
+        password = ""
+        token = ""
+        if self._accounts:
+            try:
+                username, password, token = await self._accounts.get_or_create_credentials(
+                    uid, display_name=first_name, force_reset=force_reset
+                )
+            except Exception as e:
+                logger.error("Failed to provision credentials for %s: %s", uid, e)
+                token = await self._mint_web_token(uid) or ""
+
+        magic_link = f"{base}/?token=" + token if token else base
+
+        lines = [
+            self._t("ui_dashboard_body"),
+            "",
+            f"👤 {self._t('ui_webpass_username')}: <code>{username}</code>",
+        ]
+        if password and not password.startswith("("):
+            lines.append(f"🔑 {self._t('ui_webpass_password')}: <code>{password}</code>")
+        elif password:
+            lines.append(f"🔑 {self._t('ui_webpass_password')}: <i>{password}</i>")
+        lines.append(f"🌐 {self._t('ui_webpass_url')}: <code>{base}</code>")
+        lines.append("")
+        lines.append(self._t("ui_dashboard_tip"))
+
+        text = "\n".join(lines)
+        buttons = [
+            [InlineKeyboardButton("🌐 " + self._t("ui_dashboard_open"), url=magic_link)],
+            [InlineKeyboardButton("🔄 " + self._t("ui_webpass_reset_btn"), callback_data=CB["webpass_reset"])],
+            [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])],
+        ]
+        kbd = InlineKeyboardMarkup(buttons)
+        try:
+            await cq.edit_message_text(text, reply_markup=kbd, disable_web_page_preview=True)
+        except Exception:
+            try:
+                await cq.message.reply_text(text, reply_markup=kbd, disable_web_page_preview=True)
+            except Exception:
+                pass
+        try:
+            self._log.info("bot", "system", f"web dashboard link and credentials issued to {uid}")
+        except Exception:
+            pass
+        await cq.answer()
+
+    async def _issue_web_credentials(self, cq: CallbackQuery) -> None:
+        """Create / refresh the web account credentials for this Telegram user."""
+        uid = cq.from_user.id
+        if self._accounts is None:
+            await cq.answer(self._t("ui_dashboard_offline"), show_alert=True)
+            return
+        try:
+            from core.proto import pb
+            resp = await self._accounts.IssueWebToken(
+                pb.IssueWebTokenRequest(user_id=uid), None
+            )
+            if getattr(resp, "success", False) and resp.account:
+                acc = resp.account
+                body = (
+                    self._t("ui_webpass_body") + "\n\n"
+                    f"👤 {self._t('ui_webpass_username')}: `{acc.username}`\n"
+                    f"🆔 {self._t('ui_webpass_userid')}: `{acc.user_id}`\n\n"
+                    + self._t("ui_webpass_note")
+                )
+                await cq.edit_message_text(body, reply_markup=self._main_menu())
+                try:
+                    self._log.info("bot", "system",
+                                   f"web credentials issued to {uid} ({acc.username})")
+                except Exception:
+                    pass
+                await cq.answer()
+                return
+            await cq.answer(resp.message or self._t("ui_webpass_fail"), show_alert=True)
+        except Exception as exc:
+            await cq.answer(str(exc)[:180], show_alert=True)
 
     async def _perf_body(self) -> str:
         s = self._pipeline.stats
