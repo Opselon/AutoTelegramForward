@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from pyrogram import Client, filters
+from pyrogram.errors import MessageNotModified
 from pyrogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -263,6 +264,19 @@ class ProBotUI:
 
     def _t(self, key: str, **kw) -> str:
         return self.i18n.t(key, **kw)
+
+    @staticmethod
+    async def _safe_edit(target, text: str, reply_markup=None, **kw) -> None:
+        """edit_message_text without the MESSAGE_NOT_MODIFIED traceback spam.
+
+        Telegram rejects a no-op edit (same text + same keyboard) with 400
+        MESSAGE_NOT_MODIFIED — normal on double-clicks / re-renders. Swallow
+        only that; everything else propagates to the dispatcher's logger.
+        """
+        try:
+            await target.edit_message_text(text, reply_markup=reply_markup, **kw)
+        except MessageNotModified:
+            pass
 
     def _kbd(self, rows) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
@@ -966,7 +980,7 @@ class ProBotUI:
                 [("🏠 منوی اصلی", CB["main"])],
             ])
             if hasattr(event, "edit_message_text"):
-                await event.edit_message_text(err_text, reply_markup=markup)
+                await self._safe_edit(event, err_text, reply_markup=markup)
             else:
                 await event.reply_text(err_text, reply_markup=markup)
             return
@@ -979,7 +993,7 @@ class ProBotUI:
             await self._persist(uid, st)
             msg_text = self._t("ui_no_sessions")
             if hasattr(event, "edit_message_text"):
-                await event.edit_message_text(msg_text, reply_markup=self._sessions_menu())
+                await self._safe_edit(event, msg_text, reply_markup=self._sessions_menu())
             else:
                 await event.reply_text(msg_text, reply_markup=self._sessions_menu())
             return
@@ -1025,7 +1039,7 @@ class ProBotUI:
             ])
 
             if hasattr(event, "edit_message_text"):
-                await event.edit_message_text(success_text, reply_markup=markup)
+                await self._safe_edit(event, success_text, reply_markup=markup)
             else:
                 await event.reply_text(success_text, reply_markup=markup)
 
@@ -1033,7 +1047,7 @@ class ProBotUI:
             await self._record_error("bot", exc, user_id=uid)
             err_text = self._t("ui_rule_fail", error=tg_detail(exc))
             if hasattr(event, "edit_message_text"):
-                await event.edit_message_text(err_text, reply_markup=self._rules_menu())
+                await self._safe_edit(event, err_text, reply_markup=self._rules_menu())
             else:
                 await event.reply_text(err_text, reply_markup=self._rules_menu())
 
@@ -1268,10 +1282,14 @@ class ProBotUI:
                 self._log.info("bot", "cb", f"click from {uid}: {data}")
             except Exception:
                 pass
-            try:
-                cq.continue_propagation()
-            except Exception:
-                pass
+            # Do NOT swallow dispatcher flow: `continue_propagation()` raises
+            # ContinuePropagation (a StopAsyncIteration subclass) and the
+            # dispatcher relies on that exception propagating to reach handlers
+            # in the next group. Wrapping it in `except Exception` silently ate
+            # it, so no real handler ever ran and buttons appeared dead.
+            # Best-effort local log only; never touch the propagation signal.
+            if not data:
+                await cq.continue_propagation()
 
         @b.on_message(filters.command("start") & filters.private)
         async def _start(_, message: Message):
@@ -1308,7 +1326,7 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["main"] + "$"))
         async def _cb_main(_, cq: CallbackQuery):
-            await cq.edit_message_text(
+            await self._safe_edit(cq, 
                 await self._main_text(cq.from_user.id if cq.from_user else 0),
                 reply_markup=self._main_menu(),
             )
@@ -1330,7 +1348,7 @@ class ProBotUI:
                         live = False
                     mark = "🟢" if live else ("🟡" if s.is_active else "🔴")
                     lines.append(f"{mark} `{s.id[:8]}` +{s.phone_number}")
-                await cq.edit_message_text("\n".join(lines), reply_markup=self._sessions_menu())
+                await self._safe_edit(cq, "\n".join(lines), reply_markup=self._sessions_menu())
                 await cq.answer()
             except Exception as exc:
                 logger.exception("_cb_sessions failed for uid=%s: %s", uid, exc)
@@ -1344,7 +1362,7 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             text, kbd = self._render_rules_list(rules, page=0)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_pg:(\d+)$"))
@@ -1355,7 +1373,7 @@ class ProBotUI:
             rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             text, kbd = self._render_rules_list(rules, page=page)
             try:
-                await cq.edit_message_text(text, reply_markup=kbd)
+                await self._safe_edit(cq, text, reply_markup=kbd)
             except Exception:
                 pass
             await cq.answer()
@@ -1368,7 +1386,7 @@ class ProBotUI:
                 lines.append(self._t("ui_none"))
             for f in filters_:
                 lines.append(f"🧹 `{f.id[:8]}` {f.name}")
-            await cq.edit_message_text("\n".join(lines), reply_markup=self._filters_menu())
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=self._filters_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["ai"] + "$"))
@@ -1384,36 +1402,36 @@ class ProBotUI:
                 lines.append(
                     f"{status} `{c.id[:8]}` {c.name} "
                     f"[{self._provider_label(c.provider.value)}/{c.model}]")
-            await cq.edit_message_text("\n".join(lines), reply_markup=self._ai_menu(cfgs))
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=self._ai_menu(cfgs))
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["stats"] + "$"))
         async def _cb_stats(_, cq: CallbackQuery):
-            await cq.edit_message_text(
+            await self._safe_edit(cq, 
                 await self._dashboard_body(), reply_markup=self._main_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["perf"] + "$"))
         async def _cb_perf(_, cq: CallbackQuery):
-            await cq.edit_message_text(await self._perf_body(), reply_markup=self._debug_menu())
+            await self._safe_edit(cq, await self._perf_body(), reply_markup=self._debug_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["refresh"] + "$"))
         async def _cb_refresh(_, cq: CallbackQuery):
-            await cq.edit_message_text(
+            await self._safe_edit(cq, 
                 await self._dashboard_body(), reply_markup=self._debug_menu())
             await cq.answer(self._t("ui_done"), show_alert=False)
 
         @b.on_callback_query(filters.regex("^" + CB["lang"] + "$"))
         async def _cb_lang(_, cq: CallbackQuery):
-            await cq.edit_message_text(self._t("ui_lang_choose"), reply_markup=self._lang_menu())
+            await self._safe_edit(cq, self._t("ui_lang_choose"), reply_markup=self._lang_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["lang_set"] + ":"))
         async def _cb_lang_set(_, cq: CallbackQuery):
             code = cq.data.split(":", 1)[1]
             if self.i18n.set_language(code):
-                await cq.edit_message_text(
+                await self._safe_edit(cq, 
                     self._t("ui_lang_done"), reply_markup=self._main_menu())
                 if self._users is not None:
                     try:
@@ -1428,7 +1446,7 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["help"] + "$"))
         async def _cb_help(_, cq: CallbackQuery):
-            await cq.edit_message_text(self._t("ui_help_body"), reply_markup=self._main_menu())
+            await self._safe_edit(cq, self._t("ui_help_body"), reply_markup=self._main_menu())
             await cq.answer()
 
         # ---------------------------------------------------------- web dashboard
@@ -1446,7 +1464,7 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["back"] + "$"))
         async def _cb_back(_, cq: CallbackQuery):
-            await cq.edit_message_text(self._t("ui_main_title"), reply_markup=self._main_menu())
+            await self._safe_edit(cq, self._t("ui_main_title"), reply_markup=self._main_menu())
             await cq.answer()
 
         # ---------------- cancel any active flow ----------------
@@ -1465,9 +1483,9 @@ class ProBotUI:
             if old_step.startswith("rule_"):
                 rules = await self._rules.list_all()
                 text, kbd = self._render_rules_list(rules, page=0)
-                await cq.edit_message_text(text, reply_markup=kbd)
+                await self._safe_edit(cq, text, reply_markup=kbd)
             else:
-                await cq.edit_message_text(self._t("ui_cancelled"), reply_markup=self._main_menu())
+                await self._safe_edit(cq, self._t("ui_cancelled"), reply_markup=self._main_menu())
             await cq.answer()
 
         # ---------------- login flow ----------------
@@ -1513,7 +1531,7 @@ class ProBotUI:
                 st = self._state(uid)
                 st.step = "login_phone"
                 await self._persist(uid, st)
-                await cq.edit_message_text(
+                await self._safe_edit(cq, 
                     self._t("ui_login_phone"), reply_markup=self._cancel_kbd())
                 await cq.answer()
                 logger.info("_cb_login prompt sent successfully for uid=%s; step=login_phone", uid)
@@ -1543,7 +1561,7 @@ class ProBotUI:
                     lines.append("⚠️ " + tg_detail(exc))
             else:
                 lines.append(self._t("ui_none"))
-            await cq.edit_message_text("\n".join(lines), reply_markup=self._creds_menu())
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=self._creds_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["cred_add"] + "$"))
@@ -1553,7 +1571,7 @@ class ProBotUI:
             st = self._state(cq.from_user.id)
             st.step = "cred_label"
             await self._persist(cq.from_user.id, st)
-            await cq.edit_message_text(
+            await self._safe_edit(cq, 
                 self._t("ui_cred_label"), reply_markup=self._cancel_kbd())
             await cq.answer()
 
@@ -1578,7 +1596,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             sessions = await self._sessions.list_all()
             if not sessions:
-                await cq.edit_message_text(
+                await self._safe_edit(cq, 
                     self._t("ui_no_sessions"), reply_markup=self._sessions_menu())
                 return await cq.answer()
 
@@ -1599,7 +1617,7 @@ class ProBotUI:
             await self._persist(cq.from_user.id, st)
 
             text, markup = self._render_chat_picker(st, role="source", page=0)
-            await cq.edit_message_text(text, reply_markup=markup)
+            await self._safe_edit(cq, text, reply_markup=markup)
 
         @b.on_callback_query(filters.regex(r"^ch:(s|t):(\d+)$"))
         async def _cb_pick_chat(_, cq: CallbackQuery):
@@ -1649,7 +1667,7 @@ class ProBotUI:
                         await self._persist(uid, st)
                         await cq.answer(f"✅ مبدأ پیش‌نویس تغییر کرد: {selected['title']}")
                         text, markup = self._render_draft_editor(rule, draft)
-                        return await cq.edit_message_text(text, reply_markup=markup)
+                        return await self._safe_edit(cq, text, reply_markup=markup)
                     else:
                         rule.source_chat_id = str(chat_id)
                         rule.source_chat_name = selected["title"]
@@ -1663,7 +1681,7 @@ class ProBotUI:
                         await self._persist(uid, st)
                         await cq.answer(f"✅ مبدأ قانون تغییر کرد: {selected['title']}")
                         text, markup = self._render_rule_detail(rule)
-                        return await cq.edit_message_text(text, reply_markup=markup)
+                        return await self._safe_edit(cq, text, reply_markup=markup)
 
                 elif edit_role == "target":
                     source_id = draft.get("source_chat_id") if in_draft else rule.source_chat_id
@@ -1677,7 +1695,7 @@ class ProBotUI:
                         await self._persist(uid, st)
                         await cq.answer(f"✅ مقصد پیش‌نویس تغییر کرد: {selected['title']}")
                         text, markup = self._render_draft_editor(rule, draft)
-                        return await cq.edit_message_text(text, reply_markup=markup)
+                        return await self._safe_edit(cq, text, reply_markup=markup)
                     else:
                         rule.target_chat_id = str(chat_id)
                         rule.target_chat_name = selected["title"]
@@ -1691,7 +1709,7 @@ class ProBotUI:
                         await self._persist(uid, st)
                         await cq.answer(f"✅ مقصد قانون تغییر کرد: {selected['title']}")
                         text, markup = self._render_rule_detail(rule)
-                        return await cq.edit_message_text(text, reply_markup=markup)
+                        return await self._safe_edit(cq, text, reply_markup=markup)
 
             if role == "source":
                 st.rule_source = chat_id
@@ -1701,7 +1719,7 @@ class ProBotUI:
                 await self._persist(uid, st)
                 await cq.answer(f"✅ مبدأ: {selected['title']}", show_alert=False)
                 text, markup = self._render_chat_picker(st, role="target", page=0)
-                await cq.edit_message_text(text, reply_markup=markup)
+                await self._safe_edit(cq, text, reply_markup=markup)
             else:
                 st.rule_target = chat_id
                 target_title = chat_title
@@ -1726,7 +1744,7 @@ class ProBotUI:
 
             text, markup = self._render_chat_picker(st, role=role, page=page)
             try:
-                await cq.edit_message_text(text, reply_markup=markup)
+                await self._safe_edit(cq, text, reply_markup=markup)
             except Exception:
                 pass
             await cq.answer()
@@ -1753,7 +1771,7 @@ class ProBotUI:
             await self._persist(uid, st)
 
             text, markup = self._render_chat_picker(st, role=role, page=0)
-            await cq.edit_message_text(text, reply_markup=markup)
+            await self._safe_edit(cq, text, reply_markup=markup)
 
         @b.on_callback_query(filters.regex(r"^r_cancel$"))
         async def _cb_rule_cancel(_, cq: CallbackQuery):
@@ -1769,7 +1787,7 @@ class ProBotUI:
             await self._persist(uid, st)
             rules = await self._rules.list_all()
             text, kbd = self._render_rules_list(rules, page=0)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer("❌ عملیات ایجاد قانون لغو شد")
 
         @b.on_callback_query(filters.regex(r"^r_back_source$"))
@@ -1784,7 +1802,7 @@ class ProBotUI:
                 st.buffer["page"] = 0
             await self._persist(uid, st)
             text, markup = self._render_chat_picker(st, role="source", page=0)
-            await cq.edit_message_text(text, reply_markup=markup)
+            await self._safe_edit(cq, text, reply_markup=markup)
             await cq.answer("⬅️ بازگشت به انتخاب مبدأ")
 
         @b.on_callback_query(filters.regex(r"^noop$"))
@@ -1807,7 +1825,7 @@ class ProBotUI:
                 [("🗑 بله، حذف شود", f"rdelyes:{rid}")],
                 [("❌ انصراف و بازگشت", f"rd:{rid}")],
             ])
-            await cq.edit_message_text(confirm_text, reply_markup=confirm_kbd)
+            await self._safe_edit(cq, confirm_text, reply_markup=confirm_kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rdelyes:(.+)$"))
@@ -1827,7 +1845,7 @@ class ProBotUI:
                 pass
             rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             text, kbd = self._render_rules_list(rules, page=0)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer(self._t("ui_rule_deleted"), show_alert=True)
 
         @b.on_callback_query(filters.regex("^" + CB["rule_toggle"] + ":"))
@@ -1858,7 +1876,7 @@ class ProBotUI:
                 mode = getattr(r.forward_mode, "value", r.forward_mode)
                 delay = float(getattr(r, "delay_seconds", 0) or 0)
                 lines.append(f"     ⚙️ mode={mode} | ⏳ delay={delay:.0f}s")
-            await cq.edit_message_text("\n".join(lines), reply_markup=self._rules_menu(rules))
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=self._rules_menu(rules))
             await cq.answer(self._t("ui_done"))
 
         # ---------------- rule detailed settings & controls ----------------
@@ -1882,12 +1900,12 @@ class ProBotUI:
                 rules = await self._rules.list_all()
                 text, kbd = self._render_rules_list(rules, page=0)
                 try:
-                    await cq.edit_message_text(text, reply_markup=kbd)
+                    await self._safe_edit(cq, text, reply_markup=kbd)
                 except Exception:
                     pass
                 return await cq.answer("❌ این قانون یافت نشد یا ممکن است حذف شده باشد.", show_alert=True)
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rtx:(.+)$"))
@@ -1900,7 +1918,7 @@ class ProBotUI:
             if not rule:
                 return await cq.answer("❌ قانون یافت نشد", show_alert=True)
             text, kbd = self._render_replace_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rtxa:(.+)$"))
@@ -1923,7 +1941,7 @@ class ProBotUI:
                 "`کلمه حذفی ->`\n\n"
                 "برای بازگشت می‌توانید دکمه زیر را لمس کنید:"
             )
-            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف و بازگشت", f"rtx:{rule_id}")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف و بازگشت", f"rtx:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rtxc:(.+)$"))
@@ -1941,7 +1959,7 @@ class ProBotUI:
             await self._rules.update(rule)
             await cq.answer("🗑 همه جایگزینی‌ها پاکسازی شدند")
             text, kbd = self._render_replace_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtxd:(.+):(\d+)$"))
         async def _cb_rule_replace_del(_, cq: CallbackQuery):
@@ -1965,7 +1983,7 @@ class ProBotUI:
                 await self._rules.update(rule)
                 await cq.answer(f"❌ `{target_key}` حذف شد")
             text, kbd = self._render_replace_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rhf:(.+)$"))
         async def _cb_rule_header_footer_menu(_, cq: CallbackQuery):
@@ -1977,7 +1995,7 @@ class ProBotUI:
             if not rule:
                 return await cq.answer("❌ قانون یافت نشد", show_alert=True)
             text, kbd = self._render_header_footer_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rh_s:(.+)$"))
@@ -1995,7 +2013,7 @@ class ProBotUI:
                 "متنی که می‌خواهید در ابتدای تمام پیام‌های ارسالی قرار گیرد را ارسال کنید.\n\n"
                 "برای انصراف دکمه زیر را لمس کنید:"
             )
-            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rhf:{rule_id}")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rhf:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rh_d:(.+)$"))
@@ -2013,7 +2031,7 @@ class ProBotUI:
             await self._rules.update(rule)
             await cq.answer("🗑 هدر با موفقیت حذف شد")
             text, kbd = self._render_header_footer_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rf_s:(.+)$"))
         async def _cb_rule_footer_set(_, cq: CallbackQuery):
@@ -2030,7 +2048,7 @@ class ProBotUI:
                 "متنی که می‌خواهید در انتهای تمام پیام‌های ارسالی قرار گیرد را ارسال کنید (مثلاً آیدی کانال، لینک، متن دلخواه).\n\n"
                 "برای انصراف دکمه زیر را لمس کنید:"
             )
-            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rhf:{rule_id}")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rhf:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rf_d:(.+)$"))
@@ -2048,7 +2066,7 @@ class ProBotUI:
             await self._rules.update(rule)
             await cq.answer("🗑 فوتر با موفقیت حذف شد")
             text, kbd = self._render_header_footer_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rlk:(.+)$"))
         async def _cb_rule_toggle_link(_, cq: CallbackQuery):
@@ -2067,7 +2085,7 @@ class ProBotUI:
             status = "حذف لینک‌ها فعال شد 🚫" if rule.remove_links else "حفظ لینک‌ها مجاز شد 🟢"
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rvc:(.+)$"))
         async def _cb_rule_toggle_voice(_, cq: CallbackQuery):
@@ -2086,7 +2104,7 @@ class ProBotUI:
             status = "مسدودسازی ویس فعال شد 🚫" if new_val else "ارسال ویس مجاز شد 🟢"
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rst:(.+)$"))
         async def _cb_rule_toggle_sticker(_, cq: CallbackQuery):
@@ -2105,7 +2123,7 @@ class ProBotUI:
             status = "مسدودسازی استیکر فعال شد 🚫" if new_val else "ارسال استیکر مجاز شد 🟢"
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rem:(.+)$"))
         async def _cb_rule_toggle_emoji(_, cq: CallbackQuery):
@@ -2124,7 +2142,7 @@ class ProBotUI:
             status = "پاکسازی خودکار ایموجی‌ها فعال شد 🧹" if new_val else "حفظ ایموجی‌ها فعال شد 🟢"
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^red:(.+)$"))
         async def _cb_rule_toggle_edit(_, cq: CallbackQuery):
@@ -2140,7 +2158,7 @@ class ProBotUI:
             status = "نادیده گرفتن ادیت فعال شد ⏹" if rule.ignore_edits else "سینک ادیت مقصد فعال شد 🔄"
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rdl:(.+)$"))
         async def _cb_rule_toggle_delete(_, cq: CallbackQuery):
@@ -2159,7 +2177,7 @@ class ProBotUI:
             status = "سینک حذف پیام فعال شد 🗑" if new_val else "نادیده گرفتن حذف فعال شد ⏹"
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rmg:(.+)$"))
         async def _cb_rule_toggle_media_group(_, cq: CallbackQuery):
@@ -2180,7 +2198,7 @@ class ProBotUI:
             names = {"album": "🖼 آلبوم کامل", "first": "1️⃣ فقط اولین مدیا", "split": "🔀 تفکیک پیام‌ها"}
             await cq.answer(f"چندتصویری: {names.get(next_mode, next_mode)}")
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rmd:(.+)$"))
         async def _cb_rule_toggle_mode(_, cq: CallbackQuery):
@@ -2204,7 +2222,7 @@ class ProBotUI:
             }
             await cq.answer(f"حالت ارسال: {mode_names.get(rule.forward_mode, rule.forward_mode.value)}")
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg:(.+)$"))
         async def _cb_rule_toggle_active(_, cq: CallbackQuery):
@@ -2220,7 +2238,7 @@ class ProBotUI:
             status = "فعال شد 🟢" if rule.is_active else "غیرفعال شد 🔴"
             await cq.answer(f"وضعیت: {status}")
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rrm:(.+)$"))
         async def _cb_rule_remove(_, cq: CallbackQuery):
@@ -2232,7 +2250,7 @@ class ProBotUI:
             await cq.answer("🗑 قانون با موفقیت حذف شد", show_alert=True)
             rules = await self._rules.list_all()
             text, kbd = self._render_rules_list(rules, page=0)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         # ---------------- rule edit (draft & direct) handlers ----------------
         @b.on_callback_query(filters.regex(r"^re:(.+)$"))
@@ -2251,7 +2269,7 @@ class ProBotUI:
                 rules = await self._rules.list_all()
                 text, kbd = self._render_rules_list(rules, page=0)
                 try:
-                    await cq.edit_message_text(text, reply_markup=kbd)
+                    await self._safe_edit(cq, text, reply_markup=kbd)
                 except Exception:
                     pass
                 return await cq.answer("❌ این قانون یافت نشد یا ممکن است حذف شده باشد.", show_alert=True)
@@ -2268,7 +2286,7 @@ class ProBotUI:
             }
             await self._persist(uid, st)
             text, kbd = self._render_draft_editor(rule, draft)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer("✏️ حالت پیش‌نویس ویرایش فعال شد")
 
         @b.on_callback_query(filters.regex(r"^ed_save:(.+)$"))
@@ -2308,7 +2326,7 @@ class ProBotUI:
             await self._persist(uid, st)
             await cq.answer("💾 تغییرات قانون با موفقیت ذخیره و اعمال شدند", show_alert=True)
             text, kbd = self._render_rule_detail(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_can:(.+)$"))
         async def _cb_rule_draft_cancel(_, cq: CallbackQuery):
@@ -2326,11 +2344,11 @@ class ProBotUI:
             await cq.answer("❌ ویرایش پیش‌نویس لغو شد و هیچ تغییری ذخیره نگردید")
             if rule:
                 text, kbd = self._render_rule_detail(rule)
-                await cq.edit_message_text(text, reply_markup=kbd)
+                await self._safe_edit(cq, text, reply_markup=kbd)
             else:
                 rules = await self._rules.list_all()
                 text, kbd = self._render_rules_list(rules, page=0)
-                await cq.edit_message_text(text, reply_markup=kbd)
+                await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_s:(.+)$"))
         async def _cb_rule_draft_source(_, cq: CallbackQuery):
@@ -2359,7 +2377,7 @@ class ProBotUI:
             await self._persist(uid, st)
 
             text, markup = self._render_chat_picker(st, role="source", page=0)
-            await cq.edit_message_text(text, reply_markup=markup)
+            await self._safe_edit(cq, text, reply_markup=markup)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ed_t:(.+)$"))
@@ -2389,7 +2407,7 @@ class ProBotUI:
             await self._persist(uid, st)
 
             text, markup = self._render_chat_picker(st, role="target", page=0)
-            await cq.edit_message_text(text, reply_markup=markup)
+            await self._safe_edit(cq, text, reply_markup=markup)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^res:(.+)$"))
@@ -2417,7 +2435,7 @@ class ProBotUI:
             await self._persist(uid, st)
 
             text, markup = self._render_chat_picker(st, role="source", page=0)
-            await cq.edit_message_text(text, reply_markup=markup)
+            await self._safe_edit(cq, text, reply_markup=markup)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ret:(.+)$"))
@@ -2445,7 +2463,7 @@ class ProBotUI:
             await self._persist(uid, st)
 
             text, markup = self._render_chat_picker(st, role="target", page=0)
-            await cq.edit_message_text(text, reply_markup=markup)
+            await self._safe_edit(cq, text, reply_markup=markup)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ed_m:(.+)$"))
@@ -2472,7 +2490,7 @@ class ProBotUI:
             await self._persist(uid, st)
             await cq.answer("حالت ارسال تغییر یافت")
             text, kbd = self._render_draft_editor(rule, draft)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_a:(.+)$"))
         async def _cb_rule_draft_active(_, cq: CallbackQuery):
@@ -2496,7 +2514,7 @@ class ProBotUI:
             stat = "فعال" if draft["is_active"] else "غیرفعال"
             await cq.answer(f"وضعیت در پیش‌نویس: {stat}")
             text, kbd = self._render_draft_editor(rule, draft)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_lk:(.+)$"))
         async def _cb_rule_draft_link(_, cq: CallbackQuery):
@@ -2520,7 +2538,7 @@ class ProBotUI:
             stat = "حذف لینک‌ها 🚫" if draft["remove_links"] else "مجاز 🟢"
             await cq.answer(f"لینک: {stat}")
             text, kbd = self._render_draft_editor(rule, draft)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_vc:(.+)$"))
         async def _cb_rule_draft_voice(_, cq: CallbackQuery):
@@ -2544,7 +2562,7 @@ class ProBotUI:
             stat = "مسدود 🚫" if draft["block_voice"] else "مجاز 🟢"
             await cq.answer(f"ویس: {stat}")
             text, kbd = self._render_draft_editor(rule, draft)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_st:(.+)$"))
         async def _cb_rule_draft_sticker(_, cq: CallbackQuery):
@@ -2568,7 +2586,7 @@ class ProBotUI:
             stat = "مسدود 🚫" if draft["block_stickers"] else "مجاز 🟢"
             await cq.answer(f"استیکر: {stat}")
             text, kbd = self._render_draft_editor(rule, draft)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_em:(.+)$"))
         async def _cb_rule_draft_emoji(_, cq: CallbackQuery):
@@ -2592,7 +2610,7 @@ class ProBotUI:
             stat = "پاکسازی 🧹" if draft["remove_emojis"] else "حفظ 🟢"
             await cq.answer(f"ایموجی: {stat}")
             text, kbd = self._render_draft_editor(rule, draft)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_ed:(.+)$"))
         async def _cb_rule_draft_edit(_, cq: CallbackQuery):
@@ -2616,7 +2634,7 @@ class ProBotUI:
             stat = "نادیده ⏹" if draft["ignore_edits"] else "سینک 🔄"
             await cq.answer(f"ویرایش پیام: {stat}")
             text, kbd = self._render_draft_editor(rule, draft)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_dl:(.+)$"))
         async def _cb_rule_draft_delete(_, cq: CallbackQuery):
@@ -2640,7 +2658,7 @@ class ProBotUI:
             stat = "سینک 🗑" if draft["sync_deletes"] else "نادیده ⏹"
             await cq.answer(f"حذف پیام: {stat}")
             text, kbd = self._render_draft_editor(rule, draft)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_mg:(.+)$"))
         async def _cb_rule_draft_media_group(_, cq: CallbackQuery):
@@ -2667,7 +2685,7 @@ class ProBotUI:
             names = {"album": "🖼 آلبوم کامل", "first": "1️⃣ فقط اولین مدیا", "split": "🔀 تفکیک پیام‌ها"}
             await cq.answer(f"چندتصویری: {names.get(next_mode, next_mode)}")
             text, kbd = self._render_draft_editor(rule, draft)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         # ---------------- smart routing & VIP controls ----------------
         @b.on_callback_query(filters.regex(r"^rsm:(.+)$"))
@@ -2680,7 +2698,7 @@ class ProBotUI:
             if not rule:
                 return await cq.answer("❌ قانون یافت نشد", show_alert=True)
             text, kbd = self._render_smart_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmpth:(.+)$"))
@@ -2723,7 +2741,7 @@ class ProBotUI:
             await self._rules.update(rule)
             await cq.answer(ans)
             text, kbd = self._render_smart_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmmod:(.+)$"))
         async def _cb_smart_toggle_match_mode(_, cq: CallbackQuery):
@@ -2746,7 +2764,7 @@ class ProBotUI:
             await self._rules.update(rule)
             await cq.answer(f"منطق شروط: {nxt} ({'همه شروط' if nxt == 'ALL' else 'حداقل یکی'})")
             text, kbd = self._render_smart_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmtx:(.+)$"))
         async def _cb_smart_set_text_prompt(_, cq: CallbackQuery):
@@ -2766,7 +2784,7 @@ class ProBotUI:
                 "برای حذف تمام کلیدواژه‌ها عبارت `حذف` را ارسال کنید.\n"
                 "برای انصراف دکمه زیر را لمس نمایید:"
             )
-            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmrx:(.+)$"))
@@ -2788,7 +2806,7 @@ class ProBotUI:
                 "برای حذف Regex عبارت `حذف` را ارسال کنید.\n"
                 "برای انصراف دکمه زیر را لمس نمایید:"
             )
-            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmc:(.+)$"))
@@ -2811,7 +2829,7 @@ class ProBotUI:
             labels = {"ALL": "🌟 همه پیام‌ها", "VIP_ONLY": "💎 فقط VIP", "NORMAL_ONLY": "👤 فقط عادی"}
             await cq.answer(f"دسته پیام: {labels.get(nxt, nxt)}")
             text, kbd = self._render_smart_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmt:(.+)$"))
         async def _cb_smart_toggle_intermediate(_, cq: CallbackQuery):
@@ -2831,7 +2849,7 @@ class ProBotUI:
             ans = "🟢 ارسال به کانال واسط فعال شد" if rule.use_intermediate else "🔴 ارسال به کانال واسط خاموش شد"
             await cq.answer(ans)
             text, kbd = self._render_smart_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmm:(.+)$"))
         async def _cb_smart_toggle_mode(_, cq: CallbackQuery):
@@ -2859,7 +2877,7 @@ class ProBotUI:
             }
             await cq.answer(f"حالت: {names.get(nxt_mode, str(nxt_mode))}")
             text, kbd = self._render_smart_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmpu:(.+)$"))
         async def _cb_smart_priority_up(_, cq: CallbackQuery):
@@ -2877,7 +2895,7 @@ class ProBotUI:
             await self._rules.update(rule)
             await cq.answer(f"اولویت: {rule.priority}")
             text, kbd = self._render_smart_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmpd:(.+)$"))
         async def _cb_smart_priority_down(_, cq: CallbackQuery):
@@ -2896,7 +2914,7 @@ class ProBotUI:
             await self._rules.update(rule)
             await cq.answer(f"اولویت: {rule.priority}")
             text, kbd = self._render_smart_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmhd:(.+)$"))
         async def _cb_smart_clear_header(_, cq: CallbackQuery):
@@ -2914,7 +2932,7 @@ class ProBotUI:
             await self._rules.update(rule)
             await cq.answer("🗑 هدر اختصاصی حذف شد")
             text, kbd = self._render_smart_menu(rule)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmw:(.+)$"))
         async def _cb_smart_set_intermediate_prompt(_, cq: CallbackQuery):
@@ -2936,7 +2954,7 @@ class ProBotUI:
                 "⚠️ *نکته ضد لوپ: کانال واسط نباید با کانال مبدأ یا مقصد یکسان باشد.*\n\n"
                 "برای انصراف دکمه زیر را لمس کنید:"
             )
-            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmh:(.+)$"))
@@ -2956,7 +2974,7 @@ class ProBotUI:
                 "💎 `VIP Alert | تحلیل طلایی اختصاصی`\n\n"
                 "برای انصراف دکمه زیر را لمس کنید:"
             )
-            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmtst:(.+)$"))
@@ -2978,7 +2996,7 @@ class ProBotUI:
                 "4. متن پیش‌نمایش به همراه هدرها و فیلترها\n\n"
                 "برای انصراف دکمه زیر را لمس کنید:"
             )
-            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         # ---------------- filter add flow ----------------
@@ -2989,7 +3007,7 @@ class ProBotUI:
             st = self._state(cq.from_user.id)
             st.step = "filter_name"
             await self._persist(cq.from_user.id, st)
-            await cq.edit_message_text(
+            await self._safe_edit(cq, 
                 self._t("ui_filter_name"), reply_markup=self._cancel_kbd())
             await cq.answer()
 
@@ -2997,7 +3015,7 @@ class ProBotUI:
         async def _cb_filter_del(_, cq: CallbackQuery):
             fid = cq.data.split(":", 1)[1]
             await self._filters.delete(fid)
-            await cq.edit_message_text(self._t("ui_done"), reply_markup=self._filters_menu())
+            await self._safe_edit(cq, self._t("ui_done"), reply_markup=self._filters_menu())
             await cq.answer()
 
         # ---------------- ai add flow ----------------
@@ -3008,7 +3026,7 @@ class ProBotUI:
             st = self._state(cq.from_user.id)
             st.step = "ai_name"
             await self._persist(cq.from_user.id, st)
-            await cq.edit_message_text(self._t("ui_ai_name"), reply_markup=self._cancel_kbd())
+            await self._safe_edit(cq, self._t("ui_ai_name"), reply_markup=self._cancel_kbd())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["ai_provider_pick"] + ":"))
@@ -3036,7 +3054,7 @@ class ProBotUI:
                 [("❌ " + self._t("ui_cancel"), CB["cancel"])],
             ])
             await self._persist(cq.from_user.id, st)
-            await cq.edit_message_text(prompt_text, reply_markup=kbd)
+            await self._safe_edit(cq, prompt_text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^ai_url_default$"))
@@ -3053,9 +3071,9 @@ class ProBotUI:
                 + "\n(از لیست زیر انتخاب کنید یا نام مدل دلخواه مانند `coding` را تایپ کنید):"
             )
             if kb is not None:
-                await cq.edit_message_text(msg_text, reply_markup=kb)
+                await self._safe_edit(cq, msg_text, reply_markup=kb)
             else:
-                await cq.edit_message_text(msg_text, reply_markup=self._cancel_kbd())
+                await self._safe_edit(cq, msg_text, reply_markup=self._cancel_kbd())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["ai_model_pick"] + ":"))
@@ -3071,7 +3089,7 @@ class ProBotUI:
             st.ai_model = model
             st.step = "ai_api_key"
             await self._persist(cq.from_user.id, st)
-            await cq.edit_message_text(self._t("ui_ai_key"), reply_markup=self._cancel_kbd())
+            await self._safe_edit(cq, self._t("ui_ai_key"), reply_markup=self._cancel_kbd())
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^aid:(.+)"))
@@ -3081,9 +3099,9 @@ class ProBotUI:
             if not cfg:
                 await cq.answer("❌ این پیکربندی یافت نشد.", show_alert=True)
                 cfgs = await self._ai.list_all()
-                return await cq.edit_message_text(self._t("ui_ai_title"), reply_markup=self._ai_menu(cfgs))
+                return await self._safe_edit(cq, self._t("ui_ai_title"), reply_markup=self._ai_menu(cfgs))
             text, kbd = self._render_ai_detail(cfg)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ai_hc:(.+)"))
@@ -3102,7 +3120,7 @@ class ProBotUI:
             }
             text, kbd = self._render_ai_detail(cfg, health_info=health_info)
             try:
-                await cq.edit_message_text(text, reply_markup=kbd)
+                await self._safe_edit(cq, text, reply_markup=kbd)
             except Exception:
                 pass
 
@@ -3120,7 +3138,7 @@ class ProBotUI:
             else:
                 body = f"❌ **خطا در بازنویسی:**\n\n`{reply[:1000]}`"
             kbd = self._kbd([[("⬅️ بازگشت به پیکربندی", f"aid:{aid}")]])
-            await cq.edit_message_text(body, reply_markup=kbd)
+            await self._safe_edit(cq, body, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ai_tog:(.+)"))
         async def _cb_ai_toggle(_, cq: CallbackQuery):
@@ -3133,7 +3151,7 @@ class ProBotUI:
             status_text = "فعال شد 🟢" if cfg.is_enabled else "غیرفعال شد 🔴"
             await cq.answer(f"وضعیت با موفقیت {status_text}", show_alert=False)
             text, kbd = self._render_ai_detail(cfg)
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ai_del_ask:(.+)"))
         async def _cb_ai_del_ask(_, cq: CallbackQuery):
@@ -3150,7 +3168,7 @@ class ProBotUI:
                 [("🗑 بله، حذف شود", f"ai_del_confirm:{aid}")],
                 [("⬅️ انصراف و بازگشت", f"aid:{aid}")],
             ])
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^(?:ai_del_confirm|" + CB["ai_del"] + r"):(.+)"))
@@ -3160,7 +3178,7 @@ class ProBotUI:
             await cq.answer("✅ پیکربندی حذف شد.", show_alert=True)
             cfgs = await self._ai.list_all()
             lines = [self._t("ui_ai_title"), "", "✅ پیکربندی با موفقیت حذف گردید."]
-            await cq.edit_message_text("\n".join(lines), reply_markup=self._ai_menu(cfgs))
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=self._ai_menu(cfgs))
 
         @b.on_callback_query(filters.regex(r"^ai_eh:(.+)"))
         async def _cb_ai_edit_host(_, cq: CallbackQuery):
@@ -3183,7 +3201,7 @@ class ProBotUI:
             kbd = self._kbd([
                 [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
             ])
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ai_em:(.+)"))
@@ -3205,7 +3223,7 @@ class ProBotUI:
             kbd = self._kbd([
                 [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
             ])
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ai_ek:(.+)"))
@@ -3226,7 +3244,7 @@ class ProBotUI:
             kbd = self._kbd([
                 [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
             ])
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         # ---------------- PV Responder (AI PV Assistant) ----------------
@@ -3236,7 +3254,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             await cq.answer()
             text, kbd = self._render_pv_menu()
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:toggle$"))
         async def _cb_pv_toggle(_, cq: CallbackQuery):
@@ -3250,7 +3268,7 @@ class ProBotUI:
             status_msg = "پاسخگوی پی‌وی فعال شد 🟢" if resp.config.enabled else "پاسخگوی پی‌وی غیرفعال شد 🔴"
             await cq.answer(status_msg)
             text, kbd = self._render_pv_menu()
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:persona$"))
         async def _cb_pv_persona(_, cq: CallbackQuery):
@@ -3258,7 +3276,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             await cq.answer()
             text, kbd = self._render_pv_persona_menu()
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:set_p:(.+)$"))
         async def _cb_pv_set_persona(_, cq: CallbackQuery):
@@ -3275,7 +3293,7 @@ class ProBotUI:
                 resp.save_config(resp.config)
                 await cq.answer("✅ لحن خودمانی و جذاب تنظیم شد.")
                 text, kbd = self._render_pv_menu()
-                await cq.edit_message_text(text, reply_markup=kbd)
+                await self._safe_edit(cq, text, reply_markup=kbd)
             elif p_type == "business":
                 resp.config.persona_prompt = (
                     "شما صاحب این اکانت شخصی تلگرام هستید. با لحنی کاملاً مؤدبانه، حرفه‌ای، "
@@ -3285,7 +3303,7 @@ class ProBotUI:
                 resp.save_config(resp.config)
                 await cq.answer("✅ لحن کاری و محترمانه تنظیم شد.")
                 text, kbd = self._render_pv_menu()
-                await cq.edit_message_text(text, reply_markup=kbd)
+                await self._safe_edit(cq, text, reply_markup=kbd)
             elif p_type == "short":
                 resp.config.persona_prompt = (
                     "شما صاحب اکانت تلگرام هستید. پیام‌ها را بسیار کوتاه، خودمانی، "
@@ -3295,7 +3313,7 @@ class ProBotUI:
                 resp.save_config(resp.config)
                 await cq.answer("✅ لحن کوتاه و سریع تنظیم شد.")
                 text, kbd = self._render_pv_menu()
-                await cq.edit_message_text(text, reply_markup=kbd)
+                await self._safe_edit(cq, text, reply_markup=kbd)
             elif p_type == "custom":
                 st = self._state(cq.from_user.id)
                 st.step = "pv_persona_input"
@@ -3305,7 +3323,7 @@ class ProBotUI:
                     "لطفاً دستورالعمل یا شخصیت دلخواه خود را به زبان فارسی ارسال کنید.\n"
                     "مثال: «مثل یک دوست صمیمی و پرانرژی حرف بزن و بگو فعلاً بیرون هستم و شب پیام میدم»"
                 )
-                await cq.edit_message_text(prompt_text, reply_markup=self._kbd([[("❌ انصراف", "pv:persona")]]))
+                await self._safe_edit(cq, prompt_text, reply_markup=self._kbd([[("❌ انصراف", "pv:persona")]]))
                 await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^pv:delays$"))
@@ -3314,7 +3332,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             await cq.answer()
             text, kbd = self._render_pv_delays_menu()
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:set_d:(.+)$"))
         async def _cb_pv_set_delay(_, cq: CallbackQuery):
@@ -3337,7 +3355,7 @@ class ProBotUI:
             resp.save_config(resp.config)
             await cq.answer("✅ زمان‌بندی تأخیر با موفقیت اعمال شد.")
             text, kbd = self._render_pv_menu()
-            await cq.edit_message_text(text, reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:test$"))
         async def _cb_pv_test(_, cq: CallbackQuery):
@@ -3352,7 +3370,7 @@ class ProBotUI:
                 "(مثلاً: «سلام چطوری؟ کجایی؟» یا «سلام فایل پروژه آماده شد؟»)\n"
                 "تا ببینید هوش مصنوعی با شخصیت انتخابی شما چگونه پاسخ می‌دهد."
             )
-            await cq.edit_message_text(prompt, reply_markup=self._kbd([[("❌ انصراف", "pv:menu")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", "pv:menu")]]))
             await cq.answer()
 
         # ---------------- backup ----------------
@@ -3362,7 +3380,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             sessions = await self._sessions.list_all()
             if not sessions:
-                await cq.edit_message_text(
+                await self._safe_edit(cq, 
                     self._t("ui_no_sessions"), reply_markup=self._sessions_menu())
                 return await cq.answer()
             target = sessions[0]
@@ -3400,7 +3418,7 @@ class ProBotUI:
         # ---------------- logs panel ----------------
         @b.on_callback_query(filters.regex("^" + CB["logs"] + "$"))
         async def _cb_logs(_, cq: CallbackQuery):
-            await cq.edit_message_text(self._t("ui_logs_title"), reply_markup=self._logs_menu())
+            await self._safe_edit(cq, self._t("ui_logs_title"), reply_markup=self._logs_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["logs_recent"] + "$"))
@@ -3422,7 +3440,7 @@ class ProBotUI:
                     lines.append("⚠️ " + tg_detail(exc))
             else:
                 lines.append(self._t("ui_none"))
-            await cq.edit_message_text("\n".join(lines), reply_markup=self._logs_menu())
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=self._logs_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["logs_errors"] + "$"))
@@ -3446,7 +3464,7 @@ class ProBotUI:
                     lines.append("⚠️ " + tg_detail(exc))
             else:
                 lines.append(self._t("ui_none"))
-            await cq.edit_message_text("\n".join(lines), reply_markup=self._logs_menu())
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=self._logs_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["logs_stats"] + "$"))
@@ -3464,13 +3482,13 @@ class ProBotUI:
                     lines.append("⚠️ " + tg_detail(exc))
             else:
                 lines.append(self._t("ui_none"))
-            await cq.edit_message_text("\n".join(lines), reply_markup=self._logs_menu())
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=self._logs_menu())
             await cq.answer()
 
         # ---------------- debug ----------------
         @b.on_callback_query(filters.regex("^" + CB["debug"] + "$"))
         async def _cb_debug(_, cq: CallbackQuery):
-            await cq.edit_message_text(
+            await self._safe_edit(cq, 
                 await self._debug_body(), reply_markup=self._debug_menu())
             await cq.answer()
 
@@ -3637,7 +3655,7 @@ class ProBotUI:
         ]
         kbd = InlineKeyboardMarkup(buttons)
         try:
-            await cq.edit_message_text(text, reply_markup=kbd, disable_web_page_preview=True)
+            await self._safe_edit(cq, text, reply_markup=kbd, disable_web_page_preview=True)
         except Exception:
             try:
                 await cq.message.reply_text(text, reply_markup=kbd, disable_web_page_preview=True)
@@ -3668,7 +3686,7 @@ class ProBotUI:
                     f"🆔 {self._t('ui_webpass_userid')}: `{acc.user_id}`\n\n"
                     + self._t("ui_webpass_note")
                 )
-                await cq.edit_message_text(body, reply_markup=self._main_menu())
+                await self._safe_edit(cq, body, reply_markup=self._main_menu())
                 try:
                     self._log.info("bot", "system",
                                    f"web credentials issued to {uid} ({acc.username})")
@@ -3842,7 +3860,7 @@ class ProBotUI:
             await self._persist(uid, st)
             await cq.answer(f"{digits or 'پاک شد'}")
             try:
-                await cq.edit_message_text(
+                await self._safe_edit(cq, 
                     self._login_code_text(st),
                     reply_markup=self._code_keypad(st),
                 )
@@ -3859,7 +3877,7 @@ class ProBotUI:
 
             if len(digits) < 5:
                 try:
-                    await cq.edit_message_text(
+                    await self._safe_edit(cq, 
                         self._login_code_text(st),
                         reply_markup=self._code_keypad(st),
                     )
@@ -3867,7 +3885,7 @@ class ProBotUI:
                     pass
             else:
                 try:
-                    await cq.edit_message_text(
+                    await self._safe_edit(cq, 
                         f"⏳ در حال بررسی و تأیید کد: `{' '.join(digits)}`...",
                     )
                 except Exception:
