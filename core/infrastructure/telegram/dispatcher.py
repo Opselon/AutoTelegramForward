@@ -32,6 +32,84 @@ from .errors import tg_detail, tg_error, wait_seconds
 logger = logging.getLogger(__name__)
 
 
+# --------------------------------------------------------------------------- #
+# Protected-content bypass helpers (module level — no client state needed)
+# --------------------------------------------------------------------------- #
+# Channels that set "restrict forwarding/saving" make server-side
+# forward_messages/copy_message fail with ChatForwardsRestricted. Telegram
+# still hands the *content itself* to any member session, so we can rebuild
+# the message from its parts. The InputMedia reference (photo/file id) is the
+# highest-fidelity path: same quality, no disk I/O, and it survives when
+# downloading is also blocked.
+_MEDIA_ATTRIBUTES = (
+    ("photo", "photo", "send_photo"),
+    ("video", "video", "send_video"),
+    ("audio", "audio", "send_audio"),
+    ("voice", "voice", "send_voice"),
+    ("animation", "animation", "send_animation"),
+    ("document", "document", "send_document"),
+    ("sticker", "sticker", "send_sticker"),
+)
+
+
+def _extract_media_reference(msg: Any) -> Optional[dict]:
+    """Return ``{kind, ref, caption?, file_name?}`` for a message's media.
+
+    ``ref`` is the raw ``InputMedia``/file-id object straight off the pyrogram
+    message — it keeps original resolution and unique-ids. ``None`` when the
+    message carries no usable media (pure text, service messages, polls...).
+    """
+    if msg is None:
+        return None
+    for attr, kind, _send in _MEDIA_ATTRIBUTES:
+        media = getattr(msg, attr, None)
+        if media is None:
+            continue
+        # pyrogram exposes ``file_id`` on the media object; the file-id string
+        # is accepted directly by every ``send_*`` call.
+        ref = getattr(media, "file_id", None)
+        if not ref:
+            continue
+        out = {"kind": kind, "ref": ref}
+        file_name = getattr(media, "file_name", None)
+        if file_name:
+            out["file_name"] = file_name
+        caption = getattr(msg, "caption", None)
+        if caption:
+            out["caption"] = caption
+        return out
+    return None
+
+
+async def _send_media_reference(client: Any, target: Any, ref: dict, caption: Optional[str]) -> Any:
+    """Send a media reference (file-id) to ``target``. ``None`` if unsupported."""
+    kind = ref.get("kind")
+    cap = caption if caption is not None else ref.get("caption")
+    senders = {
+        "photo": "send_photo",
+        "video": "send_video",
+        "audio": "send_audio",
+        "voice": "send_voice",
+        "animation": "send_animation",
+        "document": "send_document",
+        "sticker": "send_sticker",
+    }
+    method_name = senders.get(kind) if isinstance(kind, str) else None
+    method = getattr(client, method_name, None) if method_name else None
+    if method is None:
+        return None
+    kw: dict = {}
+    if kind == "photo":
+        kw["photo"] = ref["ref"]
+    elif kind == "sticker":
+        kw["sticker"] = ref["ref"]
+    else:
+        kw[kind] = ref["ref"]
+    if kind != "sticker":
+        kw["caption"] = cap
+    return await method(chat_id=target, **kw)
+
+
 class MessageDispatcher:
     """Registers handlers on live clients and executes sends per rule."""
 
@@ -432,10 +510,11 @@ class MessageDispatcher:
         """Copy fallback is allowed when native forward is blocked by channel permissions,
         protected content, or Telegram forward restrictions.
         Fallback destination is ALWAYS Copy Message (never native forward)."""
-        fallback_mode = getattr(rule, "fallback_mode", "COPY_MESSAGE")
-        if not fallback_mode or fallback_mode == "NONE":
-            if not bool(getattr(rule, "fallback_enabled", True)):
-                return False
+        # The explicit opt-out always wins: a rule with fallback_enabled=False must
+        # never be rescued by copy/re-upload, even when fallback_mode was coerced
+        # back to COPY_MESSAGE by ForwardRule.__post_init__.
+        if not bool(getattr(rule, "fallback_enabled", True)):
+            return False
 
         err_l = str(error_key or "").lower()
 
@@ -458,7 +537,18 @@ class MessageDispatcher:
         return recoverable
 
     async def _reupload_media(self, client, payload: MessagePayload, target: Any, caption: Optional[str], mode_val: str) -> Any:
-        """Download and re-upload media when server-side copy is blocked by channel content protection."""
+        """Download and re-upload media when server-side copy is blocked by channel content protection.
+
+        Bypass layers, in order of fidelity:
+          1. server-side copy (already failed before reaching here),
+          2. download + re-upload the original media file (loses nothing but
+             the "forwarded from" header),
+          3. extract the media's input-media reference (photo/file id) and send
+             it directly — works when the channel forbids *forwarding* but the
+             media itself is still publicly fetchable by the session,
+          4. text-only delivery as the last resort so the message body and its
+             caption are never silently dropped.
+        """
         temp_path = None
         try:
             src_msg = None
@@ -468,11 +558,24 @@ class MessageDispatcher:
                 except Exception as get_err:
                     logger.debug("get_messages failed during media re-upload: %s", get_err)
 
-            if src_msg and hasattr(client, "download_media"):
+            # Layer 3 first: media references work even when the download is
+            # blocked, and they keep the original quality without touching disk.
+            if src_msg is not None:
+                ref = _extract_media_reference(src_msg)
+                if ref is not None:
+                    try:
+                        sent = await _send_media_reference(client, target, ref, caption if mode_val != "MEDIA_ONLY" else None)
+                        if sent is not None:
+                            return sent
+                    except Exception as ref_err:
+                        logger.debug("media-reference send failed (%s) — falling back to download", ref_err)
+
+            # Layer 2: download the original file and re-upload it.
+            if src_msg is not None and hasattr(client, "download_media"):
                 try:
                     temp_path = await client.download_media(src_msg)
                 except Exception as dl_err:
-                    logger.warning("download_media for protected message failed: %s", dl_err)
+                    logger.debug("download_media for protected message failed: %s", dl_err)
 
             if temp_path and os.path.exists(temp_path):
                 mtype = payload.media_type.value if hasattr(payload.media_type, "value") else str(payload.media_type)
@@ -496,9 +599,13 @@ class MessageDispatcher:
                 except Exception:
                     pass
 
-        # If media cannot be re-uploaded, deliver the caption text
+        # Layer 4: nothing could be re-uploaded — still deliver the text body.
         if caption and mode_val != "MEDIA_ONLY":
             return await client.send_message(chat_id=target, text=caption)
+        # A text-only protected message (no media at all) still deserves delivery.
+        fallback_text = (caption or payload.effective_text or "").strip()
+        if fallback_text:
+            return await client.send_message(chat_id=target, text=fallback_text)
         raise RuntimeError("Protected content cannot be copied or re-uploaded")
 
     async def _deliver_copy(self, client, payload, rule, text, target, mode_val, caption_tmpl) -> Any:
