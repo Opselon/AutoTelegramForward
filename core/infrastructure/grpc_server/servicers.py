@@ -2,6 +2,8 @@
 
 import time
 
+import grpc
+
 from ...proto import pb, pb_grpc  # noqa: F401
 
 
@@ -104,6 +106,7 @@ def _filter_pb(f) -> pb.FilterRule:
         drop_service_messages=f.drop_service_messages,
         min_message_length=f.min_message_length,
         max_message_length=f.max_message_length,
+        owner_user_id=int(getattr(f, "owner_user_id", 0) or 0),
     )
 
 
@@ -114,6 +117,7 @@ def _ai_pb(c, mask_key: bool = True) -> pb.AIConfig:
         api_key=key, base_url=c.base_url, system_prompt=c.system_prompt,
         user_prompt_template=c.user_prompt_template, temperature=c.temperature,
         is_enabled=c.is_enabled, target_language=c.target_language,
+        owner_user_id=int(getattr(c, "owner_user_id", 0) or 0),
     )
 
 
@@ -222,7 +226,11 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             paused_until=int(r.paused_until or 0),
             owner_user_id=int(r.owner_user_id or 0),
         )
-        created = await self._rules.create(entity)
+        try:
+            created = await self._rules.create(entity)
+        except ValueError as exc:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+            return pb.ForwardRule()
         return _rule_pb(created)
 
     async def UpdateRule(self, request, context):
@@ -320,7 +328,11 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
                 pass
 
         existing.mark_updated()
-        updated = await self._rules.update(existing)
+        try:
+            updated = await self._rules.update(existing)
+        except ValueError as exc:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+            return pb.ForwardRule()
         return _rule_pb(updated)
 
     async def DeleteRule(self, request, context):
@@ -593,7 +605,10 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
         self._filters = filters_uc
 
     async def ListFilters(self, request, context):
-        rows = await self._filters.list_all()
+        if request.owner_user_id:
+            rows = await self._filters.list_by_owner(request.owner_user_id)
+        else:
+            rows = await self._filters.list_all()
         return pb.ListFiltersResponse(filters=[_filter_pb(f) for f in rows])
 
     async def CreateFilter(self, request, context):
@@ -609,6 +624,7 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
             drop_service_messages=f.drop_service_messages,
             min_message_length=f.min_message_length,
             max_message_length=f.max_message_length,
+            owner_user_id=int(f.owner_user_id or 0),
         )
         created = await self._filters.create(entity)
         return _filter_pb(created)
@@ -627,6 +643,7 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
         existing.drop_service_messages = f.drop_service_messages
         existing.min_message_length = f.min_message_length
         existing.max_message_length = f.max_message_length
+        existing.owner_user_id = int(f.owner_user_id or existing.owner_user_id or 0)
         updated = await self._filters.update(existing)
         return _filter_pb(updated)
 
@@ -640,7 +657,10 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         self._ai = ai_uc
 
     async def ListAIConfigs(self, request, context):
-        rows = await self._ai.list_all()
+        if request.owner_user_id:
+            rows = await self._ai.list_by_owner(request.owner_user_id)
+        else:
+            rows = await self._ai.list_all()
         return pb.ListAIConfigsResponse(configs=[_ai_pb(c) for c in rows])
 
     async def CreateAIConfig(self, request, context):
@@ -653,6 +673,7 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
             system_prompt=c.system_prompt, user_prompt_template=c.user_prompt_template or "{text}",
             temperature=c.temperature or 0.7, is_enabled=c.is_enabled or True,
             target_language=c.target_language or "en",
+            owner_user_id=int(c.owner_user_id or 0),
         )
         created = await self._ai.create(entity)
         return _ai_pb(created)
@@ -676,6 +697,7 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         existing.is_enabled = c.is_enabled
         if c.target_language:
             existing.target_language = c.target_language
+        existing.owner_user_id = int(c.owner_user_id or existing.owner_user_id or 0)
         updated = await self._ai.update(existing)
         return _ai_pb(updated)
 

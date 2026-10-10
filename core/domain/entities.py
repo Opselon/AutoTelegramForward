@@ -515,6 +515,7 @@ class FilterRule:
     drop_service_messages: bool = True
     min_message_length: int = 0
     max_message_length: int = 0
+    owner_user_id: int = 0
 
 
 @dataclass
@@ -535,6 +536,7 @@ class AIConfig:
     temperature: float = 0.7
     is_enabled: bool = True
     target_language: str = "en"
+    owner_user_id: int = 0
 
 
 @dataclass

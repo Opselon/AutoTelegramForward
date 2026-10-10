@@ -19,6 +19,7 @@ import type {
   LogItem,
   LogStats,
   AuthResponse,
+  PVResponderConfig,
 } from './types'
 
 const API_BASE = '/api'
@@ -137,10 +138,15 @@ export const api = {
     return []
   },
   saveAIConfig: (req: SaveAIConfigRequest) =>
-    fetchJson<AIConfig>(`${API_BASE}/ai-configs`, {
-      method: 'POST',
-      body: JSON.stringify(req),
-    }),
+    fetchJson<AIConfig>(
+      (req as any).id
+        ? `${API_BASE}/ai-configs/${encodeURIComponent((req as any).id)}`
+        : `${API_BASE}/ai-configs`,
+      {
+        method: (req as any).id ? 'PUT' : 'POST',
+        body: JSON.stringify(req),
+      },
+    ),
   deleteAIConfig: (id: string) =>
     fetchJson<{ success: boolean; id: string }>(`${API_BASE}/ai-configs/${id}`, {
       method: 'DELETE',
@@ -154,10 +160,15 @@ export const api = {
     return []
   },
   saveFilter: (req: SaveFilterRuleRequest) =>
-    fetchJson<FilterRule>(`${API_BASE}/filters`, {
-      method: 'POST',
-      body: JSON.stringify(req),
-    }),
+    fetchJson<FilterRule>(
+      (req as any).id
+        ? `${API_BASE}/filters/${encodeURIComponent((req as any).id)}`
+        : `${API_BASE}/filters`,
+      {
+        method: (req as any).id ? 'PUT' : 'POST',
+        body: JSON.stringify(req),
+      },
+    ),
   deleteFilter: (id: string) =>
     fetchJson<{ success: boolean; id: string }>(`${API_BASE}/filters/${id}`, {
       method: 'DELETE',
@@ -299,6 +310,14 @@ export const api = {
       body: JSON.stringify(req),
     }),
   me: () => fetchJson<{ user_id: number; username: string; is_admin: boolean; now: string }>(`${API_BASE}/auth/me`),
+
+  // ------------------------------------------------- PV Responder (AI Assistant)
+  getPVResponder: () => fetchJson<PVResponderConfig>(`${API_BASE}/pv-responder`),
+  savePVResponder: (req: PVResponderConfig) =>
+    fetchJson<PVResponderConfig>(`${API_BASE}/pv-responder`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
 
   // ------------------------------------------------- Logout
   logout: () => {

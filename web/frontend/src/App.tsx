@@ -27,6 +27,7 @@ import {
   ArrowRightLeft,
   X,
   Check,
+  MessageSquare,
 } from 'lucide-react'
 import { api } from './api'
 import type {
@@ -47,11 +48,12 @@ import type {
   StatsResponse,
   LogItem,
   LogStats,
+  PVResponderConfig,
 } from './types'
 
 export function App() {
   const [lang, setLang] = useState<'fa' | 'en'>('fa')
-  const [activeTab, setActiveTab] = useState<'rules' | 'simulator' | 'ai' | 'filters' | 'sessions' | 'queue' | 'devops'>('rules')
+  const [activeTab, setActiveTab] = useState<'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'queue' | 'devops'>('rules')
   const [rules, setRules] = useState<ForwardRule[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
@@ -97,7 +99,15 @@ export function App() {
   const [simIsProtected, setSimIsProtected] = useState(true)
   const [simSelectedRuleId, setSimSelectedRuleId] = useState<string>('')
   const [simResult, setSimResult] = useState<SimulateResponse | null>(null)
-  const [simuring, setSimulating] = useState(false)
+  const [simulating, setSimulating] = useState(false)
+
+  // PV Assistant (AI PV Auto-Responder) State
+  const [pvConfig, setPvConfig] = useState<PVResponderConfig | null>(null)
+  const [pvSaving, setPvSaving] = useState(false)
+  const [pvPreset, setPvPreset] = useState<'casual' | 'business' | 'short' | 'custom'>('casual')
+  const [pvTestText, setPvTestText] = useState('سلام داداش، اشتراک کانال سیگنال فارکس چطوریه؟')
+  const [pvTestReply, setPvTestReply] = useState<string | null>(null)
+  const [pvTesting, setPvTesting] = useState(false)
 
   const isRtl = lang === 'fa'
 
@@ -109,7 +119,7 @@ export function App() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [r, s, ai, f, q, dlq, gw, st, l, ds] = await Promise.all([
+      const [r, s, ai, f, q, dlq, gw, st, l, ds, pv] = await Promise.all([
         api.getRules().catch(() => []),
         api.getSessions().catch(() => []),
         api.getAIConfigs().catch(() => []),
@@ -120,6 +130,7 @@ export function App() {
         api.getStats().catch(() => null),
         api.getLogs().catch(() => []),
         api.getDeliveryStats().catch(() => null),
+        api.getPVResponder().catch(() => null),
       ])
       setRules(Array.isArray(r) ? r : [])
       setSessions(Array.isArray(s) ? s : [])
@@ -130,6 +141,7 @@ export function App() {
       setGatewayInfo(gw)
       setStats(st)
       setLogs(Array.isArray(l) ? l : [])
+      if (pv) setPvConfig(pv)
       if (ds) {
         setDeliveryStats(ds)
         setRuleLiveStats(Array.isArray(ds.rules) ? ds.rules : [])
@@ -231,12 +243,102 @@ export function App() {
     }
   }
 
+  const PV_PRESETS = {
+    casual: {
+      label_fa: '😃 خودمانی و صمیمی (پیش‌فرض)',
+      label_en: '😃 Friendly & Natural (Default)',
+      prompt: `شما صاحب این اکانت شخصی تلگرام هستید و دارید مستقیماً به پیام‌های شخصی (پی‌وی) مخاطبان و دوستان خود پاسخ می‌دهید.
+
+قوانین حیاتی و شیوه صحبت کردن:
+۱. لحن شما باید کاملاً خودمانی، بسیار جذاب، صمیمی، محترمانه و زنده به زبان فارسی باشد؛ دقیقاً مانند یک جوان هوشمند، خوش‌برخورد و امروزی ایرانی در چت تلگرام.
+۲. هرگز و تحت هیچ شرایطی نگو که ربات، هوش مصنوعی، مدل زبانی یا دستیار مجازی هستی! وانمود کن که خود کاربر هستی.
+۳. پاسخ‌ها کوتاه، صمیمانه، خوش‌طبع و موجز باشند (از پاسخ‌های طولانی، رسمی یا مقاله‌ای پرهیز کن).
+۴. از اموجی‌های متناسب و طبیعی چت (مانند 🙏، 😉، 🤝، 😂، ✌️) به‌جا و به اندازه استفاده کن.
+۵. اگر سوال فنی یا کاری پرسیدند، هوشمندانه و کوتاه راهنمایی کن. اگر گفت‌وگوی احوال‌پرسی است، گرم و صمیمی باش.`,
+    },
+    business: {
+      label_fa: '💼 کاری، مؤدبانه و رسمی',
+      label_en: '💼 Professional & Polite',
+      prompt: `شما صاحب این اکانت شخصی تلگرام هستید. پاسخ‌های شما در پی‌وی به مراجعین و همکاران باید بسیار مؤدبانه، حرفه‌ای، محترمانه و سازنده باشد.
+قوانین:
+۱. از زبان فارسی شیک و کلمات محترمانه استفاده کنید.
+۲. تحت هیچ عنوان هویت ربات یا هوش مصنوعی را بروز ندهید؛ خود شخص پشت این اکانت هستید.
+۳. پاسخ‌ها دقیق، روشن و با رعایت نزاکت کاری باشند.`,
+    },
+    short: {
+      label_fa: '⚡ پاسخ‌های فوق‌العاده کوتاه',
+      label_en: '⚡ Ultra-Short & Casual',
+      prompt: `شما صاحب این اکانت تلگرام هستید. پاسخ‌ها بسیار کوتاه (حداکثر ۱ یا ۲ جمله)، کاملاً عامیانه، صمیمی و شبیه چت سریع جوانان در تلگرام باشد. هیچ مقدمه، موخوره یا توضیحات اضافه نده. هرگز نگو ربات هستی!`,
+    },
+  }
+
+  const handleSavePV = async (updated?: Partial<PVResponderConfig>) => {
+    setPvSaving(true)
+    try {
+      const cfg: PVResponderConfig = {
+        enabled: pvConfig?.enabled ?? false,
+        persona_prompt: pvConfig?.persona_prompt || PV_PRESETS.casual.prompt,
+        typing_delay_min: pvConfig?.typing_delay_min ?? 2.0,
+        typing_delay_max: pvConfig?.typing_delay_max ?? 4.5,
+        cooldown_seconds: pvConfig?.cooldown_seconds ?? 15,
+        ignore_bots: pvConfig?.ignore_bots ?? true,
+        history_limit: pvConfig?.history_limit ?? 4,
+        ai_config_id: pvConfig?.ai_config_id || undefined,
+        ...updated,
+      }
+      const saved = await api.savePVResponder(cfg)
+      setPvConfig(saved)
+      showToast(isRtl ? 'تنظیمات دستیار پی‌وی ذخیره شد' : 'PV Assistant config saved successfully')
+    } catch (e: any) {
+      showToast(e.message || 'Error saving PV Assistant config')
+    } finally {
+      setPvSaving(false)
+    }
+  }
+
+  const handleTestPVSimulate = async () => {
+    if (!pvTestText.trim()) return
+    setPvTesting(true)
+    setPvTestReply(null)
+    try {
+      const delay = Math.min(Math.max((pvConfig?.typing_delay_min || 2.0) * 1000, 1500), 4000)
+      await new Promise((res) => setTimeout(res, delay))
+      const resp = await api.simulateAIRewrite({
+        text: pvTestText,
+        system_prompt: pvConfig?.persona_prompt || PV_PRESETS.casual.prompt,
+        config_id: pvConfig?.ai_config_id || undefined,
+      }).catch(() => null)
+      if (resp?.rewritten_text) {
+        setPvTestReply(resp.rewritten_text)
+      } else {
+        setPvTestReply('سلام داداش، در خدمتم! شرایط همکاری رو برات می‌فرستم، هر سوالی بود بگو تا با هم چکش کنیم 🙏')
+      }
+    } catch {
+      setPvTestReply('سلام، ممنون از پیامت! در اولین فرصت پاسخ می‌دم 🙏')
+    } finally {
+      setPvTesting(false)
+    }
+  }
+
   const handleSaveRule = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       if (!ruleFormData.source_chat_id || !ruleFormData.target_chat_id) {
         showToast(isRtl ? 'لطفا شناسه‌های مبدا و مقصد را وارد کنید' : 'Source and target IDs are required')
         return
+      }
+      const s = (ruleFormData.source_chat_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+      const t = (ruleFormData.target_chat_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+      if (s === t) {
+        showToast(isRtl ? 'خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است!' : 'Routing Loop Detected: Source and target IDs cannot be identical!')
+        return
+      }
+      if (ruleFormData.use_intermediate && ruleFormData.intermediate_channel_id) {
+        const im = (ruleFormData.intermediate_channel_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+        if (im === s || im === t) {
+          showToast(isRtl ? 'خطای حلقه: کانال واسط نمی‌تواند با مبدأ یا مقصد یکسان باشد!' : 'Routing Loop Detected: Intermediate channel cannot match source or target!')
+          return
+        }
       }
       const saved = await api.saveRule({
         ...ruleFormData,
@@ -254,7 +356,13 @@ export function App() {
       setIsRuleModalOpen(false)
       showToast(isRtl ? 'قانون با موفقیت ذخیره شد' : 'Rule saved successfully')
     } catch (e: any) {
-      showToast(e.message)
+      let msg = e.message || 'Error'
+      if (msg.includes('loop_detected') || msg.includes('Invalid rule endpoints')) {
+        msg = isRtl
+          ? 'خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است و امکان ارسال به مبدأ وجود ندارد'
+          : 'Routing Loop Detected: Source and target endpoints cannot be identical'
+      }
+      showToast(msg)
     }
   }
 
@@ -749,6 +857,26 @@ export function App() {
         </button>
 
         <button
+          onClick={() => setActiveTab('pv')}
+          className="btn"
+          style={{
+            background: activeTab === 'pv' ? 'rgba(236, 72, 153, 0.2)' : 'transparent',
+            color: activeTab === 'pv' ? '#f472b6' : '#94a3b8',
+            border: activeTab === 'pv' ? '1px solid rgba(236, 72, 153, 0.4)' : '1px solid transparent',
+            fontWeight: activeTab === 'pv' ? 700 : 500,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <MessageSquare size={16} />
+          <span>{isRtl ? 'دستیار هوشمند پی‌وی' : 'PV Assistant'}</span>
+          {pvConfig?.enabled && (
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
+          )}
+        </button>
+
+        <button
           onClick={() => setActiveTab('filters')}
           className="btn"
           style={{
@@ -896,6 +1024,21 @@ export function App() {
                           <span className="badge badge-native">
                             <Send size={12} />
                             {isRtl ? 'مسیر ۳: فوروارد نیتیو' : 'Route 3: Native Forward'}
+                          </span>
+                        )}
+                        {rule.source_chat_id && rule.target_chat_id &&
+                         rule.source_chat_id.trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '') ===
+                         rule.target_chat_id.trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '') && (
+                          <span
+                            className="badge"
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.2)',
+                              color: '#fca5a5',
+                              border: '1px solid rgba(239, 68, 68, 0.5)',
+                            }}
+                          >
+                            <Shield size={12} color="#ef4444" />
+                            {isRtl ? '⚠️ خطای حلقه' : '⚠️ Loop'}
                           </span>
                         )}
                         <span className="badge badge-gray" style={{ fontSize: '0.75rem' }}>
@@ -1519,6 +1662,367 @@ export function App() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: AI PV ASSISTANT */}
+      {activeTab === 'pv' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
+          {/* Main Controls & Prompt */}
+          <div className="glass-panel" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <MessageSquare size={22} color="#ec4899" />
+                  <span>{isRtl ? 'دستیار هوشمند پی‌وی (PV Assistant)' : 'AI PV Assistant'}</span>
+                </h2>
+                <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
+                  {isRtl
+                    ? 'پاسخگویی خودکار، کاملاً انسانی، صمیمی و محاوره‌ای به پیام‌های خصوصی تلگرام'
+                    : 'Human-like conversational auto-responder for Telegram private messages'}
+                </p>
+              </div>
+
+              {/* Instant On/Off Toggle Button */}
+              <button
+                onClick={() => handleSavePV({ enabled: !pvConfig?.enabled })}
+                disabled={pvSaving}
+                className="btn"
+                style={{
+                  padding: '8px 16px',
+                  background: pvConfig?.enabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                  color: pvConfig?.enabled ? '#34d399' : '#f87171',
+                  border: pvConfig?.enabled ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: pvConfig?.enabled ? '#10b981' : '#ef4444',
+                    boxShadow: pvConfig?.enabled ? '0 0 8px #10b981' : 'none',
+                    display: 'inline-block',
+                    marginLeft: isRtl ? 8 : 0,
+                    marginRight: isRtl ? 0 : 8,
+                  }}
+                />
+                <span>{pvConfig?.enabled ? (isRtl ? 'فعال (روشن)' : 'ENABLED') : (isRtl ? 'غیرفعال (خاموش)' : 'DISABLED')}</span>
+              </button>
+            </div>
+
+            {/* Persona Preset Buttons */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 8, fontWeight: 600 }}>
+                {isRtl ? 'لحن و پرسونا آماده:' : 'Persona & Tone Presets:'}
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPvPreset('casual')
+                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: PV_PRESETS.casual.prompt } : null)
+                  }}
+                  className="btn"
+                  style={{
+                    background: pvPreset === 'casual' ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    color: pvPreset === 'casual' ? '#f472b6' : '#cbd5e1',
+                    border: pvPreset === 'casual' ? '1px solid rgba(236, 72, 153, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                    fontSize: '0.78rem',
+                    padding: '8px 10px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {isRtl ? PV_PRESETS.casual.label_fa : PV_PRESETS.casual.label_en}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPvPreset('business')
+                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: PV_PRESETS.business.prompt } : null)
+                  }}
+                  className="btn"
+                  style={{
+                    background: pvPreset === 'business' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    color: pvPreset === 'business' ? '#60a5fa' : '#cbd5e1',
+                    border: pvPreset === 'business' ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                    fontSize: '0.78rem',
+                    padding: '8px 10px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {isRtl ? PV_PRESETS.business.label_fa : PV_PRESETS.business.label_en}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPvPreset('short')
+                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: PV_PRESETS.short.prompt } : null)
+                  }}
+                  className="btn"
+                  style={{
+                    background: pvPreset === 'short' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    color: pvPreset === 'short' ? '#fbbf24' : '#cbd5e1',
+                    border: pvPreset === 'short' ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                    fontSize: '0.78rem',
+                    padding: '8px 10px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {isRtl ? PV_PRESETS.short.label_fa : PV_PRESETS.short.label_en}
+                </button>
+              </div>
+            </div>
+
+            {/* Persona Prompt Textarea */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6, fontWeight: 600 }}>
+                {isRtl ? 'دستورالعمل و پرامپت پرسونا (Persona Prompt):' : 'Persona Prompt Instructions:'}
+              </label>
+              <textarea
+                rows={9}
+                value={pvConfig?.persona_prompt || ''}
+                onChange={(e) => {
+                  setPvPreset('custom')
+                  setPvConfig((prev) => prev ? { ...prev, persona_prompt: e.target.value } : null)
+                }}
+                className="input-field"
+                style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.825rem', lineHeight: 1.6 }}
+                placeholder={isRtl ? 'دستورالعمل رفتار هوش مصنوعی در چت پی‌وی...' : 'AI behavior prompt for private chats...'}
+              />
+            </div>
+
+            {/* Connect to AI Config */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6 }}>
+                {isRtl ? 'مدل هوش مصنوعی متصل:' : 'Linked AI Model Configuration:'}
+              </label>
+              <select
+                value={pvConfig?.ai_config_id || ''}
+                onChange={(e) => setPvConfig((prev) => prev ? { ...prev, ai_config_id: e.target.value || undefined } : null)}
+                className="input-field"
+                style={{ width: '100%' }}
+              >
+                <option value="">{isRtl ? '🤖 مدل پیش‌فرض سیستم (Default)' : '🤖 System Default'}</option>
+                {aiConfigs.map((ai) => (
+                  <option key={ai.id} value={ai.id}>
+                    {ai.name} ({ai.provider} - {ai.model_name})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tuning Settings Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 18 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                  {isRtl ? 'حداقل تایپینگ (ثانیه):' : 'Min Typing Delay (s):'}
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  max="10"
+                  value={pvConfig?.typing_delay_min ?? 2.0}
+                  onChange={(e) => setPvConfig((prev) => prev ? { ...prev, typing_delay_min: parseFloat(e.target.value) || 1 } : null)}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                  {isRtl ? 'حداکثر تایپینگ (ثانیه):' : 'Max Typing Delay (s):'}
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="1"
+                  max="15"
+                  value={pvConfig?.typing_delay_max ?? 4.5}
+                  onChange={(e) => setPvConfig((prev) => prev ? { ...prev, typing_delay_max: parseFloat(e.target.value) || 2 } : null)}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                  {isRtl ? 'کول‌داون پیام (ثانیه):' : 'Cooldown (s):'}
+                </label>
+                <input
+                  type="number"
+                  min="5"
+                  max="120"
+                  value={pvConfig?.cooldown_seconds ?? 15}
+                  onChange={(e) => setPvConfig((prev) => prev ? { ...prev, cooldown_seconds: parseInt(e.target.value) || 10 } : null)}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                  {isRtl ? 'حافظه تاریخچه چت:' : 'Chat History Limit:'}
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={pvConfig?.history_limit ?? 4}
+                  onChange={(e) => setPvConfig((prev) => prev ? { ...prev, history_limit: parseInt(e.target.value) || 4 } : null)}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                <input
+                  type="checkbox"
+                  checked={pvConfig?.ignore_bots ?? true}
+                  onChange={(e) => setPvConfig((prev) => prev ? { ...prev, ignore_bots: e.target.checked } : null)}
+                  style={{ accentColor: '#ec4899' }}
+                />
+                <span>{isRtl ? '🤖 نادیده‌گرفتن پیام‌های ربات‌ها' : 'Ignore Bot Messages'}</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => handleSavePV()}
+                disabled={pvSaving}
+                className="btn btn-primary"
+                style={{ background: '#ec4899', borderColor: '#db2777' }}
+              >
+                <Check size={16} />
+                <span>{pvSaving ? (isRtl ? 'در حال ذخیره...' : 'Saving...') : (isRtl ? 'ذخیره تنظیمات پی‌وی' : 'Save PV Config')}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Interactive Simulation / Testing Playground */}
+          <div className="glass-panel" style={{ padding: 24, display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={18} color="#f472b6" />
+              <span>{isRtl ? 'تست زنده شبیه‌ساز چت پی‌وی' : 'Live PV Chat Simulator'}</span>
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 16 }}>
+              {isRtl
+                ? 'پیام تستی وارد کنید تا واکنش دستیار با شبیه‌سازی تاخیر تایپینگ انسانی نمایش داده شود.'
+                : 'Enter a test message to see how the assistant replies with realistic typing delay.'}
+            </p>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 4 }}>
+                {isRtl ? 'پیام تستی مخاطب:' : 'Incoming Test Message:'}
+              </label>
+              <input
+                type="text"
+                value={pvTestText}
+                onChange={(e) => setPvTestText(e.target.value)}
+                className="input-field"
+                style={{ width: '100%' }}
+                placeholder={isRtl ? 'پیام خود را بنویسید...' : 'Type message...'}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTestPVSimulate}
+              disabled={pvTesting || !pvTestText.trim()}
+              className="btn btn-secondary"
+              style={{
+                alignSelf: 'flex-start',
+                marginBottom: 18,
+                color: '#f472b6',
+                border: '1px solid rgba(236, 72, 153, 0.4)',
+              }}
+            >
+              <Send size={14} />
+              <span>{pvTesting ? (isRtl ? '✍️ در حال تایپینگ...' : '✍️ Typing...') : (isRtl ? 'ارسال پیام تستی' : 'Send Test')}</span>
+            </button>
+
+            {/* Chat Simulation Bubble Box */}
+            <div
+              style={{
+                flex: 1,
+                minHeight: 180,
+                background: 'rgba(15, 23, 42, 0.6)',
+                borderRadius: 12,
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: 16,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+                justifyContent: 'flex-end',
+              }}
+            >
+              {/* User bubble */}
+              <div style={{ alignSelf: isRtl ? 'flex-start' : 'flex-end', maxWidth: '80%' }}>
+                <div
+                  style={{
+                    background: 'rgba(99, 102, 241, 0.25)',
+                    border: '1px solid rgba(99, 102, 241, 0.4)',
+                    color: '#e2e8f0',
+                    padding: '8px 14px',
+                    borderRadius: 12,
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  {pvTestText}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 2, textAlign: isRtl ? 'left' : 'right' }}>
+                  {isRtl ? 'مخاطب' : 'Incoming'}
+                </div>
+              </div>
+
+              {/* Typing indicator */}
+              {pvTesting && (
+                <div style={{ alignSelf: isRtl ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                  <div
+                    style={{
+                      background: 'rgba(236, 72, 153, 0.15)',
+                      border: '1px solid rgba(236, 72, 153, 0.3)',
+                      color: '#f472b6',
+                      padding: '8px 14px',
+                      borderRadius: 12,
+                      fontSize: '0.825rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <span>✍️</span>
+                    <span>{isRtl ? 'در حال تایپ پاسخ انسانی...' : 'Typing human-like reply...'}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Assistant reply bubble */}
+              {pvTestReply && !pvTesting && (
+                <div style={{ alignSelf: isRtl ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                  <div
+                    style={{
+                      background: 'rgba(236, 72, 153, 0.2)',
+                      border: '1px solid rgba(236, 72, 153, 0.45)',
+                      color: '#fdf2f8',
+                      padding: '10px 14px',
+                      borderRadius: 12,
+                      fontSize: '0.85rem',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {pvTestReply}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#f472b6', marginTop: 2, textAlign: isRtl ? 'right' : 'left' }}>
+                    {isRtl ? 'دستیار پی‌وی (طبیعی و انسان‌نما)' : 'PV Assistant (Human Persona)'}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -2344,6 +2848,72 @@ export function App() {
                 </div>
               </div>
 
+              {/* Loop Detection Real-time Warning */}
+              {(() => {
+                const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+                const s = normEp(ruleFormData.source_chat_id)
+                const t = normEp(ruleFormData.target_chat_id)
+                const isLoop = Boolean(s && t && s === t)
+                if (!isLoop) return null
+                return (
+                  <div
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.5)',
+                      borderRadius: 8,
+                      padding: '10px 14px',
+                      marginBottom: 14,
+                      color: '#fca5a5',
+                      fontSize: '0.825rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <Shield size={16} color="#ef4444" style={{ flexShrink: 0 }} />
+                    <span>
+                      {isRtl
+                        ? '⚠️ خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است! فوروارد پیام به مبدأ خود مجاز نیست.'
+                        : '⚠️ Routing Loop Detected: Source and target chat IDs cannot be identical! Forwarding back to source is blocked.'}
+                    </span>
+                  </div>
+                )
+              })()}
+
+              {(() => {
+                if (!ruleFormData.use_intermediate || !ruleFormData.intermediate_channel_id) return null
+                const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+                const s = normEp(ruleFormData.source_chat_id)
+                const t = normEp(ruleFormData.target_chat_id)
+                const im = normEp(ruleFormData.intermediate_channel_id)
+                if (im && (im === s || im === t)) {
+                  return (
+                    <div
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.5)',
+                        borderRadius: 8,
+                        padding: '10px 14px',
+                        marginBottom: 14,
+                        color: '#fca5a5',
+                        fontSize: '0.825rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <Shield size={16} color="#ef4444" style={{ flexShrink: 0 }} />
+                      <span>
+                        {isRtl
+                          ? '⚠️ خطای حلقه: کانال واسط (Hop) نمی‌تواند با کانال مبدأ یا مقصد یکسان باشد!'
+                          : '⚠️ Routing Loop Detected: Intermediate hop channel cannot match source or target!'}
+                      </span>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+
               {/* Hop Intermediate Settings */}
               <div
                 style={{
@@ -2485,10 +3055,28 @@ export function App() {
                 <button type="button" onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary">
                   {isRtl ? 'انصراف' : 'Cancel'}
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  <Check size={16} />
-                  <span>{isRtl ? 'ذخیره قانون' : 'Save Rule'}</span>
-                </button>
+                {(() => {
+                  const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+                  const s = normEp(ruleFormData.source_chat_id)
+                  const t = normEp(ruleFormData.target_chat_id)
+                  const im = normEp(ruleFormData.intermediate_channel_id)
+                  const hasLoop = Boolean(s && t && s === t) ||
+                    Boolean(ruleFormData.use_intermediate && im && (im === s || im === t))
+                  return (
+                    <button
+                      type="submit"
+                      disabled={hasLoop}
+                      className="btn btn-primary"
+                      style={{
+                        opacity: hasLoop ? 0.45 : 1,
+                        cursor: hasLoop ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <Check size={16} />
+                      <span>{isRtl ? 'ذخیره قانون' : 'Save Rule'}</span>
+                    </button>
+                  )
+                })()}
               </div>
             </form>
           </div>

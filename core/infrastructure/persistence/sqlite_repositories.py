@@ -523,13 +523,14 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
             json.dumps(fr.regex_patterns), json.dumps(fr.allowed_media_types),
             json.dumps(fr.blocked_media_types), int(fr.drop_service_messages),
             fr.min_message_length, fr.max_message_length,
+            int(getattr(fr, "owner_user_id", 0) or 0),
         )
 
     async def add(self, filter_rule: FilterRule) -> FilterRule:
         self._db.execute(
             "INSERT INTO filter_rules (id, name, whitelist_keywords, blacklist_keywords, regex_patterns,"
             " allowed_media_types, blocked_media_types, drop_service_messages, min_message_length,"
-            " max_message_length) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " max_message_length, owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             self._cols(filter_rule),
         )
         return filter_rule
@@ -538,7 +539,7 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
         self._db.execute(
             "UPDATE filter_rules SET name=?, whitelist_keywords=?, blacklist_keywords=?, regex_patterns=?,"
             " allowed_media_types=?, blocked_media_types=?, drop_service_messages=?, min_message_length=?,"
-            " max_message_length=? WHERE id=?",
+            " max_message_length=?, owner_user_id=? WHERE id=?",
             (*self._cols(filter_rule)[1:], filter_rule.id),
         )
         return filter_rule
@@ -555,6 +556,7 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
             drop_service_messages=bool(row["drop_service_messages"]),
             min_message_length=row["min_message_length"],
             max_message_length=row["max_message_length"],
+            owner_user_id=int(row["owner_user_id"]) if "owner_user_id" in row.keys() and row["owner_user_id"] else 0,
         )
 
     async def get_by_id(self, filter_id: str) -> Optional[FilterRule]:
@@ -563,6 +565,13 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
 
     async def list_all(self) -> List[FilterRule]:
         rows = self._db.query_all("SELECT * FROM filter_rules ORDER BY name")
+        return [self._row_to_entity(r) for r in rows]
+
+    async def list_by_owner(self, owner_user_id: int) -> List[FilterRule]:
+        rows = self._db.query_all(
+            "SELECT * FROM filter_rules WHERE owner_user_id=? ORDER BY name",
+            (int(owner_user_id),),
+        )
         return [self._row_to_entity(r) for r in rows]
 
     async def delete(self, filter_id: str) -> bool:
@@ -578,13 +587,14 @@ class SqliteAIConfigRepository(IAIConfigRepository):
     async def add(self, config: AIConfig) -> AIConfig:
         self._db.execute(
             "INSERT INTO ai_configs (id, name, provider, model, api_key_encrypted, base_url, system_prompt,"
-            " user_prompt_template, temperature, is_enabled, target_language)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " user_prompt_template, temperature, is_enabled, target_language, owner_user_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 config.id, config.name, config.provider.value, config.model,
                 self._crypto.encrypt(config.api_key) if config.api_key else "",
                 config.base_url, config.system_prompt, config.user_prompt_template,
                 config.temperature, int(config.is_enabled), config.target_language,
+                int(getattr(config, "owner_user_id", 0) or 0),
             ),
         )
         return config
@@ -592,13 +602,14 @@ class SqliteAIConfigRepository(IAIConfigRepository):
     async def update(self, config: AIConfig) -> AIConfig:
         self._db.execute(
             "UPDATE ai_configs SET name=?, provider=?, model=?, api_key_encrypted=?, base_url=?,"
-            " system_prompt=?, user_prompt_template=?, temperature=?, is_enabled=?, target_language=?"
-            " WHERE id=?",
+            " system_prompt=?, user_prompt_template=?, temperature=?, is_enabled=?, target_language=?,"
+            " owner_user_id=? WHERE id=?",
             (
                 config.name, config.provider.value, config.model,
                 self._crypto.encrypt(config.api_key) if config.api_key else "",
                 config.base_url, config.system_prompt, config.user_prompt_template,
-                config.temperature, int(config.is_enabled), config.target_language, config.id,
+                config.temperature, int(config.is_enabled), config.target_language,
+                int(getattr(config, "owner_user_id", 0) or 0), config.id,
             ),
         )
         return config
@@ -613,6 +624,7 @@ class SqliteAIConfigRepository(IAIConfigRepository):
             user_prompt_template=row["user_prompt_template"],
             temperature=row["temperature"], is_enabled=bool(row["is_enabled"]),
             target_language=row["target_language"],
+            owner_user_id=int(row["owner_user_id"]) if "owner_user_id" in row.keys() and row["owner_user_id"] else 0,
         )
 
     async def get_by_id(self, config_id: str) -> Optional[AIConfig]:
@@ -621,6 +633,13 @@ class SqliteAIConfigRepository(IAIConfigRepository):
 
     async def list_all(self) -> List[AIConfig]:
         rows = self._db.query_all("SELECT * FROM ai_configs ORDER BY name")
+        return [self._row_to_entity(r) for r in rows]
+
+    async def list_by_owner(self, owner_user_id: int) -> List[AIConfig]:
+        rows = self._db.query_all(
+            "SELECT * FROM ai_configs WHERE owner_user_id=? ORDER BY name",
+            (int(owner_user_id),),
+        )
         return [self._row_to_entity(r) for r in rows]
 
     async def delete(self, config_id: str) -> bool:

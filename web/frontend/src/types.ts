@@ -362,3 +362,14 @@ export interface GetAccountRequest {
 
 // Type alias for frontend usage
 export type AuthResponse = RegisterAccountResponse | LoginAccountResponse | ValidateTokenResponse;
+
+export interface PVResponderConfig {
+  enabled: boolean;
+  ai_config_id?: string;
+  persona_prompt: string;
+  typing_delay_min: number;
+  typing_delay_max: number;
+  cooldown_seconds: number;
+  ignore_bots: boolean;
+  history_limit: number;
+}

@@ -943,6 +943,34 @@ class ProBotUI:
     async def _finish_rule_creation(self, event: Any, st: UiState, source_title: str, target_title: str) -> None:
         """Persist ForwardRule and present the completion card."""
         uid: int = int(event.from_user.id if getattr(event, "from_user", None) else (event.chat.id if getattr(event, "chat", None) else 0))
+
+        def _norm_ep(s: str) -> str:
+            s = (s or "").strip().lower()
+            for p in ("https://t.me/", "http://t.me/", "t.me/", "@"):
+                if s.startswith(p):
+                    s = s[len(p):]
+            return s.strip()
+
+        if _norm_ep(st.rule_source) and _norm_ep(st.rule_source) == _norm_ep(st.rule_target):
+            st.step = ""
+            if isinstance(st.buffer, dict):
+                st.buffer.clear()
+            await self._persist(uid, st)
+            err_text = (
+                "⚠️ **خطای حلقه (Loop Detected)!**\n\n"
+                "شناسه کانال مبدأ و مقصد قانون نمی‌تواند یکسان باشد. فوروارد پیام از یک چت به خودش مجاز نیست.\n"
+                "لطفاً مجدداً با مبدأ یا مقصد متفاوت تلاش کنید."
+            )
+            markup = self._kbd([
+                [("➕ تلاش مجدد", CB["rule_add"])],
+                [("🏠 منوی اصلی", CB["main"])],
+            ])
+            if hasattr(event, "edit_message_text"):
+                await event.edit_message_text(err_text, reply_markup=markup)
+            else:
+                await event.reply_text(err_text, reply_markup=markup)
+            return
+
         sessions = await self._sessions.list_all()
         if not sessions:
             st.step = ""
@@ -1321,11 +1349,10 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^r_pg:(\d+)$"))
         async def _cb_rules_page(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             page = int(raw.split(":", 1)[1])
-            rules = await self._rules.list_all()
+            rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             text, kbd = self._render_rules_list(rules, page=page)
             try:
                 await cq.edit_message_text(text, reply_markup=kbd)
@@ -1785,29 +1812,40 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^rdelyes:(.+)$"))
         async def _cb_rule_del_confirm(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rid = raw.split(":", 1)[1]
+            rule = await self._rules.get(rid)
+            if not rule:
+                return await cq.answer(self._t("ui_none"), show_alert=True)
+            if not (self._is_admin(uid) or rule.owner_user_id == uid):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             await self._rules.delete(rid)
             try:
                 self._log.info("bot", "rule", f"rule {rid} deleted")
             except Exception:
                 pass
-            rules = await self._rules.list_all()
+            rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             text, kbd = self._render_rules_list(rules, page=0)
             await cq.edit_message_text(text, reply_markup=kbd)
             await cq.answer(self._t("ui_rule_deleted"), show_alert=True)
 
         @b.on_callback_query(filters.regex("^" + CB["rule_toggle"] + ":"))
         async def _cb_rule_toggle(_, cq: CallbackQuery):
-            rid = cq.data.split(":", 1)[1]
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rid = raw.split(":", 1)[1]
+            rule = await self._rules.get(rid)
+            if not rule:
+                return await cq.answer(self._t("ui_none"), show_alert=True)
+            if not (self._is_admin(uid) or rule.owner_user_id == uid):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             await self._rules.toggle(rid)
             try:
                 self._log.info("bot", "rule", f"rule {rid} toggled")
             except Exception:
                 pass
-            rules = await self._rules.list_all()
+            rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
             lines = [self._t("ui_rules_title"), ""]
             if not rules:
                 lines.append(self._t("ui_none"))
@@ -1826,10 +1864,14 @@ class ProBotUI:
         # ---------------- rule detailed settings & controls ----------------
         @b.on_callback_query(filters.regex(r"^rd:(.+)$"))
         async def _cb_rule_detail(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer(self._t("ui_none"), show_alert=True)
+            if not (self._is_admin(uid) or rule.owner_user_id == uid):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             rule = await self._rules.get(rule_id)
             if not rule:
                 st = self._state(cq.from_user.id)

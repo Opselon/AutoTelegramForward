@@ -1676,6 +1676,7 @@ type FilterRule struct {
 	DropServiceMessages bool                   `protobuf:"varint,8,opt,name=drop_service_messages,json=dropServiceMessages,proto3" json:"drop_service_messages,omitempty"`
 	MinMessageLength    int64                  `protobuf:"varint,9,opt,name=min_message_length,json=minMessageLength,proto3" json:"min_message_length,omitempty"`
 	MaxMessageLength    int64                  `protobuf:"varint,10,opt,name=max_message_length,json=maxMessageLength,proto3" json:"max_message_length,omitempty"`
+	OwnerUserId         int64                  `protobuf:"varint,11,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // owning account (0 = legacy shared filter)
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -1776,6 +1777,13 @@ func (x *FilterRule) GetMinMessageLength() int64 {
 func (x *FilterRule) GetMaxMessageLength() int64 {
 	if x != nil {
 		return x.MaxMessageLength
+	}
+	return 0
+}
+
+func (x *FilterRule) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
 	}
 	return 0
 }
@@ -1914,6 +1922,7 @@ func (x *DeleteFilterRequest) GetId() string {
 
 type ListFiltersRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // scope to one account (0 = all, admins only)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1946,6 +1955,13 @@ func (x *ListFiltersRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListFiltersRequest.ProtoReflect.Descriptor instead.
 func (*ListFiltersRequest) Descriptor() ([]byte, []int) {
 	return file_autoforward_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ListFiltersRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type ListFiltersResponse struct {
@@ -2005,6 +2021,7 @@ type AIConfig struct {
 	Temperature        float64                `protobuf:"fixed64,9,opt,name=temperature,proto3" json:"temperature,omitempty"`
 	IsEnabled          bool                   `protobuf:"varint,10,opt,name=is_enabled,json=isEnabled,proto3" json:"is_enabled,omitempty"`
 	TargetLanguage     string                 `protobuf:"bytes,11,opt,name=target_language,json=targetLanguage,proto3" json:"target_language,omitempty"` // en, fa, ru, zh, etc.
+	OwnerUserId        int64                  `protobuf:"varint,12,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`       // owning account (0 = legacy shared config)
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -2114,6 +2131,13 @@ func (x *AIConfig) GetTargetLanguage() string {
 		return x.TargetLanguage
 	}
 	return ""
+}
+
+func (x *AIConfig) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type CreateAIConfigRequest struct {
@@ -2250,6 +2274,7 @@ func (x *DeleteAIConfigRequest) GetId() string {
 
 type ListAIConfigsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // scope to one account (0 = all, admins only)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2282,6 +2307,13 @@ func (x *ListAIConfigsRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListAIConfigsRequest.ProtoReflect.Descriptor instead.
 func (*ListAIConfigsRequest) Descriptor() ([]byte, []int) {
 	return file_autoforward_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ListAIConfigsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type ListAIConfigsResponse struct {
@@ -4800,7 +4832,7 @@ const file_autoforward_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\"\n" +
 	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"C\n" +
 	"\x11ListRulesResponse\x12.\n" +
-	"\x05rules\x18\x01 \x03(\v2\x18.autoforward.ForwardRuleR\x05rules\"\xa5\x03\n" +
+	"\x05rules\x18\x01 \x03(\v2\x18.autoforward.ForwardRuleR\x05rules\"\xc9\x03\n" +
 	"\n" +
 	"FilterRule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -4813,16 +4845,18 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x15drop_service_messages\x18\b \x01(\bR\x13dropServiceMessages\x12,\n" +
 	"\x12min_message_length\x18\t \x01(\x03R\x10minMessageLength\x12,\n" +
 	"\x12max_message_length\x18\n" +
-	" \x01(\x03R\x10maxMessageLength\"F\n" +
+	" \x01(\x03R\x10maxMessageLength\x12\"\n" +
+	"\rowner_user_id\x18\v \x01(\x03R\vownerUserId\"F\n" +
 	"\x13CreateFilterRequest\x12/\n" +
 	"\x06filter\x18\x01 \x01(\v2\x17.autoforward.FilterRuleR\x06filter\"F\n" +
 	"\x13UpdateFilterRequest\x12/\n" +
 	"\x06filter\x18\x01 \x01(\v2\x17.autoforward.FilterRuleR\x06filter\"%\n" +
 	"\x13DeleteFilterRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x14\n" +
-	"\x12ListFiltersRequest\"H\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"8\n" +
+	"\x12ListFiltersRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"H\n" +
 	"\x13ListFiltersResponse\x121\n" +
-	"\afilters\x18\x01 \x03(\v2\x17.autoforward.FilterRuleR\afilters\"\xd5\x02\n" +
+	"\afilters\x18\x01 \x03(\v2\x17.autoforward.FilterRuleR\afilters\"\xf9\x02\n" +
 	"\bAIConfig\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
@@ -4836,14 +4870,16 @@ const file_autoforward_proto_rawDesc = "" +
 	"\n" +
 	"is_enabled\x18\n" +
 	" \x01(\bR\tisEnabled\x12'\n" +
-	"\x0ftarget_language\x18\v \x01(\tR\x0etargetLanguage\"F\n" +
+	"\x0ftarget_language\x18\v \x01(\tR\x0etargetLanguage\x12\"\n" +
+	"\rowner_user_id\x18\f \x01(\x03R\vownerUserId\"F\n" +
 	"\x15CreateAIConfigRequest\x12-\n" +
 	"\x06config\x18\x01 \x01(\v2\x15.autoforward.AIConfigR\x06config\"F\n" +
 	"\x15UpdateAIConfigRequest\x12-\n" +
 	"\x06config\x18\x01 \x01(\v2\x15.autoforward.AIConfigR\x06config\"'\n" +
 	"\x15DeleteAIConfigRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x16\n" +
-	"\x14ListAIConfigsRequest\"H\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\":\n" +
+	"\x14ListAIConfigsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"H\n" +
 	"\x15ListAIConfigsResponse\x12/\n" +
 	"\aconfigs\x18\x01 \x03(\v2\x15.autoforward.AIConfigR\aconfigs\"Y\n" +
 	"\x14TestAIRewriteRequest\x12 \n" +

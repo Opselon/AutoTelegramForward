@@ -211,6 +211,7 @@ message FilterRule {
   bool drop_service_messages = 8;
   int64 min_message_length = 9;
   int64 max_message_length = 10;
+  int64 owner_user_id = 11;  // owning account (0 = legacy shared filter)
 }
 
 message CreateFilterRequest {
@@ -225,7 +226,9 @@ message DeleteFilterRequest {
   string id = 1;
 }
 
-message ListFiltersRequest {}
+message ListFiltersRequest {
+  int64 owner_user_id = 1;  // scope to one account (0 = all, admins only)
+}
 
 message ListFiltersResponse {
   repeated FilterRule filters = 1;
@@ -247,6 +250,7 @@ message AIConfig {
   double temperature = 9;
   bool is_enabled = 10;
   string target_language = 11; // en, fa, ru, zh, etc.
+  int64 owner_user_id = 12;    // owning account (0 = legacy shared config)
 }
 
 message CreateAIConfigRequest {
@@ -261,7 +265,9 @@ message DeleteAIConfigRequest {
   string id = 1;
 }
 
-message ListAIConfigsRequest {}
+message ListAIConfigsRequest {
+  int64 owner_user_id = 1;  // scope to one account (0 = all, admins only)
+}
 
 message ListAIConfigsResponse {
   repeated AIConfig configs = 1;

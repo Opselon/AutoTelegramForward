@@ -137,6 +137,10 @@ class IFilterRuleRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_by_owner(self, owner_user_id: int) -> List[FilterRule]:
+        ...
+
+    @abstractmethod
     async def delete(self, filter_id: str) -> bool:
         ...
 
@@ -156,6 +160,10 @@ class IAIConfigRepository(ABC):
 
     @abstractmethod
     async def list_all(self) -> List[AIConfig]:
+        ...
+
+    @abstractmethod
+    async def list_by_owner(self, owner_user_id: int) -> List[AIConfig]:
         ...
 
     @abstractmethod
