@@ -183,6 +183,41 @@ export interface DeadLetterJob {
   dead_lettered_at: number
 }
 
+export interface RuleLiveStat {
+  rule_id: string
+  rule_name: string
+  is_active: boolean
+  is_paused: boolean
+  forwarded: number
+  filtered: number
+  errors: number
+  last_forward_ts: number
+  last_error: string
+}
+
+export interface RecentError {
+  ts: number
+  rule_id: string
+  category: string
+  error_name: string
+  severity: string
+  detail: string
+  chat_id: string
+}
+
+export interface DeliveryStats {
+  processed_total: number
+  forwarded_total: number
+  failed_total: number
+  dedup_skipped_total: number
+  filtered_total: number
+  in_queue: number
+  dead_lettered_total: number
+  retry_total: number
+  rules: RuleLiveStat[]
+  errors: RecentError[]
+}
+
 export interface GatewaySystemInfo {
   atf_core_online: boolean
   atf_logger_online: boolean

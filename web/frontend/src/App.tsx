@@ -39,6 +39,9 @@ import type {
   SaveFilterRuleRequest,
   DeliveryJob,
   DeadLetterJob,
+  DeliveryStats,
+  RuleLiveStat,
+  RecentError,
   GatewaySystemInfo,
   SimulateResponse,
   StatsResponse,
@@ -55,6 +58,10 @@ export function App() {
   const [filterRules, setFilterRules] = useState<FilterRule[]>([])
   const [queueJobs, setQueueJobs] = useState<DeliveryJob[]>([])
   const [dlqJobs, setDlqJobs] = useState<DeadLetterJob[]>([])
+  const [deliveryStats, setDeliveryStats] = useState<DeliveryStats | null>(null)
+  const [ruleLiveStats, setRuleLiveStats] = useState<RuleLiveStat[]>([])
+  const [recentErrors, setRecentErrors] = useState<RecentError[]>([])
+  const [errorBanner, setErrorBanner] = useState<string | null>(null)
   const [gatewayInfo, setGatewayInfo] = useState<GatewaySystemInfo | null>(null)
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [logs, setLogs] = useState<LogItem[]>([])
@@ -100,7 +107,7 @@ export function App() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [r, s, ai, f, q, dlq, gw, st, l] = await Promise.all([
+      const [r, s, ai, f, q, dlq, gw, st, l, ds] = await Promise.all([
         api.getRules().catch(() => []),
         api.getSessions().catch(() => []),
         api.getAIConfigs().catch(() => []),
@@ -110,6 +117,7 @@ export function App() {
         api.getGatewayInfo().catch(() => null),
         api.getStats().catch(() => null),
         api.getLogs().catch(() => []),
+        api.getDeliveryStats().catch(() => null),
       ])
       setRules(Array.isArray(r) ? r : [])
       setSessions(Array.isArray(s) ? s : [])
@@ -120,6 +128,28 @@ export function App() {
       setGatewayInfo(gw)
       setStats(st)
       setLogs(Array.isArray(l) ? l : [])
+      if (ds) {
+        setDeliveryStats(ds)
+        setRuleLiveStats(Array.isArray(ds.rules) ? ds.rules : [])
+        setRecentErrors(Array.isArray(ds.errors) ? ds.errors : [])
+        // Surface the most recent ERROR/WARN as a dismissible banner so the
+        // user always sees problems instead of hunting for them in the log tab.
+        setErrorBanner((() => {
+          const worst = (ds.errors || []).find((e) => (e.severity || '').toLowerCase() === 'error')
+            || (ds.errors || []).find((e) => (e.severity || '').toLowerCase() === 'warn')
+            || null
+          if (!worst) return null
+          const name = worst.error_name || worst.category || ''
+          let detail = worst.detail || ''
+          // Python logs often arrive as "ValueError: ValueError <msg>" — strip the
+          // duplicated exception class so the banner reads as one clean sentence.
+          if (name && detail.toLowerCase().startsWith(name.toLowerCase())) {
+            detail = detail.slice(name.length).replace(/^[\s:：]+/, '')
+          }
+          const text = (name && detail) ? `${name}: ${detail}` : (detail || name)
+          return text.slice(0, 220) || null
+        })())
+      }
       if (r.length > 0 && !simSelectedRuleId) {
         setSimSelectedRuleId(r[0].id)
       }
@@ -317,6 +347,65 @@ export function App() {
     }
   }
 
+  // Rule pause / resume (mirrors bot's pause/resume feature)
+  const handlePauseRule = async (id: string) => {
+    try {
+      await api.pauseRule(id)
+      setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: true } : r)))
+      showToast(isRtl ? 'قانون متوقف شد' : 'Rule paused')
+    } catch (e: any) {
+      showToast(e.message)
+    }
+  }
+
+  const handleResumeRule = async (id: string) => {
+    try {
+      await api.resumeRule(id)
+      setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: false } : r)))
+      showToast(isRtl ? 'قانون از سر گرفته شد' : 'Rule resumed')
+    } catch (e: any) {
+      showToast(e.message)
+    }
+  }
+
+  // Session backup / terminate (mirrors bot's backup + session control)
+  const handleBackupSession = async (sess: Session) => {
+    try {
+      const res = await api.backupSession(sess.id)
+      if (res.success && res.encrypted_session_data) {
+        const blob = new Blob([res.encrypted_session_data], { type: 'application/octet-stream' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `atf-session-${sess.phone_number || sess.user_id || sess.id}.bin`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        showToast(isRtl ? 'بکاپ سشن دانلود شد' : 'Session backup downloaded')
+      } else {
+        showToast(res.message || (isRtl ? 'بکاپ ناموفق بود' : 'Backup failed'))
+      }
+    } catch (e: any) {
+      showToast(e.message)
+    }
+  }
+
+  const handleTerminateSession = async (sess: Session) => {
+    if (!confirm(isRtl ? `آیا از قطع سشن ${sess.first_name || sess.username || sess.id} مطمئن هستید؟` : `Terminate session ${sess.first_name || sess.username || sess.id}?`)) return
+    try {
+      const res = await api.terminateSession(sess.id)
+      if (res.success) {
+        setSessions((prev) => prev.filter((s) => s.id !== sess.id))
+        showToast(isRtl ? 'سشن قطع شد' : 'Session terminated')
+      } else {
+        showToast(res.message || (isRtl ? 'قطع ناموفق بود' : 'Terminate failed'))
+      }
+    } catch (e: any) {
+      showToast(e.message)
+    }
+  }
+
   // Simulator
   const handleRunSimulation = async () => {
     setSimulating(true)
@@ -342,6 +431,35 @@ export function App() {
     <div dir={isRtl ? 'rtl' : 'ltr'} style={{ padding: '24px 20px', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* User bar */}
       <UserBar lang={lang} />
+      {/* Proactive Error Banner — newest ERROR/WARN from the delivery pipeline */}
+      {errorBanner && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10,
+            padding: '10px 14px',
+            marginBottom: 16,
+            borderRadius: 10,
+            background: 'rgba(239, 68, 68, 0.10)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            fontSize: '0.82rem',
+            color: '#fca5a5',
+          }}
+        >
+          <span style={{ flexShrink: 0, lineHeight: 1.4 }}>⚠️</span>
+          <span dir="ltr" style={{ flex: 1, textAlign: 'left', wordBreak: 'break-word', fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: '0.76rem' }}>
+            {errorBanner}
+          </span>
+          <button
+            onClick={() => setErrorBanner(null)}
+            style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 2, flexShrink: 0 }}
+            title={isRtl ? 'بستن' : 'Dismiss'}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {/* Toast Notification */}
       {toast && (
         <div
@@ -402,7 +520,7 @@ export function App() {
                 AutoTelegramForward <span style={{ color: '#818cf8', fontWeight: 600 }}>PRO GATEWAY</span>
               </h1>
               <span className="badge badge-vip" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>
-                v1.2.1 RELEASE
+                v{gatewayInfo?.version ?? '1.2.2'} RELEASE
               </span>
             </div>
             <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 2 }}>
@@ -570,6 +688,7 @@ export function App() {
 
       {/* Tabs Navigation */}
       <div
+        className="tab-strip"
         style={{
           display: 'flex',
           gap: 8,
@@ -733,11 +852,12 @@ export function App() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 20 }}>
+          <div className="rules-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 20 }}>
             {(Array.isArray(rules) ? rules : []).map((rule) => {
               const isVipHop = rule.use_intermediate && rule.message_category === 'VIP_ONLY'
               const isDirectCopy = !rule.use_intermediate && rule.forward_mode !== 'DIRECT_FORWARD'
               const isNative = !rule.use_intermediate && rule.forward_mode === 'DIRECT_FORWARD'
+              const liveStat = (ruleLiveStats || []).find((st) => st.rule_id === rule.id)
 
               return (
                 <div
@@ -776,12 +896,30 @@ export function App() {
                           P:{rule.priority}
                         </span>
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4, fontFamily: 'monospace' }}>
-                        ID: {rule.id.substring(0, 16)}...
+                      <div
+                        title={rule.id}
+                        onClick={() => navigator.clipboard?.writeText(rule.id).catch(() => {})}
+                        style={{
+                          fontSize: '0.72rem',
+                          color: '#8b95a7',
+                          marginTop: 4,
+                          fontFamily: 'monospace',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '1px 4px',
+                          borderRadius: 4,
+                          transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                      >
+                        <Copy size={10} /> {rule.id.substring(0, 8)}…
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       <button
                         onClick={() => handleToggleRule(rule.id)}
                         className="btn"
@@ -795,6 +933,28 @@ export function App() {
                       >
                         {rule.is_active ? (isRtl ? 'فعال' : 'ACTIVE') : (isRtl ? 'غیرفعال' : 'PAUSED')}
                       </button>
+
+                      {rule.is_paused ? (
+                        <button
+                          onClick={() => handleResumeRule(rule.id)}
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#34d399' }}
+                          title={isRtl ? 'از سر گیری موقت' : 'Resume'}
+                        >
+                          <PlayCircle size={13} />
+                          <span>{isRtl ? 'ادامه' : 'Resume'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handlePauseRule(rule.id)}
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#fbbf24' }}
+                          title={isRtl ? 'توقف موقت' : 'Pause'}
+                        >
+                          <Clock size={13} />
+                          <span>{isRtl ? 'توقف' : 'Pause'}</span>
+                        </button>
+                      )}
 
                       <button
                         onClick={() => {
@@ -906,6 +1066,61 @@ export function App() {
                       )}
                     </div>
                   </div>
+
+                  {/* Live per-rule counters from the delivery pipeline */}
+                  {liveStat && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 0,
+                        marginBottom: 12,
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                        border: '1px solid rgba(255, 255, 255, 0.06)',
+                        fontSize: '0.72rem',
+                      }}
+                    >
+                      <div style={{ flex: 1, padding: '7px 8px', background: 'rgba(16, 185, 129, 0.10)', textAlign: 'center' }}>
+                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'فوروارد' : 'FWD'}</div>
+                        <div style={{ fontWeight: 800, color: '#34d399', lineHeight: 1.35 }}>{liveStat.forwarded ?? 0}</div>
+                      </div>
+                      <div style={{ flex: 1, padding: '7px 8px', background: 'rgba(59, 130, 246, 0.10)', textAlign: 'center' }}>
+                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'فیلتر' : 'FILT'}</div>
+                        <div style={{ fontWeight: 800, color: '#60a5fa', lineHeight: 1.35 }}>{liveStat.filtered ?? 0}</div>
+                      </div>
+                      <div style={{ flex: 1, padding: '7px 8px', background: liveStat.errors > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.07)', textAlign: 'center' }}>
+                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'خطا' : 'ERR'}</div>
+                        <div style={{ fontWeight: 800, color: liveStat.errors > 0 ? '#fca5a5' : '#64748b', lineHeight: 1.35 }}>{liveStat.errors ?? 0}</div>
+                      </div>
+                      <div style={{ flex: 1.4, padding: '7px 8px', background: 'rgba(99, 102, 241, 0.06)', textAlign: 'center' }}>
+                        <div style={{ color: '#64748b', fontSize: '0.62rem' }}>{isRtl ? 'آخرین فوروارد' : 'LAST FWD'}</div>
+                        <div style={{ fontWeight: 700, color: '#818cf8' }}>
+                          {liveStat.last_forward_ts
+                            ? new Date(liveStat.last_forward_ts * 1000).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+                            : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {liveStat?.last_error && (
+                    <div
+                      dir="ltr"
+                      style={{
+                        textAlign: 'left',
+                        marginBottom: 12,
+                        padding: '6px 10px',
+                        borderRadius: 6,
+                        background: 'rgba(239, 68, 68, 0.07)',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        color: '#fca5a5',
+                        fontSize: '0.7rem',
+                        fontFamily: "'JetBrains Mono', Consolas, monospace",
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      ⚠️ {liveStat.last_error.slice(0, 160)}
+                    </div>
+                  )}
 
                   {/* 1-Click Route Switch Buttons */}
                   <div
@@ -1405,20 +1620,22 @@ export function App() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
+          <div className="sessions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
             {(Array.isArray(sessions) ? sessions : []).map((sess) => (
               <div key={sess.id} className="glass-panel" style={{ padding: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                     <Users size={18} color="#34d399" />
-                    <span style={{ fontWeight: 700 }}>{sess.first_name || sess.username || sess.id}</span>
+                    <span style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {sess.first_name || sess.username || sess.id}
+                    </span>
                   </div>
                   <span className={`badge ${sess.is_active ? 'badge-native' : 'badge-gray'}`}>
                     {sess.is_active ? (isRtl ? 'متصل' : 'ONLINE') : (isRtl ? 'غیرفعال' : 'OFFLINE')}
                   </span>
                 </div>
 
-                <div style={{ fontSize: '0.8rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: '0.8rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                   <div>
                     <span style={{ color: '#94a3b8' }}>Phone: </span>
                     <span>{sess.phone_number || 'N/A'}</span>
@@ -1437,6 +1654,25 @@ export function App() {
                     <span style={{ color: '#94a3b8' }}>Proxy: </span>
                     <span>{sess.proxy || 'Direct (No Proxy)'}</span>
                   </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
+                  <button
+                    onClick={() => handleBackupSession(sess)}
+                    className="btn btn-secondary"
+                    style={{ flex: 1, fontSize: '0.75rem', padding: '6px 8px', minWidth: 110 }}
+                  >
+                    <Layers size={13} />
+                    <span>{isRtl ? 'بکاپ سشن' : 'Backup'}</span>
+                  </button>
+                  <button
+                    onClick={() => handleTerminateSession(sess)}
+                    className="btn btn-danger"
+                    style={{ flex: 1, fontSize: '0.75rem', padding: '6px 8px', minWidth: 110 }}
+                  >
+                    <X size={13} />
+                    <span>{isRtl ? 'قطع سشن' : 'Terminate'}</span>
+                  </button>
                 </div>
               </div>
             ))}
@@ -1933,6 +2169,69 @@ export function App() {
                             <Copy size={12} />
                           )}
                         </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Recent Pipeline Errors — triage queue for things to fix next */}
+            <div className="glass-panel" style={{ padding: 20, marginTop: 20 }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Activity size={16} color="#ef4444" />
+                <span>{isRtl ? 'آخرین خطاهای پایپ‌لاین (صف رفع اشکال)' : 'Recent Pipeline Errors (Triage Queue)'}</span>
+                {(recentErrors || []).length > 0 && (
+                  <span className="badge badge-vip" style={{ fontSize: '0.7rem' }}>{recentErrors.length}</span>
+                )}
+              </h3>
+
+              {(!Array.isArray(recentErrors) || recentErrors.length === 0) ? (
+                <div style={{ textAlign: 'center', padding: 26, color: '#64748b', fontSize: '0.85rem' }}>
+                  <div style={{ fontSize: 22, marginBottom: 6 }}>✅</div>
+                  <div>{isRtl ? 'هیچ خطایی در پایپ‌لاین ثبت نشده است.' : 'No pipeline errors recorded. All healthy.'}</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {recentErrors.map((err, idx) => {
+                    const sev = (err.severity || 'error').toLowerCase()
+                    const isErr = sev === 'error'
+                    return (
+                      <div
+                        key={`${err.ts}-${idx}`}
+                        dir="ltr"
+                        style={{
+                          textAlign: 'left',
+                          background: 'rgba(15, 23, 42, 0.6)',
+                          padding: '10px 14px',
+                          borderRadius: 8,
+                          fontSize: '0.78rem',
+                          border: `1px solid ${isErr ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, color: isErr ? '#fca5a5' : '#fbbf24' }}>
+                            {err.error_name || err.category}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {err.rule_id && (
+                              <span style={{ fontSize: '0.68rem', color: '#818cf8', background: 'rgba(99,102,241,0.1)', padding: '1px 6px', borderRadius: 4 }}>
+                                {err.rule_id.substring(0, 8)}
+                              </span>
+                            )}
+                            <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                              {err.ts ? new Date(err.ts * 1000).toLocaleString() : ''}
+                            </span>
+                          </div>
+                        </div>
+                        {err.detail && (
+                          <div style={{ color: '#94a3b8', fontSize: '0.72rem', fontFamily: "'JetBrains Mono', Consolas, monospace", wordBreak: 'break-word' }}>
+                            {err.detail.slice(0, 260)}
+                          </div>
+                        )}
                       </div>
                     )
                   })}

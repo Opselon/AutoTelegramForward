@@ -53,7 +53,11 @@ type backupReq struct {
 
 func (h *Handlers) BackupSession(w http.ResponseWriter, r *http.Request) {
 	var req backupReq
-	if !bind(w, r, &req) {
+	// The dashboard calls POST /sessions/{id}/backup (path param); the legacy
+	// v1 route still posts a JSON body. Accept both.
+	if sid := r.PathValue("id"); sid != "" {
+		req.SessionID = sid
+	} else if !bind(w, r, &req) {
 		return
 	}
 	ctx, cancel := withTimeout(r)
@@ -326,8 +330,13 @@ func (h *Handlers) TestRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) PauseRule(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
 	ctx, cancel := withTimeout(r)
 	defer cancel()
+	if !h.ownsRule(ctx, r.PathValue("id"), id.UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Rule not found"})
+		return
+	}
 	var body struct {
 		Until int64 `json:"until"`
 	}
@@ -344,14 +353,37 @@ func (h *Handlers) PauseRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) ResumeRule(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
 	ctx, cancel := withTimeout(r)
 	defer cancel()
+	if !h.ownsRule(ctx, r.PathValue("id"), id.UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Rule not found"})
+		return
+	}
 	resp, err := h.c.Rules.ResumeRule(ctx, &pb.PauseRuleRequest{RuleId: r.PathValue("id")})
 	if err != nil {
 		grpcError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// ownsRule reports whether the given rule id belongs to owner. Keeps the
+// authenticated surface tenant-isolated (no cross-user pause/resume/edit).
+func (h *Handlers) ownsRule(ctx context.Context, ruleID string, owner int64) bool {
+	if owner == 0 {
+		return false
+	}
+	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{OwnerUserId: owner})
+	if err != nil {
+		return false
+	}
+	for _, rule := range resp.Rules {
+		if rule.Id == ruleID {
+			return true
+		}
+	}
+	return false
 }
 
 // ------------------------------------------------------------- delivery
@@ -363,7 +395,53 @@ func (h *Handlers) DeliveryStats(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	rules := resp.Rules
+	if rules == nil {
+		rules = []*pb.RuleLiveStat{}
+	}
+	rulesOut := make([]map[string]any, 0, len(rules))
+	for _, st := range rules {
+		rulesOut = append(rulesOut, map[string]any{
+			"rule_id":          st.RuleId,
+			"rule_name":        st.RuleName,
+			"is_active":        st.IsActive,
+			"is_paused":        st.IsPaused,
+			"forwarded":        st.Forwarded,
+			"filtered":         st.Filtered,
+			"errors":           st.Errors,
+			"last_forward_ts":  st.LastForwardTs,
+			"last_error":       st.LastError,
+		})
+	}
+
+	errors := resp.Errors
+	if errors == nil {
+		errors = []*pb.RecentError{}
+	}
+	errsOut := make([]map[string]any, 0, len(errors))
+	for _, e := range errors {
+		errsOut = append(errsOut, map[string]any{
+			"ts":         e.Ts,
+			"rule_id":    e.RuleId,
+			"error_name": e.ErrorName,
+			"severity":   e.Severity,
+			"detail":     e.Detail,
+			"category":   e.Category,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"processed_total":     resp.ProcessedTotal,
+		"forwarded_total":     resp.ForwardedTotal,
+		"failed_total":        resp.FailedTotal,
+		"dedup_skipped_total": resp.DedupSkippedTotal,
+		"filtered_total":      resp.FilteredTotal,
+		"in_queue":            resp.InQueue,
+		"dead_lettered_total": resp.DeadLetteredTotal,
+		"retry_total":         resp.RetryTotal,
+		"rules":               rulesOut,
+		"errors":              errsOut,
+	})
 }
 
 func (h *Handlers) ListDeadLetter(w http.ResponseWriter, r *http.Request) {
@@ -641,9 +719,23 @@ func (h *Handlers) QueryLogs(w http.ResponseWriter, r *http.Request) {
 	if logs == nil {
 		logs = []*pb.LogEntry{}
 	}
+	out := make([]map[string]any, 0, len(logs))
+	for _, l := range logs {
+		out = append(out, map[string]any{
+			"ts":        l.Ts,
+			"level":     l.Level,
+			"severity":  l.Level,
+			"service":   l.Service,
+			"category":  l.Category,
+			"message":   l.Message,
+			"detail":    l.Detail,
+			"error_name": l.Category,
+			"id":        l.Ts,
+		})
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"logs":  logs,
-		"total": len(logs),
+		"logs":  out,
+		"total": len(out),
 	})
 }
 
@@ -661,7 +753,11 @@ func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":       resp.Total,
+		"by_level":    resp.ByLevel,
+		"by_category": resp.ByCategory,
+	})
 }
 
 // ------------------------------------------------------------- internals

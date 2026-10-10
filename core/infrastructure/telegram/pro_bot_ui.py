@@ -300,6 +300,56 @@ class ProBotUI:
     # ------------------------------------------------------------------ #
     # Menus
     # ------------------------------------------------------------------ #
+    async def _main_text(self, uid: int) -> str:
+        """Main-menu header: live overview banner + the standard title.
+
+        Mirrors the web dashboard's stat badges so both surfaces show the
+        same numbers. Falls back gracefully to the plain title when the
+        repositories are unavailable (e.g. during startup).
+        """
+        lines = [self._t("ui_main_title")]
+        try:
+            rules = await self._rules.list_by_owner(uid)
+            sessions = await self._sessions.list_by_owner(uid)
+            active_rules = sum(1 for r in rules if getattr(r, "is_active", False))
+            live_sessions = sum(1 for s in sessions if getattr(s, "is_active", False))
+            fwd_24h = await self._forwarded_24h(uid)
+            dlq = await self._dlq_count()
+            lines.append("")
+            lines.append(self._t("ui_overview_title"))
+            lines.append(f"⚡ {self._t('ui_overview_rules')}: {active_rules}/{len(rules)}")
+            lines.append(f"📱 {self._t('ui_overview_sessions')}: {live_sessions}/{len(sessions)}")
+            lines.append(f"📤 {self._t('ui_overview_forwarded')}: {fwd_24h}")
+            if dlq > 0:
+                lines.append(f"❌ {self._t('ui_overview_dlq')}: {dlq}")
+        except Exception:
+            logger.debug("overview banner unavailable", exc_info=True)
+        return "\n".join(lines)
+
+    async def _forwarded_24h(self, uid: int) -> int:
+        """Forwarded message count in the trailing 24h.
+
+        The metrics table is global (per-process), so this sums the hourly
+        buckets rather than trying to attribute to a single owner.
+        """
+        if self._metrics is None:
+            return 0
+        try:
+            buckets = await self._metrics.hourly(24)
+            return sum(int(b.get("forwarded") or 0) for b in (buckets or []))
+        except Exception:
+            return 0
+
+    async def _dlq_count(self) -> int:
+        """Failed messages sitting in the dead-letter queue."""
+        if self._error_log is None:
+            return 0
+        try:
+            counts = await self._error_log.counts_by_severity()
+            return int(counts.get("error", 0) or 0)
+        except Exception:
+            return 0
+
     def _main_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
             [("📱 " + self._t("ui_sessions"), CB["sessions"]), ("⚡ " + self._t("ui_rules"), CB["rules"])],
@@ -1230,7 +1280,10 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["main"] + "$"))
         async def _cb_main(_, cq: CallbackQuery):
-            await cq.edit_message_text(self._t("ui_main_title"), reply_markup=self._main_menu())
+            await cq.edit_message_text(
+                await self._main_text(cq.from_user.id if cq.from_user else 0),
+                reply_markup=self._main_menu(),
+            )
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["sessions"] + "$"))

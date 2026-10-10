@@ -9,6 +9,9 @@ import type {
   SaveFilterRuleRequest,
   DeliveryJob,
   DeadLetterJob,
+  DeliveryStats,
+  RuleLiveStat,
+  RecentError,
   GatewaySystemInfo,
   SimulateRequest,
   SimulateResponse,
@@ -19,6 +22,24 @@ import type {
 } from './types'
 
 const API_BASE = '/api'
+
+// Shared single fetch of /queue so getDeliveryStats/getRuleLiveStats/getRecentErrors
+// don't issue three redundant network calls on every render.
+let _queueCache: { data: any; ts: number } | null = null
+const QUEUE_TTL = 4000
+async function getDeliveryStatsAny(): Promise<any> {
+  const now = Date.now()
+  if (_queueCache && now - _queueCache.ts < QUEUE_TTL) {
+    return _queueCache.data
+  }
+  try {
+    const res = await fetchJson<any>(`${API_BASE}/queue`)
+    _queueCache = { data: res, ts: now }
+    return res
+  } catch {
+    return null
+  }
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem('auth_token')
@@ -77,6 +98,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(req),
     }),
+  pauseRule: (id: string, until?: number) =>
+    fetchJson<{ success: boolean; message?: string }>(`${API_BASE}/rules/${id}/pause`, {
+      method: 'POST',
+      body: JSON.stringify(until ? { until } : {}),
+    }),
+  resumeRule: (id: string) =>
+    fetchJson<{ success: boolean; message?: string }>(`${API_BASE}/rules/${id}/resume`, {
+      method: 'POST',
+    }),
 
   // Sessions
   getSessions: async (): Promise<Session[]> => {
@@ -85,6 +115,14 @@ export const api = {
     if (Array.isArray(res?.sessions)) return res.sessions
     return []
   },
+  backupSession: (sessionId: string) =>
+    fetchJson<{ success: boolean; encrypted_session_data?: string; message?: string }>(`${API_BASE}/sessions/${sessionId}/backup`, {
+      method: 'POST',
+    }),
+  terminateSession: (sessionId: string) =>
+    fetchJson<{ success: boolean; message?: string }>(`${API_BASE}/sessions/${sessionId}`, {
+      method: 'DELETE',
+    }),
 
   // AI Configurations
   getAIConfigs: async (): Promise<AIConfig[]> => {
@@ -137,6 +175,60 @@ export const api = {
         max_attempts: 3,
         delivery_stage: `In Queue: ${r.in_queue || 0}`,
         created_at: Math.floor(Date.now() / 1000),
+      }))
+    }
+    return []
+  },
+  getDeliveryStats: async (): Promise<DeliveryStats | null> => {
+    try {
+      const res = await fetchJson<any>(`${API_BASE}/queue`)
+      if (res && typeof res === 'object' && !Array.isArray(res)) {
+        return {
+          processed_total: res.processed_total ?? res.forwarded_total ?? 0,
+          forwarded_total: res.forwarded_total ?? 0,
+          failed_total: res.failed_total ?? 0,
+          dedup_skipped_total: res.dedup_skipped_total ?? 0,
+          filtered_total: res.filtered_total ?? 0,
+          in_queue: res.in_queue ?? 0,
+          dead_lettered_total: res.dead_lettered_total ?? 0,
+          retry_total: res.retry_total ?? 0,
+          rules: Array.isArray(res.rules) ? res.rules : [],
+          errors: Array.isArray(res.errors) ? res.errors : [],
+        }
+      }
+      return null
+    } catch {
+      return null
+    }
+  },
+  getRuleLiveStats: async (): Promise<RuleLiveStat[]> => {
+    const res = await getDeliveryStatsAny()
+    if (Array.isArray(res?.rules)) {
+      return res.rules.map((r: any) => ({
+        rule_id: r.rule_id || r.id || '',
+        rule_name: r.rule_name || r.name || '',
+        is_active: !!r.is_active,
+        is_paused: !!r.is_paused,
+        forwarded: r.forwarded ?? 0,
+        filtered: r.filtered ?? 0,
+        errors: r.errors ?? 0,
+        last_forward_ts: r.last_forward_ts ?? 0,
+        last_error: r.last_error ?? '',
+      }))
+    }
+    return []
+  },
+  getRecentErrors: async (): Promise<RecentError[]> => {
+    const res = await getDeliveryStatsAny()
+    if (Array.isArray(res?.errors)) {
+      return res.errors.map((e: any) => ({
+        ts: e.ts ?? 0,
+        rule_id: e.rule_id ?? '',
+        category: e.category ?? '',
+        error_name: e.error_name ?? e.category ?? '',
+        severity: e.severity ?? 'error',
+        detail: e.detail ?? '',
+        chat_id: e.chat_id ?? '',
       }))
     }
     return []

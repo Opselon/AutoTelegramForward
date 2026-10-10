@@ -107,7 +107,7 @@ async fn health_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse
 async fn gateway_info_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     Json(json!({
         "service": "atf-web-gateway",
-        "version": "1.2.1",
+        "version": "1.2.2",
         "status": "healthy",
         "role": "unified_web_gateway_bff",
         "upstream_api": state.api_upstream,
