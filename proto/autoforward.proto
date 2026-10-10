@@ -179,6 +179,22 @@ message CreateRuleRequest {
   ForwardRule rule = 1;
 }
 
+// ResolveChatRequest turns a human handle (username, t.me link or raw id) into
+// the canonical numeric chat id that the dispatcher stores in forward rules.
+message ResolveChatRequest {
+  string session_id = 1;
+  string handle = 2;  // @username, https://t.me/xxx, t.me/xxx or numeric id
+}
+
+message ResolveChatResponse {
+  bool found = 1;
+  string chat_id = 2;      // canonical numeric id (string-formatted)
+  string title = 3;        // chat display name
+  string username = 4;     // resolved @username (empty for private chats)
+  string chat_type = 5;    // channel | supergroup | group | private | bot
+  string error = 6;        // human-readable failure reason when not found
+}
+
 message UpdateRuleRequest {
   ForwardRule rule = 1;
 }
@@ -471,6 +487,7 @@ service SessionControlService {
   rpc BackupSession(BackupSessionRequest) returns (BackupSessionResponse);
   rpc RestoreSession(RestoreSessionRequest) returns (RestoreSessionResponse);
   rpc TerminateSession(TerminateSessionRequest) returns (StatusResponse);
+  rpc ResolveChat(ResolveChatRequest) returns (ResolveChatResponse);
 }
 
 service ForwardRuleControlService {

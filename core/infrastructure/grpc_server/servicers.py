@@ -166,6 +166,68 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
         await self._pool.stop(request.session_id)
         return _status(ok, "terminated" if ok else "not_found")
 
+    async def ResolveChat(self, request, context):
+        """Resolve a human handle (username / t.me link / numeric id) to a
+        canonical numeric chat id using a live Telegram session. The dispatcher
+        only understands numeric ids, so the API layer calls this before saving
+        a rule to guarantee no username ever lands in chat_id columns."""
+        import re as _re
+
+        handle = (request.handle or "").strip()
+        session_id = (request.session_id or "").strip()
+        if not handle:
+            return pb.ResolveChatResponse(found=False, error="handle_empty")
+
+        # Normalize the handle: links and @-prefixes down to a bare username/id.
+        raw = handle
+        raw = _re.sub(r"^https?://t\.me/", "", raw, flags=_re.IGNORECASE)
+        raw = _re.sub(r"^t\.me/", "", raw, flags=_re.IGNORECASE)
+        raw = raw.lstrip("@").strip()
+        if not raw:
+            return pb.ResolveChatResponse(found=False, error="handle_empty")
+
+        # Numeric ids (with optional -100 channel prefix) pass through.
+        if _re.fullmatch(r"-?\d+", raw):
+            return pb.ResolveChatResponse(
+                found=True, chat_id=str(int(raw)), title=handle, chat_type="numeric"
+            )
+
+        # Pick the requested session, or the first active+authorized one.
+        if session_id:
+            session = await self._sessions.get(session_id)
+        else:
+            sessions = await self._sessions.list_all()
+            active = [s for s in sessions if s.is_active and s.is_authorized]
+            session = active[0] if active else (sessions[0] if sessions else None)
+        if not session:
+            return pb.ResolveChatResponse(found=False, error="no_active_session")
+
+        client = self._pool.get(session.id)
+        if client is None:
+            return pb.ResolveChatResponse(
+                found=False, error="session_not_connected"
+            )
+
+        try:
+            chat = await client.get_chat(raw)
+        except Exception as exc:  # noqa: BLE001 - surface the reason to the UI
+            return pb.ResolveChatResponse(
+                found=False, error=f"{type(exc).__name__}: {exc}"
+            )
+
+        chat_type = type(chat).__name__.lower()
+        if hasattr(chat, "type") and chat.type is not None:
+            chat_type = getattr(chat.type, "value", str(chat.type)).lower()
+        username = getattr(chat, "username", "") or ""
+        title = getattr(chat, "title", "") or getattr(chat, "first_name", "") or username
+        return pb.ResolveChatResponse(
+            found=True,
+            chat_id=str(chat.id),
+            title=str(title),
+            username=username,
+            chat_type=chat_type,
+        )
+
 
 class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
     def __init__(self, rules) -> None:

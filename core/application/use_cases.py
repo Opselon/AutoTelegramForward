@@ -96,6 +96,19 @@ class ForwardRuleUseCases:
                 s = s[len(prefix):]
         return s.strip()
 
+    @staticmethod
+    def _is_numeric_chat_id(val: str) -> bool:
+        """True when the id is a numeric Telegram id (channel/group/user).
+        The dispatcher converts chat ids with int() before sending, so a
+        username in a chat_id column breaks delivery — reject non-numeric ids
+        unless an explicit opt-out flag marks them as unresolved placeholders."""
+        s = str(val or "").strip()
+        try:
+            int(s)
+            return True
+        except (TypeError, ValueError):
+            return False
+
     def validate_endpoints(
         self,
         source_chat_id: str,
@@ -110,6 +123,10 @@ class ForwardRuleUseCases:
             return False, "source_empty"
         if not t:
             return False, "target_empty"
+        if not self._is_numeric_chat_id(s):
+            return False, "source_not_numeric"
+        if not self._is_numeric_chat_id(t):
+            return False, "target_not_numeric"
         sn = self._normalize_chat_id(s)
         tn = self._normalize_chat_id(t)
         if sn == tn:

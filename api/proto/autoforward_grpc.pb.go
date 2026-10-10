@@ -26,6 +26,7 @@ const (
 	SessionControlService_BackupSession_FullMethodName    = "/autoforward.SessionControlService/BackupSession"
 	SessionControlService_RestoreSession_FullMethodName   = "/autoforward.SessionControlService/RestoreSession"
 	SessionControlService_TerminateSession_FullMethodName = "/autoforward.SessionControlService/TerminateSession"
+	SessionControlService_ResolveChat_FullMethodName      = "/autoforward.SessionControlService/ResolveChat"
 )
 
 // SessionControlServiceClient is the client API for SessionControlService service.
@@ -39,6 +40,7 @@ type SessionControlServiceClient interface {
 	BackupSession(ctx context.Context, in *BackupSessionRequest, opts ...grpc.CallOption) (*BackupSessionResponse, error)
 	RestoreSession(ctx context.Context, in *RestoreSessionRequest, opts ...grpc.CallOption) (*RestoreSessionResponse, error)
 	TerminateSession(ctx context.Context, in *TerminateSessionRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	ResolveChat(ctx context.Context, in *ResolveChatRequest, opts ...grpc.CallOption) (*ResolveChatResponse, error)
 }
 
 type sessionControlServiceClient struct {
@@ -119,6 +121,16 @@ func (c *sessionControlServiceClient) TerminateSession(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *sessionControlServiceClient) ResolveChat(ctx context.Context, in *ResolveChatRequest, opts ...grpc.CallOption) (*ResolveChatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveChatResponse)
+	err := c.cc.Invoke(ctx, SessionControlService_ResolveChat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SessionControlServiceServer is the server API for SessionControlService service.
 // All implementations must embed UnimplementedSessionControlServiceServer
 // for forward compatibility.
@@ -130,6 +142,7 @@ type SessionControlServiceServer interface {
 	BackupSession(context.Context, *BackupSessionRequest) (*BackupSessionResponse, error)
 	RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error)
 	TerminateSession(context.Context, *TerminateSessionRequest) (*StatusResponse, error)
+	ResolveChat(context.Context, *ResolveChatRequest) (*ResolveChatResponse, error)
 	mustEmbedUnimplementedSessionControlServiceServer()
 }
 
@@ -160,6 +173,9 @@ func (UnimplementedSessionControlServiceServer) RestoreSession(context.Context, 
 }
 func (UnimplementedSessionControlServiceServer) TerminateSession(context.Context, *TerminateSessionRequest) (*StatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TerminateSession not implemented")
+}
+func (UnimplementedSessionControlServiceServer) ResolveChat(context.Context, *ResolveChatRequest) (*ResolveChatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveChat not implemented")
 }
 func (UnimplementedSessionControlServiceServer) mustEmbedUnimplementedSessionControlServiceServer() {}
 func (UnimplementedSessionControlServiceServer) testEmbeddedByValue()                               {}
@@ -308,6 +324,24 @@ func _SessionControlService_TerminateSession_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SessionControlService_ResolveChat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveChatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionControlServiceServer).ResolveChat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionControlService_ResolveChat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionControlServiceServer).ResolveChat(ctx, req.(*ResolveChatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SessionControlService_ServiceDesc is the grpc.ServiceDesc for SessionControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -342,6 +376,10 @@ var SessionControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TerminateSession",
 			Handler:    _SessionControlService_TerminateSession_Handler,
+		},
+		{
+			MethodName: "ResolveChat",
+			Handler:    _SessionControlService_ResolveChat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

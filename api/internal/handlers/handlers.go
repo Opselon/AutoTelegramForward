@@ -209,6 +209,36 @@ func checkRuleEndpoints(source, target, intermediate string, useIntermediate boo
 	return true, "ok"
 }
 
+// isNumericChatID reports whether the chat id is a numeric Telegram id
+// (optionally -100-prefixed channel id, negative group id or positive user id).
+// The dispatcher does `int(chat_id)` before sending, so any username in a rule
+// would crash delivery at dispatch time — rules must always store numeric ids.
+func isNumericChatID(id string) bool {
+	_, err := strconv.ParseInt(strings.TrimSpace(id), 10, 64)
+	return err == nil
+}
+
+// resolveChat turns a username/link into a numeric chat id via the core
+// session. Returns ("", "") when no resolution was needed or possible without
+// error; (id, "") on success; ("", reason) when resolution failed.
+func (h *Handlers) resolveChat(ctx context.Context, sessionID, handle string) (string, string) {
+	norm := normalizeChatID(handle)
+	if norm == "" || isNumericChatID(norm) {
+		return "", "" // nothing to resolve
+	}
+	resp, err := h.c.Sessions.ResolveChat(ctx, &pb.ResolveChatRequest{
+		SessionId: sessionID,
+		Handle:    handle,
+	})
+	if err != nil {
+		return "", "resolve_failed: " + err.Error()
+	}
+	if !resp.Found {
+		return "", "resolve_failed: " + resp.Error
+	}
+	return resp.ChatId, ""
+}
+
 func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 	id := identity(r)
 	var rule pb.ForwardRule
@@ -221,6 +251,46 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 			"code":  errCode,
 		})
 		return
+	}
+	// Always store canonical numeric chat ids: the dispatcher calls
+	// int(chat_id) before sending, so a username would break delivery.
+	ctx, cancel0 := withTimeout(r)
+	sid, errS := h.resolveChat(ctx, rule.SessionId, rule.SourceChatId)
+	cancel0()
+	if errS != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
+		return
+	}
+	if sid != "" {
+		rule.SourceChatId = sid
+		if rule.SourceChatName == "" {
+			rule.SourceChatName = rule.SourceChatId
+		}
+	}
+	ctx, cancel1 := withTimeout(r)
+	tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId)
+	cancel1()
+	if errT != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errT, "code": "target_resolve_failed"})
+		return
+	}
+	if tid != "" {
+		rule.TargetChatId = tid
+		if rule.TargetChatName == "" {
+			rule.TargetChatName = rule.TargetChatId
+		}
+	}
+	if rule.UseIntermediate && rule.IntermediateChannelId != "" {
+		ctx, cancel2 := withTimeout(r)
+		iid, errI := h.resolveChat(ctx, rule.SessionId, rule.IntermediateChannelId)
+		cancel2()
+		if errI != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errI, "code": "intermediate_resolve_failed"})
+			return
+		}
+		if iid != "" {
+			rule.IntermediateChannelId = iid
+		}
 	}
 	rule.OwnerUserId = id.UserID
 	ctx, cancel := withTimeout(r)
@@ -269,6 +339,28 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 				"code":  errCode,
 			})
 			return
+		}
+	}
+	// Canonicalize any username/link endpoints to numeric ids (same contract
+	// as CreateRule — see the resolveChat doc comment).
+	if sid, errS := h.resolveChat(ctx, rule.SessionId, rule.SourceChatId); errS != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
+		return
+	} else if sid != "" {
+		rule.SourceChatId = sid
+	}
+	if tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId); errT != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errT, "code": "target_resolve_failed"})
+		return
+	} else if tid != "" {
+		rule.TargetChatId = tid
+	}
+	if rule.UseIntermediate && rule.IntermediateChannelId != "" {
+		if iid, errI := h.resolveChat(ctx, rule.SessionId, rule.IntermediateChannelId); errI != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errI, "code": "intermediate_resolve_failed"})
+			return
+		} else if iid != "" {
+			rule.IntermediateChannelId = iid
 		}
 	}
 	rule.OwnerUserId = id.UserID

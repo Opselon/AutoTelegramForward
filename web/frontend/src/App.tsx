@@ -384,6 +384,11 @@ export function App() {
           ? 'خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است و امکان ارسال به مبدأ وجود ندارد'
           : 'Routing Loop Detected: Source and target endpoints cannot be identical'
       }
+      if (msg.includes('not_numeric') || msg.includes('resolve_failed')) {
+        msg = isRtl
+          ? 'شناسه چنل نامعتبر است: آیدی باید عددی باشد یا با اتصال ربات قابل رزولوشن باشد (اسم چنل را وارد کنید و مطمئن شوید ربات عضو آن چنل است)'
+          : 'Invalid chat id: use a numeric id, or a username the connected account can resolve (make sure the account has joined that channel)'
+      }
       showToast(msg)
     }
   }

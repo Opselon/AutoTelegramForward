@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import autoforward_pb2 as autoforward__pb2
+from . import autoforward_pb2 as autoforward__pb2
 
 GRPC_GENERATED_VERSION = '1.84.0'
 GRPC_VERSION = grpc.__version__
@@ -73,6 +73,11 @@ class SessionControlServiceStub:
                 request_serializer=autoforward__pb2.TerminateSessionRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.StatusResponse.FromString,
                 _registered_method=True)
+        self.ResolveChat = channel.unary_unary(
+                '/autoforward.SessionControlService/ResolveChat',
+                request_serializer=autoforward__pb2.ResolveChatRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ResolveChatResponse.FromString,
+                _registered_method=True)
 
 
 class SessionControlServiceServicer:
@@ -124,6 +129,12 @@ class SessionControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ResolveChat(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SessionControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -161,6 +172,11 @@ def add_SessionControlServiceServicer_to_server(servicer, server):
                     servicer.TerminateSession,
                     request_deserializer=autoforward__pb2.TerminateSessionRequest.FromString,
                     response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'ResolveChat': grpc.unary_unary_rpc_method_handler(
+                    servicer.ResolveChat,
+                    request_deserializer=autoforward__pb2.ResolveChatRequest.FromString,
+                    response_serializer=autoforward__pb2.ResolveChatResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -356,6 +372,33 @@ class SessionControlService:
             '/autoforward.SessionControlService/TerminateSession',
             autoforward__pb2.TerminateSessionRequest.SerializeToString,
             autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ResolveChat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.SessionControlService/ResolveChat',
+            autoforward__pb2.ResolveChatRequest.SerializeToString,
+            autoforward__pb2.ResolveChatResponse.FromString,
             options,
             channel_credentials,
             insecure,
