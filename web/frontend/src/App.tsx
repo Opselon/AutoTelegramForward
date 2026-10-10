@@ -609,6 +609,7 @@ export function App() {
       {/* Toast Notification */}
       {toast && (
         <div
+          className="toast-fixed"
           style={{
             position: 'fixed',
             bottom: 24,
@@ -645,7 +646,7 @@ export function App() {
           gap: 14,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="header-title-wrap" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div
             style={{
               width: 42,
@@ -1057,9 +1058,9 @@ export function App() {
                   }}
                 >
                   {/* Top Bar of Card */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+                  <div className="rule-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <div className="rule-badges" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         {isVipHop && (
                           <span className="badge badge-vip" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
                             <Sparkles size={11} />
@@ -1116,7 +1117,7 @@ export function App() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <div className="rule-card-actions" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       <button
                         onClick={() => handleToggleRule(rule.id)}
                         className="btn"
@@ -1134,7 +1135,7 @@ export function App() {
                       {rule.is_paused ? (
                         <button
                           onClick={() => handleResumeRule(rule.id)}
-                          className="btn btn-secondary"
+                          className="btn btn-secondary icon-btn"
                           style={{ padding: '4px 8px', fontSize: '0.72rem', color: '#34d399' }}
                           title={isRtl ? 'از سر گیری' : 'Resume'}
                         >
@@ -1144,7 +1145,7 @@ export function App() {
                       ) : (
                         <button
                           onClick={() => handlePauseRule(rule.id)}
-                          className="btn btn-secondary"
+                          className="btn btn-secondary icon-btn"
                           style={{ padding: '4px 8px', fontSize: '0.72rem', color: '#fbbf24' }}
                           title={isRtl ? 'توقف' : 'Pause'}
                         >
@@ -1163,7 +1164,7 @@ export function App() {
                           }
                           setIsRuleModalOpen(true)
                         }}
-                        className="btn btn-secondary"
+                        className="btn btn-secondary icon-btn"
                         style={{ padding: '5px' }}
                         title={isRtl ? 'ویرایش' : 'Edit'}
                       >
@@ -1172,7 +1173,7 @@ export function App() {
 
                       <button
                         onClick={() => handleDeleteRule(rule.id)}
-                        className="btn btn-danger"
+                        className="btn btn-danger icon-btn"
                         style={{ padding: '5px' }}
                         title={isRtl ? 'حذف' : 'Delete'}
                       >
@@ -1182,15 +1183,15 @@ export function App() {
                   </div>
 
                   {/* Channel Flow Diagram — Mobile (Vertical Stack) */}
-                  <div className="channel-flow-mobile" style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="channel-flow-mobile" style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, border: '1px solid rgba(255, 255, 255, 0.05)', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0 }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>{isRtl ? 'کانال مبدأ (A)' : 'Source A'}</div>
                         <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {rule.source_chat_name || rule.source_chat_id}
                         </div>
                       </div>
-                      <span className="font-mono-ltr" style={{ fontSize: '0.72rem', color: '#64748b', flexShrink: 0, marginInlineStart: 8 }}>
+                      <span className="font-mono-ltr channel-id-mono" style={{ fontSize: '0.72rem', color: '#64748b', flexShrink: 0, marginInlineStart: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '46%' }}>
                         {rule.source_chat_id}
                       </span>
                     </div>
@@ -1204,27 +1205,27 @@ export function App() {
                     </div>
 
                     {rule.use_intermediate && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(245, 158, 11, 0.08)', padding: '6px 10px', borderRadius: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0, background: 'rgba(245, 158, 11, 0.08)', padding: '6px 10px', borderRadius: 6 }}>
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ color: '#fbbf24', fontSize: '0.68rem' }}>{isRtl ? 'کانال واسط (C)' : 'Hop C'}</div>
                           <div style={{ fontWeight: 600, color: '#fbbf24', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {rule.intermediate_channel_name || rule.intermediate_channel_id}
                           </div>
                         </div>
-                        <span className="font-mono-ltr" style={{ fontSize: '0.7rem', color: '#b45309', flexShrink: 0, marginInlineStart: 8 }}>
+                        <span className="font-mono-ltr channel-id-mono" style={{ fontSize: '0.7rem', color: '#b45309', flexShrink: 0, marginInlineStart: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '46%' }}>
                           {rule.intermediate_channel_id}
                         </span>
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0 }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>{isRtl ? 'مقصد نهایی (B)' : 'Target B'}</div>
                         <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {rule.target_chat_name || rule.target_chat_id}
                         </div>
                       </div>
-                      <span className="font-mono-ltr" style={{ fontSize: '0.72rem', color: '#64748b', flexShrink: 0, marginInlineStart: 8 }}>
+                      <span className="font-mono-ltr channel-id-mono" style={{ fontSize: '0.72rem', color: '#64748b', flexShrink: 0, marginInlineStart: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '46%' }}>
                         {rule.target_chat_id}
                       </span>
                     </div>
@@ -1328,6 +1329,7 @@ export function App() {
                   {/* Live per-rule counters from the delivery pipeline */}
                   {liveStat && (
                     <div
+                      className="rule-stats"
                       style={{
                         display: 'flex',
                         gap: 0,
@@ -1338,25 +1340,33 @@ export function App() {
                         fontSize: '0.72rem',
                       }}
                     >
-                      <div style={{ flex: 1, padding: '7px 6px', background: 'rgba(16, 185, 129, 0.10)', textAlign: 'center' }}>
+                      <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: 'rgba(16, 185, 129, 0.10)', textAlign: 'center' }}>
                         <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'فوروارد' : 'FWD'}</div>
                         <div style={{ fontWeight: 800, color: '#34d399', lineHeight: 1.35 }}>{liveStat.forwarded ?? 0}</div>
                       </div>
-                      <div style={{ flex: 1, padding: '7px 6px', background: 'rgba(59, 130, 246, 0.10)', textAlign: 'center' }}>
+                      <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: 'rgba(59, 130, 246, 0.10)', textAlign: 'center' }}>
                         <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'فیلتر' : 'FILT'}</div>
                         <div style={{ fontWeight: 800, color: '#60a5fa', lineHeight: 1.35 }}>{liveStat.filtered ?? 0}</div>
                       </div>
-                      <div style={{ flex: 1, padding: '7px 6px', background: liveStat.errors > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.07)', textAlign: 'center' }}>
+                      <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: liveStat.errors > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.07)', textAlign: 'center' }}>
                         <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'خطا' : 'ERR'}</div>
                         <div style={{ fontWeight: 800, color: liveStat.errors > 0 ? '#fca5a5' : '#64748b', lineHeight: 1.35 }}>{liveStat.errors ?? 0}</div>
                       </div>
-                      <div style={{ flex: 1.3, padding: '7px 6px', background: 'rgba(99, 102, 241, 0.06)', textAlign: 'center' }}>
-                        <div style={{ color: '#64748b', fontSize: '0.62rem' }}>{isRtl ? 'آخرین فوروارد' : 'LAST'}</div>
-                        <div style={{ fontWeight: 700, color: '#818cf8', fontSize: '0.7rem' }}>
+                      <div
+                        className="rule-stat-last"
+                        style={{
+                          flex: 1.3,
+                          padding: '7px 6px',
+                          background: 'rgba(99, 102, 241, 0.06)',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <span style={{ color: '#64748b', fontSize: '0.62rem' }}>{isRtl ? 'آخرین فوروارد' : 'LAST'}</span>
+                        <span style={{ fontWeight: 700, color: '#818cf8', fontSize: '0.7rem' }}>
                           {liveStat.last_forward_ts
                             ? new Date(liveStat.last_forward_ts * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
                             : '—'}
-                        </div>
+                        </span>
                       </div>
                     </div>
                   )}
@@ -1422,7 +1432,7 @@ export function App() {
 
       {/* TAB 2: SMART SIMULATOR */}
       {activeTab === 'simulator' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
+        <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
           {/* Controls Panel */}
           <div className="glass-panel" style={{ padding: 24 }}>
             <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1708,7 +1718,7 @@ export function App() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
+          <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
             {(Array.isArray(aiConfigs) ? aiConfigs : []).map((ai) => (
               <div key={ai.id} className="glass-panel" style={{ padding: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -1768,7 +1778,7 @@ export function App() {
 
       {/* TAB: AI PV ASSISTANT */}
       {activeTab === 'pv' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
+        <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
           {/* Main Controls & Prompt */}
           <div className="glass-panel" style={{ padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -2162,7 +2172,7 @@ export function App() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
+          <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
             {(Array.isArray(filterRules) ? filterRules : []).map((f) => (
               <div key={f.id} className="glass-panel" style={{ padding: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -2317,7 +2327,7 @@ export function App() {
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
+          <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
             {/* Active Delivery Queue */}
             <div className="glass-panel" style={{ padding: 20 }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2860,6 +2870,7 @@ export function App() {
       {/* CREATE / EDIT RULE MODAL */}
       {isRuleModalOpen && (
         <div
+          className="modal-overlay"
           style={{
             position: 'fixed',
             inset: 0,
@@ -2873,7 +2884,7 @@ export function App() {
           }}
         >
           <div
-            className="glass-panel"
+            className="glass-panel modal-sheet"
             style={{
               width: '100%',
               maxWidth: 680,
@@ -2882,17 +2893,18 @@ export function App() {
               padding: 28,
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexShrink: 0 }}>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
                 {ruleFormData.id ? (isRtl ? 'ویرایش قانون فوروارد' : 'Edit Forward Rule') : (isRtl ? 'قانون فوروارد جدید' : 'New Forward Rule')}
               </h3>
-              <button onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary" style={{ padding: 6 }}>
+              <button onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary icon-btn" style={{ padding: 6 }}>
                 <X size={16} />
               </button>
             </div>
 
+            <div className="modal-sheet-body">
             <form onSubmit={handleSaveRule}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <div className="rule-modal-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
                     {isRtl ? 'شناسه کانال مبدأ (A):' : 'Source Chat ID (A):'} *
@@ -2920,7 +2932,7 @@ export function App() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <div className="rule-modal-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
                     {isRtl ? 'شناسه کانال مقصد (B):' : 'Target Chat ID (B):'} *
@@ -3151,7 +3163,7 @@ export function App() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
+              <div className="modal-sheet-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
                 <button type="button" onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary">
                   {isRtl ? 'انصراف' : 'Cancel'}
                 </button>
@@ -3179,6 +3191,7 @@ export function App() {
                 })()}
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
