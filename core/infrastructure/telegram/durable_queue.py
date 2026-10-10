@@ -41,11 +41,13 @@ class DurableQueueManager:
         max_queue_size: int = 10000,
         max_per_minute_per_target: int = 25,
         metrics_repo: Any = None,
+        log_client: Any = None,
     ) -> None:
         self._queue = queue_repo
         self._map = message_map_repo
         self._pool = client_pool
         self._num_workers = max(1, num_workers)
+        self._log_client = log_client
         self._lease_duration = lease_duration
         self._max_queue_size = max_queue_size
         self._max_per_minute = max_per_minute_per_target
@@ -297,6 +299,15 @@ class DurableQueueManager:
                 target_msg_id,
                 send_duration,
             )
+            if self._log_client is not None:
+                try:
+                    self._log_client.info(
+                        "pipeline", "forward",
+                        f"delivered rule={job.rule_id[:8]} {job.source_chat_id}:{job.source_message_id} → {target}",
+                        {"msg_id": target_msg_id, "ms": round(send_duration * 1000)},
+                    )
+                except Exception:
+                    pass
             if self._metrics is not None:
                 try:
                     await self._metrics.bump(forwarded=1)
@@ -374,6 +385,10 @@ class DurableQueueManager:
                         "PEER_ID_INVALID",
                         "CHANNEL_PRIVATE",
                         "CHAT_RESTRICTED",
+                        "CHANNEL_INVALID",
+                        "CHAT_ID_INVALID",
+                        "USERNAME_INVALID",
+                        "USERNAME_NOT_OCCUPIED",
                     )
                 )
                 or any(
@@ -385,6 +400,9 @@ class DurableQueueManager:
                         "PeerIdInvalid",
                         "ChannelPrivate",
                         "ChatRestricted",
+                        "ChannelInvalid",
+                        "UsernameInvalid",
+                        "UsernameNotOccupied",
                     )
                 )
             )
