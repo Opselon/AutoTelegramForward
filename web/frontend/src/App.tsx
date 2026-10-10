@@ -13,6 +13,8 @@ import {
   Zap,
   Globe,
   ChevronRight,
+  ChevronLeft,
+  ArrowDown,
   Sparkles,
   Bot,
   Filter,
@@ -64,6 +66,14 @@ export function App() {
   const [ruleLiveStats, setRuleLiveStats] = useState<RuleLiveStat[]>([])
   const [recentErrors, setRecentErrors] = useState<RecentError[]>([])
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
+  const [dismissedErrors, setDismissedErrors] = useState<Set<string>>(() => {
+    try {
+      const saved = sessionStorage.getItem('atf_dismissed_errors')
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
   const [gatewayInfo, setGatewayInfo] = useState<GatewaySystemInfo | null>(null)
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [logs, setLogs] = useState<LogItem[]>([])
@@ -155,13 +165,25 @@ export function App() {
           if (!worst) return null
           const name = worst.error_name || worst.category || ''
           let detail = worst.detail || ''
+          // Input validation errors like loop detection belong in modal/bot feedback, not top banner
+          if (detail.includes('loop_detected') || detail.includes('Invalid rule endpoints')) {
+            return null
+          }
+          // Do not surface historical errors older than 30 minutes as active alert banner
+          const nowTs = Math.floor(Date.now() / 1000)
+          if (worst.ts && (nowTs - worst.ts > 1800)) {
+            return null
+          }
           // Python logs often arrive as "ValueError: ValueError <msg>" — strip the
           // duplicated exception class so the banner reads as one clean sentence.
           if (name && detail.toLowerCase().startsWith(name.toLowerCase())) {
             detail = detail.slice(name.length).replace(/^[\s:：]+/, '')
           }
           const text = (name && detail) ? `${name}: ${detail}` : (detail || name)
-          return text.slice(0, 220) || null
+          const errKey = `${worst.ts || 0}_${name}_${detail}`
+          const sliced = text.slice(0, 220)
+          if (dismissedErrors.has(errKey) || dismissedErrors.has(text) || dismissedErrors.has(sliced)) return null
+          return sliced || null
         })())
       }
       if (r.length > 0 && !simSelectedRuleId) {
@@ -541,7 +563,7 @@ export function App() {
   }
 
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} style={{ padding: '24px 20px', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="app-container" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* User bar */}
       <UserBar lang={lang} />
       {/* Proactive Error Banner — newest ERROR/WARN from the delivery pipeline */}
@@ -565,7 +587,18 @@ export function App() {
             {errorBanner}
           </span>
           <button
-            onClick={() => setErrorBanner(null)}
+            onClick={() => {
+              if (errorBanner) {
+                setDismissedErrors((prev) => {
+                  const next = new Set(prev).add(errorBanner)
+                  try {
+                    sessionStorage.setItem('atf_dismissed_errors', JSON.stringify([...next]))
+                  } catch {}
+                  return next
+                })
+              }
+              setErrorBanner(null)
+            }}
             style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 2, flexShrink: 0 }}
             title={isRtl ? 'بستن' : 'Dismiss'}
           >
@@ -601,42 +634,43 @@ export function App() {
 
       {/* Header Bar */}
       <header
-        className="glass-panel"
+        className="glass-panel header-container"
         style={{
-          padding: '16px 24px',
-          marginBottom: 24,
+          padding: '16px 20px',
+          marginBottom: 20,
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 16,
+          gap: 14,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div
             style={{
-              width: 44,
-              height: 44,
+              width: 42,
+              height: 42,
               borderRadius: 12,
               background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               boxShadow: '0 4px 15px rgba(99, 102, 241, 0.4)',
+              flexShrink: 0,
             }}
           >
-            <Radio size={24} color="#fff" />
+            <Radio size={22} color="#fff" />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h1 style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: '1.15rem', fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>
                 AutoTelegramForward <span style={{ color: '#818cf8', fontWeight: 600 }}>PRO GATEWAY</span>
               </h1>
-              <span className="badge badge-vip" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>
+              <span className="badge badge-vip" style={{ fontSize: '0.72rem', padding: '2px 8px' }}>
                 v{gatewayInfo?.version ?? '1.2.2'} RELEASE
               </span>
             </div>
-            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 2 }}>
+            <p className="text-balance" style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2, margin: 0 }}>
               {isRtl
                 ? 'سامانه یکپارچه فوروارد هوشمند، میکروسرویس Rust + React و درگاه DevOps'
                 : 'Unified Smart Telegram Forwarding Gateway & Microservice Platform'}
@@ -645,29 +679,29 @@ export function App() {
         </div>
 
         {/* Microservice Health Indicators */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 6,
               background: 'rgba(15, 23, 42, 0.6)',
-              padding: '6px 12px',
+              padding: '5px 10px',
               borderRadius: 8,
               border: '1px solid rgba(255, 255, 255, 0.06)',
-              fontSize: '0.8rem',
+              fontSize: '0.75rem',
             }}
           >
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 7,
+                height: 7,
                 borderRadius: '50%',
                 background: stats?.atf_core_online ? '#10b981' : '#ef4444',
                 boxShadow: stats?.atf_core_online ? '0 0 8px #10b981' : '0 0 8px #ef4444',
               }}
             />
-            <span style={{ color: '#cbd5e1' }}>Core gRPC:6001</span>
+            <span style={{ color: '#cbd5e1' }}>Core:6001</span>
           </div>
 
           <div
@@ -676,22 +710,22 @@ export function App() {
               alignItems: 'center',
               gap: 6,
               background: 'rgba(15, 23, 42, 0.6)',
-              padding: '6px 12px',
+              padding: '5px 10px',
               borderRadius: 8,
               border: '1px solid rgba(255, 255, 255, 0.06)',
-              fontSize: '0.8rem',
+              fontSize: '0.75rem',
             }}
           >
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 7,
+                height: 7,
                 borderRadius: '50%',
                 background: stats?.atf_logger_online ? '#10b981' : '#ef4444',
                 boxShadow: stats?.atf_logger_online ? '0 0 8px #10b981' : '0 0 8px #ef4444',
               }}
             />
-            <span style={{ color: '#cbd5e1' }}>Logger:6002</span>
+            <span style={{ color: '#cbd5e1' }}>Log:6002</span>
           </div>
 
           <div
@@ -700,31 +734,31 @@ export function App() {
               alignItems: 'center',
               gap: 6,
               background: 'rgba(15, 23, 42, 0.6)',
-              padding: '6px 12px',
+              padding: '5px 10px',
               borderRadius: 8,
               border: '1px solid rgba(255, 255, 255, 0.06)',
-              fontSize: '0.8rem',
+              fontSize: '0.75rem',
             }}
           >
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 7,
+                height: 7,
                 borderRadius: '50%',
                 background: '#10b981',
                 boxShadow: '0 0 8px #10b981',
               }}
             />
-            <span style={{ color: '#cbd5e1' }}>Rust Web:8088</span>
+            <span style={{ color: '#cbd5e1' }}>Web:8088</span>
           </div>
 
           {/* Language Toggle */}
           <button
             onClick={() => setLang(lang === 'fa' ? 'en' : 'fa')}
             className="btn btn-secondary"
-            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+            style={{ padding: '5px 10px', fontSize: '0.78rem' }}
           >
-            <Globe size={14} />
+            <Globe size={13} />
             <span>{lang === 'fa' ? 'English' : 'فارسی'}</span>
           </button>
 
@@ -733,66 +767,67 @@ export function App() {
             onClick={loadData}
             disabled={loading}
             className="btn btn-secondary"
-            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+            style={{ padding: '5px 10px', fontSize: '0.78rem' }}
             title={isRtl ? 'به‌روزرسانی داده‌ها' : 'Refresh'}
           >
-            <RotateCcw size={14} />
+            <RotateCcw size={13} />
           </button>
         </div>
       </header>
 
       {/* Overview Stat Badges */}
       <div
+        className="overview-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: 16,
-          marginBottom: 24,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: 14,
+          marginBottom: 20,
         }}
       >
-        <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ padding: 10, borderRadius: 10, background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>
-            <Layers size={22} />
+        <div className="glass-panel overview-card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ padding: 8, borderRadius: 10, background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', flexShrink: 0 }}>
+            <Layers size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'کل قوانین فعال' : 'Active Rules'}</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>
-              {stats?.active_rules ?? 0} <span style={{ fontSize: '0.85rem', color: '#64748b' }}>/ {stats?.total_rules ?? 0}</span>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{isRtl ? 'کل قوانین فعال' : 'Active Rules'}</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>
+              {stats?.active_rules ?? 0} <span style={{ fontSize: '0.8rem', color: '#64748b' }}>/ {stats?.total_rules ?? 0}</span>
             </div>
           </div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ padding: 10, borderRadius: 10, background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>
-            <Send size={22} />
+        <div className="glass-panel overview-card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ padding: 8, borderRadius: 10, background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', flexShrink: 0 }}>
+            <Send size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'فوروارد ۲۴ ساعت' : 'Forwarded 24h'}</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fbbf24' }}>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{isRtl ? 'فوروارد ۲۴ ساعت' : 'Forwarded 24h'}</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fbbf24' }}>
               {stats?.total_forwarded_24h ?? 0}
             </div>
           </div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ padding: 10, borderRadius: 10, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399' }}>
-            <Users size={22} />
+        <div className="glass-panel overview-card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ padding: 8, borderRadius: 10, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', flexShrink: 0 }}>
+            <Users size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'سشن‌های متصل' : 'Connected Sessions'}</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>
-              {stats?.active_sessions ?? 0} <span style={{ fontSize: '0.85rem', color: '#64748b' }}>/ {stats?.total_sessions ?? 0}</span>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{isRtl ? 'سشن‌های متصل' : 'Connected Sessions'}</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>
+              {stats?.active_sessions ?? 0} <span style={{ fontSize: '0.8rem', color: '#64748b' }}>/ {stats?.total_sessions ?? 0}</span>
             </div>
           </div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ padding: 10, borderRadius: 10, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
-            <Activity size={22} />
+        <div className="glass-panel overview-card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ padding: 8, borderRadius: 10, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', flexShrink: 0 }}>
+            <Activity size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'صف خطاها (DLQ)' : 'Dead Letter Queue'}</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: dlqJobs.length > 0 ? '#ef4444' : '#94a3b8' }}>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{isRtl ? 'صف خطاها (DLQ)' : 'Dead Letter Queue'}</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: dlqJobs.length > 0 ? '#ef4444' : '#94a3b8' }}>
               {dlqJobs.length}
             </div>
           </div>
@@ -801,14 +836,15 @@ export function App() {
 
       {/* Tabs Navigation */}
       <div
-        className="tab-strip"
+        className="tab-strip no-scrollbar"
         style={{
           display: 'flex',
           gap: 8,
           borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          paddingBottom: 12,
-          marginBottom: 24,
+          paddingBottom: 10,
+          marginBottom: 20,
           overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
         }}
       >
         <button
@@ -819,9 +855,11 @@ export function App() {
             color: activeTab === 'rules' ? '#818cf8' : '#94a3b8',
             border: activeTab === 'rules' ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid transparent',
             fontWeight: activeTab === 'rules' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
         >
-          <Radio size={16} />
+          <Radio size={15} />
           <span>{isRtl ? 'قوانین و مسیرها' : 'Rules & Routes'}</span>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({rules.length})</span>
         </button>
@@ -834,9 +872,11 @@ export function App() {
             color: activeTab === 'simulator' ? '#fbbf24' : '#94a3b8',
             border: activeTab === 'simulator' ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent',
             fontWeight: activeTab === 'simulator' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
         >
-          <PlayCircle size={16} />
+          <PlayCircle size={15} />
           <span>{isRtl ? 'شبیه‌ساز زنده مسیر' : 'Smart Simulator'}</span>
           <span className="badge badge-vip" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>TEST</span>
         </button>
@@ -849,9 +889,11 @@ export function App() {
             color: activeTab === 'ai' ? '#c084fc' : '#94a3b8',
             border: activeTab === 'ai' ? '1px solid rgba(168, 85, 247, 0.4)' : '1px solid transparent',
             fontWeight: activeTab === 'ai' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
         >
-          <Bot size={16} />
+          <Bot size={15} />
           <span>{isRtl ? 'هوش مصنوعی' : 'AI Intelligence'}</span>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({aiConfigs.length})</span>
         </button>
@@ -867,12 +909,14 @@ export function App() {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
         >
-          <MessageSquare size={16} />
-          <span>{isRtl ? 'دستیار هوشمند پی‌وی' : 'PV Assistant'}</span>
+          <MessageSquare size={15} />
+          <span>{isRtl ? 'دستیار پی‌وی' : 'PV Assistant'}</span>
           {pvConfig?.enabled && (
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
           )}
         </button>
 
@@ -884,9 +928,11 @@ export function App() {
             color: activeTab === 'filters' ? '#60a5fa' : '#94a3b8',
             border: activeTab === 'filters' ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid transparent',
             fontWeight: activeTab === 'filters' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
         >
-          <Filter size={16} />
+          <Filter size={15} />
           <span>{isRtl ? 'فیلترهای پیشرفته' : 'Advanced Filters'}</span>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({filterRules.length})</span>
         </button>
@@ -899,9 +945,11 @@ export function App() {
             color: activeTab === 'sessions' ? '#34d399' : '#94a3b8',
             border: activeTab === 'sessions' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent',
             fontWeight: activeTab === 'sessions' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
         >
-          <Users size={16} />
+          <Users size={15} />
           <span>{isRtl ? 'سشن‌های تلگرام' : 'Telegram Sessions'}</span>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({sessions.length})</span>
         </button>
@@ -914,9 +962,11 @@ export function App() {
             color: activeTab === 'queue' ? '#f87171' : '#94a3b8',
             border: activeTab === 'queue' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid transparent',
             fontWeight: activeTab === 'queue' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
         >
-          <Inbox size={16} />
+          <Inbox size={15} />
           <span>{isRtl ? 'صف تحویل و DLQ' : 'Queue & DLQ'}</span>
           {dlqJobs.length > 0 && (
             <span style={{ background: '#ef4444', color: '#fff', borderRadius: '50%', padding: '1px 6px', fontSize: '0.7rem' }}>
@@ -930,25 +980,27 @@ export function App() {
           className="btn"
           style={{
             background: activeTab === 'devops' ? 'rgba(148, 163, 184, 0.2)' : 'transparent',
-            color: activeTab === 'devops' ? '#f1f5f9' : '#94a3b8',
-            border: activeTab === 'devops' ? '1px solid rgba(255, 255, 255, 0.3)' : '1px solid transparent',
+            color: activeTab === 'devops' ? '#cbd5e1' : '#94a3b8',
+            border: activeTab === 'devops' ? '1px solid rgba(148, 163, 184, 0.4)' : '1px solid transparent',
             fontWeight: activeTab === 'devops' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
         >
-          <Server size={16} />
-          <span>{isRtl ? 'درگاه DevOps و لاگ‌ها' : 'DevOps Gateway'}</span>
+          <Server size={15} />
+          <span>{isRtl ? 'درگاه DevOps' : 'DevOps & Logs'}</span>
         </button>
       </div>
 
       {/* TAB 1: RULES & ROUTES */}
       {activeTab === 'rules' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div className="hero-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
                 {isRtl ? 'قوانین فوروارد و مسیریابی هوشمند' : 'Smart Forwarding & Routing Rules'}
               </h2>
-              <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
+              <p className="text-balance" style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: 4, margin: 0 }}>
                 {isRtl
                   ? 'تعریف مسیرهای سه‌گانه، سیاست‌های بازنویسی، کنترل حفاظت تلگرام و سوئیچ سریع مسیر'
                   : 'Configure triple-routes, branding hops, bypass policies, and channel mappings'}
@@ -979,14 +1031,14 @@ export function App() {
                 setRuleMeta({})
                 setIsRuleModalOpen(true)
               }}
-              className="btn btn-primary"
+              className="hero-add-btn btn btn-primary"
             >
               <Plus size={16} />
-              <span>{isRtl ? 'افزودن قانون جدید' : 'New Rule'}</span>
+              <span>{isRtl ? 'افزودن قانون جدید +' : 'New Rule +'}</span>
             </button>
           </div>
 
-          <div className="rules-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 20 }}>
+          <div className="rules-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
             {(Array.isArray(rules) ? rules : []).map((rule) => {
               const isVipHop = rule.use_intermediate && rule.message_category === 'VIP_ONLY'
               const isDirectCopy = !rule.use_intermediate && rule.forward_mode !== 'DIRECT_FORWARD'
@@ -996,34 +1048,34 @@ export function App() {
               return (
                 <div
                   key={rule.id}
-                  className="glass-panel"
+                  className="glass-panel rule-card"
                   style={{
-                    padding: '20px',
+                    padding: '16px',
                     position: 'relative',
                     border: isVipHop ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-color)',
                     boxShadow: isVipHop ? '0 0 20px rgba(245, 158, 11, 0.08)' : 'none',
                   }}
                 >
                   {/* Top Bar of Card */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         {isVipHop && (
-                          <span className="badge badge-vip">
-                            <Sparkles size={12} />
-                            {isRtl ? 'مسیر ۲: برندینگ VIP از C' : 'Route 2: VIP Hop via C'}
+                          <span className="badge badge-vip" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                            <Sparkles size={11} />
+                            {isRtl ? 'مسیر ۲: برندینگ VIP' : 'Route 2: VIP Hop'}
                           </span>
                         )}
                         {isDirectCopy && (
-                          <span className="badge badge-direct">
-                            <Copy size={12} />
-                            {isRtl ? 'مسیر ۱: کپی تمیز مستقیم' : 'Route 1: Direct Clean Copy'}
+                          <span className="badge badge-direct" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                            <Copy size={11} />
+                            {isRtl ? 'مسیر ۱: کپی مستقیم' : 'Route 1: Direct Copy'}
                           </span>
                         )}
                         {isNative && (
-                          <span className="badge badge-native">
-                            <Send size={12} />
-                            {isRtl ? 'مسیر ۳: فوروارد نیتیو' : 'Route 3: Native Forward'}
+                          <span className="badge badge-native" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                            <Send size={11} />
+                            {isRtl ? 'مسیر ۳: نیتیو' : 'Route 3: Native'}
                           </span>
                         )}
                         {rule.source_chat_id && rule.target_chat_id &&
@@ -1035,13 +1087,14 @@ export function App() {
                               background: 'rgba(239, 68, 68, 0.2)',
                               color: '#fca5a5',
                               border: '1px solid rgba(239, 68, 68, 0.5)',
+                              fontSize: '0.7rem',
                             }}
                           >
-                            <Shield size={12} color="#ef4444" />
-                            {isRtl ? '⚠️ خطای حلقه' : '⚠️ Loop'}
+                            <Shield size={11} color="#ef4444" />
+                            {isRtl ? 'خطای حلقه' : 'Loop'}
                           </span>
                         )}
-                        <span className="badge badge-gray" style={{ fontSize: '0.75rem' }}>
+                        <span className="badge badge-gray" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
                           P:{rule.priority}
                         </span>
                       </div>
@@ -1049,32 +1102,27 @@ export function App() {
                         title={rule.id}
                         onClick={() => navigator.clipboard?.writeText(rule.id).catch(() => {})}
                         style={{
-                          fontSize: '0.72rem',
+                          fontSize: '0.7rem',
                           color: '#8b95a7',
-                          marginTop: 4,
-                          fontFamily: 'monospace',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: 4,
                           padding: '1px 4px',
                           borderRadius: 4,
-                          transition: 'background 0.15s',
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                       >
-                        <Copy size={10} /> {rule.id.substring(0, 8)}…
+                        <Copy size={10} /> <span className="font-mono-ltr">{rule.id.substring(0, 8)}…</span>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       <button
                         onClick={() => handleToggleRule(rule.id)}
                         className="btn"
                         style={{
                           padding: '4px 8px',
-                          fontSize: '0.75rem',
+                          fontSize: '0.72rem',
                           background: rule.is_active ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
                           color: rule.is_active ? '#34d399' : '#f87171',
                           border: rule.is_active ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
@@ -1087,20 +1135,20 @@ export function App() {
                         <button
                           onClick={() => handleResumeRule(rule.id)}
                           className="btn btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#34d399' }}
-                          title={isRtl ? 'از سر گیری موقت' : 'Resume'}
+                          style={{ padding: '4px 8px', fontSize: '0.72rem', color: '#34d399' }}
+                          title={isRtl ? 'از سر گیری' : 'Resume'}
                         >
-                          <PlayCircle size={13} />
+                          <PlayCircle size={12} />
                           <span>{isRtl ? 'ادامه' : 'Resume'}</span>
                         </button>
                       ) : (
                         <button
                           onClick={() => handlePauseRule(rule.id)}
                           className="btn btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#fbbf24' }}
-                          title={isRtl ? 'توقف موقت' : 'Pause'}
+                          style={{ padding: '4px 8px', fontSize: '0.72rem', color: '#fbbf24' }}
+                          title={isRtl ? 'توقف' : 'Pause'}
                         >
-                          <Clock size={13} />
+                          <Clock size={12} />
                           <span>{isRtl ? 'توقف' : 'Pause'}</span>
                         </button>
                       )}
@@ -1116,81 +1164,137 @@ export function App() {
                           setIsRuleModalOpen(true)
                         }}
                         className="btn btn-secondary"
-                        style={{ padding: '6px' }}
-                        title={isRtl ? 'ویرایش کامل' : 'Edit'}
+                        style={{ padding: '5px' }}
+                        title={isRtl ? 'ویرایش' : 'Edit'}
                       >
-                        <Edit3 size={14} />
+                        <Edit3 size={13} />
                       </button>
 
                       <button
                         onClick={() => handleDeleteRule(rule.id)}
                         className="btn btn-danger"
-                        style={{ padding: '6px' }}
+                        style={{ padding: '5px' }}
                         title={isRtl ? 'حذف' : 'Delete'}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </div>
 
-                  {/* Channel Flow Diagram */}
+                  {/* Channel Flow Diagram — Mobile (Vertical Stack) */}
+                  <div className="channel-flow-mobile" style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>{isRtl ? 'کانال مبدأ (A)' : 'Source A'}</div>
+                        <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {rule.source_chat_name || rule.source_chat_id}
+                        </div>
+                      </div>
+                      <span className="font-mono-ltr" style={{ fontSize: '0.72rem', color: '#64748b', flexShrink: 0, marginInlineStart: 8 }}>
+                        {rule.source_chat_id}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '2px 0' }}>
+                      <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+                      <span className="badge badge-direct" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                        <ArrowDown size={11} /> {rule.use_intermediate ? (isRtl ? 'واسط برند C' : 'Hop C') : (isRtl ? 'مستقیم' : 'Direct')}
+                      </span>
+                      <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+                    </div>
+
+                    {rule.use_intermediate && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(245, 158, 11, 0.08)', padding: '6px 10px', borderRadius: 6 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ color: '#fbbf24', fontSize: '0.68rem' }}>{isRtl ? 'کانال واسط (C)' : 'Hop C'}</div>
+                          <div style={{ fontWeight: 600, color: '#fbbf24', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {rule.intermediate_channel_name || rule.intermediate_channel_id}
+                          </div>
+                        </div>
+                        <span className="font-mono-ltr" style={{ fontSize: '0.7rem', color: '#b45309', flexShrink: 0, marginInlineStart: 8 }}>
+                          {rule.intermediate_channel_id}
+                        </span>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>{isRtl ? 'مقصد نهایی (B)' : 'Target B'}</div>
+                        <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {rule.target_chat_name || rule.target_chat_id}
+                        </div>
+                      </div>
+                      <span className="font-mono-ltr" style={{ fontSize: '0.72rem', color: '#64748b', flexShrink: 0, marginInlineStart: 8 }}>
+                        {rule.target_chat_id}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Channel Flow Diagram — Desktop (Horizontal Row) */}
                   <div
+                    className="channel-flow-desktop"
                     style={{
                       background: 'rgba(15, 23, 42, 0.6)',
                       borderRadius: 10,
                       padding: '12px 14px',
-                      marginBottom: 16,
+                      marginBottom: 14,
                       border: '1px solid rgba(255, 255, 255, 0.05)',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      fontSize: '0.82rem',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: '0.82rem' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{isRtl ? 'کانال مبدا (A)' : 'Source A'}</div>
-                        <div style={{ fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {rule.source_chat_name || rule.source_chat_id}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{rule.source_chat_id}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{isRtl ? 'کانال مبدا (A)' : 'Source A'}</div>
+                      <div style={{ fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {rule.source_chat_name || rule.source_chat_id}
                       </div>
+                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                        <span className="font-mono-ltr">{rule.source_chat_id}</span>
+                      </div>
+                    </div>
 
-                      {rule.use_intermediate ? (
-                        <>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#fbbf24' }}>
-                            <span style={{ fontSize: '0.65rem' }}>Hop</span>
-                            <ArrowRightLeft size={14} />
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
-                            <div style={{ color: '#fbbf24', fontSize: '0.7rem' }}>{isRtl ? 'واسط برند (C)' : 'Brand C'}</div>
-                            <div style={{ fontWeight: 600, color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {rule.intermediate_channel_name || rule.intermediate_channel_id || 'Channel C'}
-                            </div>
-                            <div style={{ fontSize: '0.7rem', color: '#b45309', fontFamily: 'monospace' }}>
-                              {rule.intermediate_channel_id}
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#10b981' }}>
-                            <span style={{ fontSize: '0.65rem' }}>Native</span>
-                            <ChevronRight size={14} />
-                          </div>
-                        </>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#3b82f6', padding: '0 8px' }}>
-                          <span style={{ fontSize: '0.65rem' }}>Direct</span>
-                          <ChevronRight size={14} />
+                    {rule.use_intermediate ? (
+                      <>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#fbbf24', flexShrink: 0 }}>
+                          <span style={{ fontSize: '0.65rem' }}>Hop</span>
+                          <ArrowRightLeft size={14} />
                         </div>
-                      )}
+                        <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+                          <div style={{ color: '#fbbf24', fontSize: '0.7rem' }}>{isRtl ? 'واسط برند (C)' : 'Brand C'}</div>
+                          <div style={{ fontWeight: 600, color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {rule.intermediate_channel_name || rule.intermediate_channel_id || 'Channel C'}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#b45309' }}>
+                            <span className="font-mono-ltr">{rule.intermediate_channel_id}</span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#10b981', flexShrink: 0 }}>
+                          <span style={{ fontSize: '0.65rem' }}>Native</span>
+                          {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#3b82f6', padding: '0 8px', flexShrink: 0 }}>
+                        <span style={{ fontSize: '0.65rem' }}>Direct</span>
+                        {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                      </div>
+                    )}
 
-                      <div style={{ flex: 1, minWidth: 0, textAlign: isRtl ? 'left' : 'right' }}>
-                        <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{isRtl ? 'مقصد نهایی (B)' : 'Target B'}</div>
-                        <div style={{ fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {rule.target_chat_name || rule.target_chat_id}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{rule.target_chat_id}</div>
+                    <div style={{ flex: 1, minWidth: 0, textAlign: isRtl ? 'left' : 'right' }}>
+                      <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{isRtl ? 'مقصد نهایی (B)' : 'Target B'}</div>
+                      <div style={{ fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {rule.target_chat_name || rule.target_chat_id}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                        <span className="font-mono-ltr">{rule.target_chat_id}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Criteria & Details */}
-                  <div style={{ fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 14 }}>
+                  <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 12 }}>
                     {rule.custom_header && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                         <span style={{ color: '#94a3b8' }}>{isRtl ? 'هدر پیام:' : 'Header:'}</span>
@@ -1199,23 +1303,23 @@ export function App() {
                         </code>
                       </div>
                     )}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                      <span className="badge badge-gray" style={{ fontSize: '0.7rem' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                      <span className="badge badge-gray" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
                         {rule.link_policy}
                       </span>
                       {rule.filter_rule_id && (
-                        <span className="badge badge-direct" style={{ fontSize: '0.7rem' }}>
-                          <Filter size={10} /> Filter Rule
+                        <span className="badge badge-direct" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
+                          <Filter size={9} /> Filter
                         </span>
                       )}
                       {rule.ai_config_id && (
-                        <span className="badge badge-vip" style={{ fontSize: '0.7rem' }}>
-                          <Bot size={10} /> AI Enhanced
+                        <span className="badge badge-vip" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
+                          <Bot size={9} /> AI
                         </span>
                       )}
                       {rule.fallback_enabled && (
-                        <span className="badge badge-gray" style={{ fontSize: '0.7rem', color: '#a7f3d0' }}>
-                          <Shield size={10} /> Fallback: {rule.fallback_mode}
+                        <span className="badge badge-gray" style={{ fontSize: '0.68rem', padding: '2px 6px', color: '#a7f3d0' }}>
+                          <Shield size={9} /> Fallback: {rule.fallback_mode}
                         </span>
                       )}
                     </div>
@@ -1234,23 +1338,23 @@ export function App() {
                         fontSize: '0.72rem',
                       }}
                     >
-                      <div style={{ flex: 1, padding: '7px 8px', background: 'rgba(16, 185, 129, 0.10)', textAlign: 'center' }}>
+                      <div style={{ flex: 1, padding: '7px 6px', background: 'rgba(16, 185, 129, 0.10)', textAlign: 'center' }}>
                         <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'فوروارد' : 'FWD'}</div>
                         <div style={{ fontWeight: 800, color: '#34d399', lineHeight: 1.35 }}>{liveStat.forwarded ?? 0}</div>
                       </div>
-                      <div style={{ flex: 1, padding: '7px 8px', background: 'rgba(59, 130, 246, 0.10)', textAlign: 'center' }}>
+                      <div style={{ flex: 1, padding: '7px 6px', background: 'rgba(59, 130, 246, 0.10)', textAlign: 'center' }}>
                         <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'فیلتر' : 'FILT'}</div>
                         <div style={{ fontWeight: 800, color: '#60a5fa', lineHeight: 1.35 }}>{liveStat.filtered ?? 0}</div>
                       </div>
-                      <div style={{ flex: 1, padding: '7px 8px', background: liveStat.errors > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.07)', textAlign: 'center' }}>
+                      <div style={{ flex: 1, padding: '7px 6px', background: liveStat.errors > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.07)', textAlign: 'center' }}>
                         <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'خطا' : 'ERR'}</div>
                         <div style={{ fontWeight: 800, color: liveStat.errors > 0 ? '#fca5a5' : '#64748b', lineHeight: 1.35 }}>{liveStat.errors ?? 0}</div>
                       </div>
-                      <div style={{ flex: 1.4, padding: '7px 8px', background: 'rgba(99, 102, 241, 0.06)', textAlign: 'center' }}>
-                        <div style={{ color: '#64748b', fontSize: '0.62rem' }}>{isRtl ? 'آخرین فوروارد' : 'LAST FWD'}</div>
-                        <div style={{ fontWeight: 700, color: '#818cf8' }}>
+                      <div style={{ flex: 1.3, padding: '7px 6px', background: 'rgba(99, 102, 241, 0.06)', textAlign: 'center' }}>
+                        <div style={{ color: '#64748b', fontSize: '0.62rem' }}>{isRtl ? 'آخرین فوروارد' : 'LAST'}</div>
+                        <div style={{ fontWeight: 700, color: '#818cf8', fontSize: '0.7rem' }}>
                           {liveStat.last_forward_ts
-                            ? new Date(liveStat.last_forward_ts * 1000).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+                            ? new Date(liveStat.last_forward_ts * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
                             : '—'}
                         </div>
                       </div>
@@ -1280,38 +1384,34 @@ export function App() {
                   <div
                     style={{
                       borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-                      paddingTop: 12,
-                      display: 'flex',
-                      gap: 8,
-                      flexWrap: 'wrap',
+                      paddingTop: 10,
                     }}
                   >
-                    <button
-                      onClick={() => handleQuickRouteSwitch(rule.id, 'route1_direct')}
-                      className={`btn ${isDirectCopy ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ flex: 1, fontSize: '0.75rem', padding: '6px 8px' }}
-                    >
-                      <Copy size={12} />
-                      <span>{isRtl ? 'مسیر ۱: مستقیم' : 'Route 1: Direct'}</span>
-                    </button>
+                    <div className="route-switch-grid">
+                      <button
+                        onClick={() => handleQuickRouteSwitch(rule.id, 'route1_direct')}
+                        className={`route-switch-btn btn ${isDirectCopy ? 'btn-primary' : 'btn-secondary'}`}
+                      >
+                        <Copy size={11} />
+                        <span>{isRtl ? 'مسیر ۱: مستقیم' : 'Route 1: Direct'}</span>
+                      </button>
 
-                    <button
-                      onClick={() => handleQuickRouteSwitch(rule.id, 'route2_vip_hop')}
-                      className={`btn ${isVipHop ? 'btn-vip' : 'btn-secondary'}`}
-                      style={{ flex: 1, fontSize: '0.75rem', padding: '6px 8px' }}
-                    >
-                      <Sparkles size={12} />
-                      <span>{isRtl ? 'مسیر ۲: VIP برند C' : 'Route 2: VIP Hop'}</span>
-                    </button>
+                      <button
+                        onClick={() => handleQuickRouteSwitch(rule.id, 'route2_vip_hop')}
+                        className={`route-switch-btn btn ${isVipHop ? 'btn-vip' : 'btn-secondary'}`}
+                      >
+                        <Sparkles size={11} />
+                        <span>{isRtl ? 'مسیر ۲: VIP' : 'Route 2: VIP'}</span>
+                      </button>
 
-                    <button
-                      onClick={() => handleQuickRouteSwitch(rule.id, 'route3_native')}
-                      className={`btn ${isNative ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ flex: 1, fontSize: '0.75rem', padding: '6px 8px' }}
-                    >
-                      <Send size={12} />
-                      <span>{isRtl ? 'مسیر ۳: نیتیو' : 'Route 3: Native'}</span>
-                    </button>
+                      <button
+                        onClick={() => handleQuickRouteSwitch(rule.id, 'route3_native')}
+                        className={`route-switch-btn btn ${isNative ? 'btn-primary' : 'btn-secondary'}`}
+                      >
+                        <Send size={11} />
+                        <span>{isRtl ? 'مسیر ۳: نیتیو' : 'Route 3: Native'}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
