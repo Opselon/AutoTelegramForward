@@ -143,3 +143,47 @@ class LogClient:
             self._task.cancel()
         if self._channel:
             await self._channel.close()
+
+
+# Noise filter — pyrogram's TCP layer spams "Send exception: ConnectionResetError"
+# and asyncio emits one "socket.send() raised exception." per dropped packet
+# during any network blip (641 warnings in 6h on a healthy box). These carry no
+# actionable signal (the client watchdog reconnects) so they never reach the
+# central logger; local stdout keeps them for deep debugging.
+_NOISY_MESSAGES = (
+    "Send exception: ConnectionResetError",
+    "socket.send() raised exception",
+)
+
+
+class CentralLogHandler(logging.Handler):
+    """Mirror every ERROR/WARN log record into the central logger service.
+
+    Installed once on the root logger, so every module's logger.warning/error
+    (pv_responder, dispatcher, pipeline, …) lands in the Web-UI Log Explorer
+    without each call-site needing to know about the LogClient. INFO stays
+    opt-in per call-site to keep the central store high-signal.
+    """
+
+    def __init__(self, client: "LogClient") -> None:
+        super().__init__(level=logging.WARNING)
+        self._client = client
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = record.getMessage()
+            if any(noise in msg for noise in _NOISY_MESSAGES):
+                return
+            detail = None
+            if record.exc_info:
+                import traceback as _tb
+                detail = {"traceback": "".join(_tb.format_exception(*record.exc_info))[-1500:]}
+            self._client.log(
+                "WARN" if record.levelname == "WARNING" else record.levelname,
+                "core",
+                record.name.replace("atf.", "") or "core",
+                msg,
+                detail,
+            )
+        except Exception:
+            self.handleError(record)

@@ -5,6 +5,10 @@ import type {
   Session,
   AIConfig,
   SaveAIConfigRequest,
+  PromptTemplate,
+  SavePromptTemplateRequest,
+  TestPromptRequest,
+  TestPromptResponse,
   FilterRule,
   SaveFilterRuleRequest,
   DeliveryJob,
@@ -18,6 +22,9 @@ import type {
   StatsResponse,
   LogItem,
   LogStats,
+  PurgeLogsRequest,
+  PurgeLogsResponse,
+  ServicesHealthResponse,
   AuthResponse,
   PVResponderConfig,
 } from './types'
@@ -150,6 +157,35 @@ export const api = {
   deleteAIConfig: (id: string) =>
     fetchJson<{ success: boolean; id: string }>(`${API_BASE}/ai-configs/${id}`, {
       method: 'DELETE',
+    }),
+
+  // AI Rewrite prompt templates (auth-scoped: /api/prompts, not /api/v1/*)
+  getPromptTemplates: async (): Promise<PromptTemplate[]> => {
+    const res = await fetchJson<any>(`${API_BASE}/prompts`)
+    if (Array.isArray(res?.templates)) return res.templates
+    return []
+  },
+  savePromptTemplate: (req: SavePromptTemplateRequest & { current_version?: number }) =>
+    fetchJson<PromptTemplate>(
+      req.id
+        ? `${API_BASE}/prompts/${encodeURIComponent(req.id)}`
+        : `${API_BASE}/prompts`,
+      {
+        method: req.id ? 'PUT' : 'POST',
+        body: JSON.stringify({
+          template: req,
+          expected_version: (req as any).current_version || 0,
+        }),
+      },
+    ),
+  deletePromptTemplate: (id: string) =>
+    fetchJson<{ status: string }>(`${API_BASE}/prompts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  testPrompt: (req: TestPromptRequest) =>
+    fetchJson<TestPromptResponse>(`${API_BASE}/prompts/test`, {
+      method: 'POST',
+      body: JSON.stringify(req),
     }),
 
   // Filter Rules
@@ -286,6 +322,14 @@ export const api = {
   },
   getLogStats: async (): Promise<LogStats> => {
     return fetchJson<LogStats>(`${API_BASE}/logs/stats`)
+  },
+  purgeLogs: (req: PurgeLogsRequest) =>
+    fetchJson<PurgeLogsResponse>(`${API_BASE}/logs/purge`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+  getServicesHealth: async (): Promise<ServicesHealthResponse> => {
+    return fetchJson<ServicesHealthResponse>(`${API_BASE}/health/services`)
   },
 
   // ------------------------------------------------- Authentication & Identity

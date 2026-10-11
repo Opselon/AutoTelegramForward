@@ -30,6 +30,8 @@ import {
   X,
   Check,
   MessageSquare,
+  HeartPulse,
+  Cable,
 } from 'lucide-react'
 import { api } from './api'
 import type {
@@ -38,6 +40,8 @@ import type {
   Session,
   AIConfig,
   SaveAIConfigRequest,
+  PromptTemplate,
+  TestPromptResponse,
   FilterRule,
   SaveFilterRuleRequest,
   DeliveryJob,
@@ -50,6 +54,7 @@ import type {
   StatsResponse,
   LogItem,
   LogStats,
+  ServicesHealthResponse,
   PVResponderConfig,
 } from './types'
 
@@ -60,6 +65,7 @@ export function App() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
   const [filterRules, setFilterRules] = useState<FilterRule[]>([])
+  const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([])
   const [queueJobs, setQueueJobs] = useState<DeliveryJob[]>([])
   const [dlqJobs, setDlqJobs] = useState<DeadLetterJob[]>([])
   const [deliveryStats, setDeliveryStats] = useState<DeliveryStats | null>(null)
@@ -82,7 +88,11 @@ export function App() {
   const [logSearch, setLogSearch] = useState<string>('')
   const [logAutoRefresh, setLogAutoRefresh] = useState<boolean>(true)
   const [logStats, setLogStats] = useState<LogStats | null>(null)
+  const [purging, setPurging] = useState(false)
+  const [purgeWindowH, setPurgeWindowH] = useState<number>(24)
+  const [purgeResult, setPurgeResult] = useState<{ purged: number; remaining: number } | null>(null)
   const [copiedLogId, setCopiedLogId] = useState<string | number | null>(null)
+  const [servicesHealth, setServicesHealth] = useState<ServicesHealthResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -129,10 +139,11 @@ export function App() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [r, s, ai, f, q, dlq, gw, st, l, ds, pv] = await Promise.all([
+      const [r, s, ai, pt, f, q, dlq, gw, st, l, ds, pv] = await Promise.all([
         api.getRules().catch(() => []),
         api.getSessions().catch(() => []),
         api.getAIConfigs().catch(() => []),
+        api.getPromptTemplates().catch(() => []),
         api.getFilters().catch(() => []),
         api.getQueueJobs().catch(() => []),
         api.getDLQJobs().catch(() => []),
@@ -145,6 +156,7 @@ export function App() {
       setRules(Array.isArray(r) ? r : [])
       setSessions(Array.isArray(s) ? s : [])
       setAiConfigs(Array.isArray(ai) ? ai : [])
+      setPromptTemplates(Array.isArray(pt) ? pt : [])
       setFilterRules(Array.isArray(f) ? f : [])
       setQueueJobs(Array.isArray(q) ? q : [])
       setDlqJobs(Array.isArray(dlq) ? dlq : [])
@@ -211,6 +223,33 @@ export function App() {
     } catch {}
   }
 
+  const handlePurgeLogs = async () => {
+    if (purging) return
+    const keepH = Math.max(0, purgeWindowH)
+    const label = keepH > 0 ? `قدیمی‌تر از ${keepH} ساعت` : 'تمام لاگ‌ها (بدون حفاظت زمانی)'
+    if (!window.confirm(`حذف ${logFilterLevel !== 'all' ? `سطح ${logFilterLevel} ` : ''}${logFilterService !== 'all' ? `سرویس ${logFilterService} ` : ''}${label}؟ این عمل قابل بازگشت نیست.`)) return
+    setPurging(true)
+    setPurgeResult(null)
+    try {
+      const res = await api.purgeLogs({
+        level: logFilterLevel !== 'all' ? logFilterLevel : undefined,
+        service: logFilterService !== 'all' ? logFilterService : undefined,
+        older_than_hours: keepH,
+      })
+      if (res?.success) {
+        setPurgeResult({ purged: res.purged, remaining: res.remaining })
+        showToast(`${res.purged} لاگ حذف شد · ${res.remaining} باقی ماند`)
+        await fetchLogs()
+      } else {
+        showToast(res?.error || 'خطا در پاکسازی لاگ‌ها')
+      }
+    } catch (e: any) {
+      showToast(e.message || 'خطا در پاکسازی لاگ‌ها')
+    } finally {
+      setPurging(false)
+    }
+  }
+
   useEffect(() => {
     loadData()
     const timer = setInterval(() => {
@@ -224,11 +263,16 @@ export function App() {
   useEffect(() => {
     if (activeTab !== 'devops') return
     fetchLogs(logFilterService, logFilterLevel, logSearch)
+    // Service-topology health: probe all 4 services through the API layer.
+    api.getServicesHealth().then(setServicesHealth).catch(() => setServicesHealth(null))
     if (!logAutoRefresh) return
     const logTimer = setInterval(() => {
       fetchLogs(logFilterService, logFilterLevel, logSearch)
     }, 3000)
-    return () => clearInterval(logTimer)
+    const healthTimer = setInterval(() => {
+      api.getServicesHealth().then(setServicesHealth).catch(() => setServicesHealth(null))
+    }, 10000)
+    return () => { clearInterval(logTimer); clearInterval(healthTimer) }
   }, [activeTab, logAutoRefresh, logFilterService, logFilterLevel, logSearch])
 
   // Rules Handlers
@@ -383,6 +427,11 @@ export function App() {
         msg = isRtl
           ? 'خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است و امکان ارسال به مبدأ وجود ندارد'
           : 'Routing Loop Detected: Source and target endpoints cannot be identical'
+      }
+      if (msg.includes('not_numeric') || msg.includes('resolve_failed')) {
+        msg = isRtl
+          ? 'شناسه چنل نامعتبر است: آیدی باید عددی باشد یا با اتصال ربات قابل رزولوشن باشد (اسم چنل را وارد کنید و مطمئن شوید ربات عضو آن چنل است)'
+          : 'Invalid chat id: use a numeric id, or a username the connected account can resolve (make sure the account has joined that channel)'
       }
       showToast(msg)
     }
@@ -1776,6 +1825,16 @@ export function App() {
         </div>
       )}
 
+      {/* PROMPT EDITOR & TESTER (AI Rewrite) */}
+      {activeTab === 'ai' && (
+        <PromptEditorPanel
+          prompts={Array.isArray(promptTemplates) ? promptTemplates : []}
+          aiConfigs={Array.isArray(aiConfigs) ? aiConfigs : []}
+          onSaved={async () => setPromptTemplates(await api.getPromptTemplates().catch(() => []))}
+          isRtl={isRtl}
+        />
+      )}
+
       {/* TAB: AI PV ASSISTANT */}
       {activeTab === 'pv' && (
         <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
@@ -2468,54 +2527,118 @@ export function App() {
             </div>
           </div>
 
-          {/* Microservices Topology & Statistics */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 20 }}>
-            <div className="glass-panel" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>ATF Logger Microservice</span>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#34d399', marginTop: 4 }}>
-                Port 6002 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>gRPC</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>
-                {logStats ? `${logStats.total} ${isRtl ? 'لاگ ثبت‌شده' : 'events logged'}` : 'SQLite WAL Engine'}
-              </div>
-            </div>
+          {/* Microservices Topology — live probed health + connection map */}
+          {(() => {
+            const hmap: Record<string, { online: boolean; detail: string; latency_ms: number } | undefined> = {}
+            for (const s of servicesHealth?.services || []) hmap[s.name] = s
+            const nodes = [
+              { key: 'web', title: isRtl ? 'درگاه وب (Rust)' : 'Web Gateway', sub: 'atf-web · :8088', color: '#f59e0b' },
+              { key: 'api', title: isRtl ? 'کنترل‌پلین REST (Go)' : 'REST Control Plane', sub: 'atf-api · :8080', color: '#a855f7' },
+              { key: 'core', title: isRtl ? 'هسته پایتون + MTProto' : 'Python Core & MTProto', sub: 'atf · gRPC :6001', color: '#38bdf8' },
+              { key: 'logger', title: isRtl ? 'لاگر مرکزی' : 'Central Logger', sub: 'atf-logger · gRPC :6002', color: '#34d399' },
+            ]
+            const svc = (k: string) => hmap[k]
+            return (
+              <div className="glass-panel" style={{ padding: 18, marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <HeartPulse size={17} color={servicesHealth?.status === 'healthy' ? '#34d399' : '#ef4444'} />
+                    <span>{isRtl ? 'توپولوژی سرویس‌ها و سلامت زنده' : 'Services Topology & Live Health'}</span>
+                  </h3>
+                  <span
+                    className="badge"
+                    style={{
+                      background: servicesHealth?.status === 'healthy' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                      color: servicesHealth?.status === 'healthy' ? '#34d399' : '#f87171',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {servicesHealth
+                      ? servicesHealth.status === 'healthy'
+                        ? isRtl ? '✅ همه سرویس‌ها سالم' : '✅ All services healthy'
+                        : isRtl ? '⚠️ سرویس ناسالم' : '⚠️ Degraded'
+                      : isRtl ? '… در حال بررسی' : '… probing'}
+                  </span>
+                </div>
 
-            <div className="glass-panel" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Python Core & MTProto</span>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: stats?.atf_core_online ? '#10b981' : '#ef4444', boxShadow: '0 0 8px #10b981' }} />
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', marginTop: 4 }}>
-                Port 6001 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>Core</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf.service</div>
-            </div>
+                {/* Node chain: Web → API → Core → Logger, connection arrows labelled */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {nodes.map((n, i) => {
+                    const s = svc(n.key)
+                    const online = s?.online ?? false
+                    return (
+                      <React.Fragment key={n.key}>
+                        {i > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 0 2px 22px', height: 26 }} dir="ltr">
+                            <div style={{ width: 2, height: '100%', minHeight: 18, background: online ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.4)', borderRadius: 2 }} />
+                            <Cable size={12} color={online ? '#34d399' : '#ef4444'} />
+                            <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                              {i === 1
+                                ? isRtl ? 'پروکسی REST + JWT' : 'REST proxy + JWT'
+                                : i === 2
+                                ? isRtl ? 'gRPC کنترل' : 'gRPC control'
+                                : isRtl ? 'gRPC لاگ' : 'gRPC logs'}
+                            </span>
+                          </div>
+                        )}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 8,
+                            padding: '10px 14px',
+                            borderRadius: 10,
+                            border: `1px solid ${online ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.35)'}`,
+                            background: online ? 'rgba(16,185,129,0.05)' : 'rgba(239,68,68,0.07)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            <span
+                              style={{
+                                width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                                background: online ? '#10b981' : '#ef4444',
+                                boxShadow: online ? '0 0 10px #10b981' : '0 0 10px #ef4444',
+                                animation: online ? 'none' : 'none',
+                              }}
+                            />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: n.color }}>{n.title}</div>
+                              <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }} dir="ltr">{n.sub}</div>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right', minWidth: 0, maxWidth: '100%' }} dir="ltr">
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: online ? '#34d399' : '#f87171' }}>
+                              {online ? (isRtl ? 'آنلاین' : 'ONLINE') : (isRtl ? 'خاموش' : 'DOWN')}
+                              {s && s.latency_ms > 0 ? ` · ${s.latency_ms}ms` : ''}
+                            </div>
+                            {s?.detail && (
+                              <div style={{ fontSize: '0.66rem', color: '#64748b', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {s.detail}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    )
+                  })}
+                </div>
 
-            <div className="glass-panel" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Go REST Control Plane</span>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+                {/* Degraded-service hint — tell the operator which systemctl to poke */}
+                {servicesHealth && servicesHealth.status !== 'healthy' && (
+                  <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', fontSize: '0.75rem', color: '#f87171' }}>
+                    {isRtl ? 'سرویس‌های خاموش: ' : 'Down services: '}
+                    {servicesHealth.services.filter((x) => !x.online).map((x) => x.name).join(', ')}
+                    <span style={{ color: '#94a3b8' }}>
+                      {' — '}systemctl --user restart {servicesHealth.services.filter((x) => !x.online).map((x) => x.name === 'core' ? 'atf' : x.name === 'logger' ? 'atf-logger' : x.name === 'api' ? 'atf-api' : 'atf-web').join(' ')}
+                    </span>
+                  </div>
+                )}
               </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#a855f7', marginTop: 4 }}>
-                Port 8080 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>REST</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf-api.service</div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Rust Axum Web Gateway</span>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f59e0b', marginTop: 4 }}>
-                Port 8088 <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>v{gatewayInfo?.version ?? '1.2.2'}</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>systemctl: atf-web.service</div>
-            </div>
-          </div>
+            )
+          })()}
 
           {/* Pro Active Log Explorer */}
           <div className="glass-panel" style={{ padding: 20 }}>
@@ -2640,6 +2763,42 @@ export function App() {
                     TOTAL ARCHIVE: {logStats.total}
                   </span>
                 </>
+              )}
+            </div>
+
+            {/* Log purge controls — keeps the archive from growing unbounded. */}
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+              marginBottom: 14, padding: '10px 12px',
+              background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10,
+            }}>
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                🧹 {isRtl ? 'پاکسازی آرشیو:' : 'Purge archive:'}
+              </span>
+              <label style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {isRtl ? 'حفظ آخرین' : 'Keep last'}
+                <input
+                  type="number" min={0} max={720} step={1} value={purgeWindowH}
+                  onChange={(e) => setPurgeWindowH(Math.max(0, Math.min(720, Number(e.target.value) || 0)))}
+                  style={{ width: 64, background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '4px 6px', fontSize: '0.72rem' }}
+                />
+                {isRtl ? 'ساعت' : 'h'}
+              </label>
+              {(logFilterLevel !== 'all' || logFilterService !== 'all') && (
+                <span className="badge badge-gray" style={{ fontSize: '0.68rem' }}>
+                  {isRtl ? 'فقط:' : 'scoped:'} {[logFilterLevel !== 'all' && logFilterLevel, logFilterService !== 'all' && logFilterService].filter(Boolean).join(' · ')}
+                </span>
+              )}
+              <button
+                onClick={handlePurgeLogs} disabled={purging}
+                className="btn btn-secondary" style={{ padding: '5px 12px', fontSize: '0.72rem' }}
+              >
+                {purging ? '⏳ ...' : (isRtl ? 'حذف لاگ‌های قدیمی' : 'Purge old logs')}
+              </button>
+              {purgeResult && (
+                <span style={{ fontSize: '0.7rem', color: '#34d399' }}>
+                  ✓ {isRtl ? 'حذف شد' : 'purged'}: {purgeResult.purged} · {isRtl ? 'باقی' : 'left'}: {purgeResult.remaining}
+                </span>
               )}
             </div>
 
@@ -3163,6 +3322,86 @@ export function App() {
                 </div>
               </div>
 
+              {/* AI Rewrite (per-rule) */}
+              <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#c084fc', marginBottom: 10 }}>
+                  🤖 {isRtl ? 'بازنویسی هوشمند پیام (AI Rewrite)' : 'AI Message Rewrite'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      {isRtl ? 'پیکربندی AI:' : 'AI Config:'}
+                    </label>
+                    <select
+                      value={ruleFormData.ai_config_id || ''}
+                      onChange={(e) => setRuleFormData({ ...ruleFormData, ai_config_id: e.target.value || undefined })}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">{isRtl ? '❌ غیرفعال (بدون بازنویسی)' : '❌ Disabled (no rewrite)'}</option>
+                      {(Array.isArray(aiConfigs) ? aiConfigs : []).map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.is_enabled ? '🟢' : '🔴'} {a.name} [{a.provider}/{a.model}]
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      {isRtl ? 'پرامپت بازنویسی:' : 'Rewrite Prompt:'}
+                    </label>
+                    <select
+                      value={ruleMeta.prompt_id || ''}
+                      onChange={(e) => setRuleMeta({ ...ruleMeta, prompt_id: e.target.value || undefined })}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">{isRtl ? 'پیش‌فرض (بدون پرامپت سیستمی)' : 'Default (no system prompt)'}</option>
+                      {(Array.isArray(promptTemplates) ? promptTemplates : []).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.is_system ? '⭐' : '👤'} {p.name} (v{p.current_version})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      {isRtl ? 'رفتار در خطای AI:' : 'On AI Failure:'}
+                    </label>
+                    <select
+                      value={ruleFormData.ai_fallback_policy || 'DROP'}
+                      onChange={(e) => setRuleFormData({ ...ruleFormData, ai_fallback_policy: e.target.value })}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                    >
+                      <option value="SEND_ORIGINAL">{isRtl ? '🟢 ارسال متن اصلی (Fail Open)' : '🟢 Send original (Fail Open)'}</option>
+                      <option value="DROP">{isRtl ? '🔴 عدم ارسال (Fail Closed)' : '🔴 Drop (Fail Closed)'}</option>
+                      <option value="RETRY">{isRtl ? '🔁 تلاش مجدد (Retry)' : '🔁 Retry'}</option>
+                      <option value="QUARANTINE">{isRtl ? '🔒 قرنطینه' : '🔒 Quarantine'}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      {isRtl ? 'Timeout (ثانیه):' : 'Timeout (s):'}
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      value={ruleFormData.ai_timeout_seconds ?? 15}
+                      onChange={(e) => setRuleFormData({ ...ruleFormData, ai_timeout_seconds: Number(e.target.value) || 15 })}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 8 }}>
+                  {isRtl
+                    ? '💡 در حالت Fail Open، اگر AI در دسترس نباشد پیام اصلی بدون تغییر ارسال می‌شود و رویداد در لاگ ثبت می‌گردد.'
+                    : '💡 Fail Open sends the original text if AI fails, and logs the fallback event.'}
+                </div>
+              </div>
+
               <div className="modal-sheet-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
                 <button type="button" onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary">
                   {isRtl ? 'انصراف' : 'Cancel'}
@@ -3456,3 +3695,234 @@ function UserBar({ lang }: { lang: 'fa' | 'en' }) {
   )
 }
 export default App
+
+// ===========================================================================
+// AI Rewrite Prompt Editor & Tester (shared bot + dashboard logic via API)
+// ===========================================================================
+function PromptEditorPanel({ prompts, aiConfigs, onSaved, isRtl }: {
+  prompts: PromptTemplate[]
+  aiConfigs: AIConfig[]
+  onSaved: () => Promise<void>
+  isRtl: boolean
+}) {
+  const [selected, setSelected] = useState<PromptTemplate | null>(null)
+  const [form, setForm] = useState({ name: '', description: '', system_prompt: '', user_prompt_template: '{text}', target_language: 'auto' })
+  const [testText, setTestText] = useState('💎 XAUUSD SIGNAL: BUY NOW @ 2655 | TP 2680 | SL 2640 https://t.me/signal #gold')
+  const [testResult, setTestResult] = useState<TestPromptResponse | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const openEditor = (p: PromptTemplate | null) => {
+    setSelected(p)
+    setTestResult(null)
+    setForm(p ? {
+      name: p.name, description: p.description || '',
+      system_prompt: p.system_prompt,
+      user_prompt_template: p.user_prompt_template || '{text}',
+      target_language: p.target_language || 'auto',
+    } : { name: '', description: '', system_prompt: '', user_prompt_template: '{text}', target_language: 'auto' })
+  }
+
+  const handleSave = async () => {
+    if (!form.system_prompt.trim()) return
+    setSaving(true)
+    try {
+      await api.savePromptTemplate({ ...form, id: selected?.id, current_version: selected?.current_version } as any)
+      showToast(isRtl ? 'پرامپت ذخیره شد' : 'Prompt saved')
+      await onSaved()
+      openEditor(null)
+    } catch (e: any) {
+      showToast(e.message || 'Error saving prompt')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deletePromptTemplate(id)
+      showToast(isRtl ? 'پرامپت حذف شد' : 'Prompt deleted')
+      await onSaved()
+      if (selected?.id === id) openEditor(null)
+    } catch (e: any) {
+      showToast(e.message || 'Cannot delete system prompt')
+    }
+  }
+
+  const handleTest = async () => {
+    if (!selected || !aiConfigs.length) return
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const r = await api.testPrompt({
+        prompt_id: selected.id,
+        ai_config_id: aiConfigs[0].id,
+        sample_text: testText,
+        version: 0,
+      })
+      setTestResult(r)
+    } catch (e: any) {
+      showToast(e.message || 'Test failed')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <div className="glass-panel" style={{ padding: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
+            ✍️ {isRtl ? 'پرامپت‌های بازنویسی (AI Rewrite Prompts)' : 'Rewrite Prompt Editor'}
+          </h2>
+          <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
+            {isRtl
+              ? 'پرامپت‌های قابل استفاده در قوانین فوروارد. پرامپت‌های ⭐ سیستمی هستند و فقط قابل مشاهده.'
+              : 'Reusable rewrite prompts for forward rules. ⭐ = system prompts (read-only).'}
+          </p>
+        </div>
+        <button onClick={() => openEditor(null)} className="btn btn-primary" style={{ padding: '8px 14px' }}>
+          + {isRtl ? 'پرامپت جدید' : 'New Prompt'}
+        </button>
+      </div>
+
+      {/* Prompt list */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, marginBottom: 20 }}>
+        {(Array.isArray(prompts) ? prompts : []).map((p) => (
+          <div key={p.id} style={{
+            background: 'rgba(15, 23, 42, 0.6)', border: selected?.id === p.id ? '1px solid rgba(168,85,247,0.6)' : '1px solid rgba(255,255,255,0.06)',
+            borderRadius: 10, padding: 14, cursor: 'pointer',
+          }} onClick={() => openEditor(p)}>
+            <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 4 }}>
+              {p.is_system ? '⭐' : '👤'} {p.name} <span style={{ color: '#64748b', fontWeight: 400 }}>v{p.current_version}</span>
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+              {p.description || p.system_prompt.slice(0, 100)}
+            </div>
+            {!p.is_system && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(p.id) }}
+                className="btn btn-danger icon-btn" style={{ padding: 4, marginTop: 8, float: 'right' }}
+                title={isRtl ? 'حذف' : 'Delete'}
+              >
+                🗑
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Editor form */}
+      {form && (selected === null || selected !== null) && form.system_prompt !== undefined && (
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                {isRtl ? 'نام:' : 'Name:'} *
+              </label>
+              <input className="input-field" style={{ width: '100%' }} value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={isRtl ? 'مثلاً: بازنویسی رسمی' : 'e.g. Formal Rewrite'} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                {isRtl ? 'زبان خروجی:' : 'Output Language:'}
+              </label>
+              <select className="input-field" style={{ width: '100%' }} value={form.target_language}
+                onChange={(e) => setForm({ ...form, target_language: e.target.value })}>
+                <option value="auto">Auto</option>
+                <option value="fa">فارسی</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+              {isRtl ? 'توضیحات:' : 'Description:'}
+            </label>
+            <input className="input-field" style={{ width: '100%' }} value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+              {isRtl ? 'System Prompt (دستور اصلی به AI):' : 'System Prompt:'} *
+              {selected?.is_system && <span style={{ color: '#f59e0b' }}> — {isRtl ? 'سیستمی، فقط‌خواندنی' : 'system, read-only'}</span>}
+            </label>
+            <textarea
+              className="input-field"
+              style={{ width: '100%', minHeight: 110, resize: 'vertical', fontFamily: 'monospace', fontSize: '0.78rem' }}
+              value={form.system_prompt}
+              readOnly={!!selected?.is_system}
+              onChange={(e) => setForm({ ...form, system_prompt: e.target.value })}
+              placeholder={isRtl
+                ? 'متن را با حفظ اعداد، لینک‌ها و نام‌ها بازنویسی کن. اطلاعات جدید اختراع نکن. فقط متن بازنویسی‌شده را برگردان.'
+                : 'Rewrite the text preserving numbers, links, and names. Never invent facts. Return only the rewritten text.'}
+            />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+              {isRtl ? 'قالب پیام کاربر (User Template):' : 'User Prompt Template:'}
+            </label>
+            <input className="input-field" style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.78rem' }}
+              value={form.user_prompt_template} readOnly={!!selected?.is_system}
+              onChange={(e) => setForm({ ...form, user_prompt_template: e.target.value })} placeholder="{text}" />
+            <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 4 }}>
+              {isRtl ? 'متغیر {text} جای متن پیام قرار می‌گیرد.' : '{text} is replaced with the message body.'}
+            </div>
+          </div>
+
+          {/* Test panel */}
+          <div style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: 10, padding: 14, border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#a5b4fc', marginBottom: 8 }}>
+              🧪 {isRtl ? 'تست پرامپت (بدون ارسال پیام)' : 'Prompt Test (no message sent)'}
+            </div>
+            <textarea className="input-field" style={{ width: '100%', minHeight: 60, marginBottom: 8, fontSize: '0.78rem' }}
+              value={testText} onChange={(e) => setTestText(e.target.value)} />
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button
+                onClick={handleTest}
+                disabled={testing || !selected || !aiConfigs.length}
+                className="btn btn-secondary" style={{ padding: '6px 12px' }}
+              >
+                {testing ? '⏳' : '▶'} {isRtl ? 'تست با AI' : 'Run AI Test'}
+              </button>
+              {!aiConfigs.length && <span style={{ fontSize: '0.72rem', color: '#f87171' }}>
+                {isRtl ? 'اول یک پیکربندی AI بسازید' : 'Create an AI config first'}
+              </span>}
+            </div>
+            {testResult && (
+              <div style={{ marginTop: 10 }}>
+                {testResult.success ? (
+                  <div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 4 }}>
+                      ✅ {testResult.model_used} | {testResult.execution_duration_ms.toFixed(0)}ms | v{testResult.prompt_version_used}
+                    </div>
+                    <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 8, padding: 10, fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
+                      {testResult.transformed_text}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ color: '#f87171', fontSize: '0.78rem' }}>
+                    ❌ {testResult.error_code}: {testResult.error_message}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {!selected?.is_system && form.system_prompt && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+              <button onClick={handleSave} disabled={saving || !form.name.trim()} className="btn btn-primary" style={{ padding: '8px 16px' }}>
+                💾 {saving ? (isRtl ? 'در حال ذخیره…' : 'Saving…') : (isRtl ? 'ذخیره پرامپت' : 'Save Prompt')}
+              </button>
+              {selected && (
+                <button onClick={() => openEditor(null)} className="btn btn-secondary" style={{ padding: '8px 16px' }}>
+                  {isRtl ? 'انصراف' : 'Cancel'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

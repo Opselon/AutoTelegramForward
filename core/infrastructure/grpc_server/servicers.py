@@ -2,7 +2,11 @@
 
 import time
 
+import logging
+
 import grpc
+
+logger = logging.getLogger(__name__)
 
 from ...proto import pb, pb_grpc  # noqa: F401
 
@@ -165,6 +169,68 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
         ok = await self._sessions.delete(request.session_id)
         await self._pool.stop(request.session_id)
         return _status(ok, "terminated" if ok else "not_found")
+
+    async def ResolveChat(self, request, context):
+        """Resolve a human handle (username / t.me link / numeric id) to a
+        canonical numeric chat id using a live Telegram session. The dispatcher
+        only understands numeric ids, so the API layer calls this before saving
+        a rule to guarantee no username ever lands in chat_id columns."""
+        import re as _re
+
+        handle = (request.handle or "").strip()
+        session_id = (request.session_id or "").strip()
+        if not handle:
+            return pb.ResolveChatResponse(found=False, error="handle_empty")
+
+        # Normalize the handle: links and @-prefixes down to a bare username/id.
+        raw = handle
+        raw = _re.sub(r"^https?://t\.me/", "", raw, flags=_re.IGNORECASE)
+        raw = _re.sub(r"^t\.me/", "", raw, flags=_re.IGNORECASE)
+        raw = raw.lstrip("@").strip()
+        if not raw:
+            return pb.ResolveChatResponse(found=False, error="handle_empty")
+
+        # Numeric ids (with optional -100 channel prefix) pass through.
+        if _re.fullmatch(r"-?\d+", raw):
+            return pb.ResolveChatResponse(
+                found=True, chat_id=str(int(raw)), title=handle, chat_type="numeric"
+            )
+
+        # Pick the requested session, or the first active+authorized one.
+        if session_id:
+            session = await self._sessions.get(session_id)
+        else:
+            sessions = await self._sessions.list_all()
+            active = [s for s in sessions if s.is_active and s.is_authorized]
+            session = active[0] if active else (sessions[0] if sessions else None)
+        if not session:
+            return pb.ResolveChatResponse(found=False, error="no_active_session")
+
+        client = self._pool.get(session.id)
+        if client is None:
+            return pb.ResolveChatResponse(
+                found=False, error="session_not_connected"
+            )
+
+        try:
+            chat = await client.get_chat(raw)
+        except Exception as exc:  # noqa: BLE001 - surface the reason to the UI
+            return pb.ResolveChatResponse(
+                found=False, error=f"{type(exc).__name__}: {exc}"
+            )
+
+        chat_type = type(chat).__name__.lower()
+        if hasattr(chat, "type") and chat.type is not None:
+            chat_type = getattr(chat.type, "value", str(chat.type)).lower()
+        username = getattr(chat, "username", "") or ""
+        title = getattr(chat, "title", "") or getattr(chat, "first_name", "") or username
+        return pb.ResolveChatResponse(
+            found=True,
+            chat_id=str(chat.id),
+            title=str(title),
+            username=username,
+            chat_type=chat_type,
+        )
 
 
 class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
@@ -653,8 +719,10 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
 
 
 class AIControlServicer(pb_grpc.AIControlServiceServicer):
-    def __init__(self, ai_uc) -> None:
+    def __init__(self, ai_uc, prompt_service=None, ai_transformer=None) -> None:
         self._ai = ai_uc
+        self._prompts = prompt_service
+        self._transformer = ai_transformer
 
     async def ListAIConfigs(self, request, context):
         if request.owner_user_id:
@@ -708,6 +776,99 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
     async def TestAIRewrite(self, request, context):
         ok, text = await self._ai.test_rewrite(request.ai_config_id, request.sample_text)
         return pb.TestAIRewriteResponse(success=ok, rewritten_text=text if ok else "", error_message="" if ok else text)
+
+    # ------------------------------------------------------------------
+    # Prompt templates (AI Rewrite) — shared by bot & web dashboard
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _prompt_pb(t) -> pb.PromptTemplate:
+        return pb.PromptTemplate(
+            id=t.id, name=t.name, description=t.description or "",
+            system_prompt=t.system_prompt,
+            user_prompt_template=t.user_prompt_template or "{text}",
+            target_language=t.target_language or "en",
+            current_version=t.current_version,
+            is_system=bool(t.is_system),
+            created_at=int(t.created_at or 0), updated_at=int(t.updated_at or 0),
+        )
+
+    async def ListPromptTemplates(self, request, context):
+        if self._prompts is None:
+            return pb.ListPromptTemplatesResponse()
+        rows = await self._prompts.list_templates()
+        return pb.ListPromptTemplatesResponse(templates=[self._prompt_pb(t) for t in rows])
+
+    async def SavePromptTemplate(self, request, context):
+        if self._prompts is None:
+            return pb.PromptTemplate()
+        c = request.template
+        try:
+            if c.id:
+                existing = await self._prompts.get_template(c.id)
+                if existing and existing.is_system:
+                    return pb.PromptTemplate()  # system prompts are immutable
+                if existing and request.expected_version and existing.current_version != request.expected_version:
+                    return pb.PromptTemplate()  # OCC conflict
+                updated = await self._prompts.update_template(
+                    c.id,
+                    name=c.name or existing.name,
+                    system_prompt=c.system_prompt,
+                    user_prompt_template=c.user_prompt_template or "{text}",
+                    description=c.description or "",
+                    expected_version=request.expected_version or None,
+                )
+                if updated is False or updated is None:
+                    return pb.PromptTemplate()
+                fresh = await self._prompts.get_template(c.id)
+                return self._prompt_pb(fresh) if fresh else pb.PromptTemplate()
+            created = await self._prompts.create_template(
+                name=c.name or "Untitled prompt",
+                system_prompt=c.system_prompt,
+                user_prompt_template=c.user_prompt_template or "{text}",
+                description=c.description or "",
+                target_language=c.target_language or "auto",
+            )
+            return self._prompt_pb(created)
+        except Exception as exc:
+            logger.warning("SavePromptTemplate failed: %s", exc)
+            return pb.PromptTemplate()
+
+    async def DeletePromptTemplate(self, request, context):
+        if self._prompts is None:
+            return _status(False, "prompt_service_unavailable")
+        existing = await self._prompts.get_template(request.id)
+        if not existing:
+            return _status(False, "not_found")
+        if existing.is_system:
+            return _status(False, "system_prompt_immutable")
+        ok = await self._prompts.delete_template(request.id)
+        return _status(ok, "deleted" if ok else "not_found")
+
+    async def TestPrompt(self, request, context):
+        """Runs the real transform path in dry-run — no message is sent."""
+        if self._prompts is None or self._transformer is None:
+            return pb.TestPromptResponse(success=False, error_code="service_unavailable")
+        try:
+            result = await self._prompts.test_prompt(
+                request.prompt_id, request.sample_text,
+                request.ai_config_id, self._transformer,
+                version=request.version or None,
+            )
+            return pb.TestPromptResponse(
+                success=bool(result.get("success")),
+                transformed_text=result.get("transformed_text") or "",
+                error_message=result.get("error_message") or "",
+                error_code=result.get("error_code") or "",
+                execution_duration_ms=result.get("execution_duration_ms") or 0.0,
+                provider_used=result.get("provider_used") or "",
+                model_used=result.get("model_used") or "",
+                prompt_version_used=int(result.get("prompt_version_used") or 0),
+                circuit_state=result.get("circuit_state") or "",
+            )
+        except Exception as exc:
+            logger.warning("TestPrompt failed: %s", exc)
+            return pb.TestPromptResponse(success=False, error_code=str(type(exc).__name__), error_message=str(exc))
 
 
 class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):

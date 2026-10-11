@@ -111,6 +111,8 @@ def build_container(cfg: Config) -> dict:
     )
     pool = ClientPool(cfg.api_id, cfg.api_hash)
     sync_engine = SyncEngine(msg_map_repo, rule_repo, pool)
+    # LogClient is created later (line ~291); queue_manager receives it via a
+    # late attribute set right after the client exists (see below).
     queue_manager = DurableQueueManager(
         queue_repo=queue_repo,
         message_map_repo=msg_map_repo,
@@ -188,7 +190,12 @@ async def serve_grpc(container: dict, cfg: Config):
         servicers.FilterControlServicer(container["filters"]), server
     )
     pb_grpc.add_AIControlServiceServicer_to_server(
-        servicers.AIControlServicer(container["ai"]), server
+        servicers.AIControlServicer(
+            container["ai"],
+            prompt_service=container["prompt_service"],
+            ai_transformer=container["ai_transformer"],
+        ),
+        server,
     )
     pb_grpc.add_SystemStatusControlServiceServicer_to_server(
         servicers.SystemStatusControlServicer(
@@ -286,7 +293,7 @@ async def main() -> None:
 
     # Non-blocking debug-log feed to the Logger microservice.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from logger.log_client import LogClient  # noqa: E402
+    from logger.log_client import LogClient, CentralLogHandler  # noqa: E402
     log_client = LogClient(cfg.logger_addr)
     try:
         await log_client.start()
@@ -294,6 +301,15 @@ async def main() -> None:
         logger.warning("Logger service unreachable at %s: %s", cfg.logger_addr, exc)
     container["log_client"] = log_client
     log_client.info("core", "system", "core started", {"version": cfg.version})
+    # Mirror every WARNING/ERROR from any python module (pv_responder,
+    # dispatcher, pipeline, client_pool, …) into the central logger so the
+    # Web-UI Log Explorer shows them without ssh/journalctl. Pyrogram TCP
+    # noise is filtered inside the handler.
+    logging.getLogger().addHandler(CentralLogHandler(log_client))
+    # Late-bind the same client into the queue manager (built in
+    # build_container before the LogClient existed) so delivery successes
+    # reach the central log too.
+    container["queue_manager"]._log_client = log_client
 
     # TASK 03 / audit D1: persisted auth state machine, so a login in
     # progress survives a restart instead of vanishing without explanation.
@@ -360,6 +376,8 @@ async def main() -> None:
             metrics=container.get("metrics"),
             rule_stats=container.get("rule_stats"),
             users=container.get("users"),
+            prompt_service=container.get("prompt_service"),
+            ai_transformer=container.get("ai_transformer"),
             pv_responder=container.get("pv_responder"),
             web_url=cfg.web_url,
             account_servicer=container.get("account_servicer"),

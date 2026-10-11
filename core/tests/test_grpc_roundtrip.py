@@ -68,7 +68,7 @@ async def test_rules_roundtrip(grpc_endpoint):
 
     await container["rules"].create(ForwardRule(
         session_id=session.id,
-        source_chat_id="-100AAA", target_chat_id="-100BBB",
+        source_chat_id="-1001234567890", target_chat_id="-1009876543210",
         routing_type=RoutingType.CHANNEL_TO_CHANNEL,
         forward_mode=ForwardMode.COPY_MESSAGE,
     ))
@@ -76,5 +76,5 @@ async def test_rules_roundtrip(grpc_endpoint):
         stub = pb_grpc.ForwardRuleControlServiceStub(channel)
         resp = await stub.ListRules(pb.ListRulesRequest(session_id=session.id))
         assert len(resp.rules) == 1
-        assert resp.rules[0].source_chat_id == "-100AAA"
+        assert resp.rules[0].source_chat_id == "-1001234567890"
         assert resp.rules[0].routing_type == pb.RoutingType.CHANNEL_TO_CHANNEL

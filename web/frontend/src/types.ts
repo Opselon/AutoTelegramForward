@@ -79,6 +79,51 @@ export interface SaveRuleRequest {
   domain_blocklist?: string[]
   link_rewrite_map?: Record<string, string>
   custom_metadata_json?: string
+  ai_fallback_policy?: string
+  ai_prompt_version?: number
+  ai_timeout_seconds?: number
+}
+
+// AI Rewrite prompt templates (shared bot + dashboard)
+export interface PromptTemplate {
+  id: string
+  name: string
+  description?: string
+  system_prompt: string
+  user_prompt_template?: string
+  target_language?: string
+  current_version: number
+  is_system?: boolean
+  created_at?: number
+  updated_at?: number
+}
+
+export interface SavePromptTemplateRequest {
+  id?: string
+  name: string
+  description?: string
+  system_prompt: string
+  user_prompt_template?: string
+  target_language?: string
+}
+
+export interface TestPromptRequest {
+  prompt_id: string
+  ai_config_id: string
+  sample_text: string
+  version?: number
+}
+
+export interface TestPromptResponse {
+  success: boolean
+  transformed_text: string
+  error_message: string
+  error_code: string
+  execution_duration_ms: number
+  provider_used: string
+  model_used: string
+  prompt_version_used: number
+  circuit_state: string
 }
 
 export interface RoutePathQuickSetRequest {
@@ -234,6 +279,19 @@ export interface GatewaySystemInfo {
   total_sessions: number
 }
 
+export interface ServiceHealth {
+  name: string
+  online: boolean
+  detail: string
+  latency_ms: number
+}
+
+export interface ServicesHealthResponse {
+  status: 'healthy' | 'degraded'
+  time: string
+  services: ServiceHealth[]
+}
+
 export interface SimulateRequest {
   rule_id?: string
   test_text: string
@@ -291,6 +349,21 @@ export interface LogStats {
   total: number
   by_level: Record<string, number>
   by_category: Record<string, number>
+}
+
+export interface PurgeLogsRequest {
+  level?: string
+  service?: string
+  category?: string
+  /** Keep logs newer than this many hours. 0 = no protection. */
+  older_than_hours?: number
+}
+
+export interface PurgeLogsResponse {
+  success: boolean
+  purged: number
+  remaining: number
+  error?: string
 }
 
 export interface WebAccount {

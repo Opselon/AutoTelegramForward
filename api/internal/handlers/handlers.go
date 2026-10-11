@@ -3,11 +3,14 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -29,6 +32,123 @@ func New(c *grpcclient.Clients) *Handlers { return &Handlers{c: c} }
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status": "ok", "time": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// ServicesHealth reports live reachability of every microservice in the ATF
+// chain, probed in parallel with short timeouts. It powers the Web-UI topology
+// view so outages are visible at a glance instead of being discovered when a
+// forward silently fails.
+func (h *Handlers) ServicesHealth(w http.ResponseWriter, r *http.Request) {
+	type svc struct {
+		Name      string `json:"name"`
+		Online    bool   `json:"online"`
+		Detail    string `json:"detail"`
+		LatencyMs int64  `json:"latency_ms"`
+	}
+	results := make([]svc, 0, 4)
+	var mu sync.Mutex
+	check := func(name string, fn func() (bool, string)) {
+		start := time.Now()
+		ok, detail := false, ""
+		done := make(chan struct{})
+		go func() { ok, detail = fn(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(4 * time.Second):
+			ok, detail = false, "probe timeout (4s)"
+		}
+		mu.Lock()
+		results = append(results, svc{
+			Name:      name,
+			Online:    ok,
+			Detail:    detail,
+			LatencyMs: time.Since(start).Milliseconds(),
+		})
+		mu.Unlock()
+	}
+
+	// Core (Python gRPC) — GetSystemStats proves the gRPC channel AND the
+	// pipeline loop are alive.
+	go check("core", func() (bool, string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		resp, err := h.c.System.GetSystemStats(ctx, &pb.SystemStatsRequest{})
+		if err != nil {
+			return false, "gRPC: " + err.Error()
+		}
+		return resp.CoreRunning, fmt.Sprintf("uptime=%ds sessions=%d", resp.UptimeSeconds, resp.ActiveSessionsCount)
+	})
+
+	// Logger microservice — LogStats round-trip proves the log store answers.
+	go check("logger", func() (bool, string) {
+		if h.c.Logs == nil {
+			return false, "logger stub not wired (dial failed at startup)"
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		resp, err := h.c.Logs.LogStats(ctx, &pb.LogStatsRequest{})
+		if err != nil {
+			return false, "gRPC: " + err.Error()
+		}
+		return true, fmt.Sprintf("events=%d", resp.Total)
+	})
+
+	// API (this process) — trivially online if the request is being served.
+	go check("api", func() (bool, string) {
+		return true, "this process"
+	})
+
+	// Web gateway — reachable proxy probe of its /healthz.
+	go check("web", func() (bool, string) {
+		webURL := os.Getenv("ATF_WEB_HEALTH_URL")
+		if webURL == "" {
+			webURL = "http://127.0.0.1:8088/healthz"
+		}
+		client := &http.Client{Timeout: 4 * time.Second}
+		resp, err := client.Get(webURL)
+		if err != nil {
+			return false, err.Error()
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return false, "HTTP " + resp.Status
+		}
+		return true, webURL
+	})
+
+	// Give the parallel probes a moment to settle (they race the 4s timeout).
+	deadline := time.After(4500 * time.Millisecond)
+	for len(results) < 4 {
+		select {
+		case <-deadline:
+			mu.Lock()
+			if len(results) < 4 {
+				results = append(results, svc{Name: "?", Online: false, Detail: "probe pending"})
+			}
+			mu.Unlock()
+			deadline = time.After(0)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	// Deterministic order for the UI: core → logger → api → web.
+	order := map[string]int{"core": 0, "logger": 1, "api": 2, "web": 3}
+	sort.Slice(results, func(i, j int) bool { return order[results[i].Name] < order[results[j].Name] })
+
+	allOK := true
+	for _, s := range results {
+		if !s.Online {
+			allOK = false
+		}
+	}
+	status := "degraded"
+	if allOK {
+		status = "healthy"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   status,
+		"time":     time.Now().UTC().Format(time.RFC3339),
+		"services": results,
 	})
 }
 
@@ -143,6 +263,9 @@ func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
 			"is_active":                 rl.IsActive,
 			"filter_rule_id":            rl.FilterRuleId,
 			"ai_config_id":              rl.AiConfigId,
+			"ai_fallback_policy":        rl.AiFallbackPolicy,
+			"ai_prompt_version":         rl.AiPromptVersion,
+			"ai_timeout_seconds":        rl.AiTimeoutSeconds,
 			"remove_links":              rl.RemoveLinks,
 			"custom_caption_template":   rl.CustomCaptionTemplate,
 			"created_at":                rl.CreatedAt,
@@ -209,6 +332,36 @@ func checkRuleEndpoints(source, target, intermediate string, useIntermediate boo
 	return true, "ok"
 }
 
+// isNumericChatID reports whether the chat id is a numeric Telegram id
+// (optionally -100-prefixed channel id, negative group id or positive user id).
+// The dispatcher does `int(chat_id)` before sending, so any username in a rule
+// would crash delivery at dispatch time — rules must always store numeric ids.
+func isNumericChatID(id string) bool {
+	_, err := strconv.ParseInt(strings.TrimSpace(id), 10, 64)
+	return err == nil
+}
+
+// resolveChat turns a username/link into a numeric chat id via the core
+// session. Returns ("", "") when no resolution was needed or possible without
+// error; (id, "") on success; ("", reason) when resolution failed.
+func (h *Handlers) resolveChat(ctx context.Context, sessionID, handle string) (string, string) {
+	norm := normalizeChatID(handle)
+	if norm == "" || isNumericChatID(norm) {
+		return "", "" // nothing to resolve
+	}
+	resp, err := h.c.Sessions.ResolveChat(ctx, &pb.ResolveChatRequest{
+		SessionId: sessionID,
+		Handle:    handle,
+	})
+	if err != nil {
+		return "", "resolve_failed: " + err.Error()
+	}
+	if !resp.Found {
+		return "", "resolve_failed: " + resp.Error
+	}
+	return resp.ChatId, ""
+}
+
 func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 	id := identity(r)
 	var rule pb.ForwardRule
@@ -221,6 +374,46 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 			"code":  errCode,
 		})
 		return
+	}
+	// Always store canonical numeric chat ids: the dispatcher calls
+	// int(chat_id) before sending, so a username would break delivery.
+	ctx, cancel0 := withTimeout(r)
+	sid, errS := h.resolveChat(ctx, rule.SessionId, rule.SourceChatId)
+	cancel0()
+	if errS != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
+		return
+	}
+	if sid != "" {
+		rule.SourceChatId = sid
+		if rule.SourceChatName == "" {
+			rule.SourceChatName = rule.SourceChatId
+		}
+	}
+	ctx, cancel1 := withTimeout(r)
+	tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId)
+	cancel1()
+	if errT != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errT, "code": "target_resolve_failed"})
+		return
+	}
+	if tid != "" {
+		rule.TargetChatId = tid
+		if rule.TargetChatName == "" {
+			rule.TargetChatName = rule.TargetChatId
+		}
+	}
+	if rule.UseIntermediate && rule.IntermediateChannelId != "" {
+		ctx, cancel2 := withTimeout(r)
+		iid, errI := h.resolveChat(ctx, rule.SessionId, rule.IntermediateChannelId)
+		cancel2()
+		if errI != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errI, "code": "intermediate_resolve_failed"})
+			return
+		}
+		if iid != "" {
+			rule.IntermediateChannelId = iid
+		}
 	}
 	rule.OwnerUserId = id.UserID
 	ctx, cancel := withTimeout(r)
@@ -269,6 +462,28 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 				"code":  errCode,
 			})
 			return
+		}
+	}
+	// Canonicalize any username/link endpoints to numeric ids (same contract
+	// as CreateRule — see the resolveChat doc comment).
+	if sid, errS := h.resolveChat(ctx, rule.SessionId, rule.SourceChatId); errS != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
+		return
+	} else if sid != "" {
+		rule.SourceChatId = sid
+	}
+	if tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId); errT != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errT, "code": "target_resolve_failed"})
+		return
+	} else if tid != "" {
+		rule.TargetChatId = tid
+	}
+	if rule.UseIntermediate && rule.IntermediateChannelId != "" {
+		if iid, errI := h.resolveChat(ctx, rule.SessionId, rule.IntermediateChannelId); errI != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errI, "code": "intermediate_resolve_failed"})
+			return
+		} else if iid != "" {
+			rule.IntermediateChannelId = iid
 		}
 	}
 	rule.OwnerUserId = id.UserID
@@ -815,12 +1030,154 @@ type testAIReq struct {
 	SampleText string `json:"sample_text"`
 }
 
+// ---------------------------------------------------------------------------
+// Prompt templates (AI Rewrite) — shared by bot & dashboard
+// ---------------------------------------------------------------------------
+
+func promptToPb(t *promptTemplateDTO) *pb.PromptTemplate {
+	return &pb.PromptTemplate{
+		Id: t.Id, Name: t.Name, Description: t.Description,
+		SystemPrompt: t.SystemPrompt, UserPromptTemplate: t.UserPromptTemplate,
+		TargetLanguage: t.TargetLanguage, CurrentVersion: t.CurrentVersion,
+		IsSystem: t.IsSystem, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+	}
+}
+
+type promptTemplateDTO struct {
+	Id                 string `json:"id,omitempty"`
+	Name               string `json:"name"`
+	Description        string `json:"description,omitempty"`
+	SystemPrompt       string `json:"system_prompt"`
+	UserPromptTemplate string `json:"user_prompt_template,omitempty"`
+	TargetLanguage     string `json:"target_language,omitempty"`
+	CurrentVersion     int32  `json:"current_version,omitempty"`
+	IsSystem           bool   `json:"is_system,omitempty"`
+	CreatedAt          int64  `json:"created_at,omitempty"`
+	UpdatedAt          int64  `json:"updated_at,omitempty"`
+}
+
+type savePromptReq struct {
+	Template        *promptTemplateDTO `json:"template"`
+	ExpectedVersion int32              `json:"expected_version"`
+}
+
+func (h *Handlers) ListPromptTemplates(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.AI.ListPromptTemplates(ctx, &pb.ListPromptTemplatesRequest{})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	templates := resp.Templates
+	if templates == nil {
+		templates = []*pb.PromptTemplate{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"templates": templates, "total": len(templates)})
+}
+
+func (h *Handlers) CreatePromptTemplate(w http.ResponseWriter, r *http.Request) {
+	var req savePromptReq
+	if !bind(w, r, &req) || req.Template == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "template required"})
+		return
+	}
+	if req.Template.IsSystem {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "cannot create system prompts", "code": "system_prompt_immutable"})
+		return
+	}
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.AI.SavePromptTemplate(ctx, &pb.SavePromptTemplateRequest{Template: promptToPb(req.Template)})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if resp.Id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "prompt validation failed or duplicate name"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+func (h *Handlers) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request) {
+	var req savePromptReq
+	if !bind(w, r, &req) || req.Template == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "template required"})
+		return
+	}
+	req.Template.Id = r.PathValue("id")
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.AI.SavePromptTemplate(ctx, &pb.SavePromptTemplateRequest{
+		Template: promptToPb(req.Template), ExpectedVersion: req.ExpectedVersion,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if resp.Id == "" {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "update failed (system prompt, OCC conflict, or validation)", "code": "prompt_update_conflict"})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handlers) DeletePromptTemplate(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.AI.DeletePromptTemplate(ctx, &pb.DeletePromptTemplateRequest{Id: r.PathValue("id")})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if !resp.Success {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": resp.Message})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+type testPromptReq struct {
+	PromptId   string `json:"prompt_id"`
+	AiConfigId string `json:"ai_config_id"`
+	SampleText string `json:"sample_text"`
+	Version    int32  `json:"version"`
+}
+
+func (h *Handlers) TestPrompt(w http.ResponseWriter, r *http.Request) {
+	var req testPromptReq
+	if !bind(w, r, &req) {
+		return
+	}
+	if req.PromptId == "" || req.AiConfigId == "" || req.SampleText == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "prompt_id, ai_config_id and sample_text are required"})
+		return
+	}
+	ctx, cancel := withAITimeout(r)
+	defer cancel()
+	// Ownership guard: the AI config must belong to the caller.
+	if !h.ownsAIConfig(ctx, req.AiConfigId, identity(r).UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "AI config not found"})
+		return
+	}
+	resp, err := h.c.AI.TestPrompt(ctx, &pb.TestPromptRequest{
+		PromptId: req.PromptId, AiConfigId: req.AiConfigId,
+		SampleText: req.SampleText, Version: req.Version,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (h *Handlers) TestAIRewrite(w http.ResponseWriter, r *http.Request) {
 	var req testAIReq
 	if !bind(w, r, &req) {
 		return
 	}
-	ctx, cancel := withTimeout(r)
+	ctx, cancel := withAITimeout(r)
 	defer cancel()
 	resp, err := h.c.AI.TestAIRewrite(ctx, &pb.TestAIRewriteRequest{
 		AiConfigId: r.PathValue("id"), SampleText: req.SampleText,
@@ -937,6 +1294,70 @@ func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// PurgeLogs deletes log rows from the logger microservice. Filters are all
+// optional; older_than_hours (default 24) protects the newest window so a
+// blanket purge can't delete the evidence you are actively debugging.
+func (h *Handlers) PurgeLogs(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	if h.c.Logs == nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{
+			"error": "logger service unavailable",
+		})
+		return
+	}
+	var body struct {
+		Level          string `json:"level"`
+		Service        string `json:"service"`
+		Category       string `json:"category"`
+		OlderThanHours int64  `json:"older_than_hours"`
+	}
+	_ = bind(w, r, &body)
+	q := r.URL.Query()
+	if body.Level == "" {
+		body.Level = q.Get("level")
+	}
+	if body.Service == "" {
+		body.Service = q.Get("service")
+	}
+	if body.Category == "" {
+		body.Category = q.Get("category")
+	}
+	if body.OlderThanHours == 0 {
+		if v := q.Get("older_than_hours"); v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+				body.OlderThanHours = n
+			}
+		}
+	}
+	// Destructive default: never delete the last 24h unless asked explicitly.
+	if body.OlderThanHours == 0 {
+		body.OlderThanHours = 24
+	}
+	resp, err := h.c.Logs.PurgeLogs(ctx, &pb.PurgeLogsRequest{
+		Level:          body.Level,
+		Service:        body.Service,
+		Category:       body.Category,
+		OlderThanHours: body.OlderThanHours,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if !resp.Success {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error": resp.Error,
+			"code":  "purge_failed",
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":   true,
+		"purged":    resp.Purged,
+		"remaining": resp.Remaining,
+	})
+}
+
 // ------------------------------------------------------------- internals
 func identity(r *http.Request) *Identity {
 	if v := r.Context().Value(identityKey{}); v != nil {
@@ -949,6 +1370,14 @@ func identity(r *http.Request) *Identity {
 
 func withTimeout(r *http.Request) (context.Context, func()) {
 	return context.WithTimeout(r.Context(), 15*time.Second)
+}
+
+// withAITimeout is used by handlers that call LLM providers: model latency can
+// comfortably exceed the default 15s request budget, and a client-side deadline
+// races the provider's own timeout (see AITransformer), surfacing as a confusing
+// "Deadline Exceeded" instead of the real result.
+func withAITimeout(r *http.Request) (context.Context, func()) {
+	return context.WithTimeout(r.Context(), 90*time.Second)
 }
 
 func grpcError(w http.ResponseWriter, err error) {

@@ -15,7 +15,7 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..domain.entities import PromptTemplate, PromptVersion
+from ..domain.entities import PromptTemplate, PromptVersion, _new_id
 from .repositories import ConcurrencyError, IPromptRepository
 
 logger = logging.getLogger(__name__)
@@ -202,7 +202,7 @@ class PromptService:
             prompt_id=template_id,
             prompt_version=preview["version"],
             target_language=preview["target_language"],
-            timeout_seconds=15.0,
+            timeout_seconds=90.0,
         )
 
         resp = await transformer.transform(req, primary_config_id=config_id)
@@ -237,7 +237,7 @@ class PromptService:
 
         now = int(time.time())
         template = PromptTemplate(
-            id=template_id or "",
+            id=template_id or _new_id(),
             name=name.strip(),
             description=description.strip(),
             system_prompt=system_prompt.strip(),

@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import autoforward_pb2 as autoforward__pb2
+from . import autoforward_pb2 as autoforward__pb2
 
 GRPC_GENERATED_VERSION = '1.84.0'
 GRPC_VERSION = grpc.__version__
@@ -73,6 +73,11 @@ class SessionControlServiceStub:
                 request_serializer=autoforward__pb2.TerminateSessionRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.StatusResponse.FromString,
                 _registered_method=True)
+        self.ResolveChat = channel.unary_unary(
+                '/autoforward.SessionControlService/ResolveChat',
+                request_serializer=autoforward__pb2.ResolveChatRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ResolveChatResponse.FromString,
+                _registered_method=True)
 
 
 class SessionControlServiceServicer:
@@ -124,6 +129,12 @@ class SessionControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ResolveChat(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SessionControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -161,6 +172,11 @@ def add_SessionControlServiceServicer_to_server(servicer, server):
                     servicer.TerminateSession,
                     request_deserializer=autoforward__pb2.TerminateSessionRequest.FromString,
                     response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'ResolveChat': grpc.unary_unary_rpc_method_handler(
+                    servicer.ResolveChat,
+                    request_deserializer=autoforward__pb2.ResolveChatRequest.FromString,
+                    response_serializer=autoforward__pb2.ResolveChatResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -356,6 +372,33 @@ class SessionControlService:
             '/autoforward.SessionControlService/TerminateSession',
             autoforward__pb2.TerminateSessionRequest.SerializeToString,
             autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ResolveChat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.SessionControlService/ResolveChat',
+            autoforward__pb2.ResolveChatRequest.SerializeToString,
+            autoforward__pb2.ResolveChatResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -1133,6 +1176,26 @@ class AIControlServiceStub:
                 request_serializer=autoforward__pb2.TestAIRewriteRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.TestAIRewriteResponse.FromString,
                 _registered_method=True)
+        self.ListPromptTemplates = channel.unary_unary(
+                '/autoforward.AIControlService/ListPromptTemplates',
+                request_serializer=autoforward__pb2.ListPromptTemplatesRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListPromptTemplatesResponse.FromString,
+                _registered_method=True)
+        self.SavePromptTemplate = channel.unary_unary(
+                '/autoforward.AIControlService/SavePromptTemplate',
+                request_serializer=autoforward__pb2.SavePromptTemplateRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.PromptTemplate.FromString,
+                _registered_method=True)
+        self.DeletePromptTemplate = channel.unary_unary(
+                '/autoforward.AIControlService/DeletePromptTemplate',
+                request_serializer=autoforward__pb2.DeletePromptTemplateRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.TestPrompt = channel.unary_unary(
+                '/autoforward.AIControlService/TestPrompt',
+                request_serializer=autoforward__pb2.TestPromptRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.TestPromptResponse.FromString,
+                _registered_method=True)
 
 
 class AIControlServiceServicer:
@@ -1168,6 +1231,32 @@ class AIControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListPromptTemplates(self, request, context):
+        """Prompt template management (AI Rewrite prompts) — shared surface for the
+        Telegram bot and the web dashboard.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SavePromptTemplate(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeletePromptTemplate(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def TestPrompt(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AIControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -1195,6 +1284,26 @@ def add_AIControlServiceServicer_to_server(servicer, server):
                     servicer.TestAIRewrite,
                     request_deserializer=autoforward__pb2.TestAIRewriteRequest.FromString,
                     response_serializer=autoforward__pb2.TestAIRewriteResponse.SerializeToString,
+            ),
+            'ListPromptTemplates': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListPromptTemplates,
+                    request_deserializer=autoforward__pb2.ListPromptTemplatesRequest.FromString,
+                    response_serializer=autoforward__pb2.ListPromptTemplatesResponse.SerializeToString,
+            ),
+            'SavePromptTemplate': grpc.unary_unary_rpc_method_handler(
+                    servicer.SavePromptTemplate,
+                    request_deserializer=autoforward__pb2.SavePromptTemplateRequest.FromString,
+                    response_serializer=autoforward__pb2.PromptTemplate.SerializeToString,
+            ),
+            'DeletePromptTemplate': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeletePromptTemplate,
+                    request_deserializer=autoforward__pb2.DeletePromptTemplateRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'TestPrompt': grpc.unary_unary_rpc_method_handler(
+                    servicer.TestPrompt,
+                    request_deserializer=autoforward__pb2.TestPromptRequest.FromString,
+                    response_serializer=autoforward__pb2.TestPromptResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -1342,6 +1451,114 @@ class AIControlService:
             metadata,
             _registered_method=True)
 
+    @staticmethod
+    def ListPromptTemplates(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AIControlService/ListPromptTemplates',
+            autoforward__pb2.ListPromptTemplatesRequest.SerializeToString,
+            autoforward__pb2.ListPromptTemplatesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SavePromptTemplate(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AIControlService/SavePromptTemplate',
+            autoforward__pb2.SavePromptTemplateRequest.SerializeToString,
+            autoforward__pb2.PromptTemplate.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeletePromptTemplate(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AIControlService/DeletePromptTemplate',
+            autoforward__pb2.DeletePromptTemplateRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def TestPrompt(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AIControlService/TestPrompt',
+            autoforward__pb2.TestPromptRequest.SerializeToString,
+            autoforward__pb2.TestPromptResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
 
 class SystemStatusControlServiceStub:
     """Missing associated documentation comment in .proto file."""
@@ -1439,6 +1656,11 @@ class LogControlServiceStub:
                 request_serializer=autoforward__pb2.LogStatsRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.LogStatsResponse.FromString,
                 _registered_method=True)
+        self.PurgeLogs = channel.unary_unary(
+                '/autoforward.LogControlService/PurgeLogs',
+                request_serializer=autoforward__pb2.PurgeLogsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.PurgeLogsResponse.FromString,
+                _registered_method=True)
 
 
 class LogControlServiceServicer:
@@ -1462,6 +1684,12 @@ class LogControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def PurgeLogs(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_LogControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -1479,6 +1707,11 @@ def add_LogControlServiceServicer_to_server(servicer, server):
                     servicer.LogStats,
                     request_deserializer=autoforward__pb2.LogStatsRequest.FromString,
                     response_serializer=autoforward__pb2.LogStatsResponse.SerializeToString,
+            ),
+            'PurgeLogs': grpc.unary_unary_rpc_method_handler(
+                    servicer.PurgeLogs,
+                    request_deserializer=autoforward__pb2.PurgeLogsRequest.FromString,
+                    response_serializer=autoforward__pb2.PurgeLogsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -1562,6 +1795,33 @@ class LogControlService:
             '/autoforward.LogControlService/LogStats',
             autoforward__pb2.LogStatsRequest.SerializeToString,
             autoforward__pb2.LogStatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PurgeLogs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.LogControlService/PurgeLogs',
+            autoforward__pb2.PurgeLogsRequest.SerializeToString,
+            autoforward__pb2.PurgeLogsResponse.FromString,
             options,
             channel_credentials,
             insecure,

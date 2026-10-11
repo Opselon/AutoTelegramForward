@@ -173,10 +173,32 @@ message ForwardRule {
   // block_stickers, remove_emojis, sync_deletes, album_mode, ...). Round-tripped
   // as JSON so the web dashboard can read AND edit every bot feature.
   string custom_metadata_json = 47;
+  // AI Rewrite (P2): policy on AI failure (SEND_ORIGINAL | DROP | RETRY |
+  // QUARANTINE), pinned prompt version (0 = latest active), per-call AI timeout.
+  // The effective prompt id rides inside custom_metadata_json as "prompt_id".
+  string ai_fallback_policy = 48;
+  int32 ai_prompt_version = 49;
+  double ai_timeout_seconds = 50;
 }
 
 message CreateRuleRequest {
   ForwardRule rule = 1;
+}
+
+// ResolveChatRequest turns a human handle (username, t.me link or raw id) into
+// the canonical numeric chat id that the dispatcher stores in forward rules.
+message ResolveChatRequest {
+  string session_id = 1;
+  string handle = 2;  // @username, https://t.me/xxx, t.me/xxx or numeric id
+}
+
+message ResolveChatResponse {
+  bool found = 1;
+  string chat_id = 2;      // canonical numeric id (string-formatted)
+  string title = 3;        // chat display name
+  string username = 4;     // resolved @username (empty for private chats)
+  string chat_type = 5;    // channel | supergroup | group | private | bot
+  string error = 6;        // human-readable failure reason when not found
 }
 
 message UpdateRuleRequest {
@@ -285,6 +307,60 @@ message TestAIRewriteResponse {
 }
 
 // -----------------------------------------------------------------------------
+// Prompt Templates (AI Rewrite prompt management — shared by bot & dashboard)
+// -----------------------------------------------------------------------------
+
+message PromptTemplate {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string system_prompt = 4;
+  string user_prompt_template = 5;
+  string target_language = 6;
+  int32 current_version = 7;
+  bool is_system = 8;
+  int64 created_at = 9;
+  int64 updated_at = 10;
+  string owner_user_id = 11;
+}
+
+message ListPromptTemplatesRequest {
+  string owner_user_id = 1;
+}
+
+message ListPromptTemplatesResponse {
+  repeated PromptTemplate templates = 1;
+}
+
+message SavePromptTemplateRequest {
+  PromptTemplate template = 1;
+  int32 expected_version = 2; // OCC guard; 0 = skip check
+}
+
+message DeletePromptTemplateRequest {
+  string id = 1;
+}
+
+message TestPromptRequest {
+  string prompt_id = 1;
+  string ai_config_id = 2;
+  string sample_text = 3;
+  int32 version = 4; // 0 = active version
+}
+
+message TestPromptResponse {
+  bool success = 1;
+  string transformed_text = 2;
+  string error_message = 3;
+  string error_code = 4;
+  double execution_duration_ms = 5;
+  string provider_used = 6;
+  string model_used = 7;
+  int32 prompt_version_used = 8;
+  string circuit_state = 9;
+}
+
+// -----------------------------------------------------------------------------
 // System Status & Statistics
 // -----------------------------------------------------------------------------
 
@@ -329,6 +405,22 @@ message QueryLogsRequest {
   string search = 4;
   int32 limit = 5;
   int64 since = 6;
+}
+
+message PurgeLogsRequest {
+  // Optional filters. Empty = purge everything (with max_age_days as the only bound).
+  string level = 1;
+  string service = 2;
+  string category = 3;
+  // Keep the last N hours of history. 0 = no time-based protection.
+  int64 older_than_hours = 4;
+}
+
+message PurgeLogsResponse {
+  bool success = 1;
+  int64 purged = 2;       // rows actually deleted
+  int64 remaining = 3;    // rows left in the table
+  string error = 4;
 }
 
 message QueryLogsResponse {
@@ -471,6 +563,7 @@ service SessionControlService {
   rpc BackupSession(BackupSessionRequest) returns (BackupSessionResponse);
   rpc RestoreSession(RestoreSessionRequest) returns (RestoreSessionResponse);
   rpc TerminateSession(TerminateSessionRequest) returns (StatusResponse);
+  rpc ResolveChat(ResolveChatRequest) returns (ResolveChatResponse);
 }
 
 service ForwardRuleControlService {
@@ -503,6 +596,12 @@ service AIControlService {
   rpc UpdateAIConfig(UpdateAIConfigRequest) returns (AIConfig);
   rpc DeleteAIConfig(DeleteAIConfigRequest) returns (StatusResponse);
   rpc TestAIRewrite(TestAIRewriteRequest) returns (TestAIRewriteResponse);
+  // Prompt template management (AI Rewrite prompts) — shared surface for the
+  // Telegram bot and the web dashboard.
+  rpc ListPromptTemplates(ListPromptTemplatesRequest) returns (ListPromptTemplatesResponse);
+  rpc SavePromptTemplate(SavePromptTemplateRequest) returns (PromptTemplate);
+  rpc DeletePromptTemplate(DeletePromptTemplateRequest) returns (StatusResponse);
+  rpc TestPrompt(TestPromptRequest) returns (TestPromptResponse);
 }
 
 service SystemStatusControlService {
@@ -513,6 +612,7 @@ service LogControlService {
   rpc Log(LogRequest) returns (StatusResponse);
   rpc QueryLogs(QueryLogsRequest) returns (QueryLogsResponse);
   rpc LogStats(LogStatsRequest) returns (LogStatsResponse);
+  rpc PurgeLogs(PurgeLogsRequest) returns (PurgeLogsResponse);
 }
 
 // -----------------------------------------------------------------------------
