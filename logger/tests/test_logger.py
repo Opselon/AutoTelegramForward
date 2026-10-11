@@ -91,3 +91,89 @@ def test_grpc_roundtrip(tmp_path):
             store.close()
 
     asyncio.run(scenario())
+
+
+# --------------------------------------------------------------------------- #
+# Purge (API-first log retention)
+# --------------------------------------------------------------------------- #
+def test_purge_all(db):
+    _log(db, level="INFO", message="a")
+    _log(db, level="ERROR", message="b")
+    purged, remaining = db.purge(older_than_hours=0)
+    assert purged == 2
+    assert remaining == 0
+
+
+def test_purge_by_level_keeps_others(db):
+    _log(db, level="INFO", message="keep me")
+    _log(db, level="DEBUG", message="keep me too")
+    _log(db, level="ERROR", message="drop me")
+    purged, remaining = db.purge(level="ERROR", older_than_hours=0)
+    assert purged == 1
+    assert remaining == 2
+    assert [r["level"] for r in db.query(limit=10)] == ["DEBUG", "INFO"]
+
+
+def test_purge_respects_time_window(db):
+    import time
+
+    now = int(time.time())
+    db.insert(ts=now, level="INFO", service="core", category="pipeline",
+              message="fresh", detail="")
+    db.insert(ts=now - 48 * 3600, level="INFO", service="core", category="pipeline",
+              message="old", detail="")
+    purged, remaining = db.purge(older_than_hours=24)
+    assert purged == 1
+    assert remaining == 1
+    assert db.query(limit=10)[0]["message"] == "fresh"
+
+
+def test_purge_scoped_by_service_and_category(db):
+    _log(db, level="WARN", service="api", category="http", message="api warn")
+    _log(db, level="WARN", service="core", category="http", message="core warn")
+    purged, remaining = db.purge(service="api", older_than_hours=0)
+    assert purged == 1
+    assert remaining == 1
+    assert db.query(limit=10)[0]["service"] == "core"
+
+
+@pytest.mark.asyncio()
+async def test_purge_rpc_roundtrip(tmp_path):
+    """The PurgeLogs RPC must validate the level and return honest counts.
+
+    Runs against the live logger, so it seeds an unmistakable marker message
+    rather than assuming the table starts empty.
+    """
+    import time
+
+    import grpc.aio
+
+    from core.proto import pb, pb_grpc
+
+    async with grpc.aio.insecure_channel("127.0.0.1:6002") as ch:
+        stub = pb_grpc.LogControlServiceStub(ch)
+        marker = "purge-rpc-probe-7741"
+        now = int(time.time())
+        for lvl in ("INFO", "WARN", "ERROR"):
+            await stub.Log(pb.LogRequest(entry=pb.LogEntry(
+                ts=now - 72 * 3600, level=lvl, service="core", category="test",
+                message=f"{marker}-old-{lvl}")))
+            await stub.Log(pb.LogRequest(entry=pb.LogEntry(
+                ts=now, level=lvl, service="core", category="test",
+                message=f"{marker}-fresh-{lvl}")))
+
+        bad = await stub.PurgeLogs(pb.PurgeLogsRequest(level="NOPE"))
+        assert not bad.success
+        assert "invalid level" in bad.error
+
+        r = await stub.PurgeLogs(pb.PurgeLogsRequest(level="WARN", older_than_hours=24))
+        assert r.success
+
+        fresh = await stub.QueryLogs(pb.QueryLogsRequest(level="WARN", search=marker, limit=50))
+        got = [l.message for l in fresh.logs]
+        assert f"{marker}-fresh-WARN" in got, got
+        assert f"{marker}-old-WARN" not in got, got
+
+        # clean up our own markers so the test leaves no residue
+        for lvl in ("INFO", "WARN", "ERROR"):
+            await stub.PurgeLogs(pb.PurgeLogsRequest(level=lvl, older_than_hours=0))

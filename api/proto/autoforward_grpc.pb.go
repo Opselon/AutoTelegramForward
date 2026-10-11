@@ -1667,6 +1667,7 @@ const (
 	LogControlService_Log_FullMethodName       = "/autoforward.LogControlService/Log"
 	LogControlService_QueryLogs_FullMethodName = "/autoforward.LogControlService/QueryLogs"
 	LogControlService_LogStats_FullMethodName  = "/autoforward.LogControlService/LogStats"
+	LogControlService_PurgeLogs_FullMethodName = "/autoforward.LogControlService/PurgeLogs"
 )
 
 // LogControlServiceClient is the client API for LogControlService service.
@@ -1676,6 +1677,7 @@ type LogControlServiceClient interface {
 	Log(ctx context.Context, in *LogRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 	QueryLogs(ctx context.Context, in *QueryLogsRequest, opts ...grpc.CallOption) (*QueryLogsResponse, error)
 	LogStats(ctx context.Context, in *LogStatsRequest, opts ...grpc.CallOption) (*LogStatsResponse, error)
+	PurgeLogs(ctx context.Context, in *PurgeLogsRequest, opts ...grpc.CallOption) (*PurgeLogsResponse, error)
 }
 
 type logControlServiceClient struct {
@@ -1716,6 +1718,16 @@ func (c *logControlServiceClient) LogStats(ctx context.Context, in *LogStatsRequ
 	return out, nil
 }
 
+func (c *logControlServiceClient) PurgeLogs(ctx context.Context, in *PurgeLogsRequest, opts ...grpc.CallOption) (*PurgeLogsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeLogsResponse)
+	err := c.cc.Invoke(ctx, LogControlService_PurgeLogs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LogControlServiceServer is the server API for LogControlService service.
 // All implementations must embed UnimplementedLogControlServiceServer
 // for forward compatibility.
@@ -1723,6 +1735,7 @@ type LogControlServiceServer interface {
 	Log(context.Context, *LogRequest) (*StatusResponse, error)
 	QueryLogs(context.Context, *QueryLogsRequest) (*QueryLogsResponse, error)
 	LogStats(context.Context, *LogStatsRequest) (*LogStatsResponse, error)
+	PurgeLogs(context.Context, *PurgeLogsRequest) (*PurgeLogsResponse, error)
 	mustEmbedUnimplementedLogControlServiceServer()
 }
 
@@ -1741,6 +1754,9 @@ func (UnimplementedLogControlServiceServer) QueryLogs(context.Context, *QueryLog
 }
 func (UnimplementedLogControlServiceServer) LogStats(context.Context, *LogStatsRequest) (*LogStatsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LogStats not implemented")
+}
+func (UnimplementedLogControlServiceServer) PurgeLogs(context.Context, *PurgeLogsRequest) (*PurgeLogsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurgeLogs not implemented")
 }
 func (UnimplementedLogControlServiceServer) mustEmbedUnimplementedLogControlServiceServer() {}
 func (UnimplementedLogControlServiceServer) testEmbeddedByValue()                           {}
@@ -1817,6 +1833,24 @@ func _LogControlService_LogStats_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LogControlService_PurgeLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgeLogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LogControlServiceServer).PurgeLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LogControlService_PurgeLogs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LogControlServiceServer).PurgeLogs(ctx, req.(*PurgeLogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LogControlService_ServiceDesc is the grpc.ServiceDesc for LogControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1835,6 +1869,10 @@ var LogControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LogStats",
 			Handler:    _LogControlService_LogStats_Handler,
+		},
+		{
+			MethodName: "PurgeLogs",
+			Handler:    _LogControlService_PurgeLogs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

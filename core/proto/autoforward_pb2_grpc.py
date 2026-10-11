@@ -1656,6 +1656,11 @@ class LogControlServiceStub:
                 request_serializer=autoforward__pb2.LogStatsRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.LogStatsResponse.FromString,
                 _registered_method=True)
+        self.PurgeLogs = channel.unary_unary(
+                '/autoforward.LogControlService/PurgeLogs',
+                request_serializer=autoforward__pb2.PurgeLogsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.PurgeLogsResponse.FromString,
+                _registered_method=True)
 
 
 class LogControlServiceServicer:
@@ -1679,6 +1684,12 @@ class LogControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def PurgeLogs(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_LogControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -1696,6 +1707,11 @@ def add_LogControlServiceServicer_to_server(servicer, server):
                     servicer.LogStats,
                     request_deserializer=autoforward__pb2.LogStatsRequest.FromString,
                     response_serializer=autoforward__pb2.LogStatsResponse.SerializeToString,
+            ),
+            'PurgeLogs': grpc.unary_unary_rpc_method_handler(
+                    servicer.PurgeLogs,
+                    request_deserializer=autoforward__pb2.PurgeLogsRequest.FromString,
+                    response_serializer=autoforward__pb2.PurgeLogsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -1779,6 +1795,33 @@ class LogControlService:
             '/autoforward.LogControlService/LogStats',
             autoforward__pb2.LogStatsRequest.SerializeToString,
             autoforward__pb2.LogStatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PurgeLogs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.LogControlService/PurgeLogs',
+            autoforward__pb2.PurgeLogsRequest.SerializeToString,
+            autoforward__pb2.PurgeLogsResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -22,6 +22,8 @@ import type {
   StatsResponse,
   LogItem,
   LogStats,
+  PurgeLogsRequest,
+  PurgeLogsResponse,
   ServicesHealthResponse,
   AuthResponse,
   PVResponderConfig,
@@ -321,6 +323,11 @@ export const api = {
   getLogStats: async (): Promise<LogStats> => {
     return fetchJson<LogStats>(`${API_BASE}/logs/stats`)
   },
+  purgeLogs: (req: PurgeLogsRequest) =>
+    fetchJson<PurgeLogsResponse>(`${API_BASE}/logs/purge`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
   getServicesHealth: async (): Promise<ServicesHealthResponse> => {
     return fetchJson<ServicesHealthResponse>(`${API_BASE}/health/services`)
   },

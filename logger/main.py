@@ -109,6 +109,37 @@ class LoggerDatabase:
             }
         return total, by_level, by_category
 
+    def purge(self, level="", service="", category="", older_than_hours=0) -> tuple[int, int]:
+        """Delete log rows matching the filters. Returns (purged, remaining).
+
+        older_than_hours > 0 protects the newest window (use it as the default
+        safety net so a blanket purge can't wipe the evidence you're debugging).
+        """
+        sql = "DELETE FROM logs WHERE 1=1"
+        params: list = []
+        if level:
+            sql += " AND level=?"
+            params.append(level)
+        if service:
+            sql += " AND service=?"
+            params.append(service)
+        if category:
+            sql += " AND category=?"
+            params.append(category)
+        if older_than_hours and older_than_hours > 0:
+            cutoff = int(time.time()) - int(older_than_hours) * 3600
+            sql += " AND ts < ?"
+            params.append(cutoff)
+        with self._lock:
+            cur = self._conn.execute(sql, tuple(params))
+            purged = cur.rowcount or 0
+            # Reclaim disk space right away — a big purge leaves a bloated file
+            # and the WAL checkpoint is what actually shrinks it.
+            self._conn.commit()
+            self._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+            remaining = self._conn.execute("SELECT COUNT(*) AS c FROM logs").fetchone()["c"]
+        return purged, remaining
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()
@@ -161,6 +192,24 @@ class LogControlServicer(pb_grpc.LogControlServiceServicer):
             by_level=by_level,
             by_category=by_category,
         )
+
+    async def PurgeLogs(self, request, context):
+        level = (request.level or "").upper()
+        if level and level not in self.VALID_LEVELS:
+            return pb.PurgeLogsResponse(
+                success=False,
+                error=f"invalid level: {level} (expected one of {sorted(self.VALID_LEVELS)})",
+            )
+        try:
+            purged, remaining = self._db.purge(
+                level=level,
+                service=request.service or "",
+                category=request.category or "",
+                older_than_hours=request.older_than_hours or 0,
+            )
+        except Exception as exc:  # noqa: BLE001 — surface any DB failure to the caller
+            return pb.PurgeLogsResponse(success=False, error=str(exc))
+        return pb.PurgeLogsResponse(success=True, purged=purged, remaining=remaining)
 
 
 # --------------------------------------------------------------------------- #

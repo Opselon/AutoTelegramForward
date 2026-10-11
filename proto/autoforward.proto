@@ -407,6 +407,22 @@ message QueryLogsRequest {
   int64 since = 6;
 }
 
+message PurgeLogsRequest {
+  // Optional filters. Empty = purge everything (with max_age_days as the only bound).
+  string level = 1;
+  string service = 2;
+  string category = 3;
+  // Keep the last N hours of history. 0 = no time-based protection.
+  int64 older_than_hours = 4;
+}
+
+message PurgeLogsResponse {
+  bool success = 1;
+  int64 purged = 2;       // rows actually deleted
+  int64 remaining = 3;    // rows left in the table
+  string error = 4;
+}
+
 message QueryLogsResponse {
   repeated LogEntry logs = 1;
   int32 total = 2;
@@ -596,6 +612,7 @@ service LogControlService {
   rpc Log(LogRequest) returns (StatusResponse);
   rpc QueryLogs(QueryLogsRequest) returns (QueryLogsResponse);
   rpc LogStats(LogStatsRequest) returns (LogStatsResponse);
+  rpc PurgeLogs(PurgeLogsRequest) returns (PurgeLogsResponse);
 }
 
 // -----------------------------------------------------------------------------

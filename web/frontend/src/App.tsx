@@ -88,6 +88,9 @@ export function App() {
   const [logSearch, setLogSearch] = useState<string>('')
   const [logAutoRefresh, setLogAutoRefresh] = useState<boolean>(true)
   const [logStats, setLogStats] = useState<LogStats | null>(null)
+  const [purging, setPurging] = useState(false)
+  const [purgeWindowH, setPurgeWindowH] = useState<number>(24)
+  const [purgeResult, setPurgeResult] = useState<{ purged: number; remaining: number } | null>(null)
   const [copiedLogId, setCopiedLogId] = useState<string | number | null>(null)
   const [servicesHealth, setServicesHealth] = useState<ServicesHealthResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -218,6 +221,33 @@ export function App() {
       setLogs(Array.isArray(fetchedLogs) ? fetchedLogs : [])
       if (stats) setLogStats(stats)
     } catch {}
+  }
+
+  const handlePurgeLogs = async () => {
+    if (purging) return
+    const keepH = Math.max(0, purgeWindowH)
+    const label = keepH > 0 ? `قدیمی‌تر از ${keepH} ساعت` : 'تمام لاگ‌ها (بدون حفاظت زمانی)'
+    if (!window.confirm(`حذف ${logFilterLevel !== 'all' ? `سطح ${logFilterLevel} ` : ''}${logFilterService !== 'all' ? `سرویس ${logFilterService} ` : ''}${label}؟ این عمل قابل بازگشت نیست.`)) return
+    setPurging(true)
+    setPurgeResult(null)
+    try {
+      const res = await api.purgeLogs({
+        level: logFilterLevel !== 'all' ? logFilterLevel : undefined,
+        service: logFilterService !== 'all' ? logFilterService : undefined,
+        older_than_hours: keepH,
+      })
+      if (res?.success) {
+        setPurgeResult({ purged: res.purged, remaining: res.remaining })
+        showToast(`${res.purged} لاگ حذف شد · ${res.remaining} باقی ماند`)
+        await fetchLogs()
+      } else {
+        showToast(res?.error || 'خطا در پاکسازی لاگ‌ها')
+      }
+    } catch (e: any) {
+      showToast(e.message || 'خطا در پاکسازی لاگ‌ها')
+    } finally {
+      setPurging(false)
+    }
   }
 
   useEffect(() => {
@@ -2733,6 +2763,42 @@ export function App() {
                     TOTAL ARCHIVE: {logStats.total}
                   </span>
                 </>
+              )}
+            </div>
+
+            {/* Log purge controls — keeps the archive from growing unbounded. */}
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+              marginBottom: 14, padding: '10px 12px',
+              background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10,
+            }}>
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                🧹 {isRtl ? 'پاکسازی آرشیو:' : 'Purge archive:'}
+              </span>
+              <label style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {isRtl ? 'حفظ آخرین' : 'Keep last'}
+                <input
+                  type="number" min={0} max={720} step={1} value={purgeWindowH}
+                  onChange={(e) => setPurgeWindowH(Math.max(0, Math.min(720, Number(e.target.value) || 0)))}
+                  style={{ width: 64, background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '4px 6px', fontSize: '0.72rem' }}
+                />
+                {isRtl ? 'ساعت' : 'h'}
+              </label>
+              {(logFilterLevel !== 'all' || logFilterService !== 'all') && (
+                <span className="badge badge-gray" style={{ fontSize: '0.68rem' }}>
+                  {isRtl ? 'فقط:' : 'scoped:'} {[logFilterLevel !== 'all' && logFilterLevel, logFilterService !== 'all' && logFilterService].filter(Boolean).join(' · ')}
+                </span>
+              )}
+              <button
+                onClick={handlePurgeLogs} disabled={purging}
+                className="btn btn-secondary" style={{ padding: '5px 12px', fontSize: '0.72rem' }}
+              >
+                {purging ? '⏳ ...' : (isRtl ? 'حذف لاگ‌های قدیمی' : 'Purge old logs')}
+              </button>
+              {purgeResult && (
+                <span style={{ fontSize: '0.7rem', color: '#34d399' }}>
+                  ✓ {isRtl ? 'حذف شد' : 'purged'}: {purgeResult.purged} · {isRtl ? 'باقی' : 'left'}: {purgeResult.remaining}
+                </span>
               )}
             </div>
 

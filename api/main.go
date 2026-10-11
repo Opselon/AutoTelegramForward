@@ -80,6 +80,7 @@ func main() {
 	dashMux.HandleFunc("POST /rules/{id}/resume", h.ResumeRule)
 	dashMux.HandleFunc("GET /logs", h.QueryLogs)
 	dashMux.HandleFunc("GET /logs/stats", h.LogStats)
+	dashMux.HandleFunc("POST /logs/purge", h.PurgeLogs)
 	dashMux.HandleFunc("GET /health/services", h.ServicesHealth)
 	// AI Rewrite prompt templates — authenticated + ownership-scoped (same surface
 	// as /ai-configs). NOT on /api/v1/*: that prefix bypasses RequireAuth, so

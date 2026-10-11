@@ -351,6 +351,21 @@ export interface LogStats {
   by_category: Record<string, number>
 }
 
+export interface PurgeLogsRequest {
+  level?: string
+  service?: string
+  category?: string
+  /** Keep logs newer than this many hours. 0 = no protection. */
+  older_than_hours?: number
+}
+
+export interface PurgeLogsResponse {
+  success: boolean
+  purged: number
+  remaining: number
+  error?: string
+}
+
 export interface WebAccount {
   user_id: number;
   username: string;

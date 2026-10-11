@@ -1294,6 +1294,70 @@ func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// PurgeLogs deletes log rows from the logger microservice. Filters are all
+// optional; older_than_hours (default 24) protects the newest window so a
+// blanket purge can't delete the evidence you are actively debugging.
+func (h *Handlers) PurgeLogs(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	if h.c.Logs == nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{
+			"error": "logger service unavailable",
+		})
+		return
+	}
+	var body struct {
+		Level          string `json:"level"`
+		Service        string `json:"service"`
+		Category       string `json:"category"`
+		OlderThanHours int64  `json:"older_than_hours"`
+	}
+	_ = bind(w, r, &body)
+	q := r.URL.Query()
+	if body.Level == "" {
+		body.Level = q.Get("level")
+	}
+	if body.Service == "" {
+		body.Service = q.Get("service")
+	}
+	if body.Category == "" {
+		body.Category = q.Get("category")
+	}
+	if body.OlderThanHours == 0 {
+		if v := q.Get("older_than_hours"); v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+				body.OlderThanHours = n
+			}
+		}
+	}
+	// Destructive default: never delete the last 24h unless asked explicitly.
+	if body.OlderThanHours == 0 {
+		body.OlderThanHours = 24
+	}
+	resp, err := h.c.Logs.PurgeLogs(ctx, &pb.PurgeLogsRequest{
+		Level:          body.Level,
+		Service:        body.Service,
+		Category:       body.Category,
+		OlderThanHours: body.OlderThanHours,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if !resp.Success {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error": resp.Error,
+			"code":  "purge_failed",
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":   true,
+		"purged":    resp.Purged,
+		"remaining": resp.Remaining,
+	})
+}
+
 // ------------------------------------------------------------- internals
 func identity(r *http.Request) *Identity {
 	if v := r.Context().Value(identityKey{}); v != nil {
