@@ -62,6 +62,24 @@ class SessionUseCases:
     async def get(self, session_id: str) -> Optional[TelegramSession]:
         return await self._repo.get_by_id(session_id)
 
+    def _owns(self, entity_owner: int, owner_user_id: Optional[int]) -> bool:
+        # v12.1: shared IDOR guard — None keeps the legacy/admin path.
+        return owner_user_id is None or int(entity_owner or 0) == int(owner_user_id or 0)
+
+    async def get_owned(self, session_id: str, owner_user_id: Optional[int]) -> Optional[TelegramSession]:
+        s = await self._repo.get_by_id(session_id)
+        if s is None or not self._owns(getattr(s, "owner_user_id", 0), owner_user_id):
+            return None
+        return s
+
+    async def delete_owned(self, session_id: str, owner_user_id: Optional[int]) -> bool:
+        existing = await self._repo.get_by_id(session_id)
+        if existing is None:
+            return False
+        if not self._owns(getattr(existing, "owner_user_id", 0), owner_user_id):
+            raise PermissionError("not_owner")
+        return await self._repo.delete(session_id)
+
     async def activate(self, session_id: str) -> Optional[TelegramSession]:
         s = await self._repo.get_by_id(session_id)
         if s:
@@ -185,6 +203,44 @@ class ForwardRuleUseCases:
             return await self._repo.update(r)
         return None
 
+    # -- v12.1: owner-guarded mutations -------------------------------------
+    # The Telegram bot resolves entities by callback id, so an IDOR guard must
+    # live here (one enforcement point for every caller) rather than only in
+    # the HTTP/gRPC layer. `owner_user_id=None` keeps the legacy/admin path;
+    # any other value must match the entity or the call is refused.
+
+    def _owns(self, entity_owner: int, owner_user_id: Optional[int]) -> bool:
+        return owner_user_id is None or int(entity_owner or 0) == int(owner_user_id or 0)
+
+    async def get_owned(self, rule_id: str, owner_user_id: Optional[int]) -> Optional[ForwardRule]:
+        r = await self._repo.get_by_id(rule_id)
+        if r is None or not self._owns(getattr(r, "owner_user_id", 0), owner_user_id):
+            return None
+        return r
+
+    async def update_owned(self, rule: ForwardRule, owner_user_id: Optional[int],
+                           expected_version: Optional[int] = None) -> ForwardRule:
+        existing = await self._repo.get_by_id(rule.id)
+        if existing is None or not self._owns(getattr(existing, "owner_user_id", 0), owner_user_id):
+            raise PermissionError("not_owner")
+        return await self.update(rule, expected_version=expected_version)
+
+    async def delete_owned(self, rule_id: str, owner_user_id: Optional[int]) -> bool:
+        existing = await self._repo.get_by_id(rule_id)
+        if existing is None:
+            return False
+        if not self._owns(getattr(existing, "owner_user_id", 0), owner_user_id):
+            raise PermissionError("not_owner")
+        return await self._repo.delete(rule_id)
+
+    async def toggle_owned(self, rule_id: str, owner_user_id: Optional[int]) -> Optional[ForwardRule]:
+        r = await self._repo.get_by_id(rule_id)
+        if r is None or not self._owns(getattr(r, "owner_user_id", 0), owner_user_id):
+            return None
+        r.is_active = not r.is_active
+        r.mark_updated()
+        return await self._repo.update(r)
+
     async def delete(self, rule_id: str) -> bool:
         return await self._repo.delete(rule_id)
 
@@ -211,6 +267,24 @@ class FilterRuleUseCases:
 
     async def list_by_owner(self, owner_user_id: int) -> List[FilterRule]:
         return await self._repo.list_by_owner(owner_user_id)
+
+    def _owns(self, entity_owner: int, owner_user_id: Optional[int]) -> bool:
+        # v12.1: shared IDOR guard — None keeps the legacy/admin path.
+        return owner_user_id is None or int(entity_owner or 0) == int(owner_user_id or 0)
+
+    async def get_owned(self, filter_id: str, owner_user_id: Optional[int]) -> Optional[FilterRule]:
+        f = await self._repo.get_by_id(filter_id)
+        if f is None or not self._owns(getattr(f, "owner_user_id", 0), owner_user_id):
+            return None
+        return f
+
+    async def delete_owned(self, filter_id: str, owner_user_id: Optional[int]) -> bool:
+        existing = await self._repo.get_by_id(filter_id)
+        if existing is None:
+            return False
+        if not self._owns(getattr(existing, "owner_user_id", 0), owner_user_id):
+            raise PermissionError("not_owner")
+        return await self._repo.delete(filter_id)
 
     async def delete(self, filter_id: str) -> bool:
         return await self._repo.delete(filter_id)
@@ -252,6 +326,16 @@ class AIConfigUseCases:
     async def update(self, cfg: AIConfig) -> AIConfig:
         return await self._repo.update(cfg)
 
+    async def update_owned(self, cfg: AIConfig, owner_user_id: Optional[int]) -> AIConfig:
+        # v12.1: bot edit-steps resolve the config id from callback state —
+        # refuse a forged id belonging to another tenant.
+        existing = await self._repo.get_by_id(cfg.id)
+        if existing is None:
+            raise KeyError("config_not_found")
+        if not self._owns(getattr(existing, "owner_user_id", 0), owner_user_id):
+            raise PermissionError("not_owner")
+        return await self._repo.update(cfg)
+
     async def get(self, config_id: str) -> Optional[AIConfig]:
         return await self._repo.get_by_id(config_id)
 
@@ -260,6 +344,24 @@ class AIConfigUseCases:
 
     async def list_by_owner(self, owner_user_id: int) -> List[AIConfig]:
         return await self._repo.list_by_owner(owner_user_id)
+
+    def _owns(self, entity_owner: int, owner_user_id: Optional[int]) -> bool:
+        # v12.1: shared IDOR guard — None keeps the legacy/admin path.
+        return owner_user_id is None or int(entity_owner or 0) == int(owner_user_id or 0)
+
+    async def get_owned(self, config_id: str, owner_user_id: Optional[int]) -> Optional[AIConfig]:
+        c = await self._repo.get_by_id(config_id)
+        if c is None or not self._owns(getattr(c, "owner_user_id", 0), owner_user_id):
+            return None
+        return c
+
+    async def delete_owned(self, config_id: str, owner_user_id: Optional[int]) -> bool:
+        existing = await self._repo.get_by_id(config_id)
+        if existing is None:
+            return False
+        if not self._owns(getattr(existing, "owner_user_id", 0), owner_user_id):
+            raise PermissionError("not_owner")
+        return await self._repo.delete(config_id)
 
     async def delete(self, config_id: str) -> bool:
         return await self._repo.delete(config_id)
@@ -273,6 +375,15 @@ class AIConfigUseCases:
             return True, await provider.rewrite(cfg, sample_text)
         except Exception as exc:  # pragma: no cover - network path
             return False, f"{type(exc).__name__}: {exc}"
+
+    async def test_rewrite_owned(self, config_id: str, sample_text: str,
+                                 owner_user_id: Optional[int]) -> tuple[bool, str]:
+        # v12.1: executing a rewrite consumes another tenant's API key/quota —
+        # refuse a forged config id before touching the provider.
+        cfg = await self._repo.get_by_id(config_id)
+        if cfg is None or not self._owns(getattr(cfg, "owner_user_id", 0), owner_user_id):
+            return False, "config_not_found"
+        return await self.test_rewrite(config_id, sample_text)
 
     async def health_check(self, config_id: str) -> tuple[bool, str, float]:
         """Runs health check against provider, returns (is_healthy, response_or_error, latency_ms)."""
@@ -290,6 +401,15 @@ class AIConfigUseCases:
             return True, res, elapsed
         except Exception as exc:  # pragma: no cover - network path
             return False, f"{type(exc).__name__}: {exc}", 0.0
+
+    async def health_check_owned(self, config_id: str,
+                                 owner_user_id: Optional[int]) -> tuple[bool, str, float]:
+        # v12.1: same guard as test_rewrite_owned — a health check hits the
+        # provider with the stored key, so a forged id must stop here.
+        cfg = await self._repo.get_by_id(config_id)
+        if cfg is None or not self._owns(getattr(cfg, "owner_user_id", 0), owner_user_id):
+            return False, "config_not_found", 0.0
+        return await self.health_check(config_id)
 
 
 # --------------------------------------------------------------------------- #
@@ -316,6 +436,46 @@ class ApiCredentialUseCases:
 
     async def get(self, cred_id: str):
         return await self._repo.get_by_id(cred_id)
+
+    def _owns(self, entity_owner: int, owner_user_id):
+        # v12.1: shared IDOR guard — None keeps the legacy/admin path.
+        return owner_user_id is None or int(entity_owner or 0) == int(owner_user_id or 0)
+
+    async def get_owned(self, cred_id: str, owner_user_id):
+        c = await self._repo.get_by_id(cred_id)
+        if c is None or not self._owns(getattr(c, "owner_user_id", 0), owner_user_id):
+            return None
+        return c
+
+    async def list_by_owner(self, owner_user_id: int):
+        if hasattr(self._repo, "list_by_owner"):
+            return await self._repo.list_by_owner(int(owner_user_id or 0))
+        return [c for c in await self._repo.list_all()
+                if int(getattr(c, "owner_user_id", 0) or 0) == int(owner_user_id or 0)]
+
+    async def set_default_owned(self, cred_id: str, owner_user_id):
+        # v12.1: a forged credential id must not flip another tenant's default.
+        existing = await self._repo.get_by_id(cred_id)
+        if existing is None:
+            return None
+        if not self._owns(getattr(existing, "owner_user_id", 0), owner_user_id):
+            raise PermissionError("not_owner")
+        scope = None if owner_user_id is None else await self.list_by_owner(owner_user_id)
+        creds = await self._repo.list_all() if scope is None else scope
+        for c in creds:
+            want = (c.id == cred_id)
+            if c.is_default != want:
+                c.is_default = want
+                await self._repo.update(c)
+        return await self._repo.get_by_id(cred_id)
+
+    async def delete_owned(self, cred_id: str, owner_user_id) -> bool:
+        existing = await self._repo.get_by_id(cred_id)
+        if existing is None:
+            return False
+        if not self._owns(getattr(existing, "owner_user_id", 0), owner_user_id):
+            raise PermissionError("not_owner")
+        return await self._repo.delete(cred_id)
 
     async def list_all(self):
         return await self._repo.list_all()

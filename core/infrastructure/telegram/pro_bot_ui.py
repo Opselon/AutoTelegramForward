@@ -255,6 +255,14 @@ class ProBotUI:
     def _is_admin(self, user_id: int) -> bool:
         return not self._admin_ids or user_id in self._admin_ids
 
+    def _scope_uid(self, user_id: int) -> Optional[int]:
+        # v12.1: map a Telegram user to the owner scope used by the use-case
+        # IDOR guards — admins keep the legacy global scope (None) so
+        # single-tenant installs behave exactly as before.
+        admin_ids = getattr(self, "_admin_ids", None)
+        is_admin = not admin_ids or int(user_id or 0) in admin_ids
+        return None if is_admin else int(user_id or 0)
+
     def _state(self, uid: int) -> UiState:
         st = self._states.get(uid)
         if st is None:
@@ -940,9 +948,11 @@ class ProBotUI:
         fallback_rows.append([("❌ انصراف", cancel_cb)])
         return text, self._kbd(fallback_rows)
 
-    async def _fetch_dialogs(self) -> List[Dict[str, Any]]:
+    async def _fetch_dialogs(self, owner_user_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Fetch available channels/groups from connected session clients."""
-        sessions = await self._sessions.list_all()
+        _dlg_uid = None if owner_user_id is None else int(owner_user_id or 0)
+        sessions = (await self._sessions.list_all() if _dlg_uid is None
+                    else await self._sessions.list_by_owner(_dlg_uid))
         active_sessions = [s for s in sessions if getattr(s, "is_active", True) and getattr(s, "is_authorized", False)]
         if not active_sessions and sessions:
             active_sessions = sessions
@@ -1031,7 +1041,9 @@ class ProBotUI:
                 await event.reply_text(err_text, reply_markup=markup)
             return
 
-        sessions = await self._sessions.list_all()
+        _fuid = self._scope_uid(uid)
+        sessions = (await self._sessions.list_all() if _fuid is None
+                    else await self._sessions.list_by_owner(uid))
         if not sessions:
             st.step = ""
             if isinstance(st.buffer, dict):
@@ -1364,7 +1376,8 @@ class ProBotUI:
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /rules from uid=%s", uid)
             try:
-                rules = await self._rules.list_all()
+                # v12: scope to the caller's tenant; admins see everything.
+                rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
                 text, kbd = self._render_rules_list(rules, page=0)
                 await message.reply_text(text, reply_markup=kbd)
             except Exception as exc:
@@ -1426,7 +1439,9 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["filters"] + "$"))
         async def _cb_filters(_, cq: CallbackQuery):
-            filters_ = await self._filters.list_all()
+            # v12: scope to the caller's tenant; admins see everything.
+            uid_f = cq.from_user.id if cq.from_user else 0
+            filters_ = await (self._filters.list_all() if self._is_admin(uid_f) else self._filters.list_by_owner(uid_f))
             lines = [self._t("ui_filters_title"), ""]
             if not filters_:
                 lines.append(self._t("ui_none"))
@@ -1437,7 +1452,9 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["ai"] + "$"))
         async def _cb_ai(_, cq: CallbackQuery):
-            cfgs = await self._ai.list_all()
+            # v12: scope to the caller's tenant; admins see everything.
+            uid_a = cq.from_user.id if cq.from_user else 0
+            cfgs = await (self._ai.list_all() if self._is_admin(uid_a) else self._ai.list_by_owner(uid_a))
             lines = [self._t("ui_ai_title"), ""]
             if not cfgs:
                 lines.append(self._t("ui_none"))
@@ -1527,7 +1544,8 @@ class ProBotUI:
             await self._persist(uid, st)
             self._login.cancel(uid)
             if old_step.startswith("rule_"):
-                rules = await self._rules.list_all()
+                # v12.1: scope to the caller's tenant; admins see everything.
+                rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
                 text, kbd = self._render_rules_list(rules, page=0)
                 await self._safe_edit(cq, text, reply_markup=kbd)
             else:
@@ -1626,11 +1644,16 @@ class ProBotUI:
             cid = cq.data.split(":", 1)[1]
             if self._credentials is not None:
                 try:
-                    await self._credentials.set_default(cid)
+                    # v12.1: a forged credential id must not flip another
+                    # tenant's default credential.
+                    await self._credentials.set_default_owned(
+                        cid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
                     try:
                         self._log.info("bot", "cred", f"credential {cid[:8]} set default")
                     except Exception:
                         pass
+                except PermissionError:
+                    return await cq.answer(self._t("ui_need_admin"), show_alert=True)
                 except Exception as exc:
                     await self._record_error("bot", exc, user_id=cq.from_user.id)
             await cq.answer(self._t("ui_cred_set_default", id=cid[:8]), show_alert=True)
@@ -1657,7 +1680,7 @@ class ProBotUI:
             except Exception:
                 pass
 
-            chats = await self._fetch_dialogs()
+            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
             st.buffer["chats"] = chats
             st.buffer["page"] = 0
             await self._persist(cq.from_user.id, st)
@@ -1810,7 +1833,7 @@ class ProBotUI:
             except Exception:
                 pass
 
-            chats = await self._fetch_dialogs()
+            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if isinstance(st.buffer, dict):
                 st.buffer["chats"] = chats
                 st.buffer["page"] = 0
@@ -1879,12 +1902,12 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rid = raw.split(":", 1)[1]
-            rule = await self._rules.get(rid)
-            if not rule:
-                return await cq.answer(self._t("ui_none"), show_alert=True)
-            if not (self._is_admin(uid) or rule.owner_user_id == uid):
+            try:
+                ok = await self._rules.delete_owned(rid, self._scope_uid(uid))
+            except PermissionError:
                 return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            await self._rules.delete(rid)
+            if not ok:
+                return await cq.answer(self._t("ui_none"), show_alert=True)
             try:
                 self._log.info("bot", "rule", f"rule {rid} deleted")
             except Exception:
@@ -1899,12 +1922,9 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rid = raw.split(":", 1)[1]
-            rule = await self._rules.get(rid)
+            rule = await self._rules.toggle_owned(rid, self._scope_uid(uid))
             if not rule:
                 return await cq.answer(self._t("ui_none"), show_alert=True)
-            if not (self._is_admin(uid) or rule.owner_user_id == uid):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            await self._rules.toggle(rid)
             try:
                 self._log.info("bot", "rule", f"rule {rid} toggled")
             except Exception:
@@ -1931,25 +1951,13 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            rule = await self._rules.get(rule_id)
+            # v12.1: resolve through the ownership guard — a forged callback id
+            # for another tenant's rule must not render.
+            rule = await self._rules.get_owned(rule_id, None if self._is_admin(uid) else uid)
             if not rule:
                 return await cq.answer(self._t("ui_none"), show_alert=True)
             if not (self._is_admin(uid) or rule.owner_user_id == uid):
                 return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            rule = await self._rules.get(rule_id)
-            if not rule:
-                st = self._state(cq.from_user.id)
-                st.step = ""
-                if isinstance(st.buffer, dict):
-                    st.buffer.clear()
-                await self._persist(cq.from_user.id, st)
-                rules = await self._rules.list_all()
-                text, kbd = self._render_rules_list(rules, page=0)
-                try:
-                    await self._safe_edit(cq, text, reply_markup=kbd)
-                except Exception:
-                    pass
-                return await cq.answer("❌ این قانون یافت نشد یا ممکن است حذف شده باشد.", show_alert=True)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -2563,7 +2571,7 @@ class ProBotUI:
                 if prompt_id and self._prompts and self._ai_transformer:
                     result = await self._prompts.test_prompt(prompt_id, sample, cfg_id, self._ai_transformer)
                 else:
-                    ok, text_out = await self._ai.test_rewrite(cfg_id, sample)
+                    ok, text_out = await self._ai.test_rewrite_owned(cfg_id, sample, self._scope_uid(cq.from_user.id if cq.from_user else 0))
                     result = {"success": ok, "transformed_text": text_out if ok else "", "error_message": "" if ok else text_out,
                               "execution_duration_ms": 0.0, "model_used": "", "prompt_version_used": 0}
             except Exception as exc:
@@ -2629,7 +2637,7 @@ class ProBotUI:
             st.buffer["in_draft"] = True
             st.buffer["edit_role"] = "source"
             st.buffer["page"] = 0
-            chats = await self._fetch_dialogs()
+            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
             st.buffer["chats"] = chats
             await self._persist(uid, st)
 
@@ -2659,7 +2667,7 @@ class ProBotUI:
             st.buffer["in_draft"] = True
             st.buffer["edit_role"] = "target"
             st.buffer["page"] = 0
-            chats = await self._fetch_dialogs()
+            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
             st.buffer["chats"] = chats
             await self._persist(uid, st)
 
@@ -2687,7 +2695,7 @@ class ProBotUI:
                 "edit_role": "source",
                 "page": 0,
             }
-            chats = await self._fetch_dialogs()
+            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
             st.buffer["chats"] = chats
             await self._persist(uid, st)
 
@@ -2715,7 +2723,7 @@ class ProBotUI:
                 "edit_role": "target",
                 "page": 0,
             }
-            chats = await self._fetch_dialogs()
+            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
             st.buffer["chats"] = chats
             await self._persist(uid, st)
 
@@ -3271,7 +3279,12 @@ class ProBotUI:
         @b.on_callback_query(filters.regex("^" + CB["filter_del"] + ":"))
         async def _cb_filter_del(_, cq: CallbackQuery):
             fid = cq.data.split(":", 1)[1]
-            await self._filters.delete(fid)
+            # v12.1: IDOR guard — a non-admin can only delete their own filter.
+            fuid = cq.from_user.id if cq.from_user else 0
+            try:
+                await self._filters.delete_owned(fid, None if self._is_admin(fuid) else fuid)
+            except PermissionError:
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             await self._safe_edit(cq, self._t("ui_done"), reply_markup=self._filters_menu())
             await cq.answer()
 
@@ -3352,10 +3365,11 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^aid:(.+)"))
         async def _cb_ai_detail(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
-            cfg = await self._ai.get(aid)
+            cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 await cq.answer("❌ این پیکربندی یافت نشد.", show_alert=True)
-                cfgs = await self._ai.list_all()
+                _d_uid = self._scope_uid(cq.from_user.id if cq.from_user else 0)
+                cfgs = await (self._ai.list_all() if _d_uid is None else self._ai.list_by_owner(cq.from_user.id))
                 return await self._safe_edit(cq, self._t("ui_ai_title"), reply_markup=self._ai_menu(cfgs))
             text, kbd = self._render_ai_detail(cfg)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -3364,11 +3378,11 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^ai_hc:(.+)"))
         async def _cb_ai_hc(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
-            cfg = await self._ai.get(aid)
+            cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
             await cq.answer("⏳ در حال بررسی سلامت اتصال و سنجش پینگ...", show_alert=False)
-            ok, reply_or_err, latency = await self._ai.health_check(aid)
+            ok, reply_or_err, latency = await self._ai.health_check_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             health_info = {
                 "ok": ok,
                 "latency_ms": latency,
@@ -3384,12 +3398,12 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^(?:ai_sample|" + CB["ai_test"] + r"):(.+)"))
         async def _cb_ai_sample(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
-            cfg = await self._ai.get(aid)
+            cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
             await cq.answer("⏳ در حال ارسال متن نمونه جهت بازنویسی...", show_alert=False)
             sample_text = "سلام! این یک پیام آزمایشی جهت سنجش کارکرد هوش مصنوعی در فوروارد تلگرام است."
-            ok, reply = await self._ai.test_rewrite(aid, sample_text)
+            ok, reply = await self._ai.test_rewrite_owned(aid, sample_text, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if ok:
                 body = f"✅ **تست بازنویسی با موفقیت انجام شد:**\n\n📝 **پاسخ مدل ({cfg.model}):**\n`{reply[:1000]}`"
             else:
@@ -3400,11 +3414,14 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^ai_tog:(.+)"))
         async def _cb_ai_toggle(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
-            cfg = await self._ai.get(aid)
+            cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
             cfg.is_enabled = not cfg.is_enabled
-            await self._ai.update(cfg)
+            try:
+                await self._ai.update_owned(cfg, self._scope_uid(cq.from_user.id if cq.from_user else 0))
+            except PermissionError:
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             status_text = "فعال شد 🟢" if cfg.is_enabled else "غیرفعال شد 🔴"
             await cq.answer(f"وضعیت با موفقیت {status_text}", show_alert=False)
             text, kbd = self._render_ai_detail(cfg)
@@ -3413,7 +3430,7 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^ai_del_ask:(.+)"))
         async def _cb_ai_del_ask(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
-            cfg = await self._ai.get(aid)
+            cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
             text = (
@@ -3431,16 +3448,21 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^(?:ai_del_confirm|" + CB["ai_del"] + r"):(.+)"))
         async def _cb_ai_del_confirm(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
-            await self._ai.delete(aid)
+            # v12.1: IDOR guard — a non-admin can only delete their own config.
+            auid = cq.from_user.id if cq.from_user else 0
+            try:
+                await self._ai.delete_owned(aid, None if self._is_admin(auid) else auid)
+            except PermissionError:
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
             await cq.answer("✅ پیکربندی حذف شد.", show_alert=True)
-            cfgs = await self._ai.list_all()
+            cfgs = await (self._ai.list_all() if self._is_admin(auid) else self._ai.list_by_owner(auid))
             lines = [self._t("ui_ai_title"), "", "✅ پیکربندی با موفقیت حذف گردید."]
             await self._safe_edit(cq, "\n".join(lines), reply_markup=self._ai_menu(cfgs))
 
         @b.on_callback_query(filters.regex(r"^ai_eh:(.+)"))
         async def _cb_ai_edit_host(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
-            cfg = await self._ai.get(aid)
+            cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
             st = self._state(cq.from_user.id)
@@ -3464,7 +3486,7 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^ai_em:(.+)"))
         async def _cb_ai_edit_model(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
-            cfg = await self._ai.get(aid)
+            cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
             st = self._state(cq.from_user.id)
@@ -3486,7 +3508,7 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^ai_ek:(.+)"))
         async def _cb_ai_edit_key(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
-            cfg = await self._ai.get(aid)
+            cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
             st = self._state(cq.from_user.id)
@@ -4608,7 +4630,9 @@ class ProBotUI:
 
         if matched_title == raw:
             try:
-                sessions = await self._sessions.list_all()
+                _fsm_uid = self._scope_uid(uid)
+                sessions = (await self._sessions.list_all() if _fsm_uid is None
+                            else await self._sessions.list_by_owner(uid))
                 if sessions:
                     client = self._pool.get(sessions[0].id)
                     if client and getattr(client, "is_connected", False):
@@ -4646,7 +4670,9 @@ class ProBotUI:
 
         if matched_title == raw:
             try:
-                sessions = await self._sessions.list_all()
+                _fsm_uid = self._scope_uid(uid)
+                sessions = (await self._sessions.list_all() if _fsm_uid is None
+                            else await self._sessions.list_by_owner(uid))
                 if sessions:
                     client = self._pool.get(sessions[0].id)
                     if client and getattr(client, "is_connected", False):
@@ -4705,7 +4731,9 @@ class ProBotUI:
 
         if matched_title == raw:
             try:
-                sessions = await self._sessions.list_all()
+                _fsm_uid = self._scope_uid(uid)
+                sessions = (await self._sessions.list_all() if _fsm_uid is None
+                            else await self._sessions.list_by_owner(uid))
                 if sessions:
                     client = self._pool.get(sessions[0].id)
                     if client and getattr(client, "is_connected", False):
@@ -4794,7 +4822,9 @@ class ProBotUI:
 
         if matched_title == raw:
             try:
-                sessions = await self._sessions.list_all()
+                _fsm_uid = self._scope_uid(uid)
+                sessions = (await self._sessions.list_all() if _fsm_uid is None
+                            else await self._sessions.list_by_owner(uid))
                 if sessions:
                     client = self._pool.get(sessions[0].id)
                     if client and getattr(client, "is_connected", False):
@@ -5326,7 +5356,9 @@ class ProBotUI:
         blacklist = [w.strip() for w in text.replace("،", ",").split(",") if w.strip()]
         try:
             fr = FilterRule(
-                name=st.buffer.get("name", "filter"), blacklist_keywords=blacklist)
+                name=st.buffer.get("name", "filter"), blacklist_keywords=blacklist,
+                # v12.1: stamp the creator so owner-scoped reads can see it.
+                owner_user_id=int(message.from_user.id or 0) if message.from_user else 0)
             await self._filters.create(fr)
             try:
                 self._log.info(
@@ -5411,6 +5443,8 @@ class ProBotUI:
                 model=st.ai_model,
                 base_url=st.ai_base_url or "",
                 api_key=text.strip(),
+                # v12.1: stamp the creator so owner-scoped reads can see it.
+                owner_user_id=int(user_id or 0),
             )
             created = await self._ai.create(cfg)
             try:
@@ -5433,7 +5467,7 @@ class ProBotUI:
             await message.reply_text(banner + detail_text, reply_markup=detail_kbd)
         except Exception as exc:
             await self._record_error("ai", exc, user_id=user_id)
-            cfgs = await self._ai.list_all()
+            cfgs = await (self._ai.list_all() if self._is_admin(user_id) else self._ai.list_by_owner(user_id))
             await message.reply_text(
                 self._t("ui_ai_fail", error=tg_detail(exc)),
                 reply_markup=self._ai_menu(cfgs))
@@ -5448,9 +5482,10 @@ class ProBotUI:
         st.step = ""
         st.buffer = {}
         await self._persist(message.from_user.id, st)
-        cfg = await self._ai.get(aid) if aid else None
+        cfg = await self._ai.get_owned(aid, self._scope_uid(message.from_user.id if message.from_user else 0)) if aid else None
+        _step_uid = message.from_user.id if message.from_user else 0
         if not cfg:
-            cfgs = await self._ai.list_all()
+            cfgs = await (self._ai.list_all() if self._is_admin(_step_uid) else self._ai.list_by_owner(_step_uid))
             await message.reply_text("❌ پیکربندی یافت نشد.", reply_markup=self._ai_menu(cfgs))
             return
         new_url = text.strip()
@@ -5459,8 +5494,11 @@ class ProBotUI:
         elif not new_url.startswith("http://") and not new_url.startswith("https://"):
             new_url = "http://" + new_url
         cfg.base_url = new_url
-        await self._ai.update(cfg)
-        ok, reply_or_err, latency = await self._ai.health_check(cfg.id)
+        try:
+            await self._ai.update_owned(cfg, self._scope_uid(message.from_user.id if message.from_user else 0))
+        except PermissionError:
+            return await message.reply_text(self._t("ui_need_admin"))
+        ok, reply_or_err, latency = await self._ai.health_check_owned(cfg.id, self._scope_uid(message.from_user.id if message.from_user else 0))
         health_info = {
             "ok": ok,
             "latency_ms": latency,
@@ -5475,14 +5513,18 @@ class ProBotUI:
         st.step = ""
         st.buffer = {}
         await self._persist(message.from_user.id, st)
-        cfg = await self._ai.get(aid) if aid else None
+        cfg = await self._ai.get_owned(aid, self._scope_uid(message.from_user.id if message.from_user else 0)) if aid else None
+        _step_uid = message.from_user.id if message.from_user else 0
         if not cfg:
-            cfgs = await self._ai.list_all()
+            cfgs = await (self._ai.list_all() if self._is_admin(_step_uid) else self._ai.list_by_owner(_step_uid))
             await message.reply_text("❌ پیکربندی یافت نشد.", reply_markup=self._ai_menu(cfgs))
             return
         cfg.model = text.strip()
-        await self._ai.update(cfg)
-        ok, reply_or_err, latency = await self._ai.health_check(cfg.id)
+        try:
+            await self._ai.update_owned(cfg, self._scope_uid(message.from_user.id if message.from_user else 0))
+        except PermissionError:
+            return await message.reply_text(self._t("ui_need_admin"))
+        ok, reply_or_err, latency = await self._ai.health_check_owned(cfg.id, self._scope_uid(message.from_user.id if message.from_user else 0))
         health_info = {
             "ok": ok,
             "latency_ms": latency,
@@ -5501,14 +5543,18 @@ class ProBotUI:
             await message.delete()
         except Exception:
             pass
-        cfg = await self._ai.get(aid) if aid else None
+        cfg = await self._ai.get_owned(aid, self._scope_uid(message.from_user.id if message.from_user else 0)) if aid else None
+        _step_uid = message.from_user.id if message.from_user else 0
         if not cfg:
-            cfgs = await self._ai.list_all()
+            cfgs = await (self._ai.list_all() if self._is_admin(_step_uid) else self._ai.list_by_owner(_step_uid))
             await message.reply_text("❌ پیکربندی یافت نشد.", reply_markup=self._ai_menu(cfgs))
             return
         cfg.api_key = text.strip()
-        await self._ai.update(cfg)
-        ok, reply_or_err, latency = await self._ai.health_check(cfg.id)
+        try:
+            await self._ai.update_owned(cfg, self._scope_uid(message.from_user.id if message.from_user else 0))
+        except PermissionError:
+            return await message.reply_text(self._t("ui_need_admin"))
+        ok, reply_or_err, latency = await self._ai.health_check_owned(cfg.id, self._scope_uid(message.from_user.id if message.from_user else 0))
         health_info = {
             "ok": ok,
             "latency_ms": latency,

@@ -32,7 +32,10 @@ from core.application.prompt_service import PromptService
 from core.application.repositories import ApiCredential
 from core.application.use_cases import ApiCredentialUseCases
 from core.domain.entities import PromptTemplate, TelegramSession, ForwardRule, FilterRule, AIConfig
-from core.domain.value_objects import RoutingType, ForwardMode, AIProviderType
+from core.domain.value_objects import RoutingType, ForwardMode
+# module-level import: pyrogram grabs the event loop on import, which raises
+# under pytest's asyncio mode when imported lazily inside a test body.
+from core.infrastructure.telegram.pro_bot_ui import ProBotUI
 
 TENANT_A = 111
 TENANT_B = 222
@@ -455,3 +458,116 @@ def test_bot_created_credential_is_stamped(tmp_path):
     assert [c.id for c in mine] == [cred.id]
     other = asyncio.run(repo.list_by_owner(TENANT_B))
     assert other == [], "tenant B saw tenant A's bot-created credential"
+
+
+def test_use_case_owned_mutations_deny_cross_tenant(tmp_path):
+    """v12.1: the Telegram bot resolves entities by callback id, so IDOR
+    guards must live at the use-case layer — one enforcement point for every
+    caller, not only the HTTP/gRPC boundary."""
+    import time
+    from core.application.use_cases import (
+        ForwardRuleUseCases, FilterRuleUseCases, AIConfigUseCases)
+    from core.domain.entities import FilterRule, AIConfig
+    from core.domain.value_objects import RoutingType, ForwardMode
+    from core.infrastructure.persistence.sqlite_repositories import (
+        SqliteFilterRuleRepository, SqliteAIConfigRepository)
+
+    db = SqliteDatabase(str(tmp_path / "uc.db"))
+    from core.domain.entities import TelegramSession
+    asyncio.run(SqliteSessionRepository(db, CryptoService("uc-key")).add(TelegramSession(
+        id="s", phone_number="+1", session_string_encrypted="x",
+        is_active=True, is_authorized=True, owner_user_id=TENANT_A)))
+    rules_uc = ForwardRuleUseCases(SqliteForwardRuleRepository(db))
+    filt_uc = FilterRuleUseCases(SqliteFilterRuleRepository(db))
+    ai_uc = AIConfigUseCases(SqliteAIConfigRepository(db, CryptoService("uc-key")), None)
+
+    rule = asyncio.run(rules_uc.create(ForwardRule(
+        id="uc-rule", session_id="s", name="n", source_chat_id="-1", target_chat_id="-2",
+        routing_type=RoutingType.CHANNEL_TO_CHANNEL, forward_mode=ForwardMode.COPY_MESSAGE,
+        owner_user_id=TENANT_A, created_at=1, updated_at=1)))
+    filt = asyncio.run(filt_uc.create(FilterRule(id="uc-f", name="f", owner_user_id=TENANT_A)))
+    cfg = asyncio.run(ai_uc.create(AIConfig(id="uc-c", name="c", owner_user_id=TENANT_A)))
+
+    # reads
+    assert asyncio.run(rules_uc.get_owned("uc-rule", TENANT_A)) is not None
+    assert asyncio.run(rules_uc.get_owned("uc-rule", TENANT_B)) is None
+    assert asyncio.run(filt_uc.get_owned("uc-f", TENANT_B)) is None
+    assert asyncio.run(ai_uc.get_owned("uc-c", TENANT_B)) is None
+    # admin path (None) still resolves
+    assert asyncio.run(rules_uc.get_owned("uc-rule", None)) is not None
+
+    # deletes
+    with pytest.raises(PermissionError):
+        asyncio.run(rules_uc.delete_owned("uc-rule", TENANT_B))
+    with pytest.raises(PermissionError):
+        asyncio.run(filt_uc.delete_owned("uc-f", TENANT_B))
+    with pytest.raises(PermissionError):
+        asyncio.run(ai_uc.delete_owned("uc-c", TENANT_B))
+    # victims intact
+    assert asyncio.run(rules_uc.get_owned("uc-rule", TENANT_A)) is not None
+    assert asyncio.run(filt_uc.get_owned("uc-f", TENANT_A)) is not None
+    assert asyncio.run(ai_uc.get_owned("uc-c", TENANT_A)) is not None
+
+    # legitimate owner deletes still work
+    assert asyncio.run(rules_uc.delete_owned("uc-rule", TENANT_A)) is True
+    assert asyncio.run(filt_uc.delete_owned("uc-f", TENANT_A)) is True
+    assert asyncio.run(ai_uc.delete_owned("uc-c", TENANT_A)) is True
+
+
+def test_ai_and_credential_guards_deny_cross_tenant(tmp_path):
+    """v12.1: AI execution paths and credential mutation must refuse a forged
+    id belonging to another tenant. `health_check`/`test_rewrite` consume
+    another tenant's API key, and `set_default` flips shared default state."""
+    from core.application.use_cases import (
+        AIConfigUseCases, ApiCredentialUseCases)
+    from core.domain.entities import AIConfig
+    from core.application.repositories import ApiCredential
+    from core.infrastructure.persistence.sqlite_repositories import (
+        SqliteAIConfigRepository, SqliteApiCredentialRepository)
+
+    db = SqliteDatabase(str(tmp_path / "guard.db"))
+    ai_uc = AIConfigUseCases(SqliteAIConfigRepository(db, CryptoService("k")), None)
+    cred_uc = ApiCredentialUseCases(SqliteApiCredentialRepository(db, CryptoService("k")))
+
+    cfg = asyncio.run(ai_uc.create(AIConfig(id="g-cfg", name="g",
+                                            owner_user_id=TENANT_A)))
+    cred = asyncio.run(cred_uc.create("g", 1, "hash", owner_user_id=TENANT_A))
+
+    # AI reads + execution
+    assert asyncio.run(ai_uc.get_owned("g-cfg", TENANT_B)) is None
+    assert asyncio.run(ai_uc.get_owned("g-cfg", TENANT_A)) is not None
+    assert asyncio.run(ai_uc.health_check_owned("g-cfg", TENANT_B)) == \
+        (False, "config_not_found", 0.0)
+    assert asyncio.run(ai_uc.test_rewrite_owned("g-cfg", "hi", TENANT_B)) == \
+        (False, "config_not_found")
+    with pytest.raises(PermissionError):
+        asyncio.run(ai_uc.update_owned(
+            AIConfig(id="g-cfg", owner_user_id=TENANT_B), TENANT_B))
+
+    # credential mutations
+    assert asyncio.run(cred_uc.get_owned(cred.id, TENANT_B)) is None
+    with pytest.raises(PermissionError):
+        asyncio.run(cred_uc.set_default_owned(cred.id, TENANT_B))
+    with pytest.raises(PermissionError):
+        asyncio.run(cred_uc.delete_owned(cred.id, TENANT_B))
+
+    # owner still works; admin scope (None) preserved
+    assert asyncio.run(cred_uc.set_default_owned(cred.id, None)) is not None
+    assert asyncio.run(cred_uc.set_default_owned(cred.id, TENANT_A)) is not None
+    assert asyncio.run(cred_uc.get_owned(cred.id, None)) is not None
+
+
+def test_bot_scope_uid_maps_admin_and_tenant():
+    """v12.1: the bot's owner-scope helper must keep the legacy global scope
+    for admins (None) and an explicit tenant id otherwise, so single-tenant
+    installs keep working while multi-tenant reads stay scoped."""
+    # imported at module level: pyrogram grabs the event loop on import,
+    # which raises under pytest's asyncio mode when done lazily here.
+    ui = ProBotUI.__new__(ProBotUI)
+    ui._admin_ids = set()
+    assert ui._scope_uid(5094837833) is None
+
+    # explicit admin list => admin keeps global scope, others are scoped
+    ui._admin_ids = {5094837833}
+    assert ui._scope_uid(5094837833) is None
+    assert ui._scope_uid(999001) == 999001

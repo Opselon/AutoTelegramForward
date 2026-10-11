@@ -180,7 +180,11 @@ async def test_pro_bot_ui_edit_host_flow():
         base_url="http://old-url.com/v1",
     )
     ui._ai.get.return_value = cfg
+    ui._ai.get_owned.return_value = cfg
     ui._ai.health_check.return_value = (True, "pong", 50.0)
+    ui._ai.health_check_owned.return_value = (True, "pong", 50.0)
+    # uid 123 is not an admin here, so the edit must be owner-scoped
+    ui._admin_ids = {999}
 
     # 1. Trigger edit host step
     st = UiState()
@@ -192,7 +196,7 @@ async def test_pro_bot_ui_edit_host_flow():
     await ui._step_ai_edit_host(msg, st, "http://sub.legoten.com:4455/v1")
 
     assert cfg.base_url == "http://sub.legoten.com:4455/v1"
-    ui._ai.update.assert_called_once_with(cfg)
+    ui._ai.update_owned.assert_called_once_with(cfg, 123)
     msg.reply_text.assert_called_once()
     assert "آدرس هاست به‌روزرسانی شد" in msg.reply_text.call_args[0][0]
 
