@@ -158,14 +158,25 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
         return pb.SubmitPasswordResponse(success=False, message="Interactive login is handled by the bot.")
 
     async def BackupSession(self, request, context):
-        s = await self._sessions.get(request.session_id)
+        # v12.2: the exported blob is full account-takeover material — only
+        # the session's owner may retrieve it. owner_user_id == 0 (legacy
+        # admin path) keeps single-tenant installs working.
+        s = await self._sessions.get_owned(request.session_id, request.owner_user_id or None)
         if not s:
             return pb.BackupSessionResponse(success=False, message="session_not_found")
         return pb.BackupSessionResponse(success=True, encrypted_session_data=s.session_string_encrypted)
 
     async def RestoreSession(self, request, context):
+        # v12.2: bind the restored session to the importing account so it
+        # cannot be dropped into the shared/legacy scope and later picked up
+        # by another tenant's rules.
         try:
-            s = await self._sessions.create(phone_number="", session_string_encrypted=request.encrypted_session_data)
+            owner = int(request.owner_user_id or 0)
+            s = await self._sessions.create(
+                phone_number="",
+                session_string_encrypted=request.encrypted_session_data,
+                owner_user_id=owner,
+            )
             s.activate()
             await self._sessions._repo.update(s)
             return pb.RestoreSessionResponse(success=True, session_id=s.id)
@@ -173,8 +184,21 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
             return pb.RestoreSessionResponse(success=False, message=str(exc))
 
     async def TerminateSession(self, request, context):
-        ok = await self._sessions.delete(request.session_id)
-        await self._pool.stop(request.session_id)
+        # v12.2: deleting a session also tears down its live Telegram client —
+        # require ownership first. A foreign delete raises PermissionError,
+        # which we surface as a denial rather than a not_found so the caller
+        # cannot use the response to probe for session existence.
+        try:
+            ok = await self._sessions.delete_owned(request.session_id, request.owner_user_id or None)
+        except PermissionError:
+            logger.warning(
+                "TerminateSession: owner=%s denied termination of session=%s",
+                request.owner_user_id, request.session_id,
+            )
+            return _status(False, "denied")
+        if ok:
+            if self._pool is not None:
+                await self._pool.stop(request.session_id)
         return _status(ok, "terminated" if ok else "not_found")
 
     async def ResolveChat(self, request, context):
@@ -203,9 +227,17 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
                 found=True, chat_id=str(int(raw)), title=handle, chat_type="numeric"
             )
 
-        # Pick the requested session, or the first active+authorized one.
+        # Pick the requested session, or the first active+authorized one owned
+        # by the caller. v12.2: without the owner scope this endpoint drove an
+        # arbitrary tenant's Telegram client (list_all() fell back to any
+        # session on the box).
+        owner = int(request.owner_user_id or 0)
         if session_id:
-            session = await self._sessions.get(session_id)
+            session = await self._sessions.get_owned(session_id, owner or None)
+        elif owner:
+            sessions = await self._sessions.list_by_owner(owner)
+            active = [s for s in sessions if s.is_active and s.is_authorized]
+            session = active[0] if active else (sessions[0] if sessions else None)
         else:
             sessions = await self._sessions.list_all()
             active = [s for s in sessions if s.is_active and s.is_authorized]
@@ -309,7 +341,13 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
     async def UpdateRule(self, request, context):
         import json as _json
         from ...domain.value_objects import ForwardMode as FM
-        existing = await self._rules.get(request.rule.id)
+        # v12.2: verify the caller owns the rule before mutating it. The
+        # request carries the rule entity, whose owner_user_id is the *target*
+        # owner for the write; the authenticated caller is passed by the API
+        # gateway in the same field by legacy callers, so fall back to the
+        # entity value only when the caller is the legacy/admin path (0).
+        caller = int(request.rule.owner_user_id or 0)
+        existing = await self._rules.get_owned(request.rule.id, caller or None)
         if not existing:
             return pb.ForwardRule()
         r = request.rule
@@ -409,7 +447,19 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         return _rule_pb(updated)
 
     async def DeleteRule(self, request, context):
-        ok = await self._rules.delete(request.id)
+        # v12.2: enforce ownership at the use-case boundary. owner_user_id == 0
+        # is only valid for the legacy/admin path (single-tenant installs),
+        # never for a cross-tenant request. A foreign id raises
+        # PermissionError, which we surface as a plain denial so the response
+        # cannot be used to probe for rule existence.
+        try:
+            ok = await self._rules.delete_owned(request.id, request.owner_user_id or None)
+        except PermissionError:
+            logger.warning(
+                "DeleteRule: owner=%s denied delete of rule=%s",
+                request.owner_user_id, request.id,
+            )
+            return _status(False, "denied")
         return _status(ok, "deleted" if ok else "not_found")
 
     async def TestRule(self, request, context):
@@ -418,7 +468,9 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         from ...domain.entities import MessagePayload, MediaType
         from ...domain.services import SmartRoutingEngine, TransformationService
 
-        rule = await self._rules.get(request.rule_id)
+        # v12.2: only the rule's owner may run a simulation (it reads rule
+        # config, filters and prompt payloads).
+        rule = await self._rules.get_owned(request.rule_id, request.owner_user_id or None)
         if rule is None:
             return pb.TestRuleResponse(matched=False, match_reason="rule_not_found")
 
@@ -488,7 +540,7 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         )
 
     async def PauseRule(self, request, context):
-        rule = await self._rules.get(request.rule_id)
+        rule = await self._rules.get_owned(request.rule_id, request.owner_user_id or None)
         if rule is None:
             return pb.RuleActionResponse(success=False, message="rule_not_found", error_code="not_found")
         rule.is_paused = True
@@ -498,7 +550,7 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         return pb.RuleActionResponse(success=True, message="paused")
 
     async def ResumeRule(self, request, context):
-        rule = await self._rules.get(request.rule_id)
+        rule = await self._rules.get_owned(request.rule_id, request.owner_user_id or None)
         if rule is None:
             return pb.RuleActionResponse(success=False, message="rule_not_found", error_code="not_found")
         rule.is_paused = False
@@ -751,7 +803,9 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
         return _filter_pb(created)
 
     async def UpdateFilter(self, request, context):
-        existing = await self._filters.get(request.filter.id)
+        # v12.2: ownership guard at the use-case boundary.
+        caller = int(request.filter.owner_user_id or 0)
+        existing = await self._filters.get_owned(request.filter.id, caller or None)
         if not existing:
             return pb.FilterRule()
         f = request.filter
@@ -769,7 +823,14 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
         return _filter_pb(updated)
 
     async def DeleteFilter(self, request, context):
-        ok = await self._filters.delete(request.id)
+        try:
+            ok = await self._filters.delete_owned(request.id, request.owner_user_id or None)
+        except PermissionError:
+            logger.warning(
+                "DeleteFilter: owner=%s denied delete of filter=%s",
+                request.owner_user_id, request.id,
+            )
+            return _status(False, "denied")
         return _status(ok, "deleted" if ok else "not_found")
 
 
@@ -802,7 +863,10 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         return _ai_pb(created)
 
     async def UpdateAIConfig(self, request, context):
-        existing = await self._ai.get(request.config.id)
+        # v12.2: ownership guard — a forged config id must not let a tenant
+        # overwrite another account's provider key.
+        caller = int(request.config.owner_user_id or 0)
+        existing = await self._ai.get_owned(request.config.id, caller or None)
         if not existing:
             return pb.AIConfig()
         c = request.config
@@ -825,11 +889,22 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         return _ai_pb(updated)
 
     async def DeleteAIConfig(self, request, context):
-        ok = await self._ai.delete(request.id)
+        try:
+            ok = await self._ai.delete_owned(request.id, request.owner_user_id or None)
+        except PermissionError:
+            logger.warning(
+                "DeleteAIConfig: owner=%s denied delete of config=%s",
+                request.owner_user_id, request.id,
+            )
+            return _status(False, "denied")
         return _status(ok, "deleted" if ok else "not_found")
 
     async def TestAIRewrite(self, request, context):
-        ok, text = await self._ai.test_rewrite(request.ai_config_id, request.sample_text)
+        # v12.2: a rewrite burns the provider's quota — refuse to run it
+        # against a config the caller does not own.
+        ok, text = await self._ai.test_rewrite_owned(
+            request.ai_config_id, request.sample_text, request.owner_user_id or None
+        )
         return pb.TestAIRewriteResponse(success=ok, rewritten_text=text if ok else "", error_message="" if ok else text)
 
     # ------------------------------------------------------------------
@@ -928,6 +1003,18 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         """Runs the real transform path in dry-run — no message is sent."""
         if self._prompts is None or self._transformer is None:
             return pb.TestPromptResponse(success=False, error_code="service_unavailable")
+        # v12.2: the transform consumes the AI config's quota — only allow a
+        # config the caller owns (shared is_system configs stay available to
+        # everyone, as on the read path).
+        owner = int(request.owner_user_id or 0)
+        if owner and request.ai_config_id:
+            cfg = await self._ai.get_owned(request.ai_config_id, owner) if hasattr(self._ai, "get_owned") else None
+            if cfg is None:
+                logger.warning(
+                    "TestPrompt: owner=%s denied use of ai_config=%s",
+                    owner, request.ai_config_id,
+                )
+                return pb.TestPromptResponse(success=False, error_code="config_not_found")
         try:
             result = await self._prompts.test_prompt(
                 request.prompt_id, request.sample_text,

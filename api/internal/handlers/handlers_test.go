@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -201,5 +202,97 @@ func TestDeleteAIConfig_RejectsForeignOwner(t *testing.T) {
 	h.DeleteAIConfig(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("foreign AI config delete must 404, got %d", rec.Code)
+	}
+}
+
+
+// ----------------------------------------------------------- v12.2 guards
+// The API gateway must forward the authenticated identity on every by-id
+// mutation so the core can enforce ownership server-side.
+
+// recordingRulesClient captures the owner field the handler actually sent.
+type recordingRulesClient struct {
+	pb.ForwardRuleControlServiceClient
+	owners  []int64
+	ids     []string
+}
+
+func (f *recordingRulesClient) ListRules(ctx context.Context, in *pb.ListRulesRequest, opts ...grpc.CallOption) (*pb.ListRulesResponse, error) {
+	// Echo back one rule owned by whoever is asking so the handler-level
+	// ownership guard passes and the call reaches the recording methods.
+	return &pb.ListRulesResponse{Rules: []*pb.ForwardRule{
+		{Id: "rule-a", OwnerUserId: in.OwnerUserId},
+		{Id: "rule-x", OwnerUserId: in.OwnerUserId},
+	}}, nil
+}
+func (f *recordingRulesClient) DeleteRule(ctx context.Context, in *pb.DeleteRuleRequest, opts ...grpc.CallOption) (*pb.StatusResponse, error) {
+	f.owners = append(f.owners, in.OwnerUserId)
+	f.ids = append(f.ids, in.Id)
+	return &pb.StatusResponse{Success: true, Message: "deleted"}, nil
+}
+func (f *recordingRulesClient) PauseRule(ctx context.Context, in *pb.PauseRuleRequest, opts ...grpc.CallOption) (*pb.RuleActionResponse, error) {
+	f.owners = append(f.owners, in.OwnerUserId)
+	f.ids = append(f.ids, in.RuleId)
+	return &pb.RuleActionResponse{Success: true, Message: "paused"}, nil
+}
+func (f *recordingRulesClient) ResumeRule(ctx context.Context, in *pb.PauseRuleRequest, opts ...grpc.CallOption) (*pb.RuleActionResponse, error) {
+	f.owners = append(f.owners, in.OwnerUserId)
+	f.ids = append(f.ids, in.RuleId)
+	return &pb.RuleActionResponse{Success: true, Message: "resumed"}, nil
+}
+func (f *recordingRulesClient) TestRule(ctx context.Context, in *pb.TestRuleRequest, opts ...grpc.CallOption) (*pb.TestRuleResponse, error) {
+	f.owners = append(f.owners, in.OwnerUserId)
+	f.ids = append(f.ids, in.RuleId)
+	return &pb.TestRuleResponse{}, nil
+}
+
+// TestDeleteRule_ForwardsOwnerIdentity proves the gateway does not strip the
+// caller's identity before the core ownership check.
+func TestDeleteRule_ForwardsOwnerIdentity(t *testing.T) {
+	rc := &recordingRulesClient{}
+	h := &Handlers{c: &grpcclient.Clients{Rules: rc}}
+	req := reqWithIdentity(111)
+	req.SetPathValue("id", "rule-a")
+	req.Body = io.NopCloser(strings.NewReader(""))
+	rec := httptest.NewRecorder()
+	h.DeleteRule(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(rc.ids) != 1 || rc.ids[0] != "rule-a" {
+		t.Fatalf("core received ids=%v", rc.ids)
+	}
+	if len(rc.owners) != 1 || rc.owners[0] != 111 {
+		t.Fatalf("core received owners=%v, want [111]", rc.owners)
+	}
+}
+
+func TestPauseResume_ForwardOwnerIdentity(t *testing.T) {
+	rc := &recordingRulesClient{}
+	h := &Handlers{c: &grpcclient.Clients{Rules: rc}}
+	req := reqWithIdentity(222)
+	req.SetPathValue("id", "rule-x")
+	rec := httptest.NewRecorder()
+	h.PauseRule(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("pause want 200, got %d", rec.Code)
+	}
+	req2 := reqWithIdentity(222)
+	req2.SetPathValue("id", "rule-x")
+	h.ResumeRule(httptest.NewRecorder(), req2)
+	if len(rc.owners) != 2 || rc.owners[0] != 222 || rc.owners[1] != 222 {
+		t.Fatalf("core received owners=%v, want [222 222]", rc.owners)
+	}
+}
+
+func TestTestRule_ForwardsOwnerIdentity(t *testing.T) {
+	rc := &recordingRulesClient{}
+	h := &Handlers{c: &grpcclient.Clients{Rules: rc}}
+	req := reqWithIdentity(333)
+	req.Body = io.NopCloser(strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+	h.TestRule(rec, req)
+	if len(rc.owners) != 1 || rc.owners[0] != 333 {
+		t.Fatalf("TestRule must forward owner=333, got %v", rc.owners)
 	}
 }

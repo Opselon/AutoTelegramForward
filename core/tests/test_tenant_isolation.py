@@ -17,6 +17,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+from core.proto import autoforward_pb2 as pb
+
 from core.infrastructure.persistence.database import SqliteDatabase
 from core.infrastructure.persistence.sqlite_repositories import (
     SqliteApiCredentialRepository,
@@ -571,3 +573,127 @@ def test_bot_scope_uid_maps_admin_and_tenant():
     ui._admin_ids = {5094837833}
     assert ui._scope_uid(5094837833) is None
     assert ui._scope_uid(999001) == 999001
+
+
+# ---------------------------------------------------------- v12.2 servicers
+# The gRPC layer must refuse by-id mutations and secret reads when the caller
+# is not the owner. This is the enforcement point the HTTP layer cannot
+# provide on its own (list-then-filter is client-side filtering).
+
+
+def _servicers(path):
+    """Build real servicers over a two-tenant sqlite db."""
+    from core.infrastructure.grpc_server import servicers as S
+    from core.application.use_cases import (
+        SessionUseCases, ForwardRuleUseCases, FilterRuleUseCases, AIConfigUseCases,
+    )
+    db, crypto, repos = _seed_two_tenants(path)
+    sess_uc = SessionUseCases(repos["sessions"])
+    rules_uc = ForwardRuleUseCases(repos["rules"])
+    filters_uc = FilterRuleUseCases(repos["filters"])
+    ai_uc = AIConfigUseCases(repos["ai"], provider_factory=None)
+    rs = S.ForwardRuleControlServicer(rules_uc)
+    fs = S.FilterControlServicer(filters_uc)
+    ais = S.AIControlServicer(ai_uc)
+    ss = S.SessionControlServicer(sess_uc, pool=None)
+    return db, repos, rs, fs, ais, ss
+
+
+class _Ctx:
+    """Minimal stand-in for a grpc.ServicerContext (no network needed)."""
+
+    async def abort(self, code, details):
+        raise RuntimeError(f"aborted: {code} {details}")
+
+
+def test_grpc_delete_rule_denied_cross_tenant(tmp_path):
+    db, repos, rs, *_ = _servicers(tmp_path / "s1.db")
+    # Tenant B tries to delete A's rule
+    resp = asyncio.run(rs.DeleteRule(
+        pb.DeleteRuleRequest(id="rule-a", owner_user_id=TENANT_B), _Ctx()))
+    assert not resp.success
+    # rule still exists
+    assert asyncio.run(repos["rules"].get_by_id("rule-a")) is not None
+    # owner can delete
+    resp = asyncio.run(rs.DeleteRule(
+        pb.DeleteRuleRequest(id="rule-a", owner_user_id=TENANT_A), _Ctx()))
+    assert resp.success
+    db.close()
+
+
+def test_grpc_pause_resume_denied_cross_tenant(tmp_path):
+    _, repos, rs, *_ = _servicers(tmp_path / "s2.db")
+    r = asyncio.run(rs.PauseRule(
+        pb.PauseRuleRequest(rule_id="rule-a", owner_user_id=TENANT_B), _Ctx()))
+    assert not r.success
+    rule = asyncio.run(repos["rules"].get_by_id("rule-a"))
+    assert not rule.is_paused
+    # owner pause works
+    r = asyncio.run(rs.PauseRule(
+        pb.PauseRuleRequest(rule_id="rule-a", owner_user_id=TENANT_A), _Ctx()))
+    assert r.success
+    assert asyncio.run(repos["rules"].get_by_id("rule-a")).is_paused
+    # owner resume works
+    r = asyncio.run(rs.ResumeRule(
+        pb.PauseRuleRequest(rule_id="rule-a", owner_user_id=TENANT_A), _Ctx()))
+    assert r.success
+    assert not asyncio.run(repos["rules"].get_by_id("rule-a")).is_paused
+
+
+def test_grpc_update_rule_denied_cross_tenant(tmp_path):
+    db, repos, rs, *_ = _servicers(tmp_path / "s3.db")
+    # Tenant B tries to hijack A's rule. Use a persisted field
+    # (target_chat_id) since rule name/description are not schema columns.
+    foreign = pb.ForwardRule(id="rule-a", target_chat_id="-999", owner_user_id=TENANT_B)
+    out = asyncio.run(rs.UpdateRule(pb.UpdateRuleRequest(rule=foreign), _Ctx()))
+    # returns empty rule (denied), DB untouched
+    assert out == pb.ForwardRule()
+    assert asyncio.run(repos["rules"].get_by_id("rule-a")).target_chat_id == "-2"
+    # owner update works
+    own = pb.ForwardRule(id="rule-a", target_chat_id="-777", owner_user_id=TENANT_A)
+    out = asyncio.run(rs.UpdateRule(pb.UpdateRuleRequest(rule=own), _Ctx()))
+    assert out.target_chat_id == "-777"
+    db.close()
+
+
+def test_grpc_backup_session_denied_cross_tenant(tmp_path):
+    _, repos, _, _, _, ss = _servicers(tmp_path / "s4.db")
+    # B asks for A's session string
+    r = asyncio.run(ss.BackupSession(
+        pb.BackupSessionRequest(session_id="sess-a", owner_user_id=TENANT_B), _Ctx()))
+    assert not r.success
+    assert r.encrypted_session_data == ""
+    # owner gets it
+    r = asyncio.run(ss.BackupSession(
+        pb.BackupSessionRequest(session_id="sess-a", owner_user_id=TENANT_A), _Ctx()))
+    assert r.success
+    assert r.encrypted_session_data == "str-a"
+
+
+def test_grpc_terminate_session_denied_cross_tenant(tmp_path):
+    _, repos, _, _, _, ss = _servicers(tmp_path / "s5.db")
+    r = asyncio.run(ss.TerminateSession(
+        pb.TerminateSessionRequest(session_id="sess-a", owner_user_id=TENANT_B), _Ctx()))
+    assert not r.success
+    assert r.message != "terminated"
+    # session survived
+    assert asyncio.run(repos["sessions"].get_by_id("sess-a")) is not None
+    # owner terminates
+    r = asyncio.run(ss.TerminateSession(
+        pb.TerminateSessionRequest(session_id="sess-a", owner_user_id=TENANT_A), _Ctx()))
+    assert r.success and r.message == "terminated"
+    assert asyncio.run(repos["sessions"].get_by_id("sess-a")) is None
+
+
+def test_grpc_test_rule_denied_cross_tenant(tmp_path):
+    _, repos, rs, *_ = _servicers(tmp_path / "s6.db")
+    r = asyncio.run(rs.TestRule(
+        pb.TestRuleRequest(rule_id="rule-a", sample_text="hello",
+                           owner_user_id=TENANT_B), _Ctx()))
+    assert not r.matched
+    assert r.match_reason == "rule_not_found"
+    # owner can dry-run (still may not match, but the rule must be loaded)
+    r = asyncio.run(rs.TestRule(
+        pb.TestRuleRequest(rule_id="rule-a", sample_text="hello",
+                           owner_user_id=TENANT_A), _Ctx()))
+    assert r.match_reason != "rule_not_found"
