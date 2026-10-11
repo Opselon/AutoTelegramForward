@@ -419,7 +419,19 @@ class DurableMessagePipeline:
                     rule.id, payload.chat_id, payload.message_id, payload.media_group_id or ""
                 )
             except Exception:
-                pass
+                # v12.3 (ACID observability): this marker IS the replay-protection
+                # guarantee. Failing to write it does not lose this message
+                # (it is already enqueued), but it silently disables idempotency
+                # for the replay — a subsequent delivery could be duplicated with
+                # no signal anywhere. Log it with the correlation id instead of
+                # swallowing it; do not re-raise, as the enqueue already succeeded
+                # and must not be rolled back.
+                logger.exception(
+                    "%s replay-marker write failed — idempotency degraded for "
+                    "rule=%s src=%s:%s; duplicate delivery possible on replay",
+                    getattr(ctx, "correlation_id", "?"),
+                    rule.id[:8], payload.chat_id, payload.message_id,
+                )
 
     async def _apply_transforms(
         self, ctx: PipelineContext, payload: MessagePayload, rule: ForwardRule, evaluation: EvaluationResult

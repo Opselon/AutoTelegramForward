@@ -528,14 +528,23 @@ class SqliteDatabase:
                 if version > current:
                     self._conn.executescript(MIGRATIONS[version])
                     current = version
-            if row:
-                self._conn.execute(
-                    "UPDATE schema_version SET version = ?", (current,)
-                )
-            else:
-                self._conn.execute(
-                    "INSERT INTO schema_version (version) VALUES (?)", (current,)
-                )
+                    # v12.3 (ACID durability): executescript() issues an implicit
+                    # COMMIT before it runs, so each migration is already durable
+                    # the moment it returns. The recorded version must follow it
+                    # immediately — the old code only bumped it once, after the
+                    # whole loop. A crash mid-loop left the schema half-upgraded
+                    # while schema_version still read the old value, and the next
+                    # boot re-ran every script from there, re-applying
+                    # non-idempotent migrations against the new schema.
+                    if row:
+                        self._conn.execute(
+                            "UPDATE schema_version SET version = ?", (current,)
+                        )
+                    else:
+                        self._conn.execute(
+                            "INSERT INTO schema_version (version) VALUES (?)", (current,)
+                        )
+                        row = {"version": current}
             self._apply_additive_columns()
             self._conn.commit()
 
@@ -624,6 +633,29 @@ class SqliteDatabase:
             cur = self._conn.execute(sql, params)
             self._conn.commit()
             return cur
+
+    def run_in_transaction(self, fn):
+        """Run fn(conn) as one atomic unit; commit on success, roll back on error.
+
+        v12.3 (ACID atomicity): every repository write goes through execute(),
+        which auto-commits each statement. Multi-step invariants (delivery job
+        + message mapping, session activate + client start) need a single
+        atomic boundary — otherwise a crash between statements leaves a
+        half-written state that no watchdog can fully reconcile. fn receives
+        the raw sqlite3 connection **under the database lock** and must use it
+        directly (no per-statement commit); failures roll the whole unit back.
+        """
+        with self._lock:
+            try:
+                result = fn(self._conn)
+                self._conn.commit()
+                return result
+            except Exception:
+                try:
+                    self._conn.rollback()
+                except Exception:
+                    pass
+                raise
 
     def query_one(self, sql: str, params: tuple = ()):
         with self._lock:
