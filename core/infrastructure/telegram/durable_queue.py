@@ -18,6 +18,7 @@ import asyncio
 import logging
 import random
 import time
+import sqlite3
 from typing import Any, Callable, Dict, List, Optional
 
 from ...application.repositories import IDeliveryQueueRepository, IMessageMapRepository
@@ -26,6 +27,13 @@ from ...domain.value_objects import ContentMode
 from .errors import tg_detail, tg_error, wait_seconds
 
 logger = logging.getLogger("atf.durable_queue")
+
+def _dumps(value) -> str:
+    """Serialize job payload the same way the SQLite repositories do."""
+    from ...infrastructure.persistence.database import SqliteDatabase
+    return SqliteDatabase.dumps(value)
+
+
 
 
 class DurableQueueManager:
@@ -185,9 +193,13 @@ class DurableQueueManager:
             media_group_id=payload.media_group_id,
             delivery_status=DeliveryStatus.PENDING,
         )
-        await self._map.add_or_update(mapping)
-
-        # 4. Enqueue durable job
+        # 4. Enqueue durable job + mapping as ONE atomic unit.
+        # v12.3 (ACID atomicity): previously these were two separate auto-commits.
+        # A crash between them left a PENDING mapping with no delivery job — an
+        # orphan row no watchdog reconciles (it scans jobs, not mappings) and a
+        # permanent source-of-truth inconsistency between rule state and the
+        # delivery table. The job insert stays INSERT OR IGNORE, so a replay
+        # after a mid-unit crash is a harmless no-op rather than a duplicate.
         delay = float(getattr(rule, "delay_seconds", 0.0) or 0.0)
         next_retry_at = time.time() + delay if delay > 0 else 0.0
         job_id = f"{rule.id}:{payload.chat_id}:{payload.message_id}:{target_chat_id}"
@@ -202,12 +214,112 @@ class DurableQueueManager:
             status=DeliveryStatus.PENDING,
             next_retry_at=next_retry_at,
         )
-        enqueued = await self._queue.enqueue(job)
+
+        enqueued = await self._enqueue_atomic(mapping, job)
         if enqueued:
             self.stats["enqueued"] += 1
             self._notify_event.set()
 
         return enqueued
+
+    async def _enqueue_atomic(self, mapping: MessageMapping, job: DeliveryJob) -> None:
+        """v12.3 (ACID atomicity): write the delivery job and its message mapping
+        in ONE transaction.
+
+        Before v12.3 these were two separate auto-commits; a crash between them
+        left a PENDING mapping with no delivery job — an orphan row no watchdog
+        reconciles (it scans jobs, not mappings), a permanent inconsistency
+        between the rule state and the delivery table. The job insert stays
+        INSERT OR IGNORE, so a replay after a mid-unit crash is a harmless
+        no-op rather than a duplicate delivery.
+        """
+        db = getattr(self._queue, "_db", None) or getattr(self._map, "_db", None)
+        if db is None or not hasattr(db, "run_in_transaction"):
+            # In-memory or fake repos (tests): no transactional boundary to
+            # borrow — write sequentially. The unit guarantee is a
+            # real-database property; forcing it on mocks would break tests
+            # that drive the repos directly.
+            await self._map.add_or_update(mapping)
+            await self._queue.enqueue(job)
+            return
+        # The repository writes are plain SQL with no awaits internally, so they
+        # can run under run_in_transaction on the running loop via a sync unit
+        # helper — we drive them directly (the async wrappers only call execute).
+        return db.run_in_transaction(
+            lambda conn: self._write_mapping_and_job(conn, mapping, job)
+        )
+
+    def _write_mapping_and_job(self, conn, mapping: MessageMapping, job: DeliveryJob) -> bool:
+        """Both durable writes on one connection: commit together or roll back together.
+
+        Returns True only when the delivery job row was newly created. A replay
+        (job id already present) hits INSERT OR IGNORE and returns False, which
+        is what makes re-enqueueing an already-processed event a clean no-op
+        instead of a duplicate delivery.
+        """
+        now = int(time.time())
+        status_str = getattr(mapping.delivery_status, "value", str(mapping.delivery_status))
+        conn.execute(
+            """
+            INSERT INTO message_map (
+                id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                target_message_id, media_group_id, delivery_status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET
+                target_message_id = COALESCE(excluded.target_message_id, message_map.target_message_id),
+                media_group_id = COALESCE(excluded.media_group_id, message_map.media_group_id),
+                delivery_status = excluded.delivery_status,
+                updated_at = excluded.updated_at
+            """,
+            (
+                mapping.id, mapping.rule_id,
+                str(mapping.source_chat_id), int(mapping.source_message_id),
+                str(mapping.target_chat_id), mapping.target_message_id,
+                mapping.media_group_id or "", status_str, mapping.created_at, now,
+            ),
+        )
+        payload_str = _dumps(job.payload_data)
+        job_status = getattr(job.status, "value", str(job.status))
+        try:
+            cur = conn.execute(
+                """
+                INSERT OR IGNORE INTO delivery_jobs (
+                    id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                    payload_json, status, attempts, max_attempts, next_retry_at,
+                    lease_until, worker_id, error_detail, created_at, updated_at,
+                    intermediate_chat_id, intermediate_message_id, delivery_stage
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job.id, job.rule_id, str(job.source_chat_id),
+                    int(job.source_message_id), str(job.target_chat_id),
+                    payload_str, job_status, job.attempts, job.max_attempts,
+                    job.next_retry_at, job.lease_until, job.worker_id or "",
+                    job.error_detail or "", job.created_at, job.updated_at,
+                    str(job.intermediate_chat_id or "") if job.intermediate_chat_id else None,
+                    job.intermediate_message_id, job.delivery_stage or "DIRECT",
+                ),
+            )
+            return cur.rowcount > 0
+        except sqlite3.OperationalError:
+            # Legacy table without the v9 intermediate/delivery_stage columns
+            cur = conn.execute(
+                """
+                INSERT OR IGNORE INTO delivery_jobs (
+                    id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                    payload_json, status, attempts, max_attempts, next_retry_at,
+                    lease_until, worker_id, error_detail, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job.id, job.rule_id, str(job.source_chat_id),
+                    int(job.source_message_id), str(job.target_chat_id),
+                    payload_str, job_status, job.attempts, job.max_attempts,
+                    job.next_retry_at, job.lease_until, job.worker_id or "",
+                    job.error_detail or "", job.created_at, job.updated_at,
+                ),
+            )
+            return cur.rowcount > 0
 
     def _notify_worker(self) -> None:
         """Signal waiting workers that new work or retry is available."""
@@ -279,7 +391,14 @@ class DurableQueueManager:
             _bump_target("sent")
 
             # Delivery confirmed!
-            await self._queue.mark_sent(job.id, target_msg_id)
+            # v12.3 (ACID atomicity/durability): record the mapping BEFORE
+            # marking the job. Both are separate commits, so a crash between
+            # them leaves a window — mark_sent first leaves a SENT job with a
+            # PENDING mapping forever (the job is never replayed, so nothing
+            # ever fixes the mapping). Mapping first leaves a SENT mapping with
+            # a CLAIMED job, which the next worker/lease-recovery pass settles
+            # normally. Either way the message is not re-sent (Telegram already
+            # has it); this only decides which half-state is self-healing.
             await self._map.update_delivery(
                 rule_id=job.rule_id,
                 source_chat_id=job.source_chat_id,
@@ -288,6 +407,7 @@ class DurableQueueManager:
                 target_message_id=target_msg_id,
                 status=DeliveryStatus.SENT,
             )
+            await self._queue.mark_sent(job.id, target_msg_id)
             self.stats["sent"] += 1
             logger.info(
                 "[%s] Sent rule=%s src=%s:%s -> tgt=%s msg_id=%s (%.2fs)",

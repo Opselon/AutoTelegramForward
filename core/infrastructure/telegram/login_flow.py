@@ -370,11 +370,20 @@ class LoginFlowManager:
             session.first_name = me.first_name or ""
             session.api_credential_id = state.credential_id or "default"
             session.owner_user_id = int(user_id)
-            session.activate()
-            await self._sessions._repo.update(session)
+            # v12.3 (ACID atomicity): start the Telegram client BEFORE flipping
+            # the row to active. The old order committed "active" first and then
+            # started the client, so a crash (or a start() failure) left the DB
+            # asserting an authorized, running session while no client existed —
+            # the reconciler does not restart such rows, so the account's rules
+            # silently stopped forwarding until a manual restart. Starting the
+            # client first means the durable record only ever claims "active"
+            # when a client is really up; on failure the row stays inactive and
+            # the reason is logged instead of being hidden in a failed state.
             await self._pool.start_with_session_string(
                 session.id, session_string, credential_id=session.api_credential_id
             )
+            session.activate()
+            await self._sessions._repo.update(session)
             try:
                 await state.client.disconnect()
             except Exception:

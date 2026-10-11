@@ -17,8 +17,11 @@ import secrets
 import string
 import time
 from typing import Any, Optional
+import logging
 
 import grpc
+
+logger = logging.getLogger(__name__)
 
 from ...proto import pb
 from ...proto import autoforward_pb2_grpc as pb_grpc
@@ -210,12 +213,21 @@ class AccountControlServicer(pb_grpc.AccountControlServiceServicer):
                 success=False, message="Invalid username or password",
                 error_code="INVALID_CREDENTIALS")
 
-        # Optional proof-link: bind the web account to the telegram user
+        # Optional proof-link: bind the web account to the telegram user.
+        # v12.3 (ACID/tenant integrity): telegram_user_id on a *password*
+        # login is attacker-controlled (AuthLogin binds the raw JSON body, and
+        # /api/auth/login is public). Binding here lets anyone with a victim's
+        # username+password re-anchor that account to their own Telegram id,
+        # inheriting every owner-scoped row. The bot-issued proof path
+        # (AuthBotExchange -> IssueWebToken) is the only place a fresh binding
+        # may be created, so a password login must never mutate it: accept the
+        # field only when it agrees with the stored binding, otherwise ignore.
         if request.telegram_user_id and not row["user_id"]:
-            self._db.execute(
-                "UPDATE web_accounts SET user_id=?, updated_at=? WHERE username=?",
-                (int(request.telegram_user_id), int(time.time()), username))
-            row = self._find_by_username(username)
+            logger.warning(
+                "LoginAccount: ignoring telegram_user_id=%s on password login "
+                "for unbound account username=%s — bind via IssueWebToken only",
+                request.telegram_user_id, username,
+            )
 
         return self._login_success(row)
 

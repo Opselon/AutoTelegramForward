@@ -1074,7 +1074,14 @@ class SqliteMessageMapRepository(IMessageMapRepository):
             updated_at=int(row["updated_at"]),
         )
 
-    async def add_or_update(self, mapping: MessageMapping) -> MessageMapping:
+    async def add_or_update(self, mapping: MessageMapping, conn=None) -> MessageMapping:
+        """Upsert a source->target mapping.
+
+        conn: v12.3 (ACID atomicity) — when supplied, runs on that connection
+        without committing so the caller can group it with the delivery job
+        insert in one atomic unit. Replays are safe: the ON CONFLICT clause
+        only promotes (never regresses) the delivery status.
+        """
         now = _now()
         mapping.updated_at = now
         sql = """
@@ -1089,9 +1096,8 @@ class SqliteMessageMapRepository(IMessageMapRepository):
             updated_at = excluded.updated_at
         """
         status_str = getattr(mapping.delivery_status, "value", str(mapping.delivery_status))
-        self._db.execute(
-            sql,
-            (
+        if conn is None:
+            self._db.execute(sql, (
                 mapping.id,
                 mapping.rule_id,
                 str(mapping.source_chat_id),
@@ -1104,6 +1110,19 @@ class SqliteMessageMapRepository(IMessageMapRepository):
                 mapping.updated_at,
             ),
         )
+        else:
+            conn.execute(sql, (
+                mapping.id,
+                mapping.rule_id,
+                str(mapping.source_chat_id),
+                int(mapping.source_message_id),
+                str(mapping.target_chat_id),
+                mapping.target_message_id,
+                mapping.media_group_id or "",
+                status_str,
+                mapping.created_at,
+                mapping.updated_at,
+            ))
         return mapping
 
     async def get_by_source(self, source_chat_id: str, source_message_id: int) -> List[MessageMapping]:
@@ -1205,11 +1224,20 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             delivery_stage=str(deliv_stage or "DIRECT"),
         )
 
-    async def enqueue(self, job: DeliveryJob) -> bool:
+    async def enqueue(self, job: DeliveryJob, conn=None) -> bool:
+        """Enqueue a delivery job.
+
+        conn: v12.3 (ACID atomicity) — when supplied, the INSERT runs on that
+        connection without committing, so the caller can group it with other
+        writes (the job + its message mapping) in one atomic unit. The job
+        insert stays INSERT OR IGNORE, so re-enqueueing after a replay
+        remains a no-op instead of a duplicate delivery.
+        """
         payload_str = SqliteDatabase.dumps(job.payload_data)
         status_str = getattr(job.status, "value", str(job.status))
+        runner = self._db.execute if conn is None else conn.execute
         try:
-            cur = self._db.execute(
+            cur = runner(
                 """
                 INSERT OR IGNORE INTO delivery_jobs (
                     id, rule_id, source_chat_id, source_message_id, target_chat_id,
@@ -1241,7 +1269,7 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             )
         except Exception:
             # Fallback for tables without v9 columns
-            cur = self._db.execute(
+            cur = runner(
                 """
                 INSERT OR IGNORE INTO delivery_jobs (
                     id, rule_id, source_chat_id, source_message_id, target_chat_id,
