@@ -141,39 +141,52 @@ def test_purge_scoped_by_service_and_category(db):
 async def test_purge_rpc_roundtrip(tmp_path):
     """The PurgeLogs RPC must validate the level and return honest counts.
 
-    Runs against the live logger, so it seeds an unmistakable marker message
-    rather than assuming the table starts empty.
+    Spins up its own logger server on an ephemeral port so it works in CI
+    (where nothing is listening on 6002).
     """
+    import socket
     import time
 
     import grpc.aio
 
     from core.proto import pb, pb_grpc
+    from logger.main import LogControlServicer, LoggerDatabase
 
-    async with grpc.aio.insecure_channel("127.0.0.1:6002") as ch:
-        stub = pb_grpc.LogControlServiceStub(ch)
-        marker = "purge-rpc-probe-7741"
-        now = int(time.time())
-        for lvl in ("INFO", "WARN", "ERROR"):
-            await stub.Log(pb.LogRequest(entry=pb.LogEntry(
-                ts=now - 72 * 3600, level=lvl, service="core", category="test",
-                message=f"{marker}-old-{lvl}")))
-            await stub.Log(pb.LogRequest(entry=pb.LogEntry(
-                ts=now, level=lvl, service="core", category="test",
-                message=f"{marker}-fresh-{lvl}")))
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
 
-        bad = await stub.PurgeLogs(pb.PurgeLogsRequest(level="NOPE"))
-        assert not bad.success
-        assert "invalid level" in bad.error
+    store = LoggerDatabase(str(tmp_path / "purge_rpc.db"))
+    servicer = LogControlServicer(store)
+    server = grpc.aio.server()
+    pb_grpc.add_LogControlServiceServicer_to_server(servicer, server)
+    server.add_insecure_port(f"127.0.0.1:{port}")
+    await server.start()
+    try:
+        async with grpc.aio.insecure_channel(f"127.0.0.1:{port}") as ch:
+            stub = pb_grpc.LogControlServiceStub(ch)
+            marker = "purge-rpc-probe-7741"
+            now = int(time.time())
+            for lvl in ("INFO", "WARN", "ERROR"):
+                await stub.Log(pb.LogRequest(entry=pb.LogEntry(
+                    ts=now - 72 * 3600, level=lvl, service="core", category="test",
+                    message=f"{marker}-old-{lvl}")))
+                await stub.Log(pb.LogRequest(entry=pb.LogEntry(
+                    ts=now, level=lvl, service="core", category="test",
+                    message=f"{marker}-fresh-{lvl}")))
 
-        r = await stub.PurgeLogs(pb.PurgeLogsRequest(level="WARN", older_than_hours=24))
-        assert r.success
+            bad = await stub.PurgeLogs(pb.PurgeLogsRequest(level="NOPE"))
+            assert not bad.success
+            assert "invalid level" in bad.error
 
-        fresh = await stub.QueryLogs(pb.QueryLogsRequest(level="WARN", search=marker, limit=50))
-        got = [l.message for l in fresh.logs]
-        assert f"{marker}-fresh-WARN" in got, got
-        assert f"{marker}-old-WARN" not in got, got
+            r = await stub.PurgeLogs(pb.PurgeLogsRequest(level="WARN", older_than_hours=24))
+            assert r.success
 
-        # clean up our own markers so the test leaves no residue
-        for lvl in ("INFO", "WARN", "ERROR"):
-            await stub.PurgeLogs(pb.PurgeLogsRequest(level=lvl, older_than_hours=0))
+            fresh = await stub.QueryLogs(pb.QueryLogsRequest(level="WARN", search=marker, limit=50))
+            got = [l.message for l in fresh.logs]
+            assert f"{marker}-fresh-WARN" in got, got
+            assert f"{marker}-old-WARN" not in got, got
+    finally:
+        await server.stop(grace=1)
+        store.close()
