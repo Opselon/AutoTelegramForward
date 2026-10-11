@@ -1880,6 +1880,150 @@ var LogControlService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	BackupControlService_BackupExport_FullMethodName = "/autoforward.BackupControlService/BackupExport"
+	BackupControlService_BackupImport_FullMethodName = "/autoforward.BackupControlService/BackupImport"
+)
+
+// BackupControlServiceClient is the client API for BackupControlService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type BackupControlServiceClient interface {
+	// owner_user_id = 0 means "everything" (single-box installs). Multi-tenant
+	// boxes export one tenant per call.
+	BackupExport(ctx context.Context, in *BackupExportRequest, opts ...grpc.CallOption) (*BackupExportResponse, error)
+	BackupImport(ctx context.Context, in *BackupImportRequest, opts ...grpc.CallOption) (*BackupImportResponse, error)
+}
+
+type backupControlServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewBackupControlServiceClient(cc grpc.ClientConnInterface) BackupControlServiceClient {
+	return &backupControlServiceClient{cc}
+}
+
+func (c *backupControlServiceClient) BackupExport(ctx context.Context, in *BackupExportRequest, opts ...grpc.CallOption) (*BackupExportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BackupExportResponse)
+	err := c.cc.Invoke(ctx, BackupControlService_BackupExport_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backupControlServiceClient) BackupImport(ctx context.Context, in *BackupImportRequest, opts ...grpc.CallOption) (*BackupImportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BackupImportResponse)
+	err := c.cc.Invoke(ctx, BackupControlService_BackupImport_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// BackupControlServiceServer is the server API for BackupControlService service.
+// All implementations must embed UnimplementedBackupControlServiceServer
+// for forward compatibility.
+type BackupControlServiceServer interface {
+	// owner_user_id = 0 means "everything" (single-box installs). Multi-tenant
+	// boxes export one tenant per call.
+	BackupExport(context.Context, *BackupExportRequest) (*BackupExportResponse, error)
+	BackupImport(context.Context, *BackupImportRequest) (*BackupImportResponse, error)
+	mustEmbedUnimplementedBackupControlServiceServer()
+}
+
+// UnimplementedBackupControlServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedBackupControlServiceServer struct{}
+
+func (UnimplementedBackupControlServiceServer) BackupExport(context.Context, *BackupExportRequest) (*BackupExportResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BackupExport not implemented")
+}
+func (UnimplementedBackupControlServiceServer) BackupImport(context.Context, *BackupImportRequest) (*BackupImportResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BackupImport not implemented")
+}
+func (UnimplementedBackupControlServiceServer) mustEmbedUnimplementedBackupControlServiceServer() {}
+func (UnimplementedBackupControlServiceServer) testEmbeddedByValue()                              {}
+
+// UnsafeBackupControlServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to BackupControlServiceServer will
+// result in compilation errors.
+type UnsafeBackupControlServiceServer interface {
+	mustEmbedUnimplementedBackupControlServiceServer()
+}
+
+func RegisterBackupControlServiceServer(s grpc.ServiceRegistrar, srv BackupControlServiceServer) {
+	// If the following call panics, it indicates UnimplementedBackupControlServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&BackupControlService_ServiceDesc, srv)
+}
+
+func _BackupControlService_BackupExport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BackupExportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackupControlServiceServer).BackupExport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackupControlService_BackupExport_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackupControlServiceServer).BackupExport(ctx, req.(*BackupExportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackupControlService_BackupImport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BackupImportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackupControlServiceServer).BackupImport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackupControlService_BackupImport_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackupControlServiceServer).BackupImport(ctx, req.(*BackupImportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// BackupControlService_ServiceDesc is the grpc.ServiceDesc for BackupControlService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var BackupControlService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "autoforward.BackupControlService",
+	HandlerType: (*BackupControlServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "BackupExport",
+			Handler:    _BackupControlService_BackupExport_Handler,
+		},
+		{
+			MethodName: "BackupImport",
+			Handler:    _BackupControlService_BackupImport_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "autoforward.proto",
+}
+
+const (
 	AccountControlService_RegisterAccount_FullMethodName = "/autoforward.AccountControlService/RegisterAccount"
 	AccountControlService_LoginAccount_FullMethodName    = "/autoforward.AccountControlService/LoginAccount"
 	AccountControlService_ValidateToken_FullMethodName   = "/autoforward.AccountControlService/ValidateToken"

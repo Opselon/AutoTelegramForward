@@ -1833,6 +1833,141 @@ class LogControlService:
             _registered_method=True)
 
 
+class BackupControlServiceStub:
+    """-----------------------------------------------------------------------------
+    Backup & Restore — migrate a full installation (or one tenant) between
+    servers. The snapshot is a JSON document containing LIVE CREDENTIALS, so
+    the caller must protect it; `passphrase` encrypts the bundle with AES-GCM.
+    -----------------------------------------------------------------------------
+
+    """
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.BackupExport = channel.unary_unary(
+                '/autoforward.BackupControlService/BackupExport',
+                request_serializer=autoforward__pb2.BackupExportRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.BackupExportResponse.FromString,
+                _registered_method=True)
+        self.BackupImport = channel.unary_unary(
+                '/autoforward.BackupControlService/BackupImport',
+                request_serializer=autoforward__pb2.BackupImportRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.BackupImportResponse.FromString,
+                _registered_method=True)
+
+
+class BackupControlServiceServicer:
+    """-----------------------------------------------------------------------------
+    Backup & Restore — migrate a full installation (or one tenant) between
+    servers. The snapshot is a JSON document containing LIVE CREDENTIALS, so
+    the caller must protect it; `passphrase` encrypts the bundle with AES-GCM.
+    -----------------------------------------------------------------------------
+
+    """
+
+    def BackupExport(self, request, context):
+        """owner_user_id = 0 means "everything" (single-box installs). Multi-tenant
+        boxes export one tenant per call.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def BackupImport(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_BackupControlServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'BackupExport': grpc.unary_unary_rpc_method_handler(
+                    servicer.BackupExport,
+                    request_deserializer=autoforward__pb2.BackupExportRequest.FromString,
+                    response_serializer=autoforward__pb2.BackupExportResponse.SerializeToString,
+            ),
+            'BackupImport': grpc.unary_unary_rpc_method_handler(
+                    servicer.BackupImport,
+                    request_deserializer=autoforward__pb2.BackupImportRequest.FromString,
+                    response_serializer=autoforward__pb2.BackupImportResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'autoforward.BackupControlService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('autoforward.BackupControlService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class BackupControlService:
+    """-----------------------------------------------------------------------------
+    Backup & Restore — migrate a full installation (or one tenant) between
+    servers. The snapshot is a JSON document containing LIVE CREDENTIALS, so
+    the caller must protect it; `passphrase` encrypts the bundle with AES-GCM.
+    -----------------------------------------------------------------------------
+
+    """
+
+    @staticmethod
+    def BackupExport(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.BackupControlService/BackupExport',
+            autoforward__pb2.BackupExportRequest.SerializeToString,
+            autoforward__pb2.BackupExportResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def BackupImport(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.BackupControlService/BackupImport',
+            autoforward__pb2.BackupImportRequest.SerializeToString,
+            autoforward__pb2.BackupImportResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
 class AccountControlServiceStub:
     """Missing associated documentation comment in .proto file."""
 

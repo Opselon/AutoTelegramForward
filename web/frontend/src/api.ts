@@ -27,6 +27,10 @@ import type {
   ServicesHealthResponse,
   AuthResponse,
   PVResponderConfig,
+  BackupExportRequest,
+  BackupExportResponse,
+  BackupImportRequest,
+  BackupImportResponse,
 } from './types'
 
 const API_BASE = '/api'
@@ -369,4 +373,18 @@ export const api = {
       localStorage.removeItem('auth_token')
     } catch {}
   },
+
+  // ------------------------------------------------- Backup & Restore
+  // Exports a JSON snapshot (live credentials inside — optionally encrypted
+  // with a passphrase) so the install can be moved to another server.
+  backupExport: (req: BackupExportRequest) =>
+    fetchJson<BackupExportResponse>(`${API_BASE}/backup/export`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+  backupImport: (req: BackupImportRequest) =>
+    fetchJson<BackupImportResponse>(`${API_BASE}/backup/import`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
 }

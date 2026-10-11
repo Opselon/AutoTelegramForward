@@ -446,3 +446,46 @@ export interface PVResponderConfig {
   ignore_bots: boolean;
   history_limit: number;
 }
+
+// ---------------------------------------------------------------- Backup/Restore
+// Whole-installation migration between servers. The bundle carries LIVE
+// CREDENTIALS, so an optional passphrase encrypts it with AES-GCM.
+export interface BackupExportRequest {
+  /** 0 = every tenant (admin only). Non-admins always get just their own. */
+  owner_user_id?: number
+  /** When set, the bundle is encrypted with AES-GCM before it is returned. */
+  passphrase?: string
+}
+
+export interface BackupExportResponse {
+  success: boolean
+  /** JSON snapshot, plain or `enc:v1:`-prefixed when a passphrase was given. */
+  bundle: string
+  /** entity name -> row count, so the UI can preview what is inside. */
+  counts: Record<string, number>
+  /** True when the bundle is actually encrypted (for the UI badge). */
+  encrypted: boolean
+  error?: string
+}
+
+export interface BackupImportRequest {
+  bundle: string
+  /** Required when the bundle is `enc:v1:`-prefixed. */
+  passphrase?: string
+  /** Re-stamp every imported entity with this owner. 0 = keep source ids. */
+  target_owner_user_id?: number
+  /** Replace rows whose id already exists here. Default false = skip. */
+  overwrite_existing?: boolean
+}
+
+export interface EntityImportStats {
+  imported: number
+  skipped: number
+  failed: number
+}
+
+export interface BackupImportResponse {
+  success: boolean
+  stats: Record<string, EntityImportStats>
+  error?: string
+}

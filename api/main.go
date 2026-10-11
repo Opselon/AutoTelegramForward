@@ -90,6 +90,9 @@ func main() {
 	dashMux.HandleFunc("PUT /prompts/{id}", h.UpdatePromptTemplate)
 	dashMux.HandleFunc("DELETE /prompts/{id}", h.DeletePromptTemplate)
 	dashMux.HandleFunc("POST /prompts/test", h.TestPrompt)
+	// Backup & Restore — whole-installation migration between servers.
+	dashMux.HandleFunc("POST /backup/export", h.BackupExport)
+	dashMux.HandleFunc("POST /backup/import", h.BackupImport)
 	mux.Handle("/api/", h.RequireAuth(dashMux))
 
 	// v1 Routes — internal/operator surface, kept as-is.

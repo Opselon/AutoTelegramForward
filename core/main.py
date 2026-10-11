@@ -104,6 +104,17 @@ def build_container(cfg: Config) -> dict:
     credentials = ApiCredentialUseCases(cred_repo)
     bot_tokens = BotTokenUseCases(token_repo)
 
+    from core.application.backup_service import BackupService  # noqa: E402
+    backup = BackupService(
+        sessions=session_repo,
+        rules=rule_repo,
+        filters=filter_repo,
+        ai_configs=ai_repo,
+        credentials=cred_repo,
+        prompts=prompt_repo,
+        crypto=crypto,
+    )
+
     pipeline = MessageForwardingUseCase(
         rule_repo, filter_repo, ai_repo, factory,
         filter_engine=FilterEngine(), routing_policy=RoutingPolicy(),
@@ -168,6 +179,7 @@ def build_container(cfg: Config) -> dict:
         "durable_pipeline": durable_pipeline,
         "prompt_repo": prompt_repo,
         "prompt_service": prompt_service,
+        "backup": backup,
         "ai_transformer": ai_transformer,
         "ai_circuit_registry": ai_circuit_registry,
         "pv_responder": pv_responder,
@@ -214,6 +226,9 @@ async def serve_grpc(container: dict, cfg: Config):
 
     pb_grpc.add_AccountControlServiceServicer_to_server(
         AccountControlServicer(container["db"]), server,
+    )
+    pb_grpc.add_BackupControlServiceServicer_to_server(
+        servicers.BackupControlServicer(container["backup"]), server,
     )
     addr = f"{cfg.grpc_host}:{cfg.grpc_port}"
     server.add_insecure_port(addr)
@@ -381,6 +396,7 @@ async def main() -> None:
             pv_responder=container.get("pv_responder"),
             web_url=cfg.web_url,
             account_servicer=container.get("account_servicer"),
+            backup_service=container.get("backup"),
         )
         # Route ownership: while the button UI has an active step for a user
         # it answers; otherwise BotManager (commands) answers. No doubles.
