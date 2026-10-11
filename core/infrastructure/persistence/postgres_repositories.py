@@ -863,7 +863,8 @@ class PostgresPromptRepository(IPromptRepository):
         current_version INTEGER NOT NULL DEFAULT 1,
         is_system BOOLEAN NOT NULL DEFAULT FALSE,
         created_at BIGINT NOT NULL,
-        updated_at BIGINT NOT NULL
+        updated_at BIGINT NOT NULL,
+        owner_user_id BIGINT NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_pg_prompt_name ON prompt_templates (name);
 
@@ -891,18 +892,33 @@ class PostgresPromptRepository(IPromptRepository):
                 stmt = stmt.strip()
                 if stmt:
                     await _execute_db(self._db, stmt)
+            # v12: owner scoping is additive. CREATE TABLE IF NOT EXISTS does
+            # not upgrade a table created before v12, so add the column
+            # idempotently here (PostgreSQL supports ADD COLUMN IF NOT EXISTS;
+            # SQLite does not, so the sqlite adapter has its own path).
+            for stmt in self.ADDITIVE_COLUMNS.strip().split(";"):
+                stmt = stmt.strip()
+                if stmt:
+                    await _execute_db(self._db, stmt)
+
+    # v12: guarded ALTERs so an existing pre-v12 schema is upgraded in place.
+    ADDITIVE_COLUMNS = """
+    ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS owner_user_id BIGINT NOT NULL DEFAULT 0;
+    CREATE INDEX IF NOT EXISTS idx_pg_prompt_templates_owner ON prompt_templates (owner_user_id);
+    """
 
     async def add_template(self, template: PromptTemplate) -> PromptTemplate:
         query = """
         INSERT INTO prompt_templates (
             id, name, description, system_prompt, user_prompt_template,
-            target_language, current_version, is_system, created_at, updated_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            target_language, current_version, is_system, created_at, updated_at, owner_user_id
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
             template.id, template.name, template.description, template.system_prompt,
             template.user_prompt_template, template.target_language, template.current_version,
             bool(template.is_system), int(template.created_at), int(template.updated_at),
+            int(getattr(template, "owner_user_id", 0) or 0),
         )
         await _execute_db(self._db, query, params)
         return template
@@ -912,14 +928,16 @@ class PostgresPromptRepository(IPromptRepository):
         query = """
         UPDATE prompt_templates
         SET name = %s, description = %s, system_prompt = %s, user_prompt_template = %s,
-            target_language = %s, current_version = %s, is_system = %s, updated_at = %s
+            target_language = %s, current_version = %s, is_system = %s, updated_at = %s,
+            owner_user_id = %s
         WHERE id = %s
         """
         params = (
             template.name, template.description, template.system_prompt,
             template.user_prompt_template, template.target_language,
             template.current_version, bool(template.is_system),
-            template.updated_at, template.id,
+            template.updated_at, int(getattr(template, "owner_user_id", 0) or 0),
+            template.id,
         )
         await _execute_db(self._db, query, params)
         return template
@@ -929,27 +947,31 @@ class PostgresPromptRepository(IPromptRepository):
         row = await _fetch_one_db(self._db, query, (template_id,))
         if not row:
             return None
-        d = dict(row) if hasattr(row, "keys") else row
+        return self._row_to_template(row)
+
+    async def list_templates(self) -> List[PromptTemplate]:
+        query = "SELECT * FROM prompt_templates ORDER BY created_at ASC"
+        rows = await _fetch_all_db(self._db, query, ())
+        return [self._row_to_template(r) for r in rows]
+
+    async def list_templates_by_owner(self, owner_user_id: int) -> List[PromptTemplate]:
+        # v12: system prompts stay shared; user prompts are per-tenant.
+        query = (
+            "SELECT * FROM prompt_templates WHERE owner_user_id = %s OR is_system = TRUE"
+            " ORDER BY created_at ASC"
+        )
+        rows = await _fetch_all_db(self._db, query, (int(owner_user_id),))
+        return [self._row_to_template(r) for r in rows]
+
+    def _row_to_template(self, r) -> PromptTemplate:
+        d = dict(r) if hasattr(r, "keys") else r
         return PromptTemplate(
             id=d["id"], name=d["name"], description=d.get("description", ""),
             system_prompt=d["system_prompt"], user_prompt_template=d.get("user_prompt_template", "{text}"),
             target_language=d.get("target_language", "en"), current_version=int(d["current_version"]),
             is_system=bool(d["is_system"]), created_at=int(d["created_at"]), updated_at=int(d["updated_at"]),
+            owner_user_id=int(d.get("owner_user_id") or 0),
         )
-
-    async def list_templates(self) -> List[PromptTemplate]:
-        query = "SELECT * FROM prompt_templates ORDER BY created_at ASC"
-        rows = await _fetch_all_db(self._db, query, ())
-        res = []
-        for r in rows:
-            d = dict(r) if hasattr(r, "keys") else r
-            res.append(PromptTemplate(
-                id=d["id"], name=d["name"], description=d.get("description", ""),
-                system_prompt=d["system_prompt"], user_prompt_template=d.get("user_prompt_template", "{text}"),
-                target_language=d.get("target_language", "en"), current_version=int(d["current_version"]),
-                is_system=bool(d["is_system"]), created_at=int(d["created_at"]), updated_at=int(d["updated_at"]),
-            ))
-        return res
 
     async def delete_template(self, template_id: str) -> bool:
         await _execute_db(self._db, "DELETE FROM prompt_versions WHERE prompt_id = %s", (template_id,))

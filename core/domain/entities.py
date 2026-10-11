@@ -585,6 +585,8 @@ class PromptTemplate:
     is_system: bool = False
     created_at: int = field(default_factory=_now)
     updated_at: int = field(default_factory=_now)
+    # v12: user prompts are per-tenant; system prompts (is_system) stay shared.
+    owner_user_id: int = 0
 
 
 @dataclass

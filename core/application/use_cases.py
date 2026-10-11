@@ -301,13 +301,16 @@ class ApiCredentialUseCases:
         self._repo = repo
 
     async def create(self, label: str, api_id: int, api_hash: str,
-                     proxy: str = "", is_default: bool = False):
+                     proxy: str = "", is_default: bool = False,
+                     owner_user_id: int = 0):
         import uuid as _uuid, time as _time
         from .repositories import ApiCredential
         cred = ApiCredential(
             id=str(_uuid.uuid4()), label=label, api_id=int(api_id),
             api_hash=api_hash, proxy=proxy or "", is_default=is_default,
             created_at=int(_time.time()), updated_at=int(_time.time()),
+            # v12: stamp the creating tenant; 0 = legacy/system scope.
+            owner_user_id=int(owner_user_id or 0),
         )
         return await self._repo.add(cred)
 
@@ -319,6 +322,11 @@ class ApiCredentialUseCases:
 
     async def get_default(self):
         return await self._repo.get_default()
+
+    async def get_default_by_owner(self, owner_user_id: int):
+        # v12: prefer the caller's own credential; falls back to the shared
+        # system scope on a legacy single-tenant install.
+        return await self._repo.get_default_by_owner(int(owner_user_id or 0))
 
     async def set_default(self, cred_id: str):
         creds = await self._repo.list_all()

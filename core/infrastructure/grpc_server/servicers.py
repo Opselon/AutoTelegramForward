@@ -3,6 +3,7 @@
 import time
 
 import logging
+from typing import Optional
 
 import grpc
 
@@ -523,21 +524,42 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
         except Exception:
             return []
 
+    async def _owner_rule_ids(self, owner_user_id: int) -> Optional[set]:
+        """v12: resolve the rule ids a tenant may see. None = unscoped (admin)."""
+        if not owner_user_id:
+            return None
+        try:
+            owned = await self._rules.list_by_owner(int(owner_user_id))
+        except Exception:
+            return set()
+        return {r.id for r in owned}
+
     async def GetDeliveryStats(self, request, context):
+        # v12: a tenant only sees stats for its own rules, queue depth and
+        # errors included. Without this GET /api/queue exposed every tenant's
+        # rule names, error text and dead-letter backlog.
+        scope = await self._owner_rule_ids(int(request.owner_user_id or 0))
+        owner_clause = ""
+        owner_params: tuple = ()
+        if scope is not None:
+            if not scope:
+                return pb.DeliveryStatsResponse(rules=[], errors=[])
+            placeholders = ",".join("?" for _ in scope)
+            owner_clause = f" AND rule_id IN ({placeholders})"
+            owner_params = tuple(scope)
+
         processed = forwarded = failed = dedup = filtered = in_queue = retries = 0
-        for row in self._q("SELECT forwarded, filtered, errors FROM rule_stats"):
+        for row in self._q(f"SELECT forwarded, filtered, errors FROM rule_stats WHERE 1=1{owner_clause}", owner_params):
             forwarded += int(row[0] or 0)
             filtered += int(row[1] or 0)
             failed += int(row[2] or 0)
-        for row in self._q("SELECT COALESCE(SUM(forwarded),0), COALESCE(SUM(filtered),0), COALESCE(SUM(errors),0) FROM metrics_hourly"):
+        for row in self._q(f"SELECT COALESCE(SUM(forwarded),0), COALESCE(SUM(filtered),0), COALESCE(SUM(errors),0) FROM metrics_hourly WHERE 1=1{owner_clause}", owner_params):
             forwarded += int(row[0] or 0)
             filtered += int(row[1] or 0)
             failed += int(row[2] or 0)
-        for row in self._q("SELECT COALESCE(SUM(filtered),0), COALESCE(SUM(errors),0) FROM metrics_hourly"):
-            pass
-        for row in self._q("SELECT COUNT(*) FROM delivery_jobs WHERE status IN ('PENDING','LEASED')"):
+        for row in self._q(f"SELECT COUNT(*) FROM delivery_jobs WHERE status IN ('PENDING','LEASED'){owner_clause}", owner_params):
             in_queue = int(row[0] or 0)
-        for row in self._q("SELECT COALESCE(SUM(attempts),0) FROM delivery_jobs WHERE attempts > 1"):
+        for row in self._q(f"SELECT COALESCE(SUM(attempts),0) FROM delivery_jobs WHERE attempts > 1{owner_clause}", owner_params):
             retries = int(row[0] or 0)
         processed = forwarded + filtered + failed
 
@@ -547,6 +569,8 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
         except Exception:
             all_rules = []
         for r in all_rules:
+            if scope is not None and r.id not in scope:
+                continue
             stat = self._q(
                 "SELECT forwarded, filtered, errors, last_forward_ts FROM rule_stats WHERE rule_id=?",
                 (r.id,),
@@ -568,7 +592,8 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
         errors = []
         for row in self._q(
             "SELECT ts, rule_id, category, error_name, severity, detail, chat_id "
-            "FROM error_log ORDER BY ts DESC LIMIT 25"
+            "FROM error_log WHERE 1=1" + owner_clause + " ORDER BY ts DESC LIMIT 25",
+            owner_params,
         ):
             errors.append(pb.RecentError(
                 ts=int(row[0] or 0), rule_id=str(row[1] or ""), category=str(row[2] or ""),
@@ -577,7 +602,7 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
             ))
 
         dlq_total = 0
-        for row in self._q("SELECT COUNT(*) FROM dead_letter_queue"):
+        for row in self._q("SELECT COUNT(*) FROM dead_letter_queue WHERE 1=1" + owner_clause, owner_params):
             dlq_total = int(row[0] or 0)
 
         return pb.DeliveryStatsResponse(
@@ -604,6 +629,14 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
         if request.since:
             where.append("dead_lettered_at>=?")
             params = params + (int(request.since),)
+        # v12: scope to the caller's rules.
+        scope = await self._owner_rule_ids(int(request.owner_user_id or 0))
+        if scope is not None:
+            if not scope:
+                return pb.ListDeadLetterResponse(entries=[], total=0)
+            placeholders = ",".join("?" for _ in scope)
+            where.append(f"rule_id IN ({placeholders})")
+            params = params + tuple(scope)
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY dead_lettered_at DESC LIMIT ?"
@@ -624,6 +657,14 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
         if not rows:
             return pb.RuleActionResponse(success=False, message="not_found", error_code="not_found")
         row = rows[0]
+        # v12: a tenant may only replay entries whose rule it owns.
+        scope = await self._owner_rule_ids(int(request.owner_user_id or 0))
+        if scope is not None and row["rule_id"] not in scope:
+            logger.warning(
+                "ReplayDeadLetter: owner=%s denied replay of entry=%s rule=%s",
+                request.owner_user_id, request.id, row["rule_id"],
+            )
+            return pb.RuleActionResponse(success=False, message="not_found", error_code="not_found")
         try:
             self._db.execute(
                 "INSERT OR IGNORE INTO delivery_jobs "
@@ -649,6 +690,14 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
         if request.older_than:
             where.append("dead_lettered_at<?")
             params = params + (int(request.older_than),)
+        # v12: purge only the caller's own rules.
+        scope = await self._owner_rule_ids(int(request.owner_user_id or 0))
+        if scope is not None:
+            if not scope:
+                return pb.RuleActionResponse(success=True, message="purged 0")
+            placeholders = ",".join("?" for _ in scope)
+            where.append(f"rule_id IN ({placeholders})")
+            params = params + tuple(scope)
         if where:
             sql += " WHERE " + " AND ".join(where)
         try:
@@ -802,18 +851,33 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
     async def ListPromptTemplates(self, request, context):
         if self._prompts is None:
             return pb.ListPromptTemplatesResponse()
-        rows = await self._prompts.list_templates()
+        # v12: scope to the caller. An empty owner returns the shared system
+        # prompts only; list_templates() (everything) is reserved for the
+        # unscoped admin path in BackupService.
+        owner = int(request.owner_user_id or 0)
+        if owner:
+            rows = await self._prompts.list_templates_by_owner(owner)
+        else:
+            rows = [t for t in await self._prompts.list_templates() if t.is_system]
         return pb.ListPromptTemplatesResponse(templates=[self._prompt_pb(t) for t in rows])
 
     async def SavePromptTemplate(self, request, context):
         if self._prompts is None:
             return pb.PromptTemplate()
         c = request.template
+        owner = int(request.owner_user_id or 0)
         try:
             if c.id:
                 existing = await self._prompts.get_template(c.id)
                 if existing and existing.is_system:
                     return pb.PromptTemplate()  # system prompts are immutable
+                # v12: a tenant may only overwrite its own (non-system) prompts.
+                if existing and owner and int(getattr(existing, "owner_user_id", 0) or 0) not in (0, owner):
+                    logger.warning(
+                        "SavePromptTemplate: owner=%s denied write to prompt=%s owned_by=%s",
+                        owner, c.id, getattr(existing, "owner_user_id", 0),
+                    )
+                    return pb.PromptTemplate()
                 if existing and request.expected_version and existing.current_version != request.expected_version:
                     return pb.PromptTemplate()  # OCC conflict
                 updated = await self._prompts.update_template(
@@ -834,6 +898,7 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
                 user_prompt_template=c.user_prompt_template or "{text}",
                 description=c.description or "",
                 target_language=c.target_language or "auto",
+                owner_user_id=owner,
             )
             return self._prompt_pb(created)
         except Exception as exc:
@@ -848,6 +913,14 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
             return _status(False, "not_found")
         if existing.is_system:
             return _status(False, "system_prompt_immutable")
+        # v12: a tenant may only delete its own prompts.
+        owner = int(request.owner_user_id or 0)
+        if owner and int(getattr(existing, "owner_user_id", 0) or 0) not in (0, owner):
+            logger.warning(
+                "DeletePromptTemplate: owner=%s denied delete of prompt=%s owned_by=%s",
+                owner, request.id, getattr(existing, "owner_user_id", 0),
+            )
+            return _status(False, "not_found")
         ok = await self._prompts.delete_template(request.id)
         return _status(ok, "deleted" if ok else "not_found")
 

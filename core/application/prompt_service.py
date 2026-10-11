@@ -230,6 +230,7 @@ class PromptService:
         description: str = "",
         target_language: str = "en",
         template_id: Optional[str] = None,
+        owner_user_id: int = 0,
     ) -> PromptTemplate:
         valid, err = self.validate_prompt(system_prompt, user_prompt_template)
         if not valid:
@@ -247,6 +248,8 @@ class PromptService:
             is_system=False,
             created_at=now,
             updated_at=now,
+            # v12: stamp the creating tenant; 0 = legacy/system scope.
+            owner_user_id=int(owner_user_id or 0),
         )
         await self.prompt_repo.add_template(template)
 
@@ -351,6 +354,11 @@ class PromptService:
 
     async def list_templates(self) -> List[PromptTemplate]:
         return await self.prompt_repo.list_templates()
+
+    async def list_templates_by_owner(self, owner_user_id: int) -> List[PromptTemplate]:
+        # v12: tenant-scoped listing. System prompts stay shared across tenants;
+        # user prompts are only visible to their owner.
+        return await self.prompt_repo.list_templates_by_owner(owner_user_id)
 
     async def list_versions(self, template_id: str) -> List[PromptVersion]:
         return await self.prompt_repo.list_versions(template_id)

@@ -659,11 +659,12 @@ class SqliteApiCredentialRepository(IApiCredentialRepository):
     async def add(self, cred: ApiCredential) -> ApiCredential:
         self._db.execute(
             "INSERT INTO api_credentials (id, label, api_id, api_hash_encrypted, proxy,"
-            " is_default, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            " is_default, created_at, updated_at, owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 cred.id, cred.label, cred.api_id,
                 self._crypto.encrypt(cred.api_hash) if cred.api_hash else "",
                 cred.proxy, int(cred.is_default), cred.created_at, cred.updated_at,
+                int(getattr(cred, "owner_user_id", 0) or 0),
             ),
         )
         return cred
@@ -671,11 +672,12 @@ class SqliteApiCredentialRepository(IApiCredentialRepository):
     async def update(self, cred: ApiCredential) -> ApiCredential:
         self._db.execute(
             "UPDATE api_credentials SET label=?, api_id=?, api_hash_encrypted=?, proxy=?,"
-            " is_default=?, updated_at=? WHERE id=?",
+            " is_default=?, updated_at=?, owner_user_id=? WHERE id=?",
             (
                 cred.label, cred.api_id,
                 self._crypto.encrypt(cred.api_hash) if cred.api_hash else "",
-                cred.proxy, int(cred.is_default), cred.updated_at, cred.id,
+                cred.proxy, int(cred.is_default), cred.updated_at,
+                int(getattr(cred, "owner_user_id", 0) or 0), cred.id,
             ),
         )
         return cred
@@ -687,6 +689,7 @@ class SqliteApiCredentialRepository(IApiCredentialRepository):
             api_hash=self._crypto.decrypt(enc) if enc else "",
             proxy=row["proxy"], is_default=bool(row["is_default"]),
             created_at=row["created_at"], updated_at=row["updated_at"],
+            owner_user_id=int(row["owner_user_id"]) if "owner_user_id" in row.keys() else 0,
         )
 
     async def get_by_id(self, cred_id: str) -> Optional[ApiCredential]:
@@ -696,6 +699,24 @@ class SqliteApiCredentialRepository(IApiCredentialRepository):
     async def get_default(self) -> Optional[ApiCredential]:
         row = self._db.query_one("SELECT * FROM api_credentials WHERE is_default=1 LIMIT 1")
         return self._row_to_entity(row) if row else None
+
+    async def get_default_by_owner(self, owner_user_id: int) -> Optional[ApiCredential]:
+        # v12: the caller may only receive their own default credential. Falls
+        # back to the shared system scope (0) so a legacy single-tenant install
+        # keeps working.
+        row = self._db.query_one(
+            "SELECT * FROM api_credentials WHERE is_default=1"
+            " AND (owner_user_id=? OR owner_user_id=0) ORDER BY owner_user_id DESC LIMIT 1",
+            (int(owner_user_id),),
+        )
+        return self._row_to_entity(row) if row else None
+
+    async def list_by_owner(self, owner_user_id: int) -> List[ApiCredential]:
+        rows = self._db.query_all(
+            "SELECT * FROM api_credentials WHERE owner_user_id=? ORDER BY label",
+            (int(owner_user_id),),
+        )
+        return [self._row_to_entity(r) for r in rows]
 
     async def list_all(self) -> List[ApiCredential]:
         rows = self._db.query_all("SELECT * FROM api_credentials ORDER BY label")
@@ -1476,13 +1497,14 @@ class SqlitePromptRepository(IPromptRepository):
         self._db.execute(
             """
             INSERT INTO prompt_templates (id, name, description, system_prompt, user_prompt_template,
-                target_language, current_version, is_system, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                target_language, current_version, is_system, created_at, updated_at, owner_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 template.id, template.name, template.description, template.system_prompt,
                 template.user_prompt_template, template.target_language, template.current_version,
                 int(template.is_system), template.created_at, template.updated_at,
+                int(getattr(template, "owner_user_id", 0) or 0),
             ),
         )
         return template
@@ -1493,14 +1515,15 @@ class SqlitePromptRepository(IPromptRepository):
             """
             UPDATE prompt_templates
             SET name=?, description=?, system_prompt=?, user_prompt_template=?,
-                target_language=?, current_version=?, is_system=?, updated_at=?
+                target_language=?, current_version=?, is_system=?, updated_at=?, owner_user_id=?
             WHERE id=?
             """,
             (
                 template.name, template.description, template.system_prompt,
                 template.user_prompt_template, template.target_language,
                 template.current_version, int(template.is_system),
-                template.updated_at, template.id,
+                template.updated_at, int(getattr(template, "owner_user_id", 0) or 0),
+                template.id,
             ),
         )
         return template
@@ -1509,24 +1532,29 @@ class SqlitePromptRepository(IPromptRepository):
         row = self._db.query_one("SELECT * FROM prompt_templates WHERE id=?", (template_id,))
         if not row:
             return None
-        return PromptTemplate(
-            id=row["id"], name=row["name"], description=row["description"],
-            system_prompt=row["system_prompt"], user_prompt_template=row["user_prompt_template"],
-            target_language=row["target_language"], current_version=int(row["current_version"]),
-            is_system=bool(row["is_system"]), created_at=row["created_at"], updated_at=row["updated_at"],
-        )
+        return self._row_to_template(row)
 
     async def list_templates(self) -> List[PromptTemplate]:
         rows = self._db.query_all("SELECT * FROM prompt_templates ORDER BY created_at ASC")
-        return [
-            PromptTemplate(
-                id=r["id"], name=r["name"], description=r["description"],
-                system_prompt=r["system_prompt"], user_prompt_template=r["user_prompt_template"],
-                target_language=r["target_language"], current_version=int(r["current_version"]),
-                is_system=bool(r["is_system"]), created_at=r["created_at"], updated_at=r["updated_at"],
-            )
-            for r in rows
-        ]
+        return [self._row_to_template(r) for r in rows]
+
+    async def list_templates_by_owner(self, owner_user_id: int) -> List[PromptTemplate]:
+        # v12: system prompts are shared; user prompts are per-tenant.
+        rows = self._db.query_all(
+            "SELECT * FROM prompt_templates WHERE owner_user_id=? OR is_system=1"
+            " ORDER BY created_at ASC",
+            (int(owner_user_id),),
+        )
+        return [self._row_to_template(r) for r in rows]
+
+    def _row_to_template(self, r) -> PromptTemplate:
+        return PromptTemplate(
+            id=r["id"], name=r["name"], description=r["description"],
+            system_prompt=r["system_prompt"], user_prompt_template=r["user_prompt_template"],
+            target_language=r["target_language"], current_version=int(r["current_version"]),
+            is_system=bool(r["is_system"]), created_at=r["created_at"], updated_at=r["updated_at"],
+            owner_user_id=int(r["owner_user_id"]) if "owner_user_id" in r.keys() else 0,
+        )
 
     async def delete_template(self, template_id: str) -> bool:
         cur = self._db.execute("DELETE FROM prompt_templates WHERE id=?", (template_id,))

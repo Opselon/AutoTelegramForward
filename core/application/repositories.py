@@ -34,6 +34,8 @@ class ApiCredential:
     is_default: bool = False
     created_at: int = 0
     updated_at: int = 0
+    # v12: credentials are per-tenant. 0 = legacy/system scope (admin only).
+    owner_user_id: int = 0
 
 
 @dataclass
@@ -189,6 +191,10 @@ class IPromptRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_templates_by_owner(self, owner_user_id: int) -> List[PromptTemplate]:
+        ...
+
+    @abstractmethod
     async def delete_template(self, template_id: str) -> bool:
         ...
 
@@ -220,7 +226,11 @@ class IApiCredentialRepository(ABC):
         ...
 
     @abstractmethod
-    async def update(self, cred: ApiCredential) -> ApiCredential:
+    async def get_default(self) -> Optional[ApiCredential]:
+        ...
+
+    @abstractmethod
+    async def get_default_by_owner(self, owner_user_id: int) -> Optional[ApiCredential]:
         ...
 
     @abstractmethod
@@ -228,7 +238,7 @@ class IApiCredentialRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_default(self) -> Optional[ApiCredential]:
+    async def list_by_owner(self, owner_user_id: int) -> List[ApiCredential]:
         ...
 
     @abstractmethod

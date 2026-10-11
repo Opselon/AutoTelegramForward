@@ -61,6 +61,7 @@ async def _seed(stack):
     ).ApiCredential(
         id="cred-1", label="main", api_id=98765, api_hash="HASH-SECRET",
         proxy="", is_default=True, created_at=1, updated_at=1,
+        owner_user_id=42,
     ))
     await r["sessions"].add(TelegramSession(
         id="sess-int", phone_number="+989111111111",
