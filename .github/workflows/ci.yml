@@ -62,3 +62,9 @@ jobs:
 
       - name: Build logger image
         run: docker build -f Dockerfile.logger -t atf-logger .
+
+      # The release workflow builds and pushes this image; a stale toolchain
+      # pin here once broke a published release (rust:1.85 vs transitive deps
+      # needing rustc >= 1.86). Keep this so the failure surfaces pre-merge.
+      - name: Build web image
+        run: docker build -f Dockerfile.web -t atf-web .
