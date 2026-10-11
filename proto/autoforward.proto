@@ -76,6 +76,7 @@ message SubmitPasswordResponse {
 
 message BackupSessionRequest {
   string session_id = 1;
+  int64 owner_user_id = 2;   // v12.2: only the session's owner may export its string
 }
 
 message BackupSessionResponse {
@@ -190,6 +191,7 @@ message CreateRuleRequest {
 message ResolveChatRequest {
   string session_id = 1;
   string handle = 2;  // @username, https://t.me/xxx, t.me/xxx or numeric id
+  int64 owner_user_id = 3;  // v12.2: scope session choice to this account
 }
 
 message ResolveChatResponse {
@@ -207,6 +209,7 @@ message UpdateRuleRequest {
 
 message DeleteRuleRequest {
   string id = 1;
+  int64 owner_user_id = 2;   // v12.2: tenant that owns the delete
 }
 
 message ListRulesRequest {
@@ -246,6 +249,7 @@ message UpdateFilterRequest {
 
 message DeleteFilterRequest {
   string id = 1;
+  int64 owner_user_id = 2;   // v12.2: tenant that owns the delete
 }
 
 message ListFiltersRequest {
@@ -285,6 +289,7 @@ message UpdateAIConfigRequest {
 
 message DeleteAIConfigRequest {
   string id = 1;
+  int64 owner_user_id = 2;   // v12.2: tenant that owns the delete
 }
 
 message ListAIConfigsRequest {
@@ -298,6 +303,7 @@ message ListAIConfigsResponse {
 message TestAIRewriteRequest {
   string ai_config_id = 1;
   string sample_text = 2;
+  int64 owner_user_id = 3;  // v12.2: refuse to bill another tenant's API key
 }
 
 message TestAIRewriteResponse {
@@ -348,6 +354,7 @@ message TestPromptRequest {
   string ai_config_id = 2;
   string sample_text = 3;
   int32 version = 4; // 0 = active version
+  int64 owner_user_id = 5;  // v12.2: refuse to bill another tenant's AI config
 }
 
 message TestPromptResponse {
@@ -452,6 +459,7 @@ message TestRuleRequest {
   string forward_origin_title = 7;
   bool sample_has_media = 8;
   string sample_media_type = 9;   // text | photo | video | document | voice | audio | sticker | animation
+  int64 owner_user_id = 10;  // v12.2: only the rule's owner may run a simulation
 }
 
 message TestRuleResponse {
@@ -550,6 +558,7 @@ message RecentError {
 message PauseRuleRequest {
   string rule_id = 1;
   int64 until = 2;   // epoch seconds; 0 = indefinite
+  int64 owner_user_id = 3;  // v12.2: tenant that owns the pause/resume
 }
 
 message RuleActionResponse {

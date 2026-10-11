@@ -187,7 +187,10 @@ func (h *Handlers) BackupSession(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Sessions.BackupSession(ctx, &pb.BackupSessionRequest{SessionId: req.SessionID})
+	resp, err := h.c.Sessions.BackupSession(ctx, &pb.BackupSessionRequest{
+		SessionId:   req.SessionID,
+		OwnerUserId: identity(r).UserID,
+	})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -344,14 +347,16 @@ func isNumericChatID(id string) bool {
 // resolveChat turns a username/link into a numeric chat id via the core
 // session. Returns ("", "") when no resolution was needed or possible without
 // error; (id, "") on success; ("", reason) when resolution failed.
-func (h *Handlers) resolveChat(ctx context.Context, sessionID, handle string) (string, string) {
+// ownerID scopes the session choice to the caller's own account.
+func (h *Handlers) resolveChat(ctx context.Context, sessionID, handle string, ownerID int64) (string, string) {
 	norm := normalizeChatID(handle)
 	if norm == "" || isNumericChatID(norm) {
 		return "", "" // nothing to resolve
 	}
 	resp, err := h.c.Sessions.ResolveChat(ctx, &pb.ResolveChatRequest{
-		SessionId: sessionID,
-		Handle:    handle,
+		SessionId:   sessionID,
+		Handle:      handle,
+		OwnerUserId: ownerID,
 	})
 	if err != nil {
 		return "", "resolve_failed: " + err.Error()
@@ -378,7 +383,7 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 	// Always store canonical numeric chat ids: the dispatcher calls
 	// int(chat_id) before sending, so a username would break delivery.
 	ctx, cancel0 := withTimeout(r)
-	sid, errS := h.resolveChat(ctx, rule.SessionId, rule.SourceChatId)
+	sid, errS := h.resolveChat(ctx, rule.SessionId, rule.SourceChatId, id.UserID)
 	cancel0()
 	if errS != "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
@@ -391,7 +396,7 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	ctx, cancel1 := withTimeout(r)
-	tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId)
+	tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId, id.UserID)
 	cancel1()
 	if errT != "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errT, "code": "target_resolve_failed"})
@@ -405,7 +410,7 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 	}
 	if rule.UseIntermediate && rule.IntermediateChannelId != "" {
 		ctx, cancel2 := withTimeout(r)
-		iid, errI := h.resolveChat(ctx, rule.SessionId, rule.IntermediateChannelId)
+		iid, errI := h.resolveChat(ctx, rule.SessionId, rule.IntermediateChannelId, id.UserID)
 		cancel2()
 		if errI != "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errI, "code": "intermediate_resolve_failed"})
@@ -466,20 +471,20 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 	}
 	// Canonicalize any username/link endpoints to numeric ids (same contract
 	// as CreateRule — see the resolveChat doc comment).
-	if sid, errS := h.resolveChat(ctx, rule.SessionId, rule.SourceChatId); errS != "" {
+	if sid, errS := h.resolveChat(ctx, rule.SessionId, rule.SourceChatId, id.UserID); errS != "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
 		return
 	} else if sid != "" {
 		rule.SourceChatId = sid
 	}
-	if tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId); errT != "" {
+	if tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId, id.UserID); errT != "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errT, "code": "target_resolve_failed"})
 		return
 	} else if tid != "" {
 		rule.TargetChatId = tid
 	}
 	if rule.UseIntermediate && rule.IntermediateChannelId != "" {
-		if iid, errI := h.resolveChat(ctx, rule.SessionId, rule.IntermediateChannelId); errI != "" {
+		if iid, errI := h.resolveChat(ctx, rule.SessionId, rule.IntermediateChannelId, id.UserID); errI != "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errI, "code": "intermediate_resolve_failed"})
 			return
 		} else if iid != "" {
@@ -516,7 +521,10 @@ func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
 		return
 	}
-	resp, err := h.c.Rules.DeleteRule(ctx, &pb.DeleteRuleRequest{Id: r.PathValue("id")})
+	resp, err := h.c.Rules.DeleteRule(ctx, &pb.DeleteRuleRequest{
+		Id:          r.PathValue("id"),
+		OwnerUserId: id.UserID,
+	})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -651,6 +659,7 @@ func (h *Handlers) TestRule(w http.ResponseWriter, r *http.Request) {
 		ForwardOriginTitle:   req.ForwardOriginTitle,
 		SampleHasMedia:       req.SampleHasMedia,
 		SampleMediaType:      req.SampleMediaType,
+		OwnerUserId:          identity(r).UserID,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -672,8 +681,9 @@ func (h *Handlers) PauseRule(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = bind(w, r, &body)
 	resp, err := h.c.Rules.PauseRule(ctx, &pb.PauseRuleRequest{
-		RuleId: r.PathValue("id"),
-		Until:  body.Until,
+		RuleId:      r.PathValue("id"),
+		Until:       body.Until,
+		OwnerUserId: id.UserID,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -690,7 +700,10 @@ func (h *Handlers) ResumeRule(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Rule not found"})
 		return
 	}
-	resp, err := h.c.Rules.ResumeRule(ctx, &pb.PauseRuleRequest{RuleId: r.PathValue("id")})
+	resp, err := h.c.Rules.ResumeRule(ctx, &pb.PauseRuleRequest{
+		RuleId:      r.PathValue("id"),
+		OwnerUserId: identity(r).UserID,
+	})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -945,7 +958,10 @@ func (h *Handlers) DeleteFilter(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "filter not found"})
 		return
 	}
-	resp, err := h.c.Filters.DeleteFilter(ctx, &pb.DeleteFilterRequest{Id: r.PathValue("id")})
+	resp, err := h.c.Filters.DeleteFilter(ctx, &pb.DeleteFilterRequest{
+		Id:          r.PathValue("id"),
+		OwnerUserId: identity(r).UserID,
+	})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -1020,7 +1036,10 @@ func (h *Handlers) DeleteAIConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "AI config not found"})
 		return
 	}
-	resp, err := h.c.AI.DeleteAIConfig(ctx, &pb.DeleteAIConfigRequest{Id: r.PathValue("id")})
+	resp, err := h.c.AI.DeleteAIConfig(ctx, &pb.DeleteAIConfigRequest{
+		Id:          r.PathValue("id"),
+		OwnerUserId: identity(r).UserID,
+	})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -1165,8 +1184,11 @@ func (h *Handlers) TestPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp, err := h.c.AI.TestPrompt(ctx, &pb.TestPromptRequest{
-		PromptId: req.PromptId, AiConfigId: req.AiConfigId,
-		SampleText: req.SampleText, Version: req.Version,
+		PromptId:     req.PromptId,
+		AiConfigId:   req.AiConfigId,
+		SampleText:   req.SampleText,
+		Version:      req.Version,
+		OwnerUserId:  identity(r).UserID,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -1183,7 +1205,9 @@ func (h *Handlers) TestAIRewrite(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withAITimeout(r)
 	defer cancel()
 	resp, err := h.c.AI.TestAIRewrite(ctx, &pb.TestAIRewriteRequest{
-		AiConfigId: r.PathValue("id"), SampleText: req.SampleText,
+		AiConfigId:  r.PathValue("id"),
+		SampleText:  req.SampleText,
+		OwnerUserId: identity(r).UserID,
 	})
 	if err != nil {
 		grpcError(w, err)

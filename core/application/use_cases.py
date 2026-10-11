@@ -35,13 +35,18 @@ class SessionUseCases:
     def __init__(self, repo: ISessionRepository) -> None:
         self._repo = repo
 
-    async def create(self, phone_number: str, session_string_encrypted: str = "") -> TelegramSession:
+    async def create(self, phone_number: str, session_string_encrypted: str = "",
+                     owner_user_id: int = 0) -> TelegramSession:
         existing = await self._repo.get_by_phone(phone_number)
         if existing:
             existing.session_string_encrypted = session_string_encrypted
+            if owner_user_id and not getattr(existing, "owner_user_id", 0):
+                existing.owner_user_id = int(owner_user_id)
             return await self._repo.update(existing)
         return await self._repo.add(
-            TelegramSession(phone_number=phone_number, session_string_encrypted=session_string_encrypted)
+            TelegramSession(phone_number=phone_number,
+                            session_string_encrypted=session_string_encrypted,
+                            owner_user_id=int(owner_user_id or 0))
         )
 
     def create_sync(self, phone_number: str, session_string_encrypted: str = "") -> TelegramSession:

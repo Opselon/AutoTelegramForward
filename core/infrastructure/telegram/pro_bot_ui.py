@@ -263,6 +263,19 @@ class ProBotUI:
         is_admin = not admin_ids or int(user_id or 0) in admin_ids
         return None if is_admin else int(user_id or 0)
 
+    async def _owned_rule(self, rule_id: str, user_id: int):
+        # v12.2: every rule read in the bot funnels through the use-case
+        # ownership guard. rule_id comes from conversation state or callback
+        # data, which is user-controlled — never trust it unsccoped.
+        if not rule_id:
+            return None
+        return await self._rules.get_owned(rule_id, self._scope_uid(user_id))
+
+    async def _save_owned_rule(self, rule, user_id: int, expected_version=None):
+        # v12.2: writes go through update_owned so a rule whose id was
+        # transplanted into another user's conversation state is refused.
+        return await self._rules.update_owned(rule, self._scope_uid(user_id), expected_version)
+
     def _state(self, uid: int) -> UiState:
         st = self._states.get(uid)
         if st is None:
@@ -1742,7 +1755,7 @@ class ProBotUI:
                         rule.source_chat_name = selected["title"]
                         expected_ver = st.buffer.get("version")
                         try:
-                            await self._rules.update(rule, expected_version=expected_ver)
+                            await self._save_owned_rule(rule, uid, expected_ver)
                         except ConcurrencyError:
                             return await cq.answer("⚠️ خطا: این قانون هم‌زمان ویرایش شده است.", show_alert=True)
                         st.step = ""
@@ -1770,7 +1783,7 @@ class ProBotUI:
                         rule.target_chat_name = selected["title"]
                         expected_ver = st.buffer.get("version")
                         try:
-                            await self._rules.update(rule, expected_version=expected_ver)
+                            await self._save_owned_rule(rule, uid, expected_ver)
                         except ConcurrencyError:
                             return await cq.answer("⚠️ خطا: این قانون هم‌زمان ویرایش شده است.", show_alert=True)
                         st.step = ""
@@ -4694,7 +4707,7 @@ class ProBotUI:
         uid = int(message.from_user.id if message.from_user else (message.chat.id if message.chat else 0))
 
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}
@@ -4769,7 +4782,7 @@ class ProBotUI:
             rule.source_chat_name = matched_title
             expected_ver = st.buffer.get("version") if isinstance(st.buffer, dict) else None
             try:
-                await self._rules.update(rule, expected_version=expected_ver)
+                await self._save_owned_rule(rule, uid, expected_ver)
             except ConcurrencyError:
                 await message.reply_text("⚠️ خطا: این قانون هم‌زمان ویرایش شده است.", reply_markup=self._main_menu())
                 return
@@ -4785,7 +4798,7 @@ class ProBotUI:
         uid = int(message.from_user.id if message.from_user else (message.chat.id if message.chat else 0))
 
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}
@@ -4860,7 +4873,7 @@ class ProBotUI:
             rule.target_chat_name = matched_title
             expected_ver = st.buffer.get("version") if isinstance(st.buffer, dict) else None
             try:
-                await self._rules.update(rule, expected_version=expected_ver)
+                await self._save_owned_rule(rule, uid, expected_ver)
             except ConcurrencyError:
                 await message.reply_text("⚠️ خطا: این قانون هم‌زمان ویرایش شده است.", reply_markup=self._main_menu())
                 return
@@ -4875,7 +4888,7 @@ class ProBotUI:
         raw = text.strip()
         uid = int(message.from_user.id if message.from_user else (message.chat.id if message.chat else 0))
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}
@@ -4905,8 +4918,9 @@ class ProBotUI:
 
     # ---------------- rule replace & header/footer FSM ----------------
     async def _step_rule_replace_input(self, message: Message, st: UiState, text: str) -> None:
+        uid = int(message.from_user.id if message.from_user else 0)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}
@@ -4961,7 +4975,7 @@ class ProBotUI:
         current_reps = dict(rule.replacements)
         current_reps.update(new_replacements)
         rule.metadata["replacements"] = current_reps
-        await self._rules.update(rule)
+        await self._save_owned_rule(rule, uid)
 
         st.step = ""
         st.buffer = {}
@@ -4975,8 +4989,9 @@ class ProBotUI:
         await message.reply_text(menu_text, reply_markup=menu_kbd)
 
     async def _step_rule_header_input(self, message: Message, st: UiState, text: str) -> None:
+        uid = int(message.from_user.id if message.from_user else 0)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}
@@ -4995,7 +5010,7 @@ class ProBotUI:
         if not isinstance(rule.metadata, dict):
             rule.metadata = {}
         rule.metadata["header"] = text.strip()
-        await self._rules.update(rule)
+        await self._save_owned_rule(rule, uid)
 
         st.step = ""
         st.buffer = {}
@@ -5006,8 +5021,9 @@ class ProBotUI:
         await message.reply_text(menu_text, reply_markup=menu_kbd)
 
     async def _step_rule_footer_input(self, message: Message, st: UiState, text: str) -> None:
+        uid = int(message.from_user.id if message.from_user else 0)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}
@@ -5026,7 +5042,7 @@ class ProBotUI:
         if not isinstance(rule.metadata, dict):
             rule.metadata = {}
         rule.metadata["footer"] = text.strip()
-        await self._rules.update(rule)
+        await self._save_owned_rule(rule, uid)
 
         st.step = ""
         st.buffer = {}
@@ -5038,8 +5054,9 @@ class ProBotUI:
 
     # ---------------- smart routing FSM steps ----------------
     async def _step_smart_set_intermediate(self, message: Message, st: UiState, text: str) -> None:
+        uid = int(message.from_user.id if message.from_user else 0)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}
@@ -5098,7 +5115,7 @@ class ProBotUI:
         rule.metadata["intermediate_channel_id"] = str(raw_input)
         rule.metadata["intermediate_channel_name"] = str(resolved_name)
         rule.metadata["use_intermediate"] = True
-        await self._rules.update(rule)
+        await self._save_owned_rule(rule, uid)
 
         st.step = ""
         st.buffer = {}
@@ -5113,8 +5130,9 @@ class ProBotUI:
         await message.reply_text(m_text, reply_markup=m_kbd)
 
     async def _step_smart_set_header(self, message: Message, st: UiState, text: str) -> None:
+        uid = int(message.from_user.id if message.from_user else 0)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}
@@ -5134,7 +5152,7 @@ class ProBotUI:
         if not isinstance(rule.metadata, dict):
             rule.metadata = {}
         rule.metadata["custom_header"] = text.strip()
-        await self._rules.update(rule)
+        await self._save_owned_rule(rule, uid)
 
         st.step = ""
         st.buffer = {}
@@ -5145,8 +5163,9 @@ class ProBotUI:
         await message.reply_text(m_text, reply_markup=m_kbd)
 
     async def _step_smart_set_keywords(self, message: Message, st: UiState, text: str) -> None:
+        uid = int(message.from_user.id if message.from_user else 0)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}
@@ -5179,7 +5198,7 @@ class ProBotUI:
         if not isinstance(rule.metadata, dict):
             rule.metadata = {}
         rule.metadata["detection_criteria"] = rule.detection_criteria
-        await self._rules.update(rule)
+        await self._save_owned_rule(rule, uid)
 
         st.step = ""
         st.buffer = {}
@@ -5190,8 +5209,9 @@ class ProBotUI:
         await message.reply_text(m_text, reply_markup=m_kbd)
 
     async def _step_smart_set_regex(self, message: Message, st: UiState, text: str) -> None:
+        uid = int(message.from_user.id if message.from_user else 0)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}
@@ -5229,7 +5249,7 @@ class ProBotUI:
         if not isinstance(rule.metadata, dict):
             rule.metadata = {}
         rule.metadata["detection_criteria"] = rule.detection_criteria
-        await self._rules.update(rule)
+        await self._save_owned_rule(rule, uid)
 
         st.step = ""
         st.buffer = {}
@@ -5240,8 +5260,9 @@ class ProBotUI:
         await message.reply_text(m_text, reply_markup=m_kbd)
 
     async def _step_smart_test_rule(self, message: Message, st: UiState, text: str) -> None:
+        uid = int(message.from_user.id if message.from_user else 0)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
-        rule = await self._rules.get(rule_id) if rule_id else None
+        rule = await self._owned_rule(rule_id, uid)
         if not rule:
             st.step = ""
             st.buffer = {}

@@ -747,6 +747,7 @@ func (x *SubmitPasswordResponse) GetMessage() string {
 type BackupSessionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12.2: only the session's owner may export its string
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -786,6 +787,13 @@ func (x *BackupSessionRequest) GetSessionId() string {
 		return x.SessionId
 	}
 	return ""
+}
+
+func (x *BackupSessionRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type BackupSessionResponse struct {
@@ -1512,7 +1520,8 @@ func (x *CreateRuleRequest) GetRule() *ForwardRule {
 type ResolveChatRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Handle        string                 `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"` // @username, https://t.me/xxx, t.me/xxx or numeric id
+	Handle        string                 `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"`                                 // @username, https://t.me/xxx, t.me/xxx or numeric id
+	OwnerUserId   int64                  `protobuf:"varint,3,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12.2: scope session choice to this account
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1559,6 +1568,13 @@ func (x *ResolveChatRequest) GetHandle() string {
 		return x.Handle
 	}
 	return ""
+}
+
+func (x *ResolveChatRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type ResolveChatResponse struct {
@@ -1692,6 +1708,7 @@ func (x *UpdateRuleRequest) GetRule() *ForwardRule {
 type DeleteRuleRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12.2: tenant that owns the delete
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1731,6 +1748,13 @@ func (x *DeleteRuleRequest) GetId() string {
 		return x.Id
 	}
 	return ""
+}
+
+func (x *DeleteRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type ListRulesRequest struct {
@@ -2044,6 +2068,7 @@ func (x *UpdateFilterRequest) GetFilter() *FilterRule {
 type DeleteFilterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12.2: tenant that owns the delete
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2083,6 +2108,13 @@ func (x *DeleteFilterRequest) GetId() string {
 		return x.Id
 	}
 	return ""
+}
+
+func (x *DeleteFilterRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type ListFiltersRequest struct {
@@ -2396,6 +2428,7 @@ func (x *UpdateAIConfigRequest) GetConfig() *AIConfig {
 type DeleteAIConfigRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12.2: tenant that owns the delete
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2435,6 +2468,13 @@ func (x *DeleteAIConfigRequest) GetId() string {
 		return x.Id
 	}
 	return ""
+}
+
+func (x *DeleteAIConfigRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type ListAIConfigsRequest struct {
@@ -2529,6 +2569,7 @@ type TestAIRewriteRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AiConfigId    string                 `protobuf:"bytes,1,opt,name=ai_config_id,json=aiConfigId,proto3" json:"ai_config_id,omitempty"`
 	SampleText    string                 `protobuf:"bytes,2,opt,name=sample_text,json=sampleText,proto3" json:"sample_text,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,3,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12.2: refuse to bill another tenant's API key
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2575,6 +2616,13 @@ func (x *TestAIRewriteRequest) GetSampleText() string {
 		return x.SampleText
 	}
 	return ""
+}
+
+func (x *TestAIRewriteRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type TestAIRewriteResponse struct {
@@ -2966,7 +3014,8 @@ type TestPromptRequest struct {
 	PromptId      string                 `protobuf:"bytes,1,opt,name=prompt_id,json=promptId,proto3" json:"prompt_id,omitempty"`
 	AiConfigId    string                 `protobuf:"bytes,2,opt,name=ai_config_id,json=aiConfigId,proto3" json:"ai_config_id,omitempty"`
 	SampleText    string                 `protobuf:"bytes,3,opt,name=sample_text,json=sampleText,proto3" json:"sample_text,omitempty"`
-	Version       int32                  `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"` // 0 = active version
+	Version       int32                  `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`                              // 0 = active version
+	OwnerUserId   int64                  `protobuf:"varint,5,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12.2: refuse to bill another tenant's AI config
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3025,6 +3074,13 @@ func (x *TestPromptRequest) GetSampleText() string {
 func (x *TestPromptRequest) GetVersion() int32 {
 	if x != nil {
 		return x.Version
+	}
+	return 0
+}
+
+func (x *TestPromptRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
 	}
 	return 0
 }
@@ -3806,6 +3862,7 @@ type TestRuleRequest struct {
 	ForwardOriginTitle    string                 `protobuf:"bytes,7,opt,name=forward_origin_title,json=forwardOriginTitle,proto3" json:"forward_origin_title,omitempty"`
 	SampleHasMedia        bool                   `protobuf:"varint,8,opt,name=sample_has_media,json=sampleHasMedia,proto3" json:"sample_has_media,omitempty"`
 	SampleMediaType       string                 `protobuf:"bytes,9,opt,name=sample_media_type,json=sampleMediaType,proto3" json:"sample_media_type,omitempty"` // text | photo | video | document | voice | audio | sticker | animation
+	OwnerUserId           int64                  `protobuf:"varint,10,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`           // v12.2: only the rule's owner may run a simulation
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3901,6 +3958,13 @@ func (x *TestRuleRequest) GetSampleMediaType() string {
 		return x.SampleMediaType
 	}
 	return ""
+}
+
+func (x *TestRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type TestRuleResponse struct {
@@ -4770,7 +4834,8 @@ func (x *RecentError) GetChatId() string {
 type PauseRuleRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
-	Until         int64                  `protobuf:"varint,2,opt,name=until,proto3" json:"until,omitempty"` // epoch seconds; 0 = indefinite
+	Until         int64                  `protobuf:"varint,2,opt,name=until,proto3" json:"until,omitempty"`                                  // epoch seconds; 0 = indefinite
+	OwnerUserId   int64                  `protobuf:"varint,3,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12.2: tenant that owns the pause/resume
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4815,6 +4880,13 @@ func (x *PauseRuleRequest) GetRuleId() string {
 func (x *PauseRuleRequest) GetUntil() int64 {
 	if x != nil {
 		return x.Until
+	}
+	return 0
+}
+
+func (x *PauseRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
 	}
 	return 0
 }
@@ -5889,10 +5961,11 @@ const file_autoforward_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"5\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"Y\n" +
 	"\x14BackupSessionRequest\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\"\x9d\x01\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"\x9d\x01\n" +
 	"\x15BackupSessionResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x124\n" +
 	"\x16encrypted_session_data\x18\x02 \x01(\tR\x14encryptedSessionData\x12\x1a\n" +
@@ -5969,11 +6042,12 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x11ai_prompt_version\x181 \x01(\x05R\x0faiPromptVersion\x12,\n" +
 	"\x12ai_timeout_seconds\x182 \x01(\x01R\x10aiTimeoutSeconds\"A\n" +
 	"\x11CreateRuleRequest\x12,\n" +
-	"\x04rule\x18\x01 \x01(\v2\x18.autoforward.ForwardRuleR\x04rule\"K\n" +
+	"\x04rule\x18\x01 \x01(\v2\x18.autoforward.ForwardRuleR\x04rule\"o\n" +
 	"\x12ResolveChatRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x16\n" +
-	"\x06handle\x18\x02 \x01(\tR\x06handle\"\xa9\x01\n" +
+	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\"\n" +
+	"\rowner_user_id\x18\x03 \x01(\x03R\vownerUserId\"\xa9\x01\n" +
 	"\x13ResolveChatResponse\x12\x14\n" +
 	"\x05found\x18\x01 \x01(\bR\x05found\x12\x17\n" +
 	"\achat_id\x18\x02 \x01(\tR\x06chatId\x12\x14\n" +
@@ -5982,9 +6056,10 @@ const file_autoforward_proto_rawDesc = "" +
 	"\tchat_type\x18\x05 \x01(\tR\bchatType\x12\x14\n" +
 	"\x05error\x18\x06 \x01(\tR\x05error\"A\n" +
 	"\x11UpdateRuleRequest\x12,\n" +
-	"\x04rule\x18\x01 \x01(\v2\x18.autoforward.ForwardRuleR\x04rule\"#\n" +
+	"\x04rule\x18\x01 \x01(\v2\x18.autoforward.ForwardRuleR\x04rule\"G\n" +
 	"\x11DeleteRuleRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"U\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"U\n" +
 	"\x10ListRulesRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\"\n" +
@@ -6008,9 +6083,10 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x13CreateFilterRequest\x12/\n" +
 	"\x06filter\x18\x01 \x01(\v2\x17.autoforward.FilterRuleR\x06filter\"F\n" +
 	"\x13UpdateFilterRequest\x12/\n" +
-	"\x06filter\x18\x01 \x01(\v2\x17.autoforward.FilterRuleR\x06filter\"%\n" +
+	"\x06filter\x18\x01 \x01(\v2\x17.autoforward.FilterRuleR\x06filter\"I\n" +
 	"\x13DeleteFilterRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"8\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"8\n" +
 	"\x12ListFiltersRequest\x12\"\n" +
 	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"H\n" +
 	"\x13ListFiltersResponse\x121\n" +
@@ -6033,18 +6109,20 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x15CreateAIConfigRequest\x12-\n" +
 	"\x06config\x18\x01 \x01(\v2\x15.autoforward.AIConfigR\x06config\"F\n" +
 	"\x15UpdateAIConfigRequest\x12-\n" +
-	"\x06config\x18\x01 \x01(\v2\x15.autoforward.AIConfigR\x06config\"'\n" +
+	"\x06config\x18\x01 \x01(\v2\x15.autoforward.AIConfigR\x06config\"K\n" +
 	"\x15DeleteAIConfigRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\":\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\":\n" +
 	"\x14ListAIConfigsRequest\x12\"\n" +
 	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"H\n" +
 	"\x15ListAIConfigsResponse\x12/\n" +
-	"\aconfigs\x18\x01 \x03(\v2\x15.autoforward.AIConfigR\aconfigs\"Y\n" +
+	"\aconfigs\x18\x01 \x03(\v2\x15.autoforward.AIConfigR\aconfigs\"}\n" +
 	"\x14TestAIRewriteRequest\x12 \n" +
 	"\fai_config_id\x18\x01 \x01(\tR\n" +
 	"aiConfigId\x12\x1f\n" +
 	"\vsample_text\x18\x02 \x01(\tR\n" +
-	"sampleText\"}\n" +
+	"sampleText\x12\"\n" +
+	"\rowner_user_id\x18\x03 \x01(\x03R\vownerUserId\"}\n" +
 	"\x15TestAIRewriteResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12%\n" +
 	"\x0erewritten_text\x18\x02 \x01(\tR\rrewrittenText\x12#\n" +
@@ -6074,14 +6152,15 @@ const file_autoforward_proto_rawDesc = "" +
 	"\rowner_user_id\x18\x03 \x01(\x03R\vownerUserId\"Q\n" +
 	"\x1bDeletePromptTemplateRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\"\n" +
-	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"\x8d\x01\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"\xb1\x01\n" +
 	"\x11TestPromptRequest\x12\x1b\n" +
 	"\tprompt_id\x18\x01 \x01(\tR\bpromptId\x12 \n" +
 	"\fai_config_id\x18\x02 \x01(\tR\n" +
 	"aiConfigId\x12\x1f\n" +
 	"\vsample_text\x18\x03 \x01(\tR\n" +
 	"sampleText\x12\x18\n" +
-	"\aversion\x18\x04 \x01(\x05R\aversion\"\xea\x02\n" +
+	"\aversion\x18\x04 \x01(\x05R\aversion\x12\"\n" +
+	"\rowner_user_id\x18\x05 \x01(\x03R\vownerUserId\"\xea\x02\n" +
 	"\x12TestPromptResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12)\n" +
 	"\x10transformed_text\x18\x02 \x01(\tR\x0ftransformedText\x12#\n" +
@@ -6149,7 +6228,7 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a=\n" +
 	"\x0fByCategoryEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"\x90\x03\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"\xb4\x03\n" +
 	"\x0fTestRuleRequest\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x1f\n" +
 	"\vsample_text\x18\x02 \x01(\tR\n" +
@@ -6160,7 +6239,9 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x17forward_origin_username\x18\x06 \x01(\tR\x15forwardOriginUsername\x120\n" +
 	"\x14forward_origin_title\x18\a \x01(\tR\x12forwardOriginTitle\x12(\n" +
 	"\x10sample_has_media\x18\b \x01(\bR\x0esampleHasMedia\x12*\n" +
-	"\x11sample_media_type\x18\t \x01(\tR\x0fsampleMediaType\"\xe0\x04\n" +
+	"\x11sample_media_type\x18\t \x01(\tR\x0fsampleMediaType\x12\"\n" +
+	"\rowner_user_id\x18\n" +
+	" \x01(\x03R\vownerUserId\"\xe0\x04\n" +
 	"\x10TestRuleResponse\x12\x18\n" +
 	"\amatched\x18\x01 \x01(\bR\amatched\x12!\n" +
 	"\fmatch_reason\x18\x02 \x01(\tR\vmatchReason\x12\x1b\n" +
@@ -6242,10 +6323,11 @@ const file_autoforward_proto_rawDesc = "" +
 	"error_name\x18\x04 \x01(\tR\terrorName\x12\x1a\n" +
 	"\bseverity\x18\x05 \x01(\tR\bseverity\x12\x16\n" +
 	"\x06detail\x18\x06 \x01(\tR\x06detail\x12\x17\n" +
-	"\achat_id\x18\a \x01(\tR\x06chatId\"A\n" +
+	"\achat_id\x18\a \x01(\tR\x06chatId\"e\n" +
 	"\x10PauseRuleRequest\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x14\n" +
-	"\x05until\x18\x02 \x01(\x03R\x05until\"g\n" +
+	"\x05until\x18\x02 \x01(\x03R\x05until\x12\"\n" +
+	"\rowner_user_id\x18\x03 \x01(\x03R\vownerUserId\"g\n" +
 	"\x12RuleActionResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1d\n" +
