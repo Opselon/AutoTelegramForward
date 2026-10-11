@@ -1,11 +1,17 @@
 """SQLite connection management + schema migrations (WAL, foreign keys)."""
 
 import json
+import logging
 import sqlite3
 import threading
 from pathlib import Path
 
-SCHEMA_VERSION = 11
+logger = logging.getLogger(__name__)
+
+# v12 adds owner scoping to api_credentials and prompt_templates. The real work
+# is done by _apply_additive_columns (guarded ALTER + index); MIGRATIONS[12]
+# only exists so schema_version tracks the upgrade and reconciliation runs.
+SCHEMA_VERSION = 12
 
 MIGRATIONS = {
     1: """
@@ -439,6 +445,17 @@ MIGRATIONS = {
         owner_user_id INTEGER NOT NULL DEFAULT 0
     );
     """,
+    12: """
+    -- v12: owner scoping for the credential vault and prompt templates.
+    -- Previously both were global: GET /api/prompts and a backup export
+    -- returned every tenant's rows, so tenant A could read tenant B's
+    -- api_hash / system prompts, and replay/purge tenant B's dead-letter jobs.
+    -- The columns themselves are added by _apply_additive_columns, which runs
+    -- AFTER this script and also on a database carried over from an older
+    -- schema; creating the indexes here would fail on a fresh DB because the
+    -- column does not exist yet. The additive path creates the indexes once
+    -- the ALTER has landed.
+    """,
 }
 
 # Columns added by additive migrations that must also work on a table carried
@@ -446,6 +463,11 @@ MIGRATIONS = {
 _ADDITIVE_COLUMNS = (
     ("ai_configs", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_ai_configs_owner"),
     ("filter_rules", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_filter_rules_owner"),
+    # v12: credential vault + prompt templates are per-tenant, not global.
+    # Without this any authenticated tenant can read another tenant's api_hash
+    # through a backup export, and overwrite another tenant's prompt templates.
+    ("api_credentials", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_api_credentials_owner"),
+    ("prompt_templates", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_prompt_templates_owner"),
 )
 
 
@@ -550,6 +572,48 @@ class SqliteDatabase:
                 )
             except Exception:
                 pass
+
+        # v12: single-tenant upgrade reconciliation.
+        # Legacy rows in api_credentials / prompt_templates were created before
+        # owner_user_id existed, so they defaulted to 0 (the shared system
+        # scope). On a real single-tenant install that silently hides the
+        # owner's own credentials and personal prompts from them, because the
+        # new owner-scoped queries only look at their own id. If exactly one
+        # genuine human account exists, the legacy rows belong to them; if
+        # there are zero or several, leave them at 0 (admin/system scope) and
+        # let the operator claim them explicitly.
+        self._reconcile_legacy_ownership()
+
+    def _reconcile_legacy_ownership(self) -> None:
+        try:
+            rows = self._conn.execute(
+                "SELECT user_id FROM web_accounts WHERE user_id > 0"
+            ).fetchall()
+        except Exception:
+            return
+        if len(rows) != 1:
+            return
+        owner = int(rows[0]["user_id"]) if isinstance(rows[0], dict) else int(rows[0][0])
+        if not owner:
+            return
+        for table in ("api_credentials", "prompt_templates"):
+            try:
+                # Only rebind rows that are still in the legacy system scope.
+                # Anything already claimed by a real owner is untouched.
+                cur = self._conn.execute(
+                    f"UPDATE {table} SET owner_user_id = ? WHERE owner_user_id = 0",
+                    (owner,),
+                )
+                if cur.rowcount:
+                    logger.info(
+                        "v12 ownership reconciliation: rebound %d legacy row(s) in"
+                        " %s to owner %d",
+                        cur.rowcount,
+                        table,
+                        owner,
+                    )
+            except Exception as exc:
+                logger.warning("v12 ownership reconciliation failed for %s: %s", table, exc)
 
     @property
     def connection(self) -> sqlite3.Connection:

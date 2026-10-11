@@ -2763,7 +2763,7 @@ func (x *PromptTemplate) GetOwnerUserId() string {
 
 type ListPromptTemplatesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	OwnerUserId   string                 `protobuf:"bytes,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12: scope to one account (0 = system prompts only)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2798,11 +2798,11 @@ func (*ListPromptTemplatesRequest) Descriptor() ([]byte, []int) {
 	return file_autoforward_proto_rawDescGZIP(), []int{38}
 }
 
-func (x *ListPromptTemplatesRequest) GetOwnerUserId() string {
+func (x *ListPromptTemplatesRequest) GetOwnerUserId() int64 {
 	if x != nil {
 		return x.OwnerUserId
 	}
-	return ""
+	return 0
 }
 
 type ListPromptTemplatesResponse struct {
@@ -2853,6 +2853,7 @@ type SavePromptTemplateRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Template        *PromptTemplate        `protobuf:"bytes,1,opt,name=template,proto3" json:"template,omitempty"`
 	ExpectedVersion int32                  `protobuf:"varint,2,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"` // OCC guard; 0 = skip check
+	OwnerUserId     int64                  `protobuf:"varint,3,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`           // v12: tenant that owns the write
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -2901,9 +2902,17 @@ func (x *SavePromptTemplateRequest) GetExpectedVersion() int32 {
 	return 0
 }
 
+func (x *SavePromptTemplateRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
 type DeletePromptTemplateRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12: tenant that owns the delete
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2943,6 +2952,13 @@ func (x *DeletePromptTemplateRequest) GetId() string {
 		return x.Id
 	}
 	return ""
+}
+
+func (x *DeletePromptTemplateRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type TestPromptRequest struct {
@@ -4056,6 +4072,7 @@ type ListDeadLetterRequest struct {
 	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
 	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
 	Since         int64                  `protobuf:"varint,3,opt,name=since,proto3" json:"since,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,4,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12: only entries from this tenant's rules
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4107,6 +4124,13 @@ func (x *ListDeadLetterRequest) GetLimit() int32 {
 func (x *ListDeadLetterRequest) GetSince() int64 {
 	if x != nil {
 		return x.Since
+	}
+	return 0
+}
+
+func (x *ListDeadLetterRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
 	}
 	return 0
 }
@@ -4274,6 +4298,7 @@ func (x *ListDeadLetterResponse) GetTotal() int32 {
 type ReplayDeadLetterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12: replay only if the entry's rule is owned
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4315,10 +4340,18 @@ func (x *ReplayDeadLetterRequest) GetId() string {
 	return ""
 }
 
+func (x *ReplayDeadLetterRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
 type PurgeDeadLetterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
-	OlderThan     int64                  `protobuf:"varint,2,opt,name=older_than,json=olderThan,proto3" json:"older_than,omitempty"` // epoch seconds; 0 = all
+	OlderThan     int64                  `protobuf:"varint,2,opt,name=older_than,json=olderThan,proto3" json:"older_than,omitempty"`         // epoch seconds; 0 = all
+	OwnerUserId   int64                  `protobuf:"varint,3,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12: purge only this tenant's rules
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4367,8 +4400,16 @@ func (x *PurgeDeadLetterRequest) GetOlderThan() int64 {
 	return 0
 }
 
+func (x *PurgeDeadLetterRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
 type DeliveryStatsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // v12: only stats for this tenant's rules
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4401,6 +4442,13 @@ func (x *DeliveryStatsRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use DeliveryStatsRequest.ProtoReflect.Descriptor instead.
 func (*DeliveryStatsRequest) Descriptor() ([]byte, []int) {
 	return file_autoforward_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *DeliveryStatsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
 }
 
 type DeliveryStatsResponse struct {
@@ -6017,14 +6065,16 @@ const file_autoforward_proto_rawDesc = "" +
 	" \x01(\x03R\tupdatedAt\x12\"\n" +
 	"\rowner_user_id\x18\v \x01(\tR\vownerUserId\"@\n" +
 	"\x1aListPromptTemplatesRequest\x12\"\n" +
-	"\rowner_user_id\x18\x01 \x01(\tR\vownerUserId\"X\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"X\n" +
 	"\x1bListPromptTemplatesResponse\x129\n" +
-	"\ttemplates\x18\x01 \x03(\v2\x1b.autoforward.PromptTemplateR\ttemplates\"\x7f\n" +
+	"\ttemplates\x18\x01 \x03(\v2\x1b.autoforward.PromptTemplateR\ttemplates\"\xa3\x01\n" +
 	"\x19SavePromptTemplateRequest\x127\n" +
 	"\btemplate\x18\x01 \x01(\v2\x1b.autoforward.PromptTemplateR\btemplate\x12)\n" +
-	"\x10expected_version\x18\x02 \x01(\x05R\x0fexpectedVersion\"-\n" +
+	"\x10expected_version\x18\x02 \x01(\x05R\x0fexpectedVersion\x12\"\n" +
+	"\rowner_user_id\x18\x03 \x01(\x03R\vownerUserId\"Q\n" +
 	"\x1bDeletePromptTemplateRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x8d\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"\x8d\x01\n" +
 	"\x11TestPromptRequest\x12\x1b\n" +
 	"\tprompt_id\x18\x01 \x01(\tR\bpromptId\x12 \n" +
 	"\fai_config_id\x18\x02 \x01(\tR\n" +
@@ -6130,11 +6180,12 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x0frendered_footer\x18\r \x01(\tR\x0erenderedFooter\x12)\n" +
 	"\x10delivery_targets\x18\x0e \x03(\tR\x0fdeliveryTargets\x126\n" +
 	"\x17intermediate_channel_id\x18\x0f \x01(\tR\x15intermediateChannelId\x12)\n" +
-	"\x10use_intermediate\x18\x10 \x01(\bR\x0fuseIntermediate\"\\\n" +
+	"\x10use_intermediate\x18\x10 \x01(\bR\x0fuseIntermediate\"\x80\x01\n" +
 	"\x15ListDeadLetterRequest\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x14\n" +
-	"\x05since\x18\x03 \x01(\x03R\x05since\"\xbe\x02\n" +
+	"\x05since\x18\x03 \x01(\x03R\x05since\x12\"\n" +
+	"\rowner_user_id\x18\x04 \x01(\x03R\vownerUserId\"\xbe\x02\n" +
 	"\x0fDeadLetterEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\arule_id\x18\x02 \x01(\tR\x06ruleId\x12$\n" +
@@ -6148,14 +6199,17 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x10dead_lettered_at\x18\t \x01(\x03R\x0edeadLetteredAt\"f\n" +
 	"\x16ListDeadLetterResponse\x126\n" +
 	"\aentries\x18\x01 \x03(\v2\x1c.autoforward.DeadLetterEntryR\aentries\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\")\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"M\n" +
 	"\x17ReplayDeadLetterRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"P\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"t\n" +
 	"\x16PurgeDeadLetterRequest\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x1d\n" +
 	"\n" +
-	"older_than\x18\x02 \x01(\x03R\tolderThan\"\x16\n" +
-	"\x14DeliveryStatsRequest\"\xb2\x03\n" +
+	"older_than\x18\x02 \x01(\x03R\tolderThan\x12\"\n" +
+	"\rowner_user_id\x18\x03 \x01(\x03R\vownerUserId\":\n" +
+	"\x14DeliveryStatsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"\xb2\x03\n" +
 	"\x15DeliveryStatsResponse\x12'\n" +
 	"\x0fprocessed_total\x18\x01 \x01(\x03R\x0eprocessedTotal\x12'\n" +
 	"\x0fforwarded_total\x18\x02 \x01(\x03R\x0eforwardedTotal\x12!\n" +

@@ -4563,6 +4563,9 @@ class ProBotUI:
                 api_id=int(st.cred_api_id),
                 api_hash=st.cred_api_hash,
                 is_default=True,
+                # v12: stamp the Telegram user who added this credential so the
+                # owner-scoped queries (backup export, listing) can see it.
+                owner_user_id=int(message.from_user.id or 0),
             )
             try:
                 self._pool.register_credentials(cred.id, cred.api_id, cred.api_hash)

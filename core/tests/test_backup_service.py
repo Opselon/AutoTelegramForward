@@ -251,8 +251,31 @@ class FakeCredRepo(_Base, IApiCredentialRepository):
                 return await self.get_by_id(c.id)
         return None
 
+    async def get_default_by_owner(self, owner_user_id: int) -> Optional[ApiCredential]:
+        # v12: mirror the sqlite fallback — the caller's own default first,
+        # then the shared system scope (owner 0).
+        own = [
+            c for c in self._store.values()
+            if c.is_default and int(getattr(c, "owner_user_id", 0) or 0) == int(owner_user_id)
+        ]
+        if own:
+            return await self.get_by_id(own[0].id)
+        shared = [
+            c for c in self._store.values()
+            if c.is_default and int(getattr(c, "owner_user_id", 0) or 0) == 0
+        ]
+        return await self.get_by_id(shared[0].id) if shared else None
+
     async def list_all(self) -> List[ApiCredential]:
         return [await self.get_by_id(c.id) for c in self._store.values()]
+
+    async def list_by_owner(self, owner_user_id: int) -> List[ApiCredential]:
+        # v12: mirror the sqlite scoping; owner 0 is the legacy/system scope.
+        return [
+            await self.get_by_id(c.id)
+            for c in self._store.values()
+            if int(getattr(c, "owner_user_id", 0) or 0) == int(owner_user_id)
+        ]
 
     async def delete(self, cred_id: str) -> bool:
         return self._store.pop(cred_id, None) is not None
@@ -288,6 +311,13 @@ class FakePromptRepo(_Base, IPromptRepository):
 
     async def list_templates(self) -> List[PromptTemplate]:
         return list(self._store.values())
+
+    async def list_templates_by_owner(self, owner_user_id: int) -> List[PromptTemplate]:
+        # v12: mirror the sqlite scoping — system prompts stay shared.
+        return [
+            t for t in self._store.values()
+            if t.is_system or int(getattr(t, "owner_user_id", 0) or 0) == int(owner_user_id)
+        ]
 
     async def delete_template(self, template_id: str) -> bool:
         return self._store.pop(template_id, None) is not None
@@ -348,11 +378,12 @@ def _seed_source(svc: BackupService, crypto: FakeCrypto, repos: dict) -> None:
     exactly what the real sqlite layer receives from the application.
     """
     async def _seed():
-        # credential (global)
+        # credential (per-tenant as of v12; the export is scoped to owner 42)
         await repos["creds"].add(ApiCredential(
             id="cred-1", label="main", api_id=12345,
             api_hash="HASHSECRET",
             proxy="", is_default=True, created_at=1, updated_at=1,
+            owner_user_id=42,
         ))
         # session
         await repos["sessions"].add(TelegramSession(
@@ -376,12 +407,13 @@ def _seed_source(svc: BackupService, crypto: FakeCrypto, repos: dict) -> None:
             system_prompt="rewrite", temperature=0.5, is_enabled=True,
             target_language="fa", owner_user_id=42,
         ))
-        # user prompt template
+        # user prompt template (owned by tenant 42)
         await repos["prompts"].add_template(PromptTemplate(
             id="pt-7", name="fa rewrite", description="",
             system_prompt="you are a translator",
             user_prompt_template="Translate: {text}", target_language="fa",
             current_version=1, is_system=False,
+            owner_user_id=42,
         ))
         # system prompt: identical on every box, must NOT be re-imported
         await repos["prompts"].add_template(PromptTemplate(

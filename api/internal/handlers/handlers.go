@@ -754,7 +754,7 @@ func (h *Handlers) ownsAIConfig(ctx context.Context, configID string, owner int6
 func (h *Handlers) DeliveryStats(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Delivery.GetDeliveryStats(ctx, &pb.DeliveryStatsRequest{})
+	resp, err := h.c.Delivery.GetDeliveryStats(ctx, &pb.DeliveryStatsRequest{OwnerUserId: identity(r).UserID})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -824,9 +824,10 @@ func (h *Handlers) ListDeadLetter(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	resp, err := h.c.Delivery.ListDeadLetter(ctx, &pb.ListDeadLetterRequest{
-		RuleId: r.URL.Query().Get("rule_id"),
-		Limit:  int32(limit),
-		Since:  since,
+		RuleId:     r.URL.Query().Get("rule_id"),
+		Limit:      int32(limit),
+		Since:      since,
+		OwnerUserId: identity(r).UserID,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -846,7 +847,7 @@ func (h *Handlers) ListDeadLetter(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) ReplayDeadLetter(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Delivery.ReplayDeadLetter(ctx, &pb.ReplayDeadLetterRequest{Id: r.PathValue("id")})
+	resp, err := h.c.Delivery.ReplayDeadLetter(ctx, &pb.ReplayDeadLetterRequest{Id: r.PathValue("id"), OwnerUserId: identity(r).UserID})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -866,8 +867,9 @@ func (h *Handlers) PurgeDeadLetter(w http.ResponseWriter, r *http.Request) {
 		body.RuleId = r.URL.Query().Get("rule_id")
 	}
 	resp, err := h.c.Delivery.PurgeDeadLetter(ctx, &pb.PurgeDeadLetterRequest{
-		RuleId:    body.RuleId,
-		OlderThan: body.OlderThan,
+		RuleId:     body.RuleId,
+		OlderThan:  body.OlderThan,
+		OwnerUserId: identity(r).UserID,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -1064,7 +1066,8 @@ type savePromptReq struct {
 func (h *Handlers) ListPromptTemplates(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.AI.ListPromptTemplates(ctx, &pb.ListPromptTemplatesRequest{})
+	id := identity(r)
+	resp, err := h.c.AI.ListPromptTemplates(ctx, &pb.ListPromptTemplatesRequest{OwnerUserId: id.UserID})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -1088,7 +1091,7 @@ func (h *Handlers) CreatePromptTemplate(w http.ResponseWriter, r *http.Request) 
 	}
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.AI.SavePromptTemplate(ctx, &pb.SavePromptTemplateRequest{Template: promptToPb(req.Template)})
+	resp, err := h.c.AI.SavePromptTemplate(ctx, &pb.SavePromptTemplateRequest{Template: promptToPb(req.Template), OwnerUserId: identity(r).UserID})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -1110,7 +1113,7 @@ func (h *Handlers) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request) 
 	ctx, cancel := withTimeout(r)
 	defer cancel()
 	resp, err := h.c.AI.SavePromptTemplate(ctx, &pb.SavePromptTemplateRequest{
-		Template: promptToPb(req.Template), ExpectedVersion: req.ExpectedVersion,
+		Template: promptToPb(req.Template), ExpectedVersion: req.ExpectedVersion, OwnerUserId: identity(r).UserID,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -1126,7 +1129,7 @@ func (h *Handlers) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request) 
 func (h *Handlers) DeletePromptTemplate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.AI.DeletePromptTemplate(ctx, &pb.DeletePromptTemplateRequest{Id: r.PathValue("id")})
+	resp, err := h.c.AI.DeletePromptTemplate(ctx, &pb.DeletePromptTemplateRequest{Id: r.PathValue("id"), OwnerUserId: identity(r).UserID})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -1389,9 +1392,12 @@ func (h *Handlers) BackupExport(w http.ResponseWriter, r *http.Request) {
 	// Non-admins can only ever export their own tenant; an admin (or a
 	// single-tenant box with no identity) may pass owner_user_id explicitly.
 	id := identity(r)
-	requested := body.OwnerUserID
-	if !id.IsAdmin && id.UserID != 0 {
-		requested = id.UserID
+	// v12 hardening: a non-admin caller can only ever export their own tenant.
+	// owner_user_id from the body is only honoured for admins; any other value
+	// (including a 0 from an unauthenticated reach) is forced to the caller's id.
+	requested := id.UserID
+	if id.IsAdmin {
+		requested = body.OwnerUserID
 	}
 	resp, err := h.c.Backup.BackupExport(ctx, &pb.BackupExportRequest{
 		OwnerUserId: requested,
@@ -1436,10 +1442,18 @@ func (h *Handlers) BackupImport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bundle is required"})
 		return
 	}
+	// v12 hardening: import lands in the caller's own tenant unless an admin
+	// explicitly redirects it. Importing into another tenant would let a
+	// non-admin write rules/credentials into someone else's scope.
+	id := identity(r)
+	target := id.UserID
+	if id.IsAdmin {
+		target = body.TargetOwnerUserID
+	}
 	resp, err := h.c.Backup.BackupImport(ctx, &pb.BackupImportRequest{
 		Bundle:            body.Bundle,
 		Passphrase:        body.Passphrase,
-		TargetOwnerUserId: body.TargetOwnerUserID,
+		TargetOwnerUserId: target,
 		OverwriteExisting: body.OverwriteExisting,
 	})
 	if err != nil {

@@ -126,13 +126,20 @@ class BackupService:
                 if scoped else await self._ai.list_all()
             )
         ]
-        # credentials are global (one api_id/api_hash pair serves every tenant),
-        # but they are useless without the sessions, so always include them
+        # v12: credentials are per-tenant. A non-admin export must only carry
+        # the caller's own api_id/api_hash pairs; the unscoped list_all() here
+        # leaked every tenant's credentials to any authenticated user.
         ent["api_credentials"] = [
-            self._cred_dict(c) for c in await self._creds.list_all()
+            self._cred_dict(c) for c in (
+                await self._creds.list_by_owner(owner_user_id)
+                if scoped else await self._creds.list_all()
+            )
         ]
         ent["prompt_templates"] = [
-            self._prompt_dict(t) for t in await self._prompts.list_templates()
+            self._prompt_dict(t) for t in (
+                await self._prompts.list_templates_by_owner(owner_user_id)
+                if scoped else await self._prompts.list_templates()
+            )
         ]
 
         doc["counts"] = {k: len(v) for k, v in ent.items() if isinstance(v, list)}
@@ -282,6 +289,7 @@ class BackupService:
             "target_language": t.target_language,
             "current_version": t.current_version,
             "is_system": t.is_system,
+            "owner_user_id": int(getattr(t, "owner_user_id", 0) or 0),
         }
 
     # ------------------------------------------------------------------ import
@@ -330,6 +338,13 @@ class BackupService:
                     is_default=bool(raw.get("is_default", False)),
                     created_at=int(raw.get("created_at") or time.time()),
                     updated_at=int(time.time()),
+                    # v12: re-stamp to the import target so an imported pair does
+                    # not stay invisible to its new owner (or default to 0).
+                    owner_user_id=int(
+                        target_owner_user_id
+                        if target_owner_user_id is not None
+                        else raw.get("owner_user_id") or 0
+                    ),
                 )
                 if existing:
                     await self._creds.update(cred)
@@ -484,6 +499,13 @@ class BackupService:
                     target_language=raw.get("target_language") or "auto",
                     current_version=int(raw.get("current_version") or 1),
                     is_system=False,
+                    # v12: re-stamp to the import target; a user prompt imported
+                    # from another box must not land in the shared owner-0 scope.
+                    owner_user_id=int(
+                        target_owner_user_id
+                        if target_owner_user_id is not None
+                        else raw.get("owner_user_id") or 0
+                    ),
                 )
                 await self._prompts.add_template(t)
                 p_stats["imported"] += 1
