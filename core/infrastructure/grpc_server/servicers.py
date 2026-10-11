@@ -9,6 +9,12 @@ import grpc
 logger = logging.getLogger(__name__)
 
 from ...proto import pb, pb_grpc  # noqa: F401
+from ...application.backup_service import (  # noqa: E402
+    decrypt_bundle,
+    deserialize_bundle,
+    encrypt_bundle,
+    serialize_bundle,
+)
 
 
 def _status(success: bool, message: str = "", error_code: str = "") -> pb.StatusResponse:
@@ -899,3 +905,55 @@ class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):
             bot_username=self._bot_username,
             version=self._version,
         )
+
+
+class BackupControlServicer(pb_grpc.BackupControlServiceServicer):
+    """Server migration: export/import the whole install or one tenant.
+
+    The bundle carries live credentials, so the caller should pass a passphrase
+    for anything that leaves the box.
+    """
+
+    def __init__(self, backup_service) -> None:
+        self._backup = backup_service
+
+    async def BackupExport(self, request, context):
+        try:
+            owner = int(request.owner_user_id or 0)
+            doc = await self._backup.create_snapshot(owner or None)
+            text = serialize_bundle(doc)
+            if request.passphrase:
+                text = encrypt_bundle(text, request.passphrase)
+            return pb.BackupExportResponse(
+                success=True,
+                bundle=text,
+                counts={k: int(v) for k, v in (doc.get("counts") or {}).items()},
+            )
+        except Exception as exc:
+            logger.warning("BackupExport failed: %s", exc)
+            return pb.BackupExportResponse(success=False, error=str(exc))
+
+    async def BackupImport(self, request, context):
+        try:
+            text = decrypt_bundle(request.bundle, request.passphrase)
+            doc = deserialize_bundle(text)
+            target = int(request.target_owner_user_id or 0)
+            stats = await self._backup.restore_snapshot(
+                doc,
+                target or None,
+                overwrite_existing=bool(request.overwrite_existing),
+            )
+            return pb.BackupImportResponse(
+                success=True,
+                stats={
+                    k: pb.EntityImportStats(
+                        imported=int(v.get("imported", 0)),
+                        skipped=int(v.get("skipped", 0)),
+                        failed=int(v.get("failed", 0)),
+                    )
+                    for k, v in stats.items()
+                },
+            )
+        except Exception as exc:
+            logger.warning("BackupImport failed: %s", exc)
+            return pb.BackupImportResponse(success=False, error=str(exc))

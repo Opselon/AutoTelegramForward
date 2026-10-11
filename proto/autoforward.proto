@@ -616,6 +616,51 @@ service LogControlService {
 }
 
 // -----------------------------------------------------------------------------
+// Backup & Restore — migrate a full installation (or one tenant) between
+// servers. The snapshot is a JSON document containing LIVE CREDENTIALS, so
+// the caller must protect it; `passphrase` encrypts the bundle with AES-GCM.
+// -----------------------------------------------------------------------------
+
+service BackupControlService {
+  // owner_user_id = 0 means "everything" (single-box installs). Multi-tenant
+  // boxes export one tenant per call.
+  rpc BackupExport(BackupExportRequest) returns (BackupExportResponse);
+  rpc BackupImport(BackupImportRequest) returns (BackupImportResponse);
+}
+
+message BackupExportRequest {
+  int64 owner_user_id = 1;   // 0 = all tenants
+  string passphrase = 2;     // optional AES-GCM encryption for the bundle
+}
+
+message BackupExportResponse {
+  bool success = 1;
+  string bundle = 2;         // JSON snapshot, optionally encrypted with enc:v1:
+  map<string, int32> counts = 3;  // entity name -> count in the snapshot
+  string error = 4;
+}
+
+message BackupImportRequest {
+  string bundle = 1;                 // JSON snapshot (plain or enc:v1:)
+  string passphrase = 2;             // required when the bundle is encrypted
+  int64 target_owner_user_id = 3;    // 0 = keep the source owner
+  bool overwrite_existing = 4;       // replace rows that already exist
+}
+
+message BackupImportResponse {
+  bool success = 1;
+  // entity name -> {imported, skipped, failed}
+  map<string, EntityImportStats> stats = 2;
+  string error = 3;
+}
+
+message EntityImportStats {
+  int32 imported = 1;
+  int32 skipped = 2;
+  int32 failed = 3;
+}
+
+// -----------------------------------------------------------------------------
 // Web Accounts — unified per-user identity for Telegram bot + Web dashboard.
 // One account per Telegram user; the web dashboard authenticates with
 // username/password and receives a JWT. All rules/sessions are owner-scoped.

@@ -1368,6 +1368,94 @@ func identity(r *http.Request) *Identity {
 	return &Identity{}
 }
 
+// --------------------------------------------------------------- backup/restore
+
+// BackupExport returns a JSON snapshot of everything the caller owns, ready to
+// be imported on another server. The bundle contains LIVE CREDENTIALS (session
+// strings, AI API keys, api_hash) in plaintext, so an optional passphrase
+// encrypts the payload with AES-GCM before it leaves this box.
+func (h *Handlers) BackupExport(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	if h.c.Backup == nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "core service unavailable"})
+		return
+	}
+	var body struct {
+		OwnerUserID int64  `json:"owner_user_id"`
+		Passphrase  string `json:"passphrase"`
+	}
+	_ = bind(w, r, &body)
+	// Non-admins can only ever export their own tenant; an admin (or a
+	// single-tenant box with no identity) may pass owner_user_id explicitly.
+	id := identity(r)
+	requested := body.OwnerUserID
+	if !id.IsAdmin && id.UserID != 0 {
+		requested = id.UserID
+	}
+	resp, err := h.c.Backup.BackupExport(ctx, &pb.BackupExportRequest{
+		OwnerUserId: requested,
+		Passphrase:  body.Passphrase,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if !resp.Success {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": resp.Error})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"bundle":  resp.Bundle,
+		"counts":  resp.Counts,
+		// surfaced in the UI so the user knows whether the bytes are protected
+		"encrypted": body.Passphrase != "",
+	})
+}
+
+// BackupImport applies a bundle produced by BackupExport on this or another
+// box. Destructive: pass overwrite_existing to replace rows that already exist.
+func (h *Handlers) BackupImport(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	if h.c.Backup == nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "core service unavailable"})
+		return
+	}
+	var body struct {
+		Bundle            string `json:"bundle"`
+		Passphrase        string `json:"passphrase"`
+		TargetOwnerUserID int64  `json:"target_owner_user_id"`
+		OverwriteExisting bool   `json:"overwrite_existing"`
+	}
+	if !bind(w, r, &body) {
+		return
+	}
+	if strings.TrimSpace(body.Bundle) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bundle is required"})
+		return
+	}
+	resp, err := h.c.Backup.BackupImport(ctx, &pb.BackupImportRequest{
+		Bundle:            body.Bundle,
+		Passphrase:        body.Passphrase,
+		TargetOwnerUserId: body.TargetOwnerUserID,
+		OverwriteExisting: body.OverwriteExisting,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if !resp.Success {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": resp.Error})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"stats":   resp.Stats,
+	})
+}
+
 func withTimeout(r *http.Request) (context.Context, func()) {
 	return context.WithTimeout(r.Context(), 15*time.Second)
 }

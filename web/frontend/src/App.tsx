@@ -32,6 +32,9 @@ import {
   MessageSquare,
   HeartPulse,
   Cable,
+  Database,
+  Download,
+  Upload,
 } from 'lucide-react'
 import { api } from './api'
 import type {
@@ -91,6 +94,16 @@ export function App() {
   const [purging, setPurging] = useState(false)
   const [purgeWindowH, setPurgeWindowH] = useState<number>(24)
   const [purgeResult, setPurgeResult] = useState<{ purged: number; remaining: number } | null>(null)
+
+  // ---- Backup & Restore: move this install (or one tenant) between servers
+  const [backupBusy, setBackupBusy] = useState(false)
+  const [backupPassphrase, setBackupPassphrase] = useState('')
+  const [backupCounts, setBackupCounts] = useState<Record<string, number> | null>(null)
+  const [backupEncrypted, setBackupEncrypted] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importPassphrase, setImportPassphrase] = useState('')
+  const [importOverwrite, setImportOverwrite] = useState(false)
+  const [importStats, setImportStats] = useState<Record<string, { imported: number; skipped: number; failed: number }> | null>(null)
   const [copiedLogId, setCopiedLogId] = useState<string | number | null>(null)
   const [servicesHealth, setServicesHealth] = useState<ServicesHealthResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -248,6 +261,88 @@ export function App() {
     } finally {
       setPurging(false)
     }
+  }
+
+  // Produce a migration bundle of everything this account owns. The bundle
+  // contains live credentials; a passphrase encrypts it with AES-GCM.
+  const handleBackupExport = async () => {
+    if (backupBusy) return
+    if (!backupPassphrase && !window.confirm('بدون رمز عبور، فایل بکاپ حاوی اطلاعات حساس به‌صورت متن ساده خواهد بود. ادامه می‌دهید؟')) return
+    setBackupBusy(true)
+    setBackupCounts(null)
+    try {
+      const res = await api.backupExport({ passphrase: backupPassphrase || undefined })
+      if (res?.success) {
+        setBackupCounts(res.counts || {})
+        setBackupEncrypted(!!res.encrypted)
+        const blob = new Blob([res.bundle], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+        a.download = `atf-backup-${stamp}${res.encrypted ? '.enc' : '.json'}`
+        a.click()
+        URL.revokeObjectURL(url)
+        showToast(`بکاپ ساخته شد · ${Object.values(res.counts || {}).reduce((a, b) => a + b, 0)} رکورد${res.encrypted ? ' · 🔒 رمزگذاری‌شده' : ''}`)
+      } else {
+        showToast(res?.error || 'خطا در ساخت بکاپ')
+      }
+    } catch (e: any) {
+      showToast(e.message || 'خطا در ساخت بکاپ')
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  // Apply a bundle from this or another server. Destructive when overwrite is on.
+  const handleBackupImport = async () => {
+    if (backupBusy) return
+    const bundle = importText.trim()
+    if (!bundle) {
+      showToast('متن فایل بکاپ را وارد کنید یا فایل را انتخاب کنید')
+      return
+    }
+    const looksEncrypted = bundle.startsWith('enc:v1:')
+    if (looksEncrypted && !importPassphrase) {
+      showToast('این فایل رمزگذاری شده است؛ رمز عبور را وارد کنید')
+      return
+    }
+    const totalRows = importStats ? Object.values(importStats).reduce((s, v) => s + v.imported + v.skipped + v.failed, 0) : 0
+    const verb = importOverwrite ? 'جایگزینی کامل' : 'ادغام'
+    if (!window.confirm(`${verb} تنظیمات از فایل بکاپ${importOverwrite ? ' (سطرهای موجود بازنویسی می‌شوند)' : ''}؟${totalRows ? ` شامل ${totalRows} رکورد.` : ''} این عمل قابل بازگشت نیست.`)) return
+    setBackupBusy(true)
+    setImportStats(null)
+    try {
+      const res = await api.backupImport({
+        bundle,
+        passphrase: importPassphrase || undefined,
+        overwrite_existing: importOverwrite,
+      })
+      if (res?.success) {
+        setImportStats(res.stats || {})
+        const imported = Object.values(res.stats || {}).reduce((s, v) => s + v.imported, 0)
+        const failed = Object.values(res.stats || {}).reduce((s, v) => s + v.failed, 0)
+        showToast(`بازیابی کامل · ${imported} رکورد وارد شد${failed ? ` · ⚠️ ${failed} ناموفق` : ''}`)
+        // everything the UI shows may have changed underneath it
+        await loadData()
+      } else {
+        showToast(res?.error || 'خطا در بازیابی بکاپ')
+      }
+    } catch (e: any) {
+      showToast(e.message || 'خطا در بازیابی بکاپ')
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  const onBackupFileChosen = (file: File | undefined) => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      setImportText(String(reader.result || ''))
+      setImportStats(null)
+    }
+    reader.readAsText(file)
   }
 
   useEffect(() => {
@@ -2800,6 +2895,115 @@ export function App() {
                   ✓ {isRtl ? 'حذف شد' : 'purged'}: {purgeResult.purged} · {isRtl ? 'باقی' : 'left'}: {purgeResult.remaining}
                 </span>
               )}
+            </div>
+
+            {/* Backup & Restore — migrate this install to another server */}
+            <div className="glass-panel" style={{ padding: 18, marginBottom: 20 }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <Database size={17} color="#38bdf8" />
+                <span>{isRtl ? 'بکاپ‌گیری و بازیابی (انتقال بین سرورها)' : 'Backup & Restore (Server Migration)'}</span>
+              </h3>
+              <p style={{ fontSize: '0.76rem', color: '#94a3b8', marginBottom: 14 }}>
+                {isRtl
+                  ? 'تمام تنظیمات، قوانین، فیلترها، پیکربندی‌های هوش مصنوعی و سشن‌های تلگرام در یک فایل JSON ذخیره می‌شود. برای انتقال به سرور جدید، این فایل را در سرور مقصد بازیابی کنید.'
+                  : 'Every setting, rule, filter, AI config and Telegram session is packed into one JSON bundle. Restore it on the new server to migrate.'}
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
+                {/* EXPORT */}
+                <div style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(56, 189, 248, 0.18)', borderRadius: 10, padding: 14 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#7dd3fc', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Download size={14} /> {isRtl ? '۱. گرفتن بکاپ از این سرور' : '1. Back up this server'}
+                  </div>
+                  <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+                    {isRtl ? 'رمز عبور فایل (اختیاری، ولی توصیه می‌شود)' : 'File passphrase (optional, recommended)'}
+                  </label>
+                  <input
+                    type="password"
+                    value={backupPassphrase}
+                    onChange={(e) => setBackupPassphrase(e.target.value)}
+                    placeholder={isRtl ? 'رمز عبور قوی' : 'strong passphrase'}
+                    style={{ width: '100%', boxSizing: 'border-box', background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: '0.78rem', marginBottom: 10 }}
+                  />
+                  <button
+                    onClick={handleBackupExport} disabled={backupBusy}
+                    className="btn" style={{ width: '100%', justifyContent: 'center', padding: '8px 12px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}
+                  >
+                    {backupBusy ? '⏳ ...' : (isRtl ? '📥 دانلود فایل بکاپ' : '📥 Download backup')}
+                  </button>
+                  {backupCounts && (
+                    <div style={{ marginTop: 10, fontSize: '0.7rem', color: '#94a3b8' }}>
+                      {backupEncrypted && (
+                        <span className="badge" style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', fontSize: '0.66rem', marginRight: 6 }}>🔒 AES-GCM</span>
+                      )}
+                      {Object.entries(backupCounts).map(([k, v]) => (
+                        <span key={k} style={{ display: 'inline-block', margin: '2px 4px 0 0', padding: '2px 7px', background: 'rgba(255,255,255,0.05)', borderRadius: 6 }}>
+                          {k}: <b style={{ color: '#e2e8f0' }}>{v}</b>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {!backupEncrypted && backupCounts && (
+                    <div style={{ marginTop: 8, fontSize: '0.68rem', color: '#fbbf24' }}>
+                      ⚠️ {isRtl ? 'این فایل رمزگذاری نشده و حاوی اطلاعات حساس است.' : 'This file is unencrypted and holds live credentials.'}
+                    </div>
+                  )}
+                </div>
+
+                {/* IMPORT */}
+                <div style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(168, 85, 247, 0.18)', borderRadius: 10, padding: 14 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#c4b5fd', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Upload size={14} /> {isRtl ? '۲. بازیابی در این سرور' : '2. Restore on this server'}
+                  </div>
+                  <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+                    {isRtl ? 'فایل بکاپ' : 'Backup file'}
+                  </label>
+                  <input
+                    type="file" accept=".json,.enc,application/json"
+                    onChange={(e) => onBackupFileChosen(e.target.files?.[0])}
+                    style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.72rem', color: '#94a3b8', marginBottom: 8 }}
+                  />
+                  <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+                    {isRtl ? 'یا چسباندن محتوای فایل' : 'Or paste the bundle'}
+                  </label>
+                  <textarea
+                    value={importText}
+                    onChange={(e) => { setImportText(e.target.value); setImportStats(null) }}
+                    placeholder={isRtl ? 'محتوای فایل بکاپ...' : 'bundle contents...'}
+                    rows={3}
+                    style={{ width: '100%', boxSizing: 'border-box', background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: '0.7rem', fontFamily: 'monospace', resize: 'vertical', marginBottom: 10 }}
+                  />
+                  <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+                    {isRtl ? 'رمز عبور (در صورت رمزگذاری بودن فایل)' : 'Passphrase (if the file is encrypted)'}
+                  </label>
+                  <input
+                    type="password"
+                    value={importPassphrase}
+                    onChange={(e) => setImportPassphrase(e.target.value)}
+                    placeholder={isRtl ? 'رمز عبور فایل' : 'passphrase'}
+                    style={{ width: '100%', boxSizing: 'border-box', background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: '0.78rem', marginBottom: 10 }}
+                  />
+                  <label style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                    <input type="checkbox" checked={importOverwrite} onChange={(e) => setImportOverwrite(e.target.checked)} />
+                    {isRtl ? 'جایگزینی کامل (بازنویسی سطرهای موجود)' : 'Full replace (overwrite existing rows)'}
+                  </label>
+                  <button
+                    onClick={handleBackupImport} disabled={backupBusy}
+                    className="btn" style={{ width: '100%', justifyContent: 'center', padding: '8px 12px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#c4b5fd' }}
+                  >
+                    {backupBusy ? '⏳ ...' : (isRtl ? '📤 بازیابی بکاپ' : '📤 Restore backup')}
+                  </button>
+                  {importStats && (
+                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                      {Object.entries(importStats).map(([k, v]) => (
+                        <span key={k} style={{ fontSize: '0.66rem', padding: '3px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>
+                          {k}: <b style={{ color: '#34d399' }}>{v.imported}</b>{v.skipped ? <span style={{ color: '#94a3b8' }}>/{v.skipped}</span> : null}{v.failed ? <span style={{ color: '#f87171' }}> ✗{v.failed}</span> : null}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Terminal Log Console */}

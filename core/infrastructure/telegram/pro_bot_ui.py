@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -30,6 +31,12 @@ from pyrogram.types import (
     Message,
 )
 
+from ...application.backup_service import (
+    decrypt_bundle,
+    deserialize_bundle,
+    encrypt_bundle,
+    serialize_bundle,
+)
 from ...application.repositories import ConcurrencyError
 from ...application.use_cases import (
     AIConfigUseCases,
@@ -102,6 +109,13 @@ CB = {
     "p_edit": "pe",
     "p_del": "pd",
     "p_test": "pt",
+    # Full-installation backup & restore (server migration)
+    "migrate": "mg",
+    "migrate_export": "mgx",
+    "migrate_export_enc": "mgxe",
+    "migrate_import": "mgi",
+    "migrate_overwrite": "mgo",
+    "migrate_help": "mgh",
 }
 
 SEV_ICON = {"info": "ℹ️", "warn": "⚠️", "error": "❌", "auth": "🔐", "fatal": "💀"}
@@ -204,6 +218,7 @@ class ProBotUI:
         pv_responder=None,
         web_url: str = "",
         account_servicer=None,
+        backup_service=None,
     ) -> None:
         self.bot = bot
         self.i18n = i18n
@@ -230,6 +245,7 @@ class ProBotUI:
         self._pv_responder = pv_responder
         self._web_url = (web_url or "").rstrip("/")
         self._accounts = account_servicer
+        self._backup = backup_service
         self._states: Dict[int, UiState] = {}
         self._register()
 
@@ -386,9 +402,19 @@ class ProBotUI:
             [("📱 " + self._t("ui_sessions"), CB["sessions"]), ("⚡ " + self._t("ui_rules"), CB["rules"])],
             [("🧹 " + self._t("ui_filters"), CB["filters"]), ("🤖 " + self._t("ui_ai"), CB["ai"])],
             [("📊 " + self._t("ui_stats"), CB["stats"]), ("🔑 " + self._t("ui_creds"), CB["creds"])],
+            [("🗄 " + self._t("ui_migrate"), CB["migrate"])],
             [("🛠 " + self._t("ui_debug"), CB["debug"]), ("🌐 " + self._t("ui_lang"), CB["lang"])],
             [("💻 " + self._t("ui_dashboard"), CB["dashboard"])],
             [("📚 " + self._t("ui_help"), CB["help"])],
+        ])
+
+    def _migrate_menu(self) -> InlineKeyboardMarkup:
+        return self._kbd([
+            [("📤 " + self._t("ui_migrate_export"), CB["migrate_export"])],
+            [("🔒 " + self._t("ui_migrate_export_enc"), CB["migrate_export_enc"])],
+            [("📥 " + self._t("ui_migrate_import"), CB["migrate_import"])],
+            [("ⓘ " + self._t("ui_migrate_help"), CB["migrate_help"])],
+            [("↩ " + self._t("ui_back"), CB["back"])],
         ])
 
     def _sessions_menu(self) -> InlineKeyboardMarkup:
@@ -3646,6 +3672,119 @@ class ProBotUI:
                     self._t("ui_backup_fail", error=tg_detail(exc)))
             await cq.answer()
 
+        # ---------------- migration backup/restore -----------------------------
+        # Full-installation snapshot: everything needed to move this box to
+        # another server. The bundle carries live credentials, so the encrypted
+        # variant is the safe one to send over Telegram.
+        async def _do_migration_export(cq: CallbackQuery, passphrase: str):
+            if self._backup is None:
+                await self._safe_edit(cq, self._t("ui_migrate_unavailable"),
+                                      reply_markup=self._migrate_menu())
+                return await cq.answer()
+            try:
+                await self._safe_edit(cq, self._t("ui_migrate_packing"),
+                                      reply_markup=None)
+                owner = cq.from_user.id if not self._is_admin(cq.from_user.id) else None
+                doc = await self._backup.create_snapshot(owner)
+                text = serialize_bundle(doc)
+                fname = "atf-backup.json"
+                if passphrase:
+                    text = encrypt_bundle(text, passphrase)
+                    fname = "atf-backup.enc"
+                path = os.path.join(tempfile.gettempdir(), f"atf_{cq.from_user.id}_{fname}")
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+                counts = doc.get("counts") or {}
+                lines = [self._t("ui_migrate_exported"),
+                         "─────────────────────"]
+                for k in ("sessions", "forward_rules", "filter_rules",
+                          "ai_configs", "prompt_templates", "api_credentials"):
+                    if counts.get(k):
+                        lines.append(f"• {k}: {counts[k]}")
+                if passphrase:
+                    lines.insert(1, "🔒 AES-GCM " + self._t("ui_migrate_encrypted"))
+                await self.bot.send_document(
+                    chat_id=cq.message.chat.id, document=path,
+                    caption="\n".join(lines),
+                )
+                os.remove(path)
+                try:
+                    self._log.info("bot", "backup", "migration snapshot exported")
+                except Exception:
+                    pass
+            except Exception as exc:
+                logger.exception("migration export failed")
+                await self._record_error("bot", exc, user_id=cq.from_user.id)
+                await cq.message.reply_text(
+                    self._t("ui_migrate_fail", error=tg_detail(exc)))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["migrate"] + "$"))
+        async def _cb_migrate(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            await self._safe_edit(cq, self._t("ui_migrate_title"),
+                                  reply_markup=self._migrate_menu())
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["migrate_export"] + "$"))
+        async def _cb_migrate_export(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            await cq.answer()
+            await _do_migration_export(cq, "")
+
+        @b.on_callback_query(filters.regex("^" + CB["migrate_export_enc"] + "$"))
+        async def _cb_migrate_export_enc(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            await cq.answer()
+            st = self._state(cq.from_user.id)
+            st.step = "migrate_passphrase"
+            st.buffer["migrate_chat_id"] = cq.message.chat.id
+            await self._persist(cq.from_user.id, st)
+            await self._safe_edit(cq, self._t("ui_migrate_ask_passphrase"),
+                                  reply_markup=self._kbd(
+                                      [[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+
+        @b.on_callback_query(filters.regex("^" + CB["migrate_import"] + "$"))
+        async def _cb_migrate_import(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            await cq.answer()
+            st = self._state(cq.from_user.id)
+            st.step = "migrate_await_file"
+            st.buffer["migrate_overwrite"] = False
+            await self._persist(cq.from_user.id, st)
+            await self._safe_edit(cq, self._t("ui_migrate_await_file"),
+                                  reply_markup=self._kbd(
+                                      [[("⚡ " + self._t("ui_migrate_overwrite"), CB["migrate_overwrite"])],
+                                       [("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+
+        @b.on_callback_query(filters.regex("^" + CB["migrate_overwrite"] + "$"))
+        async def _cb_migrate_overwrite(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            await cq.answer()
+            st = self._state(cq.from_user.id)
+            if st.step == "migrate_await_file":
+                st.buffer["migrate_overwrite"] = not st.buffer.get("migrate_overwrite", False)
+                await self._persist(cq.from_user.id, st)
+                await self._safe_edit(
+                    cq,
+                    self._t("ui_migrate_await_file")
+                    + ("\n\n⚠️ " + self._t("ui_migrate_overwrite_on")
+                       if st.buffer.get("migrate_overwrite") else ""),
+                    reply_markup=self._kbd(
+                        [[("⚡ " + self._t("ui_migrate_overwrite"), CB["migrate_overwrite"])],
+                         [("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+
+        @b.on_callback_query(filters.regex("^" + CB["migrate_help"] + "$"))
+        async def _cb_migrate_help(_, cq: CallbackQuery):
+            await self._safe_edit(cq, self._t("ui_migrate_help_text"),
+                                  reply_markup=self._migrate_menu())
+            await cq.answer()
+
         # ---------------- logs panel ----------------
         @b.on_callback_query(filters.regex("^" + CB["logs"] + "$"))
         async def _cb_logs(_, cq: CallbackQuery):
@@ -3774,6 +3913,23 @@ class ProBotUI:
                         reply_markup=self._cancel_kbd())
                 except Exception:
                     pass
+
+        @b.on_message(filters.private & filters.document, group=-2)
+        async def _document(_, message: Message):
+            """Receive a migration bundle file and restore it."""
+            uid = message.from_user.id if message.from_user else 0
+            step = ""
+            try:
+                step = self._state(uid).step or ""
+            except Exception:
+                pass
+            if step != "migrate_await_file":
+                try:
+                    message.continue_propagation()
+                except Exception:
+                    pass
+                return
+            await self._route_document(message)
 
     # ------------------------------------------------------------------ #
     # error recording
@@ -4000,9 +4156,151 @@ class ProBotUI:
             )
         await handler(message, st, text)
 
+    async def _route_document(self, message: Message) -> None:
+        """Handle a document sent during the migration-import flow."""
+        uid = message.from_user.id
+        st = self._state(uid)
+        if self._backup is None:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(
+                self._t("ui_migrate_unavailable"), reply_markup=self._main_menu())
+
+        doc = message.document
+        if doc is None:
+            return await message.reply_text(self._t("ui_migrate_need_file"))
+        size_mb = (doc.file_size or 0) / (1024 * 1024)
+        if size_mb > 20:
+            return await message.reply_text(self._t("ui_migrate_file_too_big"))
+
+        path = os.path.join(tempfile.gettempdir(), f"atf_import_{uid}_{doc.file_id[:12]}")
+        try:
+            await message.download(file_name=path)
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                blob = fh.read()
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+        if blob.startswith("enc:v1:"):
+            # ask for the passphrase, keep the bundle in the FSM buffer
+            st.buffer["migrate_blob"] = blob
+            st.step = "migrate_import_passphrase"
+            await self._persist(uid, st)
+            return await message.reply_text(
+                self._t("ui_migrate_ask_passphrase"),
+                reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+
+        await self._finish_migration_import(message, st, blob, "")
+
+    async def _finish_migration_import(
+        self, message: Message, st: UiState, blob: str, passphrase: str,
+    ) -> None:
+        uid = message.from_user.id
+        overwrite = bool(st.buffer.get("migrate_overwrite", False))
+        try:
+            text = decrypt_bundle(blob, passphrase)
+            doc = deserialize_bundle(text)
+        except ValueError as exc:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(f"❌ {exc}")
+
+        try:
+            stats = await self._backup.restore_snapshot(
+                doc, None, overwrite_existing=overwrite)
+        except Exception as exc:
+            logger.exception("migration import failed")
+            await self._record_error("bot", exc, user_id=uid)
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(
+                self._t("ui_migrate_fail", error=tg_detail(exc)))
+
+        st.step = ""
+        st.buffer.pop("migrate_blob", None)
+        await self._persist(uid, st)
+        lines = [self._t("ui_migrate_imported"), "─────────────────────"]
+        total_in = total_sk = total_fl = 0
+        for k, v in stats.items():
+            total_in += v.get("imported", 0)
+            total_sk += v.get("skipped", 0)
+            total_fl += v.get("failed", 0)
+            lines.append(f"• {k}: ✅{v.get('imported', 0)}"
+                         + (f" ⏭{v.get('skipped', 0)}" if v.get("skipped") else "")
+                         + (f" ❌{v.get('failed', 0)}" if v.get("failed") else ""))
+        lines.append(f"\n**جمع:** ✅ {total_in} · ⏭ {total_sk} · ❌ {total_fl}")
+        try:
+            self._log.info("bot", "backup",
+                           f"migration snapshot imported by {uid}: {stats}")
+        except Exception:
+            pass
+        await message.reply_text("\n".join(lines), reply_markup=self._main_menu())
+
     # ------------------------------------------------------------------ #
     # Step handlers (FSM)
     # ------------------------------------------------------------------ #
+    async def _step_migrate_passphrase(self, message: Message, st: UiState, text: str) -> None:
+        """Passphrase for the snapshot being EXPORTED right now."""
+        uid = message.from_user.id
+        passphrase = (text or "").strip()
+        if not passphrase:
+            return await message.reply_text(self._t("ui_migrate_passphrase_required"))
+        st.step = ""
+        await self._persist(uid, st)
+        await self._do_migration_export_from_message(message, passphrase)
+
+    async def _step_migrate_import_passphrase(self, message: Message, st: UiState, text: str) -> None:
+        """Passphrase for an ENCRYPTED bundle that was just uploaded."""
+        uid = message.from_user.id
+        passphrase = (text or "").strip()
+        blob = st.buffer.get("migrate_blob") or ""
+        if not blob:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(
+                self._t("ui_migrate_need_file"), reply_markup=self._migrate_menu())
+        if not passphrase:
+            return await message.reply_text(self._t("ui_migrate_passphrase_required"))
+        await self._finish_migration_import(message, st, blob, passphrase)
+
+    async def _do_migration_export_from_message(self, message: Message, passphrase: str) -> None:
+        """Export with a passphrase, invoked once the user has typed one."""
+        uid = message.from_user.id
+        if self._backup is None:
+            return await message.reply_text(
+                self._t("ui_migrate_unavailable"), reply_markup=self._migrate_menu())
+        try:
+            owner = uid if not self._is_admin(uid) else None
+            doc = await self._backup.create_snapshot(owner)
+            text = serialize_bundle(doc)
+            fname = "atf-backup.enc"
+            text = encrypt_bundle(text, passphrase)
+            path = os.path.join(tempfile.gettempdir(), f"atf_{uid}_{fname}")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            counts = doc.get("counts") or {}
+            lines = [self._t("ui_migrate_exported"),
+                     "🔒 AES-GCM " + self._t("ui_migrate_encrypted"),
+                     "─────────────────────"]
+            for k in ("sessions", "forward_rules", "filter_rules",
+                      "ai_configs", "prompt_templates", "api_credentials"):
+                if counts.get(k):
+                    lines.append(f"• {k}: {counts[k]}")
+            await self.bot.send_document(
+                chat_id=message.chat.id, document=path, caption="\n".join(lines))
+            os.remove(path)
+            try:
+                self._log.info("bot", "backup", "migration snapshot exported (encrypted)")
+            except Exception:
+                pass
+        except Exception as exc:
+            logger.exception("migration export failed")
+            await self._record_error("bot", exc, user_id=uid)
+            await message.reply_text(self._t("ui_migrate_fail", error=tg_detail(exc)))
+
     async def _step_login_phone(self, message: Message, st: UiState, text: str) -> None:
         uid = message.from_user.id
         raw_text = (text or "").strip()

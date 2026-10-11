@@ -27,6 +27,7 @@ type Clients struct {
 	Logs       pb.LogControlServiceClient
 	Delivery   pb.DeliveryControlServiceClient
 	Account    pb.AccountControlServiceClient
+	Backup     pb.BackupControlServiceClient
 }
 
 // NewClients bundles the core service stubs.
@@ -39,6 +40,7 @@ func NewClients(conn *grpc.ClientConn) *Clients {
 		System:   pb.NewSystemStatusControlServiceClient(conn),
 		Delivery: pb.NewDeliveryControlServiceClient(conn),
 		Account:  pb.NewAccountControlServiceClient(conn),
+		Backup:   pb.NewBackupControlServiceClient(conn),
 	}
 }
 
