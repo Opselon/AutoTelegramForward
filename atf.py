@@ -585,10 +585,71 @@ def cmd_restart(_args=None) -> None:
     cmd_start()
 
 
+def _docker_container_states() -> "tuple[bool, dict[str, str]]":
+    """Probe the running docker-compose stack.
+
+    Returns (docker_mode, states) where docker_mode is True when any ATF
+    container exists, and states maps a service name (logger/core/web/api) to
+    one of: "running-healthy", "running", "unhealthy", "exited", "paused".
+    """
+    if not have("docker"):
+        return False, {}
+    try:
+        out = subprocess.run(
+            ["docker", "ps", "-a", "--format", "{{.Names}}\\t{{.Status}}\\t{{.Labels}}"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        return False, {}
+    states: "dict[str, str]" = {}
+    saw_atf = False
+    for line in out.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        name, status = parts[0], parts[1]
+        # compose names the containers atf-<service>
+        if not name.startswith("atf-"):
+            continue
+        svc = name[4:]
+        if svc not in ("logger", "core", "web", "api"):
+            continue
+        saw_atf = True
+        low = status.lower()
+        if low.startswith("up "):
+            if "healthy" in low:
+                states[svc] = "running-healthy"
+            elif "unhealthy" in low:
+                states[svc] = "unhealthy"
+            else:
+                states[svc] = "running"
+        elif "paused" in low:
+            states[svc] = "paused"
+        else:
+            states[svc] = "exited"
+    return saw_atf, states
+
+
 def _describe() -> "list[tuple[str, str, str]]":
     rows = []
     pids = read_pids()
+    docker_mode, container_state = _docker_container_states()
     for name in ("logger", "core", "web", "api"):
+        # Docker mode: containers are the source of truth, not host pids or
+        # systemd units. `atf start` was never run in this mode, so the
+        # pid-file / OS-service probes below would otherwise report every
+        # service as STOPPED even while the compose stack is up and healthy.
+        if docker_mode:
+            st = container_state.get(name)
+            if st == "running-healthy":
+                rows.append((name, "RUNNING", "docker: healthy"))
+            elif st == "running":
+                rows.append((name, "RUNNING", "docker: no healthcheck"))
+            elif st == "unhealthy":
+                rows.append((name, "DEAD", "docker: unhealthy"))
+            else:
+                rows.append((name, "STOPPED", f"docker: {st or 'not created'}"))
+            continue
         pid = pids.get(name)
         if pid and proc_alive(pid):
             rows.append((name, "RUNNING", f"pid {pid}"))
@@ -617,8 +678,15 @@ def _describe() -> "list[tuple[str, str, str]]":
                 rows.append((name, "STOPPED", f"os service: {svc_state}"))
             else:
                 rows.append((name, "STOPPED", "—"))
-    rows.append(("core gRPC :6001", "LISTENING" if port_open(6001) else "CLOSED", ""))
-    rows.append(("logger :6002", "LISTENING" if port_open(6002) else "CLOSED", ""))
+    if docker_mode:
+        rows.append(("mode", "RUNNING", "docker compose"))
+    # In docker mode the in-container gRPC ports (50051/50052) are not
+    # published to the host, so the :6001/:6002 probes are meaningless and
+    # would show CLOSED next to a healthy stack. The service rows above are
+    # authoritative in that mode.
+    if not docker_mode:
+        rows.append(("core gRPC :6001", "LISTENING" if port_open(6001) else "CLOSED", ""))
+        rows.append(("logger :6002", "LISTENING" if port_open(6002) else "CLOSED", ""))
     rows.append(("web :8088", "LISTENING" if port_open(8088) else "CLOSED", "http://localhost:8088"))
     rows.append(("api :8080", "LISTENING" if port_open(8080) else "CLOSED", "http://localhost:8080"))
     return rows
@@ -670,12 +738,25 @@ def cmd_health(_args=None) -> None:
     print(f"• SQLite Database    : {db_file} ({'OK' if db_file.exists() else 'MISSING'})")
     print(f"• Web Gateway binary : {find_web() or 'built in web/backend (Axum)'}")
     print(f"• Go API binary      : {find_api() or 'not built (optional)'}")
-    print(f"• Core gRPC port 6001: {'ACTIVE' if port_open(6001) else 'INACTIVE'}")
-    print(f"• Logger port 6002   : {'ACTIVE' if port_open(6002) else 'INACTIVE'}")
-    print(f"• Web Gateway :8088  : {'ACTIVE (http://localhost:8088)' if port_open(8088) else 'INACTIVE'}")
-    print(f"• REST API port 8080 : {'ACTIVE (http://localhost:8080)' if port_open(8080) else 'INACTIVE'}")
+    docker_mode, container_state = _docker_container_states()
     print(f"• Docker Engine      : {'available' if have('docker') else 'not installed'}")
     print(f"• Kubernetes kubectl : {'available' if have('kubectl') else 'not installed'}")
+    if docker_mode:
+        print("• Deployment mode    : docker compose")
+        for svc in ("core", "logger", "web", "api"):
+            st = container_state.get(svc, "not created")
+            ok = st in ("running", "running-healthy")
+            print(f"  container atf-{svc:<6}: {'HEALTHY' if st == 'running-healthy' else 'UP' if ok else st.upper()}")
+        # The gRPC ports are in-container only (not published), so probe the
+        # published HTTP ports from the host instead.
+        print(f"• Web Gateway :8088  : {'ACTIVE (http://localhost:8088)' if port_open(8088) else 'INACTIVE'}")
+        print(f"• REST API port 8080 : {'ACTIVE (http://localhost:8080)' if port_open(8080) else 'INACTIVE'}")
+    else:
+        print(f"• Deployment mode    : local (systemd / pid files)")
+        print(f"• Core gRPC port 6001: {'ACTIVE' if port_open(6001) else 'INACTIVE'}")
+        print(f"• Logger port 6002   : {'ACTIVE' if port_open(6002) else 'INACTIVE'}")
+        print(f"• Web Gateway :8088  : {'ACTIVE (http://localhost:8088)' if port_open(8088) else 'INACTIVE'}")
+        print(f"• REST API port 8080 : {'ACTIVE (http://localhost:8080)' if port_open(8080) else 'INACTIVE'}")
     print("=" * 64)
 
 
