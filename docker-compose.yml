@@ -52,6 +52,11 @@ services:
       ATF_LOGGER_GRPC: logger:50052
       ATF_API_ADDR: ":8080"
       ATF_API_KEY: ${ATF_API_KEY:-}
+      # The web gateway runs in its own container, so the health handler must
+      # probe it over the compose network, not 127.0.0.1:8088 (nothing listens
+      # there inside the api container, and /api/v1/health/services would
+      # otherwise report the gateway as down).
+      ATF_WEB_HEALTH_URL: http://web:8088/healthz
     ports:
       - "8080:8080"
     networks:
