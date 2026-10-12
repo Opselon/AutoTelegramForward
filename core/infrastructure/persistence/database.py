@@ -456,6 +456,17 @@ MIGRATIONS = {
     -- column does not exist yet. The additive path creates the indexes once
     -- the ALTER has landed.
     """,
+    13: """
+    -- v13: operator-editable runtime settings (key/value store).
+    -- Holds the public web dashboard URL the bot shows in its dashboard
+    -- panel, so an operator can point the one-tap login link at their own
+    -- domain without editing config files or restarting the service.
+    CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL
+    );
+    """,
 }
 
 # Columns added by additive migrations that must also work on a table carried

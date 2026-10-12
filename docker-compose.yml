@@ -26,6 +26,11 @@ services:
       ATF_API_HASH: ${ATF_API_HASH}
       ATF_BOT_TOKEN: ${ATF_BOT_TOKEN}
       ATF_MASTER_KEY: ${ATF_MASTER_KEY}
+      # Public dashboard URL the bot shows in its panel (e.g. https://panel.example.com
+      # or http://203.0.113.10:8088). Inside Docker the container cannot detect
+      # the host's public address, so set it here — or leave blank and configure
+      # it from the bot's "Dashboard URL" button.
+      ATF_WEB_URL: ${ATF_WEB_URL:-}
       ATF_GRPC_PORT: 50051
       ATF_DB_PATH: /app/data/atf.db
       ATF_LOGGER_ADDR: logger:50052
@@ -73,8 +78,35 @@ services:
       timeout: 5s
       retries: 3
 
+  # Optional TLS reverse proxy. Enable with --profile tls (see docs/tls.md):
+  #   docker compose --profile tls up -d
+  # Caddy provisions a Let's Encrypt certificate automatically for
+  # ATF_TLS_DOMAIN and terminates TLS for the dashboard.
+  caddy:
+    profiles: ["tls"]
+    image: caddy:2-alpine
+    container_name: atf-caddy
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      ATF_TLS_DOMAIN: ${ATF_TLS_DOMAIN:-localhost}
+      ATF_TLS_EMAIL: ${ATF_TLS_EMAIL:-}
+      ATF_WEB_INTERNAL_ADDR: http://web:8088
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - atf-net
+
 volumes:
   atf-data:
+  caddy-data:
+  caddy-config:
 
 networks:
   atf-net:

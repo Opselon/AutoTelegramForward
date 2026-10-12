@@ -14,6 +14,7 @@ from ...application.repositories import (
     BotToken,
     IAIConfigRepository,
     IApiCredentialRepository,
+    IAuthFlowRepository,
     IBotTokenRepository,
     IDeliveryQueueRepository,
     IErrorLogRepository,
@@ -25,9 +26,9 @@ from ...application.repositories import (
     IPromptRepository,
     IRuleStatsRepository,
     ISessionRepository,
+    ISettingsRepository,
     IUiStateRepository,
     IUserRepository,
-    IAuthFlowRepository,
 )
 from ...domain.entities import (
     AIConfig,
@@ -1671,3 +1672,24 @@ class SqlitePromptRepository(IPromptRepository):
 
 
 
+
+
+class SqliteSettingsRepository(ISettingsRepository):
+    """Key/value store for operator-editable runtime settings (app_settings)."""
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def get(self, key: str, default: str = "") -> str:
+        row = self._db.query_one("SELECT value FROM app_settings WHERE key=?", (key,))
+        if not row:
+            return default
+        return row["value"] or default
+
+    async def set(self, key: str, value: str) -> None:
+        self._db.execute(
+            "INSERT INTO app_settings (key, value, updated_at) VALUES (?,?,?)"
+            " ON CONFLICT(key) DO UPDATE SET value=excluded.value,"
+            " updated_at=excluded.updated_at",
+            (key, value, int(time.time())),
+        )
