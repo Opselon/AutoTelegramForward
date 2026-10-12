@@ -96,6 +96,9 @@ CB = {
     "dashboard": "dsh",
     "webpass": "wp",
     "webpass_reset": "wpr",
+    # Web dashboard URL configuration (operator sets public URL / domain)
+    "weburl": "wurl",
+    "weburl_set": "wurls",
     # AI Rewrite (per-rule): pick AI config / prompt / fallback policy / test
     "r_ai": "rai",
     "r_ai_cfg": "raic",
@@ -219,6 +222,7 @@ class ProBotUI:
         web_url: str = "",
         account_servicer=None,
         backup_service=None,
+        settings=None,
     ) -> None:
         self.bot = bot
         self.i18n = i18n
@@ -246,6 +250,7 @@ class ProBotUI:
         self._web_url = (web_url or "").rstrip("/")
         self._accounts = account_servicer
         self._backup = backup_service
+        self._settings = settings  # ISettingsRepository, optional
         self._states: Dict[int, UiState] = {}
         self._register()
 
@@ -424,9 +429,10 @@ class ProBotUI:
             [("🧹 " + self._t("ui_filters"), CB["filters"]), ("🤖 " + self._t("ui_ai"), CB["ai"])],
             [("📊 " + self._t("ui_stats"), CB["stats"]), ("🔑 " + self._t("ui_creds"), CB["creds"])],
             [("🗄 " + self._t("ui_migrate"), CB["migrate"])],
-            [("🛠 " + self._t("ui_debug"), CB["debug"]), ("🌐 " + self._t("ui_lang"), CB["lang"])],
-            [("💻 " + self._t("ui_dashboard"), CB["dashboard"])],
-            [("📚 " + self._t("ui_help"), CB["help"])],
+            [(("🛠 " + self._t("ui_debug")), CB["debug"]), (("🌐 " + self._t("ui_lang")), CB["lang"])],
+            [(("💻 " + self._t("ui_dashboard")), CB["dashboard"])],
+            [(("🔗 " + self._t("ui_weburl")), CB["weburl"])],
+            [(("📚 " + self._t("ui_help")), CB["help"])],
         ])
 
     def _migrate_menu(self) -> InlineKeyboardMarkup:
@@ -3897,6 +3903,38 @@ class ProBotUI:
                 await self._debug_body(), reply_markup=self._debug_menu())
             await cq.answer()
 
+        # ---------------- web dashboard URL configuration ----------------
+        @b.on_callback_query(filters.regex("^" + CB["weburl"] + "$"))
+        async def _cb_weburl(_, cq: CallbackQuery):
+            await self._safe_edit(
+                cq, self._weburl_body(), reply_markup=self._weburl_menu())
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["weburl_set"] + "$"))
+        async def _cb_weburl_set(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            st = self._state(cq.from_user.id)
+            st.step = "weburl_input"
+            await self._persist(cq.from_user.id, st)
+            await self._safe_edit(
+                cq, self._t("ui_weburl_prompt"), reply_markup=self._cancel_kbd())
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^weburl_clear$"))
+        async def _cb_weburl_clear(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            if self._settings is not None:
+                try:
+                    await self._settings.set("web_url", "")
+                except Exception as exc:
+                    logger.warning("clear web_url failed: %s", exc)
+            self._web_url = ""
+            await self._safe_edit(
+                cq, self._t("ui_weburl_cleared"), reply_markup=self._main_menu())
+            await cq.answer()
+
         # ---------------- free-text FSM router ----------------
         @b.on_message(filters.private & filters.text & ~filters.command(["start", "menu"]), group=-1)
         async def _text(_, message: Message):
@@ -4018,8 +4056,76 @@ class ProBotUI:
         return "\n".join(lines)
 
     # -------------------------------------------------------------- web access
+    @staticmethod
+    def _detect_public_host() -> str:
+        """Best-effort public host for the web dashboard.
+
+        Used only when the operator has not configured ``web_url`` explicitly.
+        ``localhost`` is useless in Telegram: the link is opened on the user's
+        own device, so it must point at a reachable address of *this* server.
+        Returns the first global (non-loopback / non-private) address seen on
+        the host's interfaces; falls back to ``localhost`` only if none found.
+        """
+        try:
+            import ipaddress
+            import socket
+
+            seen: list[str] = []
+            for info in socket.getaddrinfo(socket.gethostname(), None):
+                addr = str(info[4][0])
+                if addr in seen:
+                    continue
+                seen.append(addr)
+                try:
+                    ip = ipaddress.ip_address(addr)
+                except ValueError:
+                    continue
+                if not ip.is_global or ip.is_loopback or ip.is_link_local:
+                    continue
+                if ip.version == 6:
+                    return f"[{ip}]"
+                return str(ip)
+        except Exception:
+            pass
+        return "localhost"
+
     def _web_base_url(self) -> str:
-        return self._web_url or "http://localhost:8088"
+        if self._web_url:
+            return self._web_url
+        return f"http://{self._detect_public_host()}:8088"
+
+    def _weburl_menu(self) -> InlineKeyboardMarkup:
+        return self._kbd([
+            [(("✏️ " + self._t("ui_weburl_set")), CB["weburl_set"])],
+            [(("🗑 " + self._t("ui_weburl_clear")), "weburl_clear")],
+            [(("⬅️ " + self._t("ui_back")), CB["main"])],
+        ])
+
+    def _weburl_body(self) -> str:
+        current = self._web_url or self._t("ui_weburl_none")
+        return self._t("ui_weburl_body").replace("{cur}", current)
+
+    async def _step_weburl_input(
+        self, message: Message, st: "UiState", text: str
+    ) -> None:
+        url = (text or "").strip()
+        st.step = ""
+        await self._persist(message.from_user.id, st)
+        if not (url.startswith("http://") or url.startswith("https://")) or " " in url:
+            return await message.reply_text(
+                self._t("ui_weburl_invalid"), reply_markup=self._cancel_kbd())
+        url = url.rstrip("/")
+        if self._settings is not None:
+            try:
+                await self._settings.set("web_url", url)
+            except Exception as exc:
+                logger.warning("save web_url failed: %s", exc)
+                return await message.reply_text(
+                    self._t("ui_internal_error"), reply_markup=self._main_menu())
+        self._web_url = url
+        await message.reply_text(
+            self._t("ui_weburl_saved").replace("{url}", url),
+            reply_markup=self._main_menu())
 
     async def _mint_web_token(self, user_id: int) -> Optional[str]:
         """Mint a JWT for this Telegram user via the Account servicer."""

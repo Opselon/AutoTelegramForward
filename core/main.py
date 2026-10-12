@@ -38,6 +38,7 @@ from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
     SqlitePromptRepository,
     SqliteRuleStatsRepository,
     SqliteSessionRepository,
+    SqliteSettingsRepository,
     SqliteUiStateRepository,
     SqliteUserRepository,
 )
@@ -78,6 +79,7 @@ def build_container(cfg: Config) -> dict:
     metrics_repo = SqliteMetricsRepository(db)
     rule_stats_repo = SqliteRuleStatsRepository(db)
     user_repo = SqliteUserRepository(db)
+    settings_repo = SqliteSettingsRepository(db)
     msg_map_repo = SqliteMessageMapRepository(db)
     queue_repo = SqliteDeliveryQueueRepository(db)
     prompt_repo = SqlitePromptRepository(db)
@@ -184,6 +186,7 @@ def build_container(cfg: Config) -> dict:
         "ai_circuit_registry": ai_circuit_registry,
         "pv_responder": pv_responder,
         "account_servicer": account_servicer,
+        "settings": settings_repo,
     }
 
 
@@ -397,7 +400,16 @@ async def main() -> None:
             web_url=cfg.web_url,
             account_servicer=container.get("account_servicer"),
             backup_service=container.get("backup"),
+            settings=container.get("settings"),
         )
+        # An operator's saved dashboard URL wins over the config/env default —
+        # they set it from the bot and expect it to survive a restart.
+        try:
+            saved_url = await container["settings"].get("web_url", "")
+            if saved_url:
+                ui._web_url = saved_url.rstrip("/")
+        except Exception as exc:
+            logger.warning("Could not load saved web_url: %s", exc)
         # Route ownership: while the button UI has an active step for a user
         # it answers; otherwise BotManager (commands) answers. No doubles.
         bot.bot_ui = ui

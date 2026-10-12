@@ -1,0 +1,42 @@
+# AutoTelegramForward — Caddy reverse proxy with automatic TLS
+#
+# Caddy reads the domain from the ATF_TLS_DOMAIN environment variable and
+# provisions a Let's Encrypt certificate automatically. The dashboard backend
+# (Rust gateway on :8088) is proxied with WebSocket support and the same
+# security headers the gateway already sets.
+#
+# Enable with:  docker compose --profile tls up -d
+#
+# With ATF_TLS_DOMAIN set, the site is served over HTTPS (:443) and HTTP (:80)
+# redirects to it. With it empty, only the :80 block below is used.
+
+{$ATF_TLS_DOMAIN:} {
+	encode gzip zstd
+
+	reverse_proxy {$ATF_WEB_INTERNAL_ADDR:http://web:8088} {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Plain HTTP: used when no domain is configured, and to answer ACME challenges.
+:80 {
+	encode gzip zstd
+	reverse_proxy {$ATF_WEB_INTERNAL_ADDR:http://web:8088}
+	log {
+		output stdout
+		format json
+	}
+}

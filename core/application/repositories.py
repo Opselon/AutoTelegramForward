@@ -498,3 +498,20 @@ class IDeliveryQueueRepository(ABC):
         """Purge terminal jobs (SENT, FAILED) older than retention_seconds."""
         ...
 
+
+
+class ISettingsRepository(ABC):
+    """Operator-editable runtime settings (key/value).
+
+    Backs the bot-side ``web_url`` override so an operator can point the
+    dashboard one-tap login link at their own domain without touching config
+    files or restarting the service.
+    """
+
+    @abstractmethod
+    async def get(self, key: str, default: str = "") -> str:
+        ...
+
+    @abstractmethod
+    async def set(self, key: str, value: str) -> None:
+        ...
