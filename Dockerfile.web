@@ -22,7 +22,12 @@ RUN cargo build --release
 # Stage 3: Minimal Self-Contained Runtime
 FROM debian:bookworm-slim
 WORKDIR /app
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+# ca-certificates for outbound TLS; wget is required by the healthcheck
+# (docker compose ps / any orchestrator reads State.Health, so without it
+# the gateway is reported unhealthy even while serving fine).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates wget \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=backend-builder /app/web/backend/target/release/atf-web-backend /app/atf-web-backend
 
 ENV ATF_WEB_ADDR=0.0.0.0:8088
