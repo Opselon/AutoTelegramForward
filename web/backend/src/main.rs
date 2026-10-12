@@ -35,7 +35,11 @@ async fn main() {
     info!("Starting AutoTelegramForward Unified Web Gateway (Rust + Axum)...");
 
     let listen_addr = std::env::var("ATF_WEB_ADDR").unwrap_or_else(|_| "0.0.0.0:8088".to_string());
-    let upstream_api = std::env::var("ATF_UPSTREAM_API")
+    // Upstream Control Plane (Go API). The canonical env var across the whole
+    // stack (docker-compose, k8s, atf.py, systemd unit) is ATF_API_ADDR; the
+    // older ATF_UPSTREAM_API / ATF_API_URL aliases stay as a courtesy.
+    let upstream_api = std::env::var("ATF_API_ADDR")
+        .or_else(|_| std::env::var("ATF_UPSTREAM_API"))
         .or_else(|_| std::env::var("ATF_API_URL"))
         .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
 
