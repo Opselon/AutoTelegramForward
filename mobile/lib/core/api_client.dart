@@ -20,6 +20,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'env.dart';
 import 'models.dart';
 import 'storage.dart';
 
@@ -80,6 +81,107 @@ HttpTransport ioTransport(http.Client client) {
 /// transport.
 HttpTransport defaultTransport(http.Client client) => ioTransport(client);
 
+/// Compares two dotted version strings (`major.minor.patch`, each segment
+/// numeric). Missing segments default to 0, a leading `v` and `+build`
+/// metadata are ignored, and a `-prerelease` suffix sorts below the release.
+///
+/// Returns a negative value when [a] < [b], zero when equal, positive when
+/// [a] > [b]. Used to decide whether a probed server satisfies
+/// [AppEnv.minSupportedApiVersion].
+int compareApiVersions(String a, String b) {
+  List<int> numbers(String version) {
+    var cleaned = version.trim();
+    if (cleaned.startsWith('v') || cleaned.startsWith('V')) {
+      cleaned = cleaned.substring(1);
+    }
+    final build = cleaned.indexOf('+');
+    if (build >= 0) cleaned = cleaned.substring(0, build);
+    final dash = cleaned.indexOf('-');
+    if (dash >= 0) cleaned = cleaned.substring(0, dash);
+    final parts =
+        cleaned.split('.').map((p) => int.tryParse(p.trim()) ?? 0).toList();
+    while (parts.length < 3) {
+      parts.add(0);
+    }
+    return parts;
+  }
+
+  String preRelease(String version) {
+    var cleaned = version.trim();
+    final build = cleaned.indexOf('+');
+    if (build >= 0) cleaned = cleaned.substring(0, build);
+    final dash = cleaned.indexOf('-');
+    return dash >= 0 ? cleaned.substring(dash + 1) : '';
+  }
+
+  final left = numbers(a);
+  final right = numbers(b);
+  final width = left.length > right.length ? left.length : right.length;
+  for (var i = 0; i < width; i++) {
+    final l = i < left.length ? left[i] : 0;
+    final r = i < right.length ? right[i] : 0;
+    if (l != r) return l.compareTo(r);
+  }
+  final leftPre = preRelease(a);
+  final rightPre = preRelease(b);
+  if (leftPre == rightPre) return 0;
+  if (leftPre.isEmpty) return 1;
+  if (rightPre.isEmpty) return -1;
+  return leftPre.compareTo(rightPre);
+}
+
+/// Outcome of [ApiClient.probeServer]: whether the server answered its
+/// public `/api/version` endpoint, what it reported, and whether that
+/// release is new enough for this client.
+@immutable
+class ProbeResult {
+  const ProbeResult({
+    required this.ok,
+    this.productVersion = '',
+    this.apiVersion = '',
+    required this.reachable,
+    required this.compatible,
+    this.errorKind,
+    this.errorMessage = '',
+  });
+
+  /// The server answered `/api/version` with a usable `api_version`.
+  final bool ok;
+
+  /// `product_version` reported by the server (empty when unknown).
+  final String productVersion;
+
+  /// `api_version` reported by the server (empty when unknown).
+  final String apiVersion;
+
+  /// True when an HTTP response arrived at all (even an error status).
+  /// False means the host was unreachable, timed out, or TLS failed.
+  final bool reachable;
+
+  /// True when [ok] and `api_version >= minSupportedApiVersion`.
+  final bool compatible;
+
+  /// Actionable [ErrorKind] when [!ok]; null on success.
+  final String? errorKind;
+
+  /// Machine-readable detail (e.g. `request_timeout`, `server_tls_error`).
+  final String errorMessage;
+
+  /// Builds the unreachable case (DNS failure, timeout, TLS, bad URL…).
+  factory ProbeResult.unreachable(String kind, String message) => ProbeResult(
+    ok: false,
+    reachable: false,
+    compatible: false,
+    errorKind: kind,
+    errorMessage: message,
+  );
+
+  @override
+  String toString() =>
+      'ProbeResult(ok=$ok, reachable=$reachable, compatible=$compatible, '
+      'api=$apiVersion, product=$productVersion, error=$errorKind)';
+}
+
 class ApiClient {
   ApiClient({
     required this.baseUrl,
@@ -102,6 +204,164 @@ class ApiClient {
   void setBearer(String token) => _bearer = token;
 
   bool get hasBearer => _bearer != null && _bearer!.isNotEmpty;
+
+  // ------------------------------------------------------------------ //
+  // Unauthenticated server probe (`GET /api/version`, public endpoint)
+  // ------------------------------------------------------------------ //
+
+  /// Probes a server's public `/api/version` endpoint without credentials.
+  ///
+  /// Fully unauthenticated: no `Authorization` header is attached and the
+  /// stored credentials are never read, written, or cleared. The caller
+  /// decides compatibility against [minSupportedApiVersion] (normally
+  /// [AppEnv.minSupportedApiVersion]).
+  ///
+  /// Never throws: network, timeout, TLS, malformed-JSON, and unexpected
+  /// HTTP statuses map to a [ProbeResult] carrying an actionable
+  /// [ErrorKind].
+  static Future<ProbeResult> probeServer(
+    String baseUrl, {
+    required String minSupportedApiVersion,
+    HttpTransport? transport,
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    final parsed = ServerUrl.tryParse(baseUrl);
+    if (parsed == null) {
+      return ProbeResult.unreachable(
+        ErrorKind.validation,
+        'server_url_invalid',
+      );
+    }
+    final uri = Uri.parse('${parsed.normalized}api/version');
+    HttpTransport effective = transport ?? _ioTransport;
+    http.Client? owned;
+    if (transport == null) {
+      owned = http.Client();
+      effective = ioTransport(owned);
+    }
+    try {
+      // Belt and braces: the transport applies [timeout] itself, and the
+      // outer guard covers transports that ignore it.
+      final response = await effective(
+        uri,
+        method: 'GET',
+        headers: const {'accept': 'application/json'},
+        timeout: timeout,
+      ).timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final int status = response.statusCode;
+        final String kind =
+            status == 404
+                ? ErrorKind.notFound
+                : status == 429
+                ? ErrorKind.rateLimited
+                : status >= 500
+                ? ErrorKind.server
+                : ErrorKind.unknown;
+        return ProbeResult(
+          ok: false,
+          reachable: true,
+          compatible: false,
+          errorKind: kind,
+          errorMessage: 'probe_http_$status',
+        );
+      }
+      final Map<String, dynamic> json;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is! Map<String, dynamic>) {
+          return const ProbeResult(
+            ok: false,
+            reachable: true,
+            compatible: false,
+            errorKind: ErrorKind.server,
+            errorMessage: 'probe_invalid_json',
+          );
+        }
+        json = decoded;
+      } on FormatException {
+        return const ProbeResult(
+          ok: false,
+          reachable: true,
+          compatible: false,
+          errorKind: ErrorKind.server,
+          errorMessage: 'probe_invalid_json',
+        );
+      }
+      final apiVersion =
+          (json['api_version'] ?? json['apiVersion'] ?? '').toString().trim();
+      final productVersion =
+          (json['product_version'] ?? json['productVersion'] ?? '')
+              .toString()
+              .trim();
+      if (apiVersion.isEmpty) {
+        return ProbeResult(
+          ok: false,
+          productVersion: productVersion,
+          reachable: true,
+          compatible: false,
+          errorKind: ErrorKind.server,
+          errorMessage: 'probe_missing_api_version',
+        );
+      }
+      final compatible =
+          compareApiVersions(apiVersion, minSupportedApiVersion) >= 0;
+      if (!compatible) {
+        return ProbeResult(
+          ok: false,
+          productVersion: productVersion,
+          apiVersion: apiVersion,
+          reachable: true,
+          compatible: false,
+          errorKind: ErrorKind.incompatibleServer,
+          errorMessage: 'probe_incompatible_server',
+        );
+      }
+      return ProbeResult(
+        ok: true,
+        productVersion: productVersion,
+        apiVersion: apiVersion,
+        reachable: true,
+        compatible: true,
+      );
+    } on TimeoutException {
+      return ProbeResult.unreachable(ErrorKind.timeout, 'request_timeout');
+    } on http.ClientException catch (exc) {
+      return ProbeResult.unreachable(
+        ErrorKind.network,
+        _probeNetworkMessage(exc.message),
+      );
+    } on FormatException {
+      return const ProbeResult(
+        ok: false,
+        reachable: true,
+        compatible: false,
+        errorKind: ErrorKind.server,
+        errorMessage: 'probe_invalid_json',
+      );
+    } catch (exc) {
+      // SocketException, TlsException, ArgumentError… never throw raw.
+      return ProbeResult.unreachable(
+        ErrorKind.network,
+        _probeNetworkMessage('$exc'),
+      );
+    } finally {
+      owned?.close();
+    }
+  }
+
+  /// Maps a transport failure detail to an actionable message code,
+  /// distinguishing TLS/certificate failures from plain unreachable hosts.
+  static String _probeNetworkMessage(String detail) {
+    final lower = detail.toLowerCase();
+    if (lower.contains('tls') ||
+        lower.contains('ssl') ||
+        lower.contains('certificate') ||
+        lower.contains('handshake')) {
+      return 'server_tls_error';
+    }
+    return detail.isNotEmpty ? detail : 'probe_unreachable';
+  }
 
   // ------------------------------------------------------------------ //
   // Core plumbing

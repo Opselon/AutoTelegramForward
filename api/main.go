@@ -35,6 +35,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.Health)
 	mux.HandleFunc("GET /health", h.Health)
+	mux.HandleFunc("GET /api/version", h.Version)
 	mux.HandleFunc("GET /api/v1/health/services", h.ServicesHealth)
 
 	// Public authentication endpoints (no Bearer [REDACTED] required).

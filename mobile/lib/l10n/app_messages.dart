@@ -49,6 +49,20 @@ class AppMessagesEn {
     'login_no_account': 'No account yet?',
     'login_have_account': 'Already have an account?',
 
+    // server connection
+    'server_probe_test': 'Test connection',
+    'server_probe_testing': 'Testing connection…',
+    'server_probe_reachable': 'Server reachable and compatible',
+    'server_probe_unreachable':
+        'Cannot reach the server. Check the address and your connection.',
+    'server_probe_bad_response':
+        'The server answered but returned an unexpected response.',
+    'server_probe_no_version':
+        'This server does not expose a version endpoint. Check the address or update the server.',
+    'server_probe_tls_error':
+        'Secure connection failed. Check the server certificate and use https://.',
+    'server_restore_default': 'Restore official default',
+
     // nav
     'nav_dashboard': 'Dashboard',
     'nav_rules': 'Rules',
