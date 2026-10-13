@@ -1,5 +1,9 @@
 # AutoTelegramForward
 
+<p align="center">
+  <img src="docs/assets/social-preview.png" alt="AutoTelegramForward — Telegram Auto-Forwarding & Routing Suite" width="100%">
+</p>
+
 [![Official Documentation](https://img.shields.io/badge/Docs-Official%20Website-0284c7?style=flat-square&logo=telegram)](https://opselon.github.io/AutoTelegramForward/)
 [![Interactive Playground](https://img.shields.io/badge/Playground-Live%20Sandbox-10b981?style=flat-square)](https://opselon.github.io/AutoTelegramForward/tools/playground/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
