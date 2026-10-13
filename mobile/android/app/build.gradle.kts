@@ -1,12 +1,12 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
-
-import java.util.Properties
-import java.io.FileInputStream
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -70,8 +70,12 @@ android {
             val releaseConfig = signingConfigs.getByName("release")
             signingConfig = if (releaseConfig.storeFile != null) {
                 releaseConfig
-            } else {
+            } else if (providers.gradleProperty("allowDebugReleaseSigning").orNull == "true") {
                 signingConfigs.getByName("debug")
+            } else {
+                throw GradleException(
+                    "Release signing keystore is missing. Configure ANDROID_KEYSTORE_PATH and signing secrets."
+                )
             }
         }
     }

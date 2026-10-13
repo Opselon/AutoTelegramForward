@@ -89,45 +89,46 @@ HttpTransport defaultTransport(http.Client client) => ioTransport(client);
 /// [a] > [b]. Used to decide whether a probed server satisfies
 /// [AppEnv.minSupportedApiVersion].
 int compareApiVersions(String a, String b) {
-  List<int> numbers(String version) {
-    var cleaned = version.trim();
-    if (cleaned.startsWith('v') || cleaned.startsWith('V')) {
-      cleaned = cleaned.substring(1);
+  final pattern = RegExp(
+    r'^[vV]?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+    r'(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?'
+    r'(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$',
+  );
+  ({List<int> core, List<String> pre}) parse(String raw) {
+    final match = pattern.firstMatch(raw.trim());
+    if (match == null) throw FormatException('Invalid semantic version', raw);
+    final core = <int>[
+      int.parse(match.group(1)!),
+      int.parse(match.group(2)!),
+      int.parse(match.group(3)!),
+    ];
+    final pre = match.group(4)?.split('.') ?? <String>[];
+    if (pre.any((part) => RegExp(r'^0[0-9]+$').hasMatch(part))) {
+      throw FormatException('Numeric prerelease identifiers cannot have leading zeros', raw);
     }
-    final build = cleaned.indexOf('+');
-    if (build >= 0) cleaned = cleaned.substring(0, build);
-    final dash = cleaned.indexOf('-');
-    if (dash >= 0) cleaned = cleaned.substring(0, dash);
-    final parts =
-        cleaned.split('.').map((p) => int.tryParse(p.trim()) ?? 0).toList();
-    while (parts.length < 3) {
-      parts.add(0);
-    }
-    return parts;
+    return (core: core, pre: pre);
   }
-
-  String preRelease(String version) {
-    var cleaned = version.trim();
-    final build = cleaned.indexOf('+');
-    if (build >= 0) cleaned = cleaned.substring(0, build);
-    final dash = cleaned.indexOf('-');
-    return dash >= 0 ? cleaned.substring(dash + 1) : '';
+  final left = parse(a);
+  final right = parse(b);
+  for (var i = 0; i < 3; i++) {
+    final compared = left.core[i].compareTo(right.core[i]);
+    if (compared != 0) return compared;
   }
-
-  final left = numbers(a);
-  final right = numbers(b);
-  final width = left.length > right.length ? left.length : right.length;
+  if (left.pre.isEmpty && right.pre.isEmpty) return 0;
+  if (left.pre.isEmpty) return 1;
+  if (right.pre.isEmpty) return -1;
+  final width = left.pre.length < right.pre.length ? left.pre.length : right.pre.length;
   for (var i = 0; i < width; i++) {
-    final l = i < left.length ? left[i] : 0;
-    final r = i < right.length ? right[i] : 0;
-    if (l != r) return l.compareTo(r);
+    final l = left.pre[i], r = right.pre[i];
+    if (l == r) continue;
+    final ln = int.tryParse(l), rn = int.tryParse(r);
+    if (ln != null && rn != null) return ln.compareTo(rn);
+    if (ln != null) return -1;
+    if (rn != null) return 1;
+    return l.compareTo(r);
   }
-  final leftPre = preRelease(a);
-  final rightPre = preRelease(b);
-  if (leftPre == rightPre) return 0;
-  if (leftPre.isEmpty) return 1;
-  if (rightPre.isEmpty) return -1;
-  return leftPre.compareTo(rightPre);
+  return left.pre.length.compareTo(right.pre.length);
+}
 }
 
 /// Outcome of [ApiClient.probeServer]: whether the server answered its
@@ -222,6 +223,7 @@ class ApiClient {
   static Future<ProbeResult> probeServer(
     String baseUrl, {
     required String minSupportedApiVersion,
+    String clientVersion = '1.0.0',
     HttpTransport? transport,
     Duration timeout = const Duration(seconds: 8),
   }) async {
@@ -294,18 +296,22 @@ class ApiClient {
           (json['product_version'] ?? json['productVersion'] ?? '')
               .toString()
               .trim();
-      if (apiVersion.isEmpty) {
+      final minSupportedClient =
+          (json['min_supported_client'] ?? json['minSupportedClient'] ?? '').toString().trim();
+      if (apiVersion.isEmpty || minSupportedClient.isEmpty) {
         return ProbeResult(
           ok: false,
           productVersion: productVersion,
+          apiVersion: apiVersion,
           reachable: true,
           compatible: false,
           errorKind: ErrorKind.server,
-          errorMessage: 'probe_missing_api_version',
+          errorMessage: apiVersion.isEmpty ? 'probe_missing_api_version' : 'probe_missing_min_supported_client',
         );
       }
       final compatible =
-          compareApiVersions(apiVersion, minSupportedApiVersion) >= 0;
+          compareApiVersions(apiVersion, minSupportedApiVersion) >= 0 &&
+          compareApiVersions(clientVersion, minSupportedClient) >= 0;
       if (!compatible) {
         return ProbeResult(
           ok: false,
