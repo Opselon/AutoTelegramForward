@@ -4,9 +4,9 @@
   "starsUrl": "https://img.shields.io/github/stars/Opselon/AutoTelegramForward?style=social",
   "license": "MIT",
   "version": "1.4.1",
-  "gitCommit": "e4cd1ec",
-  "gitDate": "2026-10-13T17:47:54+03:30",
-  "syncTimestamp": "2026-10-13T14:47:03.842Z",
+  "gitCommit": "ba4de2b",
+  "gitDate": "2026-10-13T18:23:33+03:30",
+  "syncTimestamp": "2026-10-13T14:57:00.719Z",
   "verifiedFeatures": [
     {
       "category": "Forwarding & Routing",
