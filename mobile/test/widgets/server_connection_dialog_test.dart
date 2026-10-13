@@ -18,6 +18,7 @@ AppEnv _testEnv() => const AppEnv(
   minSupportedApiVersion: '1.0.0',
   documentationUrl: 'https://example.com/docs',
   repositoryUrl: 'https://example.com/repo',
+  appVersion: '1.5.0',
 );
 
 AppState _testState() {
@@ -95,7 +96,11 @@ void main() {
         }) async {
           expect(headers?['authorization'], isNull);
           return http.Response(
-            jsonEncode({'product_version': '1.5.0', 'api_version': '1.5.0'}),
+            jsonEncode({
+              'product_version': '1.5.0',
+              'api_version': '1.5.0',
+              'min_supported_client': '1.0.0',
+            }),
             200,
           );
         },
@@ -149,7 +154,11 @@ void main() {
           required Duration timeout,
         }) async {
           return http.Response(
-            jsonEncode({'product_version': '0.9.0', 'api_version': '0.9.0'}),
+            jsonEncode({
+              'product_version': '0.9.0',
+              'api_version': '0.9.0',
+              'min_supported_client': '1.0.0',
+            }),
             200,
           );
         },
@@ -198,6 +207,7 @@ void main() {
                                 jsonEncode({
                                   'product_version': '1.5.0',
                                   'api_version': '1.5.0',
+                                  'min_supported_client': '1.0.0',
                                 }),
                                 200,
                               );
