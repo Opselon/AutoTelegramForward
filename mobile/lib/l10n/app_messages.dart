@@ -141,6 +141,16 @@ class AppMessagesEn {
     'rules_source_required': 'Pick a source channel',
     'rules_target_required': 'Pick a destination channel',
     'rules_session_required': 'Pick a Telegram session first',
+    'rules_media_toggles_title': 'Media & Sync Settings (bot/web parity)',
+    'rules_block_voice': 'Block Voice',
+    'rules_block_stickers': 'Block Stickers',
+    'rules_remove_emojis': 'Strip Emojis',
+    'rules_sync_deletes': 'Sync Deletes',
+    'rules_ignore_edits': 'Ignore Edits',
+    'rules_album_mode': 'Album Mode',
+    'rules_album_full': 'Full Album',
+    'rules_album_first': 'First Media Only',
+    'rules_album_split': 'Split Messages',
 
     // filters
     'filters_title': 'Filters',

@@ -52,6 +52,12 @@ void main() {
         'delay_seconds': 5,
         'header_template': 'Header',
         'footer_template': 'Footer',
+        'block_voice': true,
+        'block_stickers': true,
+        'remove_emojis': true,
+        'sync_deletes': true,
+        'ignore_edits': true,
+        'album_mode': 'first',
         'version': 3,
         'is_enabled': true,
         'owner_user_id': 42,
@@ -62,8 +68,18 @@ void main() {
       expect(rule.sourceChatId, '-1001');
       expect(rule.filters, ['apple', 'banana']);
       expect(rule.useVipRouting, isTrue);
+      expect(rule.blockVoice, isTrue);
+      expect(rule.blockStickers, isTrue);
+      expect(rule.removeEmojis, isTrue);
+      expect(rule.syncDeletes, isTrue);
+      expect(rule.ignoreEdits, isTrue);
+      expect(rule.albumMode, 'first');
       expect(rule.version, 3);
       expect(rule.ownerUserId, 42);
+
+      final createJson = rule.toCreateJson();
+      expect(createJson['block_voice'], isTrue);
+      expect(createJson['album_mode'], 'first');
 
       final updateJson = rule.toUpdateJson();
       expect(updateJson['expected_version'], 3);
