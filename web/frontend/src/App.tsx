@@ -35,8 +35,12 @@ import {
   Database,
   Download,
   Upload,
+  ShieldAlert,
+  Sliders,
 } from 'lucide-react'
 import { api } from './api'
+import { AdminPanel } from './components/AdminPanel'
+import { ClientSettings } from './components/ClientSettings'
 import type {
   ForwardRule,
   SaveRuleRequest,
@@ -63,7 +67,8 @@ import type {
 
 export function App() {
   const [lang, setLang] = useState<'fa' | 'en'>('fa')
-  const [activeTab, setActiveTab] = useState<'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'queue' | 'devops'>('rules')
+  const [activeTab, setActiveTab] = useState<'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'queue' | 'devops' | 'admin' | 'settings'>('rules')
+  const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(null)
   const [rules, setRules] = useState<ForwardRule[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
@@ -347,6 +352,7 @@ export function App() {
 
   useEffect(() => {
     loadData()
+    api.me().then(setCurrentUser).catch(() => {})
     const timer = setInterval(() => {
       api.getStats().then(setStats).catch(() => {})
       api.getGatewayInfo().then(setGatewayInfo).catch(() => {})
@@ -1135,6 +1141,41 @@ export function App() {
           <Server size={15} />
           <span>{isRtl ? 'درگاه DevOps' : 'DevOps & Logs'}</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className="btn"
+          style={{
+            background: activeTab === 'settings' ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+            color: activeTab === 'settings' ? '#818cf8' : '#94a3b8',
+            border: activeTab === 'settings' ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid transparent',
+            fontWeight: activeTab === 'settings' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Sliders size={15} />
+          <span>{isRtl ? 'تنظیمات کاربر' : 'Client Settings'}</span>
+        </button>
+
+        {currentUser?.is_admin && (
+          <button
+            onClick={() => setActiveTab('admin')}
+            className="btn"
+            style={{
+              background: activeTab === 'admin' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(239, 68, 68, 0.1)',
+              color: activeTab === 'admin' ? '#f87171' : '#fca5a5',
+              border: activeTab === 'admin' ? '1px solid rgba(239, 68, 68, 0.5)' : '1px solid rgba(239, 68, 68, 0.25)',
+              fontWeight: 700,
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <ShieldAlert size={15} />
+            <span>{isRtl ? '🛡 پنل مدیریت کلان' : 'Master Admin'}</span>
+            <span className="badge badge-vip" style={{ fontSize: '0.65rem', padding: '1px 6px', background: '#ef4444', color: '#fff' }}>ADMIN</span>
+          </button>
+        )}
       </div>
 
       {/* TAB 1: RULES & ROUTES */}
@@ -3228,6 +3269,16 @@ export function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB 8: ADMIN CONTROL PLANE */}
+      {activeTab === 'admin' && currentUser?.is_admin && (
+        <AdminPanel lang={lang} />
+      )}
+
+      {/* TAB 9: CLIENT SETTINGS */}
+      {activeTab === 'settings' && (
+        <ClientSettings lang={lang} />
       )}
 
       {/* CREATE / EDIT RULE MODAL */}

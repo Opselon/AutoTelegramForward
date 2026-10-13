@@ -52,12 +52,18 @@ def _b64url_decode(s: str) -> bytes:
 
 
 class AccountControlServicer(pb_grpc.AccountControlServiceServicer):
-    def __init__(self, db, users=None, is_admin_user=None) -> None:
+    def __init__(self, db, users=None, is_admin_user=None, admin_service=None) -> None:
         self._db = db
         self._users = users  # optional SqliteUserRepository for plan/language
+        self._admin_service = admin_service
         self._admin_ids = set(is_admin_user or [])
         secret = os.environ.get("ATF_JWT_SECRET", "")
         self._secret = secret.encode("utf-8") if secret else None
+
+    def _is_user_admin(self, uid: int) -> bool:
+        if self._admin_service is not None:
+            return self._admin_service.is_admin(uid)
+        return uid in self._admin_ids
 
     # ------------------------------------------------------------------ jwt
     def _get_secret(self) -> bytes:
@@ -164,7 +170,7 @@ class AccountControlServicer(pb_grpc.AccountControlServiceServicer):
 
         salt = secrets.token_bytes(16)
         now = int(time.time())
-        is_admin = int(bool(request.is_admin) or uid in self._admin_ids)
+        is_admin = int(bool(request.is_admin) or self._is_user_admin(uid))
         plan = getattr(request, "plan", None) or "free"
         self._db.execute(
             "INSERT INTO web_accounts (user_id, username, password_hash, password_algo,"
@@ -276,7 +282,7 @@ class AccountControlServicer(pb_grpc.AccountControlServiceServicer):
                     username=username,
                     password=plain_secret,
                     display_name=display_name or f"User {uid}",
-                    is_admin=uid in self._admin_ids,
+                    is_admin=self._is_user_admin(uid),
                 ),
                 None,
             )

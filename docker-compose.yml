@@ -25,6 +25,9 @@ services:
       ATF_API_ID: ${ATF_API_ID}
       ATF_API_HASH: ${ATF_API_HASH}
       ATF_BOT_TOKEN: ${ATF_BOT_TOKEN}
+      ADMIN_USER_ID: ${ADMIN_USER_ID:-5094837833}
+      ADMIN_IDS: ${ADMIN_IDS:-5094837833}
+      ATF_ADMIN_USER_ID: ${ATF_ADMIN_USER_ID:-5094837833}
       ATF_MASTER_KEY: ${ATF_MASTER_KEY}
       # Public dashboard URL the bot shows in its panel (e.g. https://panel.example.com
       # or http://203.0.113.10:8088). Inside Docker the container cannot detect

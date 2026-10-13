@@ -137,7 +137,7 @@ def test_main_menu_buttons_structure(mock_pro_bot_ui):
     assert rows[1][1].text == "Clone" and rows[1][1].callback_data == CB["ai"]
 
     # Row 3: Settings | Browse Addons
-    assert rows[2][0].text == "⚙️ Settings" and rows[2][0].callback_data == CB["creds"]
+    assert rows[2][0].text == "⚙️ Settings" and rows[2][0].callback_data == CB["settings"]
     assert rows[2][1].text == "🧩 Browse Addons" and rows[2][1].callback_data == CB["dashboard"]
 
     # Row 4: Upgrade | Stats

@@ -20,6 +20,7 @@ import os
 import re
 import tempfile
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -121,6 +122,29 @@ CB = {
     "migrate_import": "mgi",
     "migrate_overwrite": "mgo",
     "migrate_help": "mgh",
+    # Client settings & user credentials
+    "settings": "stg",
+    "client_creds": "clc",
+    "client_cred_reset": "clcr",
+    # Administrator Control Plane
+    "admin": "adm",
+    "adm_stats": "admst",
+    "adm_users": "admus",
+    "adm_user_view": "admuv",
+    "adm_user_suspend": "admssp",
+    "adm_user_activate": "admact",
+    "adm_user_plan": "admpln",
+    "adm_bcast": "admbc",
+    "adm_bcast_confirm": "admbcc",
+    "adm_bcast_cancel": "admbcx",
+    "adm_forcesub": "admfs",
+    "adm_forcesub_toggle": "admfst",
+    "adm_forcesub_set": "admfss",
+    "adm_admins": "admadm",
+    "adm_admin_add": "admaadd",
+    "adm_admin_del": "admadel",
+    "adm_config": "admcfg",
+    "check_sub": "chksub",
 }
 
 SEV_ICON = {"info": "ℹ️", "warn": "⚠️", "error": "❌", "auth": "🔐", "fatal": "💀"}
@@ -225,6 +249,8 @@ class ProBotUI:
         account_servicer=None,
         backup_service=None,
         settings=None,
+        admin_service=None,
+        db=None,
     ) -> None:
         self.bot = bot
         self.i18n = i18n
@@ -237,6 +263,8 @@ class ProBotUI:
         self._login = login
         self._log = log_client
         self._admin_ids = set(admin_ids or [])
+        self._admin_service = admin_service
+        self._db = db
         self._credentials = credentials
         self._bot_tokens = bot_tokens
         self._dispatcher = dispatcher
@@ -260,13 +288,20 @@ class ProBotUI:
     # helpers
     # ------------------------------------------------------------------ #
     def _is_admin(self, user_id: int) -> bool:
+        if getattr(self, "_admin_service", None) is not None:
+            return self._admin_service.is_admin(user_id)
         admin_ids = getattr(self, "_admin_ids", None)
-        return bool(admin_ids and int(user_id or 0) in admin_ids)
+        try:
+            return bool(admin_ids and int(user_id or 0) in admin_ids)
+        except Exception:
+            return False
 
     def _scope_uid(self, user_id: int) -> Optional[int]:
-        if not getattr(self, "_admin_ids", None):
+        if not getattr(self, "_admin_ids", None) and getattr(self, "_admin_service", None) is None:
             return None
-        return None if self._is_admin(user_id) else (int(user_id) if user_id else 0)
+        if self._is_admin(user_id):
+            return None
+        return int(user_id) if user_id else 0
 
     async def _owned_rule(self, rule_id: str, user_id: int):
         # v12.2: every rule read in the bot funnels through the use-case
@@ -852,10 +887,20 @@ class ProBotUI:
         except Exception:
             return 0
 
-    def _main_menu(self) -> InlineKeyboardMarkup:
+    def _main_menu(self, uid: int = 0) -> InlineKeyboardMarkup:
         is_fa = self.i18n.current == "fa"
+        is_adm = self._is_admin(uid) if uid else False
+        rows = []
+        if is_adm:
+            rows.append([
+                InlineKeyboardButton(
+                    "👑 پنل مدیریت سامانه (Admin Panel)" if is_fa else "👑 Admin Control Plane",
+                    callback_data=CB["admin"],
+                )
+            ])
+
         if is_fa:
-            rows = [
+            rows.extend([
                 [
                     InlineKeyboardButton("⚡ فوروارد (Forward)", callback_data=CB["rules"]),
                     InlineKeyboardButton("🧹 فیلترها و اسپم", callback_data=CB["filters"]),
@@ -865,7 +910,7 @@ class ProBotUI:
                     InlineKeyboardButton("🤖 هوش مصنوعی (Clone)", callback_data=CB["ai"]),
                 ],
                 [
-                    InlineKeyboardButton("⚙️ تنظیمات (Settings)", callback_data=CB["creds"]),
+                    InlineKeyboardButton("⚙️ تنظیمات (Settings)", callback_data=CB["settings"]),
                     InlineKeyboardButton("🌐 پنل تحت وب (Web)", callback_data=CB["dashboard"]),
                 ],
                 [
@@ -882,9 +927,9 @@ class ProBotUI:
                 [
                     InlineKeyboardButton("🔌 مدیریت نشست‌ها (Disconnect)", callback_data=CB["sessions"]),
                 ],
-            ]
+            ])
         else:
-            rows = [
+            rows.extend([
                 [
                     InlineKeyboardButton("Forward", callback_data=CB["rules"]),
                     InlineKeyboardButton("Spam", callback_data=CB["filters"]),
@@ -894,7 +939,7 @@ class ProBotUI:
                     InlineKeyboardButton("Clone", callback_data=CB["ai"]),
                 ],
                 [
-                    InlineKeyboardButton("⚙️ Settings", callback_data=CB["creds"]),
+                    InlineKeyboardButton("⚙️ Settings", callback_data=CB["settings"]),
                     InlineKeyboardButton("🧩 Browse Addons", callback_data=CB["dashboard"]),
                 ],
                 [
@@ -911,7 +956,7 @@ class ProBotUI:
                 [
                     InlineKeyboardButton("🔌 Disconnect", callback_data=CB["sessions"]),
                 ],
-            ]
+            ])
         return InlineKeyboardMarkup(rows)
 
     def _upgrade_text(self, uid: int = 0) -> str:
@@ -952,6 +997,144 @@ class ProBotUI:
             "To purchase via Crypto (USDT/TON) or local payment and receive instant activation, contact support:\n"
             "📩 Direct Contact: @Capxi"
         )
+
+    def _client_settings_menu(self, uid: int = 0) -> InlineKeyboardMarkup:
+        is_fa = self.i18n.current == "fa"
+        is_adm = self._is_admin(uid) if uid else False
+        rows = [
+            [
+                InlineKeyboardButton(
+                    "📱 کلیدهای اختصاصی تلگرام (API ID & Hash)" if is_fa else "📱 My Telegram API Credentials",
+                    callback_data=CB["client_creds"],
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🌐 تغییر زبان (Language)" if is_fa else "🌐 Language",
+                    callback_data=CB["lang"],
+                ),
+                InlineKeyboardButton(
+                    "💎 اشتراک و سهمیه (Plan & Quota)" if is_fa else "💎 Plan & Quota",
+                    callback_data=CB["upgrade"],
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "🔑 ورود مستقیم به پنل وب (Web Token)" if is_fa else "🔑 Web Access Token",
+                    callback_data=CB["webpass"],
+                )
+            ],
+        ]
+        if is_adm:
+            rows.append([
+                InlineKeyboardButton(
+                    "👑 ورود به پنل مدیریت کل (Admin Panel)" if is_fa else "👑 Administrator Control Plane",
+                    callback_data=CB["admin"],
+                )
+            ])
+        rows.append([
+            InlineKeyboardButton("🔙 بازگشت به منوی اصلی" if is_fa else "🔙 Back to Main Menu", callback_data=CB["main"])
+        ])
+        return InlineKeyboardMarkup(rows)
+
+    async def _render_admin_panel(self, uid: int) -> tuple[str, InlineKeyboardMarkup]:
+        is_fa = self.i18n.current == "fa"
+        total_users = 0
+        active_rules = 0
+        dlq_errors = await self._dlq_count()
+        fs_channel = ""
+        fs_enabled = False
+
+        if self._users:
+            try:
+                total_users = await self._users.count_all()
+            except Exception:
+                pass
+        if self._rules:
+            try:
+                all_r = await self._rules.list_all()
+                active_rules = sum(1 for r in all_r if getattr(r, "enabled", True))
+            except Exception:
+                pass
+
+        if self._db:
+            try:
+                r1 = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_enabled'")
+                if r1 and r1["value"] == "1":
+                    fs_enabled = True
+                r2 = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_channel'")
+                if r2 and r2["value"]:
+                    fs_channel = str(r2["value"])
+            except Exception:
+                pass
+
+        fs_status_str = f"🟢 فعال ({fs_channel})" if fs_enabled and fs_channel else "⚪ غیرفعال"
+
+        if is_fa:
+            lines = [
+                "👑 **پنل مدیریت کل سامانه (Administrator Control Plane)**\n",
+                "📊 **وضعیت لحظه‌ای و مانیتورینگ سیستم:**",
+                f"• 👥 کل کاربران / مستاجران ثبت‌شده: `{total_users}`",
+                f"• ⚡ قوانین فعال فوروارد: `{active_rules}`",
+                f"• ❌ خطاهای صف / DLQ: `{dlq_errors}`",
+                f"• 🔒 قفل عضویت اجباری: {fs_status_str}",
+                "• 🖥 وضعیت سرویس‌ها: Core 🟢 | Logger 🟢 | Web 🟢\n",
+                "👇 جهت مدیریت بخش‌های مختلف سامانه، گزینه مورد نظر را انتخاب کنید:",
+            ]
+            rows = [
+                [
+                    InlineKeyboardButton("📊 آمار و مانیتورینگ جامع", callback_data=CB["adm_stats"]),
+                    InlineKeyboardButton("👥 مدیریت کاربران و مستاجران", callback_data=CB["adm_users"]),
+                ],
+                [
+                    InlineKeyboardButton("📢 ارسال پیام همگانی (Broadcast)", callback_data=CB["adm_bcast"]),
+                    InlineKeyboardButton("🔒 قفل عضویت اجباری (Force-Sub)", callback_data=CB["adm_forcesub"]),
+                ],
+                [
+                    InlineKeyboardButton("👮‍♂️ مدیریت مدیران سامانه", callback_data=CB["adm_admins"]),
+                    InlineKeyboardButton("🔐 کلیدهای API سراسری (Vault)", callback_data=CB["creds"]),
+                ],
+                [
+                    InlineKeyboardButton("⚙️ تنظیمات عمومی و دامنه وب", callback_data=CB["adm_config"]),
+                    InlineKeyboardButton("📦 پشتیبان‌گیری و مهاجرت سرور", callback_data=CB["migrate"]),
+                ],
+                [
+                    InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data=CB["main"]),
+                ],
+            ]
+        else:
+            lines = [
+                "👑 **Administrator Control Plane**\n",
+                "📊 **System Status & Live Metrics:**",
+                f"• 👥 Registered Users / Tenants: `{total_users}`",
+                f"• ⚡ Active Forward Rules: `{active_rules}`",
+                f"• ❌ DLQ / System Errors: `{dlq_errors}`",
+                f"• 🔒 Force-Subscription: {fs_status_str}",
+                "• 🖥 Services Health: Core 🟢 | Logger 🟢 | Web 🟢\n",
+                "Select an administrative module below:",
+            ]
+            rows = [
+                [
+                    InlineKeyboardButton("📊 System Overview & Metrics", callback_data=CB["adm_stats"]),
+                    InlineKeyboardButton("👥 Tenant & User Management", callback_data=CB["adm_users"]),
+                ],
+                [
+                    InlineKeyboardButton("📢 Broadcast Center", callback_data=CB["adm_bcast"]),
+                    InlineKeyboardButton("🔒 Force-Subscription Channel", callback_data=CB["adm_forcesub"]),
+                ],
+                [
+                    InlineKeyboardButton("👮‍♂️ Administrator Access Control", callback_data=CB["adm_admins"]),
+                    InlineKeyboardButton("🔐 Global API Credentials Vault", callback_data=CB["creds"]),
+                ],
+                [
+                    InlineKeyboardButton("⚙️ Global Config & Domain", callback_data=CB["adm_config"]),
+                    InlineKeyboardButton("📦 Server Migration & Backup", callback_data=CB["migrate"]),
+                ],
+                [
+                    InlineKeyboardButton("🔙 Back to Main Menu", callback_data=CB["main"]),
+                ],
+            ]
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
 
     def _migrate_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
@@ -1767,9 +1950,16 @@ class ProBotUI:
 
         _fuid = self._scope_uid(uid)
         if _fuid is None and hasattr(self._sessions, "list_all"):
-            sessions = await self._sessions.list_all()
+            _res = self._sessions.list_all()
+            sessions = await _res if asyncio.iscoroutine(_res) else _res
+        elif hasattr(self._sessions, "list_by_owner"):
+            _res = self._sessions.list_by_owner(uid)
+            sessions = await _res if asyncio.iscoroutine(_res) else _res
+        elif hasattr(self._sessions, "list_all"):
+            _res = self._sessions.list_all()
+            sessions = await _res if asyncio.iscoroutine(_res) else _res
         else:
-            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+            sessions = []
         if not sessions:
             st.step = ""
             if isinstance(st.buffer, dict):
@@ -2311,22 +2501,26 @@ class ProBotUI:
         async def _settings_cmd(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /settings from uid=%s", uid)
-            try:
-                rules = await self._rules.list_by_owner(uid) if uid else []
-                if not rules:
-                    sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
-                    if not sessions:
-                        text, kbd = self._render_welcome_onboarding(uid, user=message.from_user)
-                    else:
-                        text = "⚙️ شما هنوز هیچ تسک یا قانون انتقالی ایجاد نکرده‌اید."
-                        kbd = self._main_menu()
-                    await message.reply_text(text, reply_markup=kbd)
-                else:
-                    text, kbd = self._render_rules_list(rules, page=0)
-                    msg_text = "⚙️ **تنظیمات تسک‌ها (Cleaner، Filters، Header و Footer)**\n\n👇 جهت ورود به تنظیمات Cleaner، فیلترها، هدر یا فوتر، تسک مورد نظر را انتخاب کنید:\n\n" + text
-                    await message.reply_text(msg_text, reply_markup=kbd)
-            except Exception as exc:
-                logger.exception("/settings failed for uid=%s: %s", uid, exc)
+            lines = [
+                "⚙️ **تنظیمات و سفارشی‌سازی (Settings)**\n",
+                "از این بخش می‌توانید تنظیمات اختصاصی حساب کاربری و کلیدهای شخصی خود را مدیریت کنید.\n",
+                f"👤 شناسه عددی شما (User ID): `{uid}`",
+            ]
+            if self._is_admin(uid):
+                lines.append("👑 وضعیت دسترسی: **مدیر سیستم (Administrator)**")
+            else:
+                lines.append("👤 وضعیت دسترسی: **کاربر عادی (Client)**")
+            kbd = self._client_settings_menu(uid)
+            await message.reply_text("\n".join(lines), reply_markup=kbd)
+
+        @b.on_message(filters.command("admin") & filters.private)
+        async def _admin_cmd(_, message: Message):
+            uid = message.from_user.id if message.from_user else 0
+            logger.info("Handling /admin from uid=%s", uid)
+            if not self._is_admin(uid):
+                return await message.reply_text("⛔ دسترسی غیرمجاز. این بخش مخصوص مدیران سامانه است.")
+            text, kbd = await self._render_admin_panel(uid)
+            await message.reply_text(text, reply_markup=kbd)
 
         @b.on_message(filters.command("profile") & filters.private)
         async def _profile_cmd(_, message: Message):
@@ -2575,6 +2769,471 @@ class ProBotUI:
                     reply_markup=self._main_menu(),
                 )
             await cq.answer()
+
+        # ---------------- client settings & personal credentials ----------------
+        @b.on_callback_query(filters.regex("^" + CB["settings"] + "$"))
+        async def _cb_settings(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            lines = [
+                "⚙️ **تنظیمات و سفارشی‌سازی (Settings)**\n",
+                "از این بخش می‌توانید تنظیمات اختصاصی حساب کاربری و کلیدهای شخصی خود را مدیریت کنید.\n",
+                f"👤 شناسه عددی شما (User ID): `{uid}`",
+            ]
+            if self._is_admin(uid):
+                lines.append("👑 وضعیت دسترسی: **مدیر سیستم (Administrator)**")
+            else:
+                lines.append("👤 وضعیت دسترسی: **کاربر عادی (Client)**")
+            kbd = self._client_settings_menu(uid)
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["client_creds"] + "$"))
+        async def _cb_client_creds(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            has_custom = False
+            masked_hash = ""
+            api_id = 0
+            if self._credentials:
+                try:
+                    owned = await self._credentials.list_by_owner(uid)
+                    if owned:
+                        has_custom = True
+                        api_id = owned[0].api_id
+                        h = owned[0].api_hash or ""
+                        masked_hash = f"{h[:2]}***{h[-4:]}" if len(h) >= 8 else "***"
+                except Exception:
+                    pass
+
+            is_fa = self.i18n.current == "fa"
+            if is_fa:
+                lines = [
+                    "📱 **کلیدهای اختصاصی تلگرام کاربر (Telegram API Credentials)**\n",
+                    "شما می‌توانید از کلیدهای اختصاصی (API ID و API Hash) خود برای اتصال نشست‌ها استفاده کنید.\n",
+                ]
+                if has_custom:
+                    lines.extend([
+                        "✅ **کلیدهای اختصاصی فعال شما:**",
+                        f"• API ID: `{api_id}`",
+                        f"• API Hash: `{masked_hash}` (رمزنگاری شده)\n",
+                    ])
+                else:
+                    lines.append("ℹ️ در حال حاضر از **کلیدهای پیش‌فرض و اشتراکی سامانه** استفاده می‌کنید.\n")
+
+                rows = [
+                    [
+                        InlineKeyboardButton("✏️ تنظیم یا تغییر کلیدهای شخصی", callback_data="clc_edit"),
+                    ],
+                ]
+                if has_custom:
+                    rows.append([
+                        InlineKeyboardButton("🗑 بازنشانی به پیش‌فرض سامانه", callback_data=CB["client_cred_reset"]),
+                    ])
+                rows.append([
+                    InlineKeyboardButton("🔙 بازگشت به تنظیمات", callback_data=CB["settings"]),
+                ])
+            else:
+                lines = [
+                    "📱 **Personal Telegram API Credentials**\n",
+                    "You can configure your own Telegram API ID and API Hash for connecting your accounts.\n",
+                ]
+                if has_custom:
+                    lines.extend([
+                        "✅ **Active Custom Credentials:**",
+                        f"• API ID: `{api_id}`",
+                        f"• API Hash: `{masked_hash}` (encrypted)\n",
+                    ])
+                else:
+                    lines.append("ℹ️ Currently using the **system default credentials**.\n")
+
+                rows = [
+                    [
+                        InlineKeyboardButton("✏️ Configure Custom Credentials", callback_data="clc_edit"),
+                    ],
+                ]
+                if has_custom:
+                    rows.append([
+                        InlineKeyboardButton("🗑 Reset to System Default", callback_data=CB["client_cred_reset"]),
+                    ])
+                rows.append([
+                    InlineKeyboardButton("🔙 Back to Settings", callback_data=CB["settings"]),
+                ])
+
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^clc_edit$"))
+        async def _cb_client_creds_edit(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            st = self._state(uid)
+            st.step = "client_api_id"
+            await self._persist(uid, st)
+            msg = (
+                "📱 لطفاً **API ID عددی** خود را ارسال نمایید:\n"
+                "(می‌توانید آن را از my.telegram.org دریافت کنید)"
+                if self.i18n.current == "fa"
+                else "📱 Please send your numeric **Telegram API ID** (from my.telegram.org):"
+            )
+            await self._safe_edit(
+                cq, msg,
+                reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]])
+            )
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["client_cred_reset"] + "$"))
+        async def _cb_client_cred_reset(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if self._credentials:
+                try:
+                    owned = await self._credentials.list_by_owner(uid)
+                    for c in owned:
+                        await self._credentials.delete(c.id)
+                except Exception:
+                    pass
+            await cq.answer("✅ کلیدهای شخصی حذف شد و تنظیمات به پیش‌فرض بازگشت.", show_alert=True)
+            cq.data = CB["client_creds"]
+            await _cb_client_creds(_, cq)
+
+        # ---------------- administrator control plane ----------------
+        @b.on_callback_query(filters.regex("^" + CB["admin"] + "$"))
+        async def _cb_admin_panel(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ فقط مدیران سامانه مجاز به دسترسی هستند.", show_alert=True)
+            text, kbd = await self._render_admin_panel(uid)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["adm_stats"] + "$"))
+        async def _cb_adm_stats(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+            total_users = await self._users.count_all() if self._users else 0
+            active_rules = 0
+            if self._rules:
+                all_r = await self._rules.list_all()
+                active_rules = sum(1 for r in all_r if getattr(r, "enabled", True))
+            dlq_count = await self._dlq_count()
+
+            lines = [
+                "📊 **آمار و گزارش تفصیلی سامانه (System Diagnostics)**\n",
+                f"• 👥 کل کاربران ثبت‌شده: `{total_users}`",
+                f"• ⚡ قوانین فعال: `{active_rules}`",
+                f"• ⚠️ پیام‌های ناموفق / صف خطا (DLQ): `{dlq_count}`",
+                f"• 🌐 دامنه پنل وب: `{self._web_url or 'تنظیم نشده'}`",
+                "• 🟢 هسته پردازشی (Core): برخط",
+                "• 🟢 سرویس لاگر (Logger): برخط",
+                "• 🟢 درگاه وب (Web Gateway): برخط",
+            ]
+            kbd = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data=CB["admin"])],
+            ])
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^" + CB["adm_users"] + r"(?:_pg_(\d+))?$"))
+        async def _cb_adm_users(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+
+            page = 0
+            m = re.match(r"^" + CB["adm_users"] + r"_pg_(\d+)$", cq.data or "")
+            if m:
+                page = int(m.group(1))
+
+            limit = 6
+            offset = page * limit
+            users = await self._users.list_all(limit=limit, offset=offset) if self._users else []
+            total = await self._users.count_all() if self._users else 0
+
+            lines = [
+                f"👥 **مدیریت کاربران و مستاجران (صفحه {page + 1} از {max(1, (total + limit - 1) // limit)}):**\n",
+            ]
+            rows = []
+            for u in users:
+                user_uid = u.get("user_id")
+                status = u.get("status", "active")
+                is_adm = self._is_admin(user_uid)
+                status_icon = "👑" if is_adm else ("🟢" if status == "active" else "🔴")
+                plan = u.get("plan", "free")
+                lines.append(f"{status_icon} `{user_uid}` | پلن: **{plan}** | وضعیت: {status}")
+
+                btn_toggle = (
+                    InlineKeyboardButton(f"⛔ تعلیق {user_uid}", callback_data=f"{CB['adm_user_suspend']}_{user_uid}")
+                    if status == "active" and not is_adm
+                    else (
+                        InlineKeyboardButton(f"✅ فعال‌سازی {user_uid}", callback_data=f"{CB['adm_user_activate']}_{user_uid}")
+                        if status == "suspended" and not is_adm
+                        else None
+                    )
+                )
+                if btn_toggle:
+                    rows.append([btn_toggle])
+
+            nav = []
+            if page > 0:
+                nav.append(InlineKeyboardButton("⬅️ قبلی", callback_data=f"{CB['adm_users']}_pg_{page - 1}"))
+            if offset + limit < total:
+                nav.append(InlineKeyboardButton("بعدی ➡️", callback_data=f"{CB['adm_users']}_pg_{page + 1}"))
+            if nav:
+                rows.append(nav)
+
+            rows.append([InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data=CB["admin"])])
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^" + CB["adm_user_suspend"] + r"_(\d+)$"))
+        async def _cb_adm_user_suspend(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+            target = int(cq.matches[0].group(1))
+            if self._is_admin(target):
+                return await cq.answer("❌ مدیران سامانه قابل تعلیق نیستند.", show_alert=True)
+            if self._users:
+                await self._users.set_status(target, "suspended")
+            await cq.answer(f"⛔ کاربر {target} تعلیق شد.", show_alert=True)
+            cq.data = CB["adm_users"]
+            await _cb_adm_users(_, cq)
+
+        @b.on_callback_query(filters.regex(r"^" + CB["adm_user_activate"] + r"_(\d+)$"))
+        async def _cb_adm_user_activate(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+            target = int(cq.matches[0].group(1))
+            if self._users:
+                await self._users.set_status(target, "active")
+            await cq.answer(f"✅ حساب کاربر {target} فعال شد.", show_alert=True)
+            cq.data = CB["adm_users"]
+            await _cb_adm_users(_, cq)
+
+        @b.on_callback_query(filters.regex("^" + CB["adm_bcast"] + "$"))
+        async def _cb_adm_bcast(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+            st = self._state(uid)
+            st.step = "admin_broadcast_text"
+            await self._persist(uid, st)
+            msg = (
+                "📢 **ارسال پیام همگانی به تمام کاربران**\n\n"
+                "لطفاً متن پیام خود را ارسال نمایید (امکان استفاده از شکلک‌ها و فرمت متن وجود دارد):"
+            )
+            await self._safe_edit(cq, msg, reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["adm_bcast_confirm"] + "$"))
+        async def _cb_adm_bcast_confirm(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+            st = self._state(uid)
+            text = st.buffer.get("bcast_text", "")
+            st.buffer.clear()
+            await self._persist(uid, st)
+
+            if not text:
+                return await cq.answer("❌ متنی برای ارسال یافت نشد.", show_alert=True)
+
+            bcast_id = str(uuid.uuid4())
+            now = int(time.time())
+            if self._db:
+                try:
+                    self._db.execute(
+                        "INSERT INTO broadcast_queue (id, initiator_user_id, message_text, target, status, "
+                        "total_recipients, sent_count, failed_count, created_at, updated_at) "
+                        "VALUES (?, ?, ?, 'all', 'running', 0, 0, 0, ?, ?)",
+                        (bcast_id, uid, text, now, now),
+                    )
+                except Exception:
+                    pass
+
+            asyncio.create_task(self._run_broadcast_job(bcast_id, uid, text))
+            await cq.answer("🚀 ارسال همگانی در پس‌زمینه آغاز گردید.", show_alert=True)
+            text_panel, kbd_panel = await self._render_admin_panel(uid)
+            await self._safe_edit(cq, text_panel, reply_markup=kbd_panel)
+
+        @b.on_callback_query(filters.regex("^" + CB["adm_bcast_cancel"] + "$"))
+        async def _cb_adm_bcast_cancel(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            st = self._state(uid)
+            st.buffer.clear()
+            await self._persist(uid, st)
+            await cq.answer("❌ ارسال همگانی لغو شد.")
+            text_panel, kbd_panel = await self._render_admin_panel(uid)
+            await self._safe_edit(cq, text_panel, reply_markup=kbd_panel)
+
+        @b.on_callback_query(filters.regex("^" + CB["adm_forcesub"] + "$"))
+        async def _cb_adm_forcesub(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+
+            fs_enabled = False
+            fs_channel = ""
+            if self._db:
+                r1 = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_enabled'")
+                if r1 and r1["value"] == "1":
+                    fs_enabled = True
+                r2 = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_channel'")
+                if r2 and r2["value"]:
+                    fs_channel = str(r2["value"])
+
+            status_str = "🟢 فعال" if fs_enabled else "⚪ غیرفعال"
+            lines = [
+                "🔒 **تنظیمات قفل عضویت اجباری (Force-Subscription)**\n",
+                f"• وضعیت کنونی: {status_str}",
+                f"• کانال تنظیم شده: `{fs_channel or 'تنظیم نشده'}`\n",
+                "در صورت فعال بودن، کاربران عادی قبل از استفاده از ربات ملزم به عضویت در کانال خواهند بود.",
+            ]
+            rows = [
+                [
+                    InlineKeyboardButton(
+                        "🔴 غیرفعال‌سازی" if fs_enabled else "🟢 فعال‌سازی",
+                        callback_data=CB["adm_forcesub_toggle"],
+                    ),
+                    InlineKeyboardButton("✏️ تغییر کانال الزامی", callback_data=CB["adm_forcesub_set"]),
+                ],
+                [InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data=CB["admin"])],
+            ]
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["adm_forcesub_toggle"] + "$"))
+        async def _cb_adm_forcesub_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+            if self._db:
+                r = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_enabled'")
+                new_val = "0" if (r and r["value"] == "1") else "1"
+                now = int(time.time())
+                self._db.execute(
+                    "INSERT INTO app_settings (key, value, updated_at) VALUES ('force_sub_enabled', ?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                    (new_val, now),
+                )
+            await cq.answer("✅ وضعیت قفل عضویت اجباری تغییر یافت.")
+            cq.data = CB["adm_forcesub"]
+            await _cb_adm_forcesub(_, cq)
+
+        @b.on_callback_query(filters.regex("^" + CB["adm_forcesub_set"] + "$"))
+        async def _cb_adm_forcesub_set(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+            st = self._state(uid)
+            st.step = "admin_forcesub_channel"
+            await self._persist(uid, st)
+            msg = "🔒 لطفاً آیدی کانال الزامی (مثلاً `@ChannelID`) یا شناسه عددی آن را ارسال نمایید:"
+            await self._safe_edit(cq, msg, reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["adm_admins"] + "$"))
+        async def _cb_adm_admins(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+
+            admins = self._admin_service.list_admins() if self._admin_service else []
+            lines = [
+                "👮‍♂️ **مدیریت مدیران و دسترسی‌های سامانه (Admin Access Control)**\n",
+            ]
+            rows = []
+            for a in admins:
+                aid = a["user_id"]
+                role = a.get("role", "admin")
+                role_label = "👑 مالک کل (Owner)" if role == "owner" else "🛡 مدیر (Admin)"
+                lines.append(f"• `{aid}` — {role_label}")
+                if role != "owner":
+                    rows.append([
+                        InlineKeyboardButton(f"❌ حذف دسترسی {aid}", callback_data=f"{CB['adm_admin_del']}_{aid}")
+                    ])
+
+            rows.append([InlineKeyboardButton("➕ افزودن مدیر جدید", callback_data=CB["adm_admin_add"])])
+            rows.append([InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data=CB["admin"])])
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["adm_admin_add"] + "$"))
+        async def _cb_adm_admin_add(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+            st = self._state(uid)
+            st.step = "admin_add_id"
+            await self._persist(uid, st)
+            msg = "👮‍♂️ لطفاً شناسه عددی (Telegram User ID) کاربری که می‌خواهید مدیر شود را ارسال نمایید:"
+            await self._safe_edit(cq, msg, reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^" + CB["adm_admin_del"] + r"_(\d+)$"))
+        async def _cb_adm_admin_del(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+            target = int(cq.matches[0].group(1))
+            try:
+                if self._admin_service:
+                    self._admin_service.remove_admin(target, removed_by=uid)
+                await cq.answer(f"✅ دسترسی مدیریت کاربر {target} لغو شد.", show_alert=True)
+            except Exception as exc:
+                await cq.answer(f"❌ خطا: {exc}", show_alert=True)
+            cq.data = CB["adm_admins"]
+            await _cb_adm_admins(_, cq)
+
+        @b.on_callback_query(filters.regex("^" + CB["adm_config"] + "$"))
+        async def _cb_adm_config(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+
+            lines = [
+                "⚙️ **تنظیمات عمومی سامانه و دامنه وب**\n",
+                f"• آدرس عمومی پنل وب: `{self._web_url or 'تنظیم نشده'}`",
+                "• کلید رمزنگاری محلی (Master Key): بارگذاری‌شده 🔒\n",
+                "جهت تنظیم آدرس دامنه عمومی یا مدیریت کلیدهای API سراسری از گزینه‌های زیر استفاده نمایید:",
+            ]
+            rows = [
+                [InlineKeyboardButton("🌐 تنظیم دامنه پنل وب", callback_data=CB["weburl_set"])],
+                [InlineKeyboardButton("🔐 کلیدهای API سراسری (Vault)", callback_data=CB["creds"])],
+                [InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data=CB["admin"])],
+            ]
+            await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["check_sub"] + "$"))
+        async def _cb_check_sub(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            fs_channel = ""
+            if self._db:
+                r = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_channel'")
+                if r and r["value"]:
+                    fs_channel = str(r["value"])
+
+            is_member = True
+            if fs_channel:
+                try:
+                    chat_member = await self.bot.get_chat_member(fs_channel, uid)
+                    st_str = str(getattr(chat_member, "status", "")).lower()
+                    if "left" in st_str or "banned" in st_str:
+                        is_member = False
+                except Exception as exc:
+                    logger.warning("Force-sub verification check error: %s", exc)
+
+            if not is_member:
+                return await cq.answer("⚠️ شما هنوز در کانال عضو نشده‌اید! لطفاً ابتدا عضو شوید.", show_alert=True)
+
+            await cq.answer("✅ عضویت شما با موفقیت تأیید گردید! خوش آمدید.", show_alert=True)
+            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+            if not sessions:
+                text, kbd = self._render_welcome_onboarding(uid, user=cq.from_user)
+            else:
+                text = await self._main_text(uid, user=cq.from_user)
+                kbd = self._main_menu(uid)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         # ---------------- cancel any active flow ----------------
         @b.on_callback_query(filters.regex("^" + CB["cancel"] + "$"))
@@ -5562,6 +6221,203 @@ class ProBotUI:
         await message.reply_text(
             self._t("ui_weburl_saved").replace("{url}", url),
             reply_markup=self._main_menu())
+
+    async def _step_client_api_id(self, message: Message, st: "UiState", text: str) -> None:
+        clean = (text or "").strip()
+        if not clean.isdigit() or int(clean) <= 0:
+            return await message.reply_text(
+                "❌ API ID نامعتبر است. لطفاً فقط یک عدد مثبت وارد نمایید:"
+                if self.i18n.current == "fa"
+                else "❌ Invalid API ID. Please enter a valid positive number:",
+                reply_markup=self._cancel_kbd(),
+            )
+        st.buffer["client_api_id"] = int(clean)
+        st.step = "client_api_hash"
+        await self._persist(message.from_user.id, st)
+        await message.reply_text(
+            "🔑 اکنون **API Hash** (رشته ۳۲ حرفی) خود را ارسال نمایید:"
+            if self.i18n.current == "fa"
+            else "🔑 Now enter your 32-character **API Hash**:",
+            reply_markup=self._cancel_kbd(),
+        )
+
+    async def _step_client_api_hash(self, message: Message, st: "UiState", text: str) -> None:
+        api_hash = (text or "").strip()
+        uid = message.from_user.id
+        if len(api_hash) != 32:
+            return await message.reply_text(
+                "❌ API Hash باید دقیقاً یک رشته ۳۲ کاراکتری هگزادسیمال باشد. لطفاً مجدداً ارسال کنید:"
+                if self.i18n.current == "fa"
+                else "❌ API Hash must be exactly 32 hexadecimal characters. Please try again:",
+                reply_markup=self._cancel_kbd(),
+            )
+        api_id = int(st.buffer.get("client_api_id", 0))
+        st.step = ""
+        st.buffer.clear()
+        await self._persist(uid, st)
+
+        if self._credentials:
+            try:
+                owned = await self._credentials.list_by_owner(uid)
+                for c in owned:
+                    await self._credentials.delete(c.id)
+                await self._credentials.create(
+                    label=f"user_{uid}_cred",
+                    api_id=api_id,
+                    api_hash=api_hash,
+                    is_default=True,
+                    owner_user_id=uid,
+                )
+            except Exception as exc:
+                logger.error("Failed saving user credentials: %s", exc)
+
+        if self._pool:
+            try:
+                self._pool.register_credentials(f"user_{uid}", api_id, api_hash)
+            except Exception:
+                pass
+
+        await message.reply_text(
+            "✅ **کلیدهای اختصاصی شما با موفقیت ذخیره و فعال گردید.**\n"
+            "از این پس نشست‌های جدید شما با کلیدهای شخصی خودتان متصل خواهند شد."
+            if self.i18n.current == "fa"
+            else "✅ **Your personal Telegram API credentials were saved successfully.**",
+            reply_markup=self._client_settings_menu(uid),
+        )
+
+    async def _step_admin_broadcast_text(self, message: Message, st: "UiState", text: str) -> None:
+        uid = message.from_user.id
+        if not self._is_admin(uid):
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text("⛔ دسترسی غیرمجاز.")
+
+        bcast_text = (message.text or "").strip()
+        if not bcast_text:
+            return await message.reply_text("❌ متن پیام نمی‌تواند خالی باشد.", reply_markup=self._cancel_kbd())
+
+        st.buffer["bcast_text"] = bcast_text
+        st.step = ""
+        await self._persist(uid, st)
+
+        count = 0
+        if self._users:
+            try:
+                count = await self._users.count_all()
+            except Exception:
+                pass
+
+        preview_text = (
+            f"📢 **پیش‌نمایش پیام همگانی:**\n\n"
+            f"{bcast_text}\n\n"
+            f"👥 تعداد کل دریافت‌کنندگان واجد شرایط: `{count}`\n"
+            f"⚠️ پیام به صورت پس‌زمینه و با رعایت محدودیت Rate Limit ارسال خواهد شد."
+        )
+        kbd = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ تایید و ارسال همگانی", callback_data=CB["adm_bcast_confirm"])],
+            [InlineKeyboardButton("❌ انصراف", callback_data=CB["adm_bcast_cancel"])],
+        ])
+        await message.reply_text(preview_text, reply_markup=kbd)
+
+    async def _step_admin_forcesub_channel(self, message: Message, st: "UiState", text: str) -> None:
+        uid = message.from_user.id
+        if not self._is_admin(uid):
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text("⛔ دسترسی غیرمجاز.")
+
+        channel = (text or "").strip()
+        if not channel.startswith("@") and not channel.startswith("-100"):
+            channel = "@" + channel.lstrip("@")
+
+        now = int(time.time())
+        if self._db:
+            try:
+                self._db.execute(
+                    "INSERT INTO app_settings (key, value, updated_at) VALUES ('force_sub_channel', ?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                    (channel, now),
+                )
+                self._db.execute(
+                    "INSERT INTO app_settings (key, value, updated_at) VALUES ('force_sub_enabled', '1', ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                    (now,),
+                )
+            except Exception as exc:
+                logger.error("Failed saving force_sub_channel: %s", exc)
+
+        st.step = ""
+        await self._persist(uid, st)
+        text_panel, kbd_panel = await self._render_admin_panel(uid)
+        await message.reply_text(f"✅ کانال عضویت اجباری با موفقیت به `{channel}` تنظیم و فعال شد.", reply_markup=kbd_panel)
+
+    async def _step_admin_add_id(self, message: Message, st: "UiState", text: str) -> None:
+        uid = message.from_user.id
+        if not self._is_admin(uid):
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text("⛔ دسترسی غیرمجاز.")
+
+        clean = (text or "").strip()
+        if not clean.isdigit() or int(clean) <= 0:
+            return await message.reply_text("❌ شناسه عددی نامعتبر است. فقط یک عدد مثبت وارد نمایید:", reply_markup=self._cancel_kbd())
+
+        target_uid = int(clean)
+        st.step = ""
+        await self._persist(uid, st)
+
+        if self._admin_service:
+            try:
+                self._admin_service.add_admin(target_uid, added_by=uid)
+            except Exception as exc:
+                return await message.reply_text(f"❌ خطا در افزودن مدیر: {exc}")
+
+        text_panel, kbd_panel = await self._render_admin_panel(uid)
+        await message.reply_text(f"✅ دسترسی مدیریت برای کاربر `{target_uid}` فعال گردید.", reply_markup=kbd_panel)
+
+    async def _run_broadcast_job(self, bcast_id: str, admin_uid: int, text: str) -> None:
+        recipients = []
+        if self._db:
+            try:
+                rows = self._db.query_all("SELECT user_id FROM users WHERE status != 'suspended'")
+                for r in rows or []:
+                    recipients.append(int(r["user_id"]))
+            except Exception as exc:
+                logger.error("Failed querying users for broadcast: %s", exc)
+
+        sent = 0
+        failed = 0
+        for uid in recipients:
+            try:
+                await self.bot.send_message(uid, text)
+                sent += 1
+            except Exception as exc:
+                failed += 1
+                exc_str = str(exc).lower()
+                if "flood" in exc_str:
+                    await asyncio.sleep(2.0)
+            await asyncio.sleep(0.04)
+
+        if self._db:
+            try:
+                self._db.execute(
+                    "UPDATE broadcast_queue SET status='completed', sent_count=?, failed_count=?, updated_at=? WHERE id=?",
+                    (sent, failed, int(time.time()), bcast_id),
+                )
+            except Exception:
+                pass
+
+        if admin_uid > 0:
+            try:
+                await self.bot.send_message(
+                    admin_uid,
+                    f"📢 **ارسال پیام همگانی به پایان رسید:**\n\n"
+                    f"✅ ارسال موفق: `{sent}`\n"
+                    f"❌ ناموفق: `{failed}`\n"
+                    f"👥 کل دریافت‌کنندگان: `{len(recipients)}`",
+                )
+            except Exception:
+                pass
 
     async def _mint_web_token(self, user_id: int) -> Optional[str]:
         """Mint a JWT for this Telegram user via the Account servicer."""

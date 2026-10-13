@@ -94,6 +94,26 @@ func main() {
 	// Backup & Restore — whole-installation migration between servers.
 	dashMux.HandleFunc("POST /backup/export", h.BackupExport)
 	dashMux.HandleFunc("POST /backup/import", h.BackupImport)
+
+	// Client self-management endpoints (personal credentials, settings)
+	dashMux.HandleFunc("GET /client/settings", h.ClientGetSettings)
+	dashMux.HandleFunc("POST /client/credentials", h.ClientSaveCredentials)
+
+	// Administrator Control Plane endpoints (strictly gated by RequireAdmin)
+	adminMux := http.NewServeMux()
+	adminMux.HandleFunc("GET /overview", h.AdminOverview)
+	adminMux.HandleFunc("GET /users", h.AdminListUsers)
+	adminMux.HandleFunc("POST /users/{id}/status", h.AdminSetUserStatus)
+	adminMux.HandleFunc("POST /broadcast", h.AdminBroadcast)
+	adminMux.HandleFunc("GET /settings", h.AdminGetSettings)
+	adminMux.HandleFunc("POST /settings", h.AdminSaveSettings)
+	adminMux.HandleFunc("GET /admins", h.AdminListAdmins)
+	adminMux.HandleFunc("POST /admins", h.AdminAddAdmin)
+	adminMux.HandleFunc("DELETE /admins/{id}", h.AdminRemoveAdmin)
+	adminMux.HandleFunc("GET /extensions", h.AdminListExtensions)
+	adminMux.HandleFunc("POST /extensions/{id}/toggle", h.AdminToggleExtension)
+	dashMux.Handle("/admin/", http.StripPrefix("/admin", h.RequireAdmin(adminMux)))
+
 	mux.Handle("/api/", h.RequireAuth(dashMux))
 
 	var handler http.Handler = mux

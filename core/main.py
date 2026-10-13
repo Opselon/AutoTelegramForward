@@ -226,11 +226,32 @@ def build_container(cfg: Config) -> dict:
     i18n = I18n()
     i18n.set_language(cfg.language)
 
+    from core.domain.authorization import AdminService
+    admin_service = AdminService(db, cfg.admin_ids, owner_user_id=cfg.admin_user_id)
+
     from core.infrastructure.grpc_server.account_servicer import AccountControlServicer
-    account_servicer = AccountControlServicer(db, users=user_repo, is_admin_user=cfg.admin_ids)
+    account_servicer = AccountControlServicer(
+        db, users=user_repo, is_admin_user=cfg.admin_ids, admin_service=admin_service
+    )
+
+    from core.infrastructure.grpc_server.admin_servicer import AdminControlServicer
+    admin_servicer = AdminControlServicer(
+        db=db,
+        users=user_repo,
+        rules=rules,
+        admin_service=admin_service,
+        credentials=credentials,
+        pool=pool,
+        error_log=error_log_repo,
+        queue_manager=queue_manager,
+        bot=None,
+        web_url=cfg.web_url,
+    )
 
     return {
         "config": cfg, "db": db, "crypto": crypto,
+        "admin_service": admin_service, "account_servicer": account_servicer,
+        "admin_servicer": admin_servicer,
         "sessions": sessions, "rules": rules, "filters": filter_rules,
         "ai": ai_configs, "credentials": credentials, "bot_tokens": bot_tokens,
         "rule_repo": rule_repo,
@@ -295,11 +316,21 @@ async def serve_grpc(container: dict, cfg: Config):
     from core.infrastructure.grpc_server.account_servicer import AccountControlServicer
 
     pb_grpc.add_AccountControlServiceServicer_to_server(
-        AccountControlServicer(container["db"]), server,
+        container.get("account_servicer") or AccountControlServicer(
+            container["db"],
+            users=container.get("users"),
+            is_admin_user=cfg.admin_ids,
+            admin_service=container.get("admin_service"),
+        ),
+        server,
     )
     pb_grpc.add_BackupControlServiceServicer_to_server(
         servicers.BackupControlServicer(container["backup"]), server,
     )
+    if "admin_servicer" in container:
+        pb_grpc.add_AdminControlServiceServicer_to_server(
+            container["admin_servicer"], server,
+        )
     addr = f"{cfg.grpc_host}:{cfg.grpc_port}"
     server.add_insecure_port(addr)
     await server.start()
@@ -344,6 +375,12 @@ async def sync_pool_credentials(container: dict) -> None:
 
 async def main() -> None:
     cfg = Config.load()
+    try:
+        cfg.validate()
+    except ValueError as exc:
+        logger.critical("Configuration validation error: %s", exc)
+        sys.exit(1)
+
     if cfg.disable_bot:
         logger.info("ATF_DISABLE_BOT set: gRPC-only mode (no bot, no Telegram).")
         container = build_container(cfg)
@@ -416,6 +453,8 @@ async def main() -> None:
         auth_machine=auth_machine,
     )
     await bot.start()
+    if "admin_servicer" in container:
+        container["admin_servicer"]._bot = bot.bot
 
     queue_mgr = container.get("queue_manager")
     if queue_mgr:
@@ -474,6 +513,8 @@ async def main() -> None:
             # mean two disjoint pending-login states and codes would never match.
             login=bot.login_manager,
             log_client=log_client, admin_ids=cfg.admin_ids,
+            admin_service=container.get("admin_service"),
+            db=container.get("db"),
             credentials=container.get("credentials"),
             bot_tokens=container.get("bot_tokens"),
             dispatcher=container.get("dispatcher"),
