@@ -201,24 +201,32 @@ class ChannelCatchUpService:
 
     def _replay_one(self, client, session_id: str, raw_message: Any, users: dict, chats: dict) -> bool:
         """Feed one raw channel post through the bound dispatcher handler."""
-        handler = self._dispatcher.message_handler(session_id) if hasattr(
-            self._dispatcher, "message_handler"
-        ) else None
-        if handler is None:
-            return False
+        async def _one():
+            handler = self._dispatcher.message_handler(session_id) if hasattr(
+                self._dispatcher, "message_handler"
+            ) else None
+            if handler is None:
+                logger.warning("catch-up: no message handler for session %s — dropping post %s", session_id[:8], getattr(raw_message, "id", "?"))
+                return
+            try:
+                from pyrogram.types import Message as PyroMessage
+                msg = await PyroMessage._parse(client, raw_message, users, chats)  # noqa: SLF001
+            except Exception as exc:
+                logger.warning("catch-up: could not parse post %s: %s", getattr(raw_message, "id", "?"), exc)
+                return
+            if msg is None:
+                logger.warning("catch-up: parsed post %s returned None", getattr(raw_message, "id", "?"))
+                return
+            try:
+                await handler(client, msg)
+            except Exception as exc:
+                logger.error("catch-up: dispatch failed for post %s: %s", getattr(raw_message, "id", "?"), exc, exc_info=True)
+
         try:
-            from pyrogram.types import Message as PyroMessage
-            msg = PyroMessage._parse(client, raw_message, users, chats)  # noqa: SLF001
-        except Exception as exc:
-            logger.debug("catch-up: could not parse post: %s", exc)
-            return False
-        if msg is None:
-            return False
-        try:
-            asyncio.ensure_future(handler(client, msg))
+            asyncio.ensure_future(_one())
             return True
         except Exception as exc:
-            logger.debug("catch-up: dispatch failed: %s", exc)
+            logger.error("catch-up: schedule failed for post %s: %s", getattr(raw_message, "id", "?"), exc)
             return False
 
     def _emit(self, message: str) -> None:

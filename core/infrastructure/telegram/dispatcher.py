@@ -173,7 +173,17 @@ class MessageDispatcher:
             try:
                 self._log_client.error(
                     "core", "forward",
-                    f"{type(exc).__name__}: {tg_detail(exc)}",
+                    f"Send error on rule {getattr(rule, 'id', '?')[:8]}: {type(exc).__name__} ({tg_detail(exc)})",
+                    detail={
+                        "rule_id": getattr(rule, "id", ""),
+                        "source_chat_id": str(getattr(payload, "chat_id", "")),
+                        "source_message_id": getattr(payload, "message_id", 0),
+                        "target_chat_id": str(target),
+                        "error_type": type(exc).__name__,
+                        "error_detail": tg_detail(exc),
+                        "severity": severity,
+                        "recoverable": recoverable,
+                    },
                 )
             except Exception:
                 pass
@@ -248,7 +258,7 @@ class MessageDispatcher:
         Returned so the channel catch-up service can replay missed channel
         posts through the exact same path as a live push update.
         """
-        return self._handlers.get(session_id)
+        return self._message_handlers.get(session_id)
 
     def set_rate_limit(self, per_minute: int) -> None:
         self._max_per_minute = max(1, int(per_minute))
@@ -336,7 +346,12 @@ class MessageDispatcher:
     async def _send(self, payload: MessagePayload, rule, text: str, evaluation) -> bool:
         targets = list(getattr(rule, "all_targets", [rule.target_chat_id]) or [rule.target_chat_id])
         if not targets:
-            logger.warning("rule %s has no targets", getattr(rule, "id", "?")[:8])
+            logger.warning(
+                "Rule %s (source %s) has no targets configured — message %s cannot be forwarded",
+                getattr(rule, "id", "?")[:8],
+                getattr(payload, "chat_id", "?"),
+                getattr(payload, "message_id", "?"),
+            )
             return False
 
         # Smart routing: intermediate VIP hop

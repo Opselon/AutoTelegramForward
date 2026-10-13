@@ -286,6 +286,16 @@ class DurableMessagePipeline:
 
         if not valid_rules:
             ctx.record_stage(PipelineStage.FILTER, False, reason="no_matching_rules")
+            if not active_rules:
+                logger.info(
+                    "[%s] Message %s from chat %s: No active forward rules exist for this source",
+                    ctx.correlation_id[:8], payload.message_id, payload.chat_id,
+                )
+            else:
+                logger.info(
+                    "[%s] Message %s from chat %s: None of the %d active rule(s) matched (matching=%d, trigger=%s)",
+                    ctx.correlation_id[:8], payload.message_id, payload.chat_id, len(active_rules), len(matching), trigger,
+                )
             return ctx
 
         for rule in valid_rules:
@@ -310,11 +320,19 @@ class DurableMessagePipeline:
         if since and payload.date and payload.date < since:
             ctx.record_stage(PipelineStage.DEDUPLICATE, False, reason="too_old", duration_ms=(time.monotonic() - t0) * 1000)
             self.metrics.dedup_skipped_total += 1
+            logger.info(
+                "[%s] Rule %s skipped msg %s: too_old (date=%s < since_ts=%s)",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id, payload.date, since,
+            )
             return
 
         if payload.is_edit and getattr(rule, "ignore_edits", False):
             ctx.record_stage(PipelineStage.DEDUPLICATE, False, reason="edit_ignored")
             self.metrics.dedup_skipped_total += 1
+            logger.info(
+                "[%s] Rule %s skipped msg %s: edit_ignored",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+            )
             return
 
         if not payload.is_edit and getattr(rule, "skip_history", True) and self._processed is not None:
@@ -322,6 +340,10 @@ class DurableMessagePipeline:
             if seen:
                 ctx.record_stage(PipelineStage.DEDUPLICATE, False, reason="duplicate_event")
                 self.metrics.dedup_skipped_total += 1
+                logger.info(
+                    "[%s] Rule %s skipped msg %s: already processed (duplicate_event)",
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                )
                 return
 
         ctx.record_stage(PipelineStage.DEDUPLICATE, True, reason="unique", duration_ms=(time.monotonic() - t0) * 1000)
@@ -341,6 +363,10 @@ class DurableMessagePipeline:
         if eval_res.action == FilterAction.DROP:
             ctx.record_stage(PipelineStage.FILTER, False, reason=eval_res.reason, duration_ms=(time.monotonic() - t0) * 1000)
             self.metrics.filtered_total += 1
+            logger.warning(
+                "[%s] Rule %s DROPPED msg %s by filter rule %s: %s",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id, rule.filter_rule_id or "none", eval_res.reason,
+            )
             return
 
         # Additional media blocks
@@ -348,10 +374,18 @@ class DurableMessagePipeline:
         if getattr(rule, "block_voice", False) and m_type in ("voice", "audio"):
             ctx.record_stage(PipelineStage.FILTER, False, reason="voice_blocked")
             self.metrics.filtered_total += 1
+            logger.warning(
+                "[%s] Rule %s DROPPED msg %s: voice/audio blocked by rule setting",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+            )
             return
         if getattr(rule, "block_stickers", False) and m_type in ("sticker",):
             ctx.record_stage(PipelineStage.FILTER, False, reason="sticker_blocked")
             self.metrics.filtered_total += 1
+            logger.warning(
+                "[%s] Rule %s DROPPED msg %s: sticker blocked by rule setting",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+            )
             return
 
         ctx.record_stage(PipelineStage.FILTER, True, reason=eval_res.reason, duration_ms=(time.monotonic() - t0) * 1000)
@@ -363,6 +397,10 @@ class DurableMessagePipeline:
             if transformed is None:
                 # Message was dropped or deferred by transform policy (e.g. AI fallback DROP or RETRY)
                 self.metrics.failed_total += 1
+                logger.warning(
+                    "[%s] Rule %s transform policy returned None for msg %s (dropped or deferred)",
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                )
                 return
             # Output validation: validate max length
             max_limit = 1024 if payload.has_media else 4096
@@ -382,6 +420,10 @@ class DurableMessagePipeline:
         targets = list(getattr(rule, "all_targets", [rule.target_chat_id]) or [rule.target_chat_id])
         if not targets:
             ctx.record_stage(PipelineStage.ENQUEUE, False, reason="no_targets")
+            logger.warning(
+                "[%s] Rule %s has no target chats configured — cannot enqueue msg %s",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+            )
             return
 
         enqueued_any = False
@@ -401,6 +443,10 @@ class DurableMessagePipeline:
                     self.metrics.enqueued_total += 1
                 else:
                     self.metrics.backpressure_drops += 1
+                    logger.error(
+                        "[%s] Rule %s failed to enqueue msg %s for target %s (queue full / backpressure drop)",
+                        ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
+                    )
             else:
                 # No queue manager configured (standalone/mock mode)
                 enqueued_any = True
