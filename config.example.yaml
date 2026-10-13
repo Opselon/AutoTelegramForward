@@ -27,3 +27,28 @@ logger_addr: "localhost:50052"
 
 # Default bot language: en | fa | ru | zh
 language: "en"
+
+# --- Durable delivery queue (v14) ------------------------------------------
+# Worker pool size. More workers raise concurrency but every Telegram account
+# is rate-limited globally, so raising this past ~8 rarely helps and only
+# increases the chance of FloodWait.
+queue_num_workers: 3
+# Jobs claimed per worker poll. Larger batches mean fewer DB round-trips per
+# delivered message (the SENT markers are committed once per batch).
+queue_batch_size: 8
+# Backpressure cap: enqueue is refused (and the event is counted as a
+# backpressure drop) once this many jobs are pending.
+queue_max_size: 10000
+# How long a claimed job is safe from re-claim. A worker that dies mid-send
+# has its lease expire and the job is recovered by the watchdog.
+queue_lease_seconds: 30.0
+# Per-target send cap per 60s window. Telegram's own limit is the real
+# bound (~30/min to a chat from a user account); this keeps us under it.
+queue_max_per_minute_per_target: 25
+
+# Optional PostgreSQL for the durable queue (production / multi-node).
+# When set, delivery_jobs / message_map / dead_letter_queue run on Postgres
+# with FOR UPDATE SKIP LOCKED and a real connection pool; SQLite is used
+# otherwise. Create the schema first:
+#   psql "$ATF_DATABASE_URL" -f scripts/postgres/schema.sql
+# database_url: "postgres://user:password@localhost:5432/atf"
