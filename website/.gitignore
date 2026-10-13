@@ -1,0 +1,7 @@
+# Build and runtime outputs
+dist/
+.astro/
+node_modules/
+test-results/
+playwright-report/
+.cache/

@@ -1,0 +1,66 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Telegram Credentials & Session Setup";
+const pageDesc = "Step-by-step instructions to obtain Telegram API ID/Hash, create a manager bot with BotFather, and connect Pyrogram user sessions.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Getting Started', href: url('/getting-started/') },
+    { name: 'Telegram Credentials', href: url('/getting-started/telegram-bot-setup/') },
+  ]}
+  prev={{ title: 'Linux & Windows', href: url('/getting-started/linux-windows/') }}
+  next={{ title: 'Configuration Reference', href: url('/getting-started/configuration/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      AutoTelegramForward uses a hybrid model:
+    </p>
+    <ul>
+      <li><strong>Telegram Bot Token:</strong> Powers the interactive inline button UI (<code>/settings</code>, <code>/profile</code>, rule management).</li>
+      <li><strong>User MTProto Sessions:</strong> Enables reading and forwarding from private channels, public channels, and groups where external bots are not permitted to join.</li>
+    </ul>
+
+    <h2 id="step-1-api-credentials">Step 1: Obtain API ID & API Hash</h2>
+    <ol>
+      <li>Log in to the official Telegram portal at <a href="https://my.telegram.org" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline">my.telegram.org</a> using your Telegram phone number.</li>
+      <li>Click on <strong>API development tools</strong>.</li>
+      <li>Create a new application by filling in an App title and Short name (e.g., <code>ATF Forwarder</code>).</li>
+      <li>Copy your <strong>api_id</strong> (an integer like <code>12345678</code>) and <strong>api_hash</strong> (a 32-character hex string).</li>
+    </ol>
+
+    <h2 id="step-2-bot-father">Step 2: Create Manager Bot with @BotFather</h2>
+    <ol>
+      <li>Open Telegram and start a chat with the official <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline">@BotFather</a>.</li>
+      <li>Send the command <code>/newbot</code>.</li>
+      <li>Choose a friendly display name (e.g., <em>ATF Manager</em>) and a unique username ending in <code>bot</code>.</li>
+      <li>Copy the HTTP API token provided (e.g. <code>1234567890:ABCdef...</code>). This is your <code>TELEGRAM_BOT_TOKEN</code>.</li>
+    </ol>
+
+    <h2 id="step-3-admin-id">Step 3: Discover Your Numerical User ID</h2>
+    <p>
+      Telegram usernames can change, so AutoTelegramForward uses permanent 64-bit numerical IDs for admin authentication.
+    </p>
+    <ol>
+      <li>Message <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline">@userinfobot</a> on Telegram.</li>
+      <li>Note down your numerical <code>Id</code> (e.g. <code>5094837833</code>).</li>
+      <li>Assign this to <code>ADMIN_USER_ID</code> in your <code>.env</code> file.</li>
+    </ol>
+
+    <h2 id="step-4-user-session">Step 4: Connect MTProto User Sessions</h2>
+    <p>
+      Once the core service is started:
+    </p>
+    <ol>
+      <li>Open your newly created manager bot on Telegram and send <code>/start</code>.</li>
+      <li>Click on <strong>👤 حساب‌های کاربری (Accounts / Sessions)</strong>.</li>
+      <li>Click <strong>➕ افزودن اکانت جدید</strong> to connect an account via QR code or phone verification code.</li>
+      <li>The session is securely stored inside the isolated <code>sessions/</code> volume.</li>
+    </ol>
+  </div>
+</DocsLayout>

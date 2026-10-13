@@ -1,0 +1,159 @@
+---
+import repoInfo from '../data/repo-info.json';
+import { url } from '../utils/paths';
+
+const navItems = [
+  { name: 'Features', href: url('/features/') },
+  { name: 'Getting Started', href: url('/getting-started/') },
+  { name: 'Architecture', href: url('/architecture/') },
+  { name: 'Tutorials', href: url('/tutorials/') },
+  { name: 'Operations', href: url('/operations/') },
+  { name: 'Releases', href: url('/releases/') },
+  { name: 'Playground', href: url('/tools/playground/') },
+  { name: 'FAQ', href: url('/faq/') },
+];
+
+const currentPath = Astro.url.pathname;
+---
+
+<header class="sticky top-0 z-50 w-full glass border-b border-slate-800">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-16">
+      
+      <!-- Logo & Product Name -->
+      <div class="flex items-center gap-3">
+        <a href={url('/')} class="flex items-center gap-2.5 group" aria-label="AutoTelegramForward Home">
+          <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-tg-blue to-brand-500 flex items-center justify-center shadow-lg shadow-sky-500/20 group-hover:scale-105 transition-transform">
+            <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <span class="font-bold text-lg tracking-tight text-white flex items-center gap-2">
+            AutoTelegramForward
+            <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-950 text-sky-400 border border-sky-800/60">
+              v{repoInfo.version}
+            </span>
+          </span>
+        </a>
+      </div>
+
+      <!-- Desktop Nav -->
+      <nav class="hidden md:flex items-center gap-1" aria-label="Main Navigation">
+        {navItems.map((item) => {
+          const isActive = currentPath.startsWith(item.href) && (item.href !== url('/') || currentPath === url('/'));
+          return (
+            <a
+              href={item.href}
+              class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                isActive
+                  ? 'text-white bg-slate-800/90 shadow-sm border border-slate-700/60'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              {item.name}
+            </a>
+          );
+        })}
+      </nav>
+
+      <!-- Right CTAs & GitHub -->
+      <div class="hidden sm:flex items-center gap-3">
+        <a
+          href={repoInfo.repoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
+          aria-label="View on GitHub"
+        >
+          <svg class="w-4 h-4 text-slate-300" viewBox="0 0 24 24" fill="currentColor">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+          </svg>
+          <span>GitHub</span>
+        </a>
+
+        <a
+          href={url('/getting-started/')}
+          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-tg-blue hover:bg-sky-500 text-white shadow-sm shadow-sky-500/25 transition-all"
+        >
+          <span>Install Now</span>
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+          </svg>
+        </a>
+      </div>
+
+      <!-- Mobile Menu Button -->
+      <div class="flex md:hidden items-center">
+        <button
+          type="button"
+          id="mobile-menu-btn"
+          class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-tg-blue"
+          aria-label="Toggle mobile menu"
+          aria-expanded="false"
+        >
+          <svg id="menu-icon-open" class="w-6 h-6 block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+          </svg>
+          <svg id="menu-icon-close" class="w-6 h-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Mobile Menu Dropdown -->
+  <div id="mobile-menu" class="hidden md:hidden border-b border-slate-800 bg-slate-900/95 backdrop-blur-xl px-4 pt-2 pb-6 space-y-1">
+    {navItems.map((item) => (
+      <a
+        href={item.href}
+        class="block px-3 py-2.5 rounded-md text-base font-medium text-slate-200 hover:text-white hover:bg-slate-800 transition-colors"
+      >
+        {item.name}
+      </a>
+    ))}
+    <div class="pt-4 border-t border-slate-800 flex flex-col gap-2.5">
+      <a
+        href={repoInfo.repoUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+      >
+        <span>View on GitHub</span>
+      </a>
+      <a
+        href={url('/getting-started/')}
+        class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold bg-tg-blue hover:bg-sky-500 text-white shadow-md shadow-sky-500/20"
+      >
+        <span>Get Started</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<script>
+  const btn = document.getElementById('mobile-menu-btn');
+  const menu = document.getElementById('mobile-menu');
+  const iconOpen = document.getElementById('menu-icon-open');
+  const iconClose = document.getElementById('menu-icon-close');
+
+  if (btn && menu && iconOpen && iconClose) {
+    btn.addEventListener('click', () => {
+      const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', String(!isExpanded));
+      const willShow = !isExpanded;
+      if (willShow) {
+        menu.classList.remove('hidden');
+        menu.style.display = 'block';
+        iconOpen.classList.add('hidden');
+        iconClose.classList.remove('hidden');
+      } else {
+        menu.classList.add('hidden');
+        menu.style.display = 'none';
+        iconOpen.classList.remove('hidden');
+        iconClose.classList.add('hidden');
+      }
+    });
+  }
+</script>

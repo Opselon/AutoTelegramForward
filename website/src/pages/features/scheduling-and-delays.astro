@@ -1,0 +1,63 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Scheduling, Delays & Max Time Edit Limits";
+const pageDesc = "Configurable message delay jitter, automated post scheduling, operating windows, and max_time_edit thresholds for post synchronization.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Scheduling & Delays', href: url('/features/scheduling-and-delays/') },
+  ]}
+  prev={{ title: 'Headers & Footers', href: url('/features/headers-footers-shortcodes/') }}
+  next={{ title: 'Media & Albums', href: url('/features/media-and-albums/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      High-volume instant forwarding can trigger Telegram anti-spam detection or overload downstream subscribers. AutoTelegramForward provides comprehensive timing controls: jittered delays, operating schedules, and edit-synchronization cutoffs.
+    </p>
+
+    <h2 id="max-time-edit">Max Time Edit Threshold (max_time_edit)</h2>
+    <p>
+      In high-frequency news channels, authors often edit older posts (e.g., correcting typos hours or days later). Attempting to synchronize edits on weeks-old posts wastes Telegram API quotas and creates unnecessary traffic.
+    </p>
+    <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 not-prose my-4">
+      <div class="text-xs font-mono text-sky-400 mb-1">Configuration Parameter</div>
+      <div class="text-sm font-bold text-white mb-2"><code>max_time_edit</code> (integer seconds, default: 86400 / 24 hours)</div>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        When an edited message arrives, the <code>SyncEngine</code> calculates <code>time.time() - message.date.timestamp()</code>. If the post age exceeds <code>max_time_edit</code>, the edit event is silently dropped without hitting the destination chat.
+      </p>
+    </div>
+
+    <h2 id="anti-detection-delays">Anti-Detection Forwarding Delays (Jitter)</h2>
+    <p>
+      To mimic authentic human curation and avoid algorithmic rate-limit penalties, each rule can be configured with randomized forwarding delays:
+    </p>
+    <ul>
+      <li><strong>Min Delay:</strong> Minimum wait time (e.g., 5 seconds) before dispatching to destination.</li>
+      <li><strong>Max Delay:</strong> Maximum wait time (e.g., 25 seconds).</li>
+      <li><strong>Jitter Distribution:</strong> The durable queue calculates a uniform random delay between min and max bounds for every message.</li>
+    </ul>
+
+    <h2 id="operating-windows">Daily Operating Windows</h2>
+    <p>
+      Ensure posts are only forwarded during appropriate daytime hours for your audience's timezone:
+    </p>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code># Example schedule configuration
+schedule:
+  enabled: true
+  timezone: "UTC"
+  active_hours: "08:00-22:00"
+  queue_outside_hours: true  # Store in durable queue until 08:00</code></pre>
+
+    <h2 id="edit-re-evaluation">Edit Re-Filtering Engine</h2>
+    <p>
+      When an existing post is edited in the source channel, AutoTelegramForward doesn't just re-send the edit blindly—it executes the full <code>FilterEngine</code> and <code>Cleaner</code> again. If a newly edited post now contains blacklisted terms or prohibited links, the forwarded message in the destination channel can be automatically deleted or updated based on rule policy.
+    </p>
+  </div>
+</DocsLayout>

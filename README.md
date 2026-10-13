@@ -1,5 +1,11 @@
 # AutoTelegramForward
 
+[![Official Documentation](https://img.shields.io/badge/Docs-Official%20Website-0284c7?style=flat-square&logo=telegram)](https://opselon.github.io/AutoTelegramForward/)
+[![Interactive Playground](https://img.shields.io/badge/Playground-Live%20Sandbox-10b981?style=flat-square)](https://opselon.github.io/AutoTelegramForward/tools/playground/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+
+> 🌐 **Official Website, Documentation & Live Transformation Playground:** [https://opselon.github.io/AutoTelegramForward/](https://opselon.github.io/AutoTelegramForward/)
+
 A production-grade, microservice-based **Telegram MTProto auto-forwarding & routing suite** with an embedded Rust/React Web Dashboard, Go REST Control API, Python MTProto Core, and dedicated Logger Service.
 
 ## Architecture & Microservice Boundaries

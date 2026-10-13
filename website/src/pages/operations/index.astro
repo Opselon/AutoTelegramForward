@@ -1,0 +1,124 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Operations, Troubleshooting & Security Diagnostics";
+const pageDesc = "Operational guide for AutoTelegramForward: resolving FloodWait, handling SQLite concurrency locks, inspecting pipeline logs, and enforcing fail-closed security.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Operations', href: url('/operations/') }
+  ]}
+  prev={{ title: 'Tutorials', href: url('/tutorials/') }}
+  next={{ title: 'Releases & Changelog', href: url('/releases/') }}
+>
+  <div class="space-y-8">
+    <p class="text-base text-slate-300 leading-relaxed">
+      Comprehensive runbook for diagnosing production incidents, handling Telegram API rate limits, resolving database contention, and auditing security boundaries.
+    </p>
+
+    <!-- Section 1: FloodWait -->
+    <section class="space-y-4">
+      <h2 id="floodwait">1. Telegram API FloodWait & Rate Limiting</h2>
+      <p class="text-sm text-slate-300">
+        Telegram enforces strict server-side rate limits on message broadcasting and API requests. When a limit is breached, Telegram returns a <code>FloodWait(x)</code> exception, where <code>x</code> is the mandatory cooldown in seconds.
+      </p>
+
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 not-prose text-xs space-y-2">
+        <div class="font-bold text-sky-400">Automatic Account Suspension & Resume Architecture</div>
+        <p class="text-slate-400 font-sans">
+          When an account encounters <code>FloodWait(seconds)</code>:
+        </p>
+        <ol class="list-decimal ml-4 space-y-1 text-slate-300 font-sans">
+          <li>The client pool executes <code>set_time_limit(account_id, until_timestamp)</code>.</li>
+          <li>All active durable queue workers check <code>pool.is_time_limited(account_id)</code> before attempting deliveries.</li>
+          <li>Jobs for the limited account remain safe in the persistent queue rather than failing or triggering further Telegram penalties.</li>
+          <li>The second the cooldown expires, <code>is_time_limited()</code> automatically returns <code>False</code> and the queue resumes at full speed.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Section 2: Database Locking -->
+    <section class="space-y-4">
+      <h2 id="database-locking">2. Resolving SQLite Database Contention ("Database is locked")</h2>
+      <p class="text-sm text-slate-300">
+        When dozens of high-traffic channels forward posts simultaneously in SQLite, you might see <code>sqlite3.OperationalError: database is locked</code> if busy timeouts are not configured properly.
+      </p>
+
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 not-prose text-xs">
+        <div class="font-bold text-white mb-2 font-sans">Recommended Mitigation:</div>
+        <p class="text-slate-400 mb-2 font-sans">
+          1. Verify that Write-Ahead Logging (WAL) is enabled in <code>atf.db</code>:
+        </p>
+        <pre class="bg-slate-950 p-2.5 rounded font-mono text-emerald-400"><code>sqlite3 data/atf.db "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;"</code></pre>
+        <p class="text-slate-400 mt-3 font-sans">
+          2. For enterprise deployments exceeding 50 concurrent active forward rules, migrate to PostgreSQL by updating your <code>.env</code>:
+        </p>
+        <pre class="bg-slate-950 p-2.5 rounded font-mono text-emerald-400"><code>DATABASE_URL=postgresql://atf_user:secure_pass@localhost:5432/atf_db</code></pre>
+      </div>
+    </section>
+
+    <!-- Section 3: Structured Logging Forensics -->
+    <section class="space-y-4">
+      <h2 id="logging-forensics">3. Structured Pipeline Log Forensics</h2>
+      <p class="text-sm text-slate-300">
+        AutoTelegramForward outputs standardized structured markers in stdout to enable instant diagnosis with <code>grep</code> or log aggregators:
+      </p>
+
+      <div class="overflow-x-auto not-prose">
+        <table class="w-full text-left text-xs border border-slate-800 rounded-xl overflow-hidden font-mono">
+          <thead class="bg-slate-900 text-slate-300 uppercase text-[11px] font-sans">
+            <tr>
+              <th class="p-3">Log Tag</th>
+              <th class="p-3">Meaning</th>
+              <th class="p-3">Next Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/80 bg-slate-950/60">
+            <tr>
+              <td class="p-3 text-sky-400 font-bold">[PIPELINE:ROUTE]</td>
+              <td class="p-3 text-slate-300 font-sans">Matching rule identified for incoming post.</td>
+              <td class="p-3 text-slate-400 font-sans">Normal execution.</td>
+            </tr>
+            <tr>
+              <td class="p-3 text-rose-400 font-bold">[PIPELINE:FILTER_DROP]</td>
+              <td class="p-3 text-slate-300 font-sans">Message rejected by Whitelist, Blacklist, or Media filter.</td>
+              <td class="p-3 text-slate-400 font-sans">Inspect filter configuration if post was expected.</td>
+            </tr>
+            <tr>
+              <td class="p-3 text-purple-400 font-bold">[PIPELINE:RESTRICTED_BYPASS]</td>
+              <td class="p-3 text-slate-300 font-sans">ChatForwardsRestricted triggered download-and-reupload fallback.</td>
+              <td class="p-3 text-slate-400 font-sans">Normal copy-protection handling.</td>
+            </tr>
+            <tr>
+              <td class="p-3 text-emerald-400 font-bold">[PIPELINE:DELIVERED]</td>
+              <td class="p-3 text-slate-300 font-sans">Post successfully dispatched to target chat.</td>
+              <td class="p-3 text-slate-400 font-sans">Delivery completed.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 4: Safe Updates & Rollback -->
+    <section class="space-y-4">
+      <h2 id="updates-rollback">4. Safe Updates & Rollback Strategy</h2>
+      <p class="text-sm text-slate-300">
+        Before pulling updates from GitHub, create a snapshot of your persistent database and session files:
+      </p>
+      <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code># 1. Backup persistent state
+tar -czvf atf-backup-$(date +%F).tar.gz data/ sessions/
+
+# 2. Pull updates and rebuild
+git pull origin master
+docker compose build core
+docker restart atf-core
+
+# 3. Confirm health
+curl -f http://localhost:8080/health</code></pre>
+    </section>
+  </div>
+</DocsLayout>

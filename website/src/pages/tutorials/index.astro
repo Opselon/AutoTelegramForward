@@ -1,0 +1,111 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Tutorials & Practical Recipes";
+const pageDesc = "Step-by-step guides for setting up automated Telegram forwarding, content cleaning, header/footer templates, and bypass configurations.";
+
+const tutorials = [
+  {
+    title: 'Recipe 1: Create Your First Forwarding Rule',
+    desc: 'Step-by-step guide to connect a source channel to a target channel using the Telegram Bot UI.',
+    tag: 'Beginner'
+  },
+  {
+    title: 'Recipe 2: Scrub Unwanted Ads, Links & Mentions',
+    desc: 'Configure the Cleaner engine to strip promotional URLs, @handles, and hashtags while preserving text formatting.',
+    tag: 'Cleaning'
+  },
+  {
+    title: 'Recipe 3: Add Custom Branding with Dynamic Shortcodes',
+    desc: 'Attach clean headers and footers with clickable source links using [[ORIGIN_NAME_URL]] and [[ORIGIN_POST_DATE]].',
+    tag: 'Branding'
+  },
+  {
+    title: 'Recipe 4: Forwarding from Copy-Protected Channels',
+    desc: 'Enable seamless download-and-reupload forwarding for channels with "Restrict saving content" enabled.',
+    tag: 'Advanced'
+  },
+  {
+    title: 'Recipe 5: Setting Up Anti-Spam Delays & Operating Hours',
+    desc: 'Configure randomized jitter delays and time-zone-based operating windows to emulate human publishing.',
+    tag: 'Automation'
+  }
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Tutorials', href: url('/tutorials/') }
+  ]}
+  prev={{ title: 'Architecture', href: url('/architecture/') }}
+  next={{ title: 'Operations & Troubleshooting', href: url('/operations/') }}
+>
+  <div class="space-y-8">
+    <p class="text-base text-slate-300 leading-relaxed">
+      Practical, reproducible recipes to solve common Telegram channel management workflows with AutoTelegramForward.
+    </p>
+
+    <!-- Recipe 1 -->
+    <section class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 id="recipe-1" class="text-lg font-bold text-white">Recipe 1: Create Your First Forwarding Rule</h2>
+        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-sky-950 text-sky-400 border border-sky-800">Beginner</span>
+      </div>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Let's forward all messages from a public crypto news channel (e.g. <code>@MarketNews</code>) to your private channel (e.g. <code>@MyBroadcast</code>).
+      </p>
+      <ol class="text-xs text-slate-400 space-y-2 list-decimal ml-4">
+        <li>Add your bot as an <strong>Administrator</strong> in <code>@MyBroadcast</code> with permission to <em>Post Messages</em>.</li>
+        <li>Open your bot in Telegram and send <code>/settings</code>.</li>
+        <li>Click <strong>➕ ایجاد قانون جدید (Create Rule)</strong>.</li>
+        <li>Send the source chat username or ID: <code>@MarketNews</code>.</li>
+        <li>Send the destination chat username or ID: <code>@MyBroadcast</code>.</li>
+        <li>Select <strong>حالت کپی (Copy Mode)</strong> so messages arrive cleanly without author watermarks.</li>
+        <li>Click <strong>ذخیره و فعال‌سازی (Save & Enable)</strong>.</li>
+      </ol>
+    </section>
+
+    <!-- Recipe 2 -->
+    <section class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 id="recipe-2" class="text-lg font-bold text-white">Recipe 2: Scrub Unwanted Ads, Links & Mentions</h2>
+        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800">Cleaner</span>
+      </div>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Remove promotional Telegram links, sponsor usernames, and hashtags from forwarded posts.
+      </p>
+      <ol class="text-xs text-slate-400 space-y-2 list-decimal ml-4">
+        <li>Send <code>/settings</code> and select your target rule.</li>
+        <li>Click <strong>🧹 پاک‌کننده (Cleaner)</strong>.</li>
+        <li>Toggle <strong>🔗 حذف لینک‌ها (Remove URLs)</strong> → Green Checkmark.</li>
+        <li>Toggle <strong>👤 حذف منشن‌ها (Remove Mentions)</strong> → Green Checkmark.</li>
+        <li>Toggle <strong>#️⃣ حذف هشتگ‌ها (Remove Hashtags)</strong> → Green Checkmark.</li>
+        <li>Click <strong>📝 کلمات سفارشی</strong> and enter sponsor words to delete: <code>Sponsor, Join VIP, 50% Off</code>.</li>
+      </ol>
+    </section>
+
+    <!-- Recipe 3 -->
+    <section class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 id="recipe-3" class="text-lg font-bold text-white">Recipe 3: Add Custom Branding with Dynamic Shortcodes</h2>
+        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-purple-950 text-purple-400 border border-purple-800">Branding</span>
+      </div>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Add custom header and footer branding that credits the original source with a clickable link.
+      </p>
+      <pre class="bg-slate-950 p-3 rounded-lg text-xs font-mono text-emerald-400"><code># Desired Header:
+📢 [[ORIGIN_NAME]] | پست شماره [[ORIGIN_POST_ID]]
+
+# Desired Footer:
+─────────────────────
+🔗 لینک پست اصلی: [[ORIGIN_NAME_URL]]
+📅 تاریخ انتشار: [[ORIGIN_POST_DATE]]</code></pre>
+      <p class="text-xs text-slate-400">
+        In the bot, navigate to <strong>📝 هدر / فوتر</strong>, paste the above templates, and click Save.
+      </p>
+    </section>
+  </div>
+</DocsLayout>

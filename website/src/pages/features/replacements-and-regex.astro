@@ -1,0 +1,53 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Text Replacements & Regular Expressions";
+const pageDesc = "Configure word substitution dictionaries and regex patterns with ReDoS protection and Telegram entity offset preservation.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Replacements & Regex', href: url('/features/replacements-and-regex/') },
+  ]}
+  prev={{ title: 'Headers & Footers', href: url('/features/headers-footers-shortcodes/') }}
+  next={{ title: 'Scheduling & Delays', href: url('/features/scheduling-and-delays/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      The <strong>Replacement Engine</strong> enables fine-grained textual substitutions on incoming Telegram posts. This allows modifying brand names, re-tagging topics, or translating recurring phrases before broadcasting to your destination chats.
+    </p>
+
+    <h2 id="dictionary-replacements">Dictionary-Based Replacements</h2>
+    <p>
+      Define exact key-value pairs to replace across the message text and media captions:
+    </p>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code># Example Dictionary Pairings
+"Binance" -> "Crypto Exchange"
+"Discount Code: ABC" -> "Discount Code: PROMO2026"
+"Follow @OldChannel" -> "Follow @OurChannel"</code></pre>
+
+    <h2 id="regex-substitutions">Regex Transformations</h2>
+    <p>
+      For dynamic patterns, AutoTelegramForward supports standard Python regex expressions:
+    </p>
+    <ul>
+      <li><strong>Pattern Matching:</strong> <code>(?i)price:\s*\$([0-9.]+)</code></li>
+      <li><strong>Group Substitution:</strong> <code>Valuation: $$1 USD</code></li>
+    </ul>
+
+    <h2 id="redos-safety">Catastrophic Backtracking (ReDoS) Defense</h2>
+    <p>
+      User-supplied regular expressions can inadvertently cause CPU exhaustion (ReDoS). AutoTelegramForward validates every pattern against strict compilation limits and enforces an execution timeout on every regex substitution. If a pattern times out, it logs an error and gracefully preserves the original text without dropping the message.
+    </p>
+
+    <h2 id="entity-preservation">Telegram Entity Preservation</h2>
+    <p>
+      When performing textual modifications, naive string replacement breaks Telegram formatting entities (such as <code>MessageEntityBold</code>, <code>MessageEntityItalic</code>, or <code>MessageEntityCode</code>) because byte offsets shift. AutoTelegramForward re-calculates entity offsets or reconstructs formatted text in MarkdownV2/HTML mode to ensure typography remains crisp and uncorrupted.
+    </p>
+  </div>
+</DocsLayout>

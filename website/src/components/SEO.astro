@@ -1,0 +1,108 @@
+---
+import repoInfo from '../data/repo-info.json';
+
+interface Props {
+  title: string;
+  description: string;
+  canonical?: string;
+  type?: 'website' | 'article';
+  image?: string;
+  breadcrumbs?: Array<{ name: string; url: string }>;
+  articleDate?: string;
+  keywords?: string[];
+}
+
+const {
+  title,
+  description,
+  canonical,
+  type = 'website',
+  image = '/assets/og-image.png',
+  breadcrumbs,
+  articleDate,
+  keywords = [
+    'Telegram auto-forwarding',
+    'Telegram forward bot',
+    'automated telegram forwarder',
+    'telegram message filters',
+    'telegram channel cloning',
+    'telegram message scheduler',
+    'telegram multi-tenant bot',
+    'telegram content cleaner',
+    'telegram copy-restricted bypass',
+    'open source telegram forwarder'
+  ],
+} = Astro.props;
+
+const siteUrl = Astro.site ? Astro.site.toString().replace(/\/$/, '') : 'https://opselon.github.io/AutoTelegramForward';
+const currentPath = Astro.url.pathname;
+const canonicalUrl = canonical || `${siteUrl}${currentPath}`;
+const fullImageUrl = image.startsWith('http') ? image : `${siteUrl}${image.startsWith('/') ? '' : '/'}${image}`;
+
+const baseSiteUrl = siteUrl;
+
+// Schema.org JSON-LD
+const schemaSoftwareApp = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'AutoTelegramForward',
+  description: description,
+  operatingSystem: 'Linux, Windows, macOS, Docker',
+  applicationCategory: 'CommunicationApplication',
+  softwareVersion: repoInfo.version,
+  offers: {
+    '@type': 'Offer',
+    price: '0.00',
+    priceCurrency: 'USD',
+  },
+  author: {
+    '@type': 'Organization',
+    name: 'Opselon',
+    url: 'https://github.com/Opselon',
+  },
+  downloadUrl: 'https://github.com/Opselon/AutoTelegramForward/releases',
+  codeRepository: 'https://github.com/Opselon/AutoTelegramForward',
+};
+
+const schemaBreadcrumbs = breadcrumbs && breadcrumbs.length > 0 ? {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: breadcrumbs.map((b, idx) => ({
+    '@type': 'ListItem',
+    position: idx + 1,
+    name: b.name,
+    item: b.url.startsWith('http') ? b.url : `${baseSiteUrl}${b.url}`,
+  })),
+} : null;
+---
+
+<!-- Core Metadata -->
+<title>{title} | AutoTelegramForward</title>
+<meta name="description" content={description} />
+<meta name="keywords" content={keywords.join(', ')} />
+<meta name="author" content="Opselon" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+<meta name="theme-color" content="#0b1120" />
+<link rel="canonical" href={canonicalUrl} />
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content={type} />
+<meta property="og:url" content={canonicalUrl} />
+<meta property="og:title" content={`${title} | AutoTelegramForward`} />
+<meta property="og:description" content={description} />
+<meta property="og:image" content={fullImageUrl} />
+<meta property="og:site_name" content="AutoTelegramForward" />
+{articleDate && <meta property="article:published_time" content={articleDate} />}
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:url" content={canonicalUrl} />
+<meta name="twitter:title" content={`${title} | AutoTelegramForward`} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={fullImageUrl} />
+
+<!-- Structured Data (JSON-LD) -->
+<script type="application/ld+json" set:html={JSON.stringify(schemaSoftwareApp)} />
+{schemaBreadcrumbs && (
+  <script type="application/ld+json" set:html={JSON.stringify(schemaBreadcrumbs)} />
+)}

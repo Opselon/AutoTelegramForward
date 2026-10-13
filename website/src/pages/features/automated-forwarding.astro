@@ -1,0 +1,67 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Automated Forwarding Modes — Direct vs Clean Copy";
+const pageDesc = "Understand AutoTelegramForward's operational forwarding modes: Direct native MTProto forward, Clean Copy mode (stripping author attribution), and topic-level routing.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Automated Forwarding', href: url('/features/automated-forwarding/') },
+  ]}
+  next={{ title: 'Destination Management', href: url('/features/rules-and-destinations/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      AutoTelegramForward supports real-time, event-driven message dispatch between any Telegram entities: public channels, private channels, supergroups, forum topics, and direct chats.
+    </p>
+
+    <h2 id="forward-modes">Forwarding Modes: Direct vs Clean Copy</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 not-prose my-6">
+      
+      <!-- Direct Forward -->
+      <div class="p-5 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-sky-950 text-sky-400 border border-sky-800 mb-2 inline-block">Mode: DIRECT</span>
+        <h3 class="text-base font-bold text-white mb-2">Native MTProto Forward</h3>
+        <p class="text-xs text-slate-400 leading-relaxed mb-3">
+          Uses Telegram's native <code>forward_messages()</code> call. The delivered post retains the original author banner (<em>"Forwarded from Channel X"</em>).
+        </p>
+        <div class="text-[11px] text-slate-400 bg-slate-950 p-2.5 rounded-lg border border-slate-800/80">
+          • Fastest delivery (sub-100ms)<br />
+          • Does not allow modifying text or stripping links<br />
+          • Fails if source channel has restricted forwarding
+        </div>
+      </div>
+
+      <!-- Clean Copy -->
+      <div class="p-5 rounded-xl bg-slate-900 border border-emerald-500/30">
+        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 mb-2 inline-block">Mode: COPY (Recommended)</span>
+        <h3 class="text-base font-bold text-white mb-2">Clean Copy Mode</h3>
+        <p class="text-xs text-slate-400 leading-relaxed mb-3">
+          Extracts raw media and text, passes it through the Cleaners and Shortcodes engine, and posts it as an authentic new publication.
+        </p>
+        <div class="text-[11px] text-emerald-300 bg-slate-950 p-2.5 rounded-lg border border-slate-800/80">
+          • No "Forwarded from" watermark<br />
+          • Full support for custom headers & footers<br />
+          • Strips unwanted ads, URLs & mentions
+        </div>
+      </div>
+
+    </div>
+
+    <h2 id="forum-topics">Telegram Forum Topics Support</h2>
+    <p>
+      AutoTelegramForward fully supports modern Telegram Supergroups with Forum Topics enabled. By supplying the topic ID (e.g. <code>message_thread_id</code>), messages can be routed precisely into specific topics rather than cluttering the General feed.
+    </p>
+
+    <h2 id="priority">Execution Priority & Ordering</h2>
+    <p>
+      In high-traffic news channels, maintaining chronological order is critical. ATF's durable queue uses per-chat serial leases to guarantee that consecutive messages from a single source are processed strictly in sequence without out-of-order race conditions.
+    </p>
+  </div>
+</DocsLayout>

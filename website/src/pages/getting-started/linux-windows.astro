@@ -1,0 +1,101 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Native Linux & Windows Installation Guide";
+const pageDesc = "Install and run AutoTelegramForward natively on Linux (Ubuntu, Debian, RHEL with systemd) and Windows using Python virtual environments.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Getting Started', href: url('/getting-started/') },
+    { name: 'Linux & Windows', href: url('/getting-started/linux-windows/') },
+  ]}
+  prev={{ title: 'Docker Deployment', href: url('/getting-started/docker/') }}
+  next={{ title: 'Telegram Credentials', href: url('/getting-started/telegram-bot-setup/') }}
+>
+  <div class="space-y-6">
+    <h2 id="linux">Linux Installation (Ubuntu / Debian / RHEL)</h2>
+    <p>
+      For VPS environments without Docker, AutoTelegramForward can be installed directly as a background <code>systemd</code> daemon.
+    </p>
+
+    <h3>Method A: Automated One-Line Installer</h3>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code>curl -sSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash</code></pre>
+
+    <h3>Method B: Manual Setup</h3>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code># 1. Install prerequisites
+sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip git
+
+# 2. Clone repository
+git clone https://github.com/Opselon/AutoTelegramForward.git
+cd AutoTelegramForward
+
+# 3. Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 4. Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 5. Populate environment variables
+cp .env.example .env
+nano .env
+
+# 6. Run core
+python3 -m core.main</code></pre>
+
+    <h3>Systemd Service Configuration</h3>
+    <p>
+      Create <code>/etc/systemd/system/autotelegramforward.service</code>:
+    </p>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-slate-300"><code>[Unit]
+Description=AutoTelegramForward Engine
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/AutoTelegramForward
+ExecStart=/root/AutoTelegramForward/.venv/bin/python3 -m core.main
+Restart=always
+RestartSec=5
+EnvironmentFile=/root/AutoTelegramForward/.env
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code>sudo systemctl daemon-reload
+sudo systemctl enable autotelegramforward
+sudo systemctl start autotelegramforward
+journalctl -u autotelegramforward -f</code></pre>
+
+    <h2 id="windows">Windows 10 / 11 / Server Installation</h2>
+    <p>
+      AutoTelegramForward runs smoothly on Windows using PowerShell:
+    </p>
+
+    <h3>Method A: Automated PowerShell Installer</h3>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code>irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex</code></pre>
+
+    <h3>Method B: Manual PowerShell Setup</h3>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code># 1. Clone repository
+git clone https://github.com/Opselon/AutoTelegramForward.git
+cd AutoTelegramForward
+
+# 2. Create and activate venv
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# 3. Install requirements
+pip install -r requirements.txt
+
+# 4. Copy configuration
+copy .env.example .env
+
+# 5. Start engine
+python -m core.main</code></pre>
+  </div>
+</DocsLayout>

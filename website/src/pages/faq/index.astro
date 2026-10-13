@@ -1,0 +1,118 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import repoInfo from '../../data/repo-info.json';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Frequently Asked Questions & Technical Glossary";
+const pageDesc = "Frequently asked questions, common misconceptions, technical glossary, and community support channels for AutoTelegramForward.";
+
+const faqs = [
+  {
+    q: "Is AutoTelegramForward free to use?",
+    a: "Yes. AutoTelegramForward is completely free and open-source software distributed under the MIT license. You host it on your own server or virtual private machine with zero subscription fees."
+  },
+  {
+    q: "Can I forward from private channels where I am only a subscriber?",
+    a: "Yes. By connecting a Telegram User Session (MTProto client) rather than a bot token, AutoTelegramForward can read and forward posts from any channel, group, or chat that your account can view."
+  },
+  {
+    q: "Can AutoTelegramForward forward from channels that have 'Restrict saving content' enabled?",
+    a: "Yes. When a source channel disables standard Telegram forwarding (ChatForwardsRestricted), AutoTelegramForward's pipeline automatically falls back to downloading the media to a temporary disk stream and re-uploading it as a fresh message to your destination."
+  },
+  {
+    q: "Does AutoTelegramForward strip author watermark tags?",
+    a: "Yes. When configured in 'Copy Mode', messages are delivered as clean publications without any 'Forwarded from' banner."
+  },
+  {
+    q: "How does the bot handle Telegram rate limits (FloodWait)?",
+    a: "When Telegram issues a FloodWait, the ClientPool marks the affected account as time-limited and temporarily suspends deliveries for that specific account. Messages remain safely buffered in the persistent queue and resume automatically the moment the restriction clears."
+  },
+  {
+    q: "Can other users on the server see or modify my forwarding tasks?",
+    a: "No. AutoTelegramForward enforces strict fail-closed multi-tenant isolation. All use-cases, gRPC RPCs, and database operations enforce owner verification. Missing or mismatched identity headers are immediately rejected."
+  }
+];
+
+const glossary = [
+  { term: "MTProto", def: "Telegram's mobile protocol used for encrypted real-time client-server communication with Telegram Data Centers." },
+  { term: "FloodWait", def: "A Telegram API exception signaling that an account or bot has sent too many requests in a short period and must pause for N seconds." },
+  { term: "ChatForwardsRestricted", def: "A channel security flag that blocks native forward_messages calls; bypassed via download-and-reupload." },
+  { term: "Shortcode", def: "A template variable (e.g. [[ORIGIN_NAME]]) dynamically replaced with real metadata from the incoming message." },
+  { term: "Fail-Closed", def: "A security architecture principle where any missing, ambiguous, or unverified credential defaults to total access denial." },
+  { term: "Debounce Window", def: "A short timing buffer (e.g. 800ms) that groups split MTProto album fragments into an atomic media group." },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'FAQ & Glossary', href: url('/faq/') }
+  ]}
+  prev={{ title: 'Releases', href: url('/releases/') }}
+>
+  <div class="space-y-8">
+    <p class="text-base text-slate-300 leading-relaxed">
+      Find answers to common questions about deployment, feature capabilities, Telegram limitations, and terminology.
+    </p>
+
+    <!-- FAQ Accordion / Grid -->
+    <section class="space-y-4">
+      <h2 id="faq" class="text-xl font-bold text-white">Frequently Asked Questions</h2>
+      <div class="space-y-3 not-prose">
+        {faqs.map((f) => (
+          <div class="p-4 rounded-xl bg-slate-900/70 border border-slate-800">
+            <h3 class="text-sm font-bold text-white mb-2 font-sans flex items-center gap-2">
+              <span class="text-sky-400">Q:</span>
+              {f.q}
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed font-sans pl-5">
+              {f.a}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Glossary -->
+    <section class="space-y-4">
+      <h2 id="glossary" class="text-xl font-bold text-white">Technical Glossary</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose">
+        {glossary.map((g) => (
+          <div class="p-4 rounded-xl bg-slate-900/50 border border-slate-800">
+            <span class="text-xs font-mono font-bold text-sky-400 block mb-1">{g.term}</span>
+            <p class="text-xs text-slate-300 font-sans leading-relaxed">{g.def}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Community & Support -->
+    <section class="p-6 rounded-2xl bg-gradient-to-r from-slate-900 to-sky-950/30 border border-slate-800 space-y-3">
+      <h2 id="community" class="text-base font-bold text-white">Community & Maintainer Support</h2>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        AutoTelegramForward is actively maintained by <strong class="text-white">Opselon</strong> and lead engineer <a href="https://t.me/Capxi" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline">@Capxi</a>.
+      </p>
+      <div class="flex flex-wrap gap-3 pt-2">
+        <a
+          href="https://t.me/Capxi"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="px-4 py-2 rounded-xl text-xs font-semibold bg-tg-blue hover:bg-sky-500 text-white transition-colors inline-flex items-center gap-1.5"
+        >
+          <span>Contact Lead Engineer (@Capxi)</span>
+          <span>→</span>
+        </a>
+        <a
+          href={repoInfo.repoUrl + "/issues"}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors inline-flex items-center gap-1.5"
+        >
+          <span>Report an Issue on GitHub</span>
+          <span>→</span>
+        </a>
+      </div>
+    </section>
+  </div>
+</DocsLayout>

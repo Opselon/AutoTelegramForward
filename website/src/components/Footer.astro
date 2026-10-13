@@ -1,0 +1,84 @@
+---
+import repoInfo from '../data/repo-info.json';
+import { url } from '../utils/paths';
+---
+
+<footer class="bg-slate-950 border-t border-slate-900 text-slate-400 text-sm">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 lg:gap-12">
+      
+      <!-- Brand & Mission Column -->
+      <div class="col-span-2">
+        <a href={url('/')} class="flex items-center gap-2.5 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-tg-blue to-brand-500 flex items-center justify-center">
+            <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <span class="font-bold text-white text-base">AutoTelegramForward</span>
+        </a>
+        <p class="text-slate-400 text-sm leading-relaxed max-w-sm mb-5">
+          Production-grade, asynchronous Telegram message forwarding engine with advanced content cleaning, multi-tenant security, durable queues, and real-time synchronization.
+        </p>
+        <div class="flex items-center gap-3 text-xs text-slate-400">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            Version {repoInfo.version}
+          </span>
+          <span class="px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+            MIT License
+          </span>
+        </div>
+      </div>
+
+      <!-- Navigation: Features -->
+      <div>
+        <h3 class="text-white font-semibold text-xs uppercase tracking-wider mb-3">Capabilities</h3>
+        <ul class="space-y-2">
+          <li><a href={url('/features/')} class="hover:text-white transition-colors">All Features</a></li>
+          <li><a href={url('/features/text-cleaner/')} class="hover:text-white transition-colors">Content Cleaner</a></li>
+          <li><a href={url('/features/headers-footers-shortcodes/')} class="hover:text-white transition-colors">Header/Footer Templates</a></li>
+          <li><a href={url('/features/whitelist-blacklist-filters/')} class="hover:text-white transition-colors">Filters & Rules</a></li>
+          <li><a href={url('/features/media-and-albums/')} class="hover:text-white transition-colors">Media & Albums</a></li>
+          <li><a href={url('/features/multi-tenant-security/')} class="hover:text-white transition-colors">Multi-Tenant Isolation</a></li>
+        </ul>
+      </div>
+
+      <!-- Navigation: Documentation -->
+      <div>
+        <h3 class="text-white font-semibold text-xs uppercase tracking-wider mb-3">Documentation</h3>
+        <ul class="space-y-2">
+          <li><a href={url('/getting-started/')} class="hover:text-white transition-colors">Installation Guide</a></li>
+          <li><a href={url('/getting-started/docker/')} class="hover:text-white transition-colors">Docker Deployment</a></li>
+          <li><a href={url('/architecture/')} class="hover:text-white transition-colors">System Architecture</a></li>
+          <li><a href={url('/tutorials/')} class="hover:text-white transition-colors">Tutorials & Recipes</a></li>
+          <li><a href={url('/operations/')} class="hover:text-white transition-colors">Operations & Troubleshooting</a></li>
+          <li><a href={url('/faq/')} class="hover:text-white transition-colors">Frequently Asked Questions</a></li>
+        </ul>
+      </div>
+
+      <!-- Navigation: Community & Source -->
+      <div>
+        <h3 class="text-white font-semibold text-xs uppercase tracking-wider mb-3">Source & Releases</h3>
+        <ul class="space-y-2">
+          <li><a href={repoInfo.repoUrl} target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">GitHub Repository</a></li>
+          <li><a href={url('/releases/')} class="hover:text-white transition-colors">Release Notes</a></li>
+          <li><a href={url('/tools/playground/')} class="hover:text-white transition-colors">Template Playground</a></li>
+          <li><a href={`${repoInfo.repoUrl}/issues`} target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">Issue Tracker</a></li>
+          <li><a href="https://t.me/Capxi" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">Community Support (@Capxi)</a></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Bottom line -->
+    <div class="mt-12 pt-8 border-t border-slate-900/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+      <p>© {new Date().getFullYear()} Opselon. Released under the open-source MIT License.</p>
+      <div class="flex items-center gap-6">
+        <a href={url('/architecture/')} class="hover:text-slate-300">Architecture</a>
+        <a href={url('/operations/')} class="hover:text-slate-300">Security & Isolation</a>
+        <a href={repoInfo.repoUrl} class="hover:text-slate-300">GitHub</a>
+      </div>
+    </div>
+  </div>
+</footer>

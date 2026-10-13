@@ -1,0 +1,160 @@
+---
+import repoInfo from '../data/repo-info.json';
+---
+
+<div class="glass-card rounded-2xl border border-slate-800 p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-800">
+    <div class="flex items-center gap-2.5">
+      <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+      <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+      <div class="w-3 h-3 rounded-full bg-emerald-500/80"></div>
+      <span class="text-xs font-mono text-slate-400 ml-2">Quick Deployment</span>
+    </div>
+    
+    <!-- Tab Selectors -->
+    <div class="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs font-medium">
+      <button
+        type="button"
+        class="tab-btn px-3 py-1 rounded-md text-white bg-slate-800 shadow-sm"
+        data-target="tab-docker"
+      >
+        Docker Compose
+      </button>
+      <button
+        type="button"
+        class="tab-btn px-3 py-1 rounded-md text-slate-400 hover:text-white"
+        data-target="tab-linux"
+      >
+        Linux / Bash
+      </button>
+      <button
+        type="button"
+        class="tab-btn px-3 py-1 rounded-md text-slate-400 hover:text-white"
+        data-target="tab-windows"
+      >
+        Windows (PowerShell)
+      </button>
+    </div>
+  </div>
+
+  <!-- Tab 1: Docker -->
+  <div id="tab-docker" class="tab-content block">
+    <div class="relative group">
+      <pre class="bg-slate-950 p-4 rounded-xl text-xs sm:text-sm font-mono text-emerald-400 overflow-x-auto leading-relaxed"><code># 1. Clone the verified repository
+git clone {repoInfo.repoUrl}.git
+cd AutoTelegramForward
+
+# 2. Configure credentials & start services
+cp .env.example .env
+docker compose up -d
+
+# 3. Check container health
+docker compose ps</code></pre>
+      <button
+        type="button"
+        class="copy-code-btn absolute top-3 right-3 px-2.5 py-1 text-xs font-medium rounded-md bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700 opacity-80 group-hover:opacity-100 transition-opacity"
+        data-code={`git clone ${repoInfo.repoUrl}.git\ncd AutoTelegramForward\ncp .env.example .env\ndocker compose up -d\ndocker compose ps`}
+      >
+        Copy
+      </button>
+    </div>
+    <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+      <span>🚀 Boots Core (50051), API Gateway (8080), Logger (50052) & Dashboard (8088).</span>
+      <a href="/getting-started/docker/" class="text-sky-400 hover:underline">Full Docker Guide →</a>
+    </div>
+  </div>
+
+  <!-- Tab 2: Linux Bash -->
+  <div id="tab-linux" class="tab-content hidden">
+    <div class="relative group">
+      <pre class="bg-slate-950 p-4 rounded-xl text-xs sm:text-sm font-mono text-emerald-400 overflow-x-auto leading-relaxed"><code># Run official automated Linux installer
+curl -sSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash
+
+# Or run manually in Python virtual environment:
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python3 -m core.main</code></pre>
+      <button
+        type="button"
+        class="copy-code-btn absolute top-3 right-3 px-2.5 py-1 text-xs font-medium rounded-md bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700 opacity-80 group-hover:opacity-100 transition-opacity"
+        data-code="curl -sSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash"
+      >
+        Copy
+      </button>
+    </div>
+    <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+      <span>🐧 Configures systemd background service and log rotation.</span>
+      <a href="/getting-started/linux-windows/" class="text-sky-400 hover:underline">Linux Guide →</a>
+    </div>
+  </div>
+
+  <!-- Tab 3: Windows PowerShell -->
+  <div id="tab-windows" class="tab-content hidden">
+    <div class="relative group">
+      <pre class="bg-slate-950 p-4 rounded-xl text-xs sm:text-sm font-mono text-emerald-400 overflow-x-auto leading-relaxed"><code># Run official Windows PowerShell installer
+irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex
+
+# Or run with Python:
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m core.main</code></pre>
+      <button
+        type="button"
+        class="copy-code-btn absolute top-3 right-3 px-2.5 py-1 text-xs font-medium rounded-md bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700 opacity-80 group-hover:opacity-100 transition-opacity"
+        data-code="irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex"
+      >
+        Copy
+      </button>
+    </div>
+    <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+      <span>🪟 Automated dependency check and execution script.</span>
+      <a href="/getting-started/linux-windows/" class="text-sky-400 hover:underline">Windows Guide →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Tab switching
+  const tabs = document.querySelectorAll('.tab-btn');
+  const contents = document.querySelectorAll('.tab-content');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetId = tab.getAttribute('data-target');
+      tabs.forEach(t => {
+        t.classList.remove('bg-slate-800', 'text-white', 'shadow-sm');
+        t.classList.add('text-slate-400');
+      });
+      tab.classList.add('bg-slate-800', 'text-white', 'shadow-sm');
+      tab.classList.remove('text-slate-400');
+
+      contents.forEach(c => {
+        const el = c as HTMLElement;
+        if (c.id === targetId) {
+          c.classList.remove('hidden');
+          c.classList.add('block');
+          el.style.display = 'block';
+        } else {
+          c.classList.add('hidden');
+          c.classList.remove('block');
+          el.style.display = 'none';
+        }
+      });
+    });
+  });
+
+  // Copy code buttons
+  document.querySelectorAll('.copy-code-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = btn.getAttribute('data-code');
+      if (code) {
+        navigator.clipboard.writeText(code).then(() => {
+          const orig = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = orig; }, 2000);
+        });
+      }
+    });
+  });
+</script>

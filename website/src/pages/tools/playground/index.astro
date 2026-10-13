@@ -1,0 +1,39 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import Playground from '../../../components/Playground.astro';
+import { url } from '../../../utils/paths';
+
+const pageTitle = "Interactive Template & Cleaner Playground";
+const pageDesc = "Test AutoTelegramForward's cleaner options, header/footer templates, and shortcodes in your browser with real-time output preview.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Tools', href: url('/tools/playground/') },
+    { name: 'Playground', href: url('/tools/playground/') }
+  ]}
+  prev={{ title: 'All Features', href: url('/features/') }}
+>
+  <div class="space-y-6">
+    <p class="text-base text-slate-300 leading-relaxed">
+      This interactive sandbox runs entirely in your browser using pure client-side JavaScript. It simulates the exact transformation logic used in AutoTelegramForward's Python Core pipeline: URL and mention stripping, hashtag cleaning, phone number scrubbing, and shortcode interpolation.
+    </p>
+
+    <div class="not-prose my-6">
+      <Playground />
+    </div>
+
+    <h2 id="how-it-works">How It Works in Production</h2>
+    <p>
+      In production, AutoTelegramForward executes this transformation pipeline inside <code>core/domain/services.py</code>:
+    </p>
+    <ol>
+      <li><strong>Normalization:</strong> The raw Pyrogram message caption or text is normalized to standard Python strings, eliminating UTF-16 surrogates.</li>
+      <li><strong>Cleaning:</strong> Cleaner options strip URLs, mentions, hashtags, emojis, or custom words according to your per-rule settings.</li>
+      <li><strong>Shortcode Interpolation:</strong> Header and footer templates are populated with verified variables (<code>[[ORIGIN_NAME]]</code>, <code>[[ORIGIN_POST_ID]]</code>, <code>[[ORIGIN_POST_DATE]]</code>, etc.).</li>
+      <li><strong>Dispatch:</strong> The assembled message is enqueued for delivery to destination chats via MTProto.</li>
+    </ol>
+  </div>
+</DocsLayout>

@@ -1,0 +1,93 @@
+name: Deploy Official Website & Documentation to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'website/**'
+      - 'VERSION'
+      - 'README.md'
+      - '.github/workflows/deploy-pages.yml'
+  pull_request:
+    paths:
+      - 'website/**'
+      - 'VERSION'
+      - 'README.md'
+      - '.github/workflows/deploy-pages.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 1' # Weekly automated sync & rebuild
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  build-and-test:
+    name: Build, Validate & Test Platform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: website
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Playwright Browsers & OS Dependencies
+        working-directory: website
+        run: npx playwright install --with-deps chromium
+
+      - name: Synchronize Repository Content & Build Astro Site
+        working-directory: website
+        run: npm run build
+        env:
+          SITE_URL: 'https://opselon.github.io'
+          BASE_PATH: '/AutoTelegramForward'
+
+      - name: Execute Technical SEO, Schema & Canonical Audits
+        working-directory: website
+        run: npm run test:seo
+
+      - name: Run Playwright E2E & Mobile Viewport Smoke Tests
+        working-directory: website
+        run: npm run test:e2e
+
+      - name: Configure GitHub Pages
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages Artifact
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    steps:
+      - name: Deploy Site to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

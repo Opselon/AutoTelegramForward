@@ -1,0 +1,92 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Getting Started with AutoTelegramForward";
+const pageDesc = "Step-by-step installation guides and prerequisites for deploying AutoTelegramForward on Linux, Windows, or Docker.";
+
+const deploymentOptions = [
+  {
+    title: 'Docker Compose (Recommended)',
+    desc: 'Deploy Python Core, Go API Gateway, Python Logger, and Web Dashboard in one command.',
+    href: url('/getting-started/docker/'),
+    badge: 'Production Ready'
+  },
+  {
+    title: 'Native Linux / Systemd',
+    desc: 'Install directly on Ubuntu/Debian/RHEL with automated systemd background services.',
+    href: url('/getting-started/linux-windows/'),
+    badge: 'Bare Metal / VPS'
+  },
+  {
+    title: 'Windows PowerShell',
+    desc: 'Run natively on Windows 10/11 or Windows Server using Python virtual environments.',
+    href: url('/getting-started/linux-windows/'),
+    badge: 'Desktop / Server'
+  },
+  {
+    title: 'Telegram Bot & Credentials Setup',
+    desc: 'Obtain API ID, API Hash from my.telegram.org and create your management bot via @BotFather.',
+    href: url('/getting-started/telegram-bot-setup/'),
+    badge: 'Essential'
+  }
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Getting Started', href: url('/getting-started/') }
+  ]}
+  next={{ title: 'Docker Deployment', href: url('/getting-started/docker/') }}
+>
+  <div class="space-y-6">
+    <h2 id="prerequisites">Prerequisites & System Requirements</h2>
+    <p>
+      AutoTelegramForward is lightweight and engineered to run reliably on resource-constrained virtual private servers (VPS) as well as enterprise clusters:
+    </p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 not-prose my-6 text-xs">
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-sky-400 font-bold block mb-1">💻 Hardware</span>
+        <span class="text-slate-300">1 vCPU, 512 MB RAM (1 GB recommended for high media volume), 2 GB Disk.</span>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-sky-400 font-bold block mb-1">🐍 Software</span>
+        <span class="text-slate-300">Python 3.10+ (or Docker Engine 24+ & Docker Compose v2).</span>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-sky-400 font-bold block mb-1">📱 Telegram Account</span>
+        <span class="text-slate-300">Active Telegram phone number and Bot Token from @BotFather.</span>
+      </div>
+    </div>
+
+    <h2 id="deployment-paths">Choose Deployment Path</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose my-6">
+      {deploymentOptions.map((opt) => (
+        <a
+          href={opt.href}
+          class="p-5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-850 hover:border-sky-500/40 transition-all flex flex-col justify-between group"
+        >
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[11px] font-bold text-sky-400 font-mono">{opt.badge}</span>
+              <span class="text-slate-500 group-hover:text-sky-400 text-xs">Read →</span>
+            </div>
+            <h3 class="text-base font-bold text-white group-hover:text-sky-300 mb-1.5">{opt.title}</h3>
+            <p class="text-xs text-slate-400">{opt.desc}</p>
+          </div>
+        </a>
+      ))}
+    </div>
+
+    <h2 id="configuration-guide">Next Steps</h2>
+    <ol>
+      <li>Follow the <a href={url('/getting-started/telegram-bot-setup/')}>Telegram Bot Setup</a> guide to get your API credentials.</li>
+      <li>Pick your deployment method: <a href={url('/getting-started/docker/')}>Docker</a> or <a href={url('/getting-started/linux-windows/')}>Linux/Windows</a>.</li>
+      <li>Review the <a href={url('/getting-started/configuration/')}>Configuration Reference</a> to configure environment variables.</li>
+      <li>Verify your deployment using our <a href={url('/getting-started/verification/')}>Installation Health Check</a> checklist.</li>
+    </ol>
+  </div>
+</DocsLayout>

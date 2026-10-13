@@ -1,0 +1,138 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "AutoTelegramForward Features & Capabilities";
+const pageDesc = "Complete directory of verified AutoTelegramForward features including message cleaning, deterministic filters, dynamic shortcodes, and resilient queue forwarding.";
+
+const featureCategories = [
+  {
+    title: 'Automated Message Forwarding',
+    slug: 'automated-forwarding',
+    href: url('/features/automated-forwarding/'),
+    desc: 'Copy mode (clean without forward tag) vs Direct forward, channel/group/topic routing, and priority-ordered execution.',
+    badge: 'Core Engine'
+  },
+  {
+    title: 'Destination & Rules Management',
+    slug: 'rules-and-destinations',
+    href: url('/features/rules-and-destinations/'),
+    desc: 'Multi-target fan-out to 1-N destinations simultaneously, smart VIP routing, and intermediate channel origin masking.',
+    badge: 'Routing'
+  },
+  {
+    title: 'Advanced Content Cleaner',
+    slug: 'text-cleaner',
+    href: url('/features/text-cleaner/'),
+    desc: 'Strip URLs, Telegram invite links, @mentions, #hashtags, emojis, phone numbers, buttons, and custom word lists.',
+    badge: 'New in v17'
+  },
+  {
+    title: 'Whitelist, Blacklist & Filters',
+    slug: 'whitelist-blacklist-filters',
+    href: url('/features/whitelist-blacklist-filters/'),
+    desc: 'Deterministic keyword filtering, link blocking, ReDoS-protected regex, and media-type allow/deny controls.',
+    badge: 'Filters'
+  },
+  {
+    title: 'Header & Footer Templates',
+    slug: 'headers-footers-shortcodes',
+    href: url('/features/headers-footers-shortcodes/'),
+    desc: 'Interpolate 12 validated shortcodes like [[ORIGIN_NAME]], [[ORIGIN_POST_ID]], and dynamic clickable channel hyperlinks.',
+    badge: 'Templates'
+  },
+  {
+    title: 'Text Replacement & Regex',
+    slug: 'replacements-and-regex',
+    href: url('/features/replacements-and-regex/'),
+    desc: 'Configurable word replacement dictionaries, safe pattern substitution, and UTF-16 entity offset preservation.',
+    badge: 'Transform'
+  },
+  {
+    title: 'Scheduling & Max Time Edit',
+    slug: 'scheduling-and-delays',
+    href: url('/features/scheduling-and-delays/'),
+    desc: 'Anti-detection randomized delays, operating windows, and max_time_edit synchronization thresholds for edits.',
+    badge: 'Timing'
+  },
+  {
+    title: 'Media, Albums & Copy Bypass',
+    slug: 'media-and-albums',
+    href: url('/features/media-and-albums/'),
+    desc: 'Atomic album (media group) debounced bundling and automatic download/re-upload for copy-restricted channels.',
+    badge: 'Media'
+  },
+  {
+    title: 'Backup, Clone & Migration',
+    slug: 'backup-clone-migration',
+    href: url('/features/backup-clone-migration/'),
+    desc: 'AES-256-GCM encrypted backup bundles for rules and sessions, historical message cloning, and safe restoration.',
+    badge: 'Backup'
+  },
+  {
+    title: 'Multi-Tenant Security',
+    slug: 'multi-tenant-security',
+    href: url('/features/multi-tenant-security/'),
+    desc: 'Strict fail-closed tenant boundary enforcement across Bot, Web Dashboard, and internal gRPC services.',
+    badge: 'Security'
+  }
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') }
+  ]}
+  next={{ title: 'Automated Forwarding', href: url('/features/automated-forwarding/') }}
+>
+  <div class="space-y-8">
+    <p class="text-base text-slate-300 leading-relaxed">
+      AutoTelegramForward is engineered as an enterprise-grade message processing platform for Telegram. Below is the comprehensive guide to every supported capability, validated against production code and tests.
+    </p>
+
+    <!-- Features Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 not-prose my-6">
+      {featureCategories.map((f) => (
+        <a
+          href={f.href}
+          class="p-5 rounded-xl border border-slate-800 bg-slate-900/50 hover:bg-slate-850 hover:border-sky-500/40 transition-all flex flex-col justify-between group shadow-sm hover:shadow-md hover:shadow-sky-950/20"
+        >
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-sky-400 font-mono">
+                {f.badge}
+              </span>
+              <span class="text-slate-500 group-hover:text-sky-400 group-hover:translate-x-0.5 transition-all text-xs font-bold">
+                Learn more →
+              </span>
+            </div>
+            <h3 class="text-base font-bold text-white group-hover:text-sky-300 transition-colors mb-1.5">
+              {f.title}
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              {f.desc}
+            </p>
+          </div>
+        </a>
+      ))}
+    </div>
+
+    <div class="p-5 rounded-xl bg-slate-900/80 border border-slate-800 not-prose mt-8">
+      <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+        <span>🧪 Looking to test templates & cleaner rules right now?</span>
+      </h3>
+      <p class="text-xs text-slate-400 mb-3">
+        Use our client-side interactive simulator to preview transformations before saving them in your bot.
+      </p>
+      <a
+        href={url('/tools/playground/')}
+        class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-white transition-colors"
+      >
+        <span>Open Template & Cleaner Playground</span>
+        <span>→</span>
+      </a>
+    </div>
+  </div>
+</DocsLayout>

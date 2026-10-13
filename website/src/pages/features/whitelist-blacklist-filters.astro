@@ -1,0 +1,101 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Whitelist, Blacklist & Media Filters";
+const pageDesc = "Deterministic content filters for Telegram message forwarding: keyword matching, media type blocking, link detection, and ReDoS-safe regex evaluation.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Filters & Access Control', href: url('/features/whitelist-blacklist-filters/') },
+  ]}
+  prev={{ title: 'Text Cleaner', href: url('/features/text-cleaner/') }}
+  next={{ title: 'Headers & Footers', href: url('/features/headers-footers-shortcodes/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      The <code>FilterEngine</code> in AutoTelegramForward executes deterministic, multi-stage inspection on incoming Telegram messages before any forwarding or copying occurs. If a message violates filtering criteria, it is dropped early with full diagnostic logging (e.g. <code>[PIPELINE:FILTER_DROP]</code>), saving network bandwidth and rate-limit quotas.
+    </p>
+
+    <h2 id="filter-types">Supported Filter Capabilities</h2>
+
+    <div class="space-y-4 not-prose my-6">
+      <div class="p-5 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-bold text-white">✅ Whitelist (Allow-Only Filter)</h3>
+          <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800">Required Match</span>
+        </div>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          When whitelist keywords or regex patterns are defined, a message <strong>must</strong> match at least one whitelist pattern to proceed. If none match, the message is quietly dropped.
+        </p>
+      </div>
+
+      <div class="p-5 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-bold text-white">⛔ Blacklist (Block Filter)</h3>
+          <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-rose-950 text-rose-400 border border-rose-800">Immediate Rejection</span>
+        </div>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          If an incoming message matches any blacklisted word, phrase, or regular expression, forwarding is immediately aborted.
+        </p>
+      </div>
+
+      <div class="p-5 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-bold text-white">🔗 Link Detection Filter</h3>
+          <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-sky-950 text-sky-400 border border-sky-800">filter_type: "link"</span>
+        </div>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Specifically rejects any incoming message containing web URLs, IP addresses, or Telegram deep links, preventing external channel promotion.
+        </p>
+      </div>
+
+      <div class="p-5 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-bold text-white">🎬 Media Type Filter</h3>
+          <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-purple-950 text-purple-400 border border-purple-800">Granular Toggles</span>
+        </div>
+        <p class="text-xs text-slate-400 leading-relaxed mb-3">
+          Filter out specific categories of Telegram media while allowing others:
+        </p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
+          <div class="p-2 rounded bg-slate-950 border border-slate-800 text-slate-300">block_video</div>
+          <div class="p-2 rounded bg-slate-950 border border-slate-800 text-slate-300">block_audio</div>
+          <div class="p-2 rounded bg-slate-950 border border-slate-800 text-slate-300">block_stickers</div>
+          <div class="p-2 rounded bg-slate-950 border border-slate-800 text-slate-300">block_voice</div>
+          <div class="p-2 rounded bg-slate-950 border border-slate-800 text-slate-300">block_text</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="evaluation-order">Filter Evaluation Pipeline Order</h2>
+    <p>
+      To prevent race conditions, the <code>FilterEngine</code> evaluates rules in strict order:
+    </p>
+    <ol>
+      <li><strong>Media Type Check:</strong> If the message media matches any active <code>block_*</code> rule, drop immediately.</li>
+      <li><strong>Link Check:</strong> If <code>filter_type == "link"</code> and any link is detected, drop immediately.</li>
+      <li><strong>Whitelist Check:</strong> If a whitelist exists and no match is found, drop.</li>
+      <li><strong>Blacklist Check:</strong> If any blacklist keyword or pattern matches, drop.</li>
+      <li><strong>Pass:</strong> Proceed to the Cleaner and Transformation stages.</li>
+    </ol>
+
+    <h2 id="redos-protection">ReDoS Prevention & Safe Regular Expressions</h2>
+    <p>
+      All regex patterns submitted via the Telegram Bot or Web API undergo strict compilation checks. Unbounded nested quantifiers (e.g. <code>(a+)+$</code>) that cause catastrophic backtracking are rejected with descriptive error messages. Furthermore, regex evaluations are executed with timeout bounds to protect worker threads.
+    </p>
+
+    <h2 id="bot-configuration">Configuring Filters via Telegram Bot</h2>
+    <ol>
+      <li>Send <code>/settings</code> and select your rule.</li>
+      <li>Click <strong>🔍 فیلترها (Filters)</strong>.</li>
+      <li>Click <strong>⛔ بلک‌لیست (Blacklist)</strong> or <strong>✅ وایت‌لیست (Whitelist)</strong> to enter keywords (one per line or comma-separated).</li>
+      <li>Click <strong>🎬 فیلتر رسانه</strong> to toggle blocking of Videos, Voice notes, Stickers, or Audio.</li>
+    </ol>
+  </div>
+</DocsLayout>
