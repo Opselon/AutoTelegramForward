@@ -23,7 +23,7 @@ The manifest schema:
       "binaries":   [{name, platform, sha256, size_bytes, required}],
       "api_binaries": [...],
       "android": {"artifacts": [{name, abi, sha256, size_bytes, required}]},
-      "portable": {...} | null,
+      "portable": {name, sha256, size_bytes, required} (available:false when missing),
       "ios": {"simulator": {"available": bool, ...},
               "ipa": {"available": bool, "signing": "..."}},
       "required_vs_optional": [{name, required, reason}],
@@ -204,6 +204,16 @@ def build_manifest(
                 "available": True,
             }
             portable_status = "built"
+    if portable is None:
+        # A missing REQUIRED portable bundle must be an explicit unavailable
+        # entry — never null — so verify_manifest.py fails the release on it
+        # instead of silently skipping a deliverable iter_manifest_entries()
+        # would never see.
+        portable = {
+            "name": f"autotelegramforward-{product_version}-portable.tar.gz",
+            "required": True,
+            "available": False,
+        }
 
     sim_app = any(re.search(r"Runner\.app$", n) or n == "ios-simulator" for n in found)
     ipa_name = next((n for n in found if n.endswith(".ipa")), None)
@@ -236,10 +246,11 @@ def build_manifest(
         required_vs_optional.append(
             {"name": name, "required": entry.get("required", False), "reason": reason}
         )
-    if portable:
-        required_vs_optional.append(
-            {"name": portable["name"], "required": True, "reason": "required deliverable"}
-        )
+    # portable is never None: a missing bundle is an explicit
+    # available:false REQUIRED entry (see above), so it always lands here.
+    required_vs_optional.append(
+        {"name": portable["name"], "required": True, "reason": "required deliverable"}
+    )
 
     build_status: dict[str, str] = {}
     build_status.update(bin_status)

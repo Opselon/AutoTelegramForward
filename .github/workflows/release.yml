@@ -671,6 +671,13 @@ jobs:
         run: docker compose up -d --build
 
       - name: Poll health endpoints
+        # Smoke-test contract: the freshly built stack must SERVE HTTP on both
+        # public endpoints with a well-formed services payload. We accept
+        # "healthy" OR "degraded" because this job runs on placeholder
+        # credentials from .env.example (no real Telegram API id/hash/token),
+        # so core/logger probes may legitimately report offline — what this
+        # gate proves is that every container boots, wiring is correct, and
+        # the API surface answers. A missing/unparseable payload fails.
         shell: bash
         run: |
           for i in $(seq 1 30); do
@@ -679,7 +686,10 @@ jobs:
             if [ -n "$A" ] && [ -n "$B" ]; then
               echo "web /healthz: $A"
               echo "api /api/v1/health/services: $B"
-              echo "$B" | grep -q '"status"' && exit 0
+              if echo "$B" | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'services' in d and d.get('status') in ('healthy','degraded'), d"; then
+                echo "stack serves HTTP with a valid services payload"
+                exit 0
+              fi
             fi
             echo "waiting for stack... ($i/30)"
             sleep 10
@@ -708,14 +718,19 @@ jobs:
     # continue-on-error to hide a real build failure (download steps use it
     # only because optional legs may legitimately be absent; the manifest
     # self-verify + post-publish-verify jobs enforce REQUIRED completeness).
-    needs: [meta, binaries, api-binaries, portable, mobile-android, ios-simulator, manifest]
+    # clean-install is REQUIRED for production: a release whose compose stack
+    # does not boot and serve HTTP must never publish. Its health assertion
+    # accepts healthy OR degraded (placeholder CI credentials) but fails on
+    # a missing/unparseable services payload.
+    needs: [meta, binaries, api-binaries, portable, mobile-android, ios-simulator, manifest, clean-install]
     if: |
       always() &&
       needs.meta.result == 'success' &&
       needs.binaries.result != 'failure' &&
       needs.api-binaries.result != 'failure' &&
       needs.mobile-android.result != 'failure' &&
-      needs.manifest.result == 'success'
+      needs.manifest.result == 'success' &&
+      needs.clean-install.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -933,6 +948,9 @@ jobs:
   # Post-publish verify — downloads a sample of the just-published release
   # assets and re-checks sha256 against the published manifest. Catches
   # truncated uploads or asset mix-ups after the release exists.
+  # The sampled names come from the manifest itself (--list-sample), so the
+  # verifier only ever checks files that were actually downloaded — a
+  # non-downloaded entry can never fail the job for the wrong reason.
   # ------------------------------------------------------------------------ #
   post-publish-verify:
     needs: [meta, publish]
@@ -941,7 +959,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download published assets (sample)
+      - name: Download published manifest + exact verification sample
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -949,13 +967,17 @@ jobs:
           mkdir -p verify
           TAG="${{ needs.meta.outputs.tag }}"
           gh release download "$TAG" --dir verify --pattern 'manifest.json'
-          # Sample: manifest + one binary per family + checksums index.
-          gh release download "$TAG" --dir verify --pattern 'atf-linux-x64' || true
-          gh release download "$TAG" --dir verify --pattern 'atf-api-linux-x64' || true
-          gh release download "$TAG" --dir verify --pattern 'AutoTelegramForward-*-android-arm64.apk' || true
+          python3 scripts/verify_manifest.py \
+            --manifest verify/manifest.json \
+            --artifacts-dir verify --list-sample 4 > verify/sample.txt
+          cat verify/sample.txt
+          while IFS= read -r asset; do
+            [ -n "$asset" ] || continue
+            gh release download "$TAG" --dir verify --pattern "$asset"
+          done < verify/sample.txt
           gh release download "$TAG" --dir verify --pattern 'SHA256SUMS.txt'
           ls -la verify
 
       - name: Re-check sample sha256 against manifest
         shell: bash
-        run: python3 scripts/verify_manifest.py --manifest verify/manifest.json --artifacts-dir verify --sample 4
+        run: python3 scripts/verify_manifest.py --manifest verify/manifest.json --artifacts-dir verify --sample 4 --seed 42

@@ -68,6 +68,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sample", type=int, default=0,
                     help="verify only N randomly chosen artifacts (post-publish spot check; 0 = all)")
     ap.add_argument("--seed", type=int, default=42, help="RNG seed for --sample")
+    ap.add_argument("--list-sample", type=int, default=0, metavar="N",
+                    help="print the N sampled artifact names (one per line) and exit; "
+                         "lets CI download exactly the entries it will verify")
     ap.add_argument("--skip-missing-optional", action="store_true", default=True,
                     help="(default: true) absent optional artifacts are SKIP, not failure")
     args = ap.parse_args(argv)
@@ -87,10 +90,21 @@ def main(argv: list[str] | None = None) -> int:
                 on_disk.setdefault(p.name, p)
 
     entries = iter_manifest_entries(manifest)
+    # Only available entries with a recorded sha256 can be meaningfully
+    # sampled: unavailable/missing entries are already covered by the full
+    # manifest self-verify job, and sampling them here would fail for the
+    # wrong reason (not downloaded, not corrupt).
+    verifiable = [e for e in entries
+                  if e.get("available", True) and e.get("sha256")]
+    if args.list_sample > 0:
+        rng = random.Random(args.seed)
+        for e in rng.sample(verifiable, min(args.list_sample, len(verifiable))):
+            print(e.get("name", "?"))
+        return 0
     if args.sample > 0:
         rng = random.Random(args.seed)
-        entries = rng.sample(entries, min(args.sample, len(entries)))
-        print(f"spot-checking {len(entries)} of {len(iter_manifest_entries(manifest))} manifest entries")
+        entries = rng.sample(verifiable, min(args.sample, len(verifiable)))
+        print(f"spot-checking {len(entries)} of {len(verifiable)} verifiable manifest entries")
 
     failures: list[str] = []
     skips: list[str] = []

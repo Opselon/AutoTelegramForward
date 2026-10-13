@@ -28,7 +28,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Python tests
-        run: python -m pytest -q core/tests logger/tests
+        run: python -m pytest -q core/tests logger/tests scripts/tests
 
   go-tests:
     runs-on: ubuntu-latest
