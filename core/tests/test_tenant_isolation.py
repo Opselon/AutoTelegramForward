@@ -14,6 +14,7 @@ import tempfile
 import os
 
 import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -697,3 +698,121 @@ def test_grpc_test_rule_denied_cross_tenant(tmp_path):
         pb.TestRuleRequest(rule_id="rule-a", sample_text="hello",
                            owner_user_id=TENANT_A), _Ctx()))
     assert r.match_reason != "rule_not_found"
+
+
+def test_first_run_without_session_renders_onboarding():
+    from core.infrastructure.telegram.pro_bot_ui import ProBotUI, CB
+    from core.infrastructure.telegram.i18n import I18n
+
+    ui = ProBotUI.__new__(ProBotUI)
+    ui.i18n = I18n()
+    ui.i18n.current = "en"
+    ui._web_url = "https://dashboard.example.com"
+
+    fake_user = MagicMock()
+    fake_user.first_name = "Alice"
+    fake_user.last_name = ""
+    fake_user.username = "alice_test"
+
+    text, kbd = ui._render_welcome_onboarding(111222, user=fake_user)
+    assert "Alice" in text
+    assert "Connect Now" in text or "connect" in text
+    assert "Scott" not in text
+    assert "5989354154" not in text
+    assert "+989" not in text
+
+    buttons = [btn for row in kbd.inline_keyboard for btn in row]
+    btn_texts = [b.text for b in buttons]
+    assert any("Connect Now" in t for t in btn_texts)
+    assert not any("Get App" in t for t in btn_texts)
+    assert any("Support" in t for t in btn_texts)
+
+
+def test_pv_responder_multi_tenant_isolation(tmp_path, monkeypatch):
+    from core.infrastructure.telegram.pv_responder import AIPVResponder
+    import core.infrastructure.telegram.pv_responder as pvr_mod
+    monkeypatch.setattr(pvr_mod, "CONFIG_PATH", tmp_path / "global_pv.json")
+
+    responder = AIPVResponder()
+    cfg_a = responder.get_config_for_user(TENANT_A)
+    assert cfg_a.enabled is False
+
+    cfg_a.enabled = True
+    cfg_a.persona_prompt = "Prompt for Tenant A"
+    responder.save_config_for_user(TENANT_A, cfg_a)
+
+    cfg_b = responder.get_config_for_user(TENANT_B)
+    assert cfg_b.enabled is False
+    assert cfg_b.persona_prompt != "Prompt for Tenant A"
+
+    responder_new = AIPVResponder()
+    reloaded_a = responder_new.get_config_for_user(TENANT_A)
+    assert reloaded_a.enabled is True
+    assert reloaded_a.persona_prompt == "Prompt for Tenant A"
+
+    reloaded_b = responder_new.get_config_for_user(TENANT_B)
+    assert reloaded_b.enabled is False
+
+
+@pytest.mark.asyncio
+async def test_dashboard_scoped_self_only_multi_lang():
+    from core.infrastructure.telegram.pro_bot_ui import ProBotUI
+    from core.infrastructure.telegram.i18n import I18n
+    from core.infrastructure.telegram.pv_responder import AIPVResponder
+
+    ui = ProBotUI.__new__(ProBotUI)
+    ui.i18n = I18n()
+    ui._admin_ids = {TENANT_A}
+    ui._accounts = None
+    ui._metrics = None
+    ui._rule_stats = None
+    ui._users = None
+    ui._web_url = ""
+
+    ui._sessions = AsyncMock()
+    ui._sessions.list_by_owner = AsyncMock(return_value=[])
+
+    ui._rules = AsyncMock()
+    ui._rules.list_by_owner = AsyncMock(return_value=[])
+
+    ui._filters = AsyncMock()
+    ui._filters.list_by_owner = AsyncMock(return_value=[])
+
+    ui._ai = AsyncMock()
+    ui._ai.list_by_owner = AsyncMock(return_value=[])
+
+    ui._pv_responder = AIPVResponder()
+
+    fake_b = MagicMock()
+    fake_b.first_name = "Bob"
+    fake_b.last_name = "Builder"
+    fake_b.username = "bob_b"
+
+    # In English
+    ui.i18n.current = "en"
+    text_en = await ui._main_text(TENANT_B, user=fake_b)
+    assert "Bob Builder" in text_en
+    assert str(TENANT_B) in text_en
+    assert "Connected phone: `None`" in text_en
+    assert "Currently active tasks: **0**" in text_en
+    assert "Scott" not in text_en
+    assert "+989" not in text_en
+
+    # In Persian
+    ui.i18n.current = "fa"
+    text_fa = await ui._main_text(TENANT_B, user=fake_b)
+    assert "Bob Builder" in text_fa
+    assert "شماره متصل: `None`" in text_fa
+    assert "Scott" not in text_fa
+
+    # In Russian
+    ui.i18n.current = "ru"
+    text_ru = await ui._main_text(TENANT_B, user=fake_b)
+    assert "Bob Builder" in text_ru
+    assert "Подключенный номер: `None`" in text_ru
+
+    # In Chinese
+    ui.i18n.current = "zh"
+    text_zh = await ui._main_text(TENANT_B, user=fake_b)
+    assert "Bob Builder" in text_zh
+    assert "已绑手机：`None`" in text_zh

@@ -259,15 +259,13 @@ class ProBotUI:
     # helpers
     # ------------------------------------------------------------------ #
     def _is_admin(self, user_id: int) -> bool:
-        return not self._admin_ids or user_id in self._admin_ids
+        admin_ids = getattr(self, "_admin_ids", None)
+        return bool(admin_ids and int(user_id or 0) in admin_ids)
 
     def _scope_uid(self, user_id: int) -> Optional[int]:
-        # v12.1: map a Telegram user to the owner scope used by the use-case
-        # IDOR guards — admins keep the legacy global scope (None) so
-        # single-tenant installs behave exactly as before.
-        admin_ids = getattr(self, "_admin_ids", None)
-        is_admin = not admin_ids or int(user_id or 0) in admin_ids
-        return None if is_admin else int(user_id or 0)
+        if not getattr(self, "_admin_ids", None):
+            return None
+        return None if self._is_admin(user_id) else (int(user_id) if user_id else 0)
 
     async def _owned_rule(self, rule_id: str, user_id: int):
         # v12.2: every rule read in the bot funnels through the use-case
@@ -339,9 +337,16 @@ class ProBotUI:
             pass
 
     def _kbd(self, rows) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(
-            [[InlineKeyboardButton(text, callback_data=data) for text, data in row] for row in rows]
-        )
+        built_rows = []
+        for row in rows:
+            built_row = []
+            for text, data in row:
+                if str(data).startswith("http://") or str(data).startswith("https://"):
+                    built_row.append(InlineKeyboardButton(text, url=data))
+                else:
+                    built_row.append(InlineKeyboardButton(text, callback_data=data))
+            built_rows.append(built_row)
+        return InlineKeyboardMarkup(built_rows)
 
     def _cancel_kbd(self) -> InlineKeyboardMarkup:
         return self._kbd([[("❌ " + self._t("ui_cancel"), CB["cancel"])]])
@@ -371,14 +376,133 @@ class ProBotUI:
             f"🔢 کد وارد شده: `[ {code_box} ]`"
         )
 
+    def _render_welcome_onboarding(self, uid: int, user: Optional[Any] = None) -> Tuple[str, InlineKeyboardMarkup]:
+        """First-run onboarding welcome screen for users without a connected Telegram session."""
+        display_name = ""
+        if user:
+            parts = [getattr(user, "first_name", "") or "", getattr(user, "last_name", "") or ""]
+            display_name = " ".join(p for p in parts if p).strip()
+            if not display_name and getattr(user, "username", None):
+                display_name = f"@{user.username}"
+        if not display_name:
+            display_name = f"User {uid}" if uid else "Valued User"
+
+        lang = self.i18n.current or "fa"
+
+        if lang == "fa":
+            text = (
+                f"سلام **{display_name}**! 👋\n\n"
+                "ربات **Auto Forward** به شما کمک می‌کند پیام‌ها و آپدیت‌ها را بین کانال‌ها، گروه‌ها، ربات‌ها و چت‌های خصوصی به صورت خودکار و بدون نیاز به کپی دستی منتقل کنید.\n"
+                "قوانین فوروارد، فیلترها و مسیرهای اختصاصی خود را در یک محیط امن ایجاد و مدیریت کنید.\n\n"
+                "⚡️ برای بهترین تجربه، از وب اپلیکیشن یا نسخه موبایل ما استفاده کنید!\n\n"
+                "برای اتصال حساب کاربری تلگرام، دستور /connect را بفرستید یا دکمه زیر را لمس نمایید:"
+            )
+            connect_btn = "🚀 اتصال حساب (Connect Now)"
+            support_btn = "🆘 پشتیبانی"
+        elif lang == "ru":
+            text = (
+                f"Привет, **{display_name}**! 👋\n\n"
+                "**Auto Forward** помогает автоматически пересылать сообщения между каналами, группами, ботами и личными чатами без ручного копирования.\n"
+                "Настраивайте правила пересылки, фильтры и сценарии доставки в одном безопасном месте.\n\n"
+                "⚡️ Для лучшего опыта используйте мобильное или веб-приложение!\n\n"
+                "Используйте команду /connect для привязки аккаунта Telegram."
+            )
+            connect_btn = "🚀 Подключить (Connect Now)"
+            support_btn = "🆘 Поддержка"
+        elif lang == "zh":
+            text = (
+                f"你好，**{display_name}**！👋\n\n"
+                "**Auto Forward** 帮助您在频道、群组、机器人和私聊之间自动转发消息，无需手动复制。\n"
+                "在统一安全的界面中创建转发规则、过滤器与自动化投递流程。\n\n"
+                "⚡️ 为获得最佳体验，请使用我们的移动端或 Web 应用！\n\n"
+                "请发送 /connect 绑定您的 Telegram 账号。"
+            )
+            connect_btn = "🚀 立即连接 (Connect Now)"
+            support_btn = "🆘 技术支持"
+        else:
+            text = (
+                f"Hello **{display_name}**! 👋\n\n"
+                "Auto Forward helps you route updates between channels, groups, bots, and private chats without manual copying.\n"
+                "Build reliable forwarding flows, filters, and delivery rules in one place.\n\n"
+                "⚡️ For the best experience, use our mobile or web app!\n\n"
+                "Use /connect to link your Telegram account."
+            )
+            connect_btn = "🚀 Connect Now"
+            support_btn = "🆘 Support"
+
+        rows = [
+            [(connect_btn, CB["login"])],
+            [(support_btn, "https://t.me/Capxi")],
+        ]
+        return text, self._kbd(rows)
+
+    async def _connect_prompt_text(self, uid: int) -> str:
+        """Detailed connect guide text."""
+        lang = await self._get_user_lang(uid)
+        if lang == "fa":
+            return (
+                "📱 **اتصال حساب تلگرام**\n\n"
+                "این دستور را در یک پیام ارسال کنید:\n"
+                "`/connect 989123456789`\n\n"
+                "شماره مثال بالا را با شماره تلفن خودتان (همراه با پیش‌شماره کشور) جایگزین کنید.\n"
+                "• بین `/connect` و شماره دقیقاً یک فاصله بگذارید.\n"
+                "• فعلاً توکن، رمز عبور یا کد تایید نفرستید.\n"
+                "• همچنین می‌توانید ابتدا دستور `/connect` را بفرستید و سپس در پیام بعدی فقط شماره خود را ارسال کنید.\n\n"
+                "مثال برای ایران: `/connect 989123456789`"
+            )
+        elif lang == "ru":
+            return (
+                "📱 **Подключите аккаунт Telegram**\n\n"
+                "Отправьте одной командой:\n"
+                "`/connect 79991234567`\n\n"
+                "Замените цифры примера на ваш собственный номер телефона с кодом страны.\n"
+                "• Оставьте один пробел после `/connect`.\n"
+                "• Пока не вводите токен, пароль или код подтверждения.\n"
+                "• Вы также можете отправить `/connect` сначала, а затем отправить только номер в следующем сообщении.\n\n"
+                "Пример для России: `/connect 79991234567`"
+            )
+        elif lang == "zh":
+            return (
+                "📱 **绑定您的 Telegram 账号**\n\n"
+                "请发送完整指令：\n"
+                "`/connect 8613512778569`\n\n"
+                "将示例数字替换为您自己的手机号（包含国家代码）。\n"
+                "• `/connect` 后保留一个空格。\n"
+                "• 暂不要输入 Token、密码或验证码。\n"
+                "• 您也可以先发送 `/connect`，然后在下一条消息中单独发送手机号。\n\n"
+                "中国示例：`/connect 8613512778569`"
+            )
+        else:
+            return (
+                "📱 **Connect your Telegram account**\n\n"
+                "Send this as one message:\n"
+                "`/connect 14155552671`\n\n"
+                "Replace the example digits with your own phone number, including country code.\n"
+                "• Keep one space after `/connect`.\n"
+                "• Do not add a token, password, or verification code yet.\n"
+                "• You can also send `/connect` first, then send only your phone number in the next message.\n\n"
+                "Example for China: `/connect 8613512778569`"
+            )
+
     # ------------------------------------------------------------------ #
     # Menus
     # ------------------------------------------------------------------ #
+    async def _get_user_lang(self, uid: int) -> str:
+        if uid and self._users is not None:
+            try:
+                u = await self._users.get_or_create(uid)
+                if u and u.get("language"):
+                    return str(u["language"]).lower()
+            except Exception:
+                pass
+        return str(self.i18n.current or "fa").lower()
+
     async def _main_text(self, uid: int, user: Optional[Any] = None) -> str:
         """Main-menu dashboard: matches the Pro Telegram control panel design.
 
         Displays user details, connected sessions, applied rules, filters,
         server status, web token, service plan, forwarding metrics, and support links.
+        Strictly scoped to the requesting tenant (uid).
         """
         # User details
         display_name = ""
@@ -394,9 +518,9 @@ class ProBotUI:
 
         # Rules & Active tasks
         rules: list[Any] = []
-        if self._rules is not None:
+        if self._rules is not None and uid:
             try:
-                rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
+                rules = await self._rules.list_by_owner(uid)
             except Exception:
                 logger.debug("rules lookup failed in _main_text", exc_info=True)
 
@@ -405,9 +529,9 @@ class ProBotUI:
 
         # Filters & Replacements
         filters_: list[Any] = []
-        if self._filters is not None:
+        if self._filters is not None and uid:
             try:
-                filters_ = await (self._filters.list_all() if self._is_admin(uid) else self._filters.list_by_owner(uid))
+                filters_ = await self._filters.list_by_owner(uid)
             except Exception:
                 logger.debug("filters lookup failed in _main_text", exc_info=True)
 
@@ -428,11 +552,32 @@ class ProBotUI:
             except Exception:
                 pass
 
+        # AI Configurations
+        ai_configs: list[Any] = []
+        if self._ai is not None and uid:
+            try:
+                ai_configs = await self._ai.list_by_owner(uid)
+            except Exception:
+                logger.debug("ai configs lookup failed in _main_text", exc_info=True)
+
+        active_ai = sum(1 for a in ai_configs if getattr(a, "is_enabled", False))
+        total_ai = len(ai_configs)
+        active_ai_model = "None"
+        for a in ai_configs:
+            if getattr(a, "is_enabled", False):
+                active_ai_model = f"{getattr(a, 'provider', '')}/{getattr(a, 'model', '')}".strip("/")
+                break
+
+        # PV Responder Config
+        pv_cfg = self._pv_responder.get_config_for_user(uid) if (self._pv_responder and uid) else None
+        pv_enabled = bool(pv_cfg and pv_cfg.enabled)
+        pv_delays = f"{pv_cfg.typing_delay_min:.1f}-{pv_cfg.typing_delay_max:.1f}s" if pv_cfg else "N/A"
+
         # Sessions & Connected Phone
         sessions: list[Any] = []
-        if self._sessions is not None:
+        if self._sessions is not None and uid:
             try:
-                sessions = await (self._sessions.list_all() if self._is_admin(uid) else self._sessions.list_by_owner(uid))
+                sessions = await self._sessions.list_by_owner(uid)
             except Exception:
                 logger.debug("sessions lookup failed in _main_text", exc_info=True)
 
@@ -446,10 +591,8 @@ class ProBotUI:
                 clean_phone = str(p).lstrip("+")
                 connected_phone = f"+{clean_phone}"
 
-        session_status = "Active 🟢" if live_sessions > 0 else ("Registered 🟡" if total_sessions > 0 else "Disconnected 🔴")
-
-        # Forwarded metrics
-        fwd_24h = await self._forwarded_24h(uid)
+        # Forwarded metrics strictly scoped to user's rules
+        fwd_24h = await self._forwarded_24h(uid, rules=rules)
 
         # Server info
         server_name = "VIP 995"
@@ -477,9 +620,11 @@ class ProBotUI:
         plan = "VIP Pro" if (active_rules > 0 or live_sessions > 0) else "Free"
         remaining = "Active" if plan == "VIP Pro" else "0 days"
 
-        is_fa = self.i18n.current == "fa"
+        lang = await self._get_user_lang(uid)
 
-        if is_fa:
+        if lang == "fa":
+            session_status = "فعال 🟢" if live_sessions > 0 else ("ثبت‌شده 🟡" if total_sessions > 0 else "قطع‌شده 🔴")
+            pv_status = "فعال 🟢" if pv_enabled else "غیرفعال 🔴"
             lines = [
                 f"👋 خوش آمدید، **{display_name}**!",
                 "",
@@ -490,6 +635,8 @@ class ProBotUI:
                 f"• کلمات مسدودشده (Blacklist): **{blocked_kw}**",
                 f"• کلمات مجاز (Whitelist): **{allowed_kw}**",
                 f"• قوانین جایگزینی متن: **{replace_count}**",
+                f"• مدل‌های هوش مصنوعی فعال: **{active_ai}/{total_ai}** ({active_ai_model})",
+                f"• پاسخگوی خودکار پی‌وی (PV): **{pv_status}** (تأخیر: {pv_delays})",
                 "",
                 "نیاز به راهنمایی دارید؟ پشتیبانی: @Capxi",
                 "سفارش ربات، کانال‌های فارکس، کریپتو یا اتوماسیون؟ ارتباط: @Capxi",
@@ -501,7 +648,7 @@ class ProBotUI:
                 f"شناسه کاربری: `{uid_str}`",
                 f"شماره متصل: `{connected_phone}`",
                 f"سرور فعلی: `{server_name}`",
-                f"توکن: `{token_str}`",
+                f"توکن وب: `{token_str}`",
                 "",
                 "💎 **اشتراک و پلن (SERVICE PLAN)**",
                 "────────────────────",
@@ -525,17 +672,121 @@ class ProBotUI:
                 "موجودی فعلی: **0.00**",
                 "━━━━━━━━━━━━━━━━━━━━",
             ]
+        elif lang == "ru":
+            session_status = "Активно 🟢" if live_sessions > 0 else ("Зарегистрировано 🟡" if total_sessions > 0 else "Отключено 🔴")
+            pv_status = "Активно 🟢" if pv_enabled else "Неактивно 🔴"
+            lines = [
+                f"👋 Добро пожаловать, **{display_name}**!",
+                "",
+                "📊 Статус сервиса: **Работает** ✅",
+                f"📋 Активные задачи: **{active_rules}**",
+                "",
+                "🧩 **Ваши правила и конфигурации:**",
+                f"• Заблокированные слова: **{blocked_kw}**",
+                f"• Разрешенные слова: **{allowed_kw}**",
+                f"• Правила замены текста: **{replace_count}**",
+                f"• Модели ИИ: **{active_ai}/{total_ai}** ({active_ai_model})",
+                f"• Автоответчик в ЛС (PV): **{pv_status}** (Задержка: {pv_delays})",
+                "",
+                "Нужна помощь? Поддержка: @Capxi",
+                "Разработка ботов, форекс, крипто, сайтов или автоматизация? Связь: @Capxi",
+                "",
+                "━━━━━━━━━━━━━━━━━━━━",
+                "👤 **ВАШ АККАУНТ (YOUR ACCOUNT)**",
+                "────────────────────",
+                f"Отображаемое имя: `{display_name}`",
+                f"ID пользователя: `{uid_str}`",
+                f"Подключенный номер: `{connected_phone}`",
+                f"Текущий сервер: `{server_name}`",
+                f"Веб-токен: `{token_str}`",
+                "",
+                "💎 **ТАРИФНЫЙ ПЛАН (SERVICE PLAN)**",
+                "────────────────────",
+                f"Текущий план: **{plan}**",
+                f"Оставшееся время: **{remaining}**",
+                "Статус сервиса: **Работает ✅**",
+                "",
+                "📋 **ЗАДАЧИ ПЕРЕСЫЛКИ (FORWARDING TASKS)**",
+                "────────────────────",
+                f"Активные задачи: **{active_rules}**",
+                f"Переслано (24ч): **{fwd_24h}**",
+                f"Всего задач: **{total_rules}**",
+                "",
+                "👥 **ВАШИ СЕССИИ (YOUR SESSIONS)**",
+                "────────────────────",
+                f"Подключенные сессии: **{live_sessions}/{total_sessions}**",
+                f"Статус: **{session_status}**",
+                "",
+                "💰 **БАЛАНС КРЕДИТОВ (CREDITS BALANCE)**",
+                "────────────────────",
+                "Текущий баланс: **0.00**",
+                "━━━━━━━━━━━━━━━━━━━━",
+            ]
+        elif lang == "zh":
+            session_status = "活跃 🟢" if live_sessions > 0 else ("已注册 🟡" if total_sessions > 0 else "未连接 🔴")
+            pv_status = "已启用 🟢" if pv_enabled else "未启用 🔴"
+            lines = [
+                f"👋 欢迎回来，**{display_name}**！",
+                "",
+                "📊 服务状态：**运行中** ✅",
+                f"📋 活跃任务：**{active_rules}**",
+                "",
+                "🧩 **您的规则与配置：**",
+                f"• 屏蔽关键词：**{blocked_kw}**",
+                f"• 允许关键词：**{allowed_kw}**",
+                f"• 文本替换规则：**{replace_count}**",
+                f"• 活跃 AI 模型：**{active_ai}/{total_ai}** ({active_ai_model})",
+                f"• 私聊回复 (PV)：**{pv_status}** (延迟: {pv_delays})",
+                "",
+                "需要帮助？联系支持：@Capxi",
+                "定制 Telegram 机器人、外汇、加密货币、网站或自动化？联系：@Capxi",
+                "",
+                "━━━━━━━━━━━━━━━━━━━━",
+                "👤 **您的账户 (YOUR ACCOUNT)**",
+                "────────────────────",
+                f"显示名称：`{display_name}`",
+                f"用户 ID：`{uid_str}`",
+                f"已绑手机：`{connected_phone}`",
+                f"当前服务器：`{server_name}`",
+                f"Web Token：`{token_str}`",
+                "",
+                "💎 **服务计划 (SERVICE PLAN)**",
+                "────────────────────",
+                f"当前计划：**{plan}**",
+                f"剩余时间：**{remaining}**",
+                "服务状态：**运行中 ✅**",
+                "",
+                "📋 **转发任务 (FORWARDING TASKS)**",
+                "────────────────────",
+                f"正在运行：**{active_rules}**",
+                f"24小时转发：**{fwd_24h}**",
+                f"总任务数：**{total_rules}**",
+                "",
+                "👥 **您的会话 (YOUR SESSIONS)**",
+                "────────────────────",
+                f"已连会话：**{live_sessions}/{total_sessions}**",
+                f"状态：**{session_status}**",
+                "",
+                "💰 **信用余额 (CREDITS BALANCE)**",
+                "────────────────────",
+                "当前余额：**0.00**",
+                "━━━━━━━━━━━━━━━━━━━━",
+            ]
         else:
+            session_status = "Active 🟢" if live_sessions > 0 else ("Registered 🟡" if total_sessions > 0 else "Disconnected 🔴")
+            pv_status = "Active 🟢" if pv_enabled else "Inactive 🔴"
             lines = [
                 f"👋 Welcome back, **{display_name}**!",
                 "",
                 "📊 Service status: Running ✅",
                 f"📋 Active Tasks: {active_rules}",
                 "",
-                "🧩 Rules currently applied:",
+                "🧩 Rules & Configs currently applied:",
                 f"• Blocked keywords: {blocked_kw}",
                 f"• Allowed keywords: {allowed_kw}",
                 f"• Replace rules: {replace_count}",
+                f"• AI Configs active: {active_ai}/{total_ai} ({active_ai_model})",
+                f"• PV Smart Responder: {pv_status} (Typing delay: {pv_delays})",
                 "",
                 "Need help with an issue? Contact @Capxi.",
                 "Have an idea or need custom work for Telegram bots, forex, crypto, websites, SEO, or automation? Contact @Capxi.",
@@ -574,19 +825,21 @@ class ProBotUI:
 
         return "\n".join(lines)
 
-    async def _forwarded_24h(self, uid: int) -> int:
-        """Forwarded message count in the trailing 24h.
-
-        The metrics table is global (per-process), so this sums the hourly
-        buckets rather than trying to attribute to a single owner.
-        """
-        if self._metrics is None:
+    async def _forwarded_24h(self, uid: int, rules: Optional[list] = None) -> int:
+        """Forwarded message count in the trailing 24h for this user's rules."""
+        if not uid:
             return 0
-        try:
-            buckets = await self._metrics.hourly(24)
-            return sum(int(b.get("forwarded") or 0) for b in (buckets or []))
-        except Exception:
-            return 0
+        total = 0
+        if rules and self._rule_stats is not None:
+            for r in rules:
+                try:
+                    st = await self._rule_stats.get(r.id)
+                    if st:
+                        total += int(st.get("forwarded") or 0)
+                except Exception:
+                    pass
+            return total
+        return 0
 
     async def _dlq_count(self) -> int:
         """Failed messages sitting in the dead-letter queue."""
@@ -1233,9 +1486,10 @@ class ProBotUI:
 
     async def _fetch_dialogs(self, owner_user_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Fetch available channels/groups from connected session clients."""
-        _dlg_uid = None if owner_user_id is None else int(owner_user_id or 0)
-        sessions = (await self._sessions.list_all() if _dlg_uid is None
-                    else await self._sessions.list_by_owner(_dlg_uid))
+        _dlg_uid = int(owner_user_id or 0)
+        if not _dlg_uid:
+            return []
+        sessions = await self._sessions.list_by_owner(_dlg_uid)
         active_sessions = [s for s in sessions if getattr(s, "is_active", True) and getattr(s, "is_authorized", False)]
         if not active_sessions and sessions:
             active_sessions = sessions
@@ -1325,8 +1579,10 @@ class ProBotUI:
             return
 
         _fuid = self._scope_uid(uid)
-        sessions = (await self._sessions.list_all() if _fuid is None
-                    else await self._sessions.list_by_owner(uid))
+        if _fuid is None and hasattr(self._sessions, "list_all"):
+            sessions = await self._sessions.list_all()
+        else:
+            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
         if not sessions:
             st.step = ""
             if isinstance(st.buffer, dict):
@@ -1479,63 +1735,190 @@ class ProBotUI:
         ]
         return text, self._kbd(rows)
 
-    def _render_pv_menu(self) -> Tuple[str, InlineKeyboardMarkup]:
+    def _render_pv_menu(self, uid: int = 0, lang: str = "fa") -> Tuple[str, InlineKeyboardMarkup]:
         resp = getattr(self, "_pv_responder", None)
         if not resp:
             return "❌ ماژول پاسخگوی هوشمند پی‌وی بارگذاری نشده است.", self._kbd([[("⬅️ بازگشت", CB["ai"])]])
 
-        cfg = resp.config
-        status_str = "🟢 فعال" if cfg.enabled else "🔴 غیرفعال"
-
+        cfg = resp.get_config_for_user(uid) if hasattr(resp, "get_config_for_user") else resp.config
         persona_preview = (cfg.persona_prompt[:140] + "...") if len(cfg.persona_prompt) > 140 else cfg.persona_prompt
 
-        text = (
-            "🤖 **پاسخگوی فوق‌العاده هوشمند پی‌وی (AI PV Assistant)**\n\n"
-            f"📊 **وضعیت فعالیت:** {status_str}\n"
-            f"⏱ **شبیه‌سازی تایپینگ انسانی:** `{cfg.typing_delay_min:.1f}` تا `{cfg.typing_delay_max:.1f}` ثانیه\n"
-            f"⏳ **کول‌داون ضداسپم:** هر `{cfg.cooldown_seconds}` ثانیه\n"
-            f"🤖 **نادیده‌گرفتن ربات‌ها:** {'✅ بله' if cfg.ignore_bots else '❌ خیر'}\n\n"
-            f"🎭 **لحن و شخصیت فعلی:**\n"
-            f"_{persona_preview}_\n\n"
-            "💡 **ویژگی‌ها:** با اتصال این بخش به هوش مصنوعی، هر پیامی به پی‌وی اکانت شما بیاید با "
-            "شبیه‌سازی اکشنِ Typing و لحنی کاملاً انسانی، جذاب و فارسی پاسخ داده می‌شود بدون اینکه کسی شک کند."
-        )
-
-        tog_btn = "🔴 غیرفعال‌سازی" if cfg.enabled else "🟢 فعال‌سازی"
-        rows = [
-            [(f"🔘 وضعیت: {tog_btn}", "pv:toggle")],
-            [("🎭 تنظیم لحن و پرامپت شخصیت", "pv:persona")],
-            [("⏱ تنظیم زمان تأخیر و تایپینگ", "pv:delays")],
-            [("🧪 تست نمونه پاسخگویی", "pv:test")],
-            [("⬅️ " + self._t("ui_back"), CB["ai"])],
-        ]
+        if lang == "fa":
+            status_str = "🟢 فعال" if cfg.enabled else "🔴 غیرفعال"
+            tog_btn = "🔴 غیرفعال‌سازی" if cfg.enabled else "🟢 فعال‌سازی"
+            text = (
+                "🤖 **پاسخگوی فوق‌العاده هوشمند پی‌وی (AI PV Assistant)**\n\n"
+                f"📊 **وضعیت فعالیت:** {status_str}\n"
+                f"⏱ **شبیه‌سازی تایپینگ انسانی:** `{cfg.typing_delay_min:.1f}` تا `{cfg.typing_delay_max:.1f}` ثانیه\n"
+                f"⏳ **کول‌داون ضداسپم:** هر `{cfg.cooldown_seconds}` ثانیه\n"
+                f"🤖 **نادیده‌گرفتن ربات‌ها:** {'✅ بله' if cfg.ignore_bots else '❌ خیر'}\n\n"
+                f"🎭 **لحن و شخصیت فعلی:**\n"
+                f"_{persona_preview}_\n\n"
+                "💡 **ویژگی‌ها:** با اتصال این بخش به هوش مصنوعی، هر پیامی به پی‌وی اکانت شما بیاید با "
+                "شبیه‌سازی اکشنِ Typing و لحنی کاملاً انسانی، جذاب و فارسی پاسخ داده می‌شود."
+            )
+            rows = [
+                [(f"🔘 وضعیت: {tog_btn}", "pv:toggle")],
+                [("🎭 تنظیم لحن و پرامپت شخصیت", "pv:persona")],
+                [("⏱ تنظیم زمان تأخیر و تایپینگ", "pv:delays")],
+                [("🧪 تست نمونه پاسخگویی", "pv:test")],
+                [("⬅️ " + self._t("ui_back"), CB["ai"])],
+            ]
+        elif lang == "ru":
+            status_str = "🟢 Активно" if cfg.enabled else "🔴 Неактивно"
+            tog_btn = "🔴 Отключить" if cfg.enabled else "🟢 Включить"
+            text = (
+                "🤖 **Умный автоответчик в ЛС (AI PV Assistant)**\n\n"
+                f"📊 **Статус:** {status_str}\n"
+                f"⏱ **Имитация набора текста:** от `{cfg.typing_delay_min:.1f}` до `{cfg.typing_delay_max:.1f}` сек\n"
+                f"⏳ **Антиспам кулдаун:** каждые `{cfg.cooldown_seconds}` сек\n"
+                f"🤖 **Игнорировать ботов:** {'✅ Да' if cfg.ignore_bots else '❌ Нет'}\n\n"
+                f"🎭 **Текущий стиль общения:**\n"
+                f"_{persona_preview}_\n"
+            )
+            rows = [
+                [(f"🔘 Статус: {tog_btn}", "pv:toggle")],
+                [("🎭 Настройка стиля и промпта", "pv:persona")],
+                [("⏱ Настройка задержек набора", "pv:delays")],
+                [("🧪 Тестировать ответ", "pv:test")],
+                [("⬅️ Назад", CB["ai"])],
+            ]
+        elif lang == "zh":
+            status_str = "🟢 已启用" if cfg.enabled else "🔴 未启用"
+            tog_btn = "🔴 关闭" if cfg.enabled else "🟢 开启"
+            text = (
+                "🤖 **私聊智能自动回复 (AI PV Assistant)**\n\n"
+                f"📊 **运行状态：** {status_str}\n"
+                f"⏱ **拟人输入模拟：** `{cfg.typing_delay_min:.1f}` 至 `{cfg.typing_delay_max:.1f}` 秒\n"
+                f"⏳ **防刷冷却：** 每 `{cfg.cooldown_seconds}` 秒\n"
+                f"🤖 **忽略机器人：** {'✅ 是' if cfg.ignore_bots else '❌ 否'}\n\n"
+                f"🎭 **当前语气与人设：**\n"
+                f"_{persona_preview}_\n"
+            )
+            rows = [
+                [(f"🔘 状态: {tog_btn}", "pv:toggle")],
+                [("🎭 设置回复语气与提示词", "pv:persona")],
+                [("⏱ 设置输入延迟", "pv:delays")],
+                [("🧪 测试回复", "pv:test")],
+                [("⬅️ 返回", CB["ai"])],
+            ]
+        else:
+            status_str = "🟢 Active" if cfg.enabled else "🔴 Inactive"
+            tog_btn = "🔴 Disable" if cfg.enabled else "🟢 Enable"
+            text = (
+                "🤖 **AI Private Chat Assistant (AI PV Assistant)**\n\n"
+                f"📊 **Status:** {status_str}\n"
+                f"⏱ **Typing Simulation:** `{cfg.typing_delay_min:.1f}` to `{cfg.typing_delay_max:.1f}` sec\n"
+                f"⏳ **Anti-spam Cooldown:** `{cfg.cooldown_seconds}` sec\n"
+                f"🤖 **Ignore Bots:** {'✅ Yes' if cfg.ignore_bots else '❌ No'}\n\n"
+                f"🎭 **Current Persona:**\n"
+                f"_{persona_preview}_\n"
+            )
+            rows = [
+                [(f"🔘 Status: {tog_btn}", "pv:toggle")],
+                [("🎭 Configure Persona & Prompt", "pv:persona")],
+                [("⏱ Configure Typing Delays", "pv:delays")],
+                [("🧪 Test Sample Reply", "pv:test")],
+                [("⬅️ " + self._t("ui_back"), CB["ai"])],
+            ]
         return text, self._kbd(rows)
 
-    def _render_pv_persona_menu(self) -> Tuple[str, InlineKeyboardMarkup]:
-        text = (
-            "🎭 **تنظیم لحن و شخصیت پاسخگوی پی‌وی:**\n\n"
-            "یکی از سبک‌های آماده زیر را انتخاب کنید یا پرامپت دلخواه بنویسید:"
-        )
-        rows = [
-            [("😃 لحن خودمانی، جذاب و بسیار طبیعی (پیش‌فرض)", "pv:set_p:casual")],
-            [("💼 لحن کاری، مؤدبانه و حرفه‌ای", "pv:set_p:business")],
-            [("⚡ پاسخ‌های بسیار کوتاه و دوستانه", "pv:set_p:short")],
-            [("✏️ نوشتن پرامپت اختصاصی و دلخواه", "pv:set_p:custom")],
-            [("⬅️ بازگشت به تنظیمات پی‌وی", "pv:menu")],
-        ]
+    def _render_pv_persona_menu(self, lang: str = "fa") -> Tuple[str, InlineKeyboardMarkup]:
+        if lang == "fa":
+            text = (
+                "🎭 **تنظیم لحن و شخصیت پاسخگوی پی‌وی:**\n\n"
+                "یکی از سبک‌های آماده زیر را انتخاب کنید یا پرامپت دلخواه بنویسید:"
+            )
+            rows = [
+                [("😃 لحن خودمانی، جذاب و طبیعی (پیش‌فرض)", "pv:set_p:casual")],
+                [("💼 لحن کاری، مؤدبانه و حرفه‌ای", "pv:set_p:business")],
+                [("⚡ پاسخ‌های بسیار کوتاه و دوستانه", "pv:set_p:short")],
+                [("✏️ نوشتن پرامپت اختصاصی و دلخواه", "pv:set_p:custom")],
+                [("⬅️ بازگشت به تنظیمات پی‌وی", "pv:menu")],
+            ]
+        elif lang == "ru":
+            text = (
+                "🎭 **Настройка стиля общения:**\n\n"
+                "Выберите один из готовых стилей или задайте свой промпт:"
+            )
+            rows = [
+                [("😃 Дружелюбный и естественный (по умолчанию)", "pv:set_p:casual")],
+                [("💼 Деловой и вежливый", "pv:set_p:business")],
+                [("⚡ Очень краткий и быстрый", "pv:set_p:short")],
+                [("✏️ Свой персональный промпт", "pv:set_p:custom")],
+                [("⬅️ Назад в меню PV", "pv:menu")],
+            ]
+        elif lang == "zh":
+            text = (
+                "🎭 **设置回复语气与人设：**\n\n"
+                "选择预设模板或自定义提示词："
+            )
+            rows = [
+                [("😃 亲切自然（默认）", "pv:set_p:casual")],
+                [("💼 商务专业礼貌", "pv:set_p:business")],
+                [("⚡ 简短快速回复", "pv:set_p:short")],
+                [("✏️ 自定义专属提示词", "pv:set_p:custom")],
+                [("⬅️ 返回 PV 设置", "pv:menu")],
+            ]
+        else:
+            text = (
+                "🎭 **Configure Persona & Tone:**\n\n"
+                "Choose a ready style or write your custom persona prompt:"
+            )
+            rows = [
+                [("😃 Friendly & Casual (Default)", "pv:set_p:casual")],
+                [("💼 Polite & Professional", "pv:set_p:business")],
+                [("⚡ Short & Fast Replies", "pv:set_p:short")],
+                [("✏️ Custom Prompt", "pv:set_p:custom")],
+                [("⬅️ Back to PV Menu", "pv:menu")],
+            ]
         return text, self._kbd(rows)
 
-    def _render_pv_delays_menu(self) -> Tuple[str, InlineKeyboardMarkup]:
-        text = (
-            "⏱ **تنظیم زمان تأخیر شبیه‌سازی تایپ انسانی:**\n\n"
-            "سرعت تایپ و ارسال پاسخ در پی‌وی را مشخص کنید:"
-        )
-        rows = [
-            [("⚡ سریع (۱.۵ تا ۳ ثانیه)", "pv:set_d:fast")],
-            [("🧘 طبیعی و انسانی (۲ تا ۴.۵ ثانیه)", "pv:set_d:normal")],
-            [("🐢 با تأمل و طبیعی (۳.۵ تا ۶.۵ ثانیه)", "pv:set_d:slow")],
-            [("⬅️ بازگشت به تنظیمات پی‌وی", "pv:menu")],
-        ]
+    def _render_pv_delays_menu(self, lang: str = "fa") -> Tuple[str, InlineKeyboardMarkup]:
+        if lang == "fa":
+            text = (
+                "⏱ **تنظیم زمان تأخیر شبیه‌سازی تایپ انسانی:**\n\n"
+                "سرعت تایپ و ارسال پاسخ در پی‌وی را مشخص کنید:"
+            )
+            rows = [
+                [("⚡ سریع (۱.۵ تا ۳ ثانیه)", "pv:set_d:fast")],
+                [("🧘 طبیعی و انسانی (۲ تا ۴.۵ ثانیه)", "pv:set_d:normal")],
+                [("🐢 با تأمل و طبیعی (۳.۵ تا ۶.۵ ثانیه)", "pv:set_d:slow")],
+                [("⬅️ بازگشت به تنظیمات پی‌وی", "pv:menu")],
+            ]
+        elif lang == "ru":
+            text = (
+                "⏱ **Настройка задержки набора текста:**\n\n"
+                "Укажите скорость имитации набора сообщения:"
+            )
+            rows = [
+                [("⚡ Быстро (1.5 - 3.0 сек)", "pv:set_d:fast")],
+                [("🧘 Естественно (2.0 - 4.5 сек)", "pv:set_d:normal")],
+                [("🐢 Неспешно (3.5 - 6.5 сек)", "pv:set_d:slow")],
+                [("⬅️ Назад в меню PV", "pv:menu")],
+            ]
+        elif lang == "zh":
+            text = (
+                "⏱ **设置拟人输入延迟：**\n\n"
+                "选择模拟打字与发送的间隔时长："
+            )
+            rows = [
+                [("⚡ 快速 (1.5 - 3.0 秒)", "pv:set_d:fast")],
+                [("🧘 自然拟人 (2.0 - 4.5 秒)", "pv:set_d:normal")],
+                [("🐢 沉着从容 (3.5 - 6.5 秒)", "pv:set_d:slow")],
+                [("⬅️ 返回 PV 设置", "pv:menu")],
+            ]
+        else:
+            text = (
+                "⏱ **Configure Typing Delay Simulation:**\n\n"
+                "Select typing and response speed:"
+            )
+            rows = [
+                [("⚡ Fast (1.5 - 3.0s)", "pv:set_d:fast")],
+                [("🧘 Natural (2.0 - 4.5s)", "pv:set_d:normal")],
+                [("🐢 Deliberate (3.5 - 6.5s)", "pv:set_d:slow")],
+                [("⬅️ Back to PV Menu", "pv:menu")],
+            ]
         return text, self._kbd(rows)
 
     def _logs_menu(self) -> InlineKeyboardMarkup:
@@ -1639,8 +2022,24 @@ class ProBotUI:
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /start from uid=%s", uid)
             try:
-                body = await self._main_text(uid, user=message.from_user)
-                await message.reply_text(body, reply_markup=self._main_menu())
+                # Reset any in-progress FSM state on fresh /start
+                st = self._state(uid)
+                st.step = ""
+                st.rule_source = ""
+                st.rule_target = ""
+                if isinstance(st.buffer, dict):
+                    st.buffer.clear()
+                await self._persist(uid, st)
+                self._login.cancel(uid)
+
+                # If user has no sessions connected yet, show onboarding screen
+                sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+                if not sessions:
+                    text, kbd = self._render_welcome_onboarding(uid, user=message.from_user)
+                    await message.reply_text(text, reply_markup=kbd)
+                else:
+                    body = await self._main_text(uid, user=message.from_user)
+                    await message.reply_text(body, reply_markup=self._main_menu())
                 try:
                     self._log.info("bot", "system", f"/start by {uid}")
                 except Exception:
@@ -1648,13 +2047,76 @@ class ProBotUI:
             except Exception as exc:
                 logger.exception("/start failed for uid=%s: %s", uid, exc)
 
-        @b.on_message(filters.command("menu") & filters.private)
+        @b.on_message(filters.command("connect") & filters.private)
+        async def _connect_cmd(_, message: Message):
+            uid = message.from_user.id if message.from_user else 0
+            logger.info("Handling /connect from uid=%s", uid)
+            if not uid:
+                return
+            st = self._state(uid)
+            st.step = "login_phone"
+            await self._persist(uid, st)
+            args = (message.text or "").split(None, 1)
+            phone_arg = args[1].strip() if len(args) > 1 else ""
+            if phone_arg:
+                await self._step_login_phone(message, st, phone_arg)
+            else:
+                prompt = await self._connect_prompt_text(uid)
+                await message.reply_text(prompt, reply_markup=self._cancel_kbd())
+
+        @b.on_message(filters.command("cancel") & filters.private)
+        async def _cancel_cmd(_, message: Message):
+            uid = message.from_user.id if message.from_user else 0
+            logger.info("Handling /cancel from uid=%s", uid)
+            if not uid:
+                return
+            st = self._state(uid)
+            st.step = ""
+            st.rule_source = ""
+            st.rule_target = ""
+            if isinstance(st.buffer, dict):
+                st.buffer.clear()
+            await self._persist(uid, st)
+            self._login.cancel(uid)
+            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+            if not sessions:
+                lang = await self._get_user_lang(uid)
+                if lang == "fa":
+                    c_text = "❌ عملیات لغو شد."
+                    btn_connect = "🚀 تلاش مجدد برای اتصال"
+                    btn_menu = "🏚️ منوی اصلی"
+                elif lang == "ru":
+                    c_text = "❌ Операция отменена."
+                    btn_connect = "🚀 Подключить снова"
+                    btn_menu = "🏚️ Главное меню"
+                elif lang == "zh":
+                    c_text = "❌ 操作已取消。"
+                    btn_connect = "🚀 重新连接"
+                    btn_menu = "🏚️ 主菜单"
+                else:
+                    c_text = "❌ Operation cancelled."
+                    btn_connect = "🚀 Connect Again"
+                    btn_menu = "🏚️ Main Menu"
+                kbd = self._kbd([
+                    [(btn_connect, CB["login"])],
+                    [(btn_menu, CB["main"])],
+                ])
+                await message.reply_text(c_text, reply_markup=kbd)
+            else:
+                await message.reply_text(self._t("ui_cancelled"), reply_markup=self._main_menu())
+
+        @b.on_message(filters.command(["menu", "panel", "settings"]) & filters.private)
         async def _menu(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /menu from uid=%s", uid)
             try:
-                body = await self._main_text(uid, user=message.from_user)
-                await message.reply_text(body, reply_markup=self._main_menu())
+                sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+                if not sessions:
+                    text, kbd = self._render_welcome_onboarding(uid, user=message.from_user)
+                    await message.reply_text(text, reply_markup=kbd)
+                else:
+                    body = await self._main_text(uid, user=message.from_user)
+                    await message.reply_text(body, reply_markup=self._main_menu())
             except Exception as exc:
                 logger.exception("/menu failed for uid=%s: %s", uid, exc)
 
@@ -1663,8 +2125,7 @@ class ProBotUI:
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /rules from uid=%s", uid)
             try:
-                # v12: scope to the caller's tenant; admins see everything.
-                rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
+                rules = await self._rules.list_by_owner(uid) if uid else []
                 text, kbd = self._render_rules_list(rules, page=0)
                 await message.reply_text(text, reply_markup=kbd)
             except Exception as exc:
@@ -1673,11 +2134,16 @@ class ProBotUI:
         @b.on_callback_query(filters.regex("^" + CB["main"] + "$"))
         async def _cb_main(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
-            await self._safe_edit(
-                cq, 
-                await self._main_text(uid, user=cq.from_user),
-                reply_markup=self._main_menu(),
-            )
+            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+            if not sessions:
+                text, kbd = self._render_welcome_onboarding(uid, user=cq.from_user)
+                await self._safe_edit(cq, text, reply_markup=kbd)
+            else:
+                await self._safe_edit(
+                    cq, 
+                    await self._main_text(uid, user=cq.from_user),
+                    reply_markup=self._main_menu(),
+                )
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["sessions"] + "$"))
@@ -1685,7 +2151,7 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             logger.info("Executing _cb_sessions for uid=%s", uid)
             try:
-                sessions = await (self._sessions.list_all() if self._is_admin(uid) else self._sessions.list_by_owner(uid))
+                sessions = await self._sessions.list_by_owner(uid) if uid else []
                 lines = [self._t("ui_sessions_title"), ""]
                 if not sessions:
                     lines.append(self._t("ui_none"))
@@ -1708,7 +2174,7 @@ class ProBotUI:
         @b.on_callback_query(filters.regex("^" + CB["rules"] + "$"))
         async def _cb_rules(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
-            rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
+            rules = await self._rules.list_by_owner(uid) if uid else []
             text, kbd = self._render_rules_list(rules, page=0)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -1718,7 +2184,7 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             page = int(raw.split(":", 1)[1])
-            rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
+            rules = await self._rules.list_by_owner(uid) if uid else []
             text, kbd = self._render_rules_list(rules, page=page)
             try:
                 await self._safe_edit(cq, text, reply_markup=kbd)
@@ -1728,9 +2194,8 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["filters"] + "$"))
         async def _cb_filters(_, cq: CallbackQuery):
-            # v12: scope to the caller's tenant; admins see everything.
             uid_f = cq.from_user.id if cq.from_user else 0
-            filters_ = await (self._filters.list_all() if self._is_admin(uid_f) else self._filters.list_by_owner(uid_f))
+            filters_ = await self._filters.list_by_owner(uid_f) if uid_f else []
             lines = [self._t("ui_filters_title"), ""]
             if not filters_:
                 lines.append(self._t("ui_none"))
@@ -1741,9 +2206,8 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["ai"] + "$"))
         async def _cb_ai(_, cq: CallbackQuery):
-            # v12: scope to the caller's tenant; admins see everything.
             uid_a = cq.from_user.id if cq.from_user else 0
-            cfgs = await (self._ai.list_all() if self._is_admin(uid_a) else self._ai.list_by_owner(uid_a))
+            cfgs = await self._ai.list_by_owner(uid_a) if uid_a else []
             lines = [self._t("ui_ai_title"), ""]
             if not cfgs:
                 lines.append(self._t("ui_none"))
@@ -1850,11 +2314,16 @@ class ProBotUI:
         @b.on_callback_query(filters.regex("^" + CB["back"] + "$"))
         async def _cb_back(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
-            await self._safe_edit(
-                cq,
-                await self._main_text(uid, user=cq.from_user),
-                reply_markup=self._main_menu(),
-            )
+            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+            if not sessions:
+                text, kbd = self._render_welcome_onboarding(uid, user=cq.from_user)
+                await self._safe_edit(cq, text, reply_markup=kbd)
+            else:
+                await self._safe_edit(
+                    cq,
+                    await self._main_text(uid, user=cq.from_user),
+                    reply_markup=self._main_menu(),
+                )
             await cq.answer()
 
         # ---------------- cancel any active flow ----------------
@@ -1872,11 +2341,36 @@ class ProBotUI:
             self._login.cancel(uid)
             if old_step.startswith("rule_"):
                 # v12.1: scope to the caller's tenant; admins see everything.
-                rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
+                rules = await self._rules.list_by_owner(uid)
                 text, kbd = self._render_rules_list(rules, page=0)
                 await self._safe_edit(cq, text, reply_markup=kbd)
             else:
-                await self._safe_edit(cq, self._t("ui_cancelled"), reply_markup=self._main_menu())
+                sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+                if not sessions:
+                    lang = await self._get_user_lang(uid)
+                    if lang == "fa":
+                        c_text = "❌ عملیات لغو شد."
+                        btn_connect = "🚀 تلاش مجدد برای اتصال"
+                        btn_menu = "🏚️ منوی اصلی"
+                    elif lang == "ru":
+                        c_text = "❌ Операция отменена."
+                        btn_connect = "🚀 Подключить снова"
+                        btn_menu = "🏚️ Главное меню"
+                    elif lang == "zh":
+                        c_text = "❌ 操作已取消。"
+                        btn_connect = "🚀 重新连接"
+                        btn_menu = "🏚️ 主菜单"
+                    else:
+                        c_text = "❌ Operation cancelled."
+                        btn_connect = "🚀 Connect Again"
+                        btn_menu = "🏚️ Main Menu"
+                    kbd = self._kbd([
+                        [(btn_connect, CB["login"])],
+                        [(btn_menu, CB["main"])],
+                    ])
+                    await self._safe_edit(cq, c_text, reply_markup=kbd)
+                else:
+                    await self._safe_edit(cq, self._t("ui_cancelled"), reply_markup=self._main_menu())
             await cq.answer()
 
         # ---------------- login flow ----------------
@@ -1891,8 +2385,8 @@ class ProBotUI:
                 st.step = "login_phone"
                 await self._persist(uid, st)
                 await cq.answer()
-                return await cq.message.edit_text(
-                    self._t("ui_login_phone"), reply_markup=self._cancel_kbd())
+                prompt = await self._connect_prompt_text(uid)
+                return await cq.message.edit_text(prompt, reply_markup=self._cancel_kbd())
             result = await self._login.start(uid, LoginFlowManager.normalize_phone(phone))
             await cq.answer()
             if result != "send_code":
@@ -1917,13 +2411,11 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             logger.info("Executing _cb_login for uid=%s", uid)
             try:
-                if not self._is_admin(uid):
-                    return await cq.answer(self._t("ui_need_admin"), show_alert=True)
                 st = self._state(uid)
                 st.step = "login_phone"
                 await self._persist(uid, st)
-                await self._safe_edit(cq, 
-                    self._t("ui_login_phone"), reply_markup=self._cancel_kbd())
+                prompt = await self._connect_prompt_text(uid)
+                await self._safe_edit(cq, prompt, reply_markup=self._cancel_kbd())
                 await cq.answer()
                 logger.info("_cb_login prompt sent successfully for uid=%s; step=login_phone", uid)
             except Exception as exc:
@@ -1931,6 +2423,7 @@ class ProBotUI:
                 try:
                     await cq.answer(f"⚠️ خطا: {exc}", show_alert=True)
                 except Exception:
+                    pass
                     pass
 
         # ---------------- api credentials vault ----------------
@@ -1988,15 +2481,14 @@ class ProBotUI:
         # ---------------- rule add flow ----------------
         @b.on_callback_query(filters.regex("^" + CB["rule_add"] + "$"))
         async def _cb_rule_add(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            sessions = await self._sessions.list_all()
+            uid = cq.from_user.id if cq.from_user else 0
+            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
             if not sessions:
                 await self._safe_edit(cq, 
                     self._t("ui_no_sessions"), reply_markup=self._sessions_menu())
                 return await cq.answer()
 
-            st = self._state(cq.from_user.id)
+            st = self._state(uid)
             st.step = "rule_source"
             st.rule_source = ""
             st.rule_target = ""
@@ -2007,19 +2499,17 @@ class ProBotUI:
             except Exception:
                 pass
 
-            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
+            chats = await self._fetch_dialogs(self._scope_uid(uid))
             st.buffer["chats"] = chats
             st.buffer["page"] = 0
-            await self._persist(cq.from_user.id, st)
+            await self._persist(uid, st)
 
             text, markup = self._render_chat_picker(st, role="source", page=0)
             await self._safe_edit(cq, text, reply_markup=markup)
 
         @b.on_callback_query(filters.regex(r"^ch:(s|t):(\d+)$"))
         async def _cb_pick_chat(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
             raw_data = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             parts = raw_data.split(":")
@@ -2125,9 +2615,7 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^pg:(s|t):(\d+)$"))
         async def _cb_page_chat(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
             raw_data = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             parts = raw_data.split(":")
@@ -2147,9 +2635,7 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^rfc:(s|t)$"))
         async def _cb_refresh_chats(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
             raw_data = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             parts = raw_data.split(":")
@@ -2160,7 +2646,7 @@ class ProBotUI:
             except Exception:
                 pass
 
-            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
+            chats = await self._fetch_dialogs(self._scope_uid(uid))
             if isinstance(st.buffer, dict):
                 st.buffer["chats"] = chats
                 st.buffer["page"] = 0
@@ -2171,9 +2657,7 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^r_cancel$"))
         async def _cb_rule_cancel(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
             st.step = ""
             st.rule_source = ""
@@ -2181,16 +2665,14 @@ class ProBotUI:
             if isinstance(st.buffer, dict):
                 st.buffer.clear()
             await self._persist(uid, st)
-            rules = await self._rules.list_all()
+            rules = await self._rules.list_by_owner(uid) if uid else []
             text, kbd = self._render_rules_list(rules, page=0)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer("❌ عملیات ایجاد قانون لغو شد")
 
         @b.on_callback_query(filters.regex(r"^r_back_source$"))
         async def _cb_rule_back_source(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
             st.step = "rule_source"
             st.rule_target = ""
@@ -2607,15 +3089,14 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^rtg:(.+)$"))
         async def _cb_rule_toggle_active(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            rule = await self._rules.get(rule_id)
+            rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer("❌ قانون یافت نشد یا متعلق به شما نیست", show_alert=True)
             rule.is_active = not rule.is_active
-            await self._rules.update(rule)
+            await self._save_owned_rule(rule, uid)
             status = "فعال شد 🟢" if rule.is_active else "غیرفعال شد 🔴"
             await cq.answer(f"وضعیت: {status}")
             text, kbd = self._render_rule_detail(rule)
@@ -2623,31 +3104,32 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^rrm:(.+)$"))
         async def _cb_rule_remove(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ این قانون یافت نشد یا متعلق به شما نیست.", show_alert=True)
             await self._rules.delete(rule_id)
             await cq.answer("🗑 قانون با موفقیت حذف شد", show_alert=True)
-            rules = await self._rules.list_all()
+            rules = await self._rules.list_by_owner(uid) if uid else []
             text, kbd = self._render_rules_list(rules, page=0)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         # ---------------- rule edit (draft & direct) handlers ----------------
         @b.on_callback_query(filters.regex(r"^re:(.+)$"))
         async def _cb_rule_edit_draft(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            rule = await self._rules.get(rule_id)
+            rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                st = self._state(cq.from_user.id)
+                st = self._state(uid)
                 st.step = ""
                 if isinstance(st.buffer, dict):
                     st.buffer.clear()
-                await self._persist(cq.from_user.id, st)
-                rules = await self._rules.list_all()
+                await self._persist(uid, st)
+                rules = await self._rules.list_by_owner(uid) if uid else []
                 text, kbd = self._render_rules_list(rules, page=0)
                 try:
                     await self._safe_edit(cq, text, reply_markup=kbd)
@@ -2655,7 +3137,6 @@ class ProBotUI:
                     pass
                 return await cq.answer("❌ این قانون یافت نشد یا ممکن است حذف شده باشد.", show_alert=True)
 
-            uid = cq.from_user.id
             st = self._state(uid)
             st.step = "rule_editing_draft"
             draft = rule.to_draft()
@@ -2755,16 +3236,14 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^r_ai:(.+)$"))
         async def _cb_rule_ai_menu(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
             rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
             if not isinstance(draft, dict) or st.buffer.get("rule_id") != rule_id:
-                rule = await self._rules.get(rule_id)
+                rule = await self._owned_rule(rule_id, uid)
                 if not rule:
-                    return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                    return await cq.answer("❌ قانون یافت نشد یا متعلق به شما نیست", show_alert=True)
                 draft = rule.to_draft()
             draft["ai_status_badge"] = _ai_badge(draft)
             text, kbd = await _render_ai_menu(rule_id, draft)
@@ -2773,13 +3252,11 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^r_ai_cfg:(.+)$"))
         async def _cb_rule_ai_pick_cfg(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
             rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else {}
-            cfgs = await self._ai.list_all()
+            cfgs = await self._ai.list_by_owner(uid) if (self._ai and uid) else []
             current = str(draft.get("ai_config_id") or "")
             rows: List[List[Tuple[str, str]]] = [
                 [("❌ خاموش (بدون بازنویسی)", f"r_aicset:{rule_id}:")],
@@ -2932,25 +3409,24 @@ class ProBotUI:
 
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            rule = await self._rules.get(rule_id)
+            rule = await self._owned_rule(rule_id, uid)
             await cq.answer("❌ ویرایش پیش‌نویس لغو شد و هیچ تغییری ذخیره نگردید")
             if rule:
                 text, kbd = self._render_rule_detail(rule)
                 await self._safe_edit(cq, text, reply_markup=kbd)
             else:
-                rules = await self._rules.list_all()
+                rules = await self._rules.list_by_owner(uid) if uid else []
                 text, kbd = self._render_rules_list(rules, page=0)
                 await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_s:(.+)$"))
         async def _cb_rule_draft_source(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            rule = await self._rules.get(rule_id)
+            rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer("❌ قانون یافت نشد یا متعلق به شما نیست", show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -3856,74 +4332,82 @@ class ProBotUI:
         # ---------------- PV Responder (AI PV Assistant) ----------------
         @b.on_callback_query(filters.regex(r"^pv:menu$"))
         async def _cb_pv_menu(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             await cq.answer()
-            text, kbd = self._render_pv_menu()
+            lang = await self._get_user_lang(uid)
+            text, kbd = self._render_pv_menu(uid, lang=lang)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:toggle$"))
         async def _cb_pv_toggle(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
+            if not uid:
+                return await cq.answer("❌ شناسه کاربر نامعتبر است.", show_alert=True)
             resp = getattr(self, "_pv_responder", None)
             if not resp:
                 return await cq.answer("❌ ماژول در دسترس نیست.", show_alert=True)
-            resp.config.enabled = not resp.config.enabled
-            resp.save_config(resp.config)
-            status_msg = "پاسخگوی پی‌وی فعال شد 🟢" if resp.config.enabled else "پاسخگوی پی‌وی غیرفعال شد 🔴"
+            cfg = resp.get_config_for_user(uid)
+            cfg.enabled = not cfg.enabled
+            resp.save_config_for_user(uid, cfg)
+            status_msg = "پاسخگوی پی‌وی فعال شد 🟢" if cfg.enabled else "پاسخگوی پی‌وی غیرفعال شد 🔴"
             await cq.answer(status_msg)
-            text, kbd = self._render_pv_menu()
+            lang = await self._get_user_lang(uid)
+            text, kbd = self._render_pv_menu(uid, lang=lang)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:persona$"))
         async def _cb_pv_persona(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             await cq.answer()
-            text, kbd = self._render_pv_persona_menu()
+            lang = await self._get_user_lang(uid)
+            text, kbd = self._render_pv_persona_menu(lang=lang)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:set_p:(.+)$"))
         async def _cb_pv_set_persona(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
+            if not uid:
+                return await cq.answer("❌ شناسه کاربر نامعتبر است.", show_alert=True)
             resp = getattr(self, "_pv_responder", None)
             if not resp:
                 return await cq.answer("❌ ماژول در دسترس نیست.", show_alert=True)
+            cfg = resp.get_config_for_user(uid)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             p_type = raw.split(":", 2)[2]
             if p_type == "casual":
                 from core.infrastructure.telegram.pv_responder import DEFAULT_PERSONA
-                resp.config.persona_prompt = DEFAULT_PERSONA
-                resp.save_config(resp.config)
+                cfg.persona_prompt = DEFAULT_PERSONA
+                resp.save_config_for_user(uid, cfg)
                 await cq.answer("✅ لحن خودمانی و جذاب تنظیم شد.")
-                text, kbd = self._render_pv_menu()
+                lang = await self._get_user_lang(uid)
+                text, kbd = self._render_pv_menu(uid, lang=lang)
                 await self._safe_edit(cq, text, reply_markup=kbd)
             elif p_type == "business":
-                resp.config.persona_prompt = (
+                cfg.persona_prompt = (
                     "شما صاحب این اکانت شخصی تلگرام هستید. با لحنی کاملاً مؤدبانه، حرفه‌ای، "
                     "محترمانه و در عین حال روان و انسانی به زبان فارسی به پیام‌ها پاسخ دهید. "
                     "هرگز اشاره نکن که هوش مصنوعی یا ربات هستی. پاسخ‌ها موجز و صریح باشند."
                 )
-                resp.save_config(resp.config)
+                resp.save_config_for_user(uid, cfg)
                 await cq.answer("✅ لحن کاری و محترمانه تنظیم شد.")
-                text, kbd = self._render_pv_menu()
+                lang = await self._get_user_lang(uid)
+                text, kbd = self._render_pv_menu(uid, lang=lang)
                 await self._safe_edit(cq, text, reply_markup=kbd)
             elif p_type == "short":
-                resp.config.persona_prompt = (
+                cfg.persona_prompt = (
                     "شما صاحب اکانت تلگرام هستید. پیام‌ها را بسیار کوتاه، خودمانی، "
                     "سریع و حداکثر در یک یا دو جمله جذاب و دوستانه پاسخ بده. "
                     "اصلاً شبیه ربات نباش و هرگز نگو بات هستی."
                 )
-                resp.save_config(resp.config)
+                resp.save_config_for_user(uid, cfg)
                 await cq.answer("✅ لحن کوتاه و سریع تنظیم شد.")
-                text, kbd = self._render_pv_menu()
+                lang = await self._get_user_lang(uid)
+                text, kbd = self._render_pv_menu(uid, lang=lang)
                 await self._safe_edit(cq, text, reply_markup=kbd)
             elif p_type == "custom":
-                st = self._state(cq.from_user.id)
+                st = self._state(uid)
                 st.step = "pv_persona_input"
-                await self._persist(cq.from_user.id, st)
+                await self._persist(uid, st)
                 prompt_text = (
                     "✍️ **تنظیم پرامپت اختصاصی برای هوش مصنوعی پی‌وی:**\n\n"
                     "لطفاً دستورالعمل یا شخصیت دلخواه خود را به زبان فارسی ارسال کنید.\n"
@@ -3934,42 +4418,46 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^pv:delays$"))
         async def _cb_pv_delays(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             await cq.answer()
-            text, kbd = self._render_pv_delays_menu()
+            lang = await self._get_user_lang(uid)
+            text, kbd = self._render_pv_delays_menu(lang=lang)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:set_d:(.+)$"))
         async def _cb_pv_set_delay(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
+            if not uid:
+                return await cq.answer("❌ شناسه کاربر نامعتبر است.", show_alert=True)
             resp = getattr(self, "_pv_responder", None)
             if not resp:
                 return await cq.answer("❌ ماژول در دسترس نیست.", show_alert=True)
+            cfg = resp.get_config_for_user(uid)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             d_type = raw.split(":", 2)[2]
             if d_type == "fast":
-                resp.config.typing_delay_min = 1.5
-                resp.config.typing_delay_max = 3.0
+                cfg.typing_delay_min = 1.5
+                cfg.typing_delay_max = 3.0
             elif d_type == "normal":
-                resp.config.typing_delay_min = 2.0
-                resp.config.typing_delay_max = 4.5
+                cfg.typing_delay_min = 2.0
+                cfg.typing_delay_max = 4.5
             elif d_type == "slow":
-                resp.config.typing_delay_min = 3.5
-                resp.config.typing_delay_max = 6.5
-            resp.save_config(resp.config)
+                cfg.typing_delay_min = 3.5
+                cfg.typing_delay_max = 6.5
+            resp.save_config_for_user(uid, cfg)
             await cq.answer("✅ زمان‌بندی تأخیر با موفقیت اعمال شد.")
-            text, kbd = self._render_pv_menu()
+            lang = await self._get_user_lang(uid)
+            text, kbd = self._render_pv_menu(uid, lang=lang)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:test$"))
         async def _cb_pv_test(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            st = self._state(cq.from_user.id)
+            uid = cq.from_user.id if cq.from_user else 0
+            if not uid:
+                return await cq.answer("❌ شناسه کاربر نامعتبر است.", show_alert=True)
+            st = self._state(uid)
             st.step = "pv_test_input"
-            await self._persist(cq.from_user.id, st)
+            await self._persist(uid, st)
             prompt = (
                 "🧪 **تست شبیه‌سازی پاسخگوی هوشمند پی‌وی:**\n\n"
                 "یک پیام نمونه که ممکن است مخاطبی برای شما بفرستد ارسال کنید "
@@ -3982,9 +4470,8 @@ class ProBotUI:
         # ---------------- backup ----------------
         @b.on_callback_query(filters.regex("^" + CB["backup"] + "$"))
         async def _cb_backup(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
-            sessions = await self._sessions.list_all()
+            uid = cq.from_user.id if cq.from_user else 0
+            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
             if not sessions:
                 await self._safe_edit(cq, 
                     self._t("ui_no_sessions"), reply_markup=self._sessions_menu())
@@ -4244,7 +4731,7 @@ class ProBotUI:
             await cq.answer()
 
         # ---------------- free-text FSM router ----------------
-        @b.on_message(filters.private & filters.text & ~filters.command(["start", "menu"]), group=-1)
+        @b.on_message(filters.private & filters.text & ~filters.command(["start", "menu", "cancel", "connect", "rules", "panel", "settings"]), group=-1)
         async def _text(_, message: Message):
             # Every step of every flow is traced: if the bot ever goes quiet
             # again, the log shows exactly which step died and why.
@@ -4592,6 +5079,10 @@ class ProBotUI:
             # right now — stay silent instead of spamming "use the menu".
             if self._login.has_pending(uid):
                 return
+            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+            if not sessions:
+                text_ob, kbd_ob = self._render_welcome_onboarding(uid, user=message.from_user)
+                return await message.reply_text(text_ob, reply_markup=kbd_ob)
             return await message.reply_text(
                 self._t("ui_use_menu"), reply_markup=self._main_menu()
             )
@@ -4600,6 +5091,10 @@ class ProBotUI:
         if handler is None:
             st.step = ""
             await self._persist(uid, st)
+            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+            if not sessions:
+                text_ob, kbd_ob = self._render_welcome_onboarding(uid, user=message.from_user)
+                return await message.reply_text(text_ob, reply_markup=kbd_ob)
             return await message.reply_text(
                 self._t("ui_use_menu"), reply_markup=self._main_menu()
             )
@@ -6000,41 +6495,47 @@ class ProBotUI:
         await message.reply_text("✅ کلید API با موفقیت به‌روزرسانی شد:\n\n" + detail_text, reply_markup=detail_kbd)
 
     async def _step_pv_persona_input(self, message: Message, st: UiState, text: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
         st.step = ""
         st.buffer = {}
-        await self._persist(message.from_user.id, st)
+        await self._persist(uid, st)
         resp = getattr(self, "_pv_responder", None)
         if not resp:
             await message.reply_text("❌ ماژول پاسخگوی پی‌وی یافت نشد.", reply_markup=self._main_menu())
             return
+        lang = await self._get_user_lang(uid)
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-            text_out, kbd = self._render_pv_menu()
+            text_out, kbd = self._render_pv_menu(uid, lang=lang)
             await message.reply_text("❌ تنظیم پرامپت لغو شد.", reply_markup=kbd)
             return
 
-        resp.config.persona_prompt = text.strip()
-        resp.save_config(resp.config)
+        cfg = resp.get_config_for_user(uid)
+        cfg.persona_prompt = text.strip()
+        resp.save_config_for_user(uid, cfg)
         await message.reply_text("✅ پرامپت و شخصیت پاسخگوی پی‌وی با موفقیت ثبت گردید!")
-        text_out, kbd = self._render_pv_menu()
+        text_out, kbd = self._render_pv_menu(uid, lang=lang)
         await message.reply_text(text_out, reply_markup=kbd)
 
     async def _step_pv_test_input(self, message: Message, st: UiState, text: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
         st.step = ""
         st.buffer = {}
-        await self._persist(message.from_user.id, st)
+        await self._persist(uid, st)
         resp = getattr(self, "_pv_responder", None)
         if not resp:
             await message.reply_text("❌ ماژول پاسخگوی پی‌وی یافت نشد.", reply_markup=self._main_menu())
             return
+        lang = await self._get_user_lang(uid)
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-            text_out, kbd = self._render_pv_menu()
+            text_out, kbd = self._render_pv_menu(uid, lang=lang)
             await message.reply_text("❌ تست لغو شد.", reply_markup=kbd)
             return
 
-        ai_cfg = await resp.get_active_ai_config()
+        cfg = resp.get_config_for_user(uid)
+        ai_cfg = await resp.get_active_ai_config(uid)
         if not ai_cfg:
-            text_out, kbd = self._render_pv_menu()
-            await message.reply_text("⚠️ هیچ هوش مصنوعی فعالی برای پاسخگویی یافت نشد. لطفاً در بخش AI یک مدل فعال کنید.", reply_markup=kbd)
+            text_out, kbd = self._render_pv_menu(uid, lang=lang)
+            await message.reply_text("⚠️ هیچ هوش مصنوعی فعالی برای اکانت شما یافت نشد. لطفاً در بخش AI یک مدل فعال کنید.", reply_markup=kbd)
             return
 
         wait_msg = await message.reply_text("⏳ در حال پردازش پیام با شخصیت تنظیم‌شده و شبیه‌سازی تایپینگ...")
@@ -6046,7 +6547,7 @@ class ProBotUI:
             provider = provider_cls()
 
             messages = [
-                {"role": "system", "content": resp.config.persona_prompt},
+                {"role": "system", "content": cfg.persona_prompt},
                 {"role": "user", "content": text.strip()},
             ]
             if hasattr(provider, "chat_complete"):
@@ -6059,13 +6560,13 @@ class ProBotUI:
                 f"👤 **پیام ورودی مخاطب:**\n«{text.strip()}»\n\n"
                 f"🤖 **پاسخ شبیه‌سازی‌شده (مدل {ai_cfg.model}):**\n"
                 f"«{reply_text.strip()}»\n\n"
-                f"⏱ تاخیر شبیه‌سازی تایپینگ: `{resp.config.typing_delay_min:.1f}` تا `{resp.config.typing_delay_max:.1f}` ثانیه"
+                f"⏱ تاخیر شبیه‌سازی تایپینگ: `{cfg.typing_delay_min:.1f}` تا `{cfg.typing_delay_max:.1f}` ثانیه"
             )
             try:
                 await wait_msg.delete()
             except Exception:
                 pass
-            text_out, kbd = self._render_pv_menu()
+            text_out, kbd = self._render_pv_menu(uid, lang=lang)
             await message.reply_text(body, reply_markup=kbd)
         except Exception as exc:
             try:

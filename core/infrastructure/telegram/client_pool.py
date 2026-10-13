@@ -392,6 +392,12 @@ def payload_from_pyrogram(message) -> MessagePayload:
     chat_username = getattr(chat, "username", None) if chat else None
     chat_title = getattr(chat, "title", None) if chat else None
 
+    raw_text = getattr(message, "text", None)
+    clean_text = (str(raw_text) if type(raw_text) is str else f"{raw_text}") if raw_text is not None else ""
+
+    raw_caption = getattr(message, "caption", None)
+    clean_caption = (str(raw_caption) if type(raw_caption) is str else f"{raw_caption}") if raw_caption is not None else ""
+
     return MessagePayload(
         message_id=message.id,
         chat_id=str(message.chat.id),
@@ -400,8 +406,8 @@ def payload_from_pyrogram(message) -> MessagePayload:
         sender_name=sender_name,
         chat_username=chat_username,
         chat_title=chat_title,
-        text=message.text or "",
-        caption=message.caption or "",
+        text=clean_text,
+        caption=clean_caption,
         media_type=media_type,
         has_media=media_type is not MediaType.TEXT,
         is_service=getattr(message, "service", None) is not None,

@@ -268,6 +268,12 @@ class DurableMessagePipeline:
             ctx.payload = payload
             ctx.record_stage(PipelineStage.NORMALIZE, True, reason="normalized", duration_ms=(time.monotonic() - t0) * 1000)
             self.metrics.normalized_total += 1
+            logger.info(
+                "[PIPELINE:INGEST] [%s] Ingested message id=%s chat=%s (%s) media=%s text_len=%d trigger=%s",
+                ctx.correlation_id[:8], payload.message_id, payload.chat_id,
+                payload.chat_title or "unknown", getattr(payload.media_type, "value", payload.media_type),
+                len(payload.effective_text or ""), trigger,
+            )
         except Exception as exc:
             ctx.record_stage(PipelineStage.NORMALIZE, False, reason="normalize_error", error=str(exc))
             self.metrics.failed_total += 1
@@ -277,6 +283,7 @@ class DurableMessagePipeline:
         if payload.is_service:
             ctx.record_stage(PipelineStage.FILTER, False, reason="service_message_dropped")
             self.metrics.filtered_total += 1
+            logger.info("[PIPELINE:DROP] [%s] Dropping service message id=%s", ctx.correlation_id[:8], payload.message_id)
             return ctx
 
         # Find matching rules
@@ -288,22 +295,27 @@ class DurableMessagePipeline:
             ctx.record_stage(PipelineStage.FILTER, False, reason="no_matching_rules")
             if not active_rules:
                 logger.info(
-                    "[%s] Message %s from chat %s: No active forward rules exist for this source",
+                    "[PIPELINE:NO_RULES] [%s] Message %s from chat %s: No active forward rules exist for this source",
                     ctx.correlation_id[:8], payload.message_id, payload.chat_id,
                 )
             else:
                 logger.info(
-                    "[%s] Message %s from chat %s: None of the %d active rule(s) matched (matching=%d, trigger=%s)",
+                    "[PIPELINE:NO_MATCH] [%s] Message %s from chat %s: None of %d active rule(s) matched (matching=%d, trigger=%s)",
                     ctx.correlation_id[:8], payload.message_id, payload.chat_id, len(active_rules), len(matching), trigger,
                 )
             return ctx
 
+        logger.info(
+            "[PIPELINE:ROUTE] [%s] Message %s matched %d valid forwarding rule(s) for source chat %s",
+            ctx.correlation_id[:8], payload.message_id, len(valid_rules), payload.chat_id,
+        )
+
         for rule in valid_rules:
             await self._process_for_rule(ctx, rule)
 
-        logger.debug(
-            "[%s] Pipeline completed in %.2fms. Enqueued=%d",
-            ctx.correlation_id,
+        logger.info(
+            "[PIPELINE:COMPLETE] [%s] Pipeline finished in %.2fms. Target jobs enqueued=%d",
+            ctx.correlation_id[:8],
             (time.monotonic() - t_start) * 1000,
             len(ctx.target_jobs),
         )
@@ -389,6 +401,11 @@ class DurableMessagePipeline:
             return
 
         ctx.record_stage(PipelineStage.FILTER, True, reason=eval_res.reason, duration_ms=(time.monotonic() - t0) * 1000)
+        logger.info(
+            "[PIPELINE:FILTER] [%s] Rule %s PASSED msg %s (filter=%s, reason=%s, took %.2fms)",
+            ctx.correlation_id[:8], rule.id[:8], payload.message_id, rule.filter_rule_id or "none",
+            eval_res.reason or "allow", (time.monotonic() - t0) * 1000,
+        )
 
         # 5. TRANSFORM
         t0 = time.monotonic()
@@ -398,7 +415,7 @@ class DurableMessagePipeline:
                 # Message was dropped or deferred by transform policy (e.g. AI fallback DROP or RETRY)
                 self.metrics.failed_total += 1
                 logger.warning(
-                    "[%s] Rule %s transform policy returned None for msg %s (dropped or deferred)",
+                    "[PIPELINE:TRANSFORM] [%s] Rule %s transform policy returned None for msg %s (dropped or deferred)",
                     ctx.correlation_id[:8], rule.id[:8], payload.message_id,
                 )
                 return
@@ -409,6 +426,12 @@ class DurableMessagePipeline:
             ctx.transformed_text = transformed
             ctx.record_stage(PipelineStage.TRANSFORM, True, reason="transformed", duration_ms=(time.monotonic() - t0) * 1000)
             self.metrics.transformed_total += 1
+            logger.info(
+                "[PIPELINE:TRANSFORM] [%s] Rule %s transformed msg %s: text_len %d -> %d (ai=%s, took %.2fms)",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                len(payload.effective_text or ""), len(transformed),
+                bool(rule.ai_config_id), (time.monotonic() - t0) * 1000,
+            )
         except Exception as exc:
             ctx.record_stage(PipelineStage.TRANSFORM, False, reason="transform_error", error=str(exc))
             self.metrics.failed_total += 1
@@ -421,7 +444,7 @@ class DurableMessagePipeline:
         if not targets:
             ctx.record_stage(PipelineStage.ENQUEUE, False, reason="no_targets")
             logger.warning(
-                "[%s] Rule %s has no target chats configured — cannot enqueue msg %s",
+                "[PIPELINE:ENQUEUE] [%s] Rule %s has no target chats configured — cannot enqueue msg %s",
                 ctx.correlation_id[:8], rule.id[:8], payload.message_id,
             )
             return
@@ -441,10 +464,14 @@ class DurableMessagePipeline:
                         target_chat_id=str(target),
                     )
                     self.metrics.enqueued_total += 1
+                    logger.info(
+                        "[PIPELINE:ENQUEUE] [%s] Rule %s enqueued msg %s -> target %s (job_id=%s)",
+                        ctx.correlation_id[:8], rule.id[:8], payload.message_id, target, job_id,
+                    )
                 else:
                     self.metrics.backpressure_drops += 1
                     logger.error(
-                        "[%s] Rule %s failed to enqueue msg %s for target %s (queue full / backpressure drop)",
+                        "[PIPELINE:ENQUEUE_DROP] [%s] Rule %s failed to enqueue msg %s for target %s (queue full / backpressure drop)",
                         ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
                     )
             else:

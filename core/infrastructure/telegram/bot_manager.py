@@ -85,9 +85,9 @@ class BotManager:
 
     # ------------------------------------------------------------------ #
     def _is_admin(self, message: Message) -> bool:
-        if not self._admin_ids:
-            return True  # open mode when no admin configured
-        return message.from_user and message.from_user.id in self._admin_ids
+        if not self._admin_ids or not message.from_user:
+            return False
+        return message.from_user.id in self._admin_ids
 
     def _t(self, uid: int, key: str, **kw) -> str:
         return self.i18n.t(key, **kw)
@@ -178,7 +178,10 @@ class BotManager:
         async def _sessions_cmd(client, message: Message):
             if self._ui_owns(message.from_user.id):
                 return
-            sessions = await self._sessions.list_all()
+            uid = message.from_user.id if message.from_user else 0
+            if not uid:
+                return
+            sessions = await self._sessions.list_by_owner(uid)
             if not sessions:
                 return await message.reply_text(self.i18n.t("no_sessions"))
             items = "\n".join(
@@ -195,7 +198,10 @@ class BotManager:
         async def _rules_cmd(client, message: Message):
             if self._ui_owns(message.from_user.id):
                 return
-            rules = await self._rules.list_all()
+            uid = message.from_user.id if message.from_user else 0
+            if not uid:
+                return
+            rules = await self._rules.list_by_owner(uid)
             if not rules:
                 await message.reply_text(self.i18n.t("no_rules"))
                 return await self._prompt_rule_add(message)
@@ -216,7 +222,10 @@ class BotManager:
         async def _ai_cmd(client, message: Message):
             if self._ui_owns(message.from_user.id):
                 return
-            cfgs = await self._ai.list_all()
+            uid = message.from_user.id if message.from_user else 0
+            if not uid:
+                return
+            cfgs = await self._ai.list_by_owner(uid)
             if not cfgs:
                 await message.reply_text(self.i18n.t("ai_no_configs"))
                 return await self._prompt_ai_add(message)
@@ -248,16 +257,17 @@ class BotManager:
         async def _backup(client, message: Message):
             if self._ui_owns(message.from_user.id):
                 return
-            if not self._is_admin(message):
-                return await message.reply_text(self.i18n.t("need_admin"))
+            uid = message.from_user.id if message.from_user else 0
+            if not uid:
+                return
             parts = (message.text or "").split()
             if len(parts) < 2:
-                sessions = await self._sessions.list_all()
+                sessions = await self._sessions.list_by_owner(uid)
                 if not sessions:
                     return await message.reply_text(self.i18n.t("no_sessions"))
                 target = sessions[0]
             else:
-                target = await self._sessions.get(parts[1])
+                target = await self._sessions.get_owned(parts[1], uid)
                 if not target:
                     return await message.reply_text(self.i18n.t("rule_not_found"))
             try:
@@ -288,8 +298,9 @@ class BotManager:
         async def _restore(client, message: Message):
             if self._ui_owns(message.from_user.id):
                 return
-            if not self._is_admin(message):
-                return await message.reply_text(self.i18n.t("need_admin"))
+            uid = message.from_user.id if message.from_user else 0
+            if not uid:
+                return
             if not message.document:
                 return await message.reply_text(self.i18n.t("restore_failed", error="attach .atf file"))
             path = await message.download()
@@ -299,6 +310,7 @@ class BotManager:
                 session = await self._sessions.create(
                     phone_number=bundle["phone"],
                     session_string_encrypted=bundle["session_string"],
+                    owner_user_id=uid,
                 )
                 session.user_id = bundle.get("user_id", "")
                 session.username = bundle.get("username", "")
@@ -392,7 +404,7 @@ class BotManager:
             self._awaiting_rule = None
             parts = text.split()
             if len(parts) >= 2:
-                sessions = await self._sessions.list_all()
+                sessions = await self._sessions.list_by_owner(uid)
                 session = sessions[0] if sessions else None
                 if not session:
                     return await message.reply_text(self.i18n.t("no_sessions"))
@@ -402,6 +414,7 @@ class BotManager:
                     target_chat_id=parts[1], target_chat_name=parts[1],
                     routing_type=RoutingType.CHANNEL_TO_CHANNEL,
                     forward_mode=ForwardMode.COPY_MESSAGE,
+                    owner_user_id=uid,
                 )
                 await self._rules.create(rule)
                 await message.reply_text(
@@ -418,6 +431,7 @@ class BotManager:
                     name=f"{parts[0]}-{parts[1]}",
                     provider=AIProviderType(parts[0].lower()),
                     model=parts[1], api_key=parts[2],
+                    owner_user_id=uid,
                 )
                 await self._ai.create(cfg)
                 await message.reply_text(self.i18n.t("ai_created", name=cfg.name))

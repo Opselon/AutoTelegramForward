@@ -156,7 +156,7 @@ def build_container(cfg: Config) -> dict:
     )
 
     sessions = SessionUseCases(session_repo)
-    rules = ForwardRuleUseCases(rule_repo)
+    rules = ForwardRuleUseCases(rule_repo, session_repo=session_repo)
     filter_rules = FilterRuleUseCases(filter_repo)
     ai_configs = AIConfigUseCases(ai_repo, factory)
     from core.application.use_cases import (  # noqa: E402
