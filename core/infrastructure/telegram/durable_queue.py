@@ -438,6 +438,19 @@ class DurableQueueManager:
         client = self._pool.get(session_id)
         if client is None:
             _bump_target("retried")
+            logger.error(
+                "[%s] Cannot deliver job %s: No live client for session %s (rule=%s, tgt=%s)",
+                worker_id, job.id, session_id, job.rule_id[:8], target,
+            )
+            if self._log_client is not None:
+                try:
+                    self._log_client.error(
+                        "queue", "forward",
+                        f"No live client for session {session_id} (rule={job.rule_id[:8]}, target={target})",
+                        {"job_id": job.id, "rule_id": job.rule_id, "target": target},
+                    )
+                except Exception:
+                    pass
             await self._queue.mark_retry(job.id, f"No live client for session {session_id}", backoff_seconds=1.0)
             return None
 
@@ -516,10 +529,23 @@ class DurableQueueManager:
                 self.stats["unknown"] += 1
                 _bump_target("unknown")
                 logger.error(
-                    "[%s] Telegram call timed out on %s (result UNKNOWN). Marking job UNKNOWN to prevent duplicates.",
+                    "[%s] Telegram call timed out on %s (result UNKNOWN). Marking job UNKNOWN to prevent duplicates. Rule=%s src=%s:%s error=%s",
                     worker_id,
                     target,
+                    job.rule_id[:8],
+                    job.source_chat_id,
+                    job.source_message_id,
+                    err_msg,
                 )
+                if self._log_client is not None:
+                    try:
+                        self._log_client.error(
+                            "queue", "forward",
+                            f"Telegram timeout delivering rule={job.rule_id[:8]} to target={target}: {err_msg}",
+                            {"rule_id": job.rule_id, "target": target, "src": f"{job.source_chat_id}:{job.source_message_id}"},
+                        )
+                    except Exception:
+                        pass
                 await self._queue.mark_unknown(job.id, f"Telegram timeout: {err_msg}")
                 await self._map.update_delivery(
                     rule_id=job.rule_id,
@@ -538,14 +564,24 @@ class DurableQueueManager:
                 self.stats["retried"] += 1
                 _bump_target("retried")
                 logger.warning(
-                    "[%s] FloodWait on %s: waiting %.1fs. Rule=%s src=%s:%s",
+                    "[%s] FloodWait on %s: waiting %.1fs. Rule=%s src=%s:%s error=%s",
                     worker_id,
                     target,
                     wait_sec,
                     job.rule_id[:8],
                     job.source_chat_id,
                     job.source_message_id,
+                    err_msg,
                 )
+                if self._log_client is not None:
+                    try:
+                        self._log_client.warn(
+                            "queue", "forward",
+                            f"Rate limit / FloodWait delivering rule={job.rule_id[:8]} to {target}: {err_msg} (waiting {round(wait_sec, 1)}s)",
+                            {"rule_id": job.rule_id, "target": target, "wait_seconds": round(wait_sec, 1)},
+                        )
+                    except Exception:
+                        pass
                 await self._queue.mark_retry(job.id, err_msg, backoff_seconds=wait_sec)
                 await self._map.update_delivery(
                     rule_id=job.rule_id,
@@ -595,11 +631,30 @@ class DurableQueueManager:
                 self.stats["failed"] += 1
                 _bump_target("failed")
                 logger.error(
-                    "[%s] Permanent failure delivering to %s: %s. Marking job FAILED.",
+                    "[%s] PERMANENT FAILURE delivering to %s (rule=%s, src=%s:%s): %s. Marking job FAILED.",
                     worker_id,
                     target,
+                    job.rule_id[:8],
+                    job.source_chat_id,
+                    job.source_message_id,
                     err_msg,
                 )
+                if self._log_client is not None:
+                    try:
+                        self._log_client.error(
+                            "queue", "forward",
+                            f"Permanent delivery failure rule={job.rule_id[:8]} → {target}: {err_msg}",
+                            {
+                                "rule_id": job.rule_id,
+                                "source_chat_id": job.source_chat_id,
+                                "source_message_id": job.source_message_id,
+                                "target": target,
+                                "error": err_msg,
+                                "exception": exc_name,
+                            },
+                        )
+                    except Exception:
+                        pass
                 await self._queue.mark_failed(job.id, err_msg)
                 await self._map.update_delivery(
                     rule_id=job.rule_id,
@@ -616,13 +671,31 @@ class DurableQueueManager:
                 self.stats["retried"] += 1
                 _bump_target("retried")
                 logger.warning(
-                    "[%s] Transient send error on %s (attempt %d): %s. Retrying in %.1fs.",
+                    "[%s] Transient send error on %s (attempt %d, rule=%s, src=%s:%s): %s. Retrying in %.1fs.",
                     worker_id,
                     target,
                     attempts,
+                    job.rule_id[:8],
+                    job.source_chat_id,
+                    job.source_message_id,
                     err_msg,
                     backoff,
                 )
+                if self._log_client is not None:
+                    try:
+                        self._log_client.warn(
+                            "queue", "forward",
+                            f"Transient delivery error (attempt {attempts}) rule={job.rule_id[:8]} → {target}: {err_msg}",
+                            {
+                                "rule_id": job.rule_id,
+                                "target": target,
+                                "attempt": attempts,
+                                "backoff_seconds": round(backoff, 1),
+                                "error": err_msg,
+                            },
+                        )
+                    except Exception:
+                        pass
                 await self._queue.mark_retry(job.id, err_msg, backoff_seconds=backoff)
                 await self._map.update_delivery(
                     rule_id=job.rule_id,

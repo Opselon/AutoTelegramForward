@@ -618,14 +618,17 @@ class MessageForwardingUseCase:
         # --- time floor: skip backlog / old messages ------------------
         since = getattr(rule, "since_ts", 0) or 0
         if since and payload.date and payload.date < since:
+            logger.info("Use case: Rule %s skipped msg %s: too_old (date=%s < since=%s)", rule.id[:8], payload.message_id, payload.date, since)
             return PipelineOutcome(False, "too_old")
         # --- edits -----------------------------------------------------
         if payload.is_edit and getattr(rule, "ignore_edits", False):
+            logger.info("Use case: Rule %s skipped edit on msg %s (ignore_edits=True)", rule.id[:8], payload.message_id)
             return PipelineOutcome(False, "edit_ignored")
         # --- restart-safe dedupe --------------------------------------
         if not payload.is_edit and self._processed is not None and getattr(rule, "skip_history", True):
             seen = await self._processed.was_processed(rule.id, payload.chat_id, payload.message_id)
             if seen:
+                logger.info("Use case: Rule %s skipped msg %s: already processed (duplicate)", rule.id[:8], payload.message_id)
                 return PipelineOutcome(False, "duplicate")
 
         filter_rule = (
@@ -636,13 +639,16 @@ class MessageForwardingUseCase:
         evaluation = self._filter_engine.evaluate(payload, filter_rule)
 
         if evaluation.action.name == "DROP":
+            logger.warning("Use case: Rule %s DROPPED msg %s by filter rule %s: %s", rule.id[:8], payload.message_id, rule.filter_rule_id or "none", evaluation.reason)
             return PipelineOutcome(False, evaluation.reason, evaluation)
 
         # --- media blocks (voice / stickers) --------------------------
         m_type = str(getattr(payload.media_type, "value", payload.media_type)).lower()
         if rule.block_voice and m_type in ("voice", "audio"):
+            logger.warning("Use case: Rule %s DROPPED msg %s: voice/audio blocked", rule.id[:8], payload.message_id)
             return PipelineOutcome(False, "voice_blocked", evaluation)
         if rule.block_stickers and m_type in ("sticker",):
+            logger.warning("Use case: Rule %s DROPPED msg %s: sticker blocked", rule.id[:8], payload.message_id)
             return PipelineOutcome(False, "sticker_blocked", evaluation)
 
         text = payload.effective_text
@@ -678,13 +684,14 @@ class MessageForwardingUseCase:
             text = self._filter_engine.apply_header_footer(text, header=rule.header, footer=rule.footer)
 
         if not self.sender:
+            logger.error("Use case: No sender registered on use case — cannot forward msg %s", payload.message_id)
             return PipelineOutcome(False, "no_sender_registered", evaluation)
 
         try:
             ok = await self.sender(payload, rule, text, evaluation)
         except Exception as exc:
             self.stats.errors += 1
-            logger.exception("Send failed: %s", exc)
+            logger.error("Use case: Send failed for rule %s msg %s: %s", rule.id[:8], payload.message_id, exc, exc_info=True)
             return PipelineOutcome(False, f"send_error:{exc}", evaluation)
 
         if ok and self._processed is not None:

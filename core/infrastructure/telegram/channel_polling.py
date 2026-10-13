@@ -127,12 +127,12 @@ class ChannelPollingService:
                 try:
                     n = await self._poll_channel(client, session_id, chat_id, chat_name)
                 except Exception as exc:
-                    logger.debug("poll %s failed: %s", chat_name or chat_id, exc)
+                    logger.warning("poll: channel check failed for %s (%s): %s", chat_name or chat_id, chat_id, exc)
                     continue
                 replayed += n
                 if n:
                     logger.info(
-                        "poll: replayed %d new post(s) from %s", n, chat_name or chat_id
+                        "poll: replayed %d new post(s) from %s (%s)", n, chat_name or chat_id, chat_id
                     )
         return (replayed, checked)
 
@@ -168,7 +168,7 @@ class ChannelPollingService:
         try:
             peer = await client.resolve_peer(chat_id)
         except Exception as exc:
-            logger.debug("poll: cannot resolve %s: %s", chat_id, exc)
+            logger.warning("poll: cannot resolve peer for %s (%s): %s", chat_name or chat_id, chat_id, exc)
             return 0
 
         # The channel pts is required by getChannelDifference.
@@ -177,7 +177,7 @@ class ChannelPollingService:
 
             full = await client.invoke(GetFullChannel(channel=peer))
         except Exception as exc:
-            logger.debug("poll: GetFullChannel %s failed: %s", chat_id, exc)
+            logger.warning("poll: GetFullChannel for %s (%s) failed: %s", chat_name or chat_id, chat_id, exc)
             return 0
         pts = getattr(getattr(full, "full_chat", None), "pts", 0) or 0
 
@@ -185,7 +185,7 @@ class ChannelPollingService:
         try:
             top = await self._channel_top_message(client, chat_id)
         except Exception as exc:
-            logger.debug("poll: cannot read top of %s: %s", chat_id, exc)
+            logger.warning("poll: cannot read top of %s (%s): %s", chat_name or chat_id, chat_id, exc)
             return 0
 
         if top is None or top <= cursor:
@@ -202,7 +202,7 @@ class ChannelPollingService:
                 )
             )
         except Exception as exc:
-            logger.debug("poll: GetChannelDifference %s failed: %s", chat_id, exc)
+            logger.warning("poll: GetChannelDifference for %s (%s) failed: %s", chat_name or chat_id, chat_id, exc)
             return 0
 
         raw_messages = getattr(diff, "new_messages", None) or []
@@ -236,7 +236,7 @@ class ChannelPollingService:
             async for m in client.get_chat_history(chat_id, limit=1):
                 return int(getattr(m, "id", 0) or 0)
         except Exception as exc:
-            logger.debug("poll: history read of %s failed: %s", chat_id, exc)
+            logger.warning("poll: history read of %s failed: %s", chat_id, exc)
         return None
 
     # ------------------------------------------------------------------ #
@@ -249,7 +249,7 @@ class ChannelPollingService:
             loaded = await self._state_store.load_channel_cursors()
             self._state.update({str(k): int(v) for k, v in (loaded or {}).items()})
         except Exception as exc:
-            logger.debug("poll: cannot restore cursors: %s", exc)
+            logger.warning("poll: cannot restore cursors: %s", exc)
 
     async def _persist_cursors(self) -> None:
         if self._state_store is None:
@@ -257,7 +257,7 @@ class ChannelPollingService:
         try:
             await self._state_store.save_channel_cursors(dict(self._state))
         except Exception as exc:
-            logger.debug("poll: cannot persist cursors: %s", exc)
+            logger.warning("poll: cannot persist cursors: %s", exc)
 
     # ------------------------------------------------------------------ #
     # Dispatch
@@ -271,9 +271,14 @@ class ChannelPollingService:
             if callable(getter):
                 try:
                     handler = getter(session_id)
-                except Exception:
+                except Exception as h_err:
+                    logger.warning("poll: getter(session_id) error for %s: %s", session_id[:8], h_err)
                     handler = None
             if handler is None:
+                logger.warning(
+                    "poll: no message handler registered for session %s — dropping post %s",
+                    session_id[:8], getattr(raw_message, "id", "?"),
+                )
                 return
             try:
                 from pyrogram.types import Message as PyroMessage
@@ -281,18 +286,22 @@ class ChannelPollingService:
                 # pyrogram's Message._parse is async in this version.
                 msg = await PyroMessage._parse(client, raw_message, users, chats)  # noqa: SLF001
             except Exception as exc:
-                logger.debug("poll: could not parse post: %s", exc)
+                logger.warning("poll: failed to parse post %s: %s", getattr(raw_message, "id", "?"), exc)
                 return
             if msg is None:
+                logger.warning("poll: parsed post %s returned None", getattr(raw_message, "id", "?"))
                 return
             try:
                 await handler(client, msg)
             except Exception as exc:
-                logger.debug("poll: dispatch failed: %s", exc)
+                logger.error(
+                    "poll: dispatch handler failed for post %s: %s",
+                    getattr(raw_message, "id", "?"), exc, exc_info=True,
+                )
 
         try:
             asyncio.ensure_future(_one())
             return True
         except Exception as exc:
-            logger.debug("poll: dispatch schedule failed: %s", exc)
+            logger.error("poll: dispatch schedule failed for post %s: %s", getattr(raw_message, "id", "?"), exc)
             return False
