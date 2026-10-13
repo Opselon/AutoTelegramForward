@@ -687,13 +687,10 @@ jobs:
         run: docker compose up -d --build
 
       - name: Poll health endpoints
-        # Smoke-test contract: the freshly built stack must SERVE HTTP on both
-        # public endpoints with a well-formed services payload. We accept
-        # "healthy" OR "degraded" because this job runs on placeholder
-        # credentials from .env.example (no real Telegram API id/hash/token),
-        # so core/logger probes may legitimately report offline — what this
-        # gate proves is that every container boots, wiring is correct, and
-        # the API surface answers. A missing/unparseable payload fails.
+        # Production release gate: every required internal service (core,
+        # logger, API, web) must report online. Placeholder external Telegram
+        # credentials are tolerated only if they do not degrade internal
+        # service health; an HTTP response alone is not a healthy stack.
         shell: bash
         run: |
           for i in $(seq 1 30); do
@@ -734,10 +731,8 @@ jobs:
     # continue-on-error to hide a real build failure (download steps use it
     # only because optional legs may legitimately be absent; the manifest
     # self-verify + post-publish-verify jobs enforce REQUIRED completeness).
-    # clean-install is REQUIRED for production: a release whose compose stack
-    # does not boot and serve HTTP must never publish. Its health assertion
-    # accepts healthy OR degraded (placeholder CI credentials) but fails on
-    # a missing/unparseable services payload.
+    # clean-install is REQUIRED for production: every required internal
+    # service must report healthy before publishing.
     needs: [meta, binaries, api-binaries, docker, portable, mobile-android, ios-simulator, manifest, clean-install]
     if: |
       always() &&

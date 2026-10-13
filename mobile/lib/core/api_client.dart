@@ -82,12 +82,10 @@ HttpTransport ioTransport(http.Client client) {
 HttpTransport defaultTransport(http.Client client) => ioTransport(client);
 
 /// Compares two dotted version strings (`major.minor.patch`, each segment
-/// numeric). Missing segments default to 0, a leading `v` and `+build`
-/// metadata are ignored, and a `-prerelease` suffix sorts below the release.
-///
-/// Returns a negative value when [a] < [b], zero when equal, positive when
-/// [a] > [b]. Used to decide whether a probed server satisfies
-/// [AppEnv.minSupportedApiVersion].
+/// Compares strict SemVer strings. A leading v is accepted for tag-style
+/// versions; build metadata is ignored and prerelease identifiers follow
+/// SemVer precedence. Invalid strings throw FormatException so compatibility
+/// checks fail closed instead of coercing malformed components to zero.
 int compareApiVersions(String a, String b) {
   final pattern = RegExp(
     r'^[vV]?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
@@ -128,7 +126,6 @@ int compareApiVersions(String a, String b) {
     return l.compareTo(r);
   }
   return left.pre.length.compareTo(right.pre.length);
-}
 }
 
 /// Outcome of [ApiClient.probeServer]: whether the server answered its
@@ -213,9 +210,9 @@ class ApiClient {
   /// Probes a server's public `/api/version` endpoint without credentials.
   ///
   /// Fully unauthenticated: no `Authorization` header is attached and the
-  /// stored credentials are never read, written, or cleared. The caller
-  /// decides compatibility against [minSupportedApiVersion] (normally
-  /// [AppEnv.minSupportedApiVersion]).
+  /// stored credentials are never read, written, or cleared. Compatibility
+  /// requires the server API to satisfy [minSupportedApiVersion] and the
+  /// running client to satisfy the server's min_supported_client policy.
   ///
   /// Never throws: network, timeout, TLS, malformed-JSON, and unexpected
   /// HTTP statuses map to a [ProbeResult] carrying an actionable
