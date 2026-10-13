@@ -1,0 +1,14 @@
+# Template for Android release signing key configuration
+# Copy this file to key.properties and fill in your secure release keystore details.
+# DO NOT commit key.properties or your .jks/.keystore files to Git!
+#
+# storeFile: Absolute or relative path to your upload keystore file (.jks or .keystore)
+# storePassword: Password for keystore
+# keyAlias: Alias name of the key inside keystore
+# keyPassword: Password for key
+#
+# Example:
+# storeFile=/path/to/upload-keystore.jks
+# storePassword=your_keystore_password
+# keyAlias=upload
+# keyPassword=your_key_password
