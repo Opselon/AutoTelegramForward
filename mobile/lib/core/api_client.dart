@@ -81,7 +81,6 @@ HttpTransport ioTransport(http.Client client) {
 /// transport.
 HttpTransport defaultTransport(http.Client client) => ioTransport(client);
 
-/// Compares two dotted version strings (`major.minor.patch`, each segment
 /// Compares strict SemVer strings. A leading v is accepted for tag-style
 /// versions; build metadata is ignored and prerelease identifiers follow
 /// SemVer precedence. Invalid strings throw FormatException so compatibility

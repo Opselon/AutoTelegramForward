@@ -448,7 +448,7 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 	}
 	owned := false
 	for _, rl := range listResp.Rules {
-		if rl.Id == r.PathValue("id") {
+		if rl.OwnerUserId == id.UserID && rl.Id == r.PathValue("id") {
 			owned = true
 			break
 		}
@@ -515,7 +515,7 @@ func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
 	}
 	owned := false
 	for _, rule := range listResp.Rules {
-		if rule.Id == r.PathValue("id") {
+		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
 			owned = true
 			break
 		}

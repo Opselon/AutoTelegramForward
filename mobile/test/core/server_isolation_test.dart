@@ -111,7 +111,7 @@ void main() {
       expect(result.errorKind, ErrorKind.incompatibleServer);
     });
 
-    test('flags an outdated server as incompatible without throwing',
+    test('flags an outdated server as incompatible without throwing', () async {
       final result = await ApiClient.probeServer(
         'https://old.example.com/',
         minSupportedApiVersion: _minApi,
