@@ -467,6 +467,23 @@ MIGRATIONS = {
         updated_at INTEGER NOT NULL
     );
     """,
+    14: """
+    -- v14: Queue scalability.
+    -- idx_delivery_jobs_claim is the claim path index. The old
+    -- idx_delivery_jobs_poll (status, next_retry_at, lease_until) forced a
+    -- TEMP B-TREE sort on every claim_batch call because the query orders by
+    -- created_at, which is not a leading column anywhere. At 50k pending rows
+    -- each claim paid a full in-memory sort.
+    -- The new index leads with exactly the claim predicate and the ORDER BY
+    -- key, so the planner walks the index in order and stops at LIMIT with no
+    -- sort step.
+    CREATE INDEX IF NOT EXISTS idx_delivery_jobs_claim
+        ON delivery_jobs(status, next_retry_at, lease_until, created_at);
+    -- Retention index: cleanup() deletes by status + updated_at; that was a
+    -- full table scan on a growing table.
+    CREATE INDEX IF NOT EXISTS idx_delivery_jobs_cleanup
+        ON delivery_jobs(status, updated_at);
+    """,
 }
 
 # Columns added by additive migrations that must also work on a table carried

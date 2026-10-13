@@ -30,13 +30,19 @@ def _pb_grpc():
 
 
 class LogClient:
-    def __init__(self, address: str = "localhost:50052") -> None:
+    def __init__(self, address: str = "localhost:50052", max_queue_size: int = 4096) -> None:
         self._address = address
         self._channel: Optional[grpc.aio.Channel] = None
         self._stub: Optional[Any] = None
         self._enabled = True
-        self._queue: asyncio.Queue = asyncio.Queue()
+        # Bounded: an unbounded queue is a memory leak whenever the logger is
+        # down or slow (a flood of ERROR/WARN records during an outage could
+        # grow it without limit). When full we drop the oldest records — the
+        # queue keeps the newest context, which is what an operator needs.
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
         self._task: Optional[asyncio.Task] = None
+        self._dropped_total = 0
+        self._max_queue_size = max_queue_size
 
     def connect(self) -> None:
         if self._channel is not None:
@@ -64,10 +70,28 @@ class LogClient:
                 if consecutive_errors:
                     logger.info("log client recovered after %d failure(s)", consecutive_errors)
                 consecutive_errors = 0
+                # v14: drain any records that accumulated while we were
+                # blocked, batching them so a burst does not cost one
+                # round-trip per entry. Keeps ordering within the burst.
+                for _ in range(self._max_queue_size):
+                    try:
+                        burst_entry = self._queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    try:
+                        await self._stub.Log(_pb().LogRequest(entry=burst_entry))
+                    except Exception:
+                        # A mid-burst failure: requeue this entry and let the
+                        # error path below handle reconnect/backoff.
+                        try:
+                            self._queue.put_nowait(burst_entry)
+                        except Exception:
+                            pass
+                        raise
             except Exception as exc:
                 consecutive_errors += 1
-                # Keep the entry; the queue is unbounded and the entry will be
-                # retried on the next iteration after a reconnect.
+                # Keep the entry; it will be retried on the next iteration
+                # after a reconnect.
                 if consecutive_errors in (1, 5, 20, 100) or consecutive_errors % 500 == 0:
                     logger.error(
                         "log client could not reach %s (%s): dropped %d entries "
@@ -108,7 +132,27 @@ class LogClient:
                 message=message,
                 detail=json.dumps(detail, ensure_ascii=False, default=str) if detail else "",
             )
-            self._queue.put_nowait(entry)
+            try:
+                self._queue.put_nowait(entry)
+            except asyncio.QueueFull:
+                # Bounded-queue backpressure (v14): the logger is behind.
+                # Drop the OLDEST record to make room and keep the newest
+                # context. Losing the oldest entry is the right trade: an
+                # unreachable logger used to grow this queue without bound.
+                try:
+                    self._queue.get_nowait()
+                except Exception:
+                    pass
+                self._dropped_total += 1
+                if self._dropped_total in (1, 10, 100) or self._dropped_total % 1000 == 0:
+                    logger.warning(
+                        "log queue full (%d); dropped %d oldest record(s) total",
+                        self._max_queue_size, self._dropped_total,
+                    )
+                try:
+                    self._queue.put_nowait(entry)
+                except Exception:
+                    pass
         except Exception:
             pass  # never break the caller
 

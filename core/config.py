@@ -23,6 +23,15 @@ class Config:
     logger_addr: str = "localhost:50052"
     web_url: str = ""               # public dashboard base URL, e.g. https://sub.legoten.com:8444
     jwt_secret: str = ""            # optional shared JWT secret (defaults to derived key)
+    # v14 queue scaling knobs (env > yaml > defaults).
+    queue_num_workers: int = 3
+    queue_batch_size: int = 8
+    queue_max_size: int = 10000
+    queue_lease_seconds: float = 30.0
+    queue_max_per_minute_per_target: int = 25
+    # v14 PostgreSQL (optional). When database_url is set the queue uses the
+    # Postgres repositories (FOR UPDATE SKIP LOCKED); otherwise SQLite.
+    database_url: str = ""
 
     @classmethod
     def load(cls, config_path: str = None) -> "Config":
@@ -42,7 +51,10 @@ class Config:
                 break
         for key in ("api_id", "api_hash", "bot_token", "master_key", "db_path",
                     "grpc_host", "grpc_port", "language", "version", "disable_bot",
-                    "logger_addr", "web_url", "jwt_secret"):
+                    "logger_addr", "web_url", "jwt_secret",
+                    "queue_num_workers", "queue_batch_size", "queue_max_size",
+                    "queue_lease_seconds", "queue_max_per_minute_per_target",
+                    "database_url"):
             if key in yaml_data:
                 setattr(cfg, key, yaml_data[key])
         if "admin_ids" in yaml_data:
@@ -60,6 +72,13 @@ class Config:
             "ATF_LOGGER_ADDR": ("logger_addr", str),
             "ATF_WEB_URL": ("web_url", str),
             "ATF_JWT_SECRET": ("jwt_secret", str),
+            # v14 queue scaling
+            "ATF_QUEUE_NUM_WORKERS": ("queue_num_workers", int),
+            "ATF_QUEUE_BATCH_SIZE": ("queue_batch_size", int),
+            "ATF_QUEUE_MAX_SIZE": ("queue_max_size", int),
+            "ATF_QUEUE_LEASE_SECONDS": ("queue_lease_seconds", float),
+            "ATF_QUEUE_MAX_PER_MINUTE": ("queue_max_per_minute_per_target", int),
+            "ATF_DATABASE_URL": ("database_url", str),
         }
         for env_key, (attr, cast) in env_map.items():
             val = os.environ.get(env_key)

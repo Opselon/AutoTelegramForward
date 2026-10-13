@@ -23,6 +23,10 @@ from core.domain.services import FilterEngine, RoutingPolicy  # noqa: E402
 from core.infrastructure.ai.providers import AIProviderFactory  # noqa: E402
 from core.infrastructure.grpc_server import servicers  # noqa: E402
 from core.infrastructure.persistence.database import SqliteDatabase  # noqa: E402
+from core.infrastructure.persistence.postgres_repositories import (  # noqa: E402
+    PostgresDeliveryQueueRepository,
+    PostgresMessageMapRepository,
+)
 from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
     SqliteAIConfigRepository,
     SqliteApiCredentialRepository,
@@ -63,8 +67,55 @@ logging.basicConfig(
 logger = logging.getLogger("atf.core")
 
 
+def _create_postgres_pool(database_url: str):
+    """Create an asyncpg connection pool for the durable queue (v14).
+
+    The Postgres repositories were written against the PostgresConnection
+    protocol but nothing ever constructed a pool — the code path was dead.
+    asyncpg acquires a connection per operation; the pool sets the
+    statement cache and bounds concurrent DB work.
+    """
+    try:
+        import asyncpg
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError(
+            "ATF_DATABASE_URL is set but asyncpg is not installed. "
+            "Install it (pip install asyncpg) or unset ATF_DATABASE_URL to "
+            "keep using SQLite."
+        ) from exc
+
+    import asyncio
+
+    async def _build():
+        return await asyncpg.create_pool(
+            dsn=database_url,
+            min_size=2,
+            max_size=10,
+            max_queries=50000,
+            timeout=30.0,
+            command_timeout=30.0,
+        )
+
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(_build())
+
+
 def build_container(cfg: Config) -> dict:
     crypto = CryptoService(cfg.master_key)
+
+    # v14: PostgreSQL is optional. When ATF_DATABASE_URL is set the durable
+    # queue runs against Postgres (FOR UPDATE SKIP LOCKED, real connection
+    # pooling) — the SQLite repositories remain the default for single-node
+    # installs. The queue/message-map repositories are the only ones switched:
+    # the rest of the schema is per-service and unchanged.
+    pg_pool = None
+    if getattr(cfg, "database_url", ""):
+        pg_pool = _create_postgres_pool(cfg.database_url)
+
     db = SqliteDatabase(cfg.db_path)
     session_repo = SqliteSessionRepository(db, crypto)
     rule_repo = SqliteForwardRuleRepository(db)
@@ -80,8 +131,12 @@ def build_container(cfg: Config) -> dict:
     rule_stats_repo = SqliteRuleStatsRepository(db)
     user_repo = SqliteUserRepository(db)
     settings_repo = SqliteSettingsRepository(db)
-    msg_map_repo = SqliteMessageMapRepository(db)
-    queue_repo = SqliteDeliveryQueueRepository(db)
+    if pg_pool is not None:
+        msg_map_repo = PostgresMessageMapRepository(pg_pool)
+        queue_repo = PostgresDeliveryQueueRepository(pg_pool)
+    else:
+        msg_map_repo = SqliteMessageMapRepository(db)
+        queue_repo = SqliteDeliveryQueueRepository(db)
     prompt_repo = SqlitePromptRepository(db)
     factory = AIProviderFactory()
 
@@ -130,7 +185,11 @@ def build_container(cfg: Config) -> dict:
         queue_repo=queue_repo,
         message_map_repo=msg_map_repo,
         client_pool=pool,
-        num_workers=3,
+        num_workers=getattr(cfg, "queue_num_workers", 3),
+        batch_size=getattr(cfg, "queue_batch_size", 8),
+        max_queue_size=getattr(cfg, "queue_max_size", 10000),
+        lease_duration=getattr(cfg, "queue_lease_seconds", 30.0),
+        max_per_minute_per_target=getattr(cfg, "queue_max_per_minute_per_target", 25),
         metrics_repo=metrics_repo,
     )
     from core.application.pipeline import DurableMessagePipeline  # noqa: E402

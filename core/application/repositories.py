@@ -464,6 +464,19 @@ class IDeliveryQueueRepository(ABC):
     async def mark_sent(self, job_id: str, target_message_id: Optional[int] = None) -> bool:
         ...
 
+    async def mark_sent_batch(self, job_ids: List[tuple]) -> int:
+        """Mark several jobs SENT in one transaction.
+
+        Each entry is ``(job_id, target_message_id)``. Returns the number of
+        rows updated. Default implementation falls back to per-job
+        ``mark_sent`` so existing implementations keep working.
+        """
+        count = 0
+        for job_id, _target_msg_id in job_ids:
+            if await self.mark_sent(job_id, _target_msg_id):
+                count += 1
+        return count
+
     @abstractmethod
     async def mark_retry(self, job_id: str, error: str, backoff_seconds: float) -> bool:
         ...

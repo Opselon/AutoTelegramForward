@@ -717,6 +717,31 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
         count = getattr(res, "rowcount", None)
         return count > 0 if count is not None else True
 
+    async def mark_sent_batch(self, job_ids: List[tuple]) -> int:
+        """Mark a batch SENT in one statement (v14).
+
+        Each entry is ``(job_id, target_message_id)``. SKIP LOCKED is already
+        used at claim time so two workers never hold the same job; here the
+        batch belongs to one worker.
+        """
+        if not job_ids:
+            return 0
+        now = int(time.time())
+        ids = [jid for jid, _ in job_ids]
+        placeholders = ",".join("%s" for _ in ids)
+        query = f"""
+        UPDATE delivery_jobs
+        SET status = 'SENT', lease_until = 0, updated_at = %s
+        WHERE id IN ({placeholders})
+        """
+        try:
+            res = await _execute_db(self._db, query, (now, *ids))
+        except Exception:
+            return 0
+        if isinstance(res, str) and res.startswith("UPDATE "):
+            return int(res.split()[-1])
+        return getattr(res, "rowcount", 0) or 0
+
     async def mark_retry(self, job_id: str, error: str, backoff_seconds: float) -> bool:
         now = time.time()
         row = await self._fetch_one("SELECT attempts, max_attempts FROM delivery_jobs WHERE id = %s", (job_id,))
@@ -727,6 +752,21 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
         max_attempts = int(d.get("max_attempts", 5))
 
         if attempts >= max_attempts:
+            # v14: route the exhausted job to the dead-letter queue.
+            dlq_query = """
+            INSERT INTO dead_letter_queue (
+                id, job_id, rule_id, source_chat_id, source_message_id,
+                target_chat_id, payload_json, error_message, error_category, dead_lettered_at
+            )
+            SELECT %s, id, rule_id, source_chat_id, source_message_id,
+                   target_chat_id, payload_json, %s, %s, %s
+            FROM delivery_jobs WHERE id = %s
+            ON CONFLICT (job_id) DO NOTHING
+            """
+            try:
+                await _execute_db(self._db, dlq_query, (f"dlq_{job_id}", error, "DELIVERY_EXHAUSTED", int(now), job_id))
+            except Exception:
+                pass
             query = """
             UPDATE delivery_jobs
             SET status = 'FAILED', attempts = %s, error_detail = %s, lease_until = 0, updated_at = %s

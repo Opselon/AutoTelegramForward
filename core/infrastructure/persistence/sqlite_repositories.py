@@ -1191,6 +1191,19 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
 
     def __init__(self, db: SqliteDatabase) -> None:
         self._db = db
+        # v14: enqueue() calls get_pending_count() on every message, and that
+        # COUNT(*) over three statuses is the single biggest cost on the ingest
+        # hot path (it is a scan of the pending set, once per enqueued job).
+        # Track the count in memory: it changes only through this repository's
+        # own enqueue/claim/mark_* methods, which all run under the DB lock.
+        self._pending_estimate = 0
+        try:
+            row = self._db.query_one(
+                "SELECT COUNT(*) as cnt FROM delivery_jobs WHERE status IN ('PENDING','CLAIMED','RETRY_WAIT')"
+            )
+            self._pending_estimate = int(row["cnt"]) if row else 0
+        except Exception:
+            self._pending_estimate = 0
 
     def _row_to_entity(self, row) -> DeliveryJob:
         status_val = row["status"]
@@ -1296,7 +1309,12 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
                     job.updated_at,
                 ),
             )
-        return cur.rowcount > 0
+        inserted = cur.rowcount > 0
+        if inserted:
+            # A new job enters the pending set. Replays (INSERT OR IGNORE)
+            # return rowcount 0 and must not inflate the counter.
+            self._pending_estimate += 1
+        return inserted
 
     async def claim_batch(
         self, worker_id: str, batch_size: int = 5, lease_duration: float = 30.0
@@ -1304,7 +1322,10 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
         now = time.time()
         claimed: List[DeliveryJob] = []
         with self._db._lock:
-            # Atomic claim under lock
+            # v14: the claim index (status, next_retry_at, lease_until, created_at)
+            # matches the whole predicate and the ORDER BY, so this is an
+            # ordered index walk that stops at LIMIT — no TEMP B-TREE sort
+            # (the pre-v14 idx_delivery_jobs_poll sorted every claim).
             rows = self._db._conn.execute(
                 """
                 SELECT * FROM delivery_jobs
@@ -1325,18 +1346,24 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
 
             lease_until = now + lease_duration
             now_int = int(now)
-            for r in rows:
-                self._db._conn.execute(
-                    """
-                    UPDATE delivery_jobs
-                    SET status = 'CLAIMED', worker_id = ?, lease_until = ?, updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (worker_id, lease_until, now_int, r["id"]),
-                )
+            ids = tuple(r["id"] for r in rows)
+            placeholders = ",".join("?" * len(ids))
+            # v14: one UPDATE for the whole batch instead of one per row.
+            # The batch is already serialized by _lock and every row was just
+            # fetched from the same connection, so this is the same claim set.
+            self._db._conn.execute(
+                f"""
+                UPDATE delivery_jobs
+                SET status = 'CLAIMED', worker_id = ?, lease_until = ?, updated_at = ?
+                WHERE id IN ({placeholders})
+                """,
+                (worker_id, lease_until, now_int, *ids),
+            )
             self._db._conn.commit()
+            # v14: PENDING/RETRY_WAIT -> CLAIMED. Both are inside the pending
+            # set, so the count does not change — the claim only marks who
+            # owns the row. The counter moves on mark_sent/mark_failed.
 
-            # Re-fetch claimed items
             for r in rows:
                 job = self._row_to_entity(r)
                 job.status = DeliveryStatus.CLAIMED
@@ -1345,6 +1372,33 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
                 claimed.append(job)
 
         return claimed
+
+    async def mark_sent_batch(self, job_ids: List[tuple]) -> int:
+        """Mark a batch of jobs SENT in one transaction.
+
+        Each entry of ``job_ids`` is ``(job_id, target_message_id)``. Returns
+        the number of rows updated. v14: the worker previously issued one
+        UPDATE + one commit per delivered job (5 per claim, and commits are
+        what make SQLite slow under load — every commit is an fsync).
+        """
+        if not job_ids:
+            return 0
+        now = int(time.time())
+        ids = [jid for jid, _ in job_ids]
+        placeholders = ",".join("?" * len(ids))
+        with self._db._lock:
+            cur = self._db._conn.execute(
+                f"""
+                UPDATE delivery_jobs
+                SET status = 'SENT', lease_until = 0, updated_at = ?
+                WHERE id IN ({placeholders})
+                """,
+                (now, *ids),
+            )
+            self._db._conn.commit()
+        updated = cur.rowcount
+        self._pending_estimate = max(0, self._pending_estimate - updated)
+        return updated
 
     async def mark_sent(self, job_id: str, target_message_id: Optional[int] = None) -> bool:
         now = _now()
@@ -1356,6 +1410,8 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             """,
             (now, job_id),
         )
+        if cur.rowcount > 0:
+            self._pending_estimate = max(0, self._pending_estimate - 1)
         return cur.rowcount > 0
 
     async def mark_retry(self, job_id: str, error: str, backoff_seconds: float) -> bool:
@@ -1368,6 +1424,25 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
         max_attempts = int(row["max_attempts"])
 
         if attempts >= max_attempts:
+            # v14: route the exhausted job to the dead-letter queue instead of
+            # silently leaving it FAILED. The insert keeps the payload so an
+            # operator can inspect or replay it.
+            try:
+                self._db.execute(
+                    """
+                    INSERT OR REPLACE INTO dead_letter_queue (
+                        id, job_id, rule_id, source_chat_id, source_message_id,
+                        target_chat_id, payload_json, attempts, last_error,
+                        error_category, dead_lettered_at
+                    )
+                    SELECT ?, id, rule_id, source_chat_id, source_message_id,
+                           target_chat_id, payload_json, attempts, ?, ?, ?
+                    FROM delivery_jobs WHERE id = ?
+                    """,
+                    (f"dlq_{job_id}", error, "DELIVERY_EXHAUSTED", int(now), job_id),
+                )
+            except Exception:
+                pass
             cur = self._db.execute(
                 """
                 UPDATE delivery_jobs
@@ -1376,6 +1451,8 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
                 """,
                 (attempts, error, int(now), job_id),
             )
+            if cur.rowcount > 0:
+                self._pending_estimate = max(0, self._pending_estimate - 1)
         else:
             next_retry = now + backoff_seconds
             cur = self._db.execute(
@@ -1399,6 +1476,8 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             """,
             (error, now, job_id),
         )
+        if cur.rowcount > 0:
+            self._pending_estimate = max(0, self._pending_estimate - 1)
         return cur.rowcount > 0
 
     async def mark_intermediate_copied(self, job_id: str, inter_chat: str, inter_msg_id: int) -> bool:
@@ -1463,13 +1542,27 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             """,
             (error, now, job_id),
         )
+        if cur.rowcount > 0:
+            self._pending_estimate = max(0, self._pending_estimate - 1)
         return cur.rowcount > 0
 
     async def get_pending_count(self) -> int:
-        row = self._db.query_one(
-            "SELECT COUNT(*) as cnt FROM delivery_jobs WHERE status IN ('PENDING', 'CLAIMED', 'RETRY_WAIT')"
-        )
-        return int(row["cnt"]) if row else 0
+        # v14: serve the in-memory counter. enqueue() calls this on every
+        # ingested message; the exact COUNT(*) it replaced scanned the whole
+        # pending set per call. The counter changes only under _lock inside
+        # this repository's own mutators, so it stays exact for the common
+        # single-repository case and is reconciled by _refresh_pending_count()
+        # on the periodic retention cleanup.
+        return self._pending_estimate
+
+    def _refresh_pending_count(self) -> None:
+        try:
+            row = self._db.query_one(
+                "SELECT COUNT(*) as cnt FROM delivery_jobs WHERE status IN ('PENDING','CLAIMED','RETRY_WAIT')"
+            )
+            self._pending_estimate = int(row["cnt"]) if row else 0
+        except Exception:
+            pass
 
     async def get_stats(self) -> dict:
         rows = self._db.query_all("SELECT status, COUNT(*) as cnt FROM delivery_jobs GROUP BY status")
@@ -1488,6 +1581,9 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             """,
             (int(now), now),
         )
+        # CLAIMED is part of the pending set and RETRY_WAIT is too, so the
+        # count is unchanged — but the rows did move, so this is also the
+        # natural place to defend against a drifted counter.
         return cur.rowcount
 
     async def get_queue_age_metrics(self) -> dict:
@@ -1505,6 +1601,8 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
         return {"pending_count": int(row["cnt"]), "oldest_job_age_seconds": round(age, 2)}
 
     async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 7) -> int:
+        # v14: idx_delivery_jobs_cleanup (status, updated_at) makes this an
+        # index scan instead of a full table scan on a table that only grows.
         threshold = int(time.time() - retention_seconds)
         cur = self._db.execute(
             """
@@ -1513,6 +1611,11 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             """,
             (threshold,),
         )
+        # Reconcile the in-memory counter: a crash, a concurrent writer or a
+        # direct DB edit can all drift it. The pending set is what the
+        # backpressure guard reads, so a stale-high value would silently
+        # refuse every enqueue after a restart.
+        self._refresh_pending_count()
         return cur.rowcount
 
 
