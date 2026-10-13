@@ -20,6 +20,7 @@ class AppEnv {
     required this.minSupportedApiVersion,
     required this.documentationUrl,
     required this.repositoryUrl,
+    this.appVersion = '',
   });
 
   /// Production server. Forks override this in `assets/cfg/env.json`.
@@ -36,12 +37,18 @@ class AppEnv {
   final String documentationUrl;
   final String repositoryUrl;
 
+  /// Product version shown in Settings → About. Kept here (not hardcoded in
+  /// UI) so forks bump it next to their endpoint config. Empty string means
+  /// "unknown" and the UI hides the row.
+  final String appVersion;
+
   factory AppEnv.fromJson(Map<String, dynamic> json) => AppEnv(
     apiBaseUrl: json['apiBaseUrl'] as String,
     apiBaseUrlDev: json['apiBaseUrlDev'] as String,
     minSupportedApiVersion: json['minSupportedApiVersion'] as String,
     documentationUrl: json['documentationUrl'] as String,
     repositoryUrl: json['repositoryUrl'] as String,
+    appVersion: json['appVersion'] as String? ?? '',
   );
 
   static Future<AppEnv> load({bool debug = false}) async {

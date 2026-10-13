@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_state.dart';
-import '../../core/env.dart';
 import '../../l10n/app_messages.dart';
+import '../../widgets/server_connection_dialog.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -124,7 +124,11 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: Text(t.get('app_name')),
-            subtitle: Text('${t.get('settings_version')}: 1.4.1'),
+            subtitle: Text(
+              state.env.appVersion.isNotEmpty
+                  ? '${t.get('settings_version')}: ${state.env.appVersion}'
+                  : t.get('settings_version'),
+            ),
           ),
         ],
       ),
@@ -132,41 +136,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _changeServer(BuildContext context) {
-    final state = context.read<AppState>();
-    final ctrl = TextEditingController(text: state.serverUrl);
-    final t = AppMessages.of(context);
-
-    showDialog<void>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Text(t.get('login_server_change')),
-            content: TextField(
-              controller: ctrl,
-              decoration: InputDecoration(hintText: 'https://atf.example.com'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(t.get('action_cancel')),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  final parsed = ServerUrl.tryParse(ctrl.text);
-                  if (parsed == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(t.get('login_server_invalid'))),
-                    );
-                    return;
-                  }
-                  Navigator.pop(ctx);
-                  await state.setServerUrl(parsed.normalized);
-                },
-                child: Text(t.get('action_save')),
-              ),
-            ],
-          ),
-    );
+    showServerConnectionDialog(context);
   }
 
   Future<void> _confirmLogout(BuildContext context) async {

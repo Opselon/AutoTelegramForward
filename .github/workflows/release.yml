@@ -122,7 +122,7 @@ jobs:
         run: |
           mkdir -p bin
           cd api
-          go build -trimpath -ldflags "-s -w" -o "../bin/atf-api${{ runner.os == 'Windows' && '.exe' || '' }}" .
+          go build -trimpath -ldflags "-s -w -X autoforward/internal/handlers.ProductVersion=${{ needs.meta.outputs.version }} -X autoforward/internal/handlers.CommitSHA=${GITHUB_SHA}" -o "../bin/atf-api${{ runner.os == 'Windows' && '.exe' || '' }}" .
           cd ..
           ls -la bin/
 
@@ -305,7 +305,7 @@ jobs:
         shell: bash
         run: |
           cd api
-          go build -trimpath -ldflags "-s -w" -o "../atf-api-${{ matrix.suffix }}${{ matrix.goos == 'windows' && '.exe' || '' }}" .
+          go build -trimpath -ldflags "-s -w -X autoforward/internal/handlers.ProductVersion=${{ needs.meta.outputs.version }} -X autoforward/internal/handlers.CommitSHA=${GITHUB_SHA}" -o "../atf-api-${{ matrix.suffix }}${{ matrix.goos == 'windows' && '.exe' || '' }}" .
           cd ..
           ls -la atf-api-*
 
@@ -321,7 +321,6 @@ jobs:
   # ------------------------------------------------------------------------ #
   docker:
     needs: meta
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -453,6 +452,28 @@ jobs:
         working-directory: mobile
         run: flutter analyze
 
+      - name: Configure Android release signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required Android release signing secret ${name} is missing."
+              exit 1
+            fi
+          done
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/atf-release.keystore"
+          {
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/atf-release.keystore"
+            echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
+            echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
       - name: Build release APKs (split per ABI)
         working-directory: mobile
         run: |
@@ -484,6 +505,224 @@ jobs:
           retention-days: 14
 
   # ------------------------------------------------------------------------ #
+  # iOS simulator build (unsigned) — validates the Flutter iOS target on
+  # every release without needing Apple signing certificates. Real devices
+  # still need the signed-ios job below.
+  # ------------------------------------------------------------------------ #
+  ios-simulator:
+    needs: meta
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.29.0"
+          channel: stable
+          cache: true
+
+      - name: Run mobile tests
+        working-directory: mobile
+        run: flutter test
+
+      - name: Build iOS app for simulator (no codesign)
+        working-directory: mobile
+        run: flutter build ios --simulator --no-codesign
+
+      - name: Stage simulator bundle
+        working-directory: mobile
+        run: |
+          mkdir -p ../atf-ios-sim
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphonesimulator/Runner.app \
+            "../atf-ios-sim/AutoTelegramForward-${{ needs.meta.outputs.version }}-ios-simulator.zip"
+          (cd ../atf-ios-sim && shasum -a 256 *.zip > SHA256SUMS-ios-sim.txt && ls -la)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator
+          path: atf-ios-sim/*
+          if-no-files-found: error
+          retention-days: 14
+
+  # ------------------------------------------------------------------------ #
+  # Signed iOS IPA — runs ONLY when Apple signing secrets exist. Otherwise
+  # the job resolves to a documented SKIP (its only step exits 0 without
+  # producing anything); it never reports a fake successful build.
+  # Required secrets: IOS_CERT_P12_BASE64, IOS_CERT_PASSWORD,
+  # IOS_PROVISION_PROFILE_BASE64, IOS_EXPORT_PLIST_BASE64.
+  # ------------------------------------------------------------------------ #
+  signed-ios:
+    needs: meta
+    runs-on: macos-latest
+    env:
+      HAS_IOS_SECRETS: ${{ secrets.IOS_CERT_P12_BASE64 != '' && secrets.IOS_CERT_PASSWORD != '' && secrets.IOS_PROVISION_PROFILE_BASE64 != '' && secrets.IOS_EXPORT_PLIST_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for iOS signing secrets
+        id: gate
+        shell: bash
+        run: |
+          if [ "${HAS_IOS_SECRETS}" != "true" ]; then
+            echo "SKIP: iOS signing secrets (IOS_CERT_P12_BASE64, IOS_CERT_PASSWORD, IOS_PROVISION_PROFILE_BASE64, IOS_EXPORT_PLIST_BASE64) are not configured — signed IPA build skipped by design. See docs/mobile-release.md."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Flutter
+        if: steps.gate.outputs.skip != 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.29.0"
+          channel: stable
+          cache: true
+
+      - name: Import signing certificate and profile
+        if: steps.gate.outputs.skip != 'true'
+        shell: bash
+        env:
+          IOS_CERT_P12_BASE64: ${{ secrets.IOS_CERT_P12_BASE64 }}
+          IOS_CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          echo "$IOS_CERT_P12_BASE64" | base64 --decode -o /tmp/ios_dist.p12
+          CERT_IDENTITY=$(security cms -D -i /tmp/ios_dist.p12 2>/dev/null | plutil -extract Certificates.0.T:name raw -o - - || true)
+          echo "certificate present: ${CERT_IDENTITY:-unknown identity}"
+          KEYCHAIN=build.keychain
+          security create-keychain -p actions "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p actions "$KEYCHAIN"
+          security import /tmp/ios_dist.p12 -k "$KEYCHAIN" -P "$IOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions "$KEYCHAIN"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$IOS_PROVISION_PROFILE_BASE64" | base64 --decode -o ~/Library/MobileDevice/Provisioning\ Profiles/atf.mobileprovision
+          rm -f /tmp/ios_dist.p12
+
+      - name: Build signed IPA
+        if: steps.gate.outputs.skip != 'true'
+        working-directory: mobile
+        shell: bash
+        env:
+          IOS_EXPORT_PLIST_BASE64: ${{ secrets.IOS_EXPORT_PLIST_BASE64 }}
+        run: |
+          set -euo pipefail
+          echo "$IOS_EXPORT_PLIST_BASE64" | base64 --decode -o ios/ExportOptions.plist
+          flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+          mkdir -p ../atf-ios
+          cp build/ios/ipa/*.ipa "../atf-ios/AutoTelegramForward-${{ needs.meta.outputs.version }}-ios.ipa"
+          (cd ../atf-ios && shasum -a 256 *.ipa > SHA256SUMS-ios.txt && ls -la)
+          rm -f ios/ExportOptions.plist
+
+      - uses: actions/upload-artifact@v4
+        if: steps.gate.outputs.skip != 'true'
+        with:
+          name: signed-ios
+          path: atf-ios/*
+          if-no-files-found: error
+          retention-days: 14
+
+  # ------------------------------------------------------------------------ #
+  # Manifest — scans every downloaded builder artifact and emits
+  # release/manifest.json (versions, sha256 per file, required vs optional,
+  # per-deliverable build status). Runs even if optional legs failed so the
+  # manifest honestly records what is missing; enforcement (fail on missing
+  # REQUIRED artifacts / sha mismatch) happens in verify_manifest.py, the
+  # clean-install job, and post-publish-verify below.
+  # ------------------------------------------------------------------------ #
+  manifest:
+    needs: [meta, binaries, api-binaries, docker, portable, mobile-android, ios-simulator, signed-ios]
+    if: always() && needs.meta.result == 'success' && needs.docker.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all builder artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: all-assets
+          merge-multiple: true
+
+      - name: Generate manifest
+        shell: bash
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          ls -la all-assets || true
+          OWNER="$(printf '%s' "${GITHUB_REPOSITORY_OWNER:-OWNER}" | tr '[:upper:]' '[:lower:]')"
+          python3 scripts/release_manifest.py \
+            --artifacts-dir all-assets \
+            --output release/manifest.json \
+            --commit-sha "${GITHUB_SHA}" \
+            --owner "${OWNER}"
+          cat release/manifest.json
+
+      - name: Self-verify manifest (missing REQUIRED artifacts fail here)
+        shell: bash
+        run: python3 scripts/verify_manifest.py --manifest release/manifest.json --artifacts-dir all-assets
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest
+          path: release/manifest.json
+          if-no-files-found: error
+          retention-days: 14
+
+  # ------------------------------------------------------------------------ #
+  # Clean-install check — proves a fresh checkout's compose stack boots and
+  # both health endpoints answer, then tears everything down.
+  # ------------------------------------------------------------------------ #
+  clean-install:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create minimal .env for smoke test
+        shell: bash
+        run: |
+          cp .env.example .env
+          echo "compose smoke test uses placeholder credentials from .env.example"
+
+      - name: Compose up
+        shell: bash
+        run: docker compose up -d --build
+
+      - name: Poll health endpoints
+        # Production release gate: every required internal service (core,
+        # logger, API, web) must report online. Placeholder external Telegram
+        # credentials are tolerated only if they do not degrade internal
+        # service health; an HTTP response alone is not a healthy stack.
+        shell: bash
+        run: |
+          for i in $(seq 1 30); do
+            A=$(curl -sf http://127.0.0.1:8088/healthz || true)
+            B=$(curl -sf http://127.0.0.1:8080/api/v1/health/services || true)
+            if [ -n "$A" ] && [ -n "$B" ]; then
+              echo "web /healthz: $A"
+              echo "api /api/v1/health/services: $B"
+              if echo "$B" | python3 -c "import json,sys; d=json.load(sys.stdin); s=d.get('services'); assert d.get('status') == 'healthy' and isinstance(s,list) and {x.get('name') for x in s if x.get('online') is True} >= {'core','logger','api','web'} and all(x.get('online') is True for x in s), d"; then
+                echo "stack serves HTTP with a valid services payload"
+                exit 0
+              fi
+            fi
+            echo "waiting for stack... ($i/30)"
+            sleep 10
+          done
+          echo "health endpoints never became ready"
+          docker compose ps
+          docker compose logs --tail=100
+          exit 1
+
+      - name: Compose down (always)
+        if: always()
+        shell: bash
+        run: docker compose down -v
+
+  # ------------------------------------------------------------------------ #
   # Publish: assemble everything into a GitHub Release with notes.
   # ------------------------------------------------------------------------ #
   publish:
@@ -493,13 +732,23 @@ jobs:
     # failed jobs then fills the gaps, and a partially-cancelled matrix must
     # never block the whole release. fail-fast:false (set per matrix) keeps
     # one cancelled leg from cancelling the rest.
-    needs: [meta, binaries, api-binaries, portable, mobile-android]
+    # Infra-cancel tolerance lives ONLY in this gate: no job uses
+    # continue-on-error to hide a real build failure (download steps use it
+    # only because optional legs may legitimately be absent; the manifest
+    # self-verify + post-publish-verify jobs enforce REQUIRED completeness).
+    # clean-install is REQUIRED for production: every required internal
+    # service must report healthy before publishing.
+    needs: [meta, binaries, api-binaries, docker, portable, mobile-android, ios-simulator, manifest, clean-install]
     if: |
       always() &&
       needs.meta.result == 'success' &&
       needs.binaries.result != 'failure' &&
       needs.api-binaries.result != 'failure' &&
-      needs.mobile-android.result != 'failure'
+      needs.mobile-android.result != 'failure' &&
+      needs.manifest.result == 'success' &&
+      needs.docker.result == 'success' &&
+      needs.ios-simulator.result == 'success' &&
+      needs.clean-install.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -534,6 +783,27 @@ jobs:
           name: portable
           path: all-assets
 
+      - name: Download iOS simulator bundle (optional leg)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: ios-simulator
+          path: all-assets
+
+      - name: Download signed iOS IPA (optional leg)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: signed-ios
+          path: all-assets
+
+      - name: Download release manifest
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: release-manifest
+          path: all-assets
+
       - name: Verify at least one artifact family present
         shell: bash
         run: |
@@ -551,7 +821,9 @@ jobs:
           find all-assets -type f -name 'autotelegramforward*' -exec cp {} release/ \;
           find all-assets -type f -name 'AutoTelegramForward-*.apk' -exec cp {} release/ \;
           find all-assets -type f -name 'AutoTelegramForward-*.aab' -exec cp {} release/ \;
-          find all-assets -type f -name 'SHA256SUMS-mobile.txt' -exec cp {} release/ \;
+          find all-assets -type f -name 'AutoTelegramForward-*-ios*.ipa' -exec cp {} release/ \;
+          find all-assets -type f -name 'manifest.json' -exec cp {} release/ \;
+          find all-assets -type f -name 'SHA256SUMS-*.txt' -exec cp {} release/ \;
           cd release
           sha256sum * > SHA256SUMS.txt
           ls -la
@@ -689,3 +961,41 @@ jobs:
           prerelease: false
           files: release/*
           generate_release_notes: true
+
+  # ------------------------------------------------------------------------ #
+  # Post-publish verify — downloads a sample of the just-published release
+  # assets and re-checks sha256 against the published manifest. Catches
+  # truncated uploads or asset mix-ups after the release exists.
+  # The sampled names come from the manifest itself (--list-sample), so the
+  # verifier only ever checks files that were actually downloaded — a
+  # non-downloaded entry can never fail the job for the wrong reason.
+  # ------------------------------------------------------------------------ #
+  post-publish-verify:
+    needs: [meta, publish]
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download published manifest + exact verification sample
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p verify
+          TAG="${{ needs.meta.outputs.tag }}"
+          gh release download "$TAG" --dir verify --pattern 'manifest.json'
+          python3 scripts/verify_manifest.py \
+            --manifest verify/manifest.json \
+            --artifacts-dir verify --list-sample 4 > verify/sample.txt
+          cat verify/sample.txt
+          while IFS= read -r asset; do
+            [ -n "$asset" ] || continue
+            gh release download "$TAG" --dir verify --pattern "$asset"
+          done < verify/sample.txt
+          gh release download "$TAG" --dir verify --pattern 'SHA256SUMS.txt'
+          ls -la verify
+
+      - name: Re-check sample sha256 against manifest
+        shell: bash
+        run: python3 scripts/verify_manifest.py --manifest verify/manifest.json --artifacts-dir verify --sample 4 --seed 42

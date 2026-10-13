@@ -45,6 +45,20 @@ class AppMessagesFa {
     'login_no_account': 'حساب کاربری ندارید؟',
     'login_have_account': 'حساب کاربری دارید؟',
 
+    // server connection
+    'server_probe_test': 'آزمایش اتصال',
+    'server_probe_testing': 'در حال آزمایش اتصال…',
+    'server_probe_reachable': 'سرور در دسترس و سازگار است',
+    'server_probe_unreachable':
+        'ارتباط با سرور برقرار نشد. آدرس و اتصال اینترنت را بررسی کنید.',
+    'server_probe_bad_response':
+        'سرور پاسخ داد اما پاسخ غیرمنتظره‌ای برگرداند.',
+    'server_probe_no_version':
+        'این سرور نقطه پایانی نسخه را ارائه نمی‌کند. آدرس را بررسی یا سرور را به‌روز کنید.',
+    'server_probe_tls_error':
+        'اتصال امن ناموفق بود. گواهی سرور را بررسی کنید و از https:// استفاده کنید.',
+    'server_restore_default': 'بازگردانی به پیش‌فرض رسمی',
+
     // nav
     'nav_dashboard': 'داشبورد',
     'nav_rules': 'قوانین',

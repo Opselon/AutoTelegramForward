@@ -1,8 +1,28 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+} else {
+    // CI secret path: release keystore provided via environment variables.
+    // Absent keystore => release build falls back to debug signing keys
+    // (local dev only; Play Store uploads require a real keystore).
+    val envStorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+    if (!envStorePath.isNullOrEmpty()) {
+        keystoreProperties["storeFile"] = envStorePath
+        keystoreProperties["storePassword"] = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
+        keystoreProperties["keyAlias"] = System.getenv("ANDROID_KEY_ALIAS") ?: ""
+        keystoreProperties["keyPassword"] = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
+    }
 }
 
 android {
@@ -32,29 +52,14 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePropertiesFile = rootProject.file("key.properties")
-            val keystoreProperties = java.util.Properties()
-            if (keystorePropertiesFile.exists()) {
-                keystorePropertiesFile.inputStream().use { stream ->
-                    keystoreProperties.load(stream)
-                }
-                val storePath = keystoreProperties.getProperty("storeFile")
-                if (storePath != null) {
-                    val resolvedFile = rootProject.file(storePath)
-                    if (resolvedFile.exists()) {
-                        storeFile = resolvedFile
-                        storePassword = keystoreProperties.getProperty("storePassword")
-                        keyAlias = keystoreProperties.getProperty("keyAlias")
-                        keyPassword = keystoreProperties.getProperty("keyPassword")
-                    }
-                }
-            } else {
-                val envStorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-                if (envStorePath != null && file(envStorePath).exists()) {
-                    storeFile = file(envStorePath)
-                    storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                    keyAlias = System.getenv("ANDROID_KEY_ALIAS")
-                    keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            val storePath = keystoreProperties.getProperty("storeFile")
+            if (!storePath.isNullOrEmpty()) {
+                val resolvedFile = rootProject.file(storePath)
+                if (resolvedFile.exists()) {
+                    storeFile = resolvedFile
+                    storePassword = keystoreProperties.getProperty("storePassword")
+                    keyAlias = keystoreProperties.getProperty("keyAlias")
+                    keyPassword = keystoreProperties.getProperty("keyPassword")
                 }
             }
         }
@@ -63,10 +68,19 @@ android {
     buildTypes {
         release {
             val releaseConfig = signingConfigs.getByName("release")
+            val isReleaseTask = gradle.startParameter.taskNames.any {
+                it.contains("release", ignoreCase = true)
+            }
+            val allowDebugSigning =
+                providers.gradleProperty("allowDebugReleaseSigning").orNull == "true"
             signingConfig = if (releaseConfig.storeFile != null) {
                 releaseConfig
-            } else {
+            } else if (allowDebugSigning || !isReleaseTask) {
                 signingConfigs.getByName("debug")
+            } else {
+                throw GradleException(
+                    "Release signing keystore is missing. Configure ANDROID_KEYSTORE_PATH and signing secrets."
+                )
             }
         }
     }

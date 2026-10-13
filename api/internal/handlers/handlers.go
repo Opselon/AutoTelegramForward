@@ -254,6 +254,9 @@ func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]map[string]any, 0, len(rules))
 	for _, rl := range rules {
+		if rl == nil || rl.OwnerUserId != id.UserID {
+			continue
+		}
 		out = append(out, map[string]any{
 			"id":                        rl.Id,
 			"session_id":                rl.SessionId,
@@ -445,7 +448,7 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 	}
 	owned := false
 	for _, rl := range listResp.Rules {
-		if rl.Id == r.PathValue("id") {
+		if rl.OwnerUserId == id.UserID && rl.Id == r.PathValue("id") {
 			owned = true
 			break
 		}
@@ -512,7 +515,7 @@ func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
 	}
 	owned := false
 	for _, rule := range listResp.Rules {
-		if rule.Id == r.PathValue("id") {
+		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
 			owned = true
 			break
 		}
@@ -542,7 +545,7 @@ func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, rule := range resp.Rules {
-		if rule.Id == r.PathValue("id") {
+		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
 			writeJSON(w, http.StatusOK, rule)
 			return
 		}
@@ -561,7 +564,7 @@ func (h *Handlers) ToggleRule(w http.ResponseWriter, r *http.Request) {
 	}
 	var target *pb.ForwardRule
 	for _, rule := range resp.Rules {
-		if rule.Id == r.PathValue("id") {
+		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
 			target = rule
 			break
 		}
@@ -597,7 +600,7 @@ func (h *Handlers) RoutePathQuickSet(w http.ResponseWriter, r *http.Request) {
 	}
 	var target *pb.ForwardRule
 	for _, rule := range resp.Rules {
-		if rule.Id == r.PathValue("id") {
+		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
 			target = rule
 			break
 		}
@@ -722,7 +725,7 @@ func (h *Handlers) ownsRule(ctx context.Context, ruleID string, owner int64) boo
 		return false
 	}
 	for _, rule := range resp.Rules {
-		if rule.Id == ruleID {
+		if rule.OwnerUserId == owner && rule.Id == ruleID {
 			return true
 		}
 	}
@@ -740,7 +743,7 @@ func (h *Handlers) ownsFilter(ctx context.Context, filterID string, owner int64)
 		return false
 	}
 	for _, f := range resp.Filters {
-		if f.Id == filterID {
+		if f.OwnerUserId == owner && f.Id == filterID {
 			return true
 		}
 	}
@@ -756,7 +759,7 @@ func (h *Handlers) ownsAIConfig(ctx context.Context, configID string, owner int6
 		return false
 	}
 	for _, c := range resp.Configs {
-		if c.Id == configID {
+		if c.OwnerUserId == owner && c.Id == configID {
 			return true
 		}
 	}
@@ -901,9 +904,11 @@ func (h *Handlers) ListFilters(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	filters := resp.Filters
-	if filters == nil {
-		filters = []*pb.FilterRule{}
+	filters := make([]*pb.FilterRule, 0, len(resp.Filters))
+	for _, filter := range resp.Filters {
+		if filter != nil && filter.OwnerUserId == id.UserID {
+			filters = append(filters, filter)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"filters": filters,
@@ -979,9 +984,11 @@ func (h *Handlers) ListAIConfigs(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	configs := resp.Configs
-	if configs == nil {
-		configs = []*pb.AIConfig{}
+	configs := make([]*pb.AIConfig, 0, len(resp.Configs))
+	for _, config := range resp.Configs {
+		if config != nil && config.OwnerUserId == id.UserID {
+			configs = append(configs, config)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"configs": configs,

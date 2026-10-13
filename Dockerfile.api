@@ -8,7 +8,13 @@ COPY api/ .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /atf-api .
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates
+# Retry: dl-cdn.alpinelinux.org intermittently returns transient network
+# errors mid-build ("temporary error (try again later)"), which fails the
+# whole CI run for no code reason. Retry the install a few times instead.
+RUN for i in 1 2 3 4 5; do \
+      apk add --no-cache ca-certificates && break || \
+      { echo "apk attempt $i failed, retrying..."; sleep 10; }; \
+    done && apk info -e ca-certificates
 COPY --from=builder /atf-api /usr/local/bin/atf-api
 
 EXPOSE 8080

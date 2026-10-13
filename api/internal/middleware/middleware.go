@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	pb "autoforward/proto"
@@ -86,6 +87,16 @@ func RequestLogger(next http.Handler) http.Handler {
 
 func APIKeyAuth(key string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" || r.URL.Path == "/health" ||
+			r.URL.Path == "/api/version" || r.URL.Path == "/api/v1/health/services" ||
+			strings.HasPrefix(r.URL.Path, "/api/auth/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+			next.ServeHTTP(w, r)
+			return
+		}
 		provided := r.Header.Get("X-API-Key")
 		if provided == "" {
 			auth := r.Header.Get("Authorization")
