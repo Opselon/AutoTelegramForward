@@ -93,6 +93,26 @@ class SessionBootManager:
             bound = await self._dispatcher.bind_session(session.id)
             status = "live" if bound else "live_no_bind"
             self.statuses[session_id] = status
+
+            # v15: Telegram stops pushing channel posts to a session that is
+            # far behind, so replay whatever the session missed while it was
+            # offline. This is what makes a rule forward after a restart
+            # instead of silently dropping everything until the next restart.
+            if bound:
+                try:
+                    from core.infrastructure.telegram.channel_catchup import ChannelCatchUpService
+                    catcher = ChannelCatchUpService(
+                        self._pool, self._rules, self._dispatcher, self._log
+                    )
+                    replayed, skipped = await catcher.catch_up_session(session_id)
+                    if replayed or skipped:
+                        logger.info(
+                            "catch-up for %s: replayed=%d skipped=%d",
+                            session_id[:8], replayed, skipped,
+                        )
+                except Exception as exc:
+                    logger.warning("catch-up failed for %s: %s", session_id[:8], exc)
+
             label = getattr(me, "username", "") or getattr(me, "first_name", "") or session.phone_number
             self._emit(f"session live: {label} (rules bound: {bound})")
             logger.info("session %s live as @%s", session_id[:8], label)

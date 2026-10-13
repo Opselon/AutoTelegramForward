@@ -29,6 +29,10 @@ class Config:
     queue_max_size: int = 10000
     queue_lease_seconds: float = 30.0
     queue_max_per_minute_per_target: int = 25
+    # v15 channel polling: how often to sweep source channels for posts that
+    # Telegram did not push (it stops pushing once a channel's read-state
+    # catches up, so polling is the reliable delivery path).
+    channel_poll_interval: float = 15.0
     # v14 PostgreSQL (optional). When database_url is set the queue uses the
     # Postgres repositories (FOR UPDATE SKIP LOCKED); otherwise SQLite.
     database_url: str = ""
@@ -54,7 +58,7 @@ class Config:
                     "logger_addr", "web_url", "jwt_secret",
                     "queue_num_workers", "queue_batch_size", "queue_max_size",
                     "queue_lease_seconds", "queue_max_per_minute_per_target",
-                    "database_url"):
+                    "database_url", "channel_poll_interval"):
             if key in yaml_data:
                 setattr(cfg, key, yaml_data[key])
         if "admin_ids" in yaml_data:
@@ -79,6 +83,8 @@ class Config:
             "ATF_QUEUE_LEASE_SECONDS": ("queue_lease_seconds", float),
             "ATF_QUEUE_MAX_PER_MINUTE": ("queue_max_per_minute_per_target", int),
             "ATF_DATABASE_URL": ("database_url", str),
+            # v15 channel polling
+            "ATF_CHANNEL_POLL_INTERVAL": ("channel_poll_interval", float),
         }
         for env_key, (attr, cast) in env_map.items():
             val = os.environ.get(env_key)
