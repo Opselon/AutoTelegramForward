@@ -43,6 +43,34 @@ export interface ForwardRule {
   created_at: number
   updated_at: number
   custom_metadata_json?: string
+  name?: string
+  topic_id?: number
+  debug_mode?: boolean
+  account_type?: string
+  sender_type?: string
+  feature_group?: string
+  duplicate_filters?: boolean
+  crypto_mode?: boolean
+  whitelist_keywords?: string[]
+  blacklist_keywords?: string[]
+  whitelist_users?: string[]
+  blacklist_users?: string[]
+  auto_posting?: boolean
+  power_control?: boolean
+  forward_delay_seconds?: number
+  edit_time_limit_seconds?: number
+  process_raw_text?: boolean
+  button_to_text?: boolean
+  watermark_text?: string
+  link_buttons?: Array<{ text: string; url: string }>
+  affiliate_kit?: { enabled: boolean; prefix?: string; replace_urls?: boolean }
+  ocr_image_ai?: boolean
+  smart_ai_rewrite?: boolean
+  news_digest?: boolean
+  ai_creativity?: number
+  ai_max_tokens?: number
+  paid_addons?: Record<string, boolean>
+  metadata?: Record<string, any>
 }
 
 export interface SaveRuleRequest {
@@ -82,6 +110,34 @@ export interface SaveRuleRequest {
   ai_fallback_policy?: string
   ai_prompt_version?: number
   ai_timeout_seconds?: number
+  name?: string
+  topic_id?: number
+  debug_mode?: boolean
+  account_type?: string
+  sender_type?: string
+  feature_group?: string
+  duplicate_filters?: boolean
+  crypto_mode?: boolean
+  whitelist_keywords?: string[]
+  blacklist_keywords?: string[]
+  whitelist_users?: string[]
+  blacklist_users?: string[]
+  auto_posting?: boolean
+  power_control?: boolean
+  forward_delay_seconds?: number
+  edit_time_limit_seconds?: number
+  process_raw_text?: boolean
+  button_to_text?: boolean
+  watermark_text?: string
+  link_buttons?: Array<{ text: string; url: string }>
+  affiliate_kit?: { enabled: boolean; prefix?: string; replace_urls?: boolean }
+  ocr_image_ai?: boolean
+  smart_ai_rewrite?: boolean
+  news_digest?: boolean
+  ai_creativity?: number
+  ai_max_tokens?: number
+  paid_addons?: Record<string, boolean>
+  metadata?: Record<string, any>
 }
 
 // AI Rewrite prompt templates (shared bot + dashboard)

@@ -417,6 +417,317 @@ class ForwardRule:
     def album_mode(self) -> str:
         return str(self.metadata.get("album_mode") or "album") if isinstance(self.metadata, dict) else "album"
 
+    # --- Task Overview & Routing Extensions (Screens 1 & 5) ---
+    @property
+    def topic_id(self) -> Optional[int]:
+        if not isinstance(self.metadata, dict):
+            return None
+        val = self.metadata.get("topic_id")
+        return int(val) if val is not None and str(val).isdigit() else None
+
+    @topic_id.setter
+    def topic_id(self, val: Optional[int]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["topic_id"] = val
+
+    @property
+    def debug_mode(self) -> bool:
+        return bool(self.metadata.get("debug_mode", False)) if isinstance(self.metadata, dict) else False
+
+    @debug_mode.setter
+    def debug_mode(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["debug_mode"] = bool(val)
+
+    @property
+    def sender_type(self) -> str:
+        return str(self.metadata.get("sender_type") or "Personal Telegram Account") if isinstance(self.metadata, dict) else "Personal Telegram Account"
+
+    @sender_type.setter
+    def sender_type(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["sender_type"] = str(val or "Personal Telegram Account")
+
+    # --- Filters Section (Screen 2) ---
+    @property
+    def duplicate_filters(self) -> bool:
+        return bool(self.metadata.get("duplicate_filters", False)) if isinstance(self.metadata, dict) else False
+
+    @duplicate_filters.setter
+    def duplicate_filters(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["duplicate_filters"] = bool(val)
+
+    @property
+    def crypto_mode(self) -> bool:
+        return bool(self.metadata.get("crypto_mode", False)) if isinstance(self.metadata, dict) else False
+
+    @crypto_mode.setter
+    def crypto_mode(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["crypto_mode"] = bool(val)
+
+    @property
+    def blacklist(self) -> List[str]:
+        if not isinstance(self.metadata, dict):
+            return []
+        bl = self.metadata.get("blacklist", [])
+        return list(bl) if isinstance(bl, list) else []
+
+    @blacklist.setter
+    def blacklist(self, val: List[str]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["blacklist"] = list(val or [])
+
+    @property
+    def whitelist(self) -> List[str]:
+        if not isinstance(self.metadata, dict):
+            return []
+        wl = self.metadata.get("whitelist", [])
+        return list(wl) if isinstance(wl, list) else []
+
+    @whitelist.setter
+    def whitelist(self, val: List[str]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["whitelist"] = list(val or [])
+
+    @property
+    def blacklist_users(self) -> List[str]:
+        if not isinstance(self.metadata, dict):
+            return []
+        bu = self.metadata.get("blacklist_users", [])
+        return list(bu) if isinstance(bu, list) else []
+
+    @blacklist_users.setter
+    def blacklist_users(self, val: List[str]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["blacklist_users"] = list(val or [])
+
+    @property
+    def whitelist_users(self) -> List[str]:
+        if not isinstance(self.metadata, dict):
+            return []
+        wu = self.metadata.get("whitelist_users", [])
+        return list(wu) if isinstance(wu, list) else []
+
+    @whitelist_users.setter
+    def whitelist_users(self, val: List[str]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["whitelist_users"] = list(val or [])
+
+    # --- Schedules Section (Screen 2) ---
+    @property
+    def auto_post_scheduler(self) -> Dict[str, Any]:
+        if not isinstance(self.metadata, dict):
+            return {"enabled": False}
+        sched = self.metadata.get("auto_post_scheduler", {})
+        return dict(sched) if isinstance(sched, dict) else {"enabled": bool(sched)}
+
+    @auto_post_scheduler.setter
+    def auto_post_scheduler(self, val: Dict[str, Any]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["auto_post_scheduler"] = val
+
+    @property
+    def auto_posting(self) -> bool:
+        return bool(self.auto_post_scheduler.get("enabled", False))
+
+    @auto_posting.setter
+    def auto_posting(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        curr = dict(self.auto_post_scheduler)
+        curr["enabled"] = bool(val)
+        self.metadata["auto_post_scheduler"] = curr
+
+    @property
+    def power_schedule(self) -> Dict[str, Any]:
+        if not isinstance(self.metadata, dict):
+            return {"enabled": False}
+        ps = self.metadata.get("power_schedule", {})
+        return dict(ps) if isinstance(ps, dict) else {"enabled": bool(ps)}
+
+    @power_schedule.setter
+    def power_schedule(self, val: Dict[str, Any]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["power_schedule"] = val
+
+    @property
+    def power_control(self) -> bool:
+        return bool(self.power_schedule.get("enabled", False))
+
+    @power_control.setter
+    def power_control(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        curr = dict(self.power_schedule)
+        curr["enabled"] = bool(val)
+        self.metadata["power_schedule"] = curr
+
+    # --- Processing Messages Section (Screen 2) ---
+    @property
+    def process_raw_text(self) -> bool:
+        return bool(self.metadata.get("process_raw_text", False)) if isinstance(self.metadata, dict) else False
+
+    @process_raw_text.setter
+    def process_raw_text(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["process_raw_text"] = bool(val)
+
+    @property
+    def button_to_text(self) -> bool:
+        return bool(self.metadata.get("button_to_text", False)) if isinstance(self.metadata, dict) else False
+
+    @button_to_text.setter
+    def button_to_text(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["button_to_text"] = bool(val)
+
+    # --- Modify Content Section (Screen 3) ---
+    @property
+    def translate_lang(self) -> str:
+        return str(self.metadata.get("translate_lang") or "") if isinstance(self.metadata, dict) else ""
+
+    @translate_lang.setter
+    def translate_lang(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["translate_lang"] = str(val or "")
+
+    @property
+    def watermark(self) -> str:
+        return str(self.metadata.get("watermark") or "") if isinstance(self.metadata, dict) else ""
+
+    @watermark.setter
+    def watermark(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["watermark"] = str(val or "")
+
+    @property
+    def link_buttons(self) -> List[Dict[str, str]]:
+        if not isinstance(self.metadata, dict):
+            return []
+        btns = self.metadata.get("link_buttons", [])
+        return list(btns) if isinstance(btns, list) else []
+
+    @link_buttons.setter
+    def link_buttons(self, val: List[Dict[str, str]]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["link_buttons"] = list(val or [])
+
+    @property
+    def affiliate_kit(self) -> Dict[str, Any]:
+        if not isinstance(self.metadata, dict):
+            return {"enabled": False}
+        ak = self.metadata.get("affiliate_kit", {})
+        return dict(ak) if isinstance(ak, dict) else {"enabled": bool(ak)}
+
+    @affiliate_kit.setter
+    def affiliate_kit(self, val: Dict[str, Any]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["affiliate_kit"] = val
+
+    # --- AI Features Section (Screen 3) ---
+    @property
+    def ai_creativity(self) -> float:
+        if not isinstance(self.metadata, dict):
+            return 0.7
+        try:
+            return float(self.metadata.get("ai_creativity", 0.7))
+        except (ValueError, TypeError):
+            return 0.7
+
+    @ai_creativity.setter
+    def ai_creativity(self, val: float) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["ai_creativity"] = float(val)
+
+    @property
+    def ai_max_tokens(self) -> int:
+        if not isinstance(self.metadata, dict):
+            return 600
+        try:
+            return int(self.metadata.get("ai_max_tokens", 600))
+        except (ValueError, TypeError):
+            return 600
+
+    @ai_max_tokens.setter
+    def ai_max_tokens(self, val: int) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["ai_max_tokens"] = int(val)
+
+    @property
+    def ocr_image_ai(self) -> bool:
+        return bool(self.metadata.get("ocr_image_ai", False)) if isinstance(self.metadata, dict) else False
+
+    @ocr_image_ai.setter
+    def ocr_image_ai(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["ocr_image_ai"] = bool(val)
+
+    @property
+    def smart_ai_rewrite(self) -> bool:
+        return bool(self.metadata.get("smart_ai_rewrite", False)) if isinstance(self.metadata, dict) else False
+
+    @smart_ai_rewrite.setter
+    def smart_ai_rewrite(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["smart_ai_rewrite"] = bool(val)
+
+    @property
+    def news_digest(self) -> bool:
+        return bool(self.metadata.get("news_digest", False)) if isinstance(self.metadata, dict) else False
+
+    @news_digest.setter
+    def news_digest(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["news_digest"] = bool(val)
+
+    # --- Feature Groups & Add-on Extensions (Screen 4) ---
+    @property
+    def feature_group(self) -> str:
+        return str(self.metadata.get("feature_group") or "all") if isinstance(self.metadata, dict) else "all"
+
+    @feature_group.setter
+    def feature_group(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["feature_group"] = str(val or "all")
+
+    @property
+    def paid_addons(self) -> Dict[str, Any]:
+        if not isinstance(self.metadata, dict):
+            return {}
+        addons = self.metadata.get("paid_addons", {})
+        return dict(addons) if isinstance(addons, dict) else {}
+
+    @paid_addons.setter
+    def paid_addons(self, val: Dict[str, Any]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["paid_addons"] = dict(val or {})
+
     @property
     def link_replacement(self) -> str:
         return str(self.metadata.get("link_replacement") or "") if isinstance(self.metadata, dict) else ""

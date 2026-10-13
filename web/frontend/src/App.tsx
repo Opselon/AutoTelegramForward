@@ -37,10 +37,12 @@ import {
   Upload,
   ShieldAlert,
   Sliders,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { api } from './api'
 import { AdminPanel } from './components/AdminPanel'
 import { ClientSettings } from './components/ClientSettings'
+import { TaskOverviewModal } from './components/TaskOverviewModal'
 import type {
   ForwardRule,
   SaveRuleRequest,
@@ -119,6 +121,8 @@ export function App() {
   const [ruleFormData, setRuleFormData] = useState<Partial<SaveRuleRequest>>({})
   // Bot-parity toggles that live inside rule metadata (block_voice, album_mode, …)
   const [ruleMeta, setRuleMeta] = useState<Record<string, any>>({})
+  const [taskOverviewRule, setTaskOverviewRule] = useState<ForwardRule | null>(null)
+  const [isTaskOverviewOpen, setIsTaskOverviewOpen] = useState(false)
 
   // AI Modal
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
@@ -392,9 +396,20 @@ export function App() {
     try {
       await api.deleteRule(id)
       setRules((prev) => prev.filter((r) => r.id !== id))
+      setIsTaskOverviewOpen(false)
       showToast(isRtl ? 'قانون با موفقیت حذف شد' : 'Rule deleted successfully')
     } catch (e: any) {
       showToast(e.message)
+    }
+  }
+
+  const handleSaveTaskOverview = async (updated: ForwardRule) => {
+    try {
+      const res = await api.saveRule(updated as any)
+      setRules((prev) => prev.map((r) => (r.id === res.id ? res : r)))
+      showToast(isRtl ? 'تسک با موفقیت به‌روزرسانی شد' : 'Task updated successfully')
+    } catch (e: any) {
+      showToast(e.message || (isRtl ? 'خطا در ذخیره تسک' : 'Failed to save task'))
     }
   }
 
@@ -1338,6 +1353,18 @@ export function App() {
                           <span>{isRtl ? 'توقف' : 'Pause'}</span>
                         </button>
                       )}
+
+                      <button
+                        onClick={() => {
+                          setTaskOverviewRule(rule)
+                          setIsTaskOverviewOpen(true)
+                        }}
+                        className="btn btn-secondary icon-btn"
+                        style={{ padding: '5px', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', borderColor: 'rgba(59, 130, 246, 0.4)' }}
+                        title={isRtl ? 'نمای تسک و تنظیمات پیشرفته (Task Overview)' : 'Task Overview & Advanced Settings'}
+                      >
+                        <SlidersHorizontal size={13} />
+                      </button>
 
                       <button
                         onClick={() => {
@@ -3280,6 +3307,16 @@ export function App() {
       {activeTab === 'settings' && (
         <ClientSettings lang={lang} />
       )}
+
+      {/* 1:1 PARITY TASK OVERVIEW & ADVANCED SETTINGS MODAL */}
+      <TaskOverviewModal
+        rule={taskOverviewRule}
+        isOpen={isTaskOverviewOpen}
+        onClose={() => setIsTaskOverviewOpen(false)}
+        onSave={handleSaveTaskOverview}
+        onDelete={handleDeleteRule}
+        lang={lang}
+      />
 
       {/* CREATE / EDIT RULE MODAL */}
       {isRuleModalOpen && (

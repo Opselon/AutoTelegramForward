@@ -194,6 +194,25 @@ class ForwardRule {
     this.albumMode = 'album',
     this.version = 0,
     this.ownerUserId = 0,
+    this.name = '',
+    this.topicId = 0,
+    this.debugMode = false,
+    this.senderType = 'Personal Telegram Account',
+    this.featureGroup = 'all',
+    this.duplicateFilters = false,
+    this.cryptoMode = false,
+    this.autoPosting = false,
+    this.powerControl = false,
+    this.editTimeLimitSeconds = 0,
+    this.processRawText = false,
+    this.buttonToText = false,
+    this.ocrImageAi = false,
+    this.smartAiRewrite = false,
+    this.newsDigest = false,
+    this.watermark = '',
+    this.aiCreativity = 0.7,
+    this.aiMaxTokens = 600,
+    this.paidAddons = const {},
   });
 
   final String id;
@@ -202,6 +221,27 @@ class ForwardRule {
   final String sourceChatTitle;
   final String targetChatId;
   final String targetChatTitle;
+
+  /// Task Overview & Advanced Settings Parity Fields
+  final String name;
+  final int topicId;
+  final bool debugMode;
+  final String senderType;
+  final String featureGroup;
+  final bool duplicateFilters;
+  final bool cryptoMode;
+  final bool autoPosting;
+  final bool powerControl;
+  final int editTimeLimitSeconds;
+  final bool processRawText;
+  final bool buttonToText;
+  final bool ocrImageAi;
+  final bool smartAiRewrite;
+  final bool newsDigest;
+  final String watermark;
+  final double aiCreativity;
+  final int aiMaxTokens;
+  final Map<String, bool> paidAddons;
 
   /// VIP / intermediate-channel routing. When the server exposes
   /// `intermediate_channel_id` the rule funnels through it first.
@@ -254,6 +294,25 @@ class ForwardRule {
     String? albumMode,
     int? version,
     bool? isEnabled,
+    String? name,
+    int? topicId,
+    bool? debugMode,
+    String? senderType,
+    String? featureGroup,
+    bool? duplicateFilters,
+    bool? cryptoMode,
+    bool? autoPosting,
+    bool? powerControl,
+    int? editTimeLimitSeconds,
+    bool? processRawText,
+    bool? buttonToText,
+    bool? ocrImageAi,
+    bool? smartAiRewrite,
+    bool? newsDigest,
+    String? watermark,
+    double? aiCreativity,
+    int? aiMaxTokens,
+    Map<String, bool>? paidAddons,
   }) => ForwardRule(
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
@@ -279,6 +338,25 @@ class ForwardRule {
     version: version ?? this.version,
     isEnabled: isEnabled ?? this.isEnabled,
     ownerUserId: ownerUserId,
+    name: name ?? this.name,
+    topicId: topicId ?? this.topicId,
+    debugMode: debugMode ?? this.debugMode,
+    senderType: senderType ?? this.senderType,
+    featureGroup: featureGroup ?? this.featureGroup,
+    duplicateFilters: duplicateFilters ?? this.duplicateFilters,
+    cryptoMode: cryptoMode ?? this.cryptoMode,
+    autoPosting: autoPosting ?? this.autoPosting,
+    powerControl: powerControl ?? this.powerControl,
+    editTimeLimitSeconds: editTimeLimitSeconds ?? this.editTimeLimitSeconds,
+    processRawText: processRawText ?? this.processRawText,
+    buttonToText: buttonToText ?? this.buttonToText,
+    ocrImageAi: ocrImageAi ?? this.ocrImageAi,
+    smartAiRewrite: smartAiRewrite ?? this.smartAiRewrite,
+    newsDigest: newsDigest ?? this.newsDigest,
+    watermark: watermark ?? this.watermark,
+    aiCreativity: aiCreativity ?? this.aiCreativity,
+    aiMaxTokens: aiMaxTokens ?? this.aiMaxTokens,
+    paidAddons: paidAddons ?? this.paidAddons,
   );
 
   Map<String, dynamic> toCreateJson() => {
@@ -287,6 +365,25 @@ class ForwardRule {
     'source_chat_title': sourceChatTitle,
     'target_chat_id': targetChatId,
     'target_chat_title': targetChatTitle,
+    'name': name,
+    'topic_id': topicId,
+    'debug_mode': debugMode,
+    'sender_type': senderType,
+    'feature_group': featureGroup,
+    'duplicate_filters': duplicateFilters,
+    'crypto_mode': cryptoMode,
+    'auto_posting': autoPosting,
+    'power_control': powerControl,
+    'edit_time_limit_seconds': editTimeLimitSeconds,
+    'process_raw_text': processRawText,
+    'button_to_text': buttonToText,
+    'ocr_image_ai': ocrImageAi,
+    'smart_ai_rewrite': smartAiRewrite,
+    'news_digest': newsDigest,
+    'watermark': watermark,
+    'ai_creativity': aiCreativity,
+    'ai_max_tokens': aiMaxTokens,
+    'paid_addons': paidAddons,
     if (intermediateChannelId.isNotEmpty)
       'intermediate_channel_id': intermediateChannelId,
     'use_vip_routing': useVipRouting,
@@ -311,61 +408,77 @@ class ForwardRule {
     'is_enabled': isEnabled,
   };
 
-  factory ForwardRule.fromJson(Map<String, dynamic> json) => ForwardRule(
-    id: json['id'] as String,
-    sessionId: json['session_id'] as String? ?? '',
-    sourceChatId: json['source_chat_id']?.toString() ?? '',
-    sourceChatTitle: json['source_chat_title'] as String? ?? '',
-    targetChatId: json['target_chat_id']?.toString() ?? '',
-    targetChatTitle: json['target_chat_title'] as String? ?? '',
-    intermediateChannelId: json['intermediate_channel_id']?.toString() ?? '',
-    useVipRouting: json['use_vip_routing'] as bool? ?? false,
-    filters:
-        (json['filters'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList(growable: false) ??
-        const [],
-    filterMode: json['filter_mode'] as String? ?? 'all',
-    mediaMode: json['media_mode'] as String? ?? 'all',
-    delaySeconds: (json['delay_seconds'] as num?)?.toInt() ?? 0,
-    headerTemplate: json['header_template'] as String? ?? '',
-    footerTemplate: json['footer_template'] as String? ?? '',
-    aiConfigId: json['ai_config_id'] as String? ?? '',
-    blockVoice:
-        (json['block_voice'] as bool?) ??
-        (json['metadata'] is Map
-            ? (json['metadata']['block_voice'] as bool? ?? false)
-            : false),
-    blockStickers:
-        (json['block_stickers'] as bool?) ??
-        (json['metadata'] is Map
-            ? (json['metadata']['block_stickers'] as bool? ?? false)
-            : false),
-    removeEmojis:
-        (json['remove_emojis'] as bool?) ??
-        (json['metadata'] is Map
-            ? (json['metadata']['remove_emojis'] as bool? ?? false)
-            : false),
-    syncDeletes:
-        (json['sync_deletes'] as bool?) ??
-        (json['metadata'] is Map
-            ? (json['metadata']['sync_deletes'] as bool? ?? false)
-            : false),
-    ignoreEdits:
-        (json['ignore_edits'] as bool?) ??
-        (json['metadata'] is Map
-            ? (json['metadata']['ignore_edits'] as bool? ?? false)
-            : false),
-    albumMode:
-        (json['album_mode'] as String?) ??
-        (json['metadata'] is Map
-            ? (json['metadata']['album_mode'] as String? ?? 'album')
-            : 'album'),
-    version: (json['version'] as num?)?.toInt() ?? 0,
-    isEnabled:
-        json['is_enabled'] as bool? ?? !(json['is_paused'] as bool? ?? false),
-    ownerUserId: (json['owner_user_id'] as num?)?.toInt() ?? 0,
-  );
+  factory ForwardRule.fromJson(Map<String, dynamic> json) {
+    final meta = json['metadata'] is Map ? (json['metadata'] as Map) : const {};
+    final rawAddons = json['paid_addons'] is Map ? json['paid_addons'] as Map : (meta['paid_addons'] is Map ? meta['paid_addons'] as Map : const {});
+    final Map<String, bool> parsedAddons = {};
+    rawAddons.forEach((k, v) {
+      if (k != null) parsedAddons[k.toString()] = v == true;
+    });
+
+    return ForwardRule(
+      id: json['id'] as String,
+      sessionId: json['session_id'] as String? ?? '',
+      sourceChatId: json['source_chat_id']?.toString() ?? '',
+      sourceChatTitle: json['source_chat_title'] as String? ?? '',
+      targetChatId: json['target_chat_id']?.toString() ?? '',
+      targetChatTitle: json['target_chat_title'] as String? ?? '',
+      intermediateChannelId: json['intermediate_channel_id']?.toString() ?? '',
+      useVipRouting: json['use_vip_routing'] as bool? ?? false,
+      name: (json['name'] as String?) ?? (meta['name'] as String? ?? ''),
+      topicId: (json['topic_id'] as num?)?.toInt() ?? ((meta['topic_id'] as num?)?.toInt() ?? 0),
+      debugMode: (json['debug_mode'] as bool?) ?? (meta['debug_mode'] as bool? ?? false),
+      senderType: (json['sender_type'] as String?) ?? (meta['sender_type'] as String? ?? 'Personal Telegram Account'),
+      featureGroup: (json['feature_group'] as String?) ?? (meta['feature_group'] as String? ?? 'all'),
+      duplicateFilters: (json['duplicate_filters'] as bool?) ?? (meta['duplicate_filters'] as bool? ?? false),
+      cryptoMode: (json['crypto_mode'] as bool?) ?? (meta['crypto_mode'] as bool? ?? false),
+      autoPosting: (json['auto_posting'] as bool?) ?? (meta['auto_posting'] as bool? ?? false),
+      powerControl: (json['power_control'] as bool?) ?? (meta['power_control'] as bool? ?? false),
+      editTimeLimitSeconds: (json['edit_time_limit_seconds'] as num?)?.toInt() ?? ((meta['edit_time_limit_seconds'] as num?)?.toInt() ?? 0),
+      processRawText: (json['process_raw_text'] as bool?) ?? (meta['process_raw_text'] as bool? ?? false),
+      buttonToText: (json['button_to_text'] as bool?) ?? (meta['button_to_text'] as bool? ?? false),
+      ocrImageAi: (json['ocr_image_ai'] as bool?) ?? (meta['ocr_image_ai'] as bool? ?? false),
+      smartAiRewrite: (json['smart_ai_rewrite'] as bool?) ?? (meta['smart_ai_rewrite'] as bool? ?? false),
+      newsDigest: (json['news_digest'] as bool?) ?? (meta['news_digest'] as bool? ?? false),
+      watermark: (json['watermark'] as String?) ?? (meta['watermark'] as String? ?? ''),
+      aiCreativity: (json['ai_creativity'] as num?)?.toDouble() ?? ((meta['ai_creativity'] as num?)?.toDouble() ?? 0.7),
+      aiMaxTokens: (json['ai_max_tokens'] as num?)?.toInt() ?? ((meta['ai_max_tokens'] as num?)?.toInt() ?? 600),
+      paidAddons: parsedAddons,
+      filters:
+          (json['filters'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList(growable: false) ??
+          const [],
+      filterMode: json['filter_mode'] as String? ?? 'all',
+      mediaMode: json['media_mode'] as String? ?? 'all',
+      delaySeconds: (json['delay_seconds'] as num?)?.toInt() ?? 0,
+      headerTemplate: json['header_template'] as String? ?? '',
+      footerTemplate: json['footer_template'] as String? ?? '',
+      aiConfigId: json['ai_config_id'] as String? ?? '',
+      blockVoice:
+          (json['block_voice'] as bool?) ??
+          (meta['block_voice'] as bool? ?? false),
+      blockStickers:
+          (json['block_stickers'] as bool?) ??
+          (meta['block_stickers'] as bool? ?? false),
+      removeEmojis:
+          (json['remove_emojis'] as bool?) ??
+          (meta['remove_emojis'] as bool? ?? false),
+      syncDeletes:
+          (json['sync_deletes'] as bool?) ??
+          (meta['sync_deletes'] as bool? ?? false),
+      ignoreEdits:
+          (json['ignore_edits'] as bool?) ??
+          (meta['ignore_edits'] as bool? ?? false),
+      albumMode:
+          (json['album_mode'] as String?) ??
+          (meta['album_mode'] as String? ?? 'album'),
+      version: (json['version'] as num?)?.toInt() ?? 0,
+      isEnabled:
+          json['is_enabled'] as bool? ?? !(json['is_paused'] as bool? ?? false),
+      ownerUserId: (json['owner_user_id'] as num?)?.toInt() ?? 0,
+    );
+  }
 
   @override
   String toString() =>
