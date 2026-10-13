@@ -1,0 +1,117 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import repoInfo from '../../data/repo-info.json';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Docker Compose Deployment Guide";
+const pageDesc = "Deploy AutoTelegramForward with Docker Compose: container architecture, volume mounts, environment secrets, and lifecycle commands.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Getting Started', href: url('/getting-started/') },
+    { name: 'Docker Deployment', href: url('/getting-started/docker/') },
+  ]}
+  prev={{ title: 'Overview', href: url('/getting-started/') }}
+  next={{ title: 'Linux & Windows', href: url('/getting-started/linux-windows/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      Docker Compose is the recommended production deployment method for AutoTelegramForward. It encapsulates all 4 microservices—Python Core, Go API Gateway, Python Logger, and Web Dashboard—in isolated containers connected via an internal bridge network.
+    </p>
+
+    <h2 id="services">Container Composition</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose my-6 text-xs font-mono">
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="text-sky-400 font-bold mb-1">atf-core (Python 3.12)</div>
+        <p class="text-slate-400 font-sans">
+          Runs Pyrogram client pool, MTProto event handlers, FilterEngine, Cleaner, and DurableQueue. Exposes gRPC port <code>50051</code>.
+        </p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="text-sky-400 font-bold mb-1">atf-api (Golang 1.22)</div>
+        <p class="text-slate-400 font-sans">
+          High-concurrency HTTP API gateway for authentication, rule CRUD, and external webhooks. Exposes HTTP port <code>8080</code>.
+        </p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="text-sky-400 font-bold mb-1">atf-logger (Python 3.12)</div>
+        <p class="text-slate-400 font-sans">
+          Centralized structured logging service capturing audit logs and pipeline telemetry over gRPC port <code>50052</code>.
+        </p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="text-sky-400 font-bold mb-1">atf-web (Dashboard)</div>
+        <p class="text-slate-400 font-sans">
+          Single-page React administrative management dashboard served over HTTP port <code>8088</code>.
+        </p>
+      </div>
+    </div>
+
+    <h2 id="step-by-step">Step-by-Step Installation</h2>
+
+    <h3>1. Clone the Verified Repository</h3>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code>git clone {repoInfo.repoUrl}.git
+cd AutoTelegramForward</code></pre>
+
+    <h3>2. Configure Secrets and Tokens</h3>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code>cp .env.example .env
+nano .env</code></pre>
+    <p>Ensure the following essential variables are populated:</p>
+    <ul>
+      <li><code>TELEGRAM_API_ID</code>: Your integer API ID from my.telegram.org</li>
+      <li><code>TELEGRAM_API_HASH</code>: Your 32-character API hash</li>
+      <li><code>TELEGRAM_BOT_TOKEN</code>: Bot token from @BotFather</li>
+      <li><code>ADMIN_USER_ID</code>: Your personal Telegram numerical user ID</li>
+    </ul>
+
+    <h3>3. Launch Container Fleet</h3>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code>docker compose up -d</code></pre>
+
+    <h3>4. Verify Health & Service Logs</h3>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code># Verify container statuses
+docker compose ps
+
+# Check core logs
+docker compose logs -f core
+
+# Check API health
+curl http://localhost:8080/health</code></pre>
+
+    <h2 id="lifecycle">Lifecycle & Maintenance Commands</h2>
+    <div class="overflow-x-auto not-prose my-4">
+      <table class="w-full text-left text-xs border border-slate-800 rounded-xl overflow-hidden font-mono">
+        <thead class="bg-slate-900 text-slate-300 border-b border-slate-800 uppercase font-sans">
+          <tr>
+            <th class="p-3">Action</th>
+            <th class="p-3">Command</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/80 bg-slate-950/60">
+          <tr>
+            <td class="p-3 font-bold text-sky-400 font-sans">Stop All Services</td>
+            <td class="p-3 text-slate-300"><code>docker compose down</code></td>
+          </tr>
+          <tr>
+            <td class="p-3 font-bold text-sky-400 font-sans">Restart Core Worker</td>
+            <td class="p-3 text-slate-300"><code>docker restart atf-core</code></td>
+          </tr>
+          <tr>
+            <td class="p-3 font-bold text-sky-400 font-sans">Rebuild Core Image</td>
+            <td class="p-3 text-slate-300"><code>docker compose build core && docker restart atf-core</code></td>
+          </tr>
+          <tr>
+            <td class="p-3 font-bold text-sky-400 font-sans">Update to Latest Git</td>
+            <td class="p-3 text-slate-300"><code>git pull && docker compose build && docker compose up -d</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</DocsLayout>

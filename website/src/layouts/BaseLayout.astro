@@ -1,0 +1,50 @@
+---
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import SEO from '../components/SEO.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  canonical?: string;
+  type?: 'website' | 'article';
+  breadcrumbs?: Array<{ name: string; url: string }>;
+  articleDate?: string;
+  keywords?: string[];
+}
+
+const {
+  title,
+  description,
+  canonical,
+  type = 'website',
+  breadcrumbs,
+  articleDate,
+  keywords,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2324A1DE'><path d='M13 10V3L4 14h7v7l9-11h-7z'/></svg>" />
+    <SEO
+      title={title}
+      description={description}
+      canonical={canonical}
+      type={type}
+      breadcrumbs={breadcrumbs}
+      articleDate={articleDate}
+      keywords={keywords}
+    />
+  </head>
+  <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-sky-500 selection:text-white">
+    <Header />
+    <main class="flex-grow">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

@@ -1,0 +1,277 @@
+---
+---
+
+<div class="glass-card rounded-2xl p-6 sm:p-8 border border-slate-800 shadow-2xl">
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-800">
+    <div>
+      <h3 class="text-xl font-bold text-white flex items-center gap-2">
+        <span>⚡ Interactive Message Transformation Sandbox</span>
+      </h3>
+      <p class="text-sm text-slate-400 mt-1">
+        Test AutoTelegramForward's cleaner engine, header/footer templates, and shortcode interpolation in real time.
+      </p>
+    </div>
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        id="btn-preset-news"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+      >
+        Load Preset
+      </button>
+      <button
+        type="button"
+        id="btn-reset"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800 transition-colors"
+      >
+        Reset
+      </button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    
+    <!-- Left Column: Inputs & Toggles -->
+    <div class="space-y-6">
+      
+      <!-- Source Message Input -->
+      <div>
+        <label for="src-text" class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+          1. Source Message (Incoming Telegram Post)
+        </label>
+        <textarea
+          id="src-text"
+          rows="5"
+          class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono"
+        >🚀 Breaking: Major market announcement! Check detailed chart at https://t.me/market_signals and follow @CryptoAnalyst.
+#Bitcoin #Ethereum #Finance 🔥📊
+📞 Contact support at +1-800-555-0199 for VIP access.</textarea>
+      </div>
+
+      <!-- Cleaner Options -->
+      <div>
+        <span class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2.5">
+          2. Content Cleaner Options
+        </span>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+          <label class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 hover:border-slate-700 cursor-pointer">
+            <input type="checkbox" id="chk-urls" checked class="rounded text-sky-500 focus:ring-sky-400" />
+            <span class="text-slate-200 font-medium">Remove URLs</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 hover:border-slate-700 cursor-pointer">
+            <input type="checkbox" id="chk-users" checked class="rounded text-sky-500 focus:ring-sky-400" />
+            <span class="text-slate-200 font-medium">Remove @Mentions</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 hover:border-slate-700 cursor-pointer">
+            <input type="checkbox" id="chk-tags" checked class="rounded text-sky-500 focus:ring-sky-400" />
+            <span class="text-slate-200 font-medium">Remove #Tags</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 hover:border-slate-700 cursor-pointer">
+            <input type="checkbox" id="chk-emojis" class="rounded text-sky-500 focus:ring-sky-400" />
+            <span class="text-slate-200 font-medium">Remove Emojis</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 hover:border-slate-700 cursor-pointer">
+            <input type="checkbox" id="chk-phones" checked class="rounded text-sky-500 focus:ring-sky-400" />
+            <span class="text-slate-200 font-medium">Remove Phones</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 hover:border-slate-700 cursor-pointer">
+            <input type="checkbox" id="chk-lines" checked class="rounded text-sky-500 focus:ring-sky-400" />
+            <span class="text-slate-200 font-medium">Compact Lines</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Header & Footer Templates -->
+      <div class="space-y-4 pt-2">
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="tpl-header" class="text-xs font-semibold uppercase tracking-wider text-slate-300">
+              Header Template
+            </label>
+            <span class="text-[11px] text-sky-400 font-mono">[[ORIGIN_NAME]]</span>
+          </div>
+          <input
+            type="text"
+            id="tpl-header"
+            value="📢 [[ORIGIN_NAME]] | Post #[[ORIGIN_POST_ID]]"
+            class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+          />
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="tpl-footer" class="text-xs font-semibold uppercase tracking-wider text-slate-300">
+              Footer Template
+            </label>
+            <span class="text-[11px] text-sky-400 font-mono">[[ORIGIN_NAME_URL]]</span>
+          </div>
+          <input
+            type="text"
+            id="tpl-footer"
+            value="────────────────\nSource: [[ORIGIN_NAME_URL]] | [[ORIGIN_POST_DATE]]"
+            class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+          />
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Column: Live Output Preview -->
+    <div class="flex flex-col">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Transformed Output Preview
+        </span>
+        <button
+          type="button"
+          id="btn-copy-preview"
+          class="text-xs text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors"
+        >
+          Copy Output
+        </button>
+      </div>
+
+      <div class="flex-grow flex flex-col rounded-xl bg-slate-900/95 border border-slate-800 p-4 font-mono text-sm shadow-inner relative overflow-hidden">
+        <div class="text-[11px] text-slate-400 uppercase tracking-widest pb-2 mb-3 border-b border-slate-800/80 flex items-center justify-between">
+          <span>Telegram Message Preview</span>
+          <span id="char-count" class="text-slate-400">0 chars</span>
+        </div>
+        <div id="output-preview" class="whitespace-pre-wrap text-slate-200 leading-relaxed overflow-y-auto flex-grow text-xs sm:text-sm"></div>
+      </div>
+
+      <div class="mt-4 p-3 rounded-lg bg-sky-950/30 border border-sky-800/40 text-[11px] text-sky-300 leading-relaxed">
+        <strong>💡 Validated Shortcodes:</strong> <code>[[ORIGIN_NAME]]</code>, <code>[[ORIGIN_TEXT]]</code>, <code>[[ORIGIN_POST_ID]]</code>, <code>[[ORIGIN_USERNAME]]</code>, <code>[[ORIGIN_POST_DATE]]</code>, <code>[[ORIGIN_NAME_URL]]</code>, <code>[[FORWARD_FROM_CHAT]]</code>.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function runTransform() {
+    const srcEl = document.getElementById('src-text') as HTMLTextAreaElement | null;
+    const chkUrls = document.getElementById('chk-urls') as HTMLInputElement | null;
+    const chkUsers = document.getElementById('chk-users') as HTMLInputElement | null;
+    const chkTags = document.getElementById('chk-tags') as HTMLInputElement | null;
+    const chkEmojis = document.getElementById('chk-emojis') as HTMLInputElement | null;
+    const chkPhones = document.getElementById('chk-phones') as HTMLInputElement | null;
+    const chkLines = document.getElementById('chk-lines') as HTMLInputElement | null;
+    const tplHeader = document.getElementById('tpl-header') as HTMLInputElement | null;
+    const tplFooter = document.getElementById('tpl-footer') as HTMLInputElement | null;
+    const outEl = document.getElementById('output-preview');
+    const charCountEl = document.getElementById('char-count');
+
+    if (!srcEl || !outEl) return;
+
+    let text = srcEl.value;
+
+    // 1. Cleaner: URLs
+    if (chkUrls?.checked) {
+      // Remove raw URLs, telegram links, markdown links
+      text = text.replace(/\[([^\]]+)\]\((?:https?:\/\/|www\.|t\.me\/|[^\)]+)\)/gi, '$1');
+      text = text.replace(/(https?:\/\/[^\s]+|www\.[^\s]+|(?:https?:\/\/)?(?:t(?:elegram)?\.(?:me|dog))\/[^\s]+)/gi, '');
+    }
+
+    // 2. Cleaner: Usernames / Mentions
+    if (chkUsers?.checked) {
+      text = text.replace(/@[A-Za-z0-9_]{3,32}/g, '');
+    }
+
+    // 3. Cleaner: Hashtags
+    if (chkTags?.checked) {
+      text = text.replace(/#\S+/g, '');
+    }
+
+    // 4. Cleaner: Emojis
+    if (chkEmojis?.checked) {
+      text = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
+    }
+
+    // 5. Cleaner: Phones
+    if (chkPhones?.checked) {
+      text = text.replace(/(?:\+?\d{1,4}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/g, '');
+    }
+
+    // 6. Compact whitespace & empty lines
+    text = text.replace(/[ \t]+/g, ' ');
+    if (chkLines?.checked) {
+      text = text.replace(/\n\s*\n\s*\n+/g, '\n\n');
+    }
+    text = text.trim();
+
+    // Shortcodes data
+    const vars: Record<string, string> = {
+      ORIGIN_NAME: 'Market Signals VIP',
+      ORIGIN_POST_ID: '4821',
+      ORIGIN_USERNAME: '@market_signals',
+      ORIGIN_USERID: '10842918',
+      ORIGIN_CHAT_ID: '-1001695513745',
+      ORIGIN_POST_DATE: new Date().toISOString().replace('T', ' ').substring(0, 16) + ' UTC',
+      ORIGIN_NAME_URL: '[Market Signals VIP](https://t.me/market_signals/4821)',
+      SOURCE_NAME: 'Market Signals VIP',
+      SENDER_CHAT: '-1001695513745',
+      FORWARD_FROM_CHAT: '-1001695513745',
+      FROM_USER: 'Analyst Bot',
+      ORIGIN_TEXT: text,
+    };
+
+    function interpolate(tpl: string): string {
+      let res = tpl.replace(/\\n/g, '\n');
+      for (const [k, v] of Object.entries(vars)) {
+        res = res.replaceAll(`[[${k}]]`, v);
+        res = res.replaceAll(`{${k}}`, v);
+      }
+      return res;
+    }
+
+    const header = tplHeader?.value ? interpolate(tplHeader.value) : '';
+    const footer = tplFooter?.value ? interpolate(tplFooter.value) : '';
+
+    const parts = [];
+    if (header) parts.push(header);
+    if (text) parts.push(text);
+    if (footer) parts.push(footer);
+
+    const finalOutput = parts.join('\n\n');
+    outEl.textContent = finalOutput;
+    if (charCountEl) charCountEl.textContent = `${finalOutput.length} chars`;
+  }
+
+  // Bind event listeners
+  const ids = ['src-text', 'chk-urls', 'chk-users', 'chk-tags', 'chk-emojis', 'chk-phones', 'chk-lines', 'tpl-header', 'tpl-footer'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', runTransform);
+      el.addEventListener('change', runTransform);
+    }
+  });
+
+  const btnCopy = document.getElementById('btn-copy-preview');
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      const outEl = document.getElementById('output-preview');
+      if (outEl && outEl.textContent) {
+        navigator.clipboard.writeText(outEl.textContent).then(() => {
+          btnCopy.textContent = 'Copied!';
+          setTimeout(() => { btnCopy.textContent = 'Copy Output'; }, 2000);
+        });
+      }
+    });
+  }
+
+  const btnReset = document.getElementById('btn-reset');
+  if (btnReset) {
+    btnReset.addEventListener('click', () => {
+      const srcEl = document.getElementById('src-text') as HTMLTextAreaElement | null;
+      if (srcEl) {
+        srcEl.value = 'Clean and simple telegram update for immediate broadcast.';
+        runTransform();
+      }
+    });
+  }
+
+  // Initial execution
+  runTransform();
+</script>

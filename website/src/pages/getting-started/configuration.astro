@@ -1,0 +1,93 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Configuration & Environment Reference";
+const pageDesc = "Exhaustive reference of AutoTelegramForward environment variables, database URLs, port mappings, and performance tuning parameters.";
+
+const configVars = [
+  { name: 'TELEGRAM_API_ID', type: 'integer', req: true, default: 'None', desc: 'Telegram Application ID obtained from my.telegram.org.' },
+  { name: 'TELEGRAM_API_HASH', type: 'string', req: true, default: 'None', desc: '32-character Telegram API Hash from my.telegram.org.' },
+  { name: 'TELEGRAM_BOT_TOKEN', type: 'string', req: true, default: 'None', desc: 'Telegram Bot Token from @BotFather for the management UI.' },
+  { name: 'ADMIN_USER_ID', type: 'integer', req: true, default: 'None', desc: 'Primary admin Telegram numerical ID for fail-closed root access.' },
+  { name: 'DATABASE_URL', type: 'string', req: false, default: 'sqlite:///data/atf.db', desc: 'Database connection string. Supports SQLite WAL mode and PostgreSQL.' },
+  { name: 'GRPC_PORT', type: 'integer', req: false, default: '50051', desc: 'Internal gRPC port for communication between atf-core and atf-api.' },
+  { name: 'API_PORT', type: 'integer', req: false, default: '8080', desc: 'HTTP port for the Go API gateway.' },
+  { name: 'LOGGER_PORT', type: 'integer', req: false, default: '50052', desc: 'gRPC port for centralized structured telemetry logger.' },
+  { name: 'WEB_PORT', type: 'integer', req: false, default: '8088', desc: 'HTTP port for the Web Dashboard interface.' },
+  { name: 'DURABLE_QUEUE_WORKERS', type: 'integer', req: false, default: '4', desc: 'Number of parallel queue worker coroutines per tenant.' },
+  { name: 'MAX_TIME_EDIT_DEFAULT', type: 'integer', req: false, default: '86400', desc: 'Maximum message age in seconds to accept edit synchronizations.' },
+  { name: 'LOG_LEVEL', type: 'string', req: false, default: 'INFO', desc: 'Logging verbosity (DEBUG, INFO, WARNING, ERROR).' },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Getting Started', href: url('/getting-started/') },
+    { name: 'Configuration', href: url('/getting-started/configuration/') },
+  ]}
+  prev={{ title: 'Telegram Credentials', href: url('/getting-started/telegram-bot-setup/') }}
+  next={{ title: 'Verification', href: url('/getting-started/verification/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      AutoTelegramForward is configured via environment variables, loaded automatically from <code>.env</code> in the working directory. Configuration is strictly typed and validated at application startup.
+    </p>
+
+    <h2 id="variables-table">Environment Variables Reference</h2>
+    <div class="overflow-x-auto not-prose my-6">
+      <table class="w-full text-left text-xs border border-slate-800 rounded-xl overflow-hidden font-mono">
+        <thead class="bg-slate-900 text-slate-300 border-b border-slate-800 uppercase text-[11px] font-sans">
+          <tr>
+            <th class="p-3.5">Variable</th>
+            <th class="p-3.5">Type</th>
+            <th class="p-3.5">Required</th>
+            <th class="p-3.5">Default</th>
+            <th class="p-3.5">Description</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/80 bg-slate-950/60">
+          {configVars.map((v) => (
+            <tr class="hover:bg-slate-900/40">
+              <td class="p-3.5 font-bold text-sky-400">{v.name}</td>
+              <td class="p-3.5 text-slate-400">{v.type}</td>
+              <td class="p-3.5">
+                {v.req ? (
+                  <span class="px-1.5 py-0.5 rounded text-[10px] bg-rose-950 text-rose-400 border border-rose-800">Required</span>
+                ) : (
+                  <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400">Optional</span>
+                )}
+              </td>
+              <td class="p-3.5 text-amber-300">{v.default}</td>
+              <td class="p-3.5 text-slate-300 font-sans">{v.desc}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="database-selection">Database Selection: SQLite vs PostgreSQL</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 not-prose my-4">
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <h3 class="text-sm font-bold text-white mb-2">SQLite (Default & Embedded)</h3>
+        <p class="text-xs text-slate-400 mb-2 leading-relaxed">
+          Ideal for single-server setups forwarding hundreds of messages per hour. ATF automatically configures:
+        </p>
+        <pre class="bg-slate-950 p-2.5 rounded text-[11px] font-mono text-emerald-400"><code>PRAGMA journal_mode=WAL;
+PRAGMA busy_timeout=5000;
+PRAGMA synchronous=NORMAL;</code></pre>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <h3 class="text-sm font-bold text-white mb-2">PostgreSQL (Enterprise Scale)</h3>
+        <p class="text-xs text-slate-400 mb-2 leading-relaxed">
+          Recommended for high-concurrency clusters with thousands of simultaneous channels. Supply standard URI:
+        </p>
+        <pre class="bg-slate-950 p-2.5 rounded text-[11px] font-mono text-emerald-400"><code>DATABASE_URL=postgresql://user:pass@postgres:5432/atf_db</code></pre>
+      </div>
+    </div>
+  </div>
+</DocsLayout>

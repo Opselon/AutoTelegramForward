@@ -1,0 +1,77 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Media, Albums & Copy-Protection Bypass";
+const pageDesc = "Handling Telegram media groups (albums), large documents, video notes, and automatic ChatForwardsRestricted bypass via download and re-upload.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Media & Albums', href: url('/features/media-and-albums/') },
+  ]}
+  prev={{ title: 'Scheduling & Delays', href: url('/features/scheduling-and-delays/') }}
+  next={{ title: 'Backup & Clone', href: url('/features/backup-clone-migration/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      Telegram media forwarding presents unique technical challenges: albums arrive as separate asynchronous MTProto messages sharing a <code>media_group_id</code>, while private or copyrighted channels frequently lock content using Telegram's <code>ChatForwardsRestricted</code> flag.
+    </p>
+
+    <h2 id="album-handling">Atomic Album Aggregation</h2>
+    <p>
+      When an album of 2 to 10 photos or videos is posted, Telegram delivers distinct updates with an identical <code>media_group_id</code>. Naive forwarders dispatch each item separately, cluttering destination channels.
+    </p>
+    <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 not-prose my-4">
+      <h3 class="text-sm font-bold text-white mb-2">0.8-Second Debounce Buffer</h3>
+      <p class="text-xs text-slate-400 leading-relaxed mb-3">
+        AutoTelegramForward intercepts album fragments in memory, buffers incoming parts for 800ms, and groups them into an <code>album_messages</code> collection.
+      </p>
+      <div class="p-3 rounded-lg bg-slate-950 font-mono text-xs text-sky-300">
+        Input: 5 individual Message updates with group_id "7891234"<br />
+        ↓ Debounce Aggregation Window (800ms)<br />
+        Output: Single <code>send_media_group()</code> delivery containing all 5 items + cleaned caption
+      </div>
+    </div>
+
+    <h2 id="restricted-bypass">Copy-Protection Bypass (ChatForwardsRestricted)</h2>
+    <p>
+      When channel owners enable <em>"Restrict saving content"</em> in Telegram settings, attempting a native MTProto <code>forward_messages()</code> call fails immediately with:
+    </p>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-rose-400"><code>pyrogram.errors.ChatForwardsRestricted: Telegram says: [400 CHAT_FORWARDS_RESTRICTED]</code></pre>
+    <p>
+      AutoTelegramForward features an automatic, seamless bypass:
+    </p>
+    <ol>
+      <li>The forwarding worker catches <code>ChatForwardsRestricted</code>.</li>
+      <li>The worker automatically downloads the media binary to a temporary stream.</li>
+      <li>Applies all configured Cleaners and Header/Footer templates to the caption.</li>
+      <li>Uploads the media as an authentic fresh post to the destination chat using <code>send_photo</code>, <code>send_video</code>, or <code>send_document</code>.</li>
+      <li>Cleans up temporary disk buffers immediately.</li>
+    </ol>
+
+    <h2 id="supported-media">Supported Media Types Reference</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose my-4 text-xs font-mono">
+      <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-sky-400 font-bold block mb-1">📸 Photos & Compressed Images</span>
+        <span class="text-slate-400 font-sans">Full resolution JPEG/PNG preservation with caption formatting.</span>
+      </div>
+      <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-sky-400 font-bold block mb-1">🎥 Videos & Animations (GIFs)</span>
+        <span class="text-slate-400 font-sans">MP4/MOV streaming with duration, width, and height metadata.</span>
+      </div>
+      <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-sky-400 font-bold block mb-1">📁 Documents & Archives</span>
+        <span class="text-slate-400 font-sans">PDF, ZIP, APK, and document files up to 2GB via MTProto user session.</span>
+      </div>
+      <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-sky-400 font-bold block mb-1">🎙️ Voice Notes & Video Circles</span>
+        <span class="text-slate-400 font-sans">Round video notes (Telescope) and Opus voice waveforms preserved.</span>
+      </div>
+    </div>
+  </div>
+</DocsLayout>

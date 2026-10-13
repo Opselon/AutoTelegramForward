@@ -1,0 +1,43 @@
+[
+  {
+    "version": "v17.0.0",
+    "date": "2026-10-13",
+    "title": "Production Upgrade: Advanced Cleaner, Link Filters, Header/Footer Shortcodes & Bugfixes",
+    "summary": "Comprehensive production upgrade introducing granular cleaner formats, media and link filters, 12 validated shortcodes, max_time_edit synchronization limit, copy-protected content bypass, and multi-tenant profile management.",
+    "highlights": [
+      "Cleaner module with independent URL, @mention, #hashtag, emoji, phone, and custom words stripping",
+      "Dedicated link blocking filter and granular media type blocking (video, audio, stickers, text, voice)",
+      "12 validated header and footer shortcodes with dynamic channel hyperlink attribution",
+      "max_time_edit rule threshold to ignore stale source edits with /forward command",
+      "Automatic re-evaluation of whitelist/blacklist on edits with destination deletion on violation",
+      "Bypass for copy-protected channels (ChatForwardsRestricted) via secure download and re-upload",
+      "Batch media group (album) atomic forwarding and copying",
+      "Account time-limit auto-pause and auto-resume in ClientPool and DurableQueueManager",
+      "Multi-tenant profile dashboard with Restart Setup and Reset Config options"
+    ]
+  },
+  {
+    "version": "v16.0.0",
+    "date": "2026-10-12",
+    "title": "High-Throughput Pipeline & Diagnostic Tracing",
+    "summary": "Enhanced logging architecture with [PIPELINE:*] correlation IDs, improved error diagnostics, and queue backpressure controls.",
+    "highlights": [
+      "Structured pipeline logs covering Normalize, Route, Filter, Transform, Dispatch, Delivered",
+      "Improved gRPC retry policy with exponential backoff",
+      "Pyrogram Unicode surrogate-pair decoding fixes for emojis and regional indicators",
+      "Queue throughput metrics and latency counters"
+    ]
+  },
+  {
+    "version": "v15.0.0",
+    "date": "2026-10-10",
+    "title": "Multi-Tenant Security Hardening & Bot UI Redesign",
+    "summary": "Fail-closed ownership enforcement across all domain use-cases, gRPC services, and inline Telegram bot wizards.",
+    "highlights": [
+      "Fail-closed tenant authorization on all rule and session mutations",
+      "Interactive button-driven control panel with FSM wizard",
+      "Isolated PVResponder configuration per owner_user_id",
+      "Clean onboarding for unlinked users"
+    ]
+  }
+]

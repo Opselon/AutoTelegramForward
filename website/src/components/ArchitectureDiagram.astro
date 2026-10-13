@@ -1,0 +1,109 @@
+---
+---
+
+<div class="glass-card rounded-2xl p-6 sm:p-8 border border-slate-800 shadow-xl overflow-hidden">
+  <div class="mb-6">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-sky-950 text-sky-400 border border-sky-800/60 mb-2">
+      Production Architecture
+    </div>
+    <h3 class="text-2xl font-bold text-white tracking-tight">
+      Multi-Service Resilient Forwarding Engine
+    </h3>
+    <p class="text-sm text-slate-400 mt-1 max-w-2xl">
+      Decoupled microservice topology with asynchronous non-blocking event loops, lease-based durable queues, and fail-closed tenant boundaries.
+    </p>
+  </div>
+
+  <!-- Architecture Flow Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 my-6 text-xs font-mono">
+    
+    <!-- Tier 1: Ingestion -->
+    <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between">
+      <div>
+        <div class="text-[11px] font-bold text-sky-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+          1. Ingestion
+        </div>
+        <h4 class="text-white font-bold text-sm mb-1 font-sans">Telegram MTProto</h4>
+        <p class="text-slate-400 text-[11px] leading-relaxed font-sans mb-3">
+          Asynchronous client pool connects to DC2/DC4 via user sessions and bot tokens.
+        </p>
+      </div>
+      <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800/80 text-[11px] text-slate-300">
+        • Raw Updates<br />
+        • Album Aggregator<br />
+        • FloodWait Detector
+      </div>
+    </div>
+
+    <!-- Tier 2: Core Pipeline -->
+    <div class="p-4 rounded-xl bg-slate-900/80 border border-sky-500/30 flex flex-col justify-between shadow-lg shadow-sky-950/20">
+      <div>
+        <div class="text-[11px] font-bold text-emerald-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          2. Core Pipeline
+        </div>
+        <h4 class="text-white font-bold text-sm mb-1 font-sans">Python Core (50051)</h4>
+        <p class="text-slate-400 text-[11px] leading-relaxed font-sans mb-3">
+          Strict stage-by-stage pipeline executing domain filtering, cleaning & shortcodes.
+        </p>
+      </div>
+      <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800/80 text-[11px] text-slate-300">
+        • [PIPELINE:NORMALIZE]<br />
+        • [PIPELINE:ROUTE]<br />
+        • [PIPELINE:FILTER]<br />
+        • [PIPELINE:TRANSFORM]
+      </div>
+    </div>
+
+    <!-- Tier 3: Queue & Delivery -->
+    <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between">
+      <div>
+        <div class="text-[11px] font-bold text-purple-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+          3. Durable Queue
+        </div>
+        <h4 class="text-white font-bold text-sm mb-1 font-sans">Lease Workers</h4>
+        <p class="text-slate-400 text-[11px] leading-relaxed font-sans mb-3">
+          Lease-based jobs with exponential backoff, jitter, and automatic account resume.
+        </p>
+      </div>
+      <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800/80 text-[11px] text-slate-300">
+        • Backpressure control<br />
+        • Restricted bypass<br />
+        • [PIPELINE:DELIVERED]
+      </div>
+    </div>
+
+    <!-- Tier 4: Control & Web -->
+    <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between">
+      <div>
+        <div class="text-[11px] font-bold text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+          4. APIs & UI
+        </div>
+        <h4 class="text-white font-bold text-sm mb-1 font-sans">Go API & Web (8080/8088)</h4>
+        <p class="text-slate-400 text-[11px] leading-relaxed font-sans mb-3">
+          High-performance REST API, interactive Telegram Bot UI, and React dashboard.
+        </p>
+      </div>
+      <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800/80 text-[11px] text-slate-300">
+        • Fail-Closed Auth<br />
+        • Bot Manager FSM<br />
+        • Logger (50052)
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Pipeline Banner -->
+  <div class="p-4 rounded-xl bg-gradient-to-r from-slate-900 via-sky-950/40 to-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+    <div class="flex items-center gap-2">
+      <span class="text-emerald-400 font-bold">Storage Support:</span>
+      <span class="text-slate-300 font-mono">SQLite (WAL Mode with Busy Timeout) & PostgreSQL (Connection Pooling)</span>
+    </div>
+    <div class="text-slate-400">
+      Multi-Tenant Isolation: <strong class="text-white">Enforced Fail-Closed</strong>
+    </div>
+  </div>
+</div>

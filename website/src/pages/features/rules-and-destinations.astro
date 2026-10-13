@@ -1,0 +1,51 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Rules & Multi-Destination Management";
+const pageDesc = "Manage Telegram forwarding rules with 1-to-many fan-out, multi-source aggregation, rule cloning, and intermediate channel origin masking.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Rules & Destinations', href: url('/features/rules-and-destinations/') },
+  ]}
+  prev={{ title: 'Automated Forwarding', href: url('/features/automated-forwarding/') }}
+  next={{ title: 'Text Cleaner', href: url('/features/text-cleaner/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      A <strong>ForwardRule</strong> is the fundamental unit of routing in AutoTelegramForward. Each rule links one or more source chats to one or more destination targets, binding custom filters, cleaners, and headers/footers to that specific pipeline.
+    </p>
+
+    <h2 id="fan-out">1-to-Many Fan-Out Routing</h2>
+    <p>
+      Publish once, distribute everywhere. A single source update can automatically be delivered to multiple destinations across different accounts or bots simultaneously:
+    </p>
+    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs my-4 text-slate-300">
+      Source: @PrimaryNewsChannel<br />
+      ├── Destination A: @EnglishSummaryChannel (Clean Copy + English Footer)<br />
+      ├── Destination B: -1001892348271 (VIP Private Group)<br />
+      └── Destination C: -1001928374928/42 (Forum Supergroup Topic #42)
+    </div>
+
+    <h2 id="rule-duplication">Instant Rule Duplication (rdup)</h2>
+    <p>
+      Creating complex rules with intricate cleaner flags, headers, and filters for dozens of channels can be time-consuming. AutoTelegramForward provides an instant <strong>Rule Duplicate</strong> feature:
+    </p>
+    <ul>
+      <li>In the bot rule menu, click <strong>📋 تکثیر قانون (Duplicate)</strong>.</li>
+      <li>The system clones all filters, cleaners, headers, footers, and delay configurations into a fresh rule draft.</li>
+      <li>Simply update the source and destination IDs to activate.</li>
+    </ul>
+
+    <h2 id="origin-masking">Intermediate Channel Origin Masking</h2>
+    <p>
+      For enterprise operators wishing to hide the relationship between private internal research channels and public broadcasts, AutoTelegramForward supports an <em>intermediate staging channel</em> topology. Posts route from Source → Private Relay → Destination, stripping all internal metadata before final publication.
+    </p>
+  </div>
+</DocsLayout>

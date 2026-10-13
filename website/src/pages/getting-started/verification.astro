@@ -1,0 +1,88 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Installation Health Check & Verification";
+const pageDesc = "Verify your AutoTelegramForward installation: health check endpoints, service logs, gRPC probes, and live forwarding test procedures.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Getting Started', href: url('/getting-started/') },
+    { name: 'Verification', href: url('/getting-started/verification/') },
+  ]}
+  prev={{ title: 'Configuration', href: url('/getting-started/configuration/') }}
+  next={{ title: 'Architecture Overview', href: url('/architecture/') }}
+>
+  <div class="space-y-6">
+    <h2 id="checklist">Post-Installation Health Checklist</h2>
+    <p>
+      Follow this verification checklist to guarantee all microservices and Telegram connections are functioning reliably.
+    </p>
+
+    <div class="space-y-4 not-prose my-6">
+      
+      <!-- Check 1 -->
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="flex items-center gap-2 mb-2 font-bold text-sm text-white">
+          <span class="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs">1</span>
+          Check Container Statuses
+        </div>
+        <pre class="bg-slate-950 p-3 rounded-lg text-xs font-mono text-emerald-400"><code>docker compose ps</code></pre>
+        <p class="text-xs text-slate-400 mt-2">
+          Verify that <code>atf-core</code>, <code>atf-api</code>, <code>atf-logger</code>, and <code>atf-web</code> are listed as <strong>Up (healthy)</strong>.
+        </p>
+      </div>
+
+      <!-- Check 2 -->
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="flex items-center gap-2 mb-2 font-bold text-sm text-white">
+          <span class="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs">2</span>
+          API Health Endpoint Probe
+        </div>
+        <pre class="bg-slate-950 p-3 rounded-lg text-xs font-mono text-emerald-400"><code>curl -i http://localhost:8080/health</code></pre>
+        <p class="text-xs text-slate-400 mt-2">
+          Expect <code>HTTP/1.1 200 OK</code> with response body <code>{`{"status":"ok"}`}</code>.
+        </p>
+      </div>
+
+      <!-- Check 3 -->
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="flex items-center gap-2 mb-2 font-bold text-sm text-white">
+          <span class="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs">3</span>
+          Verify Telegram Bot Interaction
+        </div>
+        <p class="text-xs text-slate-400">
+          Open Telegram, search for your bot username, and send <code>/start</code>. If the bot responds with the Persian/English management dashboard, your Bot Token and database connections are operational.
+        </p>
+      </div>
+
+      <!-- Check 4 -->
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="flex items-center gap-2 mb-2 font-bold text-sm text-white">
+          <span class="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs">4</span>
+          Execute End-to-End Forwarding Smoke Test
+        </div>
+        <ol class="text-xs text-slate-300 space-y-1.5 list-decimal ml-4">
+          <li>Create a test forward rule linking a Source Channel to a Destination Channel.</li>
+          <li>Post a test message with a link and a hashtag: <code>Test post with link https://t.me/example and #tag</code>.</li>
+          <li>Inspect core logs with <code>docker compose logs -f core</code>.</li>
+          <li>Confirm seeing structured pipeline tags:
+            <div class="mt-1 font-mono text-sky-300 bg-slate-950 p-2 rounded">
+              [PIPELINE:NORMALIZE] -> [PIPELINE:ROUTE] -> [PIPELINE:CLEANED] -> [PIPELINE:DELIVERED]
+            </div>
+          </li>
+          <li>Verify the destination channel received the post with links/tags properly stripped.</li>
+        </ol>
+      </div>
+
+    </div>
+
+    <h2 id="troubleshooting">What If Tests Fail?</h2>
+    <p>
+      If messages are not forwarding or the bot does not respond, consult our detailed <a href={url('/operations/')}>Operations & Troubleshooting Guide</a> for diagnosing FloodWait, SQLite locks, or permission mismatches.
+    </p>
+  </div>
+</DocsLayout>

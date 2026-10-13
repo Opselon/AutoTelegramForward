@@ -1,0 +1,96 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import repoInfo from '../../data/repo-info.json';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Header & Footer Templates — Validated Shortcodes Reference";
+const pageDesc = "Customize forwarded Telegram messages with dynamic headers and footers using 12 verified shortcodes, markdown links, and post attribution.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Headers & Footers', href: url('/features/headers-footers-shortcodes/') },
+  ]}
+  prev={{ title: 'Text Cleaner', href: url('/features/text-cleaner/') }}
+  next={{ title: 'Replacements & Regex', href: url('/features/replacements-and-regex/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      AutoTelegramForward enables channel managers to brand forwarded posts with custom headers (prepended before the message body) and footers (appended after the message body). Dynamic values from the incoming message—such as original channel title, post ID, or post timestamp—are interpolated into templates at runtime.
+    </p>
+
+    <h2 id="syntax">Supported Shortcode Syntax</h2>
+    <p>
+      Both double bracket <code>[[VARIABLE]]</code> and standard bracket <code>{'{'}VARIABLE{'}'}</code> notations are supported and case-insensitive.
+    </p>
+
+    <h2 id="shortcodes-table">Verified Shortcodes Reference</h2>
+    <div class="overflow-x-auto not-prose my-6">
+      <table class="w-full text-left text-xs border border-slate-800 rounded-xl overflow-hidden font-mono">
+        <thead class="bg-slate-900 text-slate-300 border-b border-slate-800 uppercase text-[11px] font-sans">
+          <tr>
+            <th class="p-3.5">Shortcode</th>
+            <th class="p-3.5">Description</th>
+            <th class="p-3.5">Example Output</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/80 bg-slate-950/60">
+          {repoInfo.supportedShortcodes.map((item) => (
+            <tr class="hover:bg-slate-900/40">
+              <td class="p-3.5 font-bold text-sky-400">{item.code}</td>
+              <td class="p-3.5 text-slate-300 font-sans">{item.desc}</td>
+              <td class="p-3.5 text-emerald-300">{item.example}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="clickable-links">Generating Clickable Channel Hyperlinks</h2>
+    <p>
+      When forwarding from public channels, using <code>[[ORIGIN_NAME_URL]]</code> automatically renders the channel title as a Telegram Markdown link formatted as:
+    </p>
+    <pre><code>[{'{'}chat.title{'}'}](https://t.me/{'{'}chat.username{'}'}/{'{'}message.id{'}'})</code></pre>
+    <p>
+      If the source chat has no public username (private channel or group), it falls back to the clean chat title without breaking the message link.
+    </p>
+
+    <h2 id="template-example">Template Configuration Example</h2>
+    <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-4 my-4 font-mono text-xs">
+      <div class="p-4 rounded-xl bg-slate-950 border border-slate-800">
+        <span class="text-slate-400 uppercase tracking-wider block mb-2 font-bold font-sans">Header / Footer Configuration</span>
+        <pre class="text-slate-300 whitespace-pre-wrap"><strong class="text-sky-400">Header Template:</strong>
+📢 [[ORIGIN_NAME]] | پست شماره #[[ORIGIN_POST_ID]]
+
+<strong class="text-sky-400">Footer Template:</strong>
+───────────────────
+🔗 منبع: [[ORIGIN_NAME_URL]]
+⏰ زمان ارسال: [[ORIGIN_POST_DATE]]</pre>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-950 border border-emerald-900/60 shadow-lg shadow-emerald-950/20">
+        <span class="text-emerald-400 uppercase tracking-wider block mb-2 font-bold font-sans">Delivered Telegram Message</span>
+        <pre class="text-emerald-300 whitespace-pre-wrap">📢 Tech Crunch | پست شماره #4921
+
+Today OpenAI announced new frontier model capabilities across developer APIs.
+
+───────────────────
+🔗 منبع: Tech Crunch
+⏰ زمان ارسال: 2026-10-13 10:45:00 UTC</pre>
+      </div>
+    </div>
+
+    <h2 id="bot-setup">Step-by-Step Configuration</h2>
+    <ol>
+      <li>In your Telegram bot, open <code>/settings</code> and choose your task.</li>
+      <li>Click <strong>📝 هدر / فوتر (Header / Footer)</strong>.</li>
+      <li>Click <strong>📌 تنظیم هدر</strong> and send your desired header template.</li>
+      <li>Click <strong>📌 تنظیم فوتر</strong> and send your desired footer template.</li>
+      <li>Send a test post in your source channel to observe the live formatting.</li>
+    </ol>
+  </div>
+</DocsLayout>

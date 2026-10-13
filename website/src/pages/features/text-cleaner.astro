@@ -1,0 +1,101 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Telegram Message Cleaner — URLs, Mentions & Hashtags";
+const pageDesc = "Automated message cleaning engine that strips URLs, Telegram invite links, @usernames, #hashtags, phone numbers, emojis, and custom keyword lists.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Text Cleaner', href: url('/features/text-cleaner/') },
+  ]}
+  prev={{ title: 'Destination Management', href: url('/features/rules-and-destinations/') }}
+  next={{ title: 'Filters & Access Control', href: url('/features/whitelist-blacklist-filters/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      Forwarded messages from public channels frequently contain promotional links, sponsor @mentions, irrelevant hashtags, and support contact details. AutoTelegramForward provides a native <strong>Cleaner Module</strong> that strips these artifacts safely before publishing to destination chats.
+    </p>
+
+    <h2 id="capabilities">Supported Cleaning Formats</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose my-4">
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <h3 class="text-sm font-bold text-white mb-1">🔗 URL & Link Stripping</h3>
+        <p class="text-xs text-slate-400">
+          Removes raw web URLs (<code>https://...</code>, <code>http://...</code>), <code>t.me/...</code> Telegram channel/invite links, and unwraps Markdown hyperlinks <code>[text](url)</code> into plain anchor text.
+        </p>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <h3 class="text-sm font-bold text-white mb-1">👤 @Mentions / Usernames</h3>
+        <p class="text-xs text-slate-400">
+          Matches and cleans Telegram usernames conforming to <code>@[A-Za-z0-9_]{'{'}3,32{'}'}</code>, ensuring third-party sponsors and channel handles are scrubbed.
+        </p>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <h3 class="text-sm font-bold text-white mb-1">#️⃣ Multi-Lingual #Hashtags</h3>
+        <p class="text-xs text-slate-400">
+          Unicode-compliant regex strips tags in English, Persian (<code>#بیتکوین</code>), Arabic, Russian, and numeric tags (<code>#crypto2026</code>).
+        </p>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <h3 class="text-sm font-bold text-white mb-1">😀 Emoji Removal</h3>
+        <p class="text-xs text-slate-400">
+          Removes UTF-8/UTF-16 emoji pictographs, symbols, and dingbats without corrupting Persian, Arabic, or European accent characters.
+        </p>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <h3 class="text-sm font-bold text-white mb-1">📞 Telephone Numbers</h3>
+        <p class="text-xs text-slate-400">
+          Strips international and local telephone patterns (<code>+1-800...</code>, <code>0912...</code>) to prevent unauthorized advertiser contact.
+        </p>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <h3 class="text-sm font-bold text-white mb-1">📝 Custom Word Lists</h3>
+        <p class="text-xs text-slate-400">
+          Define task-specific lists of prohibited words or phrases (e.g. sponsor names, promotional slogans) for case-insensitive deletion.
+        </p>
+      </div>
+    </div>
+
+    <h2 id="bot-ui">Configuration via Telegram Bot</h2>
+    <p>
+      Cleaner options can be configured per forwarding rule directly from the Telegram control panel:
+    </p>
+    <ol>
+      <li>Send <code>/settings</code> or <code>/rules</code> to your Telegram bot.</li>
+      <li>Select the forwarding rule you wish to configure.</li>
+      <li>Click <strong>🧹 پاک‌کننده (Cleaner)</strong> to open the Cleaner menu.</li>
+      <li>Toggle independent buttons for <strong>🔗 لینک (URLs)</strong>, <strong>👤 منشن (Mentions)</strong>, <strong>#️⃣ هشتگ (Hashtags)</strong>, <strong>😀 ایموجی (Emojis)</strong>, or <strong>📞 شماره تماس (Phones)</strong>.</li>
+      <li>Click <strong>📝 کلمات سفارشی</strong> to type a comma-separated list of custom words to strip.</li>
+    </ol>
+
+    <h2 id="example">Input / Output Transformation Example</h2>
+    <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-4 my-4 font-mono text-xs">
+      <div class="p-4 rounded-xl bg-slate-950 border border-slate-800">
+        <span class="text-slate-500 uppercase tracking-wider block mb-2 font-bold font-sans">Incoming Message (Raw)</span>
+        <pre class="text-slate-300 whitespace-pre-wrap">🚨 Breaking: Market surge!
+Follow @crypto_daily for VIP alerts.
+Chart: https://t.me/crypto_daily/8491
+#Bitcoin #BTC #Crypto2026 🔥
+Call +1-800-555-0199 for inquiries.</pre>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-950 border border-emerald-900/60 shadow-lg shadow-emerald-950/20">
+        <span class="text-emerald-400 uppercase tracking-wider block mb-2 font-bold font-sans">Transformed Output (Cleaned)</span>
+        <pre class="text-emerald-300 whitespace-pre-wrap">🚨 Breaking: Market surge!
+Follow for VIP alerts.
+Chart:</pre>
+      </div>
+    </div>
+
+    <h2 id="resilience">Safe Entity & Encoding Preservation</h2>
+    <p>
+      Pyrogram string objects often carry internal UTF-16 surrogate pairs. Direct string slicing in Python can trigger <code>UnicodeDecodeError</code> on emoji-heavy channels. AutoTelegramForward safely normalizes incoming text to standard Python <code>str</code> before regex execution, preventing pipeline crashes.
+    </p>
+  </div>
+</DocsLayout>

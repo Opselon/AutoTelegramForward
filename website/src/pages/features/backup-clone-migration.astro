@@ -1,0 +1,57 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Encrypted Backups, Message Cloning & Migration";
+const pageDesc = "AES-256-GCM encrypted configuration backups, historical message cloning with progress checkpoints, and zero-downtime data migration.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Backup & Clone', href: url('/features/backup-clone-migration/') },
+  ]}
+  prev={{ title: 'Media & Albums', href: url('/features/media-and-albums/') }}
+  next={{ title: 'Multi-Tenant Security', href: url('/features/multi-tenant-security/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      Managing production forwarding configurations requires robust disaster recovery, configuration portability, and the ability to backfill historical archives from source channels into new destinations.
+    </p>
+
+    <h2 id="encrypted-backup">AES-256-GCM Encrypted Backups</h2>
+    <p>
+      AutoTelegramForward exports user configurations as encrypted bundles using industry-standard authenticated encryption:
+    </p>
+    <ul>
+      <li><strong>Encryption Standard:</strong> AES-256-GCM with unique 96-bit initialization vectors.</li>
+      <li><strong>Key Derivation:</strong> PBKDF2-HMAC-SHA256 with 600,000 iterations and cryptographic salting.</li>
+      <li><strong>Scope:</strong> Exports all forward rules, filter lists, cleaner presets, and template variables without leaking raw session string secrets.</li>
+    </ul>
+
+    <h2 id="message-cloning">Historical Message Cloning</h2>
+    <p>
+      While standard forwarding processes incoming real-time updates, the <strong>Clone Engine</strong> backfills past channel history:
+    </p>
+    <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 not-prose my-4 font-mono text-xs">
+      <div class="text-sky-400 font-bold mb-2">Cloning Pipeline Features:</div>
+      • Range selection: <code>start_message_id</code> to <code>end_message_id</code><br />
+      • Checkpoint persistence: Resumes from last forwarded ID if worker is restarted<br />
+      • Adaptive rate-limiting: Built-in 2-second sleep between requests to avoid Telegram flood limits<br />
+      • Applies all Cleaner and Shortcode rules to cloned posts
+    </div>
+
+    <h2 id="restore-workflow">Restoring Configuration</h2>
+    <p>
+      To restore an exported backup on a fresh installation:
+    </p>
+    <ol>
+      <li>Upload the <code>.atfbak</code> encrypted backup file to the Telegram bot or Web Dashboard.</li>
+      <li>Provide the decryption passphrase specified during creation.</li>
+      <li>The system verifies the cryptographic GCM auth tag, decodes the rules, and imports them under your authenticated user ID.</li>
+    </ol>
+  </div>
+</DocsLayout>
