@@ -154,8 +154,9 @@ def test_release_workflow_gates():
     text = json.dumps(ppv)
     assert "--list-sample" in text, "post-publish must download the exact sampled entries"
     assert "--sample 4 --seed 42" in text or "--sample 4" in text
-    assert "ANDROID_KEYSTORE_BASE64" in text
-    assert "HAS_IOS_SECRETS" in text
-    assert "ProductVersion=${{ needs.meta.outputs.version }}" in text
-    assert "CommitSHA=${GITHUB_SHA}" in text
-    assert "d.get('status') == 'healthy'" in text
+    workflow_text = (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text()
+    assert "ANDROID_KEYSTORE_BASE64" in workflow_text
+    assert "HAS_IOS_SECRETS" in workflow_text
+    assert "ProductVersion=${{ needs.meta.outputs.version }}" in workflow_text
+    assert "CommitSHA=${GITHUB_SHA}" in workflow_text
+    assert "d.get('status') == 'healthy'" in workflow_text
