@@ -75,6 +75,11 @@ jobs:
         include:
           - {os: ubuntu-latest,   suffix: linux-x64,    label: Linux x86_64}
           - {os: ubuntu-24.04-arm, suffix: linux-arm64, label: Linux arm64}
+          # NOTE: macOS PyInstaller bundles must build natively (no
+          # cross-compilation possible). Both entries intentionally stay on
+          # macos-latest; do NOT move them to ubuntu runners. If GitHub
+          # cancels a mac jobs for capacity ("not acquired by Runner"),
+          # re-run the failed jobs instead of weakening publish below.
           - {os: macos-latest,    suffix: macos-x64,    label: macOS Intel}
           - {os: macos-latest,    suffix: macos-arm64,  label: macOS Apple Silicon}
           - {os: windows-latest,  suffix: windows-x64,  label: Windows x64}
@@ -276,8 +281,13 @@ jobs:
         include:
           - {os: ubuntu-latest, goos: linux,   goarch: amd64, suffix: linux-x64}
           - {os: ubuntu-latest, goos: linux,   goarch: arm64, suffix: linux-arm64}
-          - {os: macos-latest,  goos: darwin,  goarch: amd64, suffix: macos-x64}
-          - {os: macos-latest,  goos: darwin,  goarch: arm64, suffix: macos-arm64}
+          # NOTE: darwin binaries are cross-compiled from ubuntu-latest on
+          # purpose (CGO_ENABLED=0 static build). Previous revisions used
+          # macos-latest here and were cancelled by runner capacity limits
+          # ("job was not acquired by Runner of type hosted"), which turned
+          # the whole run red and skipped publish.
+          - {os: ubuntu-latest, goos: darwin,  goarch: amd64, suffix: macos-x64}
+          - {os: ubuntu-latest, goos: darwin,  goarch: arm64, suffix: macos-arm64}
           - {os: windows-latest, goos: windows, goarch: amd64, suffix: windows-x64}
     runs-on: ${{ matrix.os }}
     steps:
@@ -413,21 +423,90 @@ jobs:
           retention-days: 14
 
   # ------------------------------------------------------------------------ #
+  # Flutter mobile app — Android APKs. iOS builds need signing certs that do
+  # not exist in this repo's secrets, so only Android is published here.
+  # ------------------------------------------------------------------------ #
+  mobile-android:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.29.0"
+          channel: stable
+          cache: true
+
+      - name: Run mobile tests
+        working-directory: mobile
+        run: flutter test
+
+      - name: Analyze mobile code
+        working-directory: mobile
+        run: flutter analyze
+
+      - name: Build release APKs (split per ABI)
+        working-directory: mobile
+        run: |
+          flutter build apk --release --split-per-abi
+          # NOTE: working-directory is $GITHUB_WORKSPACE/mobile, so the
+          # staging dir is ../atf-mobile (= $GITHUB_WORKSPACE/atf-mobile),
+          # matching the upload-artifact path below. Do NOT use ../../ here.
+          mkdir -p ../atf-mobile
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+             "../atf-mobile/AutoTelegramForward-${{ needs.meta.outputs.version }}-android-arm64.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+             "../atf-mobile/AutoTelegramForward-${{ needs.meta.outputs.version }}-android-armv7.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk \
+             "../atf-mobile/AutoTelegramForward-${{ needs.meta.outputs.version }}-android-x86_64.apk"
+          (cd ../atf-mobile && sha256sum *.apk > SHA256SUMS-mobile.txt && ls -la)
+
+      - name: Build release App Bundle (Play Store)
+        working-directory: mobile
+        run: |
+          flutter build appbundle --release
+          cp build/app/outputs/bundle/release/app-release.aab \
+             "../atf-mobile/AutoTelegramForward-${{ needs.meta.outputs.version }}-android-bundle.aab"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile-android
+          path: atf-mobile/*
+          if-no-files-found: error
+          retention-days: 14
+
+  # ------------------------------------------------------------------------ #
   # Publish: assemble everything into a GitHub Release with notes.
   # ------------------------------------------------------------------------ #
   publish:
-    needs: [meta, binaries, api-binaries, portable]
+    # Publish gate: block only on real build failures. 'cancelled'/'skipped'
+    # are tolerated because GitHub infra occasionally cancels macOS runners
+    # for capacity ("not acquired by Runner of type hosted"); a re-run of the
+    # failed jobs then fills the gaps, and a partially-cancelled matrix must
+    # never block the whole release. fail-fast:false (set per matrix) keeps
+    # one cancelled leg from cancelling the rest.
+    needs: [meta, binaries, api-binaries, portable, mobile-android]
     if: |
       always() &&
       needs.meta.result == 'success' &&
-      (needs.binaries.result == 'success' || needs.binaries.result == 'skipped') &&
-      (needs.api-binaries.result == 'success' || needs.api-binaries.result == 'skipped')
+      needs.binaries.result != 'failure' &&
+      needs.api-binaries.result != 'failure' &&
+      needs.mobile-android.result != 'failure'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Download compiled binaries
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: 'bin-*'
           path: all-assets
@@ -435,16 +514,34 @@ jobs:
 
       - name: Download API binaries
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: 'api-*'
           path: all-assets
           merge-multiple: true
 
+      - name: Download mobile APKs
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: mobile-android
+          path: all-assets
+
       - name: Download portable bundle
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: portable
           path: all-assets
+
+      - name: Verify at least one artifact family present
+        shell: bash
+        run: |
+          if [ ! -d all-assets ] || [ -z "$(ls -A all-assets 2>/dev/null)" ]; then
+            echo "No artifacts downloaded at all — refusing to publish an empty release."
+            exit 1
+          fi
+          ls -la all-assets
 
       - name: Flatten + merge checksums
         shell: bash
@@ -452,6 +549,9 @@ jobs:
           mkdir -p release
           find all-assets -type f -name 'atf*' -exec cp {} release/ \;
           find all-assets -type f -name 'autotelegramforward*' -exec cp {} release/ \;
+          find all-assets -type f -name 'AutoTelegramForward-*.apk' -exec cp {} release/ \;
+          find all-assets -type f -name 'AutoTelegramForward-*.aab' -exec cp {} release/ \;
+          find all-assets -type f -name 'SHA256SUMS-mobile.txt' -exec cp {} release/ \;
           cd release
           sha256sum * > SHA256SUMS.txt
           ls -la
@@ -566,7 +666,11 @@ jobs:
           | \`atf-macos-arm64\` | macOS | Apple Silicon (M1/M2/M3/M4) | Self-contained single-file executable |
           | \`atf-windows-x64.exe\` | Windows | x64 | Windows native standalone executable |
           | \`atf-*-portable.tar.gz\` | Cross-platform | Portable directory | One-directory portable bundle |
-          | \`autotelegramforward-*-portable.tar.gz\` | Any POSIX | Source bundle | Source distribution |
+          | `AutoTelegramForward-*-android-arm64.apk` | Android | ARM64 | Flutter release APK (per-ABI) |
+          | `AutoTelegramForward-*-android-armv7.apk` | Android | ARMv7 | Flutter release APK (per-ABI) |
+          | `AutoTelegramForward-*-android-x86_64.apk` | Android | x86_64 | Flutter release APK (per-ABI) |
+          | `AutoTelegramForward-*-android-bundle.aab` | Android | Universal | Play Store App Bundle |
+          | `autotelegramforward-*-portable.tar.gz` | Any POSIX | Source bundle | Source distribution |
 
           ### SHA-256 Checksums Verification
           Download \`SHA256SUMS.txt\` from the release assets and verify integrity:
