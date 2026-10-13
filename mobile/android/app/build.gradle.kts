@@ -68,9 +68,14 @@ android {
     buildTypes {
         release {
             val releaseConfig = signingConfigs.getByName("release")
+            val isReleaseTask = gradle.startParameter.taskNames.any {
+                it.contains("release", ignoreCase = true)
+            }
+            val allowDebugSigning =
+                providers.gradleProperty("allowDebugReleaseSigning").orNull == "true"
             signingConfig = if (releaseConfig.storeFile != null) {
                 releaseConfig
-            } else if (providers.gradleProperty("allowDebugReleaseSigning").orNull == "true") {
+            } else if (allowDebugSigning || !isReleaseTask) {
                 signingConfigs.getByName("debug")
             } else {
                 throw GradleException(

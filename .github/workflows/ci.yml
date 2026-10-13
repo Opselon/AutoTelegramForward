@@ -101,3 +101,7 @@ jobs:
       - name: Test
         working-directory: mobile
         run: flutter test
+
+      - name: Compile Android Gradle target
+        working-directory: mobile
+        run: flutter build apk --debug

@@ -165,3 +165,8 @@ def test_release_workflow_gates():
     assert "needs.docker.result == 'success'" in publish_text
     assert "needs.ios-simulator.result == 'success'" in publish_text
     assert "continue-on-error: true" not in workflow_text[workflow_text.index("  docker:"):workflow_text.index("  portable:")]
+    ci_text = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    assert "flutter build apk --debug" in ci_text
+    gradle_text = (REPO_ROOT / "mobile" / "android" / "app" / "build.gradle.kts").read_text()
+    assert "if (allowDebugSigning || !isReleaseTask)" in gradle_text
+    assert "Release signing keystore is missing" in gradle_text
