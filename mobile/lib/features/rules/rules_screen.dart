@@ -75,6 +75,23 @@ class _RulesScreenState extends State<RulesScreen> {
     }
   }
 
+  Future<void> _duplicate(ForwardRule rule) async {
+    final client = context.read<AppState>().buildApiClient();
+    try {
+      await client.duplicateRule(rule.id);
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task duplicated successfully')),
+      );
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exc.error.message)));
+    }
+  }
+
   Future<void> _delete(ForwardRule rule) async {
     final t = AppMessages.of(context);
     final confirmed = await showDialog<bool>(
@@ -223,7 +240,9 @@ class _RulesScreenState extends State<RulesScreen> {
                               side: BorderSide(
                                 color:
                                     r.isEnabled
-                                        ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                                        ? const Color(
+                                          0xFF10B981,
+                                        ).withValues(alpha: 0.3)
                                         : Colors.grey.withValues(alpha: 0.2),
                               ),
                             ),
@@ -259,8 +278,9 @@ class _RulesScreenState extends State<RulesScreen> {
                                         children: [
                                           InkWell(
                                             onTap: () => _toggle(r),
-                                            borderRadius:
-                                                BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                             child: Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -270,7 +290,9 @@ class _RulesScreenState extends State<RulesScreen> {
                                               decoration: BoxDecoration(
                                                 color:
                                                     r.isEnabled
-                                                        ? const Color(0xFF10B981)
+                                                        ? const Color(
+                                                          0xFF10B981,
+                                                        )
                                                         : Colors.grey.shade700,
                                                 borderRadius:
                                                     BorderRadius.circular(12),
@@ -293,7 +315,8 @@ class _RulesScreenState extends State<RulesScreen> {
                                                     style: const TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
                                                   ),
                                                 ],
@@ -301,6 +324,14 @@ class _RulesScreenState extends State<RulesScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.copy_outlined,
+                                              size: 20,
+                                            ),
+                                            tooltip: 'Duplicate Task',
+                                            onPressed: () => _duplicate(r),
+                                          ),
                                           IconButton(
                                             icon: const Icon(
                                               Icons.delete_outline,
@@ -320,10 +351,14 @@ class _RulesScreenState extends State<RulesScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Theme.of(context).cardColor.withValues(alpha: 0.5),
+                                      color: Theme.of(
+                                        context,
+                                      ).cardColor.withValues(alpha: 0.5),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: Colors.white.withValues(alpha: 0.05),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.05,
+                                        ),
                                       ),
                                     ),
                                     child: Row(
@@ -494,10 +529,7 @@ class _RulesScreenState extends State<RulesScreen> {
                                       Expanded(
                                         child: ElevatedButton.icon(
                                           onPressed: () => _openEditor(r),
-                                          icon: const Icon(
-                                            Icons.tag,
-                                            size: 14,
-                                          ),
+                                          icon: const Icon(Icons.tag, size: 14),
                                           label: Text(
                                             r.topicId > 0
                                                 ? '#${r.topicId}'

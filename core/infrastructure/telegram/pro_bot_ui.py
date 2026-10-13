@@ -31,6 +31,7 @@ from pyrogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
+    WebAppInfo,
 )
 
 from ...application.backup_service import (
@@ -376,8 +377,15 @@ class ProBotUI:
         built_rows = []
         for row in rows:
             built_row = []
-            for text, data in row:
-                if str(data).startswith("http://") or str(data).startswith("https://"):
+            for item in row:
+                if isinstance(item, InlineKeyboardButton):
+                    built_row.append(item)
+                    continue
+                text, data = item
+                sdata = str(data)
+                if sdata.startswith("webapp:"):
+                    built_row.append(InlineKeyboardButton(text, web_app=WebAppInfo(url=sdata[7:])))
+                elif sdata.startswith("http://") or sdata.startswith("https://"):
                     built_row.append(InlineKeyboardButton(text, url=data))
                 else:
                     built_row.append(InlineKeyboardButton(text, callback_data=data))
@@ -1258,6 +1266,7 @@ class ProBotUI:
             # Task Name Controls
             [
                 ("✏️ Rename Task", f"rrn:{rule.id}"),
+                ("📋 Duplicate", f"rdup:{rule.id}"),
                 ("✏️ ویرایش پیش‌نویس (Draft Editor)", f"re:{rule.id}"),
                 ("🗑 Delete Task", f"rrm:{rule.id}"),
             ],

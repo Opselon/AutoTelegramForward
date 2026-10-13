@@ -76,7 +76,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     super.initState();
     final r = widget.rule;
     _nameCtrl = TextEditingController(text: r?.name ?? '');
-    _topicCtrl = TextEditingController(text: r?.topicId != null && r!.topicId > 0 ? '${r.topicId}' : '');
+    _topicCtrl = TextEditingController(
+      text: r?.topicId != null && r!.topicId > 0 ? '${r.topicId}' : '',
+    );
     _sourceIdCtrl = TextEditingController(text: r?.sourceChatId ?? '');
     _sourceTitleCtrl = TextEditingController(text: r?.sourceChatTitle ?? '');
     _targetIdCtrl = TextEditingController(text: r?.targetChatId ?? '');
@@ -86,7 +88,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     );
     _filtersCtrl = TextEditingController(text: r?.filters.join(', ') ?? '');
     _delayCtrl = TextEditingController(text: '${r?.delaySeconds ?? 0}');
-    _editTimeCtrl = TextEditingController(text: '${r?.editTimeLimitSeconds ?? 0}');
+    _editTimeCtrl = TextEditingController(
+      text: '${r?.editTimeLimitSeconds ?? 0}',
+    );
     _headerCtrl = TextEditingController(text: r?.headerTemplate ?? '');
     _footerCtrl = TextEditingController(text: r?.footerTemplate ?? '');
     _watermarkCtrl = TextEditingController(text: r?.watermark ?? '');
@@ -363,7 +367,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                     child: Text('MTProto Premium Userbot'),
                   ),
                 ],
-                onChanged: (val) => setState(() => _senderType = val ?? 'Personal Telegram Account'),
+                onChanged:
+                    (val) => setState(
+                      () => _senderType = val ?? 'Personal Telegram Account',
+                    ),
               ),
               const SizedBox(height: 12),
 
@@ -640,19 +647,29 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
                       // Filters Category
                       ExpansionTile(
-                        leading: const Icon(Icons.shield_outlined, color: Colors.blue),
+                        leading: const Icon(
+                          Icons.shield_outlined,
+                          color: Colors.blue,
+                        ),
                         title: const Text('Filters (?)'),
-                        subtitle: Text('Duplicate: ${_duplicateFilters ? "ON" : "OFF"} • Crypto: ${_cryptoMode ? "ON" : "OFF"}'),
+                        subtitle: Text(
+                          'Duplicate: ${_duplicateFilters ? "ON" : "OFF"} • Crypto: ${_cryptoMode ? "ON" : "OFF"}',
+                        ),
                         children: [
                           SwitchListTile(
                             title: const Text('Duplicate Filters'),
-                            subtitle: const Text('Media & text deep fingerprint deduplication'),
+                            subtitle: const Text(
+                              'Media & text deep fingerprint deduplication',
+                            ),
                             value: _duplicateFilters,
-                            onChanged: (v) => setState(() => _duplicateFilters = v),
+                            onChanged:
+                                (v) => setState(() => _duplicateFilters = v),
                           ),
                           SwitchListTile(
                             title: const Text('Crypto Mode'),
-                            subtitle: const Text('Signal detection, wallet cleaner, pair parsing'),
+                            subtitle: const Text(
+                              'Signal detection, wallet cleaner, pair parsing',
+                            ),
                             value: _cryptoMode,
                             onChanged: (v) => setState(() => _cryptoMode = v),
                           ),
@@ -661,9 +678,14 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
                       // Schedules Category
                       ExpansionTile(
-                        leading: const Icon(Icons.schedule_rounded, color: Colors.amber),
+                        leading: const Icon(
+                          Icons.schedule_rounded,
+                          color: Colors.amber,
+                        ),
                         title: const Text('Schedules (?)'),
-                        subtitle: Text('Auto Posting: ${_autoPosting ? "ON" : "OFF"} • Power: ${_powerControl ? "ON" : "OFF"}'),
+                        subtitle: Text(
+                          'Auto Posting: ${_autoPosting ? "ON" : "OFF"} • Power: ${_powerControl ? "ON" : "OFF"}',
+                        ),
                         children: [
                           SwitchListTile(
                             title: const Text('Auto Post Scheduler'),
@@ -680,7 +702,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
                       // Time Forward Category
                       ExpansionTile(
-                        leading: const Icon(Icons.timer_outlined, color: Colors.purple),
+                        leading: const Icon(
+                          Icons.timer_outlined,
+                          color: Colors.purple,
+                        ),
                         title: const Text('Time Forward (?)'),
                         subtitle: Text('Delay & Edit Time limits'),
                         children: [
@@ -692,7 +717,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                   child: TextFormField(
                                     controller: _delayCtrl,
                                     keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(labelText: 'Set Delay (seconds)'),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Set Delay (seconds)',
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -700,7 +727,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                   child: TextFormField(
                                     controller: _editTimeCtrl,
                                     keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(labelText: 'Max Edit Time (seconds)'),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Max Edit Time (seconds)',
+                                    ),
                                   ),
                                 ),
                               ],
@@ -711,14 +740,20 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
                       // Processing Messages Category
                       ExpansionTile(
-                        leading: const Icon(Icons.settings_suggest_outlined, color: Colors.teal),
+                        leading: const Icon(
+                          Icons.settings_suggest_outlined,
+                          color: Colors.teal,
+                        ),
                         title: const Text('Processing Messages (?)'),
-                        subtitle: Text('Raw Text: ${_processRawText ? "ON" : "OFF"} • Btn2Txt: ${_buttonToText ? "ON" : "OFF"}'),
+                        subtitle: Text(
+                          'Raw Text: ${_processRawText ? "ON" : "OFF"} • Btn2Txt: ${_buttonToText ? "ON" : "OFF"}',
+                        ),
                         children: [
                           SwitchListTile(
                             title: const Text('Process Raw Text'),
                             value: _processRawText,
-                            onChanged: (v) => setState(() => _processRawText = v),
+                            onChanged:
+                                (v) => setState(() => _processRawText = v),
                           ),
                           SwitchListTile(
                             title: const Text('Button To Text'),
@@ -730,7 +765,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
                       // Modify Content Category
                       ExpansionTile(
-                        leading: const Icon(Icons.edit_note_rounded, color: Colors.orange),
+                        leading: const Icon(
+                          Icons.edit_note_rounded,
+                          color: Colors.orange,
+                        ),
                         title: const Text('Modify Content (?)'),
                         subtitle: const Text('Header, Footer, Watermark'),
                         children: [
@@ -740,17 +778,26 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                               children: [
                                 TextFormField(
                                   controller: _headerCtrl,
-                                  decoration: const InputDecoration(labelText: 'Header Text', hintText: 'HEADER EMPTY'),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Header Text',
+                                    hintText: 'HEADER EMPTY',
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 TextFormField(
                                   controller: _footerCtrl,
-                                  decoration: const InputDecoration(labelText: 'Footer Text', hintText: 'FOOTER EMPTY'),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Footer Text',
+                                    hintText: 'FOOTER EMPTY',
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 TextFormField(
                                   controller: _watermarkCtrl,
-                                  decoration: const InputDecoration(labelText: 'Watermark Text', hintText: 'Empty'),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Watermark Text',
+                                    hintText: 'Empty',
+                                  ),
                                 ),
                               ],
                             ),
@@ -760,25 +807,35 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
                       // AI Features Category
                       ExpansionTile(
-                        leading: const Icon(Icons.auto_awesome_rounded, color: Colors.indigo),
+                        leading: const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Colors.indigo,
+                        ),
                         title: const Text('AI Features'),
                         subtitle: const Text('Creativity 0.7 - Max Tokens 600'),
                         children: [
                           SwitchListTile(
                             title: const Text('OCR Image AI'),
-                            subtitle: const Text('Optical character recognition via vision AI'),
+                            subtitle: const Text(
+                              'Optical character recognition via vision AI',
+                            ),
                             value: _ocrImageAi,
                             onChanged: (v) => setState(() => _ocrImageAi = v),
                           ),
                           SwitchListTile(
                             title: const Text('Smart AI Rewrite'),
-                            subtitle: const Text('LLM intelligent content rephrasing'),
+                            subtitle: const Text(
+                              'LLM intelligent content rephrasing',
+                            ),
                             value: _smartAiRewrite,
-                            onChanged: (v) => setState(() => _smartAiRewrite = v),
+                            onChanged:
+                                (v) => setState(() => _smartAiRewrite = v),
                           ),
                           SwitchListTile(
                             title: const Text('News Digest'),
-                            subtitle: const Text('Automated news summary bullets'),
+                            subtitle: const Text(
+                              'Automated news summary bullets',
+                            ),
                             value: _newsDigest,
                             onChanged: (v) => setState(() => _newsDigest = v),
                           ),
@@ -787,9 +844,14 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
                       // PAID ADDON Catalogue (Screen 4)
                       ExpansionTile(
-                        leading: const Icon(Icons.workspace_premium_rounded, color: Colors.amber),
+                        leading: const Icon(
+                          Icons.workspace_premium_rounded,
+                          color: Colors.amber,
+                        ),
                         title: const Text('👑 PAID ADDON Catalogue (18)'),
-                        subtitle: const Text('Channel Comments, Webhooks, TTL & more'),
+                        subtitle: const Text(
+                          'Channel Comments, Webhooks, TTL & more',
+                        ),
                         children: [
                           ...[
                             'channel_comments',
@@ -806,9 +868,12 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                             final val = _paidAddons[key] ?? false;
                             return SwitchListTile(
                               dense: true,
-                              title: Text(key.replaceAll('_', ' ').toUpperCase()),
+                              title: Text(
+                                key.replaceAll('_', ' ').toUpperCase(),
+                              ),
                               value: val,
-                              onChanged: (v) => setState(() => _paidAddons[key] = v),
+                              onChanged:
+                                  (v) => setState(() => _paidAddons[key] = v),
                             );
                           }),
                         ],

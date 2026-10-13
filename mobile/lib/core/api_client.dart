@@ -724,6 +724,27 @@ class ApiClient {
     retryable: false,
   );
 
+  Future<ForwardRule> duplicateRule(String id) => _request(
+    method: 'POST',
+    path: '/api/rules/$id/duplicate',
+    fromJson: (json) => ForwardRule.fromJson(json),
+    retryable: false,
+  );
+
+  Future<ForwardRule> stopRule(String id) => _request(
+    method: 'POST',
+    path: '/api/rules/$id/stop',
+    fromJson: (json) => ForwardRule.fromJson(json),
+    retryable: false,
+  );
+
+  Future<ForwardRule> restartRule(String id) => _request(
+    method: 'POST',
+    path: '/api/rules/$id/restart',
+    fromJson: (json) => ForwardRule.fromJson(json),
+    retryable: false,
+  );
+
   Future<List<TelegramSession>> listSessions() => _requestList(
     method: 'GET',
     path: '/api/sessions',

@@ -124,6 +124,18 @@ export const api = {
     fetchJson<{ success: boolean; message?: string }>(`${API_BASE}/rules/${id}/resume`, {
       method: 'POST',
     }),
+  duplicateRule: (id: string) =>
+    fetchJson<ForwardRule>(`${API_BASE}/rules/${id}/duplicate`, {
+      method: 'POST',
+    }),
+  stopRule: (id: string) =>
+    fetchJson<ForwardRule>(`${API_BASE}/rules/${id}/stop`, {
+      method: 'POST',
+    }),
+  restartRule: (id: string) =>
+    fetchJson<ForwardRule>(`${API_BASE}/rules/${id}/restart`, {
+      method: 'POST',
+    }),
 
   // Sessions
   getSessions: async (): Promise<Session[]> => {
@@ -351,6 +363,11 @@ export const api = {
     fetchJson<AuthResponse>(`${API_BASE}/auth/exchange-bot-token`, {
       method: 'POST',
       body: JSON.stringify(req),
+    }),
+  authTMA: (initData: string) =>
+    fetchJson<AuthResponse>(`${API_BASE}/auth/tma`, {
+      method: 'POST',
+      body: JSON.stringify({ init_data: initData }),
     }),
   changePassword: (req: { old_password?: string; new_password: string }) =>
     fetchJson<{ success: boolean; message: string }>(`${API_BASE}/auth/change-password`, {

@@ -355,6 +355,25 @@ export function App() {
   }
 
   useEffect(() => {
+    // Telegram Mini App (TMA) auto-detection, viewport expansion & token exchange
+    const tg = (window as any).Telegram?.WebApp
+    if (tg) {
+      try {
+        tg.ready?.()
+        tg.expand?.()
+      } catch {}
+      if (tg.initData && !localStorage.getItem('auth_token')) {
+        api.authTMA(tg.initData).then((auth: any) => {
+          if (auth && auth.token) {
+            localStorage.setItem('auth_token', auth.token)
+            api.me().then(setCurrentUser).catch(() => {})
+            loadData()
+            showToast(isRtl ? 'ورود خودکار مینی‌اپ تلگرام انجام شد' : 'Telegram Mini App auto-authenticated')
+          }
+        }).catch(() => {})
+      }
+    }
+
     loadData()
     api.me().then(setCurrentUser).catch(() => {})
     const timer = setInterval(() => {
@@ -400,6 +419,16 @@ export function App() {
       showToast(isRtl ? 'قانون با موفقیت حذف شد' : 'Rule deleted successfully')
     } catch (e: any) {
       showToast(e.message)
+    }
+  }
+
+  const handleDuplicateRule = async (id: string) => {
+    try {
+      const cloned = await api.duplicateRule(id)
+      setRules((prev) => [cloned, ...prev])
+      showToast(isRtl ? 'قانون با موفقیت تکثیر شد' : 'Task duplicated successfully')
+    } catch (e: any) {
+      showToast(e.message || (isRtl ? 'خطا در تکثیر قانون' : 'Failed to duplicate task'))
     }
   }
 
@@ -1384,6 +1413,15 @@ export function App() {
                       </button>
 
                       <button
+                        onClick={() => handleDuplicateRule(rule.id)}
+                        className="btn btn-secondary icon-btn"
+                        style={{ padding: '5px' }}
+                        title={isRtl ? 'کپی و تکثیر تسک' : 'Duplicate Task'}
+                      >
+                        <Copy size={13} />
+                      </button>
+
+                      <button
                         onClick={() => handleDeleteRule(rule.id)}
                         className="btn btn-danger icon-btn"
                         style={{ padding: '5px' }}
@@ -1754,12 +1792,12 @@ export function App() {
 
             <button
               onClick={handleRunSimulation}
-              disabled={simuring}
+              disabled={simulating}
               className="btn btn-vip"
               style={{ width: '100%', padding: '12px' }}
             >
               <Zap size={18} />
-              <span>{simuring ? (isRtl ? 'در حال شبیه‌سازی...' : 'Simulating...') : (isRtl ? 'اجرای ارزیابی هوشمند' : 'Run Decision Engine')}</span>
+              <span>{simulating ? (isRtl ? 'در حال شبیه‌سازی...' : 'Simulating...') : (isRtl ? 'اجرای ارزیابی هوشمند' : 'Run Decision Engine')}</span>
             </button>
           </div>
 

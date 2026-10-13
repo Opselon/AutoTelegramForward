@@ -1,7 +1,16 @@
 package handlers
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"net/http"
+	"net/url"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	pb "autoforward/proto"
@@ -59,6 +68,124 @@ func (h *Handlers) AuthBotExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp, err := h.c.Account.IssueWebToken(ctx, &req)
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// AuthTMA authenticates a user coming from a Telegram Mini App (TMA).
+// It verifies the cryptographic HMAC-SHA256 signature of window.Telegram.WebApp.initData
+// using the bot token, extracts the verified numeric Telegram User ID,
+// and issues an authenticated JWT token.
+func (h *Handlers) AuthTMA(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		InitData string `json:"init_data"`
+	}
+	if !bind(w, r, &body) {
+		return
+	}
+	if strings.TrimSpace(body.InitData) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "init_data is required"})
+		return
+	}
+
+	values, err := url.ParseQuery(body.InitData)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed init_data: " + err.Error()})
+		return
+	}
+
+	receivedHash := values.Get("hash")
+	if receivedHash == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing hash in init_data"})
+		return
+	}
+
+	authDateStr := values.Get("auth_date")
+	if authDateStr == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing auth_date in init_data"})
+		return
+	}
+	authDate, err := strconv.ParseInt(authDateStr, 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid auth_date"})
+		return
+	}
+	// Reject tokens older than 24 hours to prevent replay attacks
+	if time.Now().Unix()-authDate > 86400 {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "init_data expired"})
+		return
+	}
+
+	// Build data-check-string (all keys except 'hash', sorted alphabetically)
+	var keys []string
+	for k := range values {
+		if k != "hash" {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	var pairs []string
+	for _, k := range keys {
+		pairs = append(pairs, k+"="+values.Get(k))
+	}
+	dataCheckString := strings.Join(pairs, "\n")
+
+	botToken := strings.TrimSpace(os.Getenv("ATF_BOT_TOKEN"))
+	if botToken == "" {
+		botToken = strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN"))
+	}
+	if botToken == "" {
+		botToken = strings.TrimSpace(os.Getenv("BOT_TOKEN"))
+	}
+	if botToken == "" {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server bot token not configured"})
+		return
+	}
+
+	// Telegram HMAC-SHA256 formula:
+	// secret_key = HMAC_SHA256("WebAppData", bot_token)
+	// data_hash  = HMAC_SHA256(secret_key, data_check_string)
+	hSecret := hmac.New(sha256.New, []byte("WebAppData"))
+	hSecret.Write([]byte(botToken))
+	secretKey := hSecret.Sum(nil)
+
+	hData := hmac.New(sha256.New, secretKey)
+	hData.Write([]byte(dataCheckString))
+	expectedHash := hex.EncodeToString(hData.Sum(nil))
+
+	if !hmac.Equal([]byte(strings.ToLower(expectedHash)), []byte(strings.ToLower(receivedHash))) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid init_data signature"})
+		return
+	}
+
+	// Signature is cryptographically verified. Now extract numeric user ID.
+	var userID int64
+	if userJSON := values.Get("user"); userJSON != "" {
+		var u struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal([]byte(userJSON), &u); err == nil && u.ID > 0 {
+			userID = u.ID
+		}
+	}
+	if userID <= 0 {
+		if idVal := values.Get("id"); idVal != "" {
+			if parsed, err := strconv.ParseInt(idVal, 10, 64); err == nil && parsed > 0 {
+				userID = parsed
+			}
+		}
+	}
+	if userID <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no valid user id in init_data"})
+		return
+	}
+
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.Account.IssueWebToken(ctx, &pb.IssueWebTokenRequest{UserId: userID})
 	if err != nil {
 		grpcError(w, err)
 		return
