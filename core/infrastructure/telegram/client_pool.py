@@ -196,6 +196,10 @@ class ClientPool:
         state = self._clients.get(session_id)
         return state.client if state else None
 
+    def list_sessions(self) -> List[str]:
+        """Ids of the clients currently live in this pool."""
+        return [sid for sid, st in self._clients.items() if st and st.client is not None]
+
     def get_state(self, session_id: str) -> Optional[ClientState]:
         return self._clients.get(session_id)
 

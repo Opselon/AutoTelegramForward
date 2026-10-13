@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 # v12 adds owner scoping to api_credentials and prompt_templates. The real work
 # is done by _apply_additive_columns (guarded ALTER + index); MIGRATIONS[12]
 # only exists so schema_version tracks the upgrade and reconciliation runs.
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 15
 
 MIGRATIONS = {
     1: """
@@ -483,6 +483,18 @@ MIGRATIONS = {
     -- full table scan on a growing table.
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_cleanup
         ON delivery_jobs(status, updated_at);
+    """,
+    15: """
+    -- Channel polling cursors. The ChannelPollingService stores the newest
+    -- channel post it has already replayed here so a restart does not rescan
+    -- the whole channel history.
+    CREATE TABLE IF NOT EXISTS channel_cursors (
+        chat_id TEXT PRIMARY KEY,
+        last_message_id INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_channel_cursors_updated
+        ON channel_cursors(updated_at);
     """,
 }
 

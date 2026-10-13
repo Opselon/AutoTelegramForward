@@ -6,6 +6,7 @@ and runs the asyncio event loop.
 
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -61,9 +62,13 @@ from core.infrastructure.telegram.pro_bot_ui import ProBotUI  # noqa: E402
 from core.infrastructure.telegram.i18n import I18n  # noqa: E402
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=os.environ.get("ATF_LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+# Temporary diagnostics: allow a verbose pyrogram update stream via env var.
+_pyro_level = os.environ.get("PYROGRAM_LOG_LEVEL")
+if _pyro_level:
+    logging.getLogger("pyrogram").setLevel(_pyro_level.upper())
 logger = logging.getLogger("atf.core")
 
 
@@ -226,6 +231,7 @@ def build_container(cfg: Config) -> dict:
         "config": cfg, "db": db, "crypto": crypto,
         "sessions": sessions, "rules": rules, "filters": filter_rules,
         "ai": ai_configs, "credentials": credentials, "bot_tokens": bot_tokens,
+        "rule_repo": rule_repo,
         "processed": processed_repo, "pipeline": pipeline, "pool": pool,
         "dispatcher": dispatcher, "i18n": i18n, "factory": factory,
         "logger_addr": cfg.logger_addr,
@@ -422,6 +428,28 @@ async def main() -> None:
         log_client.info("core", "boot", f"sessions restored: {live}/{len(statuses)} live")
     except Exception as exc:
         logger.warning("session restore failed: %s", exc)
+
+    # v15: Telegram stops pushing channel posts the moment a session's channel
+    # read-state is caught up, which happens constantly (health checks, status
+    # fetches, the dashboard). Poll the active source channels on a short
+    # interval so forwarding does not depend on push arriving. This is what
+    # makes an active rule actually forward.
+    try:
+        from core.infrastructure.telegram.channel_polling import ChannelPollingService  # noqa: E402
+        from core.infrastructure.persistence.sqlite_repositories import SqliteChannelCursorRepository  # noqa: E402
+        cursor_repo = SqliteChannelCursorRepository(container["db"])
+        poller = ChannelPollingService(
+            pool=container["pool"],
+            rules=container["rule_repo"],
+            dispatcher=container["dispatcher"],
+            state_store=cursor_repo,
+            interval=getattr(cfg, "channel_poll_interval", 15.0),
+        )
+        await poller.start()
+        container["channel_poller"] = poller
+        log_client.info("core", "boot", "channel polling active")
+    except Exception as exc:
+        logger.warning("channel polling failed to start: %s", exc)
 
     # A restart kills the in-memory login clients; move any flow that still
     # claims to hold an open socket to AUTH_EXPIRED so the user is told,

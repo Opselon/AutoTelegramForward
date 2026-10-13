@@ -133,6 +133,8 @@ class MessageDispatcher:
         self._rate: dict = defaultdict(deque)
         self._max_per_minute = 25  # Telegram-friendly default per target
         self._bound_sessions: set = set()
+        # v15: session_id -> NEW_MESSAGE closure, exposed for channel catch-up
+        self._message_handlers: dict = {}
         self._album_window = 2.5  # seconds to collect an album before sending
         self._error_log = error_log
         self._metrics = metrics
@@ -220,11 +222,15 @@ class MessageDispatcher:
                 logger.warning("bind %s/%s failed: %s", session_id[:8], event_type, exc)
                 return False
         self._bound_sessions.add(session_id)
+        # v15: remember the NEW_MESSAGE closure so the channel catch-up
+        # service can replay missed posts through the identical path.
+        self._message_handlers[session_id] = handlers[0][0]
         logger.info("real-time handlers bound for session %s", session_id[:8])
         return True
 
     async def unbind_session(self, session_id: str) -> None:
         self._bound_sessions.discard(session_id)
+        self._message_handlers.pop(session_id, None)
         try:
             self._pool.remove_handlers(session_id)
         except Exception:
@@ -232,6 +238,17 @@ class MessageDispatcher:
 
     def is_bound(self, session_id: str) -> bool:
         return session_id in self._bound_sessions
+
+    # ------------------------------------------------------------------ #
+    # Catch-up support
+    # ------------------------------------------------------------------ #
+    def message_handler(self, session_id: str):
+        """The NEW_MESSAGE closure used for this session.
+
+        Returned so the channel catch-up service can replay missed channel
+        posts through the exact same path as a live push update.
+        """
+        return self._handlers.get(session_id)
 
     def set_rate_limit(self, per_minute: int) -> None:
         self._max_per_minute = max(1, int(per_minute))

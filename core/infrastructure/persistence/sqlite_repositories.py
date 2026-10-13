@@ -1796,3 +1796,38 @@ class SqliteSettingsRepository(ISettingsRepository):
             " updated_at=excluded.updated_at",
             (key, value, int(time.time())),
         )
+
+
+class SqliteChannelCursorRepository:
+    """Per-channel polling cursors for the ChannelPollingService.
+
+    Stores the newest channel post id the poller has already replayed so a
+    restart does not rescan the whole channel. The pipeline's dedupe layer is
+    the real authority; this only keeps the poller from re-reading the tail
+    every sweep.
+    """
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def load_channel_cursors(self) -> dict:
+        rows = self._db.query_all("SELECT chat_id, last_message_id FROM channel_cursors")
+        return {str(r["chat_id"]): int(r["last_message_id"]) for r in rows or []}
+
+    async def save_channel_cursors(self, cursors: dict) -> None:
+        if not cursors:
+            return
+        now = int(time.time())
+        self._db.execute("BEGIN")
+        try:
+            for chat_id, last_id in cursors.items():
+                self._db.execute(
+                    "INSERT INTO channel_cursors (chat_id, last_message_id, updated_at)"
+                    " VALUES (?,?,?) ON CONFLICT(chat_id) DO UPDATE SET"
+                    " last_message_id=excluded.last_message_id, updated_at=excluded.updated_at",
+                    (str(chat_id), int(last_id), now),
+                )
+            self._db.execute("COMMIT")
+        except Exception:
+            self._db.execute("ROLLBACK")
+            raise
