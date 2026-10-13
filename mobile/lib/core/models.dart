@@ -181,6 +181,12 @@ class ForwardRule {
     this.footerTemplate = '',
     this.aiConfigId = '',
     this.useVipRouting = false,
+    this.blockVoice = false,
+    this.blockStickers = false,
+    this.removeEmojis = false,
+    this.syncDeletes = false,
+    this.ignoreEdits = false,
+    this.albumMode = 'album',
     this.version = 0,
     this.ownerUserId = 0,
   });
@@ -205,6 +211,14 @@ class ForwardRule {
   final String footerTemplate;
   final String aiConfigId;
 
+  /// Bot & Web parity media toggles
+  final bool blockVoice;
+  final bool blockStickers;
+  final bool removeEmojis;
+  final bool syncDeletes;
+  final bool ignoreEdits;
+  final String albumMode;
+
   /// Server-side optimistic-concurrency version. Sent back on update so a
   /// concurrent edit is rejected instead of silently overwritten.
   final int version;
@@ -227,6 +241,12 @@ class ForwardRule {
     String? headerTemplate,
     String? footerTemplate,
     String? aiConfigId,
+    bool? blockVoice,
+    bool? blockStickers,
+    bool? removeEmojis,
+    bool? syncDeletes,
+    bool? ignoreEdits,
+    String? albumMode,
     int? version,
     bool? isEnabled,
   }) =>
@@ -246,6 +266,12 @@ class ForwardRule {
         headerTemplate: headerTemplate ?? this.headerTemplate,
         footerTemplate: footerTemplate ?? this.footerTemplate,
         aiConfigId: aiConfigId ?? this.aiConfigId,
+        blockVoice: blockVoice ?? this.blockVoice,
+        blockStickers: blockStickers ?? this.blockStickers,
+        removeEmojis: removeEmojis ?? this.removeEmojis,
+        syncDeletes: syncDeletes ?? this.syncDeletes,
+        ignoreEdits: ignoreEdits ?? this.ignoreEdits,
+        albumMode: albumMode ?? this.albumMode,
         version: version ?? this.version,
         isEnabled: isEnabled ?? this.isEnabled,
         ownerUserId: ownerUserId,
@@ -259,6 +285,7 @@ class ForwardRule {
         'target_chat_title': targetChatTitle,
         if (intermediateChannelId.isNotEmpty)
           'intermediate_channel_id': intermediateChannelId,
+        'use_vip_routing': useVipRouting,
         'filters': filters,
         'filter_mode': filterMode,
         'media_mode': mediaMode,
@@ -266,6 +293,12 @@ class ForwardRule {
         'header_template': headerTemplate,
         'footer_template': footerTemplate,
         if (aiConfigId.isNotEmpty) 'ai_config_id': aiConfigId,
+        'block_voice': blockVoice,
+        'block_stickers': blockStickers,
+        'remove_emojis': removeEmojis,
+        'sync_deletes': syncDeletes,
+        'ignore_edits': ignoreEdits,
+        'album_mode': albumMode,
       };
 
   Map<String, dynamic> toUpdateJson() => {
@@ -293,6 +326,18 @@ class ForwardRule {
         headerTemplate: json['header_template'] as String? ?? '',
         footerTemplate: json['footer_template'] as String? ?? '',
         aiConfigId: json['ai_config_id'] as String? ?? '',
+        blockVoice: (json['block_voice'] as bool?) ??
+            (json['metadata'] is Map ? (json['metadata']['block_voice'] as bool? ?? false) : false),
+        blockStickers: (json['block_stickers'] as bool?) ??
+            (json['metadata'] is Map ? (json['metadata']['block_stickers'] as bool? ?? false) : false),
+        removeEmojis: (json['remove_emojis'] as bool?) ??
+            (json['metadata'] is Map ? (json['metadata']['remove_emojis'] as bool? ?? false) : false),
+        syncDeletes: (json['sync_deletes'] as bool?) ??
+            (json['metadata'] is Map ? (json['metadata']['sync_deletes'] as bool? ?? false) : false),
+        ignoreEdits: (json['ignore_edits'] as bool?) ??
+            (json['metadata'] is Map ? (json['metadata']['ignore_edits'] as bool? ?? false) : false),
+        albumMode: (json['album_mode'] as String?) ??
+            (json['metadata'] is Map ? (json['metadata']['album_mode'] as String? ?? 'album') : 'album'),
         version: (json['version'] as num?)?.toInt() ?? 0,
         isEnabled: json['is_enabled'] as bool? ??
             !(json['is_paused'] as bool? ?? false),

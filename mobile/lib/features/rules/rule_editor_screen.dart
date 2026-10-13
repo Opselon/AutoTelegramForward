@@ -44,6 +44,12 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   String _mediaMode = 'all';
   bool _useVipRouting = false;
   bool _isEnabled = true;
+  bool _blockVoice = false;
+  bool _blockStickers = false;
+  bool _removeEmojis = false;
+  bool _syncDeletes = false;
+  bool _ignoreEdits = false;
+  String _albumMode = 'album';
 
   List<TelegramSession> _sessions = const [];
   bool _saving = false;
@@ -68,6 +74,12 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _mediaMode = r?.mediaMode ?? 'all';
     _useVipRouting = r?.useVipRouting ?? (r?.intermediateChannelId.isNotEmpty ?? false);
     _isEnabled = r?.isEnabled ?? true;
+    _blockVoice = r?.blockVoice ?? false;
+    _blockStickers = r?.blockStickers ?? false;
+    _removeEmojis = r?.removeEmojis ?? false;
+    _syncDeletes = r?.syncDeletes ?? false;
+    _ignoreEdits = r?.ignoreEdits ?? false;
+    _albumMode = r?.albumMode ?? 'album';
 
     _loadSessions();
   }
@@ -143,6 +155,12 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       delaySeconds: int.tryParse(_delayCtrl.text.trim()) ?? 0,
       headerTemplate: _headerCtrl.text,
       footerTemplate: _footerCtrl.text,
+      blockVoice: _blockVoice,
+      blockStickers: _blockStickers,
+      removeEmojis: _removeEmojis,
+      syncDeletes: _syncDeletes,
+      ignoreEdits: _ignoreEdits,
+      albumMode: _albumMode,
       version: widget.rule?.version ?? 0,
       isEnabled: _isEnabled,
     );
@@ -341,6 +359,93 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                 decoration: InputDecoration(
                   labelText: t.get('rules_footer'),
                   hintText: 'Footer text',
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Media & Sync Settings (Bot / Web parity)
+              Card(
+                margin: EdgeInsets.zero,
+                elevation: 0,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        t.get('rules_media_toggles_title'),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(t.get('rules_block_voice')),
+                        secondary: const Text('🎙', style: TextStyle(fontSize: 18)),
+                        value: _blockVoice,
+                        onChanged: (v) => setState(() => _blockVoice = v),
+                      ),
+                      SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(t.get('rules_block_stickers')),
+                        secondary: const Text('🎭', style: TextStyle(fontSize: 18)),
+                        value: _blockStickers,
+                        onChanged: (v) => setState(() => _blockStickers = v),
+                      ),
+                      SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(t.get('rules_remove_emojis')),
+                        secondary: const Text('😀', style: TextStyle(fontSize: 18)),
+                        value: _removeEmojis,
+                        onChanged: (v) => setState(() => _removeEmojis = v),
+                      ),
+                      SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(t.get('rules_sync_deletes')),
+                        secondary: const Text('🗑', style: TextStyle(fontSize: 18)),
+                        value: _syncDeletes,
+                        onChanged: (v) => setState(() => _syncDeletes = v),
+                      ),
+                      SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(t.get('rules_ignore_edits')),
+                        secondary: const Text('✏️', style: TextStyle(fontSize: 18)),
+                        value: _ignoreEdits,
+                        onChanged: (v) => setState(() => _ignoreEdits = v),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: _albumMode,
+                        decoration: InputDecoration(
+                          labelText: t.get('rules_album_mode'),
+                          prefixIcon: const Icon(Icons.photo_library_outlined),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'album',
+                            child: Text(t.get('rules_album_full')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'first',
+                            child: Text(t.get('rules_album_first')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'split',
+                            child: Text(t.get('rules_album_split')),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) setState(() => _albumMode = v);
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
