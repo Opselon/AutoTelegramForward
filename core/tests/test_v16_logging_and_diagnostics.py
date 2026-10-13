@@ -169,3 +169,46 @@ async def test_durable_queue_transient_failure_logging():
     _, svc, cat, msg, detail = warns[0]
     assert "Transient delivery error" in msg
     assert detail["target"] == "-100333"
+
+
+@pytest.mark.asyncio
+async def test_raw_telegram_api_tracer(caplog):
+    """RawTelegramApiTracer logs raw MTProto calls and updates safely."""
+    from core.infrastructure.telegram.raw_tracer import RawTelegramApiTracer
+
+    client = MagicMock()
+    client.invoke = AsyncMock(return_value={"pts": 100, "new_messages": []})
+    client.handle_updates = AsyncMock()
+
+    tracer = RawTelegramApiTracer(client, session_id="test_sess_123")
+    tracer.attach()
+
+    class FakeQuery:
+        def __init__(self):
+            self.channel_id = -100123
+            self.password = "secret123"
+
+    with caplog.at_level("INFO", logger="atf.raw_api"):
+        res = await client.invoke(FakeQuery())
+        assert res["pts"] == 100
+
+        # Verify query was logged with secret masked
+        assert any("[RAW MTPROTO >> test_ses] FakeQuery" in rec.message for rec in caplog.records)
+        assert any("password=[REDACTED]" in rec.message for rec in caplog.records)
+        assert not any("secret123" in rec.message for rec in caplog.records)
+
+        # Verify update logging
+        class FakeUpdate:
+            def __init__(self):
+                self.pts = 101
+                self.channel_id = -100123
+
+        class FakeUpdatesWrapper:
+            def __init__(self):
+                self.updates = [FakeUpdate()]
+
+        await client.handle_updates(FakeUpdatesWrapper())
+        assert any("[RAW UPDATE >> test_ses] FakeUpdate" in rec.message for rec in caplog.records)
+
+    tracer.detach()
+

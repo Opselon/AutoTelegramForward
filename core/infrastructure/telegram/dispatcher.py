@@ -288,9 +288,17 @@ class MessageDispatcher:
         async def _handler(client, message):
             try:
                 payload: MessagePayload = payload_from_pyrogram(message)
-            except Exception:
-                logger.exception("payload translate failed")
+            except Exception as tr_err:
+                logger.error("payload translate failed: %s", tr_err, exc_info=True)
                 return
+
+            sid = getattr(client, "name", "") or getattr(client, "session_id", "session")
+            logger.info(
+                "[DISPATCH IN %s] %s chat=%s (%s) msg_id=%s media=%s text=%r",
+                sid[:12], trigger, payload.chat_title or "", payload.chat_id, payload.message_id,
+                getattr(payload.media_type, "value", payload.media_type),
+                payload.effective_text[:60] if payload.effective_text else "",
+            )
 
             # AI PV Auto-Reply for direct messages on user accounts
             if trigger == "NEW_MESSAGE" and getattr(message, "chat", None) and str(getattr(message.chat, "type", "")).lower().endswith("private"):

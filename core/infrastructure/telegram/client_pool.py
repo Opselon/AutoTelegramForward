@@ -158,6 +158,11 @@ class ClientPool:
             )
             t0 = time.monotonic()
             await client.start()
+            try:
+                from .raw_tracer import RawTelegramApiTracer
+                RawTelegramApiTracer(client, session_id=session_id).attach()
+            except Exception as tr_err:
+                logger.debug("Failed attaching raw tracer to %s: %s", session_id[:8], tr_err)
             state = ClientState(
                 client=client, session_id=session_id,
                 api_cred_id=credential_id or "default",
@@ -323,6 +328,11 @@ class ClientPool:
                     state.reconnects += 1
                     state.healthy = True
                     state.connected_since = time.time()
+                    try:
+                        from .raw_tracer import RawTelegramApiTracer
+                        RawTelegramApiTracer(client, session_id=session_id).attach()
+                    except Exception:
+                        pass
                     await self._install_handlers(state)
                     logger.info("client %s reconnected", session_id[:8])
                 else:
