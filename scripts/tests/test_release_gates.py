@@ -156,6 +156,7 @@ def test_release_workflow_gates():
     assert "--sample 4 --seed 42" in text or "--sample 4" in text
     workflow_text = (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text()
     assert "ANDROID_KEYSTORE_BASE64" in workflow_text
+    assert 'echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"' in workflow_text
     assert "HAS_IOS_SECRETS" in workflow_text
     assert "ProductVersion=${{ needs.meta.outputs.version }}" in workflow_text
     assert "CommitSHA=${GITHUB_SHA}" in workflow_text
