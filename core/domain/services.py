@@ -621,6 +621,26 @@ def char_to_utf16_pos(s: str, char_idx: int) -> int:
     return utf16_len(sub)
 
 
+def safe_text_preview(text, max_chars: int = 60, ellipsis: str = "...") -> str:
+    """Return a plain-str preview capped at *max_chars* code points.
+
+    Detaches from Pyrogram's ``Str`` via ``str()`` so slicing can never land
+    inside a UTF-16 surrogate pair and raise UnicodeDecodeError.  Empty/None
+    input and every unexpected type return ``""``.  Never raises.
+    """
+    if text is None:
+        return ""
+    try:
+        s = text if isinstance(text, str) else str(text)
+    except Exception:
+        return ""
+    # Remove orphan surrogates so downstream JSON/UTF-8 encoders never fail.
+    s = s.encode("utf-8", errors="replace").decode("utf-8")
+    if max_chars <= 0 or len(s) <= max_chars:
+        return s
+    return s[:max_chars] + ellipsis
+
+
 class LinkManagementEngine:
     """Production-grade Link Management Engine.
     Handles domain allowlists/blocklists, regex & Telegram entity URL detection,
