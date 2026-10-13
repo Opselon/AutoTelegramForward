@@ -79,10 +79,7 @@ void main() {
           () => compareApiVersions('1.invalid.5', '1.0.0'),
           throwsFormatException,
         );
-        expect(
-          () => compareApiVersions('1.4', '1.4.0'),
-          throwsFormatException,
-        );
+        expect(() => compareApiVersions('1.4', '1.4.0'), throwsFormatException);
         expect(
           () => compareApiVersions('01.4.0', '1.4.0'),
           throwsFormatException,

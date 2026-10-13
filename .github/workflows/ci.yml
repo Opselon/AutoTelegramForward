@@ -92,10 +92,7 @@ jobs:
 
       - name: Check formatting
         working-directory: mobile
-        run: |
-          dart format .
-          git diff -- .
-          git diff --exit-code
+        run: dart format --set-exit-if-changed .
 
       - name: Analyze
         working-directory: mobile

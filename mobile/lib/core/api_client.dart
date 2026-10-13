@@ -108,6 +108,7 @@ int compareApiVersions(String a, String b) {
     }
     return (core: core, pre: pre);
   }
+
   final left = parse(a);
   final right = parse(b);
   for (var i = 0; i < 3; i++) {
@@ -117,7 +118,8 @@ int compareApiVersions(String a, String b) {
   if (left.pre.isEmpty && right.pre.isEmpty) return 0;
   if (left.pre.isEmpty) return 1;
   if (right.pre.isEmpty) return -1;
-  final width = left.pre.length < right.pre.length ? left.pre.length : right.pre.length;
+  final width =
+      left.pre.length < right.pre.length ? left.pre.length : right.pre.length;
   for (var i = 0; i < width; i++) {
     final l = left.pre[i], r = right.pre[i];
     if (l == r) continue;
