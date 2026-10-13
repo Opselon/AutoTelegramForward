@@ -410,7 +410,12 @@ class ForwardRule {
 
   factory ForwardRule.fromJson(Map<String, dynamic> json) {
     final meta = json['metadata'] is Map ? (json['metadata'] as Map) : const {};
-    final rawAddons = json['paid_addons'] is Map ? json['paid_addons'] as Map : (meta['paid_addons'] is Map ? meta['paid_addons'] as Map : const {});
+    final rawAddons =
+        json['paid_addons'] is Map
+            ? json['paid_addons'] as Map
+            : (meta['paid_addons'] is Map
+                ? meta['paid_addons'] as Map
+                : const {});
     final Map<String, bool> parsedAddons = {};
     rawAddons.forEach((k, v) {
       if (k != null) parsedAddons[k.toString()] = v == true;
@@ -426,23 +431,57 @@ class ForwardRule {
       intermediateChannelId: json['intermediate_channel_id']?.toString() ?? '',
       useVipRouting: json['use_vip_routing'] as bool? ?? false,
       name: (json['name'] as String?) ?? (meta['name'] as String? ?? ''),
-      topicId: (json['topic_id'] as num?)?.toInt() ?? ((meta['topic_id'] as num?)?.toInt() ?? 0),
-      debugMode: (json['debug_mode'] as bool?) ?? (meta['debug_mode'] as bool? ?? false),
-      senderType: (json['sender_type'] as String?) ?? (meta['sender_type'] as String? ?? 'Personal Telegram Account'),
-      featureGroup: (json['feature_group'] as String?) ?? (meta['feature_group'] as String? ?? 'all'),
-      duplicateFilters: (json['duplicate_filters'] as bool?) ?? (meta['duplicate_filters'] as bool? ?? false),
-      cryptoMode: (json['crypto_mode'] as bool?) ?? (meta['crypto_mode'] as bool? ?? false),
-      autoPosting: (json['auto_posting'] as bool?) ?? (meta['auto_posting'] as bool? ?? false),
-      powerControl: (json['power_control'] as bool?) ?? (meta['power_control'] as bool? ?? false),
-      editTimeLimitSeconds: (json['edit_time_limit_seconds'] as num?)?.toInt() ?? ((meta['edit_time_limit_seconds'] as num?)?.toInt() ?? 0),
-      processRawText: (json['process_raw_text'] as bool?) ?? (meta['process_raw_text'] as bool? ?? false),
-      buttonToText: (json['button_to_text'] as bool?) ?? (meta['button_to_text'] as bool? ?? false),
-      ocrImageAi: (json['ocr_image_ai'] as bool?) ?? (meta['ocr_image_ai'] as bool? ?? false),
-      smartAiRewrite: (json['smart_ai_rewrite'] as bool?) ?? (meta['smart_ai_rewrite'] as bool? ?? false),
-      newsDigest: (json['news_digest'] as bool?) ?? (meta['news_digest'] as bool? ?? false),
-      watermark: (json['watermark'] as String?) ?? (meta['watermark'] as String? ?? ''),
-      aiCreativity: (json['ai_creativity'] as num?)?.toDouble() ?? ((meta['ai_creativity'] as num?)?.toDouble() ?? 0.7),
-      aiMaxTokens: (json['ai_max_tokens'] as num?)?.toInt() ?? ((meta['ai_max_tokens'] as num?)?.toInt() ?? 600),
+      topicId:
+          (json['topic_id'] as num?)?.toInt() ??
+          ((meta['topic_id'] as num?)?.toInt() ?? 0),
+      debugMode:
+          (json['debug_mode'] as bool?) ??
+          (meta['debug_mode'] as bool? ?? false),
+      senderType:
+          (json['sender_type'] as String?) ??
+          (meta['sender_type'] as String? ?? 'Personal Telegram Account'),
+      featureGroup:
+          (json['feature_group'] as String?) ??
+          (meta['feature_group'] as String? ?? 'all'),
+      duplicateFilters:
+          (json['duplicate_filters'] as bool?) ??
+          (meta['duplicate_filters'] as bool? ?? false),
+      cryptoMode:
+          (json['crypto_mode'] as bool?) ??
+          (meta['crypto_mode'] as bool? ?? false),
+      autoPosting:
+          (json['auto_posting'] as bool?) ??
+          (meta['auto_posting'] as bool? ?? false),
+      powerControl:
+          (json['power_control'] as bool?) ??
+          (meta['power_control'] as bool? ?? false),
+      editTimeLimitSeconds:
+          (json['edit_time_limit_seconds'] as num?)?.toInt() ??
+          ((meta['edit_time_limit_seconds'] as num?)?.toInt() ?? 0),
+      processRawText:
+          (json['process_raw_text'] as bool?) ??
+          (meta['process_raw_text'] as bool? ?? false),
+      buttonToText:
+          (json['button_to_text'] as bool?) ??
+          (meta['button_to_text'] as bool? ?? false),
+      ocrImageAi:
+          (json['ocr_image_ai'] as bool?) ??
+          (meta['ocr_image_ai'] as bool? ?? false),
+      smartAiRewrite:
+          (json['smart_ai_rewrite'] as bool?) ??
+          (meta['smart_ai_rewrite'] as bool? ?? false),
+      newsDigest:
+          (json['news_digest'] as bool?) ??
+          (meta['news_digest'] as bool? ?? false),
+      watermark:
+          (json['watermark'] as String?) ??
+          (meta['watermark'] as String? ?? ''),
+      aiCreativity:
+          (json['ai_creativity'] as num?)?.toDouble() ??
+          ((meta['ai_creativity'] as num?)?.toDouble() ?? 0.7),
+      aiMaxTokens:
+          (json['ai_max_tokens'] as num?)?.toInt() ??
+          ((meta['ai_max_tokens'] as num?)?.toInt() ?? 600),
       paidAddons: parsedAddons,
       filters:
           (json['filters'] as List<dynamic>?)

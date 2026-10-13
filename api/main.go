@@ -38,11 +38,12 @@ func main() {
 	mux.HandleFunc("GET /api/version", h.Version)
 	mux.HandleFunc("GET /api/v1/health/services", h.ServicesHealth)
 
-	// Public authentication endpoints (no Bearer [REDACTED] required).
+	// Public authentication endpoints (no Bearer token required).
 	authMux := http.NewServeMux()
 	authMux.HandleFunc("POST /register", h.AuthRegister)
 	authMux.HandleFunc("POST /login", h.AuthLogin)
 	authMux.HandleFunc("POST /exchange-bot-token", h.AuthBotExchange)
+	authMux.HandleFunc("POST /tma", h.AuthTMA)
 	authMux.HandleFunc("PATCH /change-password", h.AuthChangePassword)
 	authMux.HandleFunc("GET /me", h.AuthMe)
 	mux.Handle("/api/auth/", h.StripPrefix(authMux))
@@ -57,6 +58,9 @@ func main() {
 	dashMux.HandleFunc("PUT /rules/{id}", h.UpdateRule)
 	dashMux.HandleFunc("DELETE /rules/{id}", h.DeleteRule)
 	dashMux.HandleFunc("POST /rules/{id}/toggle", h.ToggleRule)
+	dashMux.HandleFunc("POST /rules/{id}/duplicate", h.DuplicateRule)
+	dashMux.HandleFunc("POST /rules/{id}/stop", h.StopRule)
+	dashMux.HandleFunc("POST /rules/{id}/restart", h.RestartRule)
 	dashMux.HandleFunc("POST /rules/{id}/route-path", h.RoutePathQuickSet)
 	dashMux.HandleFunc("GET /sessions", h.ListSessions)
 	dashMux.HandleFunc("POST /sessions/{id}/backup", h.BackupSession)

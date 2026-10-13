@@ -257,55 +257,114 @@ func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
 		if rl == nil || rl.OwnerUserId != id.UserID {
 			continue
 		}
-		out = append(out, map[string]any{
-			"id":                        rl.Id,
-			"session_id":                rl.SessionId,
-			"source_chat_id":            rl.SourceChatId,
-			"source_chat_name":          rl.SourceChatName,
-			"target_chat_id":            rl.TargetChatId,
-			"target_chat_name":          rl.TargetChatName,
-			"routing_type":              pb.RoutingType_name[int32(rl.RoutingType)],
-			"forward_mode":              pb.ForwardMode_name[int32(rl.ForwardMode)],
-			"is_active":                 rl.IsActive,
-			"filter_rule_id":            rl.FilterRuleId,
-			"ai_config_id":              rl.AiConfigId,
-			"ai_fallback_policy":        rl.AiFallbackPolicy,
-			"ai_prompt_version":         rl.AiPromptVersion,
-			"ai_timeout_seconds":        rl.AiTimeoutSeconds,
-			"remove_links":              rl.RemoveLinks,
-			"custom_caption_template":   rl.CustomCaptionTemplate,
-			"created_at":                rl.CreatedAt,
-			"updated_at":                rl.UpdatedAt,
-			"name":                      rl.Name,
-			"description":               rl.Description,
-			"target_chat_ids":           rl.TargetChatIds,
-			"message_category":          rl.MessageCategory,
-			"intermediate_channel_id":   rl.IntermediateChannelId,
-			"intermediate_channel_name": rl.IntermediateChannelName,
-			"use_intermediate":          rl.UseIntermediate,
-			"fallback_mode":             pb.ForwardMode_name[int32(rl.FallbackMode)],
-			"fallback_enabled":          rl.FallbackEnabled,
-			"detection_criteria":        json.Unmarshal([]byte(rl.DetectionCriteriaJson), &map[string]any{}),
-			"detection_criteria_json":   rl.DetectionCriteriaJson,
-			"priority":                  rl.Priority,
-			"execution_order":           rl.ExecutionOrder,
-			"multi_route":               rl.MultiRoute,
-			"media_handling":            rl.MediaHandling,
-			"dedupe_policy":             rl.DedupePolicy,
-			"max_retries":               rl.MaxRetries,
-			"rate_limit_per_minute":     rl.RateLimitPerMinute,
-			"custom_header":             rl.CustomHeader,
-			"custom_footer":             rl.CustomFooter,
-			"header_enabled":            rl.HeaderEnabled,
-			"is_paused":                 rl.IsPaused,
-			"version":                   rl.Version,
-			"custom_metadata_json":      rl.CustomMetadataJson,
-		})
+		out = append(out, formatRuleJSON(rl))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"rules": out,
 		"total": len(out),
 	})
+}
+
+func formatRuleJSON(rl *pb.ForwardRule) map[string]any {
+	if rl == nil {
+		return map[string]any{}
+	}
+	metaMap := make(map[string]any)
+	if rl.CustomMetadataJson != "" {
+		_ = json.Unmarshal([]byte(rl.CustomMetadataJson), &metaMap)
+	}
+	var criteria any
+	if rl.DetectionCriteriaJson != "" {
+		_ = json.Unmarshal([]byte(rl.DetectionCriteriaJson), &criteria)
+	}
+
+	res := map[string]any{
+		"id":                        rl.Id,
+		"session_id":                rl.SessionId,
+		"source_chat_id":            rl.SourceChatId,
+		"source_chat_name":          rl.SourceChatName,
+		"target_chat_id":            rl.TargetChatId,
+		"target_chat_name":          rl.TargetChatName,
+		"routing_type":              pb.RoutingType_name[int32(rl.RoutingType)],
+		"forward_mode":              pb.ForwardMode_name[int32(rl.ForwardMode)],
+		"is_active":                 rl.IsActive,
+		"filter_rule_id":            rl.FilterRuleId,
+		"ai_config_id":              rl.AiConfigId,
+		"ai_fallback_policy":        rl.AiFallbackPolicy,
+		"ai_prompt_version":         rl.AiPromptVersion,
+		"ai_timeout_seconds":        rl.AiTimeoutSeconds,
+		"remove_links":              rl.RemoveLinks,
+		"custom_caption_template":   rl.CustomCaptionTemplate,
+		"created_at":                rl.CreatedAt,
+		"updated_at":                rl.UpdatedAt,
+		"name":                      rl.Name,
+		"description":               rl.Description,
+		"target_chat_ids":           rl.TargetChatIds,
+		"message_category":          rl.MessageCategory,
+		"intermediate_channel_id":   rl.IntermediateChannelId,
+		"intermediate_channel_name": rl.IntermediateChannelName,
+		"use_intermediate":          rl.UseIntermediate,
+		"fallback_mode":             pb.ForwardMode_name[int32(rl.FallbackMode)],
+		"fallback_enabled":          rl.FallbackEnabled,
+		"detection_criteria":        criteria,
+		"detection_criteria_json":   rl.DetectionCriteriaJson,
+		"priority":                  rl.Priority,
+		"execution_order":           rl.ExecutionOrder,
+		"multi_route":               rl.MultiRoute,
+		"media_handling":            rl.MediaHandling,
+		"dedupe_policy":             rl.DedupePolicy,
+		"max_retries":               rl.MaxRetries,
+		"rate_limit_per_minute":     rl.RateLimitPerMinute,
+		"custom_header":             rl.CustomHeader,
+		"custom_footer":             rl.CustomFooter,
+		"header_enabled":            rl.HeaderEnabled,
+		"is_paused":                 rl.IsPaused,
+		"version":                   rl.Version,
+		"custom_metadata_json":      rl.CustomMetadataJson,
+		"metadata":                  metaMap,
+	}
+	for k, v := range metaMap {
+		if _, exists := res[k]; !exists {
+			res[k] = v
+		}
+	}
+	return res
+}
+
+func enrichCustomMetadata(rawBody []byte, rule *pb.ForwardRule) {
+	if len(rawBody) == 0 || rule == nil {
+		return
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(rawBody, &raw); err != nil {
+		return
+	}
+	meta := make(map[string]any)
+	if rule.CustomMetadataJson != "" {
+		_ = json.Unmarshal([]byte(rule.CustomMetadataJson), &meta)
+	}
+	if rawMeta, ok := raw["metadata"].(map[string]any); ok {
+		for k, v := range rawMeta {
+			meta[k] = v
+		}
+	}
+	parityKeys := []string{
+		"topic_id", "debug_mode", "sender_type", "feature_group",
+		"duplicate_filters", "crypto_mode", "auto_posting", "power_control",
+		"edit_time_limit_seconds", "process_raw_text", "button_to_text",
+		"ocr_image_ai", "smart_ai_rewrite", "news_digest", "watermark",
+		"ai_creativity", "ai_max_tokens", "paid_addons",
+	}
+	for _, k := range parityKeys {
+		if val, ok := raw[k]; ok {
+			meta[k] = val
+		}
+	}
+	if len(meta) > 0 {
+		if b, err := json.Marshal(meta); err == nil {
+			rule.CustomMetadataJson = string(b)
+		}
+	}
 }
 
 func normalizeChatID(s string) string {
@@ -372,10 +431,19 @@ func (h *Handlers) resolveChat(ctx context.Context, sessionID, handle string, ow
 
 func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 	id := identity(r)
-	var rule pb.ForwardRule
-	if !bindPB(w, r, &rule) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
 		return
 	}
+	var rule pb.ForwardRule
+	opts := protojson.UnmarshalOptions{DiscardUnknown: true}
+	if err := opts.Unmarshal(body, &rule); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		return
+	}
+	enrichCustomMetadata(body, &rule)
+
 	if ok, errCode := checkRuleEndpoints(rule.SourceChatId, rule.TargetChatId, rule.IntermediateChannelId, rule.UseIntermediate); !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "Invalid rule endpoints: " + errCode,
@@ -431,7 +499,7 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, resp)
+	writeJSON(w, http.StatusCreated, formatRuleJSON(resp))
 }
 
 func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
@@ -458,10 +526,19 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var rule pb.ForwardRule
-	if !bindPB(w, r, &rule) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
 		return
 	}
+	var rule pb.ForwardRule
+	opts := protojson.UnmarshalOptions{DiscardUnknown: true}
+	if err := opts.Unmarshal(body, &rule); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		return
+	}
+	enrichCustomMetadata(body, &rule)
+
 	rule.Id = r.PathValue("id")
 	if rule.SourceChatId != "" && rule.TargetChatId != "" {
 		if ok, errCode := checkRuleEndpoints(rule.SourceChatId, rule.TargetChatId, rule.IntermediateChannelId, rule.UseIntermediate); !ok {
@@ -500,7 +577,112 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, formatRuleJSON(resp))
+}
+
+func (h *Handlers) DuplicateRule(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+
+	listResp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{OwnerUserId: id.UserID})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	var target *pb.ForwardRule
+	for _, rule := range listResp.Rules {
+		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
+			target = rule
+			break
+		}
+	}
+	if target == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
+		return
+	}
+
+	cloned := *target
+	cloned.Id = fmt.Sprintf("%s_copy_%d", target.Id, time.Now().Unix()%100000)
+	if cloned.Name != "" {
+		cloned.Name = cloned.Name + " (Copy)"
+	} else {
+		cloned.Name = "Copy of " + target.Id
+	}
+	cloned.OwnerUserId = id.UserID
+	cloned.CreatedAt = time.Now().Unix()
+	cloned.UpdatedAt = time.Now().Unix()
+
+	resp, err := h.c.Rules.CreateRule(ctx, &pb.CreateRuleRequest{Rule: &cloned})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, formatRuleJSON(resp))
+}
+
+func (h *Handlers) StopRule(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+
+	listResp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{OwnerUserId: id.UserID})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	var target *pb.ForwardRule
+	for _, rule := range listResp.Rules {
+		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
+			target = rule
+			break
+		}
+	}
+	if target == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
+		return
+	}
+
+	target.IsActive = false
+	resp, err := h.c.Rules.UpdateRule(ctx, &pb.UpdateRuleRequest{Rule: target})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, formatRuleJSON(resp))
+}
+
+func (h *Handlers) RestartRule(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+
+	listResp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{OwnerUserId: id.UserID})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	var target *pb.ForwardRule
+	for _, rule := range listResp.Rules {
+		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
+			target = rule
+			break
+		}
+	}
+	if target == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
+		return
+	}
+
+	target.IsActive = true
+	target.IsPaused = false
+	target.PausedUntil = 0
+	resp, err := h.c.Rules.UpdateRule(ctx, &pb.UpdateRuleRequest{Rule: target})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, formatRuleJSON(resp))
 }
 
 func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {
@@ -546,7 +728,7 @@ func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, rule := range resp.Rules {
 		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
-			writeJSON(w, http.StatusOK, rule)
+			writeJSON(w, http.StatusOK, formatRuleJSON(rule))
 			return
 		}
 	}
@@ -579,7 +761,7 @@ func (h *Handlers) ToggleRule(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, upResp)
+	writeJSON(w, http.StatusOK, formatRuleJSON(upResp))
 }
 
 func (h *Handlers) RoutePathQuickSet(w http.ResponseWriter, r *http.Request) {
