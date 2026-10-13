@@ -73,10 +73,12 @@ class AppMessagesEn {
 
     // sessions
     'sessions_title': 'Telegram sessions',
-    'sessions_empty': 'No Telegram account is linked yet. Add one to start forwarding.',
+    'sessions_empty':
+        'No Telegram account is linked yet. Add one to start forwarding.',
     'sessions_add': 'Link a Telegram account',
     'sessions_terminate': 'Disconnect',
-    'sessions_terminate_confirm': 'Disconnect this Telegram account? Forwarding rules that use it stop running.',
+    'sessions_terminate_confirm':
+        'Disconnect this Telegram account? Forwarding rules that use it stop running.',
     'sessions_active': 'Connected',
     'sessions_inactive': 'Offline',
     'sessions_status_live': 'live',
@@ -86,7 +88,8 @@ class AppMessagesEn {
     'tg_login_title': 'Link Telegram account',
     'tg_login_phone': 'Phone number',
     'tg_login_phone_hint': '+98 912 000 0000',
-    'tg_login_phone_invalid': 'Enter the phone number in international format, e.g. +989120000000',
+    'tg_login_phone_invalid':
+        'Enter the phone number in international format, e.g. +989120000000',
     'tg_login_code': 'Verification code',
     'tg_login_code_hint': 'Code from the Telegram app',
     'tg_login_code_invalid': 'Enter the digits Telegram sent you',
@@ -97,7 +100,8 @@ class AppMessagesEn {
     'tg_login_cancel': 'Cancel login',
     'tg_login_success': 'Telegram account linked',
     'tg_login_state_awaiting_code': 'Enter the code Telegram sent to {phone}',
-    'tg_login_state_awaiting_password': 'Enter your two-step verification password',
+    'tg_login_state_awaiting_password':
+        'Enter your two-step verification password',
     'tg_login_state_completed': 'Connected',
     'tg_login_state_failed': 'Login failed',
     'tg_login_state_expired': 'This login expired. Start it again.',
@@ -119,7 +123,8 @@ class AppMessagesEn {
 
     // rules
     'rules_title': 'Forwarding rules',
-    'rules_empty': 'No forwarding rules yet. Create one to start copying messages.',
+    'rules_empty':
+        'No forwarding rules yet. Create one to start copying messages.',
     'rules_create': 'New rule',
     'rules_source': 'Source channel',
     'rules_target': 'Destination channel',
@@ -136,8 +141,10 @@ class AppMessagesEn {
     'rules_disabled': 'Disabled',
     'rules_toggle': 'Enable / disable',
     'rules_delete_confirm': 'Delete this forwarding rule?',
-    'rules_concurrent_edit': 'This rule was changed elsewhere. Reload it and try again.',
-    'rules_validation_failed': 'The server rejected the form. Check the highlighted fields.',
+    'rules_concurrent_edit':
+        'This rule was changed elsewhere. Reload it and try again.',
+    'rules_validation_failed':
+        'The server rejected the form. Check the highlighted fields.',
     'rules_source_required': 'Pick a source channel',
     'rules_target_required': 'Pick a destination channel',
     'rules_session_required': 'Pick a Telegram session first',
@@ -170,7 +177,8 @@ class AppMessagesEn {
     'ai_language': 'Target language',
     'ai_prompt': 'Prompt',
     'ai_base_url': 'Provider base URL (optional)',
-    'ai_note': 'API keys are configured from the bot or the web dashboard. The mobile app never holds provider keys.',
+    'ai_note':
+        'API keys are configured from the bot or the web dashboard. The mobile app never holds provider keys.',
 
     // logs
     'logs_title': 'Recent errors',
@@ -195,7 +203,8 @@ class AppMessagesEn {
     'settings_version': 'Version',
 
     // server compat
-    'incompatible_server': 'This server is running an older AutoTelegramForward release. Update it to {version} or newer.',
+    'incompatible_server':
+        'This server is running an older AutoTelegramForward release. Update it to {version} or newer.',
   };
 
   const AppMessagesEn();
@@ -231,12 +240,10 @@ class AppMessages {
     return AppMessages(locale);
   }
 
-  static const LocalizationsDelegate<AppMessages> delegate = _AppMessagesDelegate();
+  static const LocalizationsDelegate<AppMessages> delegate =
+      _AppMessagesDelegate();
 
-  static const supportedLocales = <Locale>[
-    Locale('en'),
-    Locale('fa'),
-  ];
+  static const supportedLocales = <Locale>[Locale('en'), Locale('fa')];
 
   static const en = _en;
 
@@ -253,8 +260,10 @@ class AppMessages {
   String loginState(LoginChallenge challenge, String phoneDisplay) {
     switch (challenge.state) {
       case LoginChallengeState.awaitingCode:
-        return get('tg_login_state_awaiting_code',
-            params: {'phone': phoneDisplay});
+        return get(
+          'tg_login_state_awaiting_code',
+          params: {'phone': phoneDisplay},
+        );
       case LoginChallengeState.awaitingPassword:
         return get('tg_login_state_awaiting_password');
       case LoginChallengeState.completed:
@@ -264,8 +273,10 @@ class AppMessages {
       case LoginChallengeState.expired:
         return get('tg_login_state_expired');
       case LoginChallengeState.rateLimited:
-        return get('tg_login_state_rate_limited',
-            params: {'seconds': '${challenge.retryAfterSeconds}'});
+        return get(
+          'tg_login_state_rate_limited',
+          params: {'seconds': '${challenge.retryAfterSeconds}'},
+        );
       case LoginChallengeState.cancelled:
         return get('tg_login_state_cancelled');
       default:
@@ -295,8 +306,7 @@ class _AppMessagesDelegate extends LocalizationsDelegate<AppMessages> {
   const _AppMessagesDelegate();
 
   @override
-  bool isSupported(Locale locale) =>
-      ['en', 'fa'].contains(locale.languageCode);
+  bool isSupported(Locale locale) => ['en', 'fa'].contains(locale.languageCode);
 
   @override
   Future<AppMessages> load(Locale locale) async => AppMessages(locale);

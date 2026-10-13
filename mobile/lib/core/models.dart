@@ -43,8 +43,7 @@ class AppError {
           retryable == other.retryable;
 
   @override
-  int get hashCode =>
-      Object.hash(kind, message, statusCode, retryable);
+  int get hashCode => Object.hash(kind, message, statusCode, retryable);
 }
 
 /// Stable error taxonomy used across the app and in tests.
@@ -91,25 +90,26 @@ class AuthSession {
   bool get isValid => token.isNotEmpty && DateTime.now().isBefore(expiresAt);
 
   Map<String, dynamic> toJson() => {
-        'token': token,
-        'user_id': userId,
-        'username': username,
-        'is_admin': isAdmin,
-        'server_url': serverUrl,
-        'expires_at': expiresAt.toIso8601String(),
-      };
+    'token': token,
+    'user_id': userId,
+    'username': username,
+    'is_admin': isAdmin,
+    'server_url': serverUrl,
+    'expires_at': expiresAt.toIso8601String(),
+  };
 
   factory AuthSession.fromJson(Map<String, dynamic> json) => AuthSession(
-        token: json['token'] as String,
-        userId: (json['user_id'] as num).toInt(),
-        username: json['username'] as String,
-        isAdmin: json['is_admin'] as bool? ?? false,
-        serverUrl: json['server_url'] as String,
-        expiresAt: json['expires_at'] is String
+    token: json['token'] as String,
+    userId: (json['user_id'] as num).toInt(),
+    username: json['username'] as String,
+    isAdmin: json['is_admin'] as bool? ?? false,
+    serverUrl: json['server_url'] as String,
+    expiresAt:
+        json['expires_at'] is String
             ? DateTime.tryParse(json['expires_at'] as String) ??
                 DateTime.now().add(const Duration(days: 7))
             : DateTime.now().add(const Duration(days: 7)),
-      );
+  );
 
   @override
   String toString() =>
@@ -143,9 +143,14 @@ class TelegramSession {
   final int ownerUserId;
 
   String get displayName =>
-      firstName.isNotEmpty ? firstName : (username.isNotEmpty ? '@$username' : (phone.isNotEmpty ? phone : id));
+      firstName.isNotEmpty
+          ? firstName
+          : (username.isNotEmpty
+              ? '@$username'
+              : (phone.isNotEmpty ? phone : id));
 
-  factory TelegramSession.fromJson(Map<String, dynamic> json) => TelegramSession(
+  factory TelegramSession.fromJson(Map<String, dynamic> json) =>
+      TelegramSession(
         id: json['id'] as String,
         isActive: json['is_active'] as bool? ?? false,
         phone: json['phone_number'] as String? ?? '',
@@ -249,100 +254,118 @@ class ForwardRule {
     String? albumMode,
     int? version,
     bool? isEnabled,
-  }) =>
-      ForwardRule(
-        id: id ?? this.id,
-        sessionId: sessionId ?? this.sessionId,
-        sourceChatId: sourceChatId ?? this.sourceChatId,
-        sourceChatTitle: sourceChatTitle ?? this.sourceChatTitle,
-        targetChatId: targetChatId ?? this.targetChatId,
-        targetChatTitle: targetChatTitle ?? this.targetChatTitle,
-        intermediateChannelId: intermediateChannelId ?? this.intermediateChannelId,
-        useVipRouting: useVipRouting ?? this.useVipRouting,
-        filters: filters ?? this.filters,
-        filterMode: filterMode ?? this.filterMode,
-        mediaMode: mediaMode ?? this.mediaMode,
-        delaySeconds: delaySeconds ?? this.delaySeconds,
-        headerTemplate: headerTemplate ?? this.headerTemplate,
-        footerTemplate: footerTemplate ?? this.footerTemplate,
-        aiConfigId: aiConfigId ?? this.aiConfigId,
-        blockVoice: blockVoice ?? this.blockVoice,
-        blockStickers: blockStickers ?? this.blockStickers,
-        removeEmojis: removeEmojis ?? this.removeEmojis,
-        syncDeletes: syncDeletes ?? this.syncDeletes,
-        ignoreEdits: ignoreEdits ?? this.ignoreEdits,
-        albumMode: albumMode ?? this.albumMode,
-        version: version ?? this.version,
-        isEnabled: isEnabled ?? this.isEnabled,
-        ownerUserId: ownerUserId,
-      );
+  }) => ForwardRule(
+    id: id ?? this.id,
+    sessionId: sessionId ?? this.sessionId,
+    sourceChatId: sourceChatId ?? this.sourceChatId,
+    sourceChatTitle: sourceChatTitle ?? this.sourceChatTitle,
+    targetChatId: targetChatId ?? this.targetChatId,
+    targetChatTitle: targetChatTitle ?? this.targetChatTitle,
+    intermediateChannelId: intermediateChannelId ?? this.intermediateChannelId,
+    useVipRouting: useVipRouting ?? this.useVipRouting,
+    filters: filters ?? this.filters,
+    filterMode: filterMode ?? this.filterMode,
+    mediaMode: mediaMode ?? this.mediaMode,
+    delaySeconds: delaySeconds ?? this.delaySeconds,
+    headerTemplate: headerTemplate ?? this.headerTemplate,
+    footerTemplate: footerTemplate ?? this.footerTemplate,
+    aiConfigId: aiConfigId ?? this.aiConfigId,
+    blockVoice: blockVoice ?? this.blockVoice,
+    blockStickers: blockStickers ?? this.blockStickers,
+    removeEmojis: removeEmojis ?? this.removeEmojis,
+    syncDeletes: syncDeletes ?? this.syncDeletes,
+    ignoreEdits: ignoreEdits ?? this.ignoreEdits,
+    albumMode: albumMode ?? this.albumMode,
+    version: version ?? this.version,
+    isEnabled: isEnabled ?? this.isEnabled,
+    ownerUserId: ownerUserId,
+  );
 
   Map<String, dynamic> toCreateJson() => {
-        'session_id': sessionId,
-        'source_chat_id': sourceChatId,
-        'source_chat_title': sourceChatTitle,
-        'target_chat_id': targetChatId,
-        'target_chat_title': targetChatTitle,
-        if (intermediateChannelId.isNotEmpty)
-          'intermediate_channel_id': intermediateChannelId,
-        'use_vip_routing': useVipRouting,
-        'filters': filters,
-        'filter_mode': filterMode,
-        'media_mode': mediaMode,
-        'delay_seconds': delaySeconds,
-        'header_template': headerTemplate,
-        'footer_template': footerTemplate,
-        if (aiConfigId.isNotEmpty) 'ai_config_id': aiConfigId,
-        'block_voice': blockVoice,
-        'block_stickers': blockStickers,
-        'remove_emojis': removeEmojis,
-        'sync_deletes': syncDeletes,
-        'ignore_edits': ignoreEdits,
-        'album_mode': albumMode,
-      };
+    'session_id': sessionId,
+    'source_chat_id': sourceChatId,
+    'source_chat_title': sourceChatTitle,
+    'target_chat_id': targetChatId,
+    'target_chat_title': targetChatTitle,
+    if (intermediateChannelId.isNotEmpty)
+      'intermediate_channel_id': intermediateChannelId,
+    'use_vip_routing': useVipRouting,
+    'filters': filters,
+    'filter_mode': filterMode,
+    'media_mode': mediaMode,
+    'delay_seconds': delaySeconds,
+    'header_template': headerTemplate,
+    'footer_template': footerTemplate,
+    if (aiConfigId.isNotEmpty) 'ai_config_id': aiConfigId,
+    'block_voice': blockVoice,
+    'block_stickers': blockStickers,
+    'remove_emojis': removeEmojis,
+    'sync_deletes': syncDeletes,
+    'ignore_edits': ignoreEdits,
+    'album_mode': albumMode,
+  };
 
   Map<String, dynamic> toUpdateJson() => {
-        ...toCreateJson(),
-        'expected_version': version,
-        'is_enabled': isEnabled,
-      };
+    ...toCreateJson(),
+    'expected_version': version,
+    'is_enabled': isEnabled,
+  };
 
   factory ForwardRule.fromJson(Map<String, dynamic> json) => ForwardRule(
-        id: json['id'] as String,
-        sessionId: json['session_id'] as String? ?? '',
-        sourceChatId: json['source_chat_id']?.toString() ?? '',
-        sourceChatTitle: json['source_chat_title'] as String? ?? '',
-        targetChatId: json['target_chat_id']?.toString() ?? '',
-        targetChatTitle: json['target_chat_title'] as String? ?? '',
-        intermediateChannelId: json['intermediate_channel_id']?.toString() ?? '',
-        useVipRouting: json['use_vip_routing'] as bool? ?? false,
-        filters: (json['filters'] as List<dynamic>?)
-                ?.map((e) => e.toString())
-                .toList(growable: false) ??
-            const [],
-        filterMode: json['filter_mode'] as String? ?? 'all',
-        mediaMode: json['media_mode'] as String? ?? 'all',
-        delaySeconds: (json['delay_seconds'] as num?)?.toInt() ?? 0,
-        headerTemplate: json['header_template'] as String? ?? '',
-        footerTemplate: json['footer_template'] as String? ?? '',
-        aiConfigId: json['ai_config_id'] as String? ?? '',
-        blockVoice: (json['block_voice'] as bool?) ??
-            (json['metadata'] is Map ? (json['metadata']['block_voice'] as bool? ?? false) : false),
-        blockStickers: (json['block_stickers'] as bool?) ??
-            (json['metadata'] is Map ? (json['metadata']['block_stickers'] as bool? ?? false) : false),
-        removeEmojis: (json['remove_emojis'] as bool?) ??
-            (json['metadata'] is Map ? (json['metadata']['remove_emojis'] as bool? ?? false) : false),
-        syncDeletes: (json['sync_deletes'] as bool?) ??
-            (json['metadata'] is Map ? (json['metadata']['sync_deletes'] as bool? ?? false) : false),
-        ignoreEdits: (json['ignore_edits'] as bool?) ??
-            (json['metadata'] is Map ? (json['metadata']['ignore_edits'] as bool? ?? false) : false),
-        albumMode: (json['album_mode'] as String?) ??
-            (json['metadata'] is Map ? (json['metadata']['album_mode'] as String? ?? 'album') : 'album'),
-        version: (json['version'] as num?)?.toInt() ?? 0,
-        isEnabled: json['is_enabled'] as bool? ??
-            !(json['is_paused'] as bool? ?? false),
-        ownerUserId: (json['owner_user_id'] as num?)?.toInt() ?? 0,
-      );
+    id: json['id'] as String,
+    sessionId: json['session_id'] as String? ?? '',
+    sourceChatId: json['source_chat_id']?.toString() ?? '',
+    sourceChatTitle: json['source_chat_title'] as String? ?? '',
+    targetChatId: json['target_chat_id']?.toString() ?? '',
+    targetChatTitle: json['target_chat_title'] as String? ?? '',
+    intermediateChannelId: json['intermediate_channel_id']?.toString() ?? '',
+    useVipRouting: json['use_vip_routing'] as bool? ?? false,
+    filters:
+        (json['filters'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList(growable: false) ??
+        const [],
+    filterMode: json['filter_mode'] as String? ?? 'all',
+    mediaMode: json['media_mode'] as String? ?? 'all',
+    delaySeconds: (json['delay_seconds'] as num?)?.toInt() ?? 0,
+    headerTemplate: json['header_template'] as String? ?? '',
+    footerTemplate: json['footer_template'] as String? ?? '',
+    aiConfigId: json['ai_config_id'] as String? ?? '',
+    blockVoice:
+        (json['block_voice'] as bool?) ??
+        (json['metadata'] is Map
+            ? (json['metadata']['block_voice'] as bool? ?? false)
+            : false),
+    blockStickers:
+        (json['block_stickers'] as bool?) ??
+        (json['metadata'] is Map
+            ? (json['metadata']['block_stickers'] as bool? ?? false)
+            : false),
+    removeEmojis:
+        (json['remove_emojis'] as bool?) ??
+        (json['metadata'] is Map
+            ? (json['metadata']['remove_emojis'] as bool? ?? false)
+            : false),
+    syncDeletes:
+        (json['sync_deletes'] as bool?) ??
+        (json['metadata'] is Map
+            ? (json['metadata']['sync_deletes'] as bool? ?? false)
+            : false),
+    ignoreEdits:
+        (json['ignore_edits'] as bool?) ??
+        (json['metadata'] is Map
+            ? (json['metadata']['ignore_edits'] as bool? ?? false)
+            : false),
+    albumMode:
+        (json['album_mode'] as String?) ??
+        (json['metadata'] is Map
+            ? (json['metadata']['album_mode'] as String? ?? 'album')
+            : 'album'),
+    version: (json['version'] as num?)?.toInt() ?? 0,
+    isEnabled:
+        json['is_enabled'] as bool? ?? !(json['is_paused'] as bool? ?? false),
+    ownerUserId: (json['owner_user_id'] as num?)?.toInt() ?? 0,
+  );
 
   @override
   String toString() =>
@@ -373,29 +396,28 @@ class FilterRule {
     String? kind,
     bool? isEnabled,
     int? version,
-  }) =>
-      FilterRule(
-        id: id ?? this.id,
-        pattern: pattern ?? this.pattern,
-        kind: kind ?? this.kind,
-        isEnabled: isEnabled ?? this.isEnabled,
-        version: version ?? this.version,
-      );
+  }) => FilterRule(
+    id: id ?? this.id,
+    pattern: pattern ?? this.pattern,
+    kind: kind ?? this.kind,
+    isEnabled: isEnabled ?? this.isEnabled,
+    version: version ?? this.version,
+  );
 
   Map<String, dynamic> toJson() => {
-        'pattern': pattern,
-        'kind': kind,
-        'is_enabled': isEnabled,
-        'expected_version': version,
-      };
+    'pattern': pattern,
+    'kind': kind,
+    'is_enabled': isEnabled,
+    'expected_version': version,
+  };
 
   factory FilterRule.fromJson(Map<String, dynamic> json) => FilterRule(
-        id: json['id'] as String,
-        pattern: json['pattern'] as String? ?? '',
-        kind: json['kind'] as String? ?? 'blacklist',
-        isEnabled: json['is_enabled'] as bool? ?? true,
-        version: (json['version'] as num?)?.toInt() ?? 0,
-      );
+    id: json['id'] as String,
+    pattern: json['pattern'] as String? ?? '',
+    kind: json['kind'] as String? ?? 'blacklist',
+    isEnabled: json['is_enabled'] as bool? ?? true,
+    version: (json['version'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// ---- AI configuration ---------------------------------------------------
@@ -434,40 +456,39 @@ class AiConfig {
     String? baseUrl,
     bool? isEnabled,
     int? version,
-  }) =>
-      AiConfig(
-        id: id ?? this.id,
-        provider: provider ?? this.provider,
-        model: model ?? this.model,
-        targetLanguage: targetLanguage ?? this.targetLanguage,
-        prompt: prompt ?? this.prompt,
-        baseUrl: baseUrl ?? this.baseUrl,
-        isEnabled: isEnabled ?? this.isEnabled,
-        version: version ?? this.version,
-      );
+  }) => AiConfig(
+    id: id ?? this.id,
+    provider: provider ?? this.provider,
+    model: model ?? this.model,
+    targetLanguage: targetLanguage ?? this.targetLanguage,
+    prompt: prompt ?? this.prompt,
+    baseUrl: baseUrl ?? this.baseUrl,
+    isEnabled: isEnabled ?? this.isEnabled,
+    version: version ?? this.version,
+  );
 
   /// Sent to the server. `api_key` is deliberately absent: the mobile client
   /// never holds provider keys; the existing bot/web flows own that.
   Map<String, dynamic> toJson() => {
-        'provider': provider,
-        'model': model,
-        'target_language': targetLanguage,
-        'prompt': prompt,
-        if (baseUrl.isNotEmpty) 'base_url': baseUrl,
-        'is_enabled': isEnabled,
-        'expected_version': version,
-      };
+    'provider': provider,
+    'model': model,
+    'target_language': targetLanguage,
+    'prompt': prompt,
+    if (baseUrl.isNotEmpty) 'base_url': baseUrl,
+    'is_enabled': isEnabled,
+    'expected_version': version,
+  };
 
   factory AiConfig.fromJson(Map<String, dynamic> json) => AiConfig(
-        id: json['id'] as String,
-        provider: json['provider'] as String? ?? '',
-        model: json['model'] as String? ?? '',
-        targetLanguage: json['target_language'] as String? ?? '',
-        prompt: json['prompt'] as String? ?? '',
-        baseUrl: json['base_url'] as String? ?? '',
-        isEnabled: json['is_enabled'] as bool? ?? false,
-        version: (json['version'] as num?)?.toInt() ?? 0,
-      );
+    id: json['id'] as String,
+    provider: json['provider'] as String? ?? '',
+    model: json['model'] as String? ?? '',
+    targetLanguage: json['target_language'] as String? ?? '',
+    prompt: json['prompt'] as String? ?? '',
+    baseUrl: json['base_url'] as String? ?? '',
+    isEnabled: json['is_enabled'] as bool? ?? false,
+    version: (json['version'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// ---- Dashboard / operations --------------------------------------------
@@ -498,32 +519,38 @@ class SystemStats {
 
   factory SystemStats.fromJson(Map<String, dynamic> json) {
     final dynamic rules = json['rules'];
-    final int totalRules = rules is Map
-        ? (rules['total'] as num?)?.toInt() ??
-            (json['total_rules'] as num?)?.toInt() ??
-            0
-        : (json['total_rules'] as num?)?.toInt() ?? 0;
-    final int activeRules = rules is Map
-        ? (rules['active'] as num?)?.toInt() ??
-            (json['active_rules'] as num?)?.toInt() ??
-            0
-        : (json['active_rules'] as num?)?.toInt() ?? 0;
+    final int totalRules =
+        rules is Map
+            ? (rules['total'] as num?)?.toInt() ??
+                (json['total_rules'] as num?)?.toInt() ??
+                0
+            : (json['total_rules'] as num?)?.toInt() ?? 0;
+    final int activeRules =
+        rules is Map
+            ? (rules['active'] as num?)?.toInt() ??
+                (json['active_rules'] as num?)?.toInt() ??
+                0
+            : (json['active_rules'] as num?)?.toInt() ?? 0;
     return SystemStats(
       totalRules: totalRules,
       activeRules: activeRules,
-      totalSessions: (json['total_sessions'] as num?)?.toInt() ??
+      totalSessions:
+          (json['total_sessions'] as num?)?.toInt() ??
           (json['active_sessions_count'] as num?)?.toInt() ??
           0,
-      activeSessions: (json['active_sessions'] as num?)?.toInt() ??
+      activeSessions:
+          (json['active_sessions'] as num?)?.toInt() ??
           (json['active_sessions_count'] as num?)?.toInt() ??
           0,
       coreRunning: json['core_running'] as bool? ?? false,
       version: json['version'] as String? ?? '',
       uptimeSeconds: (json['uptime_seconds'] as num?)?.toInt() ?? 0,
-      deliveredTotal: (json['delivered_total'] as num?)?.toInt() ??
+      deliveredTotal:
+          (json['delivered_total'] as num?)?.toInt() ??
           (json['total_delivered'] as num?)?.toInt() ??
           0,
-      failedTotal: (json['failed_total'] as num?)?.toInt() ??
+      failedTotal:
+          (json['failed_total'] as num?)?.toInt() ??
           (json['total_failed'] as num?)?.toInt() ??
           0,
     );
@@ -545,11 +572,11 @@ class ServiceHealth {
   final int latencyMs;
 
   factory ServiceHealth.fromJson(Map<String, dynamic> json) => ServiceHealth(
-        name: json['name'] as String? ?? '',
-        online: json['online'] as bool? ?? false,
-        detail: json['detail'] as String? ?? '',
-        latencyMs: (json['latency_ms'] as num?)?.toInt() ?? 0,
-      );
+    name: json['name'] as String? ?? '',
+    online: json['online'] as bool? ?? false,
+    detail: json['detail'] as String? ?? '',
+    latencyMs: (json['latency_ms'] as num?)?.toInt() ?? 0,
+  );
 }
 
 @immutable
@@ -569,32 +596,29 @@ class LogEntry {
   final String eventCode;
 
   factory LogEntry.fromJson(Map<String, dynamic> json) => LogEntry(
-        timestamp: json['timestamp'] as String? ??
-            json['ts'] as String? ??
-            json['time'] as String? ??
-            '',
-        level: (json['level'] as String? ?? 'info').toLowerCase(),
-        category: json['category'] as String? ?? json['source'] as String? ?? '',
-        message: json['message'] as String? ?? json['event'] as String? ?? '',
-        eventCode: json['event_code'] as String? ?? '',
-      );
+    timestamp:
+        json['timestamp'] as String? ??
+        json['ts'] as String? ??
+        json['time'] as String? ??
+        '',
+    level: (json['level'] as String? ?? 'info').toLowerCase(),
+    category: json['category'] as String? ?? json['source'] as String? ?? '',
+    message: json['message'] as String? ?? json['event'] as String? ?? '',
+    eventCode: json['event_code'] as String? ?? '',
+  );
 }
 
 /// Compatibility metadata advertised by `GET /api/v1/health`.
 @immutable
 class ServerMeta {
-  const ServerMeta({
-    required this.version,
-    required this.apiContract,
-  });
+  const ServerMeta({required this.version, required this.apiContract});
 
   final String version;
   final String apiContract;
 
   factory ServerMeta.fromJson(Map<String, dynamic> json) => ServerMeta(
-        version: json['version'] as String? ?? '',
-        apiContract: json['api_contract'] as String? ??
-            json['api_version'] as String? ??
-            '',
-      );
+    version: json['version'] as String? ?? '',
+    apiContract:
+        json['api_contract'] as String? ?? json['api_version'] as String? ?? '',
+  );
 }

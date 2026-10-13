@@ -10,12 +10,12 @@ import 'package:autoforward_mobile/features/auth/login_screen.dart';
 import 'package:autoforward_mobile/l10n/app_messages.dart';
 
 AppEnv _testEnv() => const AppEnv(
-      apiBaseUrl: 'https://atf.example.com/',
-      apiBaseUrlDev: 'http://10.0.2.2:8080/',
-      minSupportedApiVersion: '1.0.0',
-      documentationUrl: 'https://example.com/docs',
-      repositoryUrl: 'https://example.com/repo',
-    );
+  apiBaseUrl: 'https://atf.example.com/',
+  apiBaseUrlDev: 'http://10.0.2.2:8080/',
+  minSupportedApiVersion: '1.0.0',
+  documentationUrl: 'https://example.com/docs',
+  repositoryUrl: 'https://example.com/repo',
+);
 
 Widget createTestApp({required AppState state, required Widget home}) {
   return ChangeNotifierProvider<AppState>.value(
@@ -35,7 +35,9 @@ Widget createTestApp({required AppState state, required Widget home}) {
 }
 
 void main() {
-  testWidgets('LoginScreen renders fields and validates empty inputs', (tester) async {
+  testWidgets('LoginScreen renders fields and validates empty inputs', (
+    tester,
+  ) async {
     final state = AppState(
       env: _testEnv(),
       tokenStore: MemoryTokenStore(),
@@ -43,7 +45,9 @@ void main() {
     );
     await state.restore();
 
-    await tester.pumpWidget(createTestApp(state: state, home: const LoginScreen()));
+    await tester.pumpWidget(
+      createTestApp(state: state, home: const LoginScreen()),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byType(TextFormField), findsNWidgets(2)); // username & password

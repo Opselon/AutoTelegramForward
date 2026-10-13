@@ -37,12 +37,12 @@ class AppEnv {
   final String repositoryUrl;
 
   factory AppEnv.fromJson(Map<String, dynamic> json) => AppEnv(
-        apiBaseUrl: json['apiBaseUrl'] as String,
-        apiBaseUrlDev: json['apiBaseUrlDev'] as String,
-        minSupportedApiVersion: json['minSupportedApiVersion'] as String,
-        documentationUrl: json['documentationUrl'] as String,
-        repositoryUrl: json['repositoryUrl'] as String,
-      );
+    apiBaseUrl: json['apiBaseUrl'] as String,
+    apiBaseUrlDev: json['apiBaseUrlDev'] as String,
+    minSupportedApiVersion: json['minSupportedApiVersion'] as String,
+    documentationUrl: json['documentationUrl'] as String,
+    repositoryUrl: json['repositoryUrl'] as String,
+  );
 
   static Future<AppEnv> load({bool debug = false}) async {
     final raw = await rootBundle.loadString('assets/cfg/env.json');
@@ -84,7 +84,8 @@ class ServerUrl {
     if (uri == null || !uri.hasScheme || uri.host.isEmpty) return null;
     if (uri.hasQuery || uri.hasFragment || uri.userInfo.isNotEmpty) return null;
 
-    final isLoopback = uri.host == 'localhost' ||
+    final isLoopback =
+        uri.host == 'localhost' ||
         uri.host == '127.0.0.1' ||
         uri.host == '10.0.2.2' ||
         uri.host == '[::1]';
@@ -105,7 +106,8 @@ class ServerUrl {
       return 'server_url_invalid';
     }
     final uri = Uri.parse(parsed.normalized);
-    final isLoopback = uri.host == 'localhost' ||
+    final isLoopback =
+        uri.host == 'localhost' ||
         uri.host == '127.0.0.1' ||
         uri.host == '10.0.2.2' ||
         uri.host == '[::1]';

@@ -45,10 +45,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       final statsFuture = client.stats();
-      final healthFuture = client.servicesHealth().catchError((_) => <ServiceHealth>[]);
-      final errorsFuture = client.queryLogs(limit: 5, level: 'error').catchError((_) => <LogEntry>[]);
+      final healthFuture = client.servicesHealth().catchError(
+        (_) => <ServiceHealth>[],
+      );
+      final errorsFuture = client
+          .queryLogs(limit: 5, level: 'error')
+          .catchError((_) => <LogEntry>[]);
 
-      final results = await Future.wait([statsFuture, healthFuture, errorsFuture]);
+      final results = await Future.wait([
+        statsFuture,
+        healthFuture,
+        errorsFuture,
+      ]);
 
       if (!mounted) return;
       setState(() {
@@ -62,7 +70,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         context.read<AppState>().markExpired();
         return;
       }
-      setState(() => _error = exc.error.message.isNotEmpty ? exc.error.message : t.get('state_error'));
+      setState(
+        () =>
+            _error =
+                exc.error.message.isNotEmpty
+                    ? exc.error.message
+                    : t.get('state_error'),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = t.get('state_error'));
@@ -71,7 +85,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Widget _buildStatCard(BuildContext context, {
+  Widget _buildStatCard(
+    BuildContext context, {
     required String label,
     required String value,
     required IconData icon,
@@ -88,14 +103,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
-                Icon(icon, size: 20, color: color ?? Theme.of(context).colorScheme.primary),
+                Text(
+                  label,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                ),
+                Icon(
+                  icon,
+                  size: 20,
+                  color: color ?? Theme.of(context).colorScheme.primary,
+                ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
               value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -138,7 +164,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const Icon(Icons.error_outline, color: Colors.red),
                     const SizedBox(width: 8),
                     Expanded(child: Text(_error!)),
-                    TextButton(onPressed: _load, child: Text(t.get('action_retry'))),
+                    TextButton(
+                      onPressed: _load,
+                      child: Text(t.get('action_retry')),
+                    ),
                   ],
                 ),
               ),
@@ -155,14 +184,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _buildStatCard(
                   context,
                   label: t.get('dash_total_rules'),
-                  value: stats != null ? '${stats.activeRules} / ${stats.totalRules}' : '—',
+                  value:
+                      stats != null
+                          ? '${stats.activeRules} / ${stats.totalRules}'
+                          : '—',
                   icon: Icons.alt_route_rounded,
                   color: const Color(0xFF10B981),
                 ),
                 _buildStatCard(
                   context,
                   label: t.get('dash_sessions'),
-                  value: stats != null ? '${stats.activeSessions} / ${stats.totalSessions}' : '—',
+                  value:
+                      stats != null
+                          ? '${stats.activeSessions} / ${stats.totalSessions}'
+                          : '—',
                   icon: Icons.send_rounded,
                   color: const Color(0xFF06B6D4),
                 ),
@@ -178,7 +213,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   label: t.get('dash_failed'),
                   value: stats != null ? '${stats.failedTotal}' : '—',
                   icon: Icons.error_outline,
-                  color: stats != null && stats.failedTotal > 0 ? Colors.red : Colors.grey,
+                  color:
+                      stats != null && stats.failedTotal > 0
+                          ? Colors.red
+                          : Colors.grey,
                 ),
               ],
             ),
@@ -187,31 +225,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Service Health
             Text(
               t.get('dash_health'),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             if (_services.isEmpty && _loading)
-              const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(),
+                ),
+              )
             else
               Card(
                 margin: EdgeInsets.zero,
                 child: Column(
-                  children: _services.map((svc) {
-                    return ListTile(
-                      dense: true,
-                      leading: Icon(
-                        svc.online ? Icons.check_circle : Icons.cancel,
-                        color: svc.online ? Colors.green : Colors.red,
-                        size: 20,
-                      ),
-                      title: Text(svc.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(svc.detail.isNotEmpty ? svc.detail : (svc.online ? 'reachable' : 'unreachable')),
-                      trailing: Text(
-                        '${svc.latencyMs} ms',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                      ),
-                    );
-                  }).toList(),
+                  children:
+                      _services.map((svc) {
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(
+                            svc.online ? Icons.check_circle : Icons.cancel,
+                            color: svc.online ? Colors.green : Colors.red,
+                            size: 20,
+                          ),
+                          title: Text(
+                            svc.name.toUpperCase(),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            svc.detail.isNotEmpty
+                                ? svc.detail
+                                : (svc.online ? 'reachable' : 'unreachable'),
+                          ),
+                          trailing: Text(
+                            '${svc.latencyMs} ms',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                          ),
+                        );
+                      }).toList(),
                 ),
               ),
             const SizedBox(height: 24),
@@ -219,7 +274,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Recent errors (if any)
             Text(
               t.get('dash_recent_errors'),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             if (_recentErrors.isEmpty)
@@ -229,7 +286,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
-                      const Icon(Icons.sentiment_satisfied_alt, color: Colors.green),
+                      const Icon(
+                        Icons.sentiment_satisfied_alt,
+                        color: Colors.green,
+                      ),
                       const SizedBox(width: 8),
                       Text(t.get('logs_empty')),
                     ],
@@ -240,13 +300,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Card(
                 margin: EdgeInsets.zero,
                 child: Column(
-                  children: _recentErrors.map((err) {
-                    return ListTile(
-                      leading: const Icon(Icons.warning, color: Colors.amber, size: 20),
-                      title: Text(err.message, maxLines: 2, overflow: TextOverflow.ellipsis),
-                      subtitle: Text('${err.category} • ${err.timestamp}'),
-                    );
-                  }).toList(),
+                  children:
+                      _recentErrors.map((err) {
+                        return ListTile(
+                          leading: const Icon(
+                            Icons.warning,
+                            color: Colors.amber,
+                            size: 20,
+                          ),
+                          title: Text(
+                            err.message,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text('${err.category} • ${err.timestamp}'),
+                        );
+                      }).toList(),
                 ),
               ),
           ],

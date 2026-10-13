@@ -39,9 +39,7 @@ class AutoTelegramForwardApp extends StatelessWidget {
   Widget _buildHome(AppState state) {
     switch (state.status) {
       case SessionStatus.unknown:
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        );
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
       case SessionStatus.authenticated:
         return const HomeScreen();
       case SessionStatus.expired:

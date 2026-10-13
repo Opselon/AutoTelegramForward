@@ -18,8 +18,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	pb "autoforward/proto"
 	"autoforward/internal/grpcclient"
+	pb "autoforward/proto"
 )
 
 type Handlers struct {
@@ -650,16 +650,16 @@ func (h *Handlers) TestRule(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
 	resp, err := h.c.Rules.TestRule(ctx, &pb.TestRuleRequest{
-		RuleId:               req.RuleId,
-		SampleText:           req.SampleText,
-		SampleChatId:         req.SampleChatId,
-		SampleSenderId:       req.SampleSenderId,
-		ForwardOriginChatId:  req.ForwardOriginChatId,
+		RuleId:                req.RuleId,
+		SampleText:            req.SampleText,
+		SampleChatId:          req.SampleChatId,
+		SampleSenderId:        req.SampleSenderId,
+		ForwardOriginChatId:   req.ForwardOriginChatId,
 		ForwardOriginUsername: req.ForwardOriginUser,
-		ForwardOriginTitle:   req.ForwardOriginTitle,
-		SampleHasMedia:       req.SampleHasMedia,
-		SampleMediaType:      req.SampleMediaType,
-		OwnerUserId:          identity(r).UserID,
+		ForwardOriginTitle:    req.ForwardOriginTitle,
+		SampleHasMedia:        req.SampleHasMedia,
+		SampleMediaType:       req.SampleMediaType,
+		OwnerUserId:           identity(r).UserID,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -779,15 +779,15 @@ func (h *Handlers) DeliveryStats(w http.ResponseWriter, r *http.Request) {
 	rulesOut := make([]map[string]any, 0, len(rules))
 	for _, st := range rules {
 		rulesOut = append(rulesOut, map[string]any{
-			"rule_id":          st.RuleId,
-			"rule_name":        st.RuleName,
-			"is_active":        st.IsActive,
-			"is_paused":        st.IsPaused,
-			"forwarded":        st.Forwarded,
-			"filtered":         st.Filtered,
-			"errors":           st.Errors,
-			"last_forward_ts":  st.LastForwardTs,
-			"last_error":       st.LastError,
+			"rule_id":         st.RuleId,
+			"rule_name":       st.RuleName,
+			"is_active":       st.IsActive,
+			"is_paused":       st.IsPaused,
+			"forwarded":       st.Forwarded,
+			"filtered":        st.Filtered,
+			"errors":          st.Errors,
+			"last_forward_ts": st.LastForwardTs,
+			"last_error":      st.LastError,
 		})
 	}
 
@@ -837,9 +837,9 @@ func (h *Handlers) ListDeadLetter(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	resp, err := h.c.Delivery.ListDeadLetter(ctx, &pb.ListDeadLetterRequest{
-		RuleId:     r.URL.Query().Get("rule_id"),
-		Limit:      int32(limit),
-		Since:      since,
+		RuleId:      r.URL.Query().Get("rule_id"),
+		Limit:       int32(limit),
+		Since:       since,
 		OwnerUserId: identity(r).UserID,
 	})
 	if err != nil {
@@ -851,9 +851,9 @@ func (h *Handlers) ListDeadLetter(w http.ResponseWriter, r *http.Request) {
 		entries = []*pb.DeadLetterEntry{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"jobs":  entries,
+		"jobs":    entries,
 		"entries": entries,
-		"total": len(entries),
+		"total":   len(entries),
 	})
 }
 
@@ -880,8 +880,8 @@ func (h *Handlers) PurgeDeadLetter(w http.ResponseWriter, r *http.Request) {
 		body.RuleId = r.URL.Query().Get("rule_id")
 	}
 	resp, err := h.c.Delivery.PurgeDeadLetter(ctx, &pb.PurgeDeadLetterRequest{
-		RuleId:     body.RuleId,
-		OlderThan:  body.OlderThan,
+		RuleId:      body.RuleId,
+		OlderThan:   body.OlderThan,
 		OwnerUserId: identity(r).UserID,
 	})
 	if err != nil {
@@ -1184,11 +1184,11 @@ func (h *Handlers) TestPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp, err := h.c.AI.TestPrompt(ctx, &pb.TestPromptRequest{
-		PromptId:     req.PromptId,
-		AiConfigId:   req.AiConfigId,
-		SampleText:   req.SampleText,
-		Version:      req.Version,
-		OwnerUserId:  identity(r).UserID,
+		PromptId:    req.PromptId,
+		AiConfigId:  req.AiConfigId,
+		SampleText:  req.SampleText,
+		Version:     req.Version,
+		OwnerUserId: identity(r).UserID,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -1283,15 +1283,15 @@ func (h *Handlers) QueryLogs(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(logs))
 	for _, l := range logs {
 		out = append(out, map[string]any{
-			"ts":        l.Ts,
-			"level":     l.Level,
-			"severity":  l.Level,
-			"service":   l.Service,
-			"category":  l.Category,
-			"message":   l.Message,
-			"detail":    l.Detail,
+			"ts":         l.Ts,
+			"level":      l.Level,
+			"severity":   l.Level,
+			"service":    l.Service,
+			"category":   l.Category,
+			"message":    l.Message,
+			"detail":     l.Detail,
 			"error_name": l.Category,
-			"id":        l.Ts,
+			"id":         l.Ts,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

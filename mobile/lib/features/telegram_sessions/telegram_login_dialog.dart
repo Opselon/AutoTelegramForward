@@ -95,9 +95,13 @@ class _TelegramLoginDialogState extends State<TelegramLoginDialog> {
       });
     } on ApiException catch (exc) {
       if (!mounted) return;
-      setState(() => _stepError = exc.error.message.isNotEmpty
-          ? t.loginMessage(exc.error.message)
-          : t.get('state_error'));
+      setState(
+        () =>
+            _stepError =
+                exc.error.message.isNotEmpty
+                    ? t.loginMessage(exc.error.message)
+                    : t.get('state_error'),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _stepError = t.get('state_error'));
@@ -230,9 +234,17 @@ class _TelegramLoginDialogState extends State<TelegramLoginDialog> {
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _submitting ? null : _startLogin,
-            child: _submitting
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text(t.get('tg_login_send_code')),
+            child:
+                _submitting
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                    : Text(t.get('tg_login_send_code')),
           ),
         ],
       );
@@ -260,9 +272,17 @@ class _TelegramLoginDialogState extends State<TelegramLoginDialog> {
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _submitting ? null : _submitCode,
-            child: _submitting
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text(t.get('tg_login_verify')),
+            child:
+                _submitting
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                    : Text(t.get('tg_login_verify')),
           ),
           if (_cooldown > 0)
             Padding(
@@ -270,7 +290,9 @@ class _TelegramLoginDialogState extends State<TelegramLoginDialog> {
               child: Text(
                 t.get('login_cooldown', params: {'seconds': '$_cooldown'}),
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.grey),
               ),
             ),
         ],
@@ -298,9 +320,17 @@ class _TelegramLoginDialogState extends State<TelegramLoginDialog> {
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _submitting ? null : _submitPassword,
-            child: _submitting
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text(t.get('tg_login_verify')),
+            child:
+                _submitting
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                    : Text(t.get('tg_login_verify')),
           ),
         ],
       );
@@ -311,9 +341,14 @@ class _TelegramLoginDialogState extends State<TelegramLoginDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Icon(
-            challenge.state == LoginChallengeState.completed ? Icons.check_circle : Icons.error_outline,
+            challenge.state == LoginChallengeState.completed
+                ? Icons.check_circle
+                : Icons.error_outline,
             size: 48,
-            color: challenge.state == LoginChallengeState.completed ? Colors.green : Colors.red,
+            color:
+                challenge.state == LoginChallengeState.completed
+                    ? Colors.green
+                    : Colors.red,
           ),
           const SizedBox(height: 12),
           Text(
@@ -324,12 +359,13 @@ class _TelegramLoginDialogState extends State<TelegramLoginDialog> {
           const SizedBox(height: 16),
           if (challenge.state != LoginChallengeState.completed)
             ElevatedButton(
-              onPressed: () => setState(() {
-                _challenge = null;
-                _codeCtrl.clear();
-                _passCtrl.clear();
-                _stepError = null;
-              }),
+              onPressed:
+                  () => setState(() {
+                    _challenge = null;
+                    _codeCtrl.clear();
+                    _passCtrl.clear();
+                    _stepError = null;
+                  }),
               child: Text(t.get('action_retry')),
             ),
         ],
@@ -352,17 +388,17 @@ class _TelegramLoginDialogState extends State<TelegramLoginDialog> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.red),
                 ),
-                child: Text(_stepError!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+                child: Text(
+                  _stepError!,
+                  style: const TextStyle(color: Colors.red, fontSize: 13),
+                ),
               ),
             body,
           ],
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _cancel,
-          child: Text(t.get('action_cancel')),
-        ),
+        TextButton(onPressed: _cancel, child: Text(t.get('action_cancel'))),
       ],
     );
   }

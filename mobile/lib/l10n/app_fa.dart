@@ -72,7 +72,8 @@ class AppMessagesFa {
     'sessions_empty': 'هنوز اکانت تلگرامی متصل نشده است. یک اکانت متصل کنید.',
     'sessions_add': 'اتصال اکانت جدید',
     'sessions_terminate': 'قطع اتصال',
-    'sessions_terminate_confirm': 'آیا از قطع اتصال این سشن اطمینان دارید؟ قوانین مرتبط متوقف خواهند شد.',
+    'sessions_terminate_confirm':
+        'آیا از قطع اتصال این سشن اطمینان دارید؟ قوانین مرتبط متوقف خواهند شد.',
     'sessions_active': 'متصل',
     'sessions_inactive': 'آفلاین',
     'sessions_status_live': 'فعال',
@@ -82,7 +83,8 @@ class AppMessagesFa {
     'tg_login_title': 'اتصال اکانت تلگرام',
     'tg_login_phone': 'شماره موبایل',
     'tg_login_phone_hint': '۰۹۱۲۰۰۰۰۰۰۰ یا ۹۸۹۱۲۰۰۰۰۰۰۰+',
-    'tg_login_phone_invalid': 'شماره را با پیش‌شماره بین‌المللی وارد کنید، مانند ۹۸۹۱۲۰۰۰۰۰۰۰+',
+    'tg_login_phone_invalid':
+        'شماره را با پیش‌شماره بین‌المللی وارد کنید، مانند ۹۸۹۱۲۰۰۰۰۰۰۰+',
     'tg_login_code': 'کد تأیید پیامک/تلگرام',
     'tg_login_code_hint': 'کد ارسال‌شده از طرف تلگرام',
     'tg_login_code_invalid': 'کد ارسالی تلگرام را وارد کنید',
@@ -93,11 +95,13 @@ class AppMessagesFa {
     'tg_login_cancel': 'انصراف',
     'tg_login_success': 'اکانت تلگرام با موفقیت متصل شد',
     'tg_login_state_awaiting_code': 'کد ارسال‌شده به {phone} را وارد کنید',
-    'tg_login_state_awaiting_password': 'رمز تأیید دو مرحله‌ای خود را وارد کنید',
+    'tg_login_state_awaiting_password':
+        'رمز تأیید دو مرحله‌ای خود را وارد کنید',
     'tg_login_state_completed': 'اتصال با موفقیت برقرار شد',
     'tg_login_state_failed': 'ورود ناموفق بود',
     'tg_login_state_expired': 'فرصت این ورود تمام شد. لطفاً دوباره تلاش کنید.',
-    'tg_login_state_rate_limited': 'درخواست‌های مکرر. لطفاً {seconds} ثانیه منتظر بمانید.',
+    'tg_login_state_rate_limited':
+        'درخواست‌های مکرر. لطفاً {seconds} ثانیه منتظر بمانید.',
     'tg_login_state_pending': 'در حال ارتباط با سرورهای تلگرام…',
     'tg_login_state_cancelled': 'ورود لغو شد',
     'login_code_sent': 'کد تأیید ارسال شد',
@@ -106,7 +110,8 @@ class AppMessagesFa {
     'login_invalid_code': 'کد وارد شده اشتباه است',
     'login_code_expired': 'کد تأیید منقضی شده است. کد جدید دریافت کنید.',
     'login_invalid_password': 'رمز دو مرحله‌ای اشتباه است',
-    'login_too_many_attempts': 'تعداد تلاش‌های ناموفق بیش از حد مجاز است. دوباره شروع کنید.',
+    'login_too_many_attempts':
+        'تعداد تلاش‌های ناموفق بیش از حد مجاز است. دوباره شروع کنید.',
     'login_auth_expired': 'سشن لاگین منقضی شد. دوباره تلاش کنید.',
     'login_no_pending': 'درخواست لاگین فعالی وجود ندارد. دوباره شروع کنید.',
     'login_flood_wait': 'محدودیت تلگرام: لطفاً {seconds} ثانیه صبر کنید',
@@ -132,8 +137,10 @@ class AppMessagesFa {
     'rules_disabled': 'غیرفعال',
     'rules_toggle': 'فعال/غیرفعال کردن',
     'rules_delete_confirm': 'آیا این قانون فوروارد حذف شود؟',
-    'rules_concurrent_edit': 'این قانون همزمان در جای دیگری تغییر کرده است. صفحه را بازخوانی کنید.',
-    'rules_validation_failed': 'سرور مقادیر ورودی را نپذیرفت. خطاهای مشخص‌شده را بررسی کنید.',
+    'rules_concurrent_edit':
+        'این قانون همزمان در جای دیگری تغییر کرده است. صفحه را بازخوانی کنید.',
+    'rules_validation_failed':
+        'سرور مقادیر ورودی را نپذیرفت. خطاهای مشخص‌شده را بررسی کنید.',
     'rules_source_required': 'کانال مبدا را انتخاب کنید',
     'rules_target_required': 'کانال مقصد را انتخاب کنید',
     'rules_session_required': 'ابتدا یک نشست تلگرام انتخاب کنید',
@@ -166,7 +173,8 @@ class AppMessagesFa {
     'ai_language': 'زبان مقصد',
     'ai_prompt': 'پرامپت اختصاصی',
     'ai_base_url': 'آدرس سرور اختصاصی (اختیاری)',
-    'ai_note': 'کلیدهای API از طریق ربات یا پنل وب تنظیم می‌شوند. اپلیکیشن موبایل کلیدها را روی دستگاه نگه نمی‌دارد.',
+    'ai_note':
+        'کلیدهای API از طریق ربات یا پنل وب تنظیم می‌شوند. اپلیکیشن موبایل کلیدها را روی دستگاه نگه نمی‌دارد.',
 
     // logs
     'logs_title': 'خطاهای اخیر',
@@ -191,7 +199,8 @@ class AppMessagesFa {
     'settings_version': 'نسخه',
 
     // server compat
-    'incompatible_server': 'سرور از نسخه قدیمی اتوتلگرام استفاده می‌کند. سرور را به نسخه {version} یا جدیدتر ارتقا دهید.',
+    'incompatible_server':
+        'سرور از نسخه قدیمی اتوتلگرام استفاده می‌کند. سرور را به نسخه {version} یا جدیدتر ارتقا دهید.',
   };
 
   String get(String key, {Map<String, String>? params}) {

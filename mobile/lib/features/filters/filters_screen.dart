@@ -46,7 +46,13 @@ class _FiltersScreenState extends State<FiltersScreen> {
         context.read<AppState>().markExpired();
         return;
       }
-      setState(() => _error = exc.error.message.isNotEmpty ? exc.error.message : t.get('state_error'));
+      setState(
+        () =>
+            _error =
+                exc.error.message.isNotEmpty
+                    ? exc.error.message
+                    : t.get('state_error'),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = t.get('state_error'));
@@ -62,60 +68,80 @@ class _FiltersScreenState extends State<FiltersScreen> {
 
     final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(existing == null ? t.get('filters_title') : t.get('action_edit')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: patternCtrl,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: t.get('filters_pattern'),
-                  hintText: 'badword, @channel, http...',
+      builder:
+          (ctx) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: Text(
+                    existing == null
+                        ? t.get('filters_title')
+                        : t.get('action_edit'),
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: patternCtrl,
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          labelText: t.get('filters_pattern'),
+                          hintText: 'badword, @channel, http...',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: kind,
+                        decoration: InputDecoration(
+                          labelText: t.get('filters_kind'),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'blacklist',
+                            child: Text(t.get('filters_kind_blacklist')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'whitelist',
+                            child: Text(t.get('filters_kind_whitelist')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'link',
+                            child: Text(t.get('filters_kind_link')),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) setDialogState(() => kind = v);
+                        },
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: Text(t.get('action_cancel')),
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final pattern = patternCtrl.text.trim();
+                        if (pattern.isEmpty) return;
+                        final client =
+                            context.read<AppState>().buildApiClient();
+                        if (existing == null) {
+                          await client.createFilter(
+                            FilterRule(id: '', pattern: pattern, kind: kind),
+                          );
+                        } else {
+                          await client.updateFilter(
+                            existing.id,
+                            existing.copyWith(pattern: pattern, kind: kind),
+                          );
+                        }
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      },
+                      child: Text(t.get('action_save')),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: kind,
-                decoration: InputDecoration(labelText: t.get('filters_kind')),
-                items: [
-                  DropdownMenuItem(value: 'blacklist', child: Text(t.get('filters_kind_blacklist'))),
-                  DropdownMenuItem(value: 'whitelist', child: Text(t.get('filters_kind_whitelist'))),
-                  DropdownMenuItem(value: 'link', child: Text(t.get('filters_kind_link'))),
-                ],
-                onChanged: (v) {
-                  if (v != null) setDialogState(() => kind = v);
-                },
-              ),
-            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(t.get('action_cancel')),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final pattern = patternCtrl.text.trim();
-                if (pattern.isEmpty) return;
-                final client = context.read<AppState>().buildApiClient();
-                if (existing == null) {
-                  await client.createFilter(FilterRule(id: '', pattern: pattern, kind: kind));
-                } else {
-                  await client.updateFilter(
-                    existing.id,
-                    existing.copyWith(pattern: pattern, kind: kind),
-                  );
-                }
-                if (ctx.mounted) Navigator.pop(ctx, true);
-              },
-              child: Text(t.get('action_save')),
-            ),
-          ],
-        ),
-      ),
     );
 
     if (saved == true) {
@@ -127,21 +153,22 @@ class _FiltersScreenState extends State<FiltersScreen> {
     final t = AppMessages.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.get('filters_delete_confirm')),
-        content: Text(filter.pattern),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(t.get('action_cancel')),
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(t.get('filters_delete_confirm')),
+            content: Text(filter.pattern),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(t.get('action_cancel')),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(t.get('action_delete')),
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(t.get('action_delete')),
-          ),
-        ],
-      ),
     );
 
     if (confirmed != true || !mounted) return;
@@ -152,9 +179,9 @@ class _FiltersScreenState extends State<FiltersScreen> {
       await _load();
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(exc.error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exc.error.message)));
     }
   }
 
@@ -193,44 +220,61 @@ class _FiltersScreenState extends State<FiltersScreen> {
                 child: Text(_error!, style: const TextStyle(color: Colors.red)),
               ),
             Expanded(
-              child: _filters.isEmpty && !_loading
-                  ? ListView(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 64),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.filter_alt_off_rounded, size: 64, color: Colors.grey),
-                        const SizedBox(height: 16),
-                        Text(
-                          t.get('filters_empty'),
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _filters.length,
-                itemBuilder: (context, index) {
-                  final f = _filters[index];
-                  return Card(
-                    child: ListTile(
-                      title: Text(f.pattern, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('Kind: ${f.kind}'),
-                      onTap: () => _addOrEdit(f),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () => _delete(f),
+              child:
+                  _filters.isEmpty && !_loading
+                      ? ListView(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 64,
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.filter_alt_off_rounded,
+                                  size: 64,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  t.get('filters_empty'),
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                      : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _filters.length,
+                        itemBuilder: (context, index) {
+                          final f = _filters[index];
+                          return Card(
+                            child: ListTile(
+                              title: Text(
+                                f.pattern,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Text('Kind: ${f.kind}'),
+                              onTap: () => _addOrEdit(f),
+                              trailing: IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () => _delete(f),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                  );
-                },
-              ),
             ),
           ],
         ),

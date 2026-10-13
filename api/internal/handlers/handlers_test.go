@@ -205,7 +205,6 @@ func TestDeleteAIConfig_RejectsForeignOwner(t *testing.T) {
 	}
 }
 
-
 // ----------------------------------------------------------- v12.2 guards
 // The API gateway must forward the authenticated identity on every by-id
 // mutation so the core can enforce ownership server-side.
@@ -213,8 +212,8 @@ func TestDeleteAIConfig_RejectsForeignOwner(t *testing.T) {
 // recordingRulesClient captures the owner field the handler actually sent.
 type recordingRulesClient struct {
 	pb.ForwardRuleControlServiceClient
-	owners  []int64
-	ids     []string
+	owners []int64
+	ids    []string
 }
 
 func (f *recordingRulesClient) ListRules(ctx context.Context, in *pb.ListRulesRequest, opts ...grpc.CallOption) (*pb.ListRulesResponse, error) {
