@@ -242,21 +242,168 @@ class ForwardRule:
     def header(self) -> str:
         return self.custom_header or (str(self.metadata.get("header") or "") if isinstance(self.metadata, dict) else "")
 
+    @header.setter
+    def header(self, val: str) -> None:
+        self.custom_header = str(val or "")
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["header"] = self.custom_header
+
     @property
     def footer(self) -> str:
         return self.custom_footer or (str(self.metadata.get("footer") or "") if isinstance(self.metadata, dict) else "")
+
+    @footer.setter
+    def footer(self, val: str) -> None:
+        self.custom_footer = str(val or "")
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["footer"] = self.custom_footer
 
     @property
     def block_voice(self) -> bool:
         return bool(self.metadata.get("block_voice", False)) if isinstance(self.metadata, dict) else False
 
+    @block_voice.setter
+    def block_voice(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["block_voice"] = bool(val)
+
     @property
     def block_stickers(self) -> bool:
         return bool(self.metadata.get("block_stickers", False)) if isinstance(self.metadata, dict) else False
 
+    @block_stickers.setter
+    def block_stickers(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["block_stickers"] = bool(val)
+
+    @property
+    def block_video(self) -> bool:
+        return bool(self.metadata.get("block_video", False)) if isinstance(self.metadata, dict) else False
+
+    @block_video.setter
+    def block_video(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["block_video"] = bool(val)
+
+    @property
+    def block_audio(self) -> bool:
+        return bool(self.metadata.get("block_audio", False)) if isinstance(self.metadata, dict) else False
+
+    @block_audio.setter
+    def block_audio(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["block_audio"] = bool(val)
+
+    @property
+    def block_text(self) -> bool:
+        return bool(self.metadata.get("block_text", False)) if isinstance(self.metadata, dict) else False
+
+    @block_text.setter
+    def block_text(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["block_text"] = bool(val)
+
+    @property
+    def block_links(self) -> bool:
+        return bool(self.metadata.get("block_links", False)) if isinstance(self.metadata, dict) else False
+
+    @block_links.setter
+    def block_links(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["block_links"] = bool(val)
+
+    @property
+    def clean_usernames(self) -> bool:
+        return bool(self.metadata.get("clean_usernames", False)) if isinstance(self.metadata, dict) else False
+
+    @clean_usernames.setter
+    def clean_usernames(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["clean_usernames"] = bool(val)
+
+    @property
+    def clean_hashtags(self) -> bool:
+        return bool(self.metadata.get("clean_hashtags", False)) if isinstance(self.metadata, dict) else False
+
+    @clean_hashtags.setter
+    def clean_hashtags(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["clean_hashtags"] = bool(val)
+
+    @property
+    def clean_phones(self) -> bool:
+        return bool(self.metadata.get("clean_phones", False)) if isinstance(self.metadata, dict) else False
+
+    @clean_phones.setter
+    def clean_phones(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["clean_phones"] = bool(val)
+
+    @property
+    def clean_buttons(self) -> bool:
+        return bool(self.metadata.get("clean_buttons", False)) if isinstance(self.metadata, dict) else False
+
+    @clean_buttons.setter
+    def clean_buttons(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["clean_buttons"] = bool(val)
+
+    @property
+    def clean_empty_lines(self) -> bool:
+        return bool(self.metadata.get("clean_empty_lines", False)) if isinstance(self.metadata, dict) else False
+
+    @clean_empty_lines.setter
+    def clean_empty_lines(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["clean_empty_lines"] = bool(val)
+
+    @property
+    def clean_custom_words(self) -> List[str]:
+        if not isinstance(self.metadata, dict):
+            return []
+        words = self.metadata.get("clean_custom_words", [])
+        return list(words) if isinstance(words, list) else []
+
+    @clean_custom_words.setter
+    def clean_custom_words(self, val: List[str]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["clean_custom_words"] = [str(w).strip() for w in val if str(w).strip()]
+
+    @property
+    def max_time_edit(self) -> int:
+        if not isinstance(self.metadata, dict):
+            return 86400
+        return int(self.metadata.get("max_time_edit", 86400) or 86400)
+
+    @max_time_edit.setter
+    def max_time_edit(self, val: int) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["max_time_edit"] = int(val)
+
     @property
     def remove_emojis(self) -> bool:
         return bool(self.metadata.get("remove_emojis", False)) if isinstance(self.metadata, dict) else False
+
+    @remove_emojis.setter
+    def remove_emojis(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["remove_emojis"] = bool(val)
 
     @property
     def sync_edits(self) -> bool:
@@ -633,6 +780,8 @@ class MessagePayload:
     entities: Optional[List[Any]] = None
     caption_entities: Optional[List[Any]] = None
     reply_markup: Optional[Any] = None
+    edit_date: Optional[int] = None
+    album_messages: List[Any] = field(default_factory=list)
 
     @property
     def effective_text(self) -> str:

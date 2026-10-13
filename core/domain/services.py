@@ -44,15 +44,26 @@ class FilterEngine:
         if filter_rule is None:
             return EvaluationResult(FilterAction.ALLOW, "no_filter")
 
-        media = payload.media_type.value if isinstance(payload.media_type, MediaType) else str(payload.media_type)
+        media = payload.media_type.value if isinstance(payload.media_type, MediaType) else str(payload.media_type).lower()
 
-        if filter_rule.blocked_media_types and media in filter_rule.blocked_media_types:
-            return EvaluationResult(FilterAction.DROP, f"media_blocked:{media}")
+        if filter_rule.blocked_media_types:
+            blocked_lower = [str(b).lower() for b in filter_rule.blocked_media_types]
+            if media in blocked_lower:
+                return EvaluationResult(FilterAction.DROP, f"media_blocked:{media}")
+            if "link" in blocked_lower:
+                text_check = payload.effective_text or ""
+                if URL_REGEX.search(text_check) or "http://" in text_check.lower() or "https://" in text_check.lower() or "t.me/" in text_check.lower():
+                    return EvaluationResult(FilterAction.DROP, "link_blocked")
 
-        if filter_rule.allowed_media_types and media not in filter_rule.allowed_media_types:
+        if filter_rule.allowed_media_types and not (media in filter_rule.allowed_media_types or any(a.lower() == media for a in filter_rule.allowed_media_types)):
             return EvaluationResult(FilterAction.DROP, f"media_not_allowed:{media}")
 
         text = payload.effective_text or ""
+
+        # Link Filter: drop message if it contains links and block_links is set
+        if getattr(filter_rule, "block_links", False):
+            if URL_REGEX.search(text) or "http://" in text.lower() or "https://" in text.lower() or "t.me/" in text.lower():
+                return EvaluationResult(FilterAction.DROP, "link_blocked")
 
         if filter_rule.min_message_length and len(text) < filter_rule.min_message_length:
             return EvaluationResult(FilterAction.DROP, "too_short")
@@ -89,6 +100,18 @@ class FilterEngine:
     def _kw(lowered_text: str, keyword: str) -> bool:
         return keyword.lower() in lowered_text
 
+    def remove_urls(self, text: str) -> str:
+        if not text:
+            return ""
+        # 1. Clean markdown hyperlinks [text](url) -> keep anchor text
+        cleaned = re.sub(r"\[([^\]]+)\]\((?:https?://|www\.|t\.me/|[^\)]+)\)", r"\1", text)
+        # 2. Remove raw URLs and telegram links
+        cleaned = re.sub(r"(https?://\S+|www\.\S+|(?:https?://)?(?:t(?:elegram)?\.(?:me|dog))/\S+)", "", cleaned, flags=re.IGNORECASE)
+        # 3. Clean up multiple empty lines and excessive spaces
+        cleaned = re.sub(r"[ \t]+", " ", cleaned)
+        cleaned = re.sub(r"\n\s*\n\s*\n+", "\n\n", cleaned)
+        return cleaned.strip()
+
     def remove_links(self, text: str) -> str:
         if not text:
             return ""
@@ -99,6 +122,48 @@ class FilterEngine:
         # 3. Clean up multiple empty lines and excessive spaces
         cleaned = re.sub(r"[ \t]+", " ", cleaned)
         cleaned = re.sub(r"\n\s*\n\s*\n+", "\n\n", cleaned)
+        return cleaned.strip()
+
+    def remove_usernames(self, text: str) -> str:
+        if not text:
+            return ""
+        # Remove @mentions/usernames
+        cleaned = re.sub(r"@[A-Za-z0-9_]{3,32}", "", text)
+        cleaned = re.sub(r"[ \t]+", " ", cleaned)
+        return cleaned.strip()
+
+    def remove_hashtags(self, text: str) -> str:
+        if not text:
+            return ""
+        # Remove #hashtags (supports Unicode/Persian/Arabic letters)
+        cleaned = re.sub(r"#\S+", "", text)
+        cleaned = re.sub(r"[ \t]+", " ", cleaned)
+        return cleaned.strip()
+
+    def remove_phones(self, text: str) -> str:
+        if not text:
+            return ""
+        # Remove telephone numbers (+1..., 09..., etc.)
+        cleaned = re.sub(r"(?:\+?\d{1,4}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}", "", text)
+        cleaned = re.sub(r"[ \t]+", " ", cleaned)
+        return cleaned.strip()
+
+    def remove_custom_words(self, text: str, words: List[str]) -> str:
+        if not text or not words:
+            return text
+        res = text
+        for w in words:
+            w_str = str(w).strip()
+            if not w_str:
+                continue
+            pattern = re.compile(re.escape(w_str), re.IGNORECASE)
+            res = pattern.sub("", res)
+        return res.strip()
+
+    def clean_empty_lines(self, text: str) -> str:
+        if not text:
+            return ""
+        cleaned = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
         return cleaned.strip()
 
     def replace_links(self, text: str, replacement: str) -> str:
@@ -153,21 +218,42 @@ class FilterEngine:
         """Applies configured links, emojis, replacements, and header/footer transforms."""
         if text is None:
             text = ""
-        # 1. Link replacement or removal
+        # 1. Cleaner: Links (URLs)
         if rule.link_replacement:
             text = self.replace_links(text, rule.link_replacement)
-        elif rule.remove_links or (isinstance(rule.metadata, dict) and rule.metadata.get("remove_links")):
+        elif getattr(rule, "remove_links", False) or (isinstance(rule.metadata, dict) and rule.metadata.get("remove_links")):
             text = self.remove_links(text)
 
-        # 2. Emoji removal
-        if rule.remove_emojis:
+        # 2. Cleaner: Usernames / Mentions
+        if getattr(rule, "clean_usernames", False):
+            text = self.remove_usernames(text)
+
+        # 3. Cleaner: Hashtags
+        if getattr(rule, "clean_hashtags", False):
+            text = self.remove_hashtags(text)
+
+        # 4. Cleaner: Emojis
+        if getattr(rule, "remove_emojis", False):
             text = self.remove_emojis(text)
 
-        # 3. Custom text replacements
+        # 5. Cleaner: Phone numbers
+        if getattr(rule, "clean_phones", False):
+            text = self.remove_phones(text)
+
+        # 6. Cleaner: Custom words to delete
+        clean_words = getattr(rule, "clean_custom_words", [])
+        if clean_words:
+            text = self.remove_custom_words(text, clean_words)
+
+        # 7. Custom text replacements
         if rule.replacements:
             text = self.replace_text(text, rule.replacements)
 
-        # 4. Header & Footer (with template placeholder formatting if payload supplied)
+        # 8. Cleaner: Empty lines
+        if getattr(rule, "clean_empty_lines", False):
+            text = self.clean_empty_lines(text)
+
+        # 9. Header & Footer (with template placeholder formatting if payload supplied)
         header = rule.header
         footer = rule.footer
         if payload is not None:
@@ -180,6 +266,9 @@ class FilterEngine:
             text = self.apply_header_footer(text, header=header, footer=footer)
 
         return text
+
+
+TextTransformer = FilterEngine
 
 
 class HeaderFormatter:
@@ -208,15 +297,39 @@ class HeaderFormatter:
 
         sender_name = payload.sender_name or ""
         chat_title = payload.chat_title or payload.chat_username or payload.chat_id
+        post_date = (
+            datetime.fromtimestamp(payload.date, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            if getattr(payload, "date", 0)
+            else date_str
+        )
+        origin_username = f"@{payload.chat_username.lstrip('@')}" if payload.chat_username else ""
+        forward_from_chat = (
+            str(payload.forward_origin.get("from_chat_id", payload.chat_id))
+            if getattr(payload, "forward_origin", None) and isinstance(payload.forward_origin, dict)
+            else str(payload.chat_id or "")
+        )
 
         vars_dict = {
             "rule_name": rule.name or f"Rule-{rule.id[:8]}",
             "category": rule.message_category or "GENERAL",
-            "date": date_str,
+            "date": post_date,
             "source_link": source_link,
             "sender_name": sender_name,
             "chat_title": chat_title,
             "source_chat": payload.chat_id,
+            # Requested validated shortcodes
+            "ORIGIN_TEXT": payload.effective_text,
+            "ORIGIN_NAME": chat_title,
+            "ORIGIN_USERNAME": origin_username,
+            "ORIGIN_USERID": str(payload.sender_id or ""),
+            "ORIGIN_POST_ID": str(payload.message_id or ""),
+            "ORIGIN_CHAT_ID": str(payload.chat_id or ""),
+            "ORIGIN_POST_DATE": post_date,
+            "ORIGIN_NAME_URL": f"[{chat_title}]({source_link})" if source_link else chat_title,
+            "SOURCE_NAME": chat_title,
+            "SENDER_CHAT": str(payload.chat_id or ""),
+            "FORWARD_FROM_CHAT": forward_from_chat,
+            "FROM_USER": sender_name or str(payload.sender_id or ""),
         }
         if custom_vars:
             vars_dict.update(custom_vars)
@@ -224,6 +337,7 @@ class HeaderFormatter:
         res = template
         for k, v in vars_dict.items():
             res = res.replace(f"{{{k}}}", str(v))
+            res = res.replace(f"[[{k}]]", str(v))
         return res.strip()
 
 

@@ -67,3 +67,69 @@ def test_remove_links():
     out = FilterEngine().remove_links("check https://example.com/x and @channel now")
     assert "example.com" not in out and "@channel" not in out
     assert "check" in out and "now" in out
+
+
+def test_cleaner_features():
+    from core.domain.services import TextTransformer
+    tt = TextTransformer()
+    # Mention removal
+    t1 = tt.remove_usernames("Join @mychannel and contact @admin_user now")
+    assert "@mychannel" not in t1 and "@admin_user" not in t1
+    assert "Join" in t1 and "now" in t1
+
+    # Hashtag removal
+    t2 = tt.remove_hashtags("Breaking news #bitcoin #ایران #crypto2026 update")
+    assert "#bitcoin" not in t2 and "#ایران" not in t2
+    assert "Breaking news" in t2 and "update" in t2
+
+    # Phone removal
+    t3 = tt.remove_phones("Call +1-800-555-0199 or 09123456789 for help")
+    assert "+1-800-555-0199" not in t3 and "09123456789" not in t3
+    assert "Call" in t3
+
+    # Emoji removal
+    t4 = tt.remove_emojis("Hello 😊 World 🔥🚀")
+    assert "😊" not in t4 and "🔥" not in t4 and "🚀" not in t4
+    assert "Hello" in t4 and "World" in t4
+
+    # Custom words removal
+    t5 = tt.remove_custom_words("Buy cheap watches today", ["cheap", "watches"])
+    assert "cheap" not in t5 and "watches" not in t5
+    assert "Buy" in t5 and "today" in t5
+
+
+def test_link_filter_blocking():
+    fr = FilterRule(blocked_media_types=["link"])
+    p_link = payload("Check this out https://t.me/testchannel")
+    assert FilterEngine().evaluate(p_link, fr).action.name == "DROP"
+
+    p_clean = payload("Just regular discussion text")
+    assert FilterEngine().evaluate(p_clean, fr).action.name == "ALLOW"
+
+
+def test_header_footer_shortcodes():
+    from core.domain.entities import ForwardRule
+    from core.domain.services import HeaderFormatter
+
+    p = MessagePayload(
+        message_id=999,
+        chat_id="-1001234567890",
+        chat_title="My Source Channel",
+        chat_username="mysource",
+        sender_id="555",
+        sender_name="Alice",
+        text="Sample post text",
+        date=1700000000,
+    )
+    r = ForwardRule(id="rule123", name="News Rule")
+
+    template = (
+        "Post [[ORIGIN_POST_ID]] by [[ORIGIN_NAME]] ([[ORIGIN_USERNAME]]):\n"
+        "[[ORIGIN_TEXT]]\n"
+        "From chat: [[ORIGIN_CHAT_ID]] / User: [[FROM_USER]]"
+    )
+    formatted = HeaderFormatter.format_text(template, r, p)
+    assert "Post 999 by My Source Channel (@mysource):" in formatted
+    assert "Sample post text" in formatted
+    assert "From chat: -1001234567890 / User: Alice" in formatted
+

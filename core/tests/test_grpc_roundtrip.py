@@ -8,13 +8,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import grpc  # noqa: E402
 import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
 
 from core.config import Config  # noqa: E402
 from core.main import build_container, serve_grpc  # noqa: E402
 from core.proto import pb, pb_grpc  # noqa: E402
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture()
 async def grpc_endpoint():
     import socket
     from contextlib import closing
@@ -39,14 +40,18 @@ async def test_list_sessions_roundtrip(grpc_endpoint):
     endpoint, container = grpc_endpoint
     async with grpc.aio.insecure_channel(endpoint) as channel:
         stub = pb_grpc.SessionControlServiceStub(channel)
+        # Unauthenticated / empty owner fails closed
         resp = await stub.ListSessions(pb.ListSessionsRequest())
         assert resp.sessions == []
 
-        # Seed a session through the domain use case and re-query.
-        await container["sessions"].create("+989120000000", "enc-session-str")
-        resp = await stub.ListSessions(pb.ListSessionsRequest())
+        # Seed an owned session and query with owner_user_id
+        await container["sessions"].create("+989****0000", "enc-session-str", owner_user_id=42)
+        resp_empty = await stub.ListSessions(pb.ListSessionsRequest())
+        assert resp_empty.sessions == []  # still fails closed without owner
+
+        resp = await stub.ListSessions(pb.ListSessionsRequest(owner_user_id=42))
         assert len(resp.sessions) == 1
-        assert resp.sessions[0].phone_number == "+989120000000"
+        assert resp.sessions[0].phone_number == "+989****0000"
 
 
 @pytest.mark.asyncio
@@ -62,7 +67,7 @@ async def test_stats_roundtrip(grpc_endpoint):
 @pytest.mark.asyncio
 async def test_rules_roundtrip(grpc_endpoint):
     endpoint, container = grpc_endpoint
-    session = await container["sessions"].create("+989121111111", "")
+    session = await container["sessions"].create("+989****1111", "", owner_user_id=42)
     from core.domain.entities import ForwardRule
     from core.domain.value_objects import ForwardMode, RoutingType
 
@@ -71,10 +76,16 @@ async def test_rules_roundtrip(grpc_endpoint):
         source_chat_id="-1001234567890", target_chat_id="-1009876543210",
         routing_type=RoutingType.CHANNEL_TO_CHANNEL,
         forward_mode=ForwardMode.COPY_MESSAGE,
+        owner_user_id=42,
     ))
     async with grpc.aio.insecure_channel(endpoint) as channel:
         stub = pb_grpc.ForwardRuleControlServiceStub(channel)
-        resp = await stub.ListRules(pb.ListRulesRequest(session_id=session.id))
+        # Without owner fails closed
+        resp_unauth = await stub.ListRules(pb.ListRulesRequest(session_id=session.id))
+        assert resp_unauth.rules == []
+
+        # With owner returns rule
+        resp = await stub.ListRules(pb.ListRulesRequest(session_id=session.id, owner_user_id=42))
         assert len(resp.rules) == 1
         assert resp.rules[0].source_chat_id == "-1001234567890"
         assert resp.rules[0].routing_type == pb.RoutingType.CHANNEL_TO_CHANNEL

@@ -231,6 +231,7 @@ class DurableMessagePipeline:
         ai_repo: Optional[Any] = None,
         ai_transformer: Optional[Any] = None,
         prompt_service: Optional[Any] = None,
+        pool: Optional[Any] = None,
     ) -> None:
         self._rules = rule_repo
         self._filters = filter_repo
@@ -243,6 +244,7 @@ class DurableMessagePipeline:
         self._ai_repo = ai_repo
         self._ai_transformer = ai_transformer
         self._prompt_service = prompt_service
+        self._pool = pool
         self.metrics = PipelineMetrics()
 
     # -----------------------------------------------------------------
@@ -381,24 +383,58 @@ class DurableMessagePipeline:
             )
             return
 
-        # Additional media blocks
+        # Check if session is time-limited
+        if self._pool is not None and hasattr(self._pool, "is_time_limited"):
+            sid = getattr(rule, "session_id", "")
+            if sid:
+                try:
+                    is_lim = self._pool.is_time_limited(sid)
+                    if type(is_lim).__name__ != "MagicMock" and is_lim:
+                        raw_rem = self._pool.remaining_limit_seconds(sid)
+                        rem = float(raw_rem) if isinstance(raw_rem, (int, float)) else 0.0
+                        ctx.record_stage(PipelineStage.FILTER, False, reason="session_time_limited")
+                        logger.info(
+                            "[PIPELINE:TIME_LIMITED] [%s] Session %s is time-limited (%.1fs remaining). Dropping msg %s",
+                            ctx.correlation_id[:8], sid[:8], rem, payload.message_id,
+                        )
+                        return
+                except Exception as exc:
+                    logger.debug("Failed checking time limit for %s: %s", sid, exc)
+
+        # Additional media & content filters
         m_type = str(getattr(payload.media_type, "value", payload.media_type)).lower()
         if getattr(rule, "block_voice", False) and m_type in ("voice", "audio"):
             ctx.record_stage(PipelineStage.FILTER, False, reason="voice_blocked")
             self.metrics.filtered_total += 1
-            logger.warning(
-                "[%s] Rule %s DROPPED msg %s: voice/audio blocked by rule setting",
-                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
-            )
+            logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: voice blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
             return
-        if getattr(rule, "block_stickers", False) and m_type in ("sticker",):
+        if getattr(rule, "block_stickers", False) and m_type == "sticker":
             ctx.record_stage(PipelineStage.FILTER, False, reason="sticker_blocked")
             self.metrics.filtered_total += 1
-            logger.warning(
-                "[%s] Rule %s DROPPED msg %s: sticker blocked by rule setting",
-                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
-            )
+            logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: sticker blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
             return
+        if getattr(rule, "block_video", False) and m_type in ("video", "video_note"):
+            ctx.record_stage(PipelineStage.FILTER, False, reason="video_blocked")
+            self.metrics.filtered_total += 1
+            logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: video blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
+            return
+        if getattr(rule, "block_audio", False) and m_type in ("audio", "voice"):
+            ctx.record_stage(PipelineStage.FILTER, False, reason="audio_blocked")
+            self.metrics.filtered_total += 1
+            logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: audio blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
+            return
+        if getattr(rule, "block_text", False) and m_type == "text":
+            ctx.record_stage(PipelineStage.FILTER, False, reason="text_blocked")
+            self.metrics.filtered_total += 1
+            logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: text blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
+            return
+        if getattr(rule, "block_links", False):
+            eff = payload.effective_text or ""
+            if "http://" in eff.lower() or "https://" in eff.lower() or "t.me/" in eff.lower():
+                ctx.record_stage(PipelineStage.FILTER, False, reason="link_blocked")
+                self.metrics.filtered_total += 1
+                logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: link blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
+                return
 
         ctx.record_stage(PipelineStage.FILTER, True, reason=eval_res.reason, duration_ms=(time.monotonic() - t0) * 1000)
         logger.info(

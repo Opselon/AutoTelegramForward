@@ -322,9 +322,8 @@ class MessageDispatcher:
             # Album: bounded LRU aggregator with TTL
             if payload.media_group_id and trigger == "NEW_MESSAGE":
                 sid = getattr(client, "session_id", str(client))
-                is_first = await self._album_aggregator.ingest(sid, payload)
-                if not is_first:
-                    return
+                await self._album_aggregator.ingest(sid, payload)
+                return
 
             try:
                 if self._durable_pipeline is not None:
@@ -338,6 +337,7 @@ class MessageDispatcher:
 
     async def _flush_album(self, first_msg: MessagePayload, all_msgs: list) -> None:
         try:
+            first_msg.album_messages = list(all_msgs)
             if self._durable_pipeline is not None:
                 await self._durable_pipeline.process(first_msg, trigger="NEW_MESSAGE")
             else:

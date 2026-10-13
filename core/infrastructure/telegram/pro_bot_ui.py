@@ -13,6 +13,7 @@ the debug panel can show it.
 
 import asyncio
 import base64
+import copy
 import json
 import logging
 import os
@@ -1077,6 +1078,30 @@ class ProBotUI:
         mid_id = getattr(rule, "intermediate_channel_id", "") or ""
         mid_badge = f"🟢 فعال (`{mid_id[:12]}`)" if (use_mid and mid_id) else "🔴 غیرفعال"
 
+        # Cleaner summary
+        cl_items = []
+        if rule.remove_links: cl_items.append("لینک")
+        if rule.clean_usernames: cl_items.append("منشن")
+        if rule.clean_hashtags: cl_items.append("هشتگ")
+        if rule.remove_emojis: cl_items.append("ایموجی")
+        if rule.clean_phones: cl_items.append("شماره")
+        if rule.clean_buttons: cl_items.append("دکمه")
+        if rule.clean_empty_lines: cl_items.append("فاصله")
+        cl_badge = f"{len(cl_items)} مورد" if cl_items else "غیرفعال"
+
+        # Filters summary
+        fl_items = []
+        if rule.block_links: fl_items.append("لینک")
+        if rule.block_video: fl_items.append("ویدیو")
+        if rule.block_audio: fl_items.append("صوت")
+        if rule.block_stickers: fl_items.append("استیکر")
+        if rule.block_text: fl_items.append("متن")
+        if rule.block_voice: fl_items.append("وویس")
+        fl_badge = f"{len(fl_items)} مسدود" if fl_items else "مجاز"
+
+        # Max edit time
+        mte_badge = f"{rule.max_time_edit}s" if rule.max_time_edit > 0 else "نامحدود"
+
         text = (
             "⚙️ **تنظیمات پیشرفته قانون انتقال**\n\n"
             f"📡 **مبدأ:** `{src_label}` (`{rule.source_chat_id}`)\n"
@@ -1084,11 +1109,13 @@ class ProBotUI:
             f"📊 **وضعیت:** {status_str}\n"
             f"⚡ **حالت ارسال:** {mode_title}\n"
             "────────────────────\n"
-            f"💎 **رده هوشمند:** {cat_badge} | **واسط VIP:** {mid_badge}\n"
-            f"🔤 **جایگزینی متن:** {reps_badge}\n"
+            f"🧹 **پاک‌کننده (Cleaner):** {cl_badge} | 🛡 **فیلترها:** {fl_badge}\n"
             f"📝 **هدر:** {hdr_badge} | **فوتر:** {ftr_badge}\n"
             f"🔗 **لینک:** {lk_badge} | 🎙 **ویس:** {vc_badge}\n"
             f"🎭 **استیکر:** {st_badge} | 😀 **ایموجی:** {em_badge}\n"
+            f"⏱ **سقف زمان ادیت:** {mte_badge}\n"
+            f"💎 **رده هوشمند:** {cat_badge} | **واسط VIP:** {mid_badge}\n"
+            f"🔤 **جایگزینی متن:** {reps_badge}\n"
             f"✏️ **ویرایش پیام:** {ed_badge} | 🗑 **حذف پیام:** {dl_badge}\n"
             f"🖼 **چندتصویری:** {alb_badge}\n\n"
             "👇 جهت تغییر و تنظیم هر بخش، دکمه مربوطه را لمس کنید:"
@@ -1100,9 +1127,11 @@ class ProBotUI:
                 ("📡 تغییر مبدأ", f"res:{rule.id}"),
                 ("🎯 تغییر مقصد", f"ret:{rule.id}"),
             ],
-            [("💎 مسیریابی هوشمند و VIP (Smart Rules)", f"rsm:{rule.id}")],
-            [("🔤 جایگزینی متن (Text Replace)", f"rtx:{rule.id}")],
-            [("📝 تنظیم هدر و فوتر", f"rhf:{rule.id}")],
+            [
+                (f"🧹 منوی کلینر", f"rcl:{rule.id}"),
+                (f"🛡 منوی فیلترها", f"rfl:{rule.id}"),
+                (f"⏱ زمان ادیت", f"rmte:{rule.id}"),
+            ],
             [
                 (f"🔗 لینک: {lk_badge}", f"rlk:{rule.id}"),
                 (f"🎙 ویس: {vc_badge}", f"rvc:{rule.id}"),
@@ -1111,6 +1140,9 @@ class ProBotUI:
                 (f"🎭 استیکر: {st_badge}", f"rst:{rule.id}"),
                 (f"😀 ایموجی: {em_badge}", f"rem:{rule.id}"),
             ],
+            [("📝 تنظیم هدر و فوتر", f"rhf:{rule.id}")],
+            [("💎 مسیریابی هوشمند و VIP (Smart Rules)", f"rsm:{rule.id}")],
+            [("🔤 جایگزینی متن (Text Replace)", f"rtx:{rule.id}")],
             [
                 (f"✏️ ادیت: {ed_badge}", f"red:{rule.id}"),
                 (f"🗑 حذف: {dl_badge}", f"rdl:{rule.id}"),
@@ -1120,7 +1152,8 @@ class ProBotUI:
                 ("⚡ تغییر حالت", f"rmd:{rule.id}"),
             ],
             [
-                ("🔄 تغییر وضعیت (🟢/🔴)", f"rtg:{rule.id}"),
+                ("🔄 وضعیت (🟢/🔴)", f"rtg:{rule.id}"),
+                ("📑 تکثیر (Duplicate)", f"rdup:{rule.id}"),
                 ("🗑 حذف قانون", f"rrm:{rule.id}"),
             ],
             [("⬅️ بازگشت به لیست قوانین", CB["rules"])],
@@ -1300,6 +1333,160 @@ class ProBotUI:
             [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
         ]
         return "\n".join(lines), self._kbd(rows)
+
+    def _render_cleaner_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render cleaner settings menu for this task."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+
+        url_b = "🚫 حذف" if rule.remove_links else "🟢 مجاز"
+        usr_b = "🚫 حذف" if rule.clean_usernames else "🟢 مجاز"
+        tag_b = "🚫 حذف" if rule.clean_hashtags else "🟢 مجاز"
+        emo_b = "🧹 پاکسازی" if rule.remove_emojis else "🟢 حفظ"
+        phn_b = "🚫 حذف" if rule.clean_phones else "🟢 مجاز"
+        btn_b = "🚫 حذف" if rule.clean_buttons else "🟢 مجاز"
+        spc_b = "🧹 پاکسازی" if rule.clean_empty_lines else "🟢 حفظ"
+        wrd_cnt = len(rule.clean_custom_words)
+        wrd_b = f"{wrd_cnt} کلمه" if wrd_cnt else "تنظیم نشده"
+
+        text = (
+            "🧹 **تنظیمات پاک‌کننده پیام (Cleaner Settings)**\n\n"
+            f"قانون: **{src_label} ➔ {dst_label}**\n"
+            "────────────────────\n"
+            "اینجا می‌توانید مواردی که نمی‌خواهید در پیام ظاهر شوند را مشخص کنید:\n\n"
+            f"• 🔗 **لینک‌ها (URLs):** {url_b}\n"
+            f"• 👤 **منشن‌ها (@Usernames):** {usr_b}\n"
+            f"• #️⃣ **هشتگ‌ها (#Hashtags):** {tag_b}\n"
+            f"• 😀 **ایموجی‌ها (Emojis):** {emo_b}\n"
+            f"• 📞 **شماره‌های تماس (Phone):** {phn_b}\n"
+            f"• 🔘 **دکمه‌های شیشه‌ای (Buttons):** {btn_b}\n"
+            f"• ✂️ **خطوط خالی اضافه (Empty Lines):** {spc_b}\n"
+            f"• 📝 **کلمات سفارشی:** {wrd_b}\n\n"
+            "👇 جهت فعال یا غیرفعال‌سازی هر گزینه کلیک کنید:"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                (f"🔗 لینک: {url_b}", f"rcl_url:{rule.id}"),
+                (f"👤 منشن: {usr_b}", f"rcl_usr:{rule.id}"),
+            ],
+            [
+                (f"#️⃣ هشتگ: {tag_b}", f"rcl_tag:{rule.id}"),
+                (f"😀 ایموجی: {emo_b}", f"rcl_emo:{rule.id}"),
+            ],
+            [
+                (f"📞 شماره تماس: {phn_b}", f"rcl_phn:{rule.id}"),
+                (f"🔘 دکمه شیشه‌ای: {btn_b}", f"rcl_btn:{rule.id}"),
+            ],
+            [
+                (f"✂️ خطوط خالی: {spc_b}", f"rcl_spc:{rule.id}"),
+                (f"📝 کلمات سفارشی: {wrd_b}", f"rcl_wrd:{rule.id}"),
+            ],
+            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_filters_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render content filter settings menu for this task."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+
+        lnk_b = "🚫 مسدود" if rule.block_links else "🟢 مجاز"
+        vid_b = "🚫 مسدود" if rule.block_video else "🟢 مجاز"
+        aud_b = "🚫 مسدود" if rule.block_audio else "🟢 مجاز"
+        stk_b = "🚫 مسدود" if rule.block_stickers else "🟢 مجاز"
+        txt_b = "🚫 مسدود" if rule.block_text else "🟢 مجاز"
+        voc_b = "🚫 مسدود" if rule.block_voice else "🟢 مجاز"
+
+        text = (
+            "🛡 **فیلترهای محتوا (Content Filters)**\n\n"
+            f"قانون: **{src_label} ➔ {dst_label}**\n"
+            "────────────────────\n"
+            "مشخص کنید کدام نوع محتواها فیلتر (مسدود) یا مجاز باشند:\n\n"
+            f"• 🔗 **فیلتر لینک (Link Filter):** {lnk_b}\n"
+            f"• 🎬 **ویدیو (Video Filter):** {vid_b}\n"
+            f"• 🎵 **فایل صوتی (Audio Filter):** {aud_b}\n"
+            f"• 🎭 **استیکر (Sticker Filter):** {stk_b}\n"
+            f"• 📝 **پیام متنی (Text Filter):** {txt_b}\n"
+            f"• 🎙 **وویس (Voice Filter):** {voc_b}\n\n"
+            "👇 جهت تغییر وضعیت هر فیلتر کلیک کنید:"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                (f"🔗 لینک: {lnk_b}", f"rfl_lnk:{rule.id}"),
+                (f"🎬 ویدیو: {vid_b}", f"rfl_vid:{rule.id}"),
+            ],
+            [
+                (f"🎵 فایل صوتی: {aud_b}", f"rfl_aud:{rule.id}"),
+                (f"🎭 استیکر: {stk_b}", f"rfl_stk:{rule.id}"),
+            ],
+            [
+                (f"📝 متن: {txt_b}", f"rfl_txt:{rule.id}"),
+                (f"🎙 وویس: {voc_b}", f"rfl_voc:{rule.id}"),
+            ],
+            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_max_time_edit_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render max edit time configuration menu."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        current = rule.max_time_edit
+        curr_str = f"{current} ثانیه" if current > 0 else "نامحدود (0)"
+
+        text = (
+            "⏱ **محدودیت زمانی ویرایش (Max Edit Time)**\n\n"
+            f"قانون: **{src_label} ➔ {dst_label}**\n"
+            f"سقف مجاز فعلی: **{curr_str}**\n"
+            "────────────────────\n"
+            "اگر در کانال مبدأ پیامی ویرایش شود، تنها در صورتی در مقصد نیز ویرایش اعمال خواهد شد "
+            "که سن پیام از زمان انتشار کمتر از این مقدار باشد.\n\n"
+            "👇 یکی از مقادیر پیش‌فرض را انتخاب کنید یا عدد دلخواه وارد کنید:"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                ("10 دقیقه (600s)", f"rmte_s:{rule.id}:600"),
+                ("1 ساعت (3600s)", f"rmte_s:{rule.id}:3600"),
+            ],
+            [
+                ("24 ساعت (86400s)", f"rmte_s:{rule.id}:86400"),
+                ("48 ساعت (172800s)", f"rmte_s:{rule.id}:172800"),
+            ],
+            [
+                ("♾ بدون محدودیت (0)", f"rmte_s:{rule.id}:0"),
+                ("✏️ ورود ثانیه دلخواه", f"rmte_c:{rule.id}"),
+            ],
+            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    async def _render_profile_menu(self, uid: int, user: Any = None) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render user profile dashboard with reset options."""
+        name = getattr(user, "first_name", "") or getattr(user, "username", "") or str(uid)
+        username = f"@{user.username}" if getattr(user, "username", None) else "—"
+        sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+        rules = await self._rules.list_by_owner(uid) if (self._rules and uid) else []
+        active_rules = [r for r in rules if r.is_active]
+
+        text = (
+            "👤 **پروفایل کاربری و وضعیت حساب**\n\n"
+            f"🆔 **شناسه عددی (User ID):** `{uid}`\n"
+            f"👤 **نام کاربری:** {username} ({name})\n"
+            f"📱 **سشن‌های متصل:** `{len(sessions)}` سشن فعال\n"
+            f"⚙️ **تسک‌های فوروارد:** `{len(rules)}` کل (`{len(active_rules)}` فعال)\n"
+            "────────────────────\n"
+            "👇 گزینه‌های مدیریت و بازنشانی حساب:"
+        )
+
+        kbd = self._kbd([
+            [("🔄 بازنشانی ستاپ (Restart Setup)", "pr_restart")],
+            [("⚠️ ریست تنظیمات تسک‌ها (Reset Config)", "pr_reset_cfg")],
+            [("⬅️ بازگشت به منوی اصلی", CB["main"])],
+        ])
+        return text, kbd
 
     def _render_smart_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
         """Render dedicated smart routing, VIP channel, and deduplication menu."""
@@ -2105,7 +2292,7 @@ class ProBotUI:
             else:
                 await message.reply_text(self._t("ui_cancelled"), reply_markup=self._main_menu())
 
-        @b.on_message(filters.command(["menu", "panel", "settings"]) & filters.private)
+        @b.on_message(filters.command(["menu", "panel"]) & filters.private)
         async def _menu(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /menu from uid=%s", uid)
@@ -2119,6 +2306,69 @@ class ProBotUI:
                     await message.reply_text(body, reply_markup=self._main_menu())
             except Exception as exc:
                 logger.exception("/menu failed for uid=%s: %s", uid, exc)
+
+        @b.on_message(filters.command("settings") & filters.private)
+        async def _settings_cmd(_, message: Message):
+            uid = message.from_user.id if message.from_user else 0
+            logger.info("Handling /settings from uid=%s", uid)
+            try:
+                rules = await self._rules.list_by_owner(uid) if uid else []
+                if not rules:
+                    sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+                    if not sessions:
+                        text, kbd = self._render_welcome_onboarding(uid, user=message.from_user)
+                    else:
+                        text = "⚙️ شما هنوز هیچ تسک یا قانون انتقالی ایجاد نکرده‌اید."
+                        kbd = self._main_menu()
+                    await message.reply_text(text, reply_markup=kbd)
+                else:
+                    text, kbd = self._render_rules_list(rules, page=0)
+                    msg_text = "⚙️ **تنظیمات تسک‌ها (Cleaner، Filters، Header و Footer)**\n\n👇 جهت ورود به تنظیمات Cleaner، فیلترها، هدر یا فوتر، تسک مورد نظر را انتخاب کنید:\n\n" + text
+                    await message.reply_text(msg_text, reply_markup=kbd)
+            except Exception as exc:
+                logger.exception("/settings failed for uid=%s: %s", uid, exc)
+
+        @b.on_message(filters.command("profile") & filters.private)
+        async def _profile_cmd(_, message: Message):
+            uid = message.from_user.id if message.from_user else 0
+            logger.info("Handling /profile from uid=%s", uid)
+            try:
+                body, kbd = await self._render_profile_menu(uid, message.from_user)
+                await message.reply_text(body, reply_markup=kbd)
+            except Exception as exc:
+                logger.exception("/profile failed for uid=%s: %s", uid, exc)
+
+        @b.on_message(filters.command("forward") & filters.private)
+        async def _forward_cmd(_, message: Message):
+            uid = message.from_user.id if message.from_user else 0
+            logger.info("Handling /forward from uid=%s", uid)
+            try:
+                parts = (message.text or "").strip().split()
+                if len(parts) > 1 and parts[1].isdigit():
+                    secs = int(parts[1])
+                    rules = await self._rules.list_by_owner(uid) if uid else []
+                    for r in rules:
+                        r.max_time_edit = secs
+                        await self._save_owned_rule(r, uid)
+                    await message.reply_text(
+                        f"✅ سقف مجاز زمان ویرایش پیام‌ها (`max_time_edit`) برای تمام تسک‌های شما به **{secs} ثانیه** تنظیم شد."
+                    )
+                    return
+
+                rules = await self._rules.list_by_owner(uid) if uid else []
+                if not rules:
+                    await message.reply_text("❌ شما هیچ تسک فعالی برای تنظیم محدودیت زمانی ادیت ندارید.")
+                    return
+
+                text = (
+                    "⏱ **تنظیم محدودیت زمان ویرایش پیام (Max Time Edit)**\n\n"
+                    "می‌توانید دستور را به صورت `/forward <ثانیه>` ارسال کنید (مثلاً `/forward 3600`) "
+                    "یا تسک مورد نظر خود را از لیست زیر انتخاب فرمایید:"
+                )
+                _, kbd = self._render_rules_list(rules, page=0)
+                await message.reply_text(text, reply_markup=kbd)
+            except Exception as exc:
+                logger.exception("/forward failed for uid=%s: %s", uid, exc)
 
         @b.on_message(filters.command("rules") & filters.private)
         async def _rules_cmd(_, message: Message):
@@ -2850,27 +3100,28 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^rhf:(.+)$"))
         async def _cb_rule_header_footer_menu(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            rule = await self._rules.get(rule_id)
+            rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer("❌ قانون یافت نشد یا دسترسی ندارید", show_alert=True)
             text, kbd = self._render_header_footer_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rh_s:(.+)$"))
         async def _cb_rule_header_set(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            st = self._state(cq.from_user.id)
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ دسترسی ندارید", show_alert=True)
+            st = self._state(uid)
             st.step = "rule_header_input"
             st.buffer = {"rule_id": rule_id}
-            await self._persist(cq.from_user.id, st)
+            await self._persist(uid, st)
             prompt = (
                 "📝 **تنظیم متن هدر (پیشوند پیام):**\n\n"
                 "متنی که می‌خواهید در ابتدای تمام پیام‌های ارسالی قرار گیرد را ارسال کنید.\n\n"
@@ -2881,31 +3132,30 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^rh_d:(.+)$"))
         async def _cb_rule_header_del(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            rule = await self._rules.get(rule_id)
+            rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer("❌ قانون یافت نشد", show_alert=True)
-            if not isinstance(rule.metadata, dict):
-                rule.metadata = {}
-            rule.metadata["header"] = ""
-            await self._rules.update(rule)
+            rule.header = ""
+            await self._save_owned_rule(rule, uid)
             await cq.answer("🗑 هدر با موفقیت حذف شد")
             text, kbd = self._render_header_footer_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rf_s:(.+)$"))
         async def _cb_rule_footer_set(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            st = self._state(cq.from_user.id)
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ دسترسی ندارید", show_alert=True)
+            st = self._state(uid)
             st.step = "rule_footer_input"
             st.buffer = {"rule_id": rule_id}
-            await self._persist(cq.from_user.id, st)
+            await self._persist(uid, st)
             prompt = (
                 "📝 **تنظیم متن فوتر (پسوند پیام):**\n\n"
                 "متنی که می‌خواهید در انتهای تمام پیام‌های ارسالی قرار گیرد را ارسال کنید (مثلاً آیدی کانال، لینک، متن دلخواه).\n\n"
@@ -2916,20 +3166,363 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^rf_d:(.+)$"))
         async def _cb_rule_footer_del(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            rule = await self._rules.get(rule_id)
+            rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer("❌ قانون یافت نشد", show_alert=True)
-            if not isinstance(rule.metadata, dict):
-                rule.metadata = {}
-            rule.metadata["footer"] = ""
-            await self._rules.update(rule)
+            rule.footer = ""
+            await self._save_owned_rule(rule, uid)
             await cq.answer("🗑 فوتر با موفقیت حذف شد")
             text, kbd = self._render_header_footer_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
+
+        # ---------------- Cleaner Callbacks ----------------
+        @b.on_callback_query(filters.regex(r"^rcl:(.+)$"))
+        async def _cb_rule_cleaner_menu(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد یا دسترسی ندارید", show_alert=True)
+            text, kbd = self._render_cleaner_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rcl_url:(.+)$"))
+        async def _cb_clean_url_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.remove_links = not bool(rule.remove_links)
+            await self._save_owned_rule(rule, uid)
+            status = "حذف لینک‌ها فعال شد 🚫" if rule.remove_links else "حفظ لینک‌ها مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_cleaner_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rcl_usr:(.+)$"))
+        async def _cb_clean_usr_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.clean_usernames = not bool(rule.clean_usernames)
+            await self._save_owned_rule(rule, uid)
+            status = "حذف منشن‌ها فعال شد 🚫" if rule.clean_usernames else "حفظ منشن‌ها مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_cleaner_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rcl_tag:(.+)$"))
+        async def _cb_clean_tag_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.clean_hashtags = not bool(rule.clean_hashtags)
+            await self._save_owned_rule(rule, uid)
+            status = "حذف هشتگ‌ها فعال شد 🚫" if rule.clean_hashtags else "حفظ هشتگ‌ها مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_cleaner_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rcl_emo:(.+)$"))
+        async def _cb_clean_emo_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.remove_emojis = not bool(rule.remove_emojis)
+            await self._save_owned_rule(rule, uid)
+            status = "پاکسازی ایموجی فعال شد 🧹" if rule.remove_emojis else "حفظ ایموجی مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_cleaner_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rcl_phn:(.+)$"))
+        async def _cb_clean_phn_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.clean_phones = not bool(rule.clean_phones)
+            await self._save_owned_rule(rule, uid)
+            status = "حذف شماره تماس فعال شد 🚫" if rule.clean_phones else "حفظ شماره تماس مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_cleaner_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rcl_btn:(.+)$"))
+        async def _cb_clean_btn_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.clean_buttons = not bool(rule.clean_buttons)
+            await self._save_owned_rule(rule, uid)
+            status = "حذف دکمه‌های شیشه‌ای فعال شد 🚫" if rule.clean_buttons else "حفظ دکمه‌ها مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_cleaner_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rcl_spc:(.+)$"))
+        async def _cb_clean_spc_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.clean_empty_lines = not bool(rule.clean_empty_lines)
+            await self._save_owned_rule(rule, uid)
+            status = "پاکسازی خطوط خالی فعال شد ✂️" if rule.clean_empty_lines else "حفظ خطوط خالی مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_cleaner_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rcl_wrd:(.+)$"))
+        async def _cb_clean_wrd_prompt(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            st = self._state(uid)
+            st.step = "rule_clean_words_input"
+            st.buffer = {"rule_id": rule_id}
+            await self._persist(uid, st)
+            prompt = (
+                "📝 **تنظیم کلمات حذفی سفارشی (Custom Words):**\n\n"
+                "کلماتی که می‌خواهید به طور خودکار از پیام‌ها پاک شوند را ارسال کنید.\n"
+                "(می‌توانید کلمات را با کاما (,) یا در خطوط جداگانه ارسال کنید).\n\n"
+                "برای پاکسازی همه کلمات عبارت `clear` را بفرستید.\n"
+                "برای انصراف دکمه زیر را لمس کنید:"
+            )
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rcl:{rule_id}")]]))
+            await cq.answer()
+
+        # ---------------- Filters Callbacks ----------------
+        @b.on_callback_query(filters.regex(r"^rfl:(.+)$"))
+        async def _cb_rule_filters_menu(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد یا دسترسی ندارید", show_alert=True)
+            text, kbd = self._render_filters_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rfl_lnk:(.+)$"))
+        async def _cb_filter_link_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.block_links = not bool(rule.block_links)
+            await self._save_owned_rule(rule, uid)
+            status = "فیلتر لینک فعال شد (پیام‌های دارای لینک مسدود می‌شوند) 🚫" if rule.block_links else "فیلتر لینک غیرفعال شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_filters_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rfl_vid:(.+)$"))
+        async def _cb_filter_video_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.block_video = not bool(rule.block_video)
+            await self._save_owned_rule(rule, uid)
+            status = "مسدودسازی ویدیو فعال شد 🚫" if rule.block_video else "ارسال ویدیو مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_filters_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rfl_aud:(.+)$"))
+        async def _cb_filter_audio_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.block_audio = not bool(rule.block_audio)
+            await self._save_owned_rule(rule, uid)
+            status = "مسدودسازی فایل صوتی فعال شد 🚫" if rule.block_audio else "ارسال فایل صوتی مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_filters_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rfl_stk:(.+)$"))
+        async def _cb_filter_sticker_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.block_stickers = not bool(rule.block_stickers)
+            await self._save_owned_rule(rule, uid)
+            status = "مسدودسازی استیکر فعال شد 🚫" if rule.block_stickers else "ارسال استیکر مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_filters_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rfl_txt:(.+)$"))
+        async def _cb_filter_text_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.block_text = not bool(rule.block_text)
+            await self._save_owned_rule(rule, uid)
+            status = "مسدودسازی پیام متنی فعال شد 🚫" if rule.block_text else "ارسال پیام متنی مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_filters_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rfl_voc:(.+)$"))
+        async def _cb_filter_voice_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.block_voice = not bool(rule.block_voice)
+            await self._save_owned_rule(rule, uid)
+            status = "مسدودسازی وویس فعال شد 🚫" if rule.block_voice else "ارسال وویس مجاز شد 🟢"
+            await cq.answer(status)
+            text, kbd = self._render_filters_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        # ---------------- Max Time Edit Callbacks ----------------
+        @b.on_callback_query(filters.regex(r"^rmte:(.+)$"))
+        async def _cb_rule_max_time_edit_menu(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد یا دسترسی ندارید", show_alert=True)
+            text, kbd = self._render_max_time_edit_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rmte_s:(.+?):(\d+)$"))
+        async def _cb_rule_max_time_edit_set(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            parts = raw.split(":")
+            rule_id, secs = parts[1], int(parts[2])
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.max_time_edit = secs
+            await self._save_owned_rule(rule, uid)
+            msg = f"سقف زمان ادیت به {secs} ثانیه تغییر کرد ✅" if secs > 0 else "محدودیت زمان ادیت برداشته شد (نامحدود) ✅"
+            await cq.answer(msg)
+            text, kbd = self._render_max_time_edit_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rmte_c:(.+)$"))
+        async def _cb_rule_max_time_edit_custom(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            st = self._state(uid)
+            st.step = "rule_max_edit_input"
+            st.buffer = {"rule_id": rule_id}
+            await self._persist(uid, st)
+            prompt = (
+                "⏱ **ورود زمان مجاز ادیت (بر حسب ثانیه):**\n\n"
+                "یک عدد به ثانیه ارسال کنید (مثلاً 1800 برای نیم ساعت یا 86400 برای یک روز).\n\n"
+                "برای انصراف دکمه زیر را لمس کنید:"
+            )
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rmte:{rule_id}")]]))
+            await cq.answer()
+
+        # ---------------- Profile Management Callbacks ----------------
+        @b.on_callback_query(filters.regex(r"^pr_restart$"))
+        async def _cb_profile_restart_setup(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            st = UiState()
+            await self._persist(uid, st)
+            await cq.answer("✅ ستاپ راه‌اندازی با موفقیت بازنشانی شد.")
+            sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+            if not sessions:
+                text, kbd = self._render_welcome_onboarding(uid, user=cq.from_user)
+            else:
+                text = await self._main_text(uid, user=cq.from_user)
+                kbd = self._main_menu()
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^pr_reset_cfg$"))
+        async def _cb_profile_reset_cfg_prompt(_, cq: CallbackQuery):
+            text = (
+                "⚠️ **هشدار بازنشانی تنظیمات (Reset Config)**\n\n"
+                "آیا مطمئن هستید که می‌خواهید تمام تنظیمات پیشرفته (هدر، فوتر، پاک‌کننده، فیلترها و کلمات حذفی) "
+                "تمام قوانین خود را به حالت اولیه بازگردانید؟\n\n"
+                "*(قوانین و سشن‌های شما حذف نخواهند شد، فقط تنظیمات آن‌ها ریست می‌شوند)*"
+            )
+            kbd = self._kbd([
+                [("✅ بله، ریست کامل تنظیمات", "pr_reset_cfg_yes")],
+                [("❌ انصراف و بازگشت", "pr_view")],
+            ])
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^pr_reset_cfg_yes$"))
+        async def _cb_profile_reset_cfg_confirm(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            rules = await self._rules.list_by_owner(uid) if uid else []
+            for r in rules:
+                r.custom_header = ""
+                r.custom_footer = ""
+                if not isinstance(r.metadata, dict):
+                    r.metadata = {}
+                r.metadata = {"replacements": {}}
+                r.max_time_edit = 86400
+                r.remove_links = False
+                await self._save_owned_rule(r, uid)
+            await cq.answer("✅ تمام تنظیمات با موفقیت ریست شدند.", show_alert=True)
+            body, kbd = await self._render_profile_menu(uid, cq.from_user)
+            await self._safe_edit(cq, body, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^pr_view$"))
+        async def _cb_profile_view(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            body, kbd = await self._render_profile_menu(uid, cq.from_user)
+            await self._safe_edit(cq, body, reply_markup=kbd)
+            await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rlk:(.+)$"))
         async def _cb_rule_toggle_link(_, cq: CallbackQuery):
@@ -3103,7 +3696,28 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rrm:(.+)$"))
-        async def _cb_rule_remove(_, cq: CallbackQuery):
+        async def _cb_rule_remove_ask(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ این قانون یافت نشد یا متعلق به شما نیست.", show_alert=True)
+            text = (
+                f"⚠️ **آیا از حذف این قانون اطمینان دارید؟**\n\n"
+                f"📡 مبدأ: `{rule.source_chat_name or rule.source_chat_id}`\n"
+                f"🎯 مقصد: `{rule.target_chat_name or rule.target_chat_id}`\n\n"
+                "این عملیات غیرقابل بازگشت است."
+            )
+            kbd = self._kbd([
+                [("🗑 بله، حذف شود", f"rrm_confirm:{rule.id}")],
+                [("❌ انصراف", f"rd:{rule.id}")],
+            ])
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rrm_confirm:(.+)$"))
+        async def _cb_rule_remove_confirm(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
@@ -3114,6 +3728,33 @@ class ProBotUI:
             await cq.answer("🗑 قانون با موفقیت حذف شد", show_alert=True)
             rules = await self._rules.list_by_owner(uid) if uid else []
             text, kbd = self._render_rules_list(rules, page=0)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rdup:(.+)$"))
+        async def _cb_rule_duplicate(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ این قانون یافت نشد یا متعلق به شما نیست.", show_alert=True)
+            draft = rule.to_draft()
+            new_rule = ForwardRule(
+                session_id=rule.session_id,
+                name=f"{rule.name} (کپی)" if rule.name else "قانون جدید (کپی)",
+                source_chat_id=rule.source_chat_id,
+                source_chat_name=rule.source_chat_name,
+                target_chat_id=rule.target_chat_id,
+                target_chat_name=rule.target_chat_name,
+                owner_user_id=uid,
+                metadata=copy.deepcopy(rule.metadata) if isinstance(rule.metadata, dict) else {},
+            )
+            draft["name"] = new_rule.name
+            new_rule.apply_draft(draft)
+            new_rule.owner_user_id = uid
+            saved = await self._save_owned_rule(new_rule, uid)
+            await cq.answer("📑 قانون با موفقیت تکثیر شد!", show_alert=True)
+            text, kbd = self._render_rule_detail(saved)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         # ---------------- rule edit (draft & direct) handlers ----------------
@@ -4731,7 +5372,7 @@ class ProBotUI:
             await cq.answer()
 
         # ---------------- free-text FSM router ----------------
-        @b.on_message(filters.private & filters.text & ~filters.command(["start", "menu", "cancel", "connect", "rules", "panel", "settings"]), group=-1)
+        @b.on_message(filters.private & filters.text & ~filters.command(["start", "menu", "cancel", "connect", "rules", "panel", "settings", "profile", "forward"]), group=-1)
         async def _text(_, message: Message):
             # Every step of every flow is traced: if the bot ever goes quiet
             # again, the log shows exactly which step died and why.
@@ -5959,6 +6600,78 @@ class ProBotUI:
 
         await message.reply_text("✅ **فوتر با موفقیت تنظیم شد.**")
         menu_text, menu_kbd = self._render_header_footer_menu(rule)
+        await message.reply_text(menu_text, reply_markup=menu_kbd)
+
+    async def _step_rule_clean_words_input(self, message: Message, st: UiState, text: str) -> None:
+        uid = int(message.from_user.id if message.from_user else 0)
+        rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            await message.reply_text("❌ تسک یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            return
+
+        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            menu_text, menu_kbd = self._render_cleaner_menu(rule)
+            await message.reply_text("❌ عملیات لغو شد.", reply_markup=menu_kbd)
+            return
+
+        words = [w.strip() for w in text.replace("\n", ",").split(",") if w.strip()]
+        if not isinstance(rule.metadata, dict):
+            rule.metadata = {}
+        rule.metadata["clean_words"] = words
+        await self._save_owned_rule(rule, uid)
+
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+
+        await message.reply_text(f"✅ **لیست {len(words)} کلمه جهت حذف با موفقیت ذخیره شد.**")
+        menu_text, menu_kbd = self._render_cleaner_menu(rule)
+        await message.reply_text(menu_text, reply_markup=menu_kbd)
+
+    async def _step_rule_max_edit_input(self, message: Message, st: UiState, text: str) -> None:
+        uid = int(message.from_user.id if message.from_user else 0)
+        rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            await message.reply_text("❌ تسک یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            return
+
+        clean = text.strip()
+        if clean.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            menu_text, menu_kbd = self._render_max_time_edit_menu(rule)
+            await message.reply_text("❌ عملیات لغو شد.", reply_markup=menu_kbd)
+            return
+
+        if not clean.isdigit():
+            await message.reply_text(
+                "❌ لطفاً فقط یک عدد صحیح معتبر بر حسب ثانیه ارسال کنید (مثلاً `3600`):",
+                reply_markup=self._cancel_kbd(),
+            )
+            return
+
+        val = int(clean)
+        rule.max_time_edit = val
+        await self._save_owned_rule(rule, uid)
+
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+
+        await message.reply_text(f"✅ **محدودیت زمان ویرایش پیام روی {val} ثانیه تنظیم شد.**")
+        menu_text, menu_kbd = self._render_max_time_edit_menu(rule)
         await message.reply_text(menu_text, reply_markup=menu_kbd)
 
     # ---------------- smart routing FSM steps ----------------

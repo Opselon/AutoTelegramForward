@@ -39,6 +39,7 @@ try:
 except ImportError:
     asyncpg = None
 import pytest
+import pytest_asyncio
 
 from core.domain.entities import (
     DeliveryJob,
@@ -74,7 +75,7 @@ def sqlite_db(tmp_path):
     return db
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def pg_conn():
     """Real PostgreSQL connection on local test database."""
     if asyncpg is None:
