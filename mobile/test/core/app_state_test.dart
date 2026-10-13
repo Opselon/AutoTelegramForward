@@ -25,14 +25,17 @@ void main() {
     });
 
     test('restores stored valid session', () async {
-      await tokenStore.write(StoredCredentials(
-        serverUrl: 'https://custom.atf.com/',
-        token: 'stored-valid-token',
-        userId: 99,
-        username: 'bob',
-        isAdmin: true,
-        expiresAtIso: DateTime.now().add(const Duration(days: 2)).toIso8601String(),
-      ));
+      await tokenStore.write(
+        StoredCredentials(
+          serverUrl: 'https://custom.atf.com/',
+          token: 'stored-valid-token',
+          userId: 99,
+          username: 'bob',
+          isAdmin: true,
+          expiresAtIso:
+              DateTime.now().add(const Duration(days: 2)).toIso8601String(),
+        ),
+      );
 
       final state = AppState(
         env: env,
@@ -50,14 +53,19 @@ void main() {
     });
 
     test('ignores expired credentials on restore', () async {
-      await tokenStore.write(StoredCredentials(
-        serverUrl: 'https://custom.atf.com/',
-        token: 'stored-expired-token',
-        userId: 99,
-        username: 'bob',
-        isAdmin: false,
-        expiresAtIso: DateTime.now().subtract(const Duration(minutes: 5)).toIso8601String(),
-      ));
+      await tokenStore.write(
+        StoredCredentials(
+          serverUrl: 'https://custom.atf.com/',
+          token: 'stored-expired-token',
+          userId: 99,
+          username: 'bob',
+          isAdmin: false,
+          expiresAtIso:
+              DateTime.now()
+                  .subtract(const Duration(minutes: 5))
+                  .toIso8601String(),
+        ),
+      );
 
       final state = AppState(
         env: env,

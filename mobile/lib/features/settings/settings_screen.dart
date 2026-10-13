@@ -17,14 +17,15 @@ class SettingsScreen extends StatelessWidget {
     final state = context.watch<AppState>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(t.get('settings_title')),
-      ),
+      appBar: AppBar(title: Text(t.get('settings_title'))),
       body: ListView(
         children: [
           // Server Section
           ListTile(
-            title: Text(t.get('settings_server'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(
+              t.get('settings_server'),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.dns_outlined),
@@ -37,7 +38,10 @@ class SettingsScreen extends StatelessWidget {
 
           // Appearance & Language
           ListTile(
-            title: Text(t.get('settings_language'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(
+              t.get('settings_language'),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           RadioListTile<String>(
             title: const Text('English'),
@@ -59,7 +63,10 @@ class SettingsScreen extends StatelessWidget {
 
           // Theme
           ListTile(
-            title: Text(t.get('settings_theme'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(
+              t.get('settings_theme'),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           RadioListTile<ThemeMode>(
             title: Text(t.get('settings_theme_system')),
@@ -90,19 +97,29 @@ class SettingsScreen extends StatelessWidget {
           // Account & Session
           ListTile(
             leading: const Icon(Icons.person_outline),
-            title: Text(state.username.isNotEmpty ? state.username : 'User #${state.userId}'),
+            title: Text(
+              state.username.isNotEmpty
+                  ? state.username
+                  : 'User #${state.userId}',
+            ),
             subtitle: Text(state.isAdmin ? 'Administrator' : 'Standard User'),
           ),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
-            title: Text(t.get('settings_logout'), style: const TextStyle(color: Colors.red)),
+            title: Text(
+              t.get('settings_logout'),
+              style: const TextStyle(color: Colors.red),
+            ),
             onTap: () => _confirmLogout(context),
           ),
           const Divider(),
 
           // About
           ListTile(
-            title: Text(t.get('settings_about'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(
+              t.get('settings_about'),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.info_outline),
@@ -121,35 +138,34 @@ class SettingsScreen extends StatelessWidget {
 
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.get('login_server_change')),
-        content: TextField(
-          controller: ctrl,
-          decoration: InputDecoration(
-            hintText: 'https://atf.example.com',
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(t.get('login_server_change')),
+            content: TextField(
+              controller: ctrl,
+              decoration: InputDecoration(hintText: 'https://atf.example.com'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(t.get('action_cancel')),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final parsed = ServerUrl.tryParse(ctrl.text);
+                  if (parsed == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(t.get('login_server_invalid'))),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                  await state.setServerUrl(parsed.normalized);
+                },
+                child: Text(t.get('action_save')),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(t.get('action_cancel')),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final parsed = ServerUrl.tryParse(ctrl.text);
-              if (parsed == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(t.get('login_server_invalid'))),
-                );
-                return;
-              }
-              Navigator.pop(ctx);
-              await state.setServerUrl(parsed.normalized);
-            },
-            child: Text(t.get('action_save')),
-          ),
-        ],
-      ),
     );
   }
 
@@ -157,21 +173,22 @@ class SettingsScreen extends StatelessWidget {
     final t = AppMessages.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.get('settings_logout')),
-        content: Text(t.get('settings_logout_confirm')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(t.get('action_cancel')),
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(t.get('settings_logout')),
+            content: Text(t.get('settings_logout_confirm')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(t.get('action_cancel')),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(t.get('action_confirm')),
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(t.get('action_confirm')),
-          ),
-        ],
-      ),
     );
 
     if (confirmed == true && context.mounted) {

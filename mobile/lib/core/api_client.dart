@@ -34,13 +34,14 @@ class ApiException implements Exception {
 }
 
 /// Pluggable transport so unit tests never touch the network.
-typedef HttpTransport = Future<http.Response> Function(
-  Uri url, {
-  required String method,
-  Map<String, String>? headers,
-  Object? body,
-  required Duration timeout,
-});
+typedef HttpTransport =
+    Future<http.Response> Function(
+      Uri url, {
+      required String method,
+      Map<String, String>? headers,
+      Object? body,
+      required Duration timeout,
+    });
 
 Future<http.Response> _ioTransport(
   Uri url, {
@@ -108,8 +109,13 @@ class ApiClient {
 
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     final clean = path.startsWith('/') ? path.substring(1) : path;
-    final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
-    return Uri.parse('$base/$clean').replace(queryParameters: query?.map((k, v) => MapEntry(k, '$v')));
+    final base =
+        baseUrl.endsWith('/')
+            ? baseUrl.substring(0, baseUrl.length - 1)
+            : baseUrl;
+    return Uri.parse(
+      '$base/$clean',
+    ).replace(queryParameters: query?.map((k, v) => MapEntry(k, '$v')));
   }
 
   Map<String, String> get _authHeaders {
@@ -127,7 +133,8 @@ class ApiClient {
     try {
       final decoded = jsonDecode(response.body);
       if (decoded is Map<String, dynamic>) {
-        final candidate = decoded['error'] ?? decoded['message'] ?? decoded['detail'];
+        final candidate =
+            decoded['error'] ?? decoded['message'] ?? decoded['detail'];
         if (candidate is String && candidate.isNotEmpty) {
           serverMessage = candidate;
         }
@@ -162,9 +169,7 @@ class ApiClient {
 
     return AppError(
       kind: kind,
-      message: serverMessage.isNotEmpty
-          ? serverMessage
-          : 'HTTP $status',
+      message: serverMessage.isNotEmpty ? serverMessage : 'HTTP $status',
       statusCode: status,
       retryable: retryable && (status >= 500 || status == 429),
     );
@@ -193,7 +198,9 @@ class ApiClient {
         }
         final error = _translate(response, retryable: retryable);
         if (error.retryable && attempt <= maxRetries) {
-          await Future<void>.delayed(Duration(milliseconds: 50 * (1 << (attempt - 1))));
+          await Future<void>.delayed(
+            Duration(milliseconds: 50 * (1 << (attempt - 1))),
+          );
           continue;
         }
         if (error.kind == ErrorKind.unauthorized) {
@@ -205,22 +212,30 @@ class ApiClient {
         rethrow;
       } on TimeoutException {
         if (attempt > maxRetries || !retryable) {
-          throw const ApiException(AppError(
-            kind: ErrorKind.timeout,
-            message: 'request_timeout',
-            retryable: true,
-          ));
+          throw const ApiException(
+            AppError(
+              kind: ErrorKind.timeout,
+              message: 'request_timeout',
+              retryable: true,
+            ),
+          );
         }
-        await Future<void>.delayed(Duration(milliseconds: 50 * (1 << (attempt - 1))));
+        await Future<void>.delayed(
+          Duration(milliseconds: 50 * (1 << (attempt - 1))),
+        );
       } on http.ClientException catch (exc) {
         if (attempt > maxRetries || !retryable) {
-          throw ApiException(AppError(
-            kind: ErrorKind.network,
-            message: exc.message,
-            retryable: true,
-          ));
+          throw ApiException(
+            AppError(
+              kind: ErrorKind.network,
+              message: exc.message,
+              retryable: true,
+            ),
+          );
         }
-        await Future<void>.delayed(Duration(milliseconds: 50 * (1 << (attempt - 1))));
+        await Future<void>.delayed(
+          Duration(milliseconds: 50 * (1 << (attempt - 1))),
+        );
       }
     }
   }
@@ -240,9 +255,10 @@ class ApiClient {
       body: body,
       retryable: retryable,
     );
-    final decoded = response.body.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(response.body) as Map<String, dynamic>;
+    final decoded =
+        response.body.isEmpty
+            ? <String, dynamic>{}
+            : jsonDecode(response.body) as Map<String, dynamic>;
     return fromJson(decoded);
   }
 
@@ -288,10 +304,7 @@ class ApiClient {
       _uri('/api/auth/login'),
       method: 'POST',
       headers: {'content-type': 'application/json; charset=utf-8'},
-      body: jsonEncode({
-        'username': username,
-        'password': password,
-      }),
+      body: jsonEncode({'username': username, 'password': password}),
       timeout: timeout,
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -300,10 +313,9 @@ class ApiClient {
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final jwt = json['token'] as String? ?? '';
     if (jwt.isEmpty) {
-      throw const ApiException(AppError(
-        kind: ErrorKind.unauthorized,
-        message: 'login_no_token',
-      ));
+      throw const ApiException(
+        AppError(kind: ErrorKind.unauthorized, message: 'login_no_token'),
+      );
     }
     final session = AuthSession(
       token: jwt,
@@ -314,14 +326,16 @@ class ApiClient {
       expiresAt: DateTime.now().add(const Duration(days: 7)),
     );
     _bearer = jwt;
-    await _tokens.write(StoredCredentials(
-      serverUrl: baseUrl,
-      token: jwt,
-      userId: session.userId,
-      username: session.username,
-      isAdmin: session.isAdmin,
-      expiresAtIso: session.expiresAt.toIso8601String(),
-    ));
+    await _tokens.write(
+      StoredCredentials(
+        serverUrl: baseUrl,
+        token: jwt,
+        userId: session.userId,
+        username: session.username,
+        isAdmin: session.isAdmin,
+        expiresAtIso: session.expiresAt.toIso8601String(),
+      ),
+    );
     return session;
   }
 
@@ -374,143 +388,143 @@ class ApiClient {
   // ------------------------------------------------------------------ //
 
   Future<SystemStats> stats() => _request(
-        method: 'GET',
-        path: '/api/stats',
-        fromJson: SystemStats.fromJson,
-        retryable: true,
-      );
+    method: 'GET',
+    path: '/api/stats',
+    fromJson: SystemStats.fromJson,
+    retryable: true,
+  );
 
   Future<List<ServiceHealth>> servicesHealth() => _requestList(
-        method: 'GET',
-        path: '/api/v1/health/services',
-        fromJson: ServiceHealth.fromJson,
-        listKey: 'services',
-      );
+    method: 'GET',
+    path: '/api/v1/health/services',
+    fromJson: ServiceHealth.fromJson,
+    listKey: 'services',
+  );
 
   Future<List<ForwardRule>> listRules() => _requestList(
-        method: 'GET',
-        path: '/api/rules',
-        fromJson: ForwardRule.fromJson,
-        listKey: 'rules',
-      );
+    method: 'GET',
+    path: '/api/rules',
+    fromJson: ForwardRule.fromJson,
+    listKey: 'rules',
+  );
 
   Future<ForwardRule> createRule(ForwardRule rule) => _request(
-        method: 'POST',
-        path: '/api/rules',
-        body: rule.toCreateJson(),
-        fromJson: ForwardRule.fromJson,
-        retryable: false,
-      );
+    method: 'POST',
+    path: '/api/rules',
+    body: rule.toCreateJson(),
+    fromJson: ForwardRule.fromJson,
+    retryable: false,
+  );
 
   Future<ForwardRule> updateRule(String id, ForwardRule rule) => _request(
-        method: 'PUT',
-        path: '/api/rules/$id',
-        body: rule.toUpdateJson(),
-        fromJson: ForwardRule.fromJson,
-        retryable: false,
-      );
+    method: 'PUT',
+    path: '/api/rules/$id',
+    body: rule.toUpdateJson(),
+    fromJson: ForwardRule.fromJson,
+    retryable: false,
+  );
 
   Future<void> deleteRule(String id) => _request(
-        method: 'DELETE',
-        path: '/api/rules/$id',
-        fromJson: (json) => json,
-        retryable: false,
-      );
+    method: 'DELETE',
+    path: '/api/rules/$id',
+    fromJson: (json) => json,
+    retryable: false,
+  );
 
   Future<void> toggleRule(String id) => _request(
-        method: 'POST',
-        path: '/api/rules/$id/toggle',
-        fromJson: (json) => json,
-        retryable: false,
-      );
+    method: 'POST',
+    path: '/api/rules/$id/toggle',
+    fromJson: (json) => json,
+    retryable: false,
+  );
 
   Future<void> pauseRule(String id) => _request(
-        method: 'POST',
-        path: '/api/rules/$id/pause',
-        fromJson: (json) => json,
-        retryable: false,
-      );
+    method: 'POST',
+    path: '/api/rules/$id/pause',
+    fromJson: (json) => json,
+    retryable: false,
+  );
 
   Future<void> resumeRule(String id) => _request(
-        method: 'POST',
-        path: '/api/rules/$id/resume',
-        fromJson: (json) => json,
-        retryable: false,
-      );
+    method: 'POST',
+    path: '/api/rules/$id/resume',
+    fromJson: (json) => json,
+    retryable: false,
+  );
 
   Future<List<TelegramSession>> listSessions() => _requestList(
-        method: 'GET',
-        path: '/api/sessions',
-        fromJson: TelegramSession.fromJson,
-        listKey: 'sessions',
-      );
+    method: 'GET',
+    path: '/api/sessions',
+    fromJson: TelegramSession.fromJson,
+    listKey: 'sessions',
+  );
 
   Future<void> terminateSession(String id) => _request(
-        method: 'DELETE',
-        path: '/api/sessions/$id',
-        fromJson: (json) => json,
-        retryable: false,
-      );
+    method: 'DELETE',
+    path: '/api/sessions/$id',
+    fromJson: (json) => json,
+    retryable: false,
+  );
 
   Future<List<FilterRule>> listFilters() => _requestList(
-        method: 'GET',
-        path: '/api/filters',
-        fromJson: FilterRule.fromJson,
-        listKey: 'filters',
-      );
+    method: 'GET',
+    path: '/api/filters',
+    fromJson: FilterRule.fromJson,
+    listKey: 'filters',
+  );
 
   Future<FilterRule> createFilter(FilterRule filter) => _request(
-        method: 'POST',
-        path: '/api/filters',
-        body: filter.toJson(),
-        fromJson: FilterRule.fromJson,
-        retryable: false,
-      );
+    method: 'POST',
+    path: '/api/filters',
+    body: filter.toJson(),
+    fromJson: FilterRule.fromJson,
+    retryable: false,
+  );
 
   Future<FilterRule> updateFilter(String id, FilterRule filter) => _request(
-        method: 'PUT',
-        path: '/api/filters/$id',
-        body: filter.toJson(),
-        fromJson: FilterRule.fromJson,
-        retryable: false,
-      );
+    method: 'PUT',
+    path: '/api/filters/$id',
+    body: filter.toJson(),
+    fromJson: FilterRule.fromJson,
+    retryable: false,
+  );
 
   Future<void> deleteFilter(String id) => _request(
-        method: 'DELETE',
-        path: '/api/filters/$id',
-        fromJson: (json) => json,
-        retryable: false,
-      );
+    method: 'DELETE',
+    path: '/api/filters/$id',
+    fromJson: (json) => json,
+    retryable: false,
+  );
 
   Future<List<AiConfig>> listAiConfigs() => _requestList(
-        method: 'GET',
-        path: '/api/ai-configs',
-        fromJson: AiConfig.fromJson,
-        listKey: 'configs',
-      );
+    method: 'GET',
+    path: '/api/ai-configs',
+    fromJson: AiConfig.fromJson,
+    listKey: 'configs',
+  );
 
   Future<AiConfig> createAiConfig(AiConfig config) => _request(
-        method: 'POST',
-        path: '/api/ai-configs',
-        body: config.toJson(),
-        fromJson: AiConfig.fromJson,
-        retryable: false,
-      );
+    method: 'POST',
+    path: '/api/ai-configs',
+    body: config.toJson(),
+    fromJson: AiConfig.fromJson,
+    retryable: false,
+  );
 
   Future<AiConfig> updateAiConfig(String id, AiConfig config) => _request(
-        method: 'PUT',
-        path: '/api/ai-configs/$id',
-        body: config.toJson(),
-        fromJson: AiConfig.fromJson,
-        retryable: false,
-      );
+    method: 'PUT',
+    path: '/api/ai-configs/$id',
+    body: config.toJson(),
+    fromJson: AiConfig.fromJson,
+    retryable: false,
+  );
 
   Future<void> deleteAiConfig(String id) => _request(
-        method: 'DELETE',
-        path: '/api/ai-configs/$id',
-        fromJson: (json) => json,
-        retryable: false,
-      );
+    method: 'DELETE',
+    path: '/api/ai-configs/$id',
+    fromJson: (json) => json,
+    retryable: false,
+  );
 
   Future<List<LogEntry>> queryLogs({int limit = 40, String level = ''}) =>
       _requestList(
@@ -530,45 +544,42 @@ class ApiClient {
   Future<LoginChallenge> startTelegramLogin({
     required int userId,
     required String phoneNumber,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/api/telegram-login/start',
-        body: {'phone_number': phoneNumber},
-        fromJson: LoginChallenge.fromJson,
-        retryable: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/api/telegram-login/start',
+    body: {'phone_number': phoneNumber},
+    fromJson: LoginChallenge.fromJson,
+    retryable: false,
+  );
 
   Future<LoginChallenge> submitTelegramCode({
     required String challengeId,
     required String code,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/api/telegram-login/$challengeId/code',
-        body: {'code': code},
-        fromJson: LoginChallenge.fromJson,
-        retryable: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/api/telegram-login/$challengeId/code',
+    body: {'code': code},
+    fromJson: LoginChallenge.fromJson,
+    retryable: false,
+  );
 
   Future<LoginChallenge> submitTelegramPassword({
     required String challengeId,
     required String password,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/api/telegram-login/$challengeId/password',
-        body: {'password': password},
-        fromJson: LoginChallenge.fromJson,
-        retryable: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/api/telegram-login/$challengeId/password',
+    body: {'password': password},
+    fromJson: LoginChallenge.fromJson,
+    retryable: false,
+  );
 
   Future<void> cancelTelegramLogin(String challengeId) => _request(
-        method: 'POST',
-        path: '/api/telegram-login/$challengeId/cancel',
-        fromJson: (json) => json,
-        retryable: false,
-      );
+    method: 'POST',
+    path: '/api/telegram-login/$challengeId/cancel',
+    fromJson: (json) => json,
+    retryable: false,
+  );
 
   Future<void> logout() async {
     _bearer = null;
@@ -601,17 +612,17 @@ class LoginChallenge {
   final String phoneNumber;
 
   factory LoginChallenge.fromJson(Map<String, dynamic> json) => LoginChallenge(
-        id: json['challenge_id'] as String? ?? json['id'] as String? ?? '',
-        state: json['state'] as String? ?? LoginChallengeState.pending,
-        message: json['message'] as String? ?? '',
-        sessionId: json['session_id'] as String? ?? '',
-        retryAfterSeconds: (json['retry_after_seconds'] as num?)?.toInt() ??
-            (json['retry_after'] as num?)?.toInt() ??
-            0,
-        attemptsRemaining:
-            (json['attempts_remaining'] as num?)?.toInt() ?? 0,
-        phoneNumber: json['phone_number'] as String? ?? '',
-      );
+    id: json['challenge_id'] as String? ?? json['id'] as String? ?? '',
+    state: json['state'] as String? ?? LoginChallengeState.pending,
+    message: json['message'] as String? ?? '',
+    sessionId: json['session_id'] as String? ?? '',
+    retryAfterSeconds:
+        (json['retry_after_seconds'] as num?)?.toInt() ??
+        (json['retry_after'] as num?)?.toInt() ??
+        0,
+    attemptsRemaining: (json['attempts_remaining'] as num?)?.toInt() ?? 0,
+    phoneNumber: json['phone_number'] as String? ?? '',
+  );
 }
 
 /// Mirrors the states the Python `LoginFlowManager` returns, surfaced through
@@ -644,7 +655,10 @@ class LoginChallengeState {
   static const String cancelled = 'cancelled';
 
   static bool isTerminal(String state) =>
-      state == completed || state == failed || state == expired || state == cancelled;
+      state == completed ||
+      state == failed ||
+      state == expired ||
+      state == cancelled;
 }
 
 /// Parses the message keys the Python flow returns into a localisable code.
@@ -679,14 +693,13 @@ String loginMessageKey(String message) {
 /// `LoginFlowManager.normalize_phone` in the Python core so the app and the
 /// bot accept identical input.
 String normalizePhone(String raw) {
-  final ascii = raw.replaceAllMapped(
-    RegExp('[۰-۹٠-٩]'),
-    (m) {
-      final code = m.group(0)!.codeUnitAt(0);
-      // Persian (U+06F0..) and Arabic-Indic (U+0660..) both map to 0..9.
-      return String.fromCharCode(code <= 0x0669 ? code - 0x0660 + 0x30 : code - 0x06F0 + 0x30);
-    },
-  );
+  final ascii = raw.replaceAllMapped(RegExp('[۰-۹٠-٩]'), (m) {
+    final code = m.group(0)!.codeUnitAt(0);
+    // Persian (U+06F0..) and Arabic-Indic (U+0660..) both map to 0..9.
+    return String.fromCharCode(
+      code <= 0x0669 ? code - 0x0660 + 0x30 : code - 0x06F0 + 0x30,
+    );
+  });
   var digits = ascii.replaceAll(RegExp(r'[^\d+]'), '');
   if (digits.startsWith('00')) digits = '+${digits.substring(2)}';
   if (digits.startsWith('09') && digits.length >= 10) {

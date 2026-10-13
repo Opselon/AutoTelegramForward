@@ -75,9 +75,10 @@ class _LoginScreenState extends State<LoginScreen> {
             exc.error.kind == ErrorKind.timeout) {
           _error = t.get('login_error_network');
         } else {
-          _error = exc.error.message.isNotEmpty
-              ? exc.error.message
-              : t.get('state_error');
+          _error =
+              exc.error.message.isNotEmpty
+                  ? exc.error.message
+                  : t.get('state_error');
         }
       });
     } catch (exc) {
@@ -95,53 +96,55 @@ class _LoginScreenState extends State<LoginScreen> {
 
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.get('login_server_change')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${t.get('login_server_label')}:',
-              style: Theme.of(ctx).textTheme.bodySmall,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(t.get('login_server_change')),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${t.get('login_server_label')}:',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: ctrl,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  keyboardType: TextInputType.url,
+                  decoration: InputDecoration(
+                    hintText: 'https://atf.example.com',
+                    errorText:
+                        ServerUrl.tryParse(ctrl.text) == null &&
+                                ctrl.text.isNotEmpty
+                            ? t.get('login_server_invalid')
+                            : null,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: ctrl,
-              autocorrect: false,
-              enableSuggestions: false,
-              keyboardType: TextInputType.url,
-              decoration: InputDecoration(
-                hintText: 'https://atf.example.com',
-                errorText: ServerUrl.tryParse(ctrl.text) == null &&
-                        ctrl.text.isNotEmpty
-                    ? t.get('login_server_invalid')
-                    : null,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(t.get('action_cancel')),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(t.get('action_cancel')),
+              ElevatedButton(
+                onPressed: () async {
+                  final parsed = ServerUrl.tryParse(ctrl.text);
+                  if (parsed == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(t.get('login_server_invalid'))),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                  await state.setServerUrl(parsed.normalized);
+                },
+                child: Text(t.get('action_save')),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              final parsed = ServerUrl.tryParse(ctrl.text);
-              if (parsed == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(t.get('login_server_invalid'))),
-                );
-                return;
-              }
-              Navigator.pop(ctx);
-              await state.setServerUrl(parsed.normalized);
-            },
-            child: Text(t.get('action_save')),
-          ),
-        ],
-      ),
     );
   }
 
@@ -162,22 +165,25 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.send_rounded, size: 56, color: Color(0xFF10B981)),
+                    const Icon(
+                      Icons.send_rounded,
+                      size: 56,
+                      color: Color(0xFF10B981),
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       t.get('app_name'),
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       t.get('app_tagline'),
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
                     ),
                     const SizedBox(height: 32),
 
@@ -192,9 +198,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                            const Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.amber,
+                            ),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(t.get('login_session_expired'))),
+                            Expanded(
+                              child: Text(t.get('login_session_expired')),
+                            ),
                           ],
                         ),
                       ),
@@ -208,7 +219,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.red),
                         ),
-                        child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
                       ),
 
                     TextFormField(
@@ -219,8 +233,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         labelText: t.get('login_username'),
                         prefixIcon: const Icon(Icons.person_outline),
                       ),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? t.get('login_username') : null,
+                      validator:
+                          (v) =>
+                              (v == null || v.trim().isEmpty)
+                                  ? t.get('login_username')
+                                  : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -230,30 +247,44 @@ class _LoginScreenState extends State<LoginScreen> {
                         labelText: t.get('login_password'),
                         prefixIcon: const Icon(Icons.lock_outline),
                       ),
-                      validator: (v) =>
-                          (v == null || v.isEmpty) ? t.get('login_password') : null,
+                      validator:
+                          (v) =>
+                              (v == null || v.isEmpty)
+                                  ? t.get('login_password')
+                                  : null,
                     ),
                     const SizedBox(height: 24),
 
                     ElevatedButton(
                       onPressed: _loading ? null : _submit,
-                      child: _loading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : Text(_isRegister ? t.get('login_register') : t.get('login_submit')),
+                      child:
+                          _loading
+                              ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                              : Text(
+                                _isRegister
+                                    ? t.get('login_register')
+                                    : t.get('login_submit'),
+                              ),
                     ),
                     const SizedBox(height: 12),
 
                     TextButton(
-                      onPressed: () => setState(() {
-                        _isRegister = !_isRegister;
-                        _error = null;
-                      }),
+                      onPressed:
+                          () => setState(() {
+                            _isRegister = !_isRegister;
+                            _error = null;
+                          }),
                       child: Text(
-                        _isRegister ? t.get('login_have_account') : t.get('login_no_account'),
+                        _isRegister
+                            ? t.get('login_have_account')
+                            : t.get('login_no_account'),
                       ),
                     ),
                     const Divider(height: 36),
@@ -262,13 +293,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.dns_outlined, size: 16, color: Colors.grey),
+                        const Icon(
+                          Icons.dns_outlined,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             state.serverUrl,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                           ),
                         ),
                         TextButton(

@@ -71,9 +71,9 @@ func (h *Handlers) AuthChangePassword(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var body struct {
-		UserId       int64  `json:"user_id"`
-		OldPassword  string `json:"old_password"`
-		NewPassword  string `json:"new_password"`
+		UserId      int64  `json:"user_id"`
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
 	}
 	if !bind(w, r, &body) {
 		return

@@ -33,13 +33,13 @@ class StoredCredentials {
   }
 
   Map<String, dynamic> toJson() => {
-        'server_url': serverUrl,
-        'token': token,
-        'user_id': userId,
-        'username': username,
-        'is_admin': isAdmin,
-        'expires_at': expiresAtIso,
-      };
+    'server_url': serverUrl,
+    'token': token,
+    'user_id': userId,
+    'username': username,
+    'is_admin': isAdmin,
+    'expires_at': expiresAtIso,
+  };
 
   factory StoredCredentials.fromJson(Map<String, dynamic> json) =>
       StoredCredentials(
@@ -78,7 +78,8 @@ abstract class SecureTokenStore {
 
 /// Pure in-memory implementation used by unit + widget tests.
 class MemoryTokenStore implements SecureTokenStore {
-  MemoryTokenStore([StoredCredentials? initial]) : _current = initial ?? StoredCredentials.empty;
+  MemoryTokenStore([StoredCredentials? initial])
+    : _current = initial ?? StoredCredentials.empty;
 
   StoredCredentials _current;
 

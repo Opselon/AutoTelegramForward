@@ -40,7 +40,7 @@ android {
                 }
                 val storePath = keystoreProperties.getProperty("storeFile")
                 if (storePath != null) {
-                    val resolvedFile = file(storePath)
+                    val resolvedFile = rootProject.file(storePath)
                     if (resolvedFile.exists()) {
                         storeFile = resolvedFile
                         storePassword = keystoreProperties.getProperty("storePassword")

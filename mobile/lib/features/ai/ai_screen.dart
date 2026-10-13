@@ -48,7 +48,13 @@ class _AiScreenState extends State<AiScreen> {
         context.read<AppState>().markExpired();
         return;
       }
-      setState(() => _error = exc.error.message.isNotEmpty ? exc.error.message : t.get('state_error'));
+      setState(
+        () =>
+            _error =
+                exc.error.message.isNotEmpty
+                    ? exc.error.message
+                    : t.get('state_error'),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = t.get('state_error'));
@@ -60,18 +66,22 @@ class _AiScreenState extends State<AiScreen> {
   Future<void> _delete(AiConfig config) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete AI configuration?'),
-        content: Text('${config.provider} • ${config.model}'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Delete AI configuration?'),
+            content: Text('${config.provider} • ${config.model}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
 
     if (confirmed != true || !mounted) return;
@@ -135,15 +145,24 @@ class _AiScreenState extends State<AiScreen> {
 
             if (_configs.isEmpty && !_loading)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 48,
+                ),
                 child: Column(
                   children: [
-                    const Icon(Icons.psychology_outlined, size: 64, color: Colors.grey),
+                    const Icon(
+                      Icons.psychology_outlined,
+                      size: 64,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       t.get('ai_empty'),
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
                     ),
                   ],
                 ),
@@ -154,10 +173,19 @@ class _AiScreenState extends State<AiScreen> {
                   child: ListTile(
                     leading: const CircleAvatar(
                       backgroundColor: Color(0xFF06B6D4),
-                      child: Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+                      child: Icon(
+                        Icons.auto_awesome,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
-                    title: Text('${c.provider.toUpperCase()} (${c.model})', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('Target: ${c.targetLanguage.isNotEmpty ? c.targetLanguage : 'same'} • Active: ${c.isEnabled ? "yes" : "no"}'),
+                    title: Text(
+                      '${c.provider.toUpperCase()} (${c.model})',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'Target: ${c.targetLanguage.isNotEmpty ? c.targetLanguage : 'same'} • Active: ${c.isEnabled ? "yes" : "no"}',
+                    ),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, color: Colors.red),
                       onPressed: () => _delete(c),

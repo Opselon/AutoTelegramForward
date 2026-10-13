@@ -29,15 +29,15 @@ func Dial(addr string) (*grpc.ClientConn, error) {
 
 // Clients bundles all typed service stubs.
 type Clients struct {
-	Sessions   pb.SessionControlServiceClient
-	Rules      pb.ForwardRuleControlServiceClient
-	Filters    pb.FilterControlServiceClient
-	AI         pb.AIControlServiceClient
-	System     pb.SystemStatusControlServiceClient
-	Logs       pb.LogControlServiceClient
-	Delivery   pb.DeliveryControlServiceClient
-	Account    pb.AccountControlServiceClient
-	Backup     pb.BackupControlServiceClient
+	Sessions pb.SessionControlServiceClient
+	Rules    pb.ForwardRuleControlServiceClient
+	Filters  pb.FilterControlServiceClient
+	AI       pb.AIControlServiceClient
+	System   pb.SystemStatusControlServiceClient
+	Logs     pb.LogControlServiceClient
+	Delivery pb.DeliveryControlServiceClient
+	Account  pb.AccountControlServiceClient
+	Backup   pb.BackupControlServiceClient
 }
 
 // NewClients bundles the core service stubs.

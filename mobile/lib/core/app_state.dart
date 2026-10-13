@@ -24,10 +24,10 @@ class AppState extends ChangeNotifier {
     required this.env,
     required this.tokenStore,
     required this.preferenceStore,
-  })  : _serverUrl = env.defaultBaseUrl,
-        _status = SessionStatus.unknown,
-        _themeMode = ThemeMode.system,
-        _locale = const Locale('en');
+  }) : _serverUrl = env.defaultBaseUrl,
+       _status = SessionStatus.unknown,
+       _themeMode = ThemeMode.system,
+       _locale = const Locale('en');
 
   final AppEnv env;
   final SecureTokenStore tokenStore;
@@ -61,7 +61,9 @@ class AppState extends ChangeNotifier {
     final creds = await tokenStore.read();
     final storedLanguage = await preferenceStore.getString(PrefKeys.language);
     final storedTheme = await preferenceStore.getString(PrefKeys.themeMode);
-    final storedServer = await preferenceStore.getString(PrefKeys.lastServerUrl);
+    final storedServer = await preferenceStore.getString(
+      PrefKeys.lastServerUrl,
+    );
 
     if (storedLanguage.isNotEmpty) {
       _locale = Locale(storedLanguage);
@@ -105,7 +107,9 @@ class AppState extends ChangeNotifier {
     _themeMode = mode;
     preferenceStore.setString(
       PrefKeys.themeMode,
-      mode == ThemeMode.dark ? 'dark' : (mode == ThemeMode.light ? 'light' : 'system'),
+      mode == ThemeMode.dark
+          ? 'dark'
+          : (mode == ThemeMode.light ? 'light' : 'system'),
     );
     notifyListeners();
   }
@@ -162,9 +166,10 @@ class AppState extends ChangeNotifier {
   /// clear reason instead of an unexplained blank view.
   void markExpired() {
     _token = null;
-    _status = _status == SessionStatus.authenticated
-        ? SessionStatus.expired
-        : SessionStatus.unauthenticated;
+    _status =
+        _status == SessionStatus.authenticated
+            ? SessionStatus.expired
+            : SessionStatus.unauthenticated;
     notifyListeners();
   }
 

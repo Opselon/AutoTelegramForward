@@ -63,7 +63,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _sourceTitleCtrl = TextEditingController(text: r?.sourceChatTitle ?? '');
     _targetIdCtrl = TextEditingController(text: r?.targetChatId ?? '');
     _targetTitleCtrl = TextEditingController(text: r?.targetChatTitle ?? '');
-    _intermediateCtrl = TextEditingController(text: r?.intermediateChannelId ?? '');
+    _intermediateCtrl = TextEditingController(
+      text: r?.intermediateChannelId ?? '',
+    );
     _filtersCtrl = TextEditingController(text: r?.filters.join(', ') ?? '');
     _delayCtrl = TextEditingController(text: '${r?.delaySeconds ?? 0}');
     _headerCtrl = TextEditingController(text: r?.headerTemplate ?? '');
@@ -72,7 +74,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _selectedSessionId = r?.sessionId;
     _filterMode = r?.filterMode ?? 'all';
     _mediaMode = r?.mediaMode ?? 'all';
-    _useVipRouting = r?.useVipRouting ?? (r?.intermediateChannelId.isNotEmpty ?? false);
+    _useVipRouting =
+        r?.useVipRouting ?? (r?.intermediateChannelId.isNotEmpty ?? false);
     _isEnabled = r?.isEnabled ?? true;
     _blockVoice = r?.blockVoice ?? false;
     _blockStickers = r?.blockStickers ?? false;
@@ -130,24 +133,28 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     });
 
     final client = context.read<AppState>().buildApiClient();
-    final filters = _filtersCtrl.text
-        .split(',')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
+    final filters =
+        _filtersCtrl.text
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
 
     final ruleData = ForwardRule(
       id: widget.rule?.id ?? '',
       sessionId: sid,
       sourceChatId: _sourceIdCtrl.text.trim(),
-      sourceChatTitle: _sourceTitleCtrl.text.trim().isNotEmpty
-          ? _sourceTitleCtrl.text.trim()
-          : _sourceIdCtrl.text.trim(),
+      sourceChatTitle:
+          _sourceTitleCtrl.text.trim().isNotEmpty
+              ? _sourceTitleCtrl.text.trim()
+              : _sourceIdCtrl.text.trim(),
       targetChatId: _targetIdCtrl.text.trim(),
-      targetChatTitle: _targetTitleCtrl.text.trim().isNotEmpty
-          ? _targetTitleCtrl.text.trim()
-          : _targetIdCtrl.text.trim(),
-      intermediateChannelId: _useVipRouting ? _intermediateCtrl.text.trim() : '',
+      targetChatTitle:
+          _targetTitleCtrl.text.trim().isNotEmpty
+              ? _targetTitleCtrl.text.trim()
+              : _targetIdCtrl.text.trim(),
+      intermediateChannelId:
+          _useVipRouting ? _intermediateCtrl.text.trim() : '',
       useVipRouting: _useVipRouting,
       filters: filters,
       filterMode: _filterMode,
@@ -181,9 +188,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
         } else if (exc.error.kind == ErrorKind.validation) {
           _error = t.get('rules_validation_failed');
         } else {
-          _error = exc.error.message.isNotEmpty
-              ? exc.error.message
-              : t.get('state_error');
+          _error =
+              exc.error.message.isNotEmpty
+                  ? exc.error.message
+                  : t.get('state_error');
         }
       });
     } catch (_) {
@@ -226,7 +234,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.red),
                   ),
-                  child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
                 ),
 
               // Session Selector
@@ -237,12 +248,13 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                     labelText: t.get('rules_session'),
                     prefixIcon: const Icon(Icons.send_rounded),
                   ),
-                  items: _sessions.map((s) {
-                    return DropdownMenuItem(
-                      value: s.id,
-                      child: Text(s.displayName),
-                    );
-                  }).toList(),
+                  items:
+                      _sessions.map((s) {
+                        return DropdownMenuItem(
+                          value: s.id,
+                          child: Text(s.displayName),
+                        );
+                      }).toList(),
                   onChanged: (val) => setState(() => _selectedSessionId = val),
                 ),
               const SizedBox(height: 16),
@@ -258,8 +270,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         labelText: t.get('rules_source'),
                         hintText: '-1001234567890',
                       ),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? t.get('rules_source_required') : null,
+                      validator:
+                          (v) =>
+                              (v == null || v.trim().isEmpty)
+                                  ? t.get('rules_source_required')
+                                  : null,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -287,8 +302,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         labelText: t.get('rules_target'),
                         hintText: '-1009876543210',
                       ),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? t.get('rules_target_required') : null,
+                      validator:
+                          (v) =>
+                              (v == null || v.trim().isEmpty)
+                                  ? t.get('rules_target_required')
+                                  : null,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -367,8 +385,12 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
               Card(
                 margin: EdgeInsets.zero,
                 elevation: 0,
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
@@ -376,14 +398,20 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                     children: [
                       Text(
                         t.get('rules_media_toggles_title'),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       SwitchListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_block_voice')),
-                        secondary: const Text('🎙', style: TextStyle(fontSize: 18)),
+                        secondary: const Text(
+                          '🎙',
+                          style: TextStyle(fontSize: 18),
+                        ),
                         value: _blockVoice,
                         onChanged: (v) => setState(() => _blockVoice = v),
                       ),
@@ -391,7 +419,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_block_stickers')),
-                        secondary: const Text('🎭', style: TextStyle(fontSize: 18)),
+                        secondary: const Text(
+                          '🎭',
+                          style: TextStyle(fontSize: 18),
+                        ),
                         value: _blockStickers,
                         onChanged: (v) => setState(() => _blockStickers = v),
                       ),
@@ -399,7 +430,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_remove_emojis')),
-                        secondary: const Text('😀', style: TextStyle(fontSize: 18)),
+                        secondary: const Text(
+                          '😀',
+                          style: TextStyle(fontSize: 18),
+                        ),
                         value: _removeEmojis,
                         onChanged: (v) => setState(() => _removeEmojis = v),
                       ),
@@ -407,7 +441,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_sync_deletes')),
-                        secondary: const Text('🗑', style: TextStyle(fontSize: 18)),
+                        secondary: const Text(
+                          '🗑',
+                          style: TextStyle(fontSize: 18),
+                        ),
                         value: _syncDeletes,
                         onChanged: (v) => setState(() => _syncDeletes = v),
                       ),
@@ -415,7 +452,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_ignore_edits')),
-                        secondary: const Text('✏️', style: TextStyle(fontSize: 18)),
+                        secondary: const Text(
+                          '✏️',
+                          style: TextStyle(fontSize: 18),
+                        ),
                         value: _ignoreEdits,
                         onChanged: (v) => setState(() => _ignoreEdits = v),
                       ),
@@ -452,13 +492,17 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
               ElevatedButton(
                 onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : Text(t.get('action_save')),
+                child:
+                    _saving
+                        ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                        : Text(t.get('action_save')),
               ),
             ],
           ),

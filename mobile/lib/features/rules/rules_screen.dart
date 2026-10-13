@@ -47,7 +47,13 @@ class _RulesScreenState extends State<RulesScreen> {
         context.read<AppState>().markExpired();
         return;
       }
-      setState(() => _error = exc.error.message.isNotEmpty ? exc.error.message : t.get('state_error'));
+      setState(
+        () =>
+            _error =
+                exc.error.message.isNotEmpty
+                    ? exc.error.message
+                    : t.get('state_error'),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = t.get('state_error'));
@@ -63,9 +69,9 @@ class _RulesScreenState extends State<RulesScreen> {
       await _load();
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(exc.error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exc.error.message)));
     }
   }
 
@@ -73,21 +79,22 @@ class _RulesScreenState extends State<RulesScreen> {
     final t = AppMessages.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.get('rules_delete_confirm')),
-        content: Text('${rule.sourceChatTitle} -> ${rule.targetChatTitle}'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(t.get('action_cancel')),
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(t.get('rules_delete_confirm')),
+            content: Text('${rule.sourceChatTitle} -> ${rule.targetChatTitle}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(t.get('action_cancel')),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(t.get('action_delete')),
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(t.get('action_delete')),
-          ),
-        ],
-      ),
     );
 
     if (confirmed != true || !mounted) return;
@@ -98,18 +105,16 @@ class _RulesScreenState extends State<RulesScreen> {
       await _load();
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(exc.error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exc.error.message)));
     }
   }
 
   Future<void> _openEditor([ForwardRule? rule]) async {
     final updated = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
-        builder: (_) => RuleEditorScreen(rule: rule),
-      ),
+      MaterialPageRoute(builder: (_) => RuleEditorScreen(rule: rule)),
     );
     if (updated == true) {
       await _load();
@@ -152,76 +157,98 @@ class _RulesScreenState extends State<RulesScreen> {
                 child: Text(_error!, style: const TextStyle(color: Colors.red)),
               ),
             Expanded(
-              child: _rules.isEmpty && !_loading
-                  ? ListView(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 64),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.alt_route_rounded, size: 64, color: Colors.grey),
-                        const SizedBox(height: 16),
-                        Text(
-                          t.get('rules_empty'),
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: () => _openEditor(),
-                          icon: const Icon(Icons.add),
-                          label: Text(t.get('rules_create')),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _rules.length,
-                itemBuilder: (context, index) {
-                  final r = _rules[index];
-                  return Card(
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      title: Row(
+              child:
+                  _rules.isEmpty && !_loading
+                      ? ListView(
                         children: [
-                          Expanded(
-                            child: Text(
-                              '${r.sourceChatTitle.isNotEmpty ? r.sourceChatTitle : r.sourceChatId} ➔ ${r.targetChatTitle.isNotEmpty ? r.targetChatTitle : r.targetChatId}',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 64,
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.alt_route_rounded,
+                                  size: 64,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  t.get('rules_empty'),
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(color: Colors.grey),
+                                ),
+                                const SizedBox(height: 24),
+                                ElevatedButton.icon(
+                                  onPressed: () => _openEditor(),
+                                  icon: const Icon(Icons.add),
+                                  label: Text(t.get('rules_create')),
+                                ),
+                              ],
                             ),
                           ),
-                          Switch(
-                            value: r.isEnabled,
-                            onChanged: (_) => _toggle(r),
-                          ),
                         ],
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Text('Filters: ${r.filters.isEmpty ? 'none' : r.filters.join(', ')} • Delay: ${r.delaySeconds}s'),
-                          if (r.intermediateChannelId.isNotEmpty)
-                            Text(
-                              'VIP route: ${r.intermediateChannelId}',
-                              style: const TextStyle(color: Color(0xFF06B6D4), fontSize: 12),
+                      )
+                      : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _rules.length,
+                        itemBuilder: (context, index) {
+                          final r = _rules[index];
+                          return Card(
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${r.sourceChatTitle.isNotEmpty ? r.sourceChatTitle : r.sourceChatId} ➔ ${r.targetChatTitle.isNotEmpty ? r.targetChatTitle : r.targetChatId}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: r.isEnabled,
+                                    onChanged: (_) => _toggle(r),
+                                  ),
+                                ],
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Filters: ${r.filters.isEmpty ? 'none' : r.filters.join(', ')} • Delay: ${r.delaySeconds}s',
+                                  ),
+                                  if (r.intermediateChannelId.isNotEmpty)
+                                    Text(
+                                      'VIP route: ${r.intermediateChannelId}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF06B6D4),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              onTap: () => _openEditor(r),
+                              trailing: IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                ),
+                                tooltip: t.get('action_delete'),
+                                onPressed: () => _delete(r),
+                              ),
                             ),
-                        ],
+                          );
+                        },
                       ),
-                      onTap: () => _openEditor(r),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        tooltip: t.get('action_delete'),
-                        onPressed: () => _delete(r),
-                      ),
-                    ),
-                  );
-                },
-              ),
             ),
           ],
         ),

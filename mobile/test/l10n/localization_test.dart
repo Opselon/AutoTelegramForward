@@ -60,8 +60,14 @@ void main() {
         message: 'code sent',
       );
 
-      expect(en.loginState(challenge, '+989121234567'), contains('+989121234567'));
-      expect(fa.loginState(challenge, '+989121234567'), contains('+989121234567'));
+      expect(
+        en.loginState(challenge, '+989121234567'),
+        contains('+989121234567'),
+      );
+      expect(
+        fa.loginState(challenge, '+989121234567'),
+        contains('+989121234567'),
+      );
     });
   });
 }

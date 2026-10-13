@@ -16,7 +16,8 @@ void main() {
         userId: 10,
         username: 'alice',
         isAdmin: true,
-        expiresAtIso: DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+        expiresAtIso:
+            DateTime.now().add(const Duration(days: 7)).toIso8601String(),
       );
 
       await store.write(creds);
@@ -38,7 +39,8 @@ void main() {
         userId: 10,
         username: 'alice',
         isAdmin: false,
-        expiresAtIso: DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
+        expiresAtIso:
+            DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
       );
       expect(expired.isValid, isFalse);
     });

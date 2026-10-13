@@ -114,34 +114,44 @@ class _LogsScreenState extends State<LogsScreen> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
-              child: _logs.isEmpty && !_loading
-                  ? Center(child: Text(t.get('logs_empty')))
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _logs.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final log = _logs[index];
-                        final isErr = log.level == 'error';
-                        final isWarn = log.level == 'warning';
-                        return ListTile(
-                          leading: Icon(
-                            isErr
-                                ? Icons.error
-                                : (isWarn ? Icons.warning : Icons.info_outline),
-                            color: isErr
-                                ? Colors.red
-                                : (isWarn ? Colors.amber : Colors.blue),
-                            size: 20,
-                          ),
-                          title: Text(log.message, style: const TextStyle(fontSize: 14)),
-                          subtitle: Text(
-                            '${log.category} • ${log.timestamp}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                        );
-                      },
-                    ),
+              child:
+                  _logs.isEmpty && !_loading
+                      ? Center(child: Text(t.get('logs_empty')))
+                      : ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _logs.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final log = _logs[index];
+                          final isErr = log.level == 'error';
+                          final isWarn = log.level == 'warning';
+                          return ListTile(
+                            leading: Icon(
+                              isErr
+                                  ? Icons.error
+                                  : (isWarn
+                                      ? Icons.warning
+                                      : Icons.info_outline),
+                              color:
+                                  isErr
+                                      ? Colors.red
+                                      : (isWarn ? Colors.amber : Colors.blue),
+                              size: 20,
+                            ),
+                            title: Text(
+                              log.message,
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            subtitle: Text(
+                              '${log.category} • ${log.timestamp}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
             ),
           ),
         ],

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"autoforward/internal/handlers"
 	"autoforward/internal/grpcclient"
+	"autoforward/internal/handlers"
 	"autoforward/internal/middleware"
 )
 
