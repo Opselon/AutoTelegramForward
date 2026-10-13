@@ -117,6 +117,28 @@ def test_sample_and_list_sample_agree(tmp_path):
     assert rc2 == 0
 
 
+def test_ios_artifacts_are_hashed_and_owner_is_normalized(tmp_path):
+    """Simulator ZIP and IPA are integrity-verifiable; image refs are lowercase."""
+    import hashlib
+
+    sim = tmp_path / "AutoTelegramForward-9.9.9-ios-simulator.zip"
+    ipa = tmp_path / "AutoTelegramForward-9.9.9-ios.ipa"
+    sim.write_bytes(b"simulator bundle")
+    ipa.write_bytes(b"signed ipa")
+    manifest = release_manifest.build_manifest(
+        product_version="9.9.9",
+        commit_sha="testsha",
+        artifacts_dir=tmp_path,
+        owner="Opselon",
+    )
+    assert all(image.startswith("ghcr.io/opselon/") for image in manifest["server"]["images"])
+    for key, path in (("simulator", sim), ("ipa", ipa)):
+        node = manifest["ios"][key]
+        assert node["available"] is True
+        assert node["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+        assert node["size_bytes"] == path.stat().st_size
+
+
 def test_release_workflow_gates():
     """publish needs clean-install==success; post-publish uses --list-sample."""
     import yaml
@@ -132,3 +154,8 @@ def test_release_workflow_gates():
     text = json.dumps(ppv)
     assert "--list-sample" in text, "post-publish must download the exact sampled entries"
     assert "--sample 4 --seed 42" in text or "--sample 4" in text
+    assert "ANDROID_KEYSTORE_BASE64" in text
+    assert "HAS_IOS_SECRETS" in text
+    assert "ProductVersion=${{ needs.meta.outputs.version }}" in text
+    assert "CommitSHA=${GITHUB_SHA}" in text
+    assert "d.get('status') == 'healthy'" in text

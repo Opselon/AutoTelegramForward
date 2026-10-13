@@ -67,7 +67,7 @@ in the client — every request uses the caller's own JWT from
 
 End users never need to rebuild: open **Settings → Server** (or the server
 dialog at login) and enter the server URL, e.g. `https://panel.example.com/`
-or `http://192.168.1.10:8080/` for LAN testing. Switching servers clears the
+or `https://192.168.1.10/` with a trusted certificate for LAN testing. Switching servers clears the
 current session token (a token minted by one server is meaningless to
 another). To return to the fork's compiled-in default, re-enter the URL from
 `assets/cfg/env.json` — the app always starts from that value when no

@@ -53,6 +53,7 @@ def iter_manifest_entries(manifest: dict) -> list[dict]:
                 {
                     "name": node["artifact"],
                     "sha256": node.get("sha256", ""),
+                    "size_bytes": node.get("size_bytes", 0),
                     "required": node.get("required", False),
                     "available": node.get("available", True),
                 }

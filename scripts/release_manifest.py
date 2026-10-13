@@ -215,20 +215,27 @@ def build_manifest(
             "available": False,
         }
 
-    sim_app = any(re.search(r"Runner\.app$", n) or n == "ios-simulator" for n in found)
-    ipa_name = next((n for n in found if n.endswith(".ipa")), None)
+    sim_name = next(
+        (n for n in found if "ios-simulator" in n.lower() and n.lower().endswith(".zip")),
+        None,
+    )
+    ipa_name = next((n for n in found if n.lower().endswith(".ipa")), None)
     ios = {
         "simulator": {
-            "available": sim_app or any("simulator" in n.lower() for n in found),
-            "artifact": next((n for n in found if "simulator" in n.lower()), None),
+            "available": sim_name is not None,
+            "artifact": sim_name,
+            "sha256": sha256_of(found[sim_name]) if sim_name else "",
+            "size_bytes": found[sim_name].stat().st_size if sim_name else 0,
             "required": False,
             "signing": "none (built with --no-codesign)",
         },
         "ipa": {
             "available": ipa_name is not None,
             "artifact": ipa_name,
+            "sha256": sha256_of(found[ipa_name]) if ipa_name else "",
+            "size_bytes": found[ipa_name].stat().st_size if ipa_name else 0,
             "required": False,
-            "signing": "Apple Developer certificate via CI secrets (see docs/self-hosting.md)"
+            "signing": "Apple Developer certificate via CI secrets (see docs/mobile-release.md)"
             if ipa_name
             else "not built (signing secrets absent)",
         },
@@ -260,9 +267,10 @@ def build_manifest(
     build_status["ios-simulator"] = "built" if ios["simulator"]["available"] else "missing"
     build_status["ios-ipa"] = "built" if (ipa_name is not None) else "not-run"
 
+    normalized_owner = owner.lower()
     images = [
-        f"ghcr.io/{owner}/{img}:{product_version}" for img in SERVER_IMAGES
-    ] + [f"ghcr.io/{owner}/{img}:latest" for img in SERVER_IMAGES]
+        f"ghcr.io/{normalized_owner}/{img}:{product_version}" for img in SERVER_IMAGES
+    ] + [f"ghcr.io/{normalized_owner}/{img}:latest" for img in SERVER_IMAGES]
 
     return {
         "product_version": product_version,

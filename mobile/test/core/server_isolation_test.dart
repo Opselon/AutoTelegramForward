@@ -43,11 +43,12 @@ HttpTransport _versionTransport(
 http.Response _versionBody({
   String productVersion = '1.5.0',
   String apiVersion = '1.5.0',
+  String minSupportedClient = '1.0.0',
 }) => http.Response(
   jsonEncode({
     'product_version': productVersion,
     'api_version': apiVersion,
-    'min_supported_client': '1.0.0',
+    'min_supported_client': minSupportedClient,
     'commit_sha': 'abc123',
     'features': <String>[],
   }),
@@ -64,10 +65,17 @@ void main() {
       expect(compareApiVersions('1.4.10', '1.4.9'), greaterThan(0));
     });
 
-    test('treats missing segments as zero and ignores v prefix', () {
-      expect(compareApiVersions('1.4', '1.4.0'), 0);
+    test('accepts v prefix and applies SemVer prerelease ordering', () {
       expect(compareApiVersions('v1.4.0', '1.4.0'), 0);
       expect(compareApiVersions('1.4.0-rc.1', '1.4.0'), lessThan(0));
+      expect(compareApiVersions('1.4.0-rc.10', '1.4.0-rc.2'), greaterThan(0));
+      expect(compareApiVersions('1.4.0+build.2', '1.4.0+build.1'), 0);
+    });
+
+    test('rejects malformed SemVer instead of coercing invalid segments to zero', () {
+      expect(() => compareApiVersions('1.invalid.5', '1.0.0'), throwsFormatException);
+      expect(() => compareApiVersions('1.4', '1.4.0'), throwsFormatException);
+      expect(() => compareApiVersions('01.4.0', '1.4.0'), throwsFormatException);
     });
   });
 
@@ -88,7 +96,22 @@ void main() {
       expect(result.errorKind, isNull);
     });
 
-    test('flags an outdated server as incompatible without throwing', () async {
+    test('enforces server min_supported_client against this app version', () async {
+      final result = await ApiClient.probeServer(
+        'https://new-server.example.com/',
+        minSupportedApiVersion: _minApi,
+        clientVersion: '1.5.0',
+        transport: _versionTransport({
+          'https://new-server.example.com': _versionBody(minSupportedClient: '2.0.0'),
+        }),
+      );
+      expect(result.ok, isFalse);
+      expect(result.reachable, isTrue);
+      expect(result.compatible, isFalse);
+      expect(result.errorKind, ErrorKind.incompatibleServer);
+    });
+
+    test('flags an outdated server as incompatible without throwing',
       final result = await ApiClient.probeServer(
         'https://old.example.com/',
         minSupportedApiVersion: _minApi,

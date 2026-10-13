@@ -72,6 +72,7 @@ class _ServerConnectionDialogState extends State<ServerConnectionDialog> {
     final result = await ApiClient.probeServer(
       raw,
       minSupportedApiVersion: state.env.minSupportedApiVersion,
+      clientVersion: state.env.appVersion.isEmpty ? '1.0.0' : state.env.appVersion,
       transport: widget.transport,
     );
     if (!mounted) return;
