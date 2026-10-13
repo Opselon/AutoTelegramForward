@@ -188,12 +188,21 @@ class ChannelPollingService:
             logger.warning("poll: cannot read top of %s (%s): %s", chat_name or chat_id, chat_id, exc)
             return 0
 
+        logger.info(
+            "[POLL TRACE] channel=%s (%s) cursor=%s top_msg_id=%s pts=%s",
+            chat_name or chat_id, chat_id, cursor, top, pts,
+        )
+
         if top is None or top <= cursor:
             # Nothing newer than what we already replayed.
             return 0
 
         lo = max(1, cursor + 1)
         hi = top
+        logger.info(
+            "[POLL TRACE] requesting difference for %s: range=[%d..%d] (pts=%s)",
+            chat_name or chat_id, lo, hi, pts,
+        )
         msg_filter = ChannelMessagesFilter(ranges=[MessageRange(min_id=lo, max_id=hi)])
         try:
             diff = await client.invoke(
@@ -207,6 +216,10 @@ class ChannelPollingService:
 
         raw_messages = getattr(diff, "new_messages", None) or []
         messages = sorted(raw_messages, key=lambda m: getattr(m, "id", 0) or 0)
+        logger.info(
+            "[POLL TRACE] channel=%s difference returned %d raw message(s)",
+            chat_name or chat_id, len(messages),
+        )
         if not messages:
             # Keep the cursor moving so an empty difference does not refetch.
             self._state[chat_id] = top
@@ -218,6 +231,10 @@ class ChannelPollingService:
 
         replayed = 0
         for raw in messages:
+            logger.info(
+                "[POLL REPLAY] dispatching post id=%s from %s (%s) through pipeline",
+                getattr(raw, "id", "?"), chat_name or chat_id, chat_id,
+            )
             if self._replay_one(client, session_id, raw, users, chats):
                 replayed += 1
         if replayed:
