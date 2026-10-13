@@ -84,6 +84,7 @@ CB = {
     "logs_stats": "ls",
     "logs_errors": "le",
     "lang_set": "lgs",
+    "upgrade": "upg",
     "creds": "cv",
     "cred_add": "ca",
     "cred_del": "cd",
@@ -373,30 +374,204 @@ class ProBotUI:
     # ------------------------------------------------------------------ #
     # Menus
     # ------------------------------------------------------------------ #
-    async def _main_text(self, uid: int) -> str:
-        """Main-menu header: live overview banner + the standard title.
+    async def _main_text(self, uid: int, user: Optional[Any] = None) -> str:
+        """Main-menu dashboard: matches the Pro Telegram control panel design.
 
-        Mirrors the web dashboard's stat badges so both surfaces show the
-        same numbers. Falls back gracefully to the plain title when the
-        repositories are unavailable (e.g. during startup).
+        Displays user details, connected sessions, applied rules, filters,
+        server status, web token, service plan, forwarding metrics, and support links.
         """
-        lines = [self._t("ui_main_title")]
-        try:
-            rules = await self._rules.list_by_owner(uid)
-            sessions = await self._sessions.list_by_owner(uid)
-            active_rules = sum(1 for r in rules if getattr(r, "is_active", False))
-            live_sessions = sum(1 for s in sessions if getattr(s, "is_active", False))
-            fwd_24h = await self._forwarded_24h(uid)
-            dlq = await self._dlq_count()
-            lines.append("")
-            lines.append(self._t("ui_overview_title"))
-            lines.append(f"⚡ {self._t('ui_overview_rules')}: {active_rules}/{len(rules)}")
-            lines.append(f"📱 {self._t('ui_overview_sessions')}: {live_sessions}/{len(sessions)}")
-            lines.append(f"📤 {self._t('ui_overview_forwarded')}: {fwd_24h}")
-            if dlq > 0:
-                lines.append(f"❌ {self._t('ui_overview_dlq')}: {dlq}")
-        except Exception:
-            logger.debug("overview banner unavailable", exc_info=True)
+        # User details
+        display_name = ""
+        if user:
+            parts = [getattr(user, "first_name", "") or "", getattr(user, "last_name", "") or ""]
+            display_name = " ".join(p for p in parts if p).strip()
+            if not display_name and getattr(user, "username", None):
+                display_name = f"@{user.username}"
+        if not display_name:
+            display_name = f"User {uid}" if uid else "Valued User"
+
+        uid_str = str(uid) if uid else "N/A"
+
+        # Rules & Active tasks
+        rules: list[Any] = []
+        if self._rules is not None:
+            try:
+                rules = await (self._rules.list_all() if self._is_admin(uid) else self._rules.list_by_owner(uid))
+            except Exception:
+                logger.debug("rules lookup failed in _main_text", exc_info=True)
+
+        active_rules = sum(1 for r in rules if getattr(r, "is_active", False))
+        total_rules = len(rules)
+
+        # Filters & Replacements
+        filters_: list[Any] = []
+        if self._filters is not None:
+            try:
+                filters_ = await (self._filters.list_all() if self._is_admin(uid) else self._filters.list_by_owner(uid))
+            except Exception:
+                logger.debug("filters lookup failed in _main_text", exc_info=True)
+
+        blocked_kw = sum(len(getattr(f, "blacklist_keywords", []) or []) for f in filters_)
+        allowed_kw = sum(len(getattr(f, "whitelist_keywords", []) or []) for f in filters_)
+
+        replace_count = 0
+        for r in rules:
+            try:
+                if hasattr(r, "replacements") and callable(r.replacements):
+                    reps = r.replacements()
+                    if isinstance(reps, dict):
+                        replace_count += len(reps)
+                elif isinstance(getattr(r, "metadata", None), dict):
+                    reps = r.metadata.get("replacements")
+                    if isinstance(reps, dict):
+                        replace_count += len(reps)
+            except Exception:
+                pass
+
+        # Sessions & Connected Phone
+        sessions: list[Any] = []
+        if self._sessions is not None:
+            try:
+                sessions = await (self._sessions.list_all() if self._is_admin(uid) else self._sessions.list_by_owner(uid))
+            except Exception:
+                logger.debug("sessions lookup failed in _main_text", exc_info=True)
+
+        live_sessions = sum(1 for s in sessions if getattr(s, "is_active", False))
+        total_sessions = len(sessions)
+
+        connected_phone = "None"
+        if sessions:
+            p = getattr(sessions[0], "phone_number", None) or getattr(sessions[0], "phone", None)
+            if p:
+                clean_phone = str(p).lstrip("+")
+                connected_phone = f"+{clean_phone}"
+
+        session_status = "Active 🟢" if live_sessions > 0 else ("Registered 🟡" if total_sessions > 0 else "Disconnected 🔴")
+
+        # Forwarded metrics
+        fwd_24h = await self._forwarded_24h(uid)
+
+        # Server info
+        server_name = "VIP 995"
+
+        # Web Token
+        token_str = "None"
+        if self._accounts is not None:
+            try:
+                _, _, tok = await self._accounts.get_or_create_credentials(
+                    uid, display_name=display_name, force_reset=False
+                )
+                if tok:
+                    token_str = tok[:24] if len(tok) > 24 else tok
+            except Exception:
+                pass
+        if token_str == "None":
+            try:
+                minted = await self._mint_web_token(uid)
+                if minted:
+                    token_str = minted[:24] if len(minted) > 24 else minted
+            except Exception:
+                pass
+
+        # Service Plan
+        plan = "VIP Pro" if (active_rules > 0 or live_sessions > 0) else "Free"
+        remaining = "Active" if plan == "VIP Pro" else "0 days"
+
+        is_fa = self.i18n.current == "fa"
+
+        if is_fa:
+            lines = [
+                f"👋 خوش آمدید، **{display_name}**!",
+                "",
+                "📊 وضعیت سرویس: **در حال اجرا** ✅",
+                f"📋 تسک‌های فعال: **{active_rules}**",
+                "",
+                "🧩 **قوانین فعال:**",
+                f"• کلمات مسدودشده (Blacklist): **{blocked_kw}**",
+                f"• کلمات مجاز (Whitelist): **{allowed_kw}**",
+                f"• قوانین جایگزینی متن: **{replace_count}**",
+                "",
+                "نیاز به راهنمایی دارید؟ پشتیبانی: @Capxi",
+                "سفارش ربات، کانال‌های فارکس، کریپتو یا اتوماسیون؟ ارتباط: @Capxi",
+                "",
+                "━━━━━━━━━━━━━━━━━━━━",
+                "👤 **حساب کاربری (YOUR ACCOUNT)**",
+                "────────────────────",
+                f"نام نمایشی: `{display_name}`",
+                f"شناسه کاربری: `{uid_str}`",
+                f"شماره متصل: `{connected_phone}`",
+                f"سرور فعلی: `{server_name}`",
+                f"توکن: `{token_str}`",
+                "",
+                "💎 **اشتراک و پلن (SERVICE PLAN)**",
+                "────────────────────",
+                f"پلن فعلی: **{plan}**",
+                f"اعتبار باقی‌مانده: **{remaining}**",
+                "وضعیت سرویس: **Running ✅**",
+                "",
+                "📋 **تسک‌های فوروارد (FORWARDING TASKS)**",
+                "────────────────────",
+                f"تسک‌های در حال اجرا: **{active_rules}**",
+                f"فورواردشده (۲۴ ساعت): **{fwd_24h}**",
+                f"کل تسک‌ها: **{total_rules}**",
+                "",
+                "👥 **نشست‌ها (YOUR SESSIONS)**",
+                "────────────────────",
+                f"نشست‌های متصل: **{live_sessions}/{total_sessions}**",
+                f"وضعیت: **{session_status}**",
+                "",
+                "💰 **موجودی حساب (CREDITS BALANCE)**",
+                "────────────────────",
+                "موجودی فعلی: **0.00**",
+                "━━━━━━━━━━━━━━━━━━━━",
+            ]
+        else:
+            lines = [
+                f"👋 Welcome back, **{display_name}**!",
+                "",
+                "📊 Service status: Running ✅",
+                f"📋 Active Tasks: {active_rules}",
+                "",
+                "🧩 Rules currently applied:",
+                f"• Blocked keywords: {blocked_kw}",
+                f"• Allowed keywords: {allowed_kw}",
+                f"• Replace rules: {replace_count}",
+                "",
+                "Need help with an issue? Contact @Capxi.",
+                "Have an idea or need custom work for Telegram bots, forex, crypto, websites, SEO, or automation? Contact @Capxi.",
+                "",
+                "━━━━━━━━━━━━━━━━━━━━",
+                "👤 YOUR ACCOUNT",
+                "────────────────────",
+                f"Display name: `{display_name}`",
+                f"User ID: `{uid_str}`",
+                f"Connected phone: `{connected_phone}`",
+                f"Current server: `{server_name}`",
+                f"Token: `{token_str}`",
+                "",
+                "💎 SERVICE PLAN",
+                "────────────────────",
+                f"Current plan: **{plan}**",
+                f"Time remaining: **{remaining}**",
+                "Service status: Running ✅",
+                "",
+                "📋 FORWARDING TASKS",
+                "────────────────────",
+                f"Currently active tasks: **{active_rules}**",
+                f"Forwarded (24h): **{fwd_24h}**",
+                f"Total tasks: **{total_rules}**",
+                "",
+                "👥 YOUR SESSIONS",
+                "────────────────────",
+                f"Connected sessions: **{live_sessions}/{total_sessions}**",
+                f"Status: **{session_status}**",
+                "",
+                "💰 CREDITS BALANCE",
+                "────────────────────",
+                "Current balance: **0.00**",
+                "━━━━━━━━━━━━━━━━━━━━",
+            ]
+
         return "\n".join(lines)
 
     async def _forwarded_24h(self, uid: int) -> int:
@@ -424,16 +599,105 @@ class ProBotUI:
             return 0
 
     def _main_menu(self) -> InlineKeyboardMarkup:
-        return self._kbd([
-            [("📱 " + self._t("ui_sessions"), CB["sessions"]), ("⚡ " + self._t("ui_rules"), CB["rules"])],
-            [("🧹 " + self._t("ui_filters"), CB["filters"]), ("🤖 " + self._t("ui_ai"), CB["ai"])],
-            [("📊 " + self._t("ui_stats"), CB["stats"]), ("🔑 " + self._t("ui_creds"), CB["creds"])],
-            [("🗄 " + self._t("ui_migrate"), CB["migrate"])],
-            [(("🛠 " + self._t("ui_debug")), CB["debug"]), (("🌐 " + self._t("ui_lang")), CB["lang"])],
-            [(("💻 " + self._t("ui_dashboard")), CB["dashboard"])],
-            [(("🔗 " + self._t("ui_weburl")), CB["weburl"])],
-            [(("📚 " + self._t("ui_help")), CB["help"])],
-        ])
+        is_fa = self.i18n.current == "fa"
+        if is_fa:
+            rows = [
+                [
+                    InlineKeyboardButton("⚡ فوروارد (Forward)", callback_data=CB["rules"]),
+                    InlineKeyboardButton("🧹 فیلترها و اسپم", callback_data=CB["filters"]),
+                ],
+                [
+                    InlineKeyboardButton("➕ ایجاد قانون (Publish)", callback_data=CB["rule_add"]),
+                    InlineKeyboardButton("🤖 هوش مصنوعی (Clone)", callback_data=CB["ai"]),
+                ],
+                [
+                    InlineKeyboardButton("⚙️ تنظیمات (Settings)", callback_data=CB["creds"]),
+                    InlineKeyboardButton("🌐 پنل تحت وب (Web)", callback_data=CB["dashboard"]),
+                ],
+                [
+                    InlineKeyboardButton("💎 خرید اشتراک (Upgrade)", callback_data=CB["upgrade"]),
+                    InlineKeyboardButton("📊 آمار و گزارشات", callback_data=CB["stats"]),
+                ],
+                [
+                    InlineKeyboardButton("📖 راهنما و مستندات ↗", callback_data=CB["help"]),
+                    InlineKeyboardButton("🌐 تغییر زبان", callback_data=CB["lang"]),
+                ],
+                [
+                    InlineKeyboardButton("🆘 پشتیبانی اختصاصی (@Capxi)", url="https://t.me/Capxi"),
+                ],
+                [
+                    InlineKeyboardButton("🔌 مدیریت نشست‌ها (Disconnect)", callback_data=CB["sessions"]),
+                ],
+            ]
+        else:
+            rows = [
+                [
+                    InlineKeyboardButton("Forward", callback_data=CB["rules"]),
+                    InlineKeyboardButton("Spam", callback_data=CB["filters"]),
+                ],
+                [
+                    InlineKeyboardButton("Publish", callback_data=CB["rule_add"]),
+                    InlineKeyboardButton("Clone", callback_data=CB["ai"]),
+                ],
+                [
+                    InlineKeyboardButton("⚙️ Settings", callback_data=CB["creds"]),
+                    InlineKeyboardButton("🧩 Browse Addons", callback_data=CB["dashboard"]),
+                ],
+                [
+                    InlineKeyboardButton("💎 Upgrade", callback_data=CB["upgrade"]),
+                    InlineKeyboardButton("📊 Statistics", callback_data=CB["stats"]),
+                ],
+                [
+                    InlineKeyboardButton("📖 Documentation ↗", callback_data=CB["help"]),
+                    InlineKeyboardButton("🌐 Language", callback_data=CB["lang"]),
+                ],
+                [
+                    InlineKeyboardButton("🆘 Support (@Capxi)", url="https://t.me/Capxi"),
+                ],
+                [
+                    InlineKeyboardButton("🔌 Disconnect", callback_data=CB["sessions"]),
+                ],
+            ]
+        return InlineKeyboardMarkup(rows)
+
+    def _upgrade_text(self, uid: int = 0) -> str:
+        if self.i18n.current == "fa":
+            return (
+                "💎 **ارتقای سرویس و خرید اشتراک ویژه (VIP Upgrade)**\n\n"
+                "با ارتقا به نسخه ویژه، به پیشرفته‌ترین امکانات سیستم بدون هیچ محدودیتی دسترسی خواهید داشت:\n\n"
+                "✨ **امکانات نسخه Pro / VIP:**\n"
+                "• ⚡ فوروارد آنی پیام‌ها با حداکثر سرعت و بدون تاخیر\n"
+                "• 🔓 بای‌پس و کپی کامل کانال‌های محافظت‌شده و قفل‌دار (Restricted Bypass)\n"
+                "• 🤖 بازنویسی هوشمند متون، ترجمه و تغییر لحن با AI (ChatGPT / DeepSeek)\n"
+                "• 🧹 فیلترهای پیشرفته بلک‌لیست، وایت‌لیست، رگکس و حذف لینک‌ها\n"
+                "• 🌐 دسترسی کامل به پنل تحت وب حرفه‌ای و مدیریت چند کاربره\n"
+                "• 📈 بدون محدودیت در تعداد تسک‌ها، کانال‌ها و پیام‌ها\n"
+                "• 🛡 پشتیبانی ۲۴ ساعته اختصاصی\n\n"
+                "💳 **پلن‌های فعال:**\n"
+                "• پلن ۱ ماهه حرفه‌ای (Pro)\n"
+                "• پلن ۳ ماهه تجاری (Business)\n"
+                "• پلن دائمی نامحدود (Lifetime VIP)\n\n"
+                "جهت خرید، استعلام تعرفه‌ها (ریالی یا تتر/رمزارز) و فعال‌سازی فوری با پشتیبانی در ارتباط باشید:\n"
+                "📩 ارتباط مستقیم: @Capxi"
+            )
+        return (
+            "💎 **Service Upgrade & VIP Plans**\n\n"
+            "Upgrade your subscription to unlock all professional automation features with zero restrictions:\n\n"
+            "✨ **VIP Features:**\n"
+            "• ⚡ Real-time multi-channel message forwarding with ultra-low latency\n"
+            "• 🔓 Complete bypass and copy from protected/restricted channels\n"
+            "• 🤖 Smart AI rewrites, translation, and tone matching (ChatGPT / DeepSeek)\n"
+            "• 🧹 Advanced keyword blacklists, whitelists, regex & link cleaning\n"
+            "• 🌐 Full access to the Web Control Dashboard\n"
+            "• 📈 Unlimited active forward rules, channels & volume\n"
+            "• 🛡 24/7 dedicated priority support\n\n"
+            "💳 **Available Plans:**\n"
+            "• 1-Month Pro Plan\n"
+            "• 3-Month Business Plan\n"
+            "• Lifetime VIP Unlimited\n\n"
+            "To purchase via Crypto (USDT/TON) or local payment and receive instant activation, contact support:\n"
+            "📩 Direct Contact: @Capxi"
+        )
 
     def _migrate_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
@@ -1301,8 +1565,10 @@ class ProBotUI:
     # ------------------------------------------------------------------ #
     def _creds_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
-            [(self._t("ui_cred_add"), CB["cred_add"])],
-            [(self._t("ui_back"), CB["main"])],
+            [("➕ " + self._t("ui_cred_add"), CB["cred_add"])],
+            [("🗄 " + self._t("ui_migrate"), CB["migrate"]), ("🛠 " + self._t("ui_debug"), CB["debug"])],
+            [("🔗 " + self._t("ui_weburl"), CB["weburl"])],
+            [("⬅️ " + self._t("ui_back"), CB["main"])],
         ])
 
     def _provider_label(self, key: str) -> str:
@@ -1373,7 +1639,8 @@ class ProBotUI:
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /start from uid=%s", uid)
             try:
-                await message.reply_text(self._t("ui_welcome"), reply_markup=self._main_menu())
+                body = await self._main_text(uid, user=message.from_user)
+                await message.reply_text(body, reply_markup=self._main_menu())
                 try:
                     self._log.info("bot", "system", f"/start by {uid}")
                 except Exception:
@@ -1386,7 +1653,8 @@ class ProBotUI:
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /menu from uid=%s", uid)
             try:
-                await message.reply_text(self._t("ui_main_title"), reply_markup=self._main_menu())
+                body = await self._main_text(uid, user=message.from_user)
+                await message.reply_text(body, reply_markup=self._main_menu())
             except Exception as exc:
                 logger.exception("/menu failed for uid=%s: %s", uid, exc)
 
@@ -1404,8 +1672,10 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["main"] + "$"))
         async def _cb_main(_, cq: CallbackQuery):
-            await self._safe_edit(cq, 
-                await self._main_text(cq.from_user.id if cq.from_user else 0),
+            uid = cq.from_user.id if cq.from_user else 0
+            await self._safe_edit(
+                cq, 
+                await self._main_text(uid, user=cq.from_user),
                 reply_markup=self._main_menu(),
             )
             await cq.answer()
@@ -1489,8 +1759,12 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["stats"] + "$"))
         async def _cb_stats(_, cq: CallbackQuery):
+            kbd = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 " + self._t("ui_refresh"), callback_data=CB["refresh"])],
+                [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])],
+            ])
             await self._safe_edit(cq, 
-                await self._dashboard_body(), reply_markup=self._main_menu())
+                await self._dashboard_body(), reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["perf"] + "$"))
@@ -1500,8 +1774,12 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex("^" + CB["refresh"] + "$"))
         async def _cb_refresh(_, cq: CallbackQuery):
+            kbd = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 " + self._t("ui_refresh"), callback_data=CB["refresh"])],
+                [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])],
+            ])
             await self._safe_edit(cq, 
-                await self._dashboard_body(), reply_markup=self._debug_menu())
+                await self._dashboard_body(), reply_markup=kbd)
             await cq.answer(self._t("ui_done"), show_alert=False)
 
         @b.on_callback_query(filters.regex("^" + CB["lang"] + "$"))
@@ -1513,22 +1791,32 @@ class ProBotUI:
         async def _cb_lang_set(_, cq: CallbackQuery):
             code = cq.data.split(":", 1)[1]
             if self.i18n.set_language(code):
-                await self._safe_edit(cq, 
-                    self._t("ui_lang_done"), reply_markup=self._main_menu())
+                uid = cq.from_user.id if cq.from_user else 0
                 if self._users is not None:
                     try:
-                        await self._users.set_language(cq.from_user.id, code)
+                        await self._users.set_language(uid, code)
                     except Exception:
                         pass
                 try:
                     self._log.info("bot", "system", f"language set to {code}")
                 except Exception:
                     pass
+                await self._safe_edit(
+                    cq,
+                    await self._main_text(uid, user=cq.from_user),
+                    reply_markup=self._main_menu(),
+                )
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["help"] + "$"))
         async def _cb_help(_, cq: CallbackQuery):
-            await self._safe_edit(cq, self._t("ui_help_body"), reply_markup=self._main_menu())
+            btn_back = "⬅️ " + self._t("ui_back")
+            btn_sup = "🆘 " + ("پشتیبانی (@Capxi)" if self.i18n.current == "fa" else "Support (@Capxi)")
+            kbd = InlineKeyboardMarkup([
+                [InlineKeyboardButton(btn_sup, url="https://t.me/Capxi")],
+                [InlineKeyboardButton(btn_back, callback_data=CB["main"])],
+            ])
+            await self._safe_edit(cq, self._t("ui_help_body"), reply_markup=kbd)
             await cq.answer()
 
         # ---------------------------------------------------------- web dashboard
@@ -1544,9 +1832,29 @@ class ProBotUI:
         async def _cb_webpass_reset(_, cq: CallbackQuery):
             await self._show_dashboard(cq, force_reset=True)
 
+        # ---------------------------------------------------------- upgrade / VIP
+        @b.on_callback_query(filters.regex("^" + CB["upgrade"] + "$"))
+        async def _cb_upgrade(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            text = self._upgrade_text(uid)
+            is_fa = self.i18n.current == "fa"
+            btn_buy = "💎 خرید و فعال‌سازی اشتراک (@Capxi)" if is_fa else "💎 Buy VIP Subscription (@Capxi)"
+            btn_back = "⬅️ " + self._t("ui_back")
+            kbd = InlineKeyboardMarkup([
+                [InlineKeyboardButton(btn_buy, url="https://t.me/Capxi")],
+                [InlineKeyboardButton(btn_back, callback_data=CB["main"])],
+            ])
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
         @b.on_callback_query(filters.regex("^" + CB["back"] + "$"))
         async def _cb_back(_, cq: CallbackQuery):
-            await self._safe_edit(cq, self._t("ui_main_title"), reply_markup=self._main_menu())
+            uid = cq.from_user.id if cq.from_user else 0
+            await self._safe_edit(
+                cq,
+                await self._main_text(uid, user=cq.from_user),
+                reply_markup=self._main_menu(),
+            )
             await cq.answer()
 
         # ---------------- cancel any active flow ----------------
