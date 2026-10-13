@@ -72,11 +72,23 @@ void main() {
       expect(compareApiVersions('1.4.0+build.2', '1.4.0+build.1'), 0);
     });
 
-    test('rejects malformed SemVer instead of coercing invalid segments to zero', () {
-      expect(() => compareApiVersions('1.invalid.5', '1.0.0'), throwsFormatException);
-      expect(() => compareApiVersions('1.4', '1.4.0'), throwsFormatException);
-      expect(() => compareApiVersions('01.4.0', '1.4.0'), throwsFormatException);
-    });
+    test(
+      'rejects malformed SemVer instead of coercing invalid segments to zero',
+      () {
+        expect(
+          () => compareApiVersions('1.invalid.5', '1.0.0'),
+          throwsFormatException,
+        );
+        expect(
+          () => compareApiVersions('1.4', '1.4.0'),
+          throwsFormatException,
+        );
+        expect(
+          () => compareApiVersions('01.4.0', '1.4.0'),
+          throwsFormatException,
+        );
+      },
+    );
   });
 
   group('probeServer', () {
@@ -96,20 +108,25 @@ void main() {
       expect(result.errorKind, isNull);
     });
 
-    test('enforces server min_supported_client against this app version', () async {
-      final result = await ApiClient.probeServer(
-        'https://new-server.example.com/',
-        minSupportedApiVersion: _minApi,
-        clientVersion: '1.5.0',
-        transport: _versionTransport({
-          'https://new-server.example.com': _versionBody(minSupportedClient: '2.0.0'),
-        }),
-      );
-      expect(result.ok, isFalse);
-      expect(result.reachable, isTrue);
-      expect(result.compatible, isFalse);
-      expect(result.errorKind, ErrorKind.incompatibleServer);
-    });
+    test(
+      'enforces server min_supported_client against this app version',
+      () async {
+        final result = await ApiClient.probeServer(
+          'https://new-server.example.com/',
+          minSupportedApiVersion: _minApi,
+          clientVersion: '1.5.0',
+          transport: _versionTransport({
+            'https://new-server.example.com': _versionBody(
+              minSupportedClient: '2.0.0',
+            ),
+          }),
+        );
+        expect(result.ok, isFalse);
+        expect(result.reachable, isTrue);
+        expect(result.compatible, isFalse);
+        expect(result.errorKind, ErrorKind.incompatibleServer);
+      },
+    );
 
     test('flags an outdated server as incompatible without throwing', () async {
       final result = await ApiClient.probeServer(

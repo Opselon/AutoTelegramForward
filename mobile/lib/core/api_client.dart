@@ -101,7 +101,10 @@ int compareApiVersions(String a, String b) {
     ];
     final pre = match.group(4)?.split('.') ?? <String>[];
     if (pre.any((part) => RegExp(r'^0[0-9]+$').hasMatch(part))) {
-      throw FormatException('Numeric prerelease identifiers cannot have leading zeros', raw);
+      throw FormatException(
+        'Numeric prerelease identifiers cannot have leading zeros',
+        raw,
+      );
     }
     return (core: core, pre: pre);
   }
@@ -293,7 +296,9 @@ class ApiClient {
               .toString()
               .trim();
       final minSupportedClient =
-          (json['min_supported_client'] ?? json['minSupportedClient'] ?? '').toString().trim();
+          (json['min_supported_client'] ?? json['minSupportedClient'] ?? '')
+              .toString()
+              .trim();
       if (apiVersion.isEmpty || minSupportedClient.isEmpty) {
         return ProbeResult(
           ok: false,
@@ -302,7 +307,10 @@ class ApiClient {
           reachable: true,
           compatible: false,
           errorKind: ErrorKind.server,
-          errorMessage: apiVersion.isEmpty ? 'probe_missing_api_version' : 'probe_missing_min_supported_client',
+          errorMessage:
+              apiVersion.isEmpty
+                  ? 'probe_missing_api_version'
+                  : 'probe_missing_min_supported_client',
         );
       }
       final compatible =
