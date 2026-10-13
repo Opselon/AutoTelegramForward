@@ -197,53 +197,360 @@ class _RulesScreenState extends State<RulesScreen> {
                         itemCount: _rules.length,
                         itemBuilder: (context, index) {
                           final r = _rules[index];
+                          final taskName =
+                              r.name.isNotEmpty
+                                  ? r.name
+                                  : (r.id.length >= 8
+                                      ? 'af_route_lab_${r.id.substring(0, 4)}'
+                                      : 'af_route_lab_b');
+                          final srcTitle =
+                              r.sourceChatTitle.isNotEmpty
+                                  ? r.sourceChatTitle
+                                  : (r.sourceChatId.isNotEmpty
+                                      ? r.sourceChatId
+                                      : 'AF Route Lab Source');
+                          final dstTitle =
+                              r.targetChatTitle.isNotEmpty
+                                  ? r.targetChatTitle
+                                  : (r.targetChatId.isNotEmpty
+                                      ? r.targetChatId
+                                      : 'AF Route Lab Target');
+
                           return Card(
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(
+                                color:
+                                    r.isEnabled
+                                        ? const Color(0xFF10B981).withValues(alpha: 0.3)
+                                        : Colors.grey.withValues(alpha: 0.2),
                               ),
-                              title: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '${r.sourceChatTitle.isNotEmpty ? r.sourceChatTitle : r.sourceChatId} ➔ ${r.targetChatTitle.isNotEmpty ? r.targetChatTitle : r.targetChatId}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  Switch(
-                                    value: r.isEnabled,
-                                    onChanged: (_) => _toggle(r),
-                                  ),
-                                ],
-                              ),
-                              subtitle: Column(
+                            ),
+                            elevation: 2,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Filters: ${r.filters.isEmpty ? 'none' : r.filters.join(', ')} • Delay: ${r.delaySeconds}s',
+                                  // Task Header
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.sync_alt_rounded,
+                                            size: 18,
+                                            color: Color(0xFF38BDF8),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            taskName,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          InkWell(
+                                            onTap: () => _toggle(r),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    r.isEnabled
+                                                        ? const Color(0xFF10B981)
+                                                        : Colors.grey.shade700,
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    r.isEnabled
+                                                        ? Icons.play_arrow
+                                                        : Icons.pause,
+                                                    size: 12,
+                                                    color: Colors.white,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    r.isEnabled
+                                                        ? 'RUNNING'
+                                                        : 'PAUSED',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              color: Colors.red,
+                                              size: 20,
+                                            ),
+                                            tooltip: t.get('action_delete'),
+                                            onPressed: () => _delete(r),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                  if (r.intermediateChannelId.isNotEmpty)
-                                    Text(
-                                      'VIP route: ${r.intermediateChannelId}',
-                                      style: const TextStyle(
-                                        color: Color(0xFF06B6D4),
-                                        fontSize: 12,
+                                  const SizedBox(height: 12),
+
+                                  // Source & Target Routing Visualizer
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).cardColor.withValues(alpha: 0.5),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.05),
                                       ),
                                     ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                'Source',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                              Text(
+                                                srcTitle,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const Text(
+                                                'Telegram',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Color(0xFF38BDF8),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                          child: Icon(
+                                            Icons.arrow_forward_rounded,
+                                            size: 16,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              const Text(
+                                                'Target',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                              Text(
+                                                dstTitle,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const Text(
+                                                'Telegram',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Color(0xFF38BDF8),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // Sender Type & Debug
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Sender: ${r.senderType}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade400,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Debug: ${r.debugMode ? 'on' : 'off'}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color:
+                                              r.debugMode
+                                                  ? const Color(0xFF10B981)
+                                                  : Colors.grey,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  // 4 Colored Buttons Grid
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () => _openEditor(r),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(
+                                              0xFF16A34A,
+                                            ),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 10,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'Edit Source',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () => _openEditor(r),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(
+                                              0xFFDC2626,
+                                            ),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 10,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'Edit Target',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: () => _openEditor(r),
+                                          icon: const Icon(
+                                            Icons.tag,
+                                            size: 14,
+                                          ),
+                                          label: Text(
+                                            r.topicId > 0
+                                                ? '#${r.topicId}'
+                                                : 'Forwarding Topic',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(
+                                              0xFF2563EB,
+                                            ),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 10,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: OutlinedButton.icon(
+                                          onPressed: () => _openEditor(r),
+                                          icon: const Icon(
+                                            Icons.tune_rounded,
+                                            size: 14,
+                                          ),
+                                          label: const Text(
+                                            'Advanced Settings',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          style: OutlinedButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 10,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ],
-                              ),
-                              onTap: () => _openEditor(r),
-                              trailing: IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.red,
-                                ),
-                                tooltip: t.get('action_delete'),
-                                onPressed: () => _delete(r),
                               ),
                             ),
                           );

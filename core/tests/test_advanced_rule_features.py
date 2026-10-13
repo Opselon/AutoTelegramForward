@@ -222,6 +222,7 @@ async def test_bot_ui_rule_card_rendering():
 
     ui = object.__new__(ProBotUI)
     ui._render_rule_detail = ProBotUI._render_rule_detail.__get__(ui, ProBotUI)
+    ui._render_advanced_settings = ProBotUI._render_advanced_settings.__get__(ui, ProBotUI)
     ui._render_replace_menu = ProBotUI._render_replace_menu.__get__(ui, ProBotUI)
     ui._render_header_footer_menu = ProBotUI._render_header_footer_menu.__get__(ui, ProBotUI)
     ui._kbd = ProBotUI._kbd.__get__(ui, ProBotUI)
@@ -247,8 +248,8 @@ async def test_bot_ui_rule_card_rendering():
         },
     )
 
-    # 1. Test Detail View
-    text, kbd = ui._render_rule_detail(rule)
+    # 1. Test Advanced Settings View
+    text, kbd = ui._render_advanced_settings(rule)
     assert "تنظیمات پیشرفته قانون" in text
     assert "Channel Source" in text
     assert "Channel Target" in text

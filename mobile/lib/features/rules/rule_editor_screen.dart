@@ -29,6 +29,8 @@ class RuleEditorScreen extends StatefulWidget {
 class _RuleEditorScreenState extends State<RuleEditorScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  late TextEditingController _nameCtrl;
+  late TextEditingController _topicCtrl;
   late TextEditingController _sourceIdCtrl;
   late TextEditingController _sourceTitleCtrl;
   late TextEditingController _targetIdCtrl;
@@ -36,14 +38,28 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   late TextEditingController _intermediateCtrl;
   late TextEditingController _filtersCtrl;
   late TextEditingController _delayCtrl;
+  late TextEditingController _editTimeCtrl;
   late TextEditingController _headerCtrl;
   late TextEditingController _footerCtrl;
+  late TextEditingController _watermarkCtrl;
 
   String? _selectedSessionId;
   String _filterMode = 'all';
   String _mediaMode = 'all';
   bool _useVipRouting = false;
   bool _isEnabled = true;
+  bool _debugMode = false;
+  String _senderType = 'Personal Telegram Account';
+  bool _duplicateFilters = false;
+  bool _cryptoMode = false;
+  bool _autoPosting = false;
+  bool _powerControl = false;
+  bool _processRawText = false;
+  bool _buttonToText = false;
+  bool _ocrImageAi = false;
+  bool _smartAiRewrite = false;
+  bool _newsDigest = false;
+  Map<String, bool> _paidAddons = {};
   bool _blockVoice = false;
   bool _blockStickers = false;
   bool _removeEmojis = false;
@@ -59,6 +75,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   void initState() {
     super.initState();
     final r = widget.rule;
+    _nameCtrl = TextEditingController(text: r?.name ?? '');
+    _topicCtrl = TextEditingController(text: r?.topicId != null && r!.topicId > 0 ? '${r.topicId}' : '');
     _sourceIdCtrl = TextEditingController(text: r?.sourceChatId ?? '');
     _sourceTitleCtrl = TextEditingController(text: r?.sourceChatTitle ?? '');
     _targetIdCtrl = TextEditingController(text: r?.targetChatId ?? '');
@@ -68,8 +86,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     );
     _filtersCtrl = TextEditingController(text: r?.filters.join(', ') ?? '');
     _delayCtrl = TextEditingController(text: '${r?.delaySeconds ?? 0}');
+    _editTimeCtrl = TextEditingController(text: '${r?.editTimeLimitSeconds ?? 0}');
     _headerCtrl = TextEditingController(text: r?.headerTemplate ?? '');
     _footerCtrl = TextEditingController(text: r?.footerTemplate ?? '');
+    _watermarkCtrl = TextEditingController(text: r?.watermark ?? '');
 
     _selectedSessionId = r?.sessionId;
     _filterMode = r?.filterMode ?? 'all';
@@ -77,6 +97,18 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _useVipRouting =
         r?.useVipRouting ?? (r?.intermediateChannelId.isNotEmpty ?? false);
     _isEnabled = r?.isEnabled ?? true;
+    _debugMode = r?.debugMode ?? false;
+    _senderType = r?.senderType ?? 'Personal Telegram Account';
+    _duplicateFilters = r?.duplicateFilters ?? false;
+    _cryptoMode = r?.cryptoMode ?? false;
+    _autoPosting = r?.autoPosting ?? false;
+    _powerControl = r?.powerControl ?? false;
+    _processRawText = r?.processRawText ?? false;
+    _buttonToText = r?.buttonToText ?? false;
+    _ocrImageAi = r?.ocrImageAi ?? false;
+    _smartAiRewrite = r?.smartAiRewrite ?? false;
+    _newsDigest = r?.newsDigest ?? false;
+    _paidAddons = Map.of(r?.paidAddons ?? {});
     _blockVoice = r?.blockVoice ?? false;
     _blockStickers = r?.blockStickers ?? false;
     _removeEmojis = r?.removeEmojis ?? false;
@@ -89,6 +121,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
   @override
   void dispose() {
+    _nameCtrl.dispose();
+    _topicCtrl.dispose();
     _sourceIdCtrl.dispose();
     _sourceTitleCtrl.dispose();
     _targetIdCtrl.dispose();
@@ -96,8 +130,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _intermediateCtrl.dispose();
     _filtersCtrl.dispose();
     _delayCtrl.dispose();
+    _editTimeCtrl.dispose();
     _headerCtrl.dispose();
     _footerCtrl.dispose();
+    _watermarkCtrl.dispose();
     super.dispose();
   }
 
@@ -162,6 +198,22 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       delaySeconds: int.tryParse(_delayCtrl.text.trim()) ?? 0,
       headerTemplate: _headerCtrl.text,
       footerTemplate: _footerCtrl.text,
+      name: _nameCtrl.text.trim(),
+      topicId: int.tryParse(_topicCtrl.text.trim()) ?? 0,
+      debugMode: _debugMode,
+      senderType: _senderType,
+      duplicateFilters: _duplicateFilters,
+      cryptoMode: _cryptoMode,
+      autoPosting: _autoPosting,
+      powerControl: _powerControl,
+      editTimeLimitSeconds: int.tryParse(_editTimeCtrl.text.trim()) ?? 0,
+      processRawText: _processRawText,
+      buttonToText: _buttonToText,
+      ocrImageAi: _ocrImageAi,
+      smartAiRewrite: _smartAiRewrite,
+      newsDigest: _newsDigest,
+      watermark: _watermarkCtrl.text.trim(),
+      paidAddons: _paidAddons,
       blockVoice: _blockVoice,
       blockStickers: _blockStickers,
       removeEmojis: _removeEmojis,
@@ -257,6 +309,87 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                       }).toList(),
                   onChanged: (val) => setState(() => _selectedSessionId = val),
                 ),
+              const SizedBox(height: 16),
+
+              // Task Name & Topic ID
+              Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: TextFormField(
+                      controller: _nameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Task Name',
+                        hintText: 'af_route_lab_b',
+                        prefixIcon: Icon(Icons.label_outline),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: TextFormField(
+                      controller: _topicCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Topic #',
+                        hintText: '0 (disabled)',
+                        prefixIcon: Icon(Icons.tag),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Sender Type
+              DropdownButtonFormField<String>(
+                value: _senderType,
+                decoration: const InputDecoration(
+                  labelText: 'Sender Type',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'Personal Telegram Account',
+                    child: Text('Personal Telegram Account'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'Bot Account',
+                    child: Text('Bot Account'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'MTProto Premium Userbot',
+                    child: Text('MTProto Premium Userbot'),
+                  ),
+                ],
+                onChanged: (val) => setState(() => _senderType = val ?? 'Personal Telegram Account'),
+              ),
+              const SizedBox(height: 12),
+
+              // Status & Debug Mode
+              Row(
+                children: [
+                  Expanded(
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Forwarding Status'),
+                      subtitle: Text(_isEnabled ? 'RUNNING' : 'PAUSED'),
+                      value: _isEnabled,
+                      onChanged: (v) => setState(() => _isEnabled = v),
+                    ),
+                  ),
+                  Expanded(
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Debug Mode'),
+                      subtitle: Text(_debugMode ? 'ON' : 'OFF'),
+                      value: _debugMode,
+                      onChanged: (v) => setState(() => _debugMode = v),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
 
               // Source Chat
@@ -483,6 +616,202 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         onChanged: (v) {
                           if (v != null) setState(() => _albumMode = v);
                         },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Advanced Settings Parity Sections (Screens 2, 3, 4)
+              Card(
+                margin: const EdgeInsets.only(top: 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '🎚 Advanced Settings Categories',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Filters Category
+                      ExpansionTile(
+                        leading: const Icon(Icons.shield_outlined, color: Colors.blue),
+                        title: const Text('Filters (?)'),
+                        subtitle: Text('Duplicate: ${_duplicateFilters ? "ON" : "OFF"} • Crypto: ${_cryptoMode ? "ON" : "OFF"}'),
+                        children: [
+                          SwitchListTile(
+                            title: const Text('Duplicate Filters'),
+                            subtitle: const Text('Media & text deep fingerprint deduplication'),
+                            value: _duplicateFilters,
+                            onChanged: (v) => setState(() => _duplicateFilters = v),
+                          ),
+                          SwitchListTile(
+                            title: const Text('Crypto Mode'),
+                            subtitle: const Text('Signal detection, wallet cleaner, pair parsing'),
+                            value: _cryptoMode,
+                            onChanged: (v) => setState(() => _cryptoMode = v),
+                          ),
+                        ],
+                      ),
+
+                      // Schedules Category
+                      ExpansionTile(
+                        leading: const Icon(Icons.schedule_rounded, color: Colors.amber),
+                        title: const Text('Schedules (?)'),
+                        subtitle: Text('Auto Posting: ${_autoPosting ? "ON" : "OFF"} • Power: ${_powerControl ? "ON" : "OFF"}'),
+                        children: [
+                          SwitchListTile(
+                            title: const Text('Auto Post Scheduler'),
+                            value: _autoPosting,
+                            onChanged: (v) => setState(() => _autoPosting = v),
+                          ),
+                          SwitchListTile(
+                            title: const Text('Power Control Schedule'),
+                            value: _powerControl,
+                            onChanged: (v) => setState(() => _powerControl = v),
+                          ),
+                        ],
+                      ),
+
+                      // Time Forward Category
+                      ExpansionTile(
+                        leading: const Icon(Icons.timer_outlined, color: Colors.purple),
+                        title: const Text('Time Forward (?)'),
+                        subtitle: Text('Delay & Edit Time limits'),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _delayCtrl,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(labelText: 'Set Delay (seconds)'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _editTimeCtrl,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(labelText: 'Max Edit Time (seconds)'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Processing Messages Category
+                      ExpansionTile(
+                        leading: const Icon(Icons.settings_suggest_outlined, color: Colors.teal),
+                        title: const Text('Processing Messages (?)'),
+                        subtitle: Text('Raw Text: ${_processRawText ? "ON" : "OFF"} • Btn2Txt: ${_buttonToText ? "ON" : "OFF"}'),
+                        children: [
+                          SwitchListTile(
+                            title: const Text('Process Raw Text'),
+                            value: _processRawText,
+                            onChanged: (v) => setState(() => _processRawText = v),
+                          ),
+                          SwitchListTile(
+                            title: const Text('Button To Text'),
+                            value: _buttonToText,
+                            onChanged: (v) => setState(() => _buttonToText = v),
+                          ),
+                        ],
+                      ),
+
+                      // Modify Content Category
+                      ExpansionTile(
+                        leading: const Icon(Icons.edit_note_rounded, color: Colors.orange),
+                        title: const Text('Modify Content (?)'),
+                        subtitle: const Text('Header, Footer, Watermark'),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              children: [
+                                TextFormField(
+                                  controller: _headerCtrl,
+                                  decoration: const InputDecoration(labelText: 'Header Text', hintText: 'HEADER EMPTY'),
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: _footerCtrl,
+                                  decoration: const InputDecoration(labelText: 'Footer Text', hintText: 'FOOTER EMPTY'),
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: _watermarkCtrl,
+                                  decoration: const InputDecoration(labelText: 'Watermark Text', hintText: 'Empty'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // AI Features Category
+                      ExpansionTile(
+                        leading: const Icon(Icons.auto_awesome_rounded, color: Colors.indigo),
+                        title: const Text('AI Features'),
+                        subtitle: const Text('Creativity 0.7 - Max Tokens 600'),
+                        children: [
+                          SwitchListTile(
+                            title: const Text('OCR Image AI'),
+                            subtitle: const Text('Optical character recognition via vision AI'),
+                            value: _ocrImageAi,
+                            onChanged: (v) => setState(() => _ocrImageAi = v),
+                          ),
+                          SwitchListTile(
+                            title: const Text('Smart AI Rewrite'),
+                            subtitle: const Text('LLM intelligent content rephrasing'),
+                            value: _smartAiRewrite,
+                            onChanged: (v) => setState(() => _smartAiRewrite = v),
+                          ),
+                          SwitchListTile(
+                            title: const Text('News Digest'),
+                            subtitle: const Text('Automated news summary bullets'),
+                            value: _newsDigest,
+                            onChanged: (v) => setState(() => _newsDigest = v),
+                          ),
+                        ],
+                      ),
+
+                      // PAID ADDON Catalogue (Screen 4)
+                      ExpansionTile(
+                        leading: const Icon(Icons.workspace_premium_rounded, color: Colors.amber),
+                        title: const Text('👑 PAID ADDON Catalogue (18)'),
+                        subtitle: const Text('Channel Comments, Webhooks, TTL & more'),
+                        children: [
+                          ...[
+                            'channel_comments',
+                            'every_n',
+                            'kw_confirm',
+                            'kw_reply',
+                            'auto_del',
+                            'webhook',
+                            'crypto',
+                            'affiliate',
+                            'link_buttons',
+                            'watermark',
+                          ].map((key) {
+                            final val = _paidAddons[key] ?? false;
+                            return SwitchListTile(
+                              dense: true,
+                              title: Text(key.replaceAll('_', ' ').toUpperCase()),
+                              value: val,
+                              onChanged: (v) => setState(() => _paidAddons[key] = v),
+                            );
+                          }),
+                        ],
                       ),
                     ],
                   ),

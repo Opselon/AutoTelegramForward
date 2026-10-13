@@ -1,0 +1,1159 @@
+import { useState, useEffect } from 'react'
+import {
+  X,
+  Play,
+  Pause,
+  Bug,
+  SlidersHorizontal,
+  ArrowRight,
+  Shield,
+  Clock,
+  Wand2,
+  Lock,
+  ChevronRight,
+  Sparkles,
+  Info,
+  Trash2,
+  Edit2,
+  Hash,
+} from 'lucide-react'
+import type { ForwardRule } from '../types'
+
+interface Props {
+  rule: ForwardRule | null
+  isOpen: boolean
+  onClose: () => void
+  onSave: (updated: ForwardRule) => Promise<void>
+  onDelete?: (id: string) => Promise<void>
+  lang?: 'fa' | 'en'
+}
+
+type TabType = 'overview' | 'advanced' | 'all_addons'
+type FeatureGroupType = 'all' | 'crypto' | 'mmo' | 'content'
+
+export function TaskOverviewModal({
+  rule,
+  isOpen,
+  onClose,
+  onSave,
+  onDelete,
+  lang = 'en',
+}: Props) {
+  if (!isOpen || !rule) return null
+
+  const isRtl = lang === 'fa'
+  const [currentTab, setCurrentTab] = useState<TabType>('overview')
+  const [activeGroup, setActiveGroup] = useState<FeatureGroupType>('all')
+  const [draft, setDraft] = useState<ForwardRule>({ ...rule })
+  const [saving, setSaving] = useState(false)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [showTopicPrompt, setShowTopicPrompt] = useState(false)
+
+  useEffect(() => {
+    if (rule) {
+      setDraft({ ...rule })
+      setCurrentTab('overview')
+    }
+  }, [rule])
+
+  const handleToggle = (field: keyof ForwardRule) => {
+    setDraft((prev) => ({
+      ...prev,
+      [field]: !prev[field],
+    }))
+  }
+
+  const handleAddonToggle = (addonKey: string) => {
+    setDraft((prev) => {
+      const currentAddons = { ...(prev.paid_addons || {}) }
+      currentAddons[addonKey] = !currentAddons[addonKey]
+      return {
+        ...prev,
+        paid_addons: currentAddons,
+      }
+    })
+  }
+
+  const handleSaveAndClose = async () => {
+    setSaving(true)
+    try {
+      await onSave(draft)
+      onClose()
+    } catch (err) {
+      console.error('Failed to save task settings:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const allAddonsCatalog = [
+    { key: 'channel_comments', title: 'Channel Comments', desc: 'Forward and sync discussion replies', locked: false },
+    { key: 'every_n', title: 'Forward Every N Messages', desc: 'Batch and sample messages rate-limit', locked: true },
+    { key: 'kw_confirm', title: 'Keyword Confirmation', desc: 'Require approval when trigger words match', locked: true },
+    { key: 'kw_reply', title: 'Keyword Reply Thread', desc: 'Auto-reply in topic threads', locked: true },
+    { key: 'auto_del', title: 'Auto Delete Messages', desc: 'Self-destruct forwarded messages after TTL', locked: true },
+    { key: 'webhook', title: 'Outbound Webhooks', desc: 'Dispatch HTTP webhook payload on message', locked: true },
+    { key: 'crypto', title: 'Crypto Signal Mode', desc: 'Clean, format and parse trade signals', locked: true },
+    { key: 'affiliate', title: 'Affiliate Kit', desc: 'Swap referral links and IDs dynamically', locked: true },
+    { key: 'link_buttons', title: 'Link Buttons', desc: 'Inject custom interactive inline buttons', locked: false },
+    { key: 'watermark', title: 'Watermark Protection', desc: 'Brand images and videos with logo/text', locked: true },
+    { key: 'duplicate', title: 'Duplicate Filters', desc: 'Deep fingerprint media & text deduplication', locked: false },
+    { key: 'cleaner', title: 'Cleaner Protocol', desc: 'Strip links, tags, phones and emojis', locked: false },
+    { key: 'scheduler', title: 'Auto Post Scheduler', desc: 'Queue messages and post on schedule', locked: false },
+    { key: 'power_schedule', title: 'Power On/Off Schedule', desc: 'Limit forwarding during business hours', locked: false },
+    { key: 'raw_text', title: 'Process Raw Text', desc: 'Normalize formatting, entities, and styles', locked: false },
+    { key: 'button_to_text', title: 'Button To Text', desc: 'Convert inline keyboard buttons to hyperlinks', locked: false },
+    { key: 'ocr_ai', title: 'OCR Image AI', desc: 'Extract text from pictures via vision AI', locked: false },
+    { key: 'ai_rewrite', title: 'Smart AI Rewrite', desc: 'Rephrase tone and language via LLM', locked: false },
+  ]
+
+  const taskName = draft.name || `af_route_lab_${draft.id.slice(0, 4)}`
+  const sourceName = draft.source_chat_name || draft.source_chat_id || 'AF Route Lab Source'
+  const targetName = draft.target_chat_name || draft.target_chat_id || 'AF Route Lab Target'
+  const isRunning = draft.is_active
+  const debugOn = draft.debug_mode ?? false
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0,0,0,0.75)',
+        backdropFilter: 'blur(6px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        direction: isRtl ? 'rtl' : 'ltr',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '480px',
+          maxHeight: '92vh',
+          backgroundColor: '#111827',
+          color: '#f9fafb',
+          borderRadius: '20px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          border: '1px solid #1f2937',
+        }}
+      >
+        {/* Top Header matching reference screens */}
+        <div
+          style={{
+            padding: '14px 18px',
+            borderBottom: '1px solid #1f2937',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: '#131b2e',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {currentTab !== 'overview' && (
+              <button
+                type="button"
+                onClick={() => setCurrentTab('overview')}
+                style={{
+                  background: '#1f2937',
+                  border: 'none',
+                  color: '#9ca3af',
+                  borderRadius: '8px',
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                ← Back
+              </button>
+            )}
+            {isEditingName ? (
+              <input
+                type="text"
+                value={draft.name || ''}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                onBlur={() => setIsEditingName(false)}
+                autoFocus
+                style={{
+                  background: '#1f2937',
+                  border: '1px solid #3b82f6',
+                  color: '#fff',
+                  borderRadius: '6px',
+                  padding: '4px 8px',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                }}
+              />
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '16px', fontWeight: 700, color: '#f3f4f6' }}>
+                  {taskName}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(true)}
+                  style={{ background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: 2 }}
+                >
+                  <Edit2 size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(draft.id)}
+                title="Delete Task"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  padding: '6px',
+                }}
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: '#1f2937',
+                border: 'none',
+                color: '#9ca3af',
+                borderRadius: '8px',
+                padding: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Modal Content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+          {currentTab === 'overview' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Task Overview Card (Screens 1 & 5) */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '14px',
+                  }}
+                >
+                  <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 600 }}>Task Overview</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Forwarding Status</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle('is_active')}
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: '20px',
+                        border: 'none',
+                        fontWeight: 700,
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        backgroundColor: isRunning ? '#10b981' : '#475569',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      {isRunning ? <Play size={10} fill="#fff" /> : <Pause size={10} fill="#fff" />}
+                      {isRunning ? 'RUNNING' : 'PAUSED'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Route Visualizer */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#0f172a',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    marginBottom: '14px',
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>Source</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>{sourceName}</div>
+                    <div style={{ fontSize: '11px', color: '#38bdf8' }}>Telegram</div>
+                  </div>
+                  <ArrowRight size={18} color="#64748b" style={{ margin: '0 10px' }} />
+                  <div style={{ flex: 1, textAlign: 'right' }}>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>Target</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>{targetName}</div>
+                    <div style={{ fontSize: '11px', color: '#38bdf8' }}>Telegram</div>
+                  </div>
+                </div>
+
+                {/* Debug Mode row */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingTop: '8px',
+                    borderTop: '1px solid #334155',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Bug size={14} color="#94a3b8" />
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Debug mode</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggle('debug_mode')}
+                    style={{
+                      background: debugOn ? '#22c55e' : '#334155',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '2px 10px',
+                      color: '#fff',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {debugOn ? 'on' : 'off'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Sender Type Card */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '12px 16px',
+                  border: '1px solid #334155',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Sender Type</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>
+                    {draft.sender_type || 'Personal Telegram Account'}
+                  </div>
+                </div>
+                <select
+                  value={draft.sender_type || 'Personal Telegram Account'}
+                  onChange={(e) => setDraft({ ...draft, sender_type: e.target.value })}
+                  style={{
+                    backgroundColor: '#0f172a',
+                    color: '#e2e8f0',
+                    border: '1px solid #475569',
+                    borderRadius: '8px',
+                    padding: '6px 10px',
+                    fontSize: '12px',
+                  }}
+                >
+                  <option value="Personal Telegram Account">Personal Telegram Account</option>
+                  <option value="Bot Account">Bot Account</option>
+                  <option value="MTProto Premium Userbot">MTProto Premium Userbot</option>
+                </select>
+              </div>
+
+              {/* Edit Task Section: 4 Distinct Action Buttons (Screen 1 & 5) */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginBottom: '8px' }}>
+                  Edit Task
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  {/* Green Button: Edit Source */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newSrc = prompt('Enter Source Chat ID or Title:', draft.source_chat_id)
+                      if (newSrc) setDraft({ ...draft, source_chat_id: newSrc, source_chat_name: newSrc })
+                    }}
+                    style={{
+                      backgroundColor: '#16a34a',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      boxShadow: '0 4px 6px -1px rgba(22, 163, 74, 0.3)',
+                    }}
+                  >
+                    Edit Source
+                  </button>
+
+                  {/* Red Button: Edit Target */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newDst = prompt('Enter Target Chat ID or Title:', draft.target_chat_id)
+                      if (newDst) setDraft({ ...draft, target_chat_id: newDst, target_chat_name: newDst })
+                    }}
+                    style={{
+                      backgroundColor: '#dc2626',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      boxShadow: '0 4px 6px -1px rgba(220, 38, 38, 0.3)',
+                    }}
+                  >
+                    Edit Target
+                  </button>
+                </div>
+
+                {/* Blue Button: Set up Forwarding Topic */}
+                <button
+                  type="button"
+                  onClick={() => setShowTopicPrompt(!showTopicPrompt)}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#2563eb',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '12px',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    marginBottom: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)',
+                  }}
+                >
+                  <Hash size={14} />
+                  Set up Forwarding Topic {draft.topic_id ? `(#${draft.topic_id})` : ''}
+                </button>
+
+                {showTopicPrompt && (
+                  <div
+                    style={{
+                      backgroundColor: '#0f172a',
+                      padding: '10px',
+                      borderRadius: '10px',
+                      marginBottom: '8px',
+                      display: 'flex',
+                      gap: '8px',
+                    }}
+                  >
+                    <input
+                      type="number"
+                      placeholder="Topic Thread ID (0 to remove)"
+                      value={draft.topic_id || ''}
+                      onChange={(e) => setDraft({ ...draft, topic_id: parseInt(e.target.value) || 0 })}
+                      style={{
+                        flex: 1,
+                        background: '#1e293b',
+                        border: '1px solid #475569',
+                        color: '#fff',
+                        borderRadius: '6px',
+                        padding: '6px 10px',
+                        fontSize: '13px',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowTopicPrompt(false)}
+                      style={{
+                        background: '#3b82f6',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '0 12px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                )}
+
+                {/* Dark Outline Button: Advanced Settings */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('advanced')}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#1f2937',
+                    color: '#f9fafb',
+                    border: '1px solid #374151',
+                    borderRadius: '12px',
+                    padding: '12px',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <SlidersHorizontal size={14} />
+                  Advanced Settings
+                </button>
+              </div>
+
+              {/* Feature Groups Filter Chips */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>Feature groups</span>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>Choose & customize tools</span>
+                </div>
+                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {[
+                    { id: 'all', label: 'All' },
+                    { id: 'crypto', label: '₿ Crypto' },
+                    { id: 'mmo', label: 'MMO / Affiliate' },
+                    { id: 'content', label: 'Content' },
+                  ].map((grp) => (
+                    <button
+                      key={grp.id}
+                      type="button"
+                      onClick={() => setActiveGroup(grp.id as FeatureGroupType)}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        border: 'none',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        backgroundColor: activeGroup === grp.id ? '#3b82f6' : '#1e293b',
+                        color: activeGroup === grp.id ? '#ffffff' : '#94a3b8',
+                      }}
+                    >
+                      {grp.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* PAID ADDON Banner & 2x3 Grid (Screen 4) */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '16px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sparkles size={14} color="#f59e0b" />
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#f59e0b' }}>PAID ADDON</span>
+                    <span title="Unlock premium features with credits" style={{ display: 'inline-flex' }}>
+                      <Info size={13} color="#64748b" />
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentTab('all_addons')}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#3b82f6',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '2px',
+                    }}
+                  >
+                    View all (18) <ChevronRight size={14} />
+                  </button>
+                </div>
+
+                {/* 2x3 Grid of Addons matching reference Image 4 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {[
+                    { key: 'channel_comments', title: 'Channel Comments', locked: false, badge: 'Addon' },
+                    { key: 'every_n', title: 'Forward Every N Messages', locked: true, badge: 'Addon' },
+                    { key: 'kw_confirm', title: 'Keyword Confirmation', locked: true, badge: 'Addon' },
+                    { key: 'kw_reply', title: 'Keyword Reply Thread', locked: true, badge: 'Addon' },
+                    { key: 'auto_del', title: 'Auto Delete Messages', locked: true, badge: 'Addon' },
+                    { key: 'webhook', title: 'Outbound Webhooks', locked: true, badge: 'Addon' },
+                  ].map((item) => {
+                    const isEnabled = draft.paid_addons?.[item.key] ?? false
+                    return (
+                      <div
+                        key={item.key}
+                        onClick={() => handleAddonToggle(item.key)}
+                        style={{
+                          backgroundColor: '#0f172a',
+                          borderRadius: '12px',
+                          padding: '10px 12px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          minHeight: '74px',
+                          cursor: 'pointer',
+                          border: isEnabled ? '1px solid #3b82f6' : '1px solid #1e293b',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 600 }}>
+                            {item.locked && <Lock size={10} style={{ display: 'inline', marginRight: 3 }} />}
+                            ★ {item.badge}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              padding: '2px 6px',
+                              borderRadius: '8px',
+                              backgroundColor: isEnabled ? '#10b981' : '#334155',
+                              color: '#fff',
+                              fontWeight: 700,
+                            }}
+                          >
+                            {isEnabled ? 'ON' : 'OFF'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', marginTop: '6px' }}>
+                          {item.title}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Advanced Settings View (Screens 2 & 3) */}
+          {currentTab === 'advanced' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* FILTERS (Screen 2) */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Shield size={14} color="#38bdf8" /> Filters (?)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Duplicate Filters</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle('duplicate_filters')}
+                      style={{
+                        background: draft.duplicate_filters ? '#22c55e' : '#475569',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '3px 10px',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {draft.duplicate_filters ? 'on' : 'off'}
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Crypto Mode</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle('crypto_mode')}
+                      style={{
+                        background: draft.crypto_mode ? '#22c55e' : '#475569',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '3px 10px',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {draft.crypto_mode ? 'on' : 'off'}
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Blacklist & Whitelist</span>
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                      Activated: {(draft.domain_blocklist?.length || 0) + (draft.domain_allowlist?.length || 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* SCHEDULES (Screen 2) */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Clock size={14} color="#f59e0b" /> Schedules (?)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Auto Posting</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle('auto_posting')}
+                      style={{
+                        background: draft.auto_posting ? '#22c55e' : '#475569',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '3px 10px',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {draft.auto_posting ? 'on' : 'off'}
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Power Control</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle('power_control')}
+                      style={{
+                        background: draft.power_control ? '#22c55e' : '#475569',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '3px 10px',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {draft.power_control ? 'on' : 'off'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* TIME FORWARD (Screen 2) */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Clock size={14} color="#a855f7" /> Time Forward (?)
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                      Delay (seconds)
+                    </label>
+                    <input
+                      type="number"
+                      value={draft.delay_seconds || 0}
+                      onChange={(e) => setDraft({ ...draft, delay_seconds: parseFloat(e.target.value) || 0 })}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#0f172a',
+                        border: '1px solid #475569',
+                        color: '#fff',
+                        borderRadius: '8px',
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                      Edit Time Limit (s)
+                    </label>
+                    <input
+                      type="number"
+                      value={draft.edit_time_limit_seconds || 0}
+                      onChange={(e) => setDraft({ ...draft, edit_time_limit_seconds: parseInt(e.target.value) || 0 })}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#0f172a',
+                        border: '1px solid #475569',
+                        color: '#fff',
+                        borderRadius: '8px',
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* PROCESSING MESSAGES (Screen 2) */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
+                  Processing Messages (?)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Process Raw Text</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle('process_raw_text')}
+                      style={{
+                        background: draft.process_raw_text ? '#22c55e' : '#475569',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '3px 10px',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {draft.process_raw_text ? 'on' : 'off'}
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Button To Text</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle('button_to_text')}
+                      style={{
+                        background: draft.button_to_text ? '#22c55e' : '#475569',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '3px 10px',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {draft.button_to_text ? 'on' : 'off'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* MODIFY CONTENT (Screen 3) */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
+                  Modify Content (?)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                      Header
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="HEADER EMPTY"
+                      value={draft.custom_header || ''}
+                      onChange={(e) => setDraft({ ...draft, custom_header: e.target.value })}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#0f172a',
+                        border: '1px solid #475569',
+                        color: '#fff',
+                        borderRadius: '8px',
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                      Footer
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="FOOTER EMPTY"
+                      value={draft.custom_footer || ''}
+                      onChange={(e) => setDraft({ ...draft, custom_footer: e.target.value })}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#0f172a',
+                        border: '1px solid #475569',
+                        color: '#fff',
+                        borderRadius: '8px',
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                      Watermark
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Empty"
+                      value={draft.watermark_text || ''}
+                      onChange={(e) => setDraft({ ...draft, watermark_text: e.target.value })}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#0f172a',
+                        border: '1px solid #475569',
+                        color: '#fff',
+                        borderRadius: '8px',
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* AI FEATURES (Screen 3) */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '10px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Wand2 size={14} color="#818cf8" />
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6' }}>AI Features</span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      color: '#a5b4fc',
+                      backgroundColor: '#312e81',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                    }}
+                  >
+                    Creativity {draft.ai_creativity ?? 0.7} - Max Tokens {draft.ai_max_tokens ?? 600}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>OCR Image AI</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle('ocr_image_ai')}
+                      style={{
+                        background: draft.ocr_image_ai ? '#22c55e' : '#475569',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '3px 10px',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {draft.ocr_image_ai ? 'on' : 'off'}
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Smart AI Rewrite</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle('smart_ai_rewrite')}
+                      style={{
+                        background: draft.smart_ai_rewrite ? '#22c55e' : '#475569',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '3px 10px',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {draft.smart_ai_rewrite ? 'on' : 'off'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ALL 18 ADDONS CATALOG MODAL VIEW */}
+          {currentTab === 'all_addons' && (
+            <div>
+              <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '12px' }}>
+                Modular Extensions Catalogue — Toggle features for this task:
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {allAddonsCatalog.map((item) => {
+                  const isEnabled = draft.paid_addons?.[item.key] ?? false
+                  return (
+                    <div
+                      key={item.key}
+                      onClick={() => handleAddonToggle(item.key)}
+                      style={{
+                        backgroundColor: '#1e293b',
+                        padding: '12px',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        border: isEnabled ? '1px solid #3b82f6' : '1px solid #334155',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {item.locked && <Lock size={12} color="#f59e0b" />}
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>{item.title}</span>
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{item.desc}</div>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          padding: '3px 8px',
+                          borderRadius: '12px',
+                          backgroundColor: isEnabled ? '#10b981' : '#334155',
+                          color: '#fff',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {isEnabled ? 'ACTIVE' : 'OFF'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Action Footer */}
+        <div
+          style={{
+            padding: '14px 18px',
+            borderTop: '1px solid #1f2937',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: '10px',
+            backgroundColor: '#131b2e',
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '10px',
+              backgroundColor: '#1f2937',
+              color: '#9ca3af',
+              border: 'none',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveAndClose}
+            disabled={saving}
+            style={{
+              padding: '8px 20px',
+              borderRadius: '10px',
+              backgroundColor: '#3b82f6',
+              color: '#ffffff',
+              border: 'none',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1219,101 +1219,241 @@ class ProBotUI:
         return "\n".join(lines), self._rules_menu(rules_list, page=page, page_size=page_size)
 
     def _render_rule_detail(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render full settings and action dashboard for an individual rule."""
-        src_label = rule.source_chat_name or rule.source_chat_id
-        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
-        status_str = "🟢 فعال" if rule.is_active else "🔴 غیرفعال"
+        """Render the complete Task Management & Routing Overview (Screens 1, 4, 5)."""
+        task_name = rule.name or f"task_{rule.id[:8]}"
+        src_label = rule.source_chat_name or rule.source_chat_id or "AF Route Lab Source"
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id or "AF Route Lab Target")
 
-        f_mode = getattr(rule, "forward_mode", ForwardMode.COPY_MESSAGE)
-        mode_val = getattr(f_mode, "value", str(f_mode))
-        mode_names = {
-            "COPY_MESSAGE": "📋 کپی بدون تگ (Copy)",
-            "DIRECT_FORWARD": "↗️ فوروارد با تگ (Forward)",
-            "REWRITE_AI": "🤖 بازنویسی با هوش مصنوعی",
+        status_text = "RUNNING 🟢" if rule.is_active else "PAUSED ⚪"
+        debug_text = "ON 🟢" if rule.debug_mode else "OFF"
+        sender_type = rule.sender_type or "Personal Telegram Account"
+        topic_str = f"#{rule.topic_id}" if rule.topic_id else "None"
+
+        grp = rule.feature_group or "all"
+        chips = {
+            "all": "All",
+            "crypto": "₿ Crypto",
+            "mmo": "MMO / Affiliate",
+            "content": "Content",
         }
-        mode_title = mode_names.get(mode_val, mode_val)
 
-        reps_count = len(rule.replacements)
-        reps_badge = f"{reps_count} مورد فعال" if reps_count else "غیرفعال"
+        # Header and Task Overview text matching the Telegram Mini App
+        text = (
+            f"⚡ **Auto Forward Messages — Task Management**\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📋 **Task Name:** `{task_name}`\n\n"
+            f"📊 **Task Overview (Click to view):**\n"
+            f"• ⏻ **Forwarding Status:** `{status_text}`\n"
+            f"• ↪ **Source:** `{src_label}` (Telegram)\n"
+            f"• ➤ **Target:** `{dst_label}` (Telegram)\n"
+            f"• 🐞 **Debug Mode:** `{debug_text}`\n"
+            f"• #️⃣ **Topic:** `{topic_str}`\n\n"
+            f"👤 **Sender Type:**\n"
+            f"• ⚡ `{sender_type}`\n\n"
+            f"✨ **Feature groups:** Choose & customize tools\n"
+            f"👑 **PAID ADDON:** Unlock premium features with credits\n"
+        )
 
-        hdr_badge = "تنظیم شده" if rule.header else "خالی"
-        ftr_badge = "تنظیم شده" if rule.footer else "خالی"
+        rows: List[List[Tuple[str, str]]] = [
+            # Task Name Controls
+            [
+                ("✏️ Rename Task", f"rrn:{rule.id}"),
+                ("✏️ ویرایش پیش‌نویس (Draft Editor)", f"re:{rule.id}"),
+                ("🗑 Delete Task", f"rrm:{rule.id}"),
+            ],
+            # Status toggle
+            [
+                (f"⏻ Status: {status_text}", f"rtg:{rule.id}"),
+                (f"🐞 Debug: {debug_text}", f"rtgbg:{rule.id}"),
+            ],
+            # Edit Task Buttons (Green / Red / Blue / White)
+            [
+                ("🟢 Edit Source", f"res:{rule.id}"),
+                ("🔴 Edit Target", f"ret:{rule.id}"),
+            ],
+            [
+                (f"#️⃣ Set up Forwarding Topic ({topic_str})", f"rtpc:{rule.id}"),
+            ],
+            [
+                ("🎚 Advanced Settings", f"radv:{rule.id}"),
+            ],
+            # Feature groups tabs / chips
+            [
+                (f"● {chips['all']}" if grp == "all" else chips["all"], f"rgrp:{rule.id}:all"),
+                (f"● {chips['crypto']}" if grp == "crypto" else chips["crypto"], f"rgrp:{rule.id}:crypto"),
+                (f"● {chips['mmo']}" if grp == "mmo" else chips["mmo"], f"rgrp:{rule.id}:mmo"),
+                (f"● {chips['content']}" if grp == "content" else chips["content"], f"rgrp:{rule.id}:content"),
+            ],
+        ]
+
+        # Filtered Add-ons grid based on selected feature group
+        addons = rule.paid_addons
+        if grp == "crypto":
+            rows.extend([
+                [
+                    ("₿ Crypto Mode: " + ("ON" if rule.crypto_mode else "OFF"), f"rtg_crypto:{rule.id}"),
+                    ("🔒 Signal Formatter", f"radon:{rule.id}:sig_format"),
+                ],
+                [
+                    ("🔒 Wallet Cleaner", f"radon:{rule.id}:wallet_clean"),
+                    ("🔒 Outbound Webhooks", f"radon:{rule.id}:webhook"),
+                ],
+            ])
+        elif grp == "mmo":
+            ak_on = rule.affiliate_kit.get("enabled", False)
+            rows.extend([
+                [
+                    ("🔗 Affiliate Kit: " + ("ON" if ak_on else "OFF"), f"rafl:{rule.id}"),
+                    ("🔒 Outbound Webhooks", f"radon:{rule.id}:webhook"),
+                ],
+                [
+                    ("🔗 Link Buttons", f"rbtn:{rule.id}"),
+                    ("🔒 Auto Delete Messages", f"radon:{rule.id}:auto_del"),
+                ],
+            ])
+        elif grp == "content":
+            c_comm = addons.get("channel_comments", False)
+            rows.extend([
+                [
+                    ("★ Channel Comments: " + ("ON" if c_comm else "OFF"), f"radon:{rule.id}:comments"),
+                    ("🔒 Forward Every N", f"radon:{rule.id}:every_n"),
+                ],
+                [
+                    ("🔒 Keyword Confirm", f"radon:{rule.id}:kw_confirm"),
+                    ("🔒 Keyword Reply Thr", f"radon:{rule.id}:kw_reply"),
+                ],
+                [
+                    ("🔒 Auto Delete Msg", f"radon:{rule.id}:auto_del"),
+                    ("🖼 Watermark", f"rwm:{rule.id}"),
+                ],
+            ])
+        else:  # "all" (matches Image 4 exactly)
+            c_comm = addons.get("channel_comments", False)
+            ev_n = addons.get("every_n", False)
+            kw_c = addons.get("kw_confirm", False)
+            kw_r = addons.get("kw_reply", False)
+            a_del = addons.get("auto_del", False)
+            wh = addons.get("webhook", False)
+
+            rows.extend([
+                [
+                    ("★ Channel Comments: " + ("ON" if c_comm else "OFF"), f"radon:{rule.id}:comments"),
+                    ("🔒 Forward Every N: " + ("ON" if ev_n else "OFF"), f"radon:{rule.id}:every_n"),
+                ],
+                [
+                    ("🔒 Keyword Confirma... " + ("ON" if kw_c else "OFF"), f"radon:{rule.id}:kw_confirm"),
+                    ("🔒 Keyword Reply Thr... " + ("ON" if kw_r else "OFF"), f"radon:{rule.id}:kw_reply"),
+                ],
+                [
+                    ("🔒 Auto Delete Messa... " + ("ON" if a_del else "OFF"), f"radon:{rule.id}:auto_del"),
+                    ("🔒 Outbound Webhoo... " + ("ON" if wh else "OFF"), f"radon:{rule.id}:webhook"),
+                ],
+            ])
+
+        rows.append([
+            ("⭐ View all (18) ➔", f"radon_all:{rule.id}"),
+        ])
+        rows.append([
+            ("⬅️ بازگشت به لیست قوانین", CB["rules"]),
+        ])
+
+        return text, self._kbd(rows)
+
+    def _render_advanced_settings(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render the complete Advanced Settings dashboard (Screens 2 & 3)."""
+        task_name = rule.name or f"task_{rule.id[:8]}"
+        src_label = rule.source_chat_name or rule.source_chat_id or "AF Route Lab Source"
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id or "AF Route Lab Target")
+
+        dup_status = "on 🟢" if rule.duplicate_filters else "off ⚪"
+        crypto_status = "on 🟢" if rule.crypto_mode else "off ⚪"
+        bl_count = len(rule.blacklist)
+        wl_count = len(rule.whitelist)
+        bu_count = len(rule.blacklist_users)
+        wu_count = len(rule.whitelist_users)
+        cl_count = len(rule.clean_custom_words) + (1 if rule.remove_links else 0) + (1 if rule.remove_emojis else 0)
+        fl_count = 1 if rule.filter_rule_id else 0
+
+        sched_on = bool(rule.auto_post_scheduler.get("enabled", False))
+        sched_status = "On 🟢" if sched_on else "Off ⚪"
+        pwr_on = bool(rule.power_schedule.get("enabled", False))
+        pwr_status = "On 🟢" if pwr_on else "Off ⚪"
+
+        delay_val = f"{rule.delay_seconds:.0f} s" if rule.delay_seconds > 0 else "0 s"
+        mte_val = f"{rule.max_time_edit} s" if rule.max_time_edit > 0 else "0 s"
+
+        raw_status = "on 🟢" if rule.process_raw_text else "off ⚪"
+        btn2txt_status = "on 🟢" if rule.button_to_text else "off ⚪"
 
         lk_badge = "🚫 حذف" if (rule.remove_links or (isinstance(rule.metadata, dict) and bool(rule.metadata.get("remove_links")))) else "🟢 مجاز"
         vc_badge = "🚫 مسدود" if rule.block_voice else "🟢 مجاز"
         st_badge = "🚫 مسدود" if rule.block_stickers else "🟢 مجاز"
         em_badge = "🧹 پاکسازی" if rule.remove_emojis else "🟢 حفظ"
+        alb_badge = "1️⃣ فقط اولین مدیا" if rule.album_mode == "first" else ("🔀 تفکیک پیام‌ها" if rule.album_mode == "split" else "🖼 آلبوم کامل")
+        reps_badge = f"{len(rule.replacements)} مورد فعال" if len(rule.replacements) else "غیرفعال"
+        hdr_badge = "تنظیم شده" if rule.header else "خالی"
+        ftr_badge = "تنظیم شده" if rule.footer else "خالی"
         ed_badge = "⏹ نادیده" if rule.ignore_edits else "🔄 سینک"
         dl_badge = "🗑 سینک" if rule.sync_deletes else "⏹ نادیده"
 
-        album_names = {
-            "album": "🖼 آلبوم کامل",
-            "first": "1️⃣ فقط اولین مدیا",
-            "split": "🔀 تفکیک پیام‌ها",
-        }
-        alb_badge = album_names.get(rule.album_mode, "🖼 آلبوم کامل")
+        rep_count = len(rule.replacements)
+        tr_status = rule.translate_lang.upper() if rule.translate_lang else "Off"
+        wm_status = "Configured" if rule.watermark else "Empty"
+        btn_count = len(rule.link_buttons)
+        ak_on = rule.affiliate_kit.get("enabled", False)
+        ak_status = "Active" if ak_on else "Off"
 
-        # Smart routing summary
-        smart_cat = getattr(rule, "message_category", "ALL")
-        cat_labels = {"ALL": "🌟 همه پیام‌ها", "VIP_ONLY": "💎 فقط VIP", "NORMAL_ONLY": "👤 فقط عادی"}
-        cat_badge = cat_labels.get(smart_cat, smart_cat)
-        use_mid = bool(getattr(rule, "use_intermediate", False))
-        mid_id = getattr(rule, "intermediate_channel_id", "") or ""
-        mid_badge = f"🟢 فعال (`{mid_id[:12]}`)" if (use_mid and mid_id) else "🔴 غیرفعال"
-
-        # Cleaner summary
-        cl_items = []
-        if rule.remove_links: cl_items.append("لینک")
-        if rule.clean_usernames: cl_items.append("منشن")
-        if rule.clean_hashtags: cl_items.append("هشتگ")
-        if rule.remove_emojis: cl_items.append("ایموجی")
-        if rule.clean_phones: cl_items.append("شماره")
-        if rule.clean_buttons: cl_items.append("دکمه")
-        if rule.clean_empty_lines: cl_items.append("فاصله")
-        cl_badge = f"{len(cl_items)} مورد" if cl_items else "غیرفعال"
-
-        # Filters summary
-        fl_items = []
-        if rule.block_links: fl_items.append("لینک")
-        if rule.block_video: fl_items.append("ویدیو")
-        if rule.block_audio: fl_items.append("صوت")
-        if rule.block_stickers: fl_items.append("استیکر")
-        if rule.block_text: fl_items.append("متن")
-        if rule.block_voice: fl_items.append("وویس")
-        fl_badge = f"{len(fl_items)} مسدود" if fl_items else "مجاز"
-
-        # Max edit time
-        mte_badge = f"{rule.max_time_edit}s" if rule.max_time_edit > 0 else "نامحدود"
+        ocr_status = "Active 🟢" if rule.ocr_image_ai else "Inactive ⚪"
+        ai_rw_status = "Active 🟢" if rule.smart_ai_rewrite else "Inactive ⚪"
+        digest_status = "Active 🟢" if rule.news_digest else "Inactive ⚪"
 
         text = (
-            "⚙️ **تنظیمات پیشرفته قانون انتقال**\n\n"
+            f"🎚 **تنظیمات پیشرفته قانون (Advanced Settings)**\n"
+            f"📋 **Route:** `{task_name}`\n"
             f"📡 **مبدأ:** `{src_label}` (`{rule.source_chat_id}`)\n"
             f"🎯 **مقصد:** `{dst_label}` (`{rule.target_chat_id}`)\n"
-            f"📊 **وضعیت:** {status_str}\n"
-            f"⚡ **حالت ارسال:** {mode_title}\n"
-            "────────────────────\n"
-            f"🧹 **پاک‌کننده (Cleaner):** {cl_badge} | 🛡 **فیلترها:** {fl_badge}\n"
-            f"📝 **هدر:** {hdr_badge} | **فوتر:** {ftr_badge}\n"
-            f"🔗 **لینک:** {lk_badge} | 🎙 **ویس:** {vc_badge}\n"
-            f"🎭 **استیکر:** {st_badge} | 😀 **ایموجی:** {em_badge}\n"
-            f"⏱ **سقف زمان ادیت:** {mte_badge}\n"
-            f"💎 **رده هوشمند:** {cat_badge} | **واسط VIP:** {mid_badge}\n"
-            f"🔤 **جایگزینی متن:** {reps_badge}\n"
-            f"✏️ **ویرایش پیام:** {ed_badge} | 🗑 **حذف پیام:** {dl_badge}\n"
-            f"🖼 **چندتصویری:** {alb_badge}\n\n"
-            "👇 جهت تغییر و تنظیم هر بخش، دکمه مربوطه را لمس کنید:"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🛡 **Filters (?):**\n"
+            f"• Duplicate: `{dup_status}` | Crypto: `{crypto_status}`\n"
+            f"• Blacklist: `Activated: {bl_count}` | Whitelist: `Activated: {wl_count}`\n"
+            f"• Block Users: `Activated: {bu_count}` | Allow Users: `Activated: {wu_count}`\n"
+            f"• Cleaner: `Activated: {cl_count}` | Filter Rules: `Activated: {fl_count}`\n"
+            f"• لینک: {lk_badge} | ویس: {vc_badge} | استیکر: {st_badge} | ایموجی: {em_badge}\n\n"
+            f"⏰ **Schedules (?):**\n"
+            f"• Auto Post Scheduler: `{sched_status}`\n"
+            f"• Power On/Off Schedule: `{pwr_status}`\n\n"
+            f"⏱ **Time Forward (?):**\n"
+            f"• Delay: `{delay_val}` | Max Edit Time: `{mte_val}`\n\n"
+            f"⚙️ **Processing Messages (?):**\n"
+            f"• Process Raw Text: `{raw_status}` | Button To Text: `{btn2txt_status}`\n\n"
+            f"✍️ **Modify Content (?):**\n"
+            f"• Header: `{hdr_badge}` | Footer: `{ftr_badge}`\n"
+            f"• Replace: `Activated: {reps_badge}` | Translate: `{tr_status}`\n"
+            f"• Watermark: `{wm_status}` | Link Buttons: `{btn_count} btns`\n"
+            f"• Affiliate Kit: `{ak_status}` | Album Mode: `{alb_badge}`\n\n"
+            f"🤖 **AI Features (Creativity {rule.ai_creativity} · Max Tokens {rule.ai_max_tokens}):**\n"
+            f"• OCR Image AI: `{ocr_status}`\n"
+            f"• Smart AI Rewrite: `{ai_rw_status}`\n"
+            f"• News Digest: `{digest_status}`\n"
         )
 
         rows: List[List[Tuple[str, str]]] = [
-            [("✏️ ویرایش پیش‌نویس (Draft Editor)", f"re:{rule.id}")],
+            # Filters Section Grid
             [
-                ("📡 تغییر مبدأ", f"res:{rule.id}"),
-                ("🎯 تغییر مقصد", f"ret:{rule.id}"),
+                (f"🔀 Duplicate Filters: {dup_status}", f"rtg_dup:{rule.id}"),
+                (f"🪙 Crypto Mode: {crypto_status}", f"rtg_crypto:{rule.id}"),
             ],
             [
-                (f"🧹 منوی کلینر", f"rcl:{rule.id}"),
-                (f"🛡 منوی فیلترها", f"rfl:{rule.id}"),
-                (f"⏱ زمان ادیت", f"rmte:{rule.id}"),
+                (f"🚫 Blacklist ({bl_count})", f"rfl_bl:{rule.id}"),
+                (f"✅ Whitelist ({wl_count})", f"rfl_wl:{rule.id}"),
+            ],
+            [
+                (f"🚷 Blacklist Users ({bu_count})", f"rfl_bu:{rule.id}"),
+                (f"👥 Whitelist Users ({wu_count})", f"rfl_wu:{rule.id}"),
+            ],
+            [
+                (f"🧹 Cleaner ({cl_count})", f"rcl:{rule.id}"),
+                (f"🛡 Filters ({fl_count})", f"rfl:{rule.id}"),
             ],
             [
                 (f"🔗 لینک: {lk_badge}", f"rlk:{rule.id}"),
@@ -1323,24 +1463,105 @@ class ProBotUI:
                 (f"🎭 استیکر: {st_badge}", f"rst:{rule.id}"),
                 (f"😀 ایموجی: {em_badge}", f"rem:{rule.id}"),
             ],
-            [("📝 تنظیم هدر و فوتر", f"rhf:{rule.id}")],
-            [("💎 مسیریابی هوشمند و VIP (Smart Rules)", f"rsm:{rule.id}")],
-            [("🔤 جایگزینی متن (Text Replace)", f"rtx:{rule.id}")],
+            # Schedules Section
+            [
+                (f"⏰ Auto Post Scheduler: {sched_status}", f"rsch_auto:{rule.id}"),
+                (f"⏻ Power On/Off Sch: {pwr_status}", f"rsch_pwr:{rule.id}"),
+            ],
+            # Time Forward Section
+            [
+                (f"⏱ Set Delay ({delay_val})", f"rdly:{rule.id}"),
+                (f"⏳ Max Edit Time ({mte_val})", f"rmte:{rule.id}"),
+            ],
+            # Processing Messages Section
+            [
+                (f"📄 Process Raw Text: {raw_status}", f"rtg_raw:{rule.id}"),
+                (f"🔘 Button To Text: {btn2txt_status}", f"rtg_btn2txt:{rule.id}"),
+            ],
+            # Modify Content Section
+            [
+                (f"📝 هدر و فوتر", f"rhf:{rule.id}"),
+                (f"🔤 Replace ({rep_count})", f"rtx:{rule.id}"),
+            ],
+            [
+                (f"🌐 Translate Language ({tr_status})", f"rtr:{rule.id}"),
+                (f"🖼 Watermark ({wm_status})", f"rwm:{rule.id}"),
+            ],
+            [
+                (f"🔗 Link Buttons ({btn_count})", f"rbtn:{rule.id}"),
+                (f"💲 Affiliate Kit ({ak_status})", f"rafl:{rule.id}"),
+            ],
             [
                 (f"✏️ ادیت: {ed_badge}", f"red:{rule.id}"),
                 (f"🗑 حذف: {dl_badge}", f"rdl:{rule.id}"),
             ],
             [
                 (f"🖼 آلبوم: {alb_badge}", f"rmg:{rule.id}"),
-                ("⚡ تغییر حالت", f"rmd:{rule.id}"),
+                (f"🗑 حذف قانون", f"rrm:{rule.id}"),
+            ],
+            # AI Features Section
+            [
+                (f"👁 OCR Image AI: {ocr_status}", f"rtg_ocr:{rule.id}"),
+                (f"✨ Smart AI Rewrite: {ai_rw_status}", f"rtg_ai:{rule.id}"),
             ],
             [
-                ("🔄 وضعیت (🟢/🔴)", f"rtg:{rule.id}"),
-                ("📑 تکثیر (Duplicate)", f"rdup:{rule.id}"),
-                ("🗑 حذف قانون", f"rrm:{rule.id}"),
+                (f"📰 News Digest: {digest_status}", f"rtg_digest:{rule.id}"),
+                (f"⚙️ AI Config ({rule.ai_creativity}/{rule.ai_max_tokens})", f"rai_cfg:{rule.id}"),
             ],
-            [("⬅️ بازگشت به لیست قوانین", CB["rules"])],
+            # Return button
+            [
+                ("🔙 بازگشت به نمای تسک (Task Overview)", f"rd:{rule.id}"),
+            ],
         ]
+
+        return text, self._kbd(rows)
+
+    def _render_all_addons(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render all 18 Add-ons catalogue with toggle controls."""
+        task_name = rule.name or f"task_{rule.id[:8]}"
+        addons = rule.paid_addons
+        
+        all_18 = [
+            ("comments", "★ Channel Comments"),
+            ("every_n", "🔒 Forward Every N Messages"),
+            ("kw_confirm", "🔒 Keyword Confirmation"),
+            ("kw_reply", "🔒 Keyword Reply Thread"),
+            ("auto_del", "🔒 Auto Delete Messages"),
+            ("webhook", "🔒 Outbound Webhooks"),
+            ("crypto", "🪙 Crypto Mode"),
+            ("affiliate", "💲 Affiliate Kit"),
+            ("link_buttons", "🔗 Link Buttons"),
+            ("watermark", "🖼 Watermark Protection"),
+            ("duplicate", "🔀 Duplicate Filters"),
+            ("cleaner", "🧹 Cleaner Protocol"),
+            ("scheduler", "⏰ Auto Post Scheduler"),
+            ("power_schedule", "⏻ Power On/Off Schedule"),
+            ("raw_text", "📄 Process Raw Text"),
+            ("button_to_text", "🔘 Button To Text"),
+            ("ocr_ai", "👁 OCR Image AI"),
+            ("ai_rewrite", "✨ Smart AI Rewrite"),
+        ]
+
+        text = (
+            f"👑 **PAID ADDON Catalogue — 18 Modular Extensions**\n"
+            f"📋 **Task:** `{task_name}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"از این بخش می‌توانید افزونه‌های ماژولار و پیشرفته را برای این تسک فعال یا غیرفعال نمایید:\n"
+        )
+
+        rows: List[List[Tuple[str, str]]] = []
+        for i in range(0, len(all_18), 2):
+            pair = []
+            k1, lbl1 = all_18[i]
+            on1 = "🟢" if addons.get(k1) else "⚪"
+            pair.append((f"{lbl1} {on1}", f"radon_tg:{rule.id}:{k1}"))
+            if i + 1 < len(all_18):
+                k2, lbl2 = all_18[i + 1]
+                on2 = "🟢" if addons.get(k2) else "⚪"
+                pair.append((f"{lbl2} {on2}", f"radon_tg:{rule.id}:{k2}"))
+            rows.append(pair)
+
+        rows.append([("🔙 بازگشت به نمای تسک", f"rd:{rule.id}")])
         return text, self._kbd(rows)
 
     def _render_draft_editor(self, rule: ForwardRule, draft: Dict[str, Any]) -> Tuple[str, InlineKeyboardMarkup]:
@@ -4416,6 +4637,222 @@ class ProBotUI:
             text, kbd = self._render_rule_detail(saved)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
+        @b.on_callback_query(filters.regex(r"^radv:(.+)$"))
+        async def _cb_rule_advanced_settings(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ این قانون یافت نشد یا متعلق به شما نیست.", show_alert=True)
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^radon_all:(.+)$"))
+        async def _cb_rule_all_addons(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ این قانون یافت نشد یا متعلق به شما نیست.", show_alert=True)
+            text, kbd = self._render_all_addons(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rgrp:(.+?):(.+)$"))
+        async def _cb_rule_group_switch(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":")
+            rule_id, grp = parts[1], parts[2]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.feature_group = grp
+            await self._save_owned_rule(rule, uid)
+            text, kbd = self._render_rule_detail(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer(f"دسته: {grp}")
+
+        @b.on_callback_query(filters.regex(r"^(?:radon|radon_tg):(.+?):(.+)$"))
+        async def _cb_rule_addon_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            is_modal = raw.startswith("radon_tg:")
+            parts = raw.split(":")
+            rule_id, addon_key = parts[1], parts[2]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            addons = rule.paid_addons
+            curr = bool(addons.get(addon_key, False))
+            addons[addon_key] = not curr
+            rule.paid_addons = addons
+            await self._save_owned_rule(rule, uid)
+            st_text = "فعال شد 🟢" if not curr else "غیرفعال شد ⚪"
+            await cq.answer(f"{addon_key}: {st_text}")
+            if is_modal:
+                text, kbd = self._render_all_addons(rule)
+            else:
+                text, kbd = self._render_rule_detail(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtgbg:(.+)$"))
+        async def _cb_rule_toggle_debug(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.debug_mode = not rule.debug_mode
+            await self._save_owned_rule(rule, uid)
+            st = "فعال شد 🟢" if rule.debug_mode else "غیرفعال شد ⚪"
+            await cq.answer(f"دیباگ: {st}")
+            text, kbd = self._render_rule_detail(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtg_dup:(.+)$"))
+        async def _cb_rule_toggle_duplicate(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.duplicate_filters = not rule.duplicate_filters
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"Duplicate Filters: {'ON' if rule.duplicate_filters else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtg_crypto:(.+)$"))
+        async def _cb_rule_toggle_crypto(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.crypto_mode = not rule.crypto_mode
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"Crypto Mode: {'ON' if rule.crypto_mode else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtg_raw:(.+)$"))
+        async def _cb_rule_toggle_raw_text(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.process_raw_text = not rule.process_raw_text
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"Process Raw Text: {'ON' if rule.process_raw_text else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtg_btn2txt:(.+)$"))
+        async def _cb_rule_toggle_btn2txt(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.button_to_text = not rule.button_to_text
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"Button To Text: {'ON' if rule.button_to_text else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtg_ocr:(.+)$"))
+        async def _cb_rule_toggle_ocr(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.ocr_image_ai = not rule.ocr_image_ai
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"OCR Image AI: {'ON' if rule.ocr_image_ai else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtg_ai:(.+)$"))
+        async def _cb_rule_toggle_ai_rewrite(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.smart_ai_rewrite = not rule.smart_ai_rewrite
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"Smart AI Rewrite: {'ON' if rule.smart_ai_rewrite else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtg_digest:(.+)$"))
+        async def _cb_rule_toggle_news_digest(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.news_digest = not rule.news_digest
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"News Digest: {'ON' if rule.news_digest else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtpc:(.+)$"))
+        async def _cb_rule_set_topic(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            st = self._state(uid)
+            st.step = f"set_topic_{rule.id}"
+            await self._persist(uid, st)
+            text = (
+                f"#️⃣ **Set up Forwarding Topic**\n\n"
+                f"لطفاً شناسه تاپیک مقصد (Topic ID / Message Thread ID) را به صورت عدد ارسال کنید.\n"
+                f"شناسه فعلی: `{rule.topic_id or 'None'}`\n\n"
+                f"برای حذف تاپیک، عدد `0` را ارسال کنید."
+            )
+            kbd = self._kbd([[("❌ انصراف", f"rd:{rule.id}")]])
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rrn:(.+)$"))
+        async def _cb_rule_rename(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            st = self._state(uid)
+            st.step = f"rename_rule_{rule.id}"
+            await self._persist(uid, st)
+            text = (
+                f"✏️ **تغییر نام تسک (Task Name)**\n\n"
+                f"نام فعلی: `{rule.name or f'task_{rule.id[:8]}'}`\n\n"
+                f"لطفاً نام جدید تسک را ارسال کنید:"
+            )
+            kbd = self._kbd([[("❌ انصراف", f"rd:{rule.id}")]])
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
         # ---------------- rule edit (draft & direct) handlers ----------------
         @b.on_callback_query(filters.regex(r"^re:(.+)$"))
         async def _cb_rule_edit_draft(_, cq: CallbackQuery):
@@ -6200,6 +6637,39 @@ class ProBotUI:
         current = self._web_url or self._t("ui_weburl_none")
         return self._t("ui_weburl_body").replace("{cur}", current)
 
+    async def _step_rename_rule(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+        rule.name = text.strip()
+        await self._save_owned_rule(rule, uid)
+        st.step = ""
+        await self._persist(uid, st)
+        card_text, kbd = self._render_rule_detail(rule)
+        await message.reply_text(f"✅ نام تسک به `{rule.name}` تغییر یافت.", reply_markup=kbd)
+
+    async def _step_set_topic(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+        clean_txt = text.strip().lstrip("#")
+        try:
+            tid = int(clean_txt)
+            rule.topic_id = tid if tid > 0 else 0
+        except ValueError:
+            return await message.reply_text("⚠️ لطفاً فقط یک عدد معتبر ارسال کنید (یا 0 برای غیرفعال‌سازی).")
+        await self._save_owned_rule(rule, uid)
+        st.step = ""
+        await self._persist(uid, st)
+        card_text, kbd = self._render_rule_detail(rule)
+        await message.reply_text(f"✅ تاپیک فوروارد روی `#{rule.topic_id or 'None'}` تنظیم شد.", reply_markup=kbd)
+
     async def _step_weburl_input(
         self, message: Message, st: "UiState", text: str
     ) -> None:
@@ -6583,6 +7053,13 @@ class ProBotUI:
             return await message.reply_text(
                 self._t("ui_use_menu"), reply_markup=self._main_menu()
             )
+
+        if st.step.startswith("rename_rule_"):
+            rule_id = st.step.split("rename_rule_", 1)[1]
+            return await self._step_rename_rule(message, st, text, rule_id)
+        if st.step.startswith("set_topic_"):
+            rule_id = st.step.split("set_topic_", 1)[1]
+            return await self._step_set_topic(message, st, text, rule_id)
 
         handler = getattr(self, f"_step_{st.step}", None)
         if handler is None:
