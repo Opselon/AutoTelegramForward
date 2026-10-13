@@ -24,6 +24,7 @@ try:
 except ImportError:
     asyncpg = None
 import pytest
+import pytest_asyncio
 
 from core.application.pipeline import (
     DurableMessagePipeline,
@@ -142,7 +143,7 @@ def sqlite_db(tmp_path):
     return SqliteDatabase(str(db_file))
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def pg_conn():
     if asyncpg is None:
         pytest.skip("asyncpg is not installed")

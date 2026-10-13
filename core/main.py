@@ -183,13 +183,14 @@ def build_container(cfg: Config) -> dict:
         processed_repo=processed_repo,
     )
     pool = ClientPool(cfg.api_id, cfg.api_hash)
-    sync_engine = SyncEngine(msg_map_repo, rule_repo, pool)
+    sync_engine = SyncEngine(msg_map_repo, rule_repo, pool, filter_repo=filter_repo)
     # LogClient is created later (line ~291); queue_manager receives it via a
     # late attribute set right after the client exists (see below).
     queue_manager = DurableQueueManager(
         queue_repo=queue_repo,
         message_map_repo=msg_map_repo,
         client_pool=pool,
+        rule_repo=rule_repo,
         num_workers=getattr(cfg, "queue_num_workers", 3),
         batch_size=getattr(cfg, "queue_batch_size", 8),
         max_queue_size=getattr(cfg, "queue_max_size", 10000),
@@ -208,6 +209,7 @@ def build_container(cfg: Config) -> dict:
         ai_repo=ai_repo,
         ai_transformer=ai_transformer,
         prompt_service=prompt_service,
+        pool=pool,
     )
     from core.infrastructure.telegram.pv_responder import AIPVResponder  # noqa: E402
     pv_responder = AIPVResponder(ai_repo=ai_repo, ai_factory=factory, db=db)

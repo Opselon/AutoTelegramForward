@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any, List, Optional
 
-from ...application.repositories import IForwardRuleRepository, IMessageMapRepository
+from ...application.repositories import IFilterRuleRepository, IForwardRuleRepository, IMessageMapRepository
 from ...domain.entities import DeliveryStatus, ForwardRule, MessagePayload
+from ...domain.services import FilterAction, FilterEngine
 
 logger = logging.getLogger("atf.sync_engine")
 
@@ -27,10 +29,13 @@ class SyncEngine:
         message_map_repo: IMessageMapRepository,
         rule_repo: IForwardRuleRepository,
         client_pool: Any,
+        filter_repo: Optional[IFilterRuleRepository] = None,
     ) -> None:
         self._map = message_map_repo
         self._rules = rule_repo
         self._pool = client_pool
+        self._filters = filter_repo
+        self._filter_engine = FilterEngine()
 
     async def handle_edit(self, payload: MessagePayload, formatted_text: str) -> int:
         """Propagate an edit from source message to all mapped target messages.
@@ -47,6 +52,8 @@ class SyncEngine:
             return 0
 
         synced_count = 0
+        now = int(time.time())
+
         for m in mappings:
             if m.delivery_status != DeliveryStatus.SENT or not m.target_message_id:
                 continue
@@ -63,6 +70,40 @@ class SyncEngine:
                 logger.debug("Rule %s has sync_edits=False, skipping post-send edit", rule.id[:8])
                 continue
 
+            # 1. max_time_edit check: ignore edits if older than max_time_edit
+            msg_date = getattr(payload, "date", 0) or getattr(payload, "edit_date", 0)
+            max_edit = getattr(rule, "max_time_edit", 86400)
+            if msg_date and max_edit > 0:
+                age = now - int(msg_date)
+                if age > max_edit:
+                    logger.info(
+                        "[SYNC_EDIT:TIME_EXCEEDED] Rule %s edit age %ds exceeds max_time_edit %ds",
+                        rule.id[:8], age, max_edit,
+                    )
+                    continue
+
+            # 2. Whitelist / Blacklist & Filters check on edit
+            if self._filters is not None and getattr(rule, "filter_rule_id", None):
+                f_rule = await self._filters.get_by_id(str(rule.filter_rule_id))
+                if f_rule is not None:
+                    eval_res = self._filter_engine.evaluate(payload, f_rule)
+                    if eval_res.action == FilterAction.DROP:
+                        logger.info(
+                            "[SYNC_EDIT:FILTER_DROP] Rule %s dropped edited msg %s: %s",
+                            rule.id[:8], payload.message_id, eval_res.reason,
+                        )
+                        continue
+
+            # 3. Rule-level link filter
+            if getattr(rule, "block_links", False):
+                eff = payload.effective_text or ""
+                if "http://" in eff.lower() or "https://" in eff.lower() or "t.me/" in eff.lower():
+                    logger.info(
+                        "[SYNC_EDIT:FILTER_DROP] Rule %s dropped edited msg %s: link_blocked",
+                        rule.id[:8], payload.message_id,
+                    )
+                    continue
+
             client = self._pool.get(rule.session_id)
             if client is None:
                 logger.warning("No live client for session %s to sync edit", rule.session_id)
@@ -71,9 +112,9 @@ class SyncEngine:
             target = int(m.target_chat_id) if m.target_chat_id.lstrip("-").isdigit() else m.target_chat_id
             target_msg_id = int(m.target_message_id)
 
-            from core.domain.services import FilterEngine
-            filter_engine = FilterEngine()
-            final_text = filter_engine.transform_text(formatted_text or payload.effective_text or "", rule)
+            final_text = self._filter_engine.transform_text(
+                formatted_text or payload.effective_text or "", rule, payload=payload
+            )
 
             try:
                 if payload.has_media:

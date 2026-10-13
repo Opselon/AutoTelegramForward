@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import random
 import time
 import sqlite3
@@ -54,6 +55,7 @@ class DurableQueueManager:
         queue_repo: IDeliveryQueueRepository,
         message_map_repo: IMessageMapRepository,
         client_pool: Any,
+        rule_repo: Optional[Any] = None,
         num_workers: int = 3,
         lease_duration: float = 30.0,
         max_queue_size: int = 10000,
@@ -65,6 +67,7 @@ class DurableQueueManager:
         self._queue = queue_repo
         self._map = message_map_repo
         self._pool = client_pool
+        self._rules = rule_repo
         self._num_workers = max(1, num_workers)
         self._log_client = log_client
         self._lease_duration = lease_duration
@@ -189,6 +192,10 @@ class DurableQueueManager:
         mode_val = getattr(mode, "value", str(mode))
         forward_mode_val = getattr(rule.forward_mode, "value", str(rule.forward_mode))
 
+        album_ids = [int(m.message_id) for m in getattr(payload, "album_messages", []) if hasattr(m, "message_id")]
+        if not album_ids:
+            album_ids = [int(payload.message_id)]
+
         payload_dict = {
             "session_id": rule.session_id,
             "source_chat_id": str(payload.chat_id),
@@ -199,6 +206,7 @@ class DurableQueueManager:
             "has_media": bool(payload.has_media),
             "media_type": getattr(payload.media_type, "value", str(payload.media_type)),
             "media_group_id": payload.media_group_id,
+            "album_message_ids": album_ids,
             "forward_mode": forward_mode_val,
             "content_mode": mode_val,
             "delay_seconds": float(getattr(rule, "delay_seconds", 0.0) or 0.0),
@@ -435,7 +443,36 @@ class DurableQueueManager:
             return None
 
         session_id = job.payload_data.get("session_id")
-        client = self._pool.get(session_id)
+
+        # Automatically stop all forward actions when account is time-limited
+        if self._pool is not None and hasattr(self._pool, "is_time_limited"):
+            if session_id:
+                try:
+                    is_limited = self._pool.is_time_limited(session_id)
+                    # If mock wasn't explicitly configured or not limited, ignore
+                    if type(is_limited).__name__ != "MagicMock" and is_limited:
+                        raw_rem = self._pool.remaining_limit_seconds(session_id)
+                        rem = float(raw_rem) if isinstance(raw_rem, (int, float)) else 0.0
+                        if rem > 0:
+                            _bump_target("retried")
+                            logger.info(
+                                "[%s] Account %s is time-limited (%.1fs remaining). Pausing job %s",
+                                worker_id, session_id[:8], rem, job.id,
+                            )
+                            await self._queue.mark_retry(job.id, f"Account time-limited ({rem:.1f}s)", backoff_seconds=max(2.0, rem))
+                            return None
+                except Exception as exc:
+                    logger.debug("Failed checking time limit for %s: %s", session_id, exc)
+
+        # Check if rule is still active
+        if self._rules is not None:
+            rule_obj = await self._rules.get_by_id(job.rule_id)
+            if rule_obj and not rule_obj.is_active:
+                logger.info("[%s] Rule %s is disabled. Dropping job %s", worker_id, job.rule_id[:8], job.id)
+                await self._queue.mark_failed(job.id, "Rule disabled")
+                return None
+
+        client = self._pool.get(session_id) if self._pool is not None else None
         if client is None:
             _bump_target("retried")
             logger.error(
@@ -554,6 +591,9 @@ class DurableQueueManager:
             # 2. FloodWait / recoverable retry
             if "FloodWait" in str(type(exc).__name__) or recoverable:
                 wait_sec = float(wait_seconds(exc, default=5) + random.uniform(0.5, 2.0))
+                # Automatically stop all forward actions for time-limited account
+                if self._pool is not None and hasattr(self._pool, "set_time_limit") and session_id:
+                    self._pool.set_time_limit(session_id, wait_sec)
                 self.stats["floodwait_hits"] += 1
                 self.stats["retried"] += 1
                 _bump_target("retried")
@@ -633,6 +673,19 @@ class DurableQueueManager:
                     job.source_message_id,
                     err_msg,
                 )
+                # Automatically disable task forward when source or target fails or is banned
+                if self._rules is not None:
+                    try:
+                        rule_obj = await self._rules.get_by_id(job.rule_id)
+                        if rule_obj and rule_obj.is_active:
+                            rule_obj.is_active = False
+                            await self._rules.update(rule_obj)
+                            logger.warning(
+                                "[AUTO_DISABLE] Automatically disabled task forward rule %s (source/target failed or banned: %s)",
+                                job.rule_id[:8], err_msg,
+                            )
+                    except Exception as dis_err:
+                        logger.error("Failed to auto-disable rule %s: %s", job.rule_id[:8], dis_err)
                 if self._log_client is not None:
                     try:
                         self._log_client.error(
@@ -701,6 +754,119 @@ class DurableQueueManager:
                 )
             return None
 
+    async def _reupload_media(
+        self,
+        client: Any,
+        src_chat: Any,
+        src_msg_id: int,
+        target: Any,
+        caption: Optional[str],
+        media_type: str = "",
+    ) -> int:
+        temp_path = None
+        try:
+            src_msg = None
+            if hasattr(client, "get_messages"):
+                try:
+                    src_msg = await client.get_messages(chat_id=src_chat, message_ids=src_msg_id)
+                except Exception as e:
+                    logger.debug("get_messages failed in _reupload_media: %s", e)
+
+            # Try downloading media file
+            if src_msg is not None and hasattr(client, "download_media"):
+                try:
+                    temp_path = await client.download_media(src_msg)
+                except Exception as dl_err:
+                    logger.debug("download_media failed in _reupload_media: %s", dl_err)
+
+            if temp_path and os.path.exists(temp_path):
+                mtype = str(media_type).lower()
+                if mtype == "photo" or getattr(src_msg, "photo", None):
+                    res = await client.send_photo(chat_id=target, photo=temp_path, caption=caption)
+                elif mtype in ("video", "round_video") or getattr(src_msg, "video", None):
+                    res = await client.send_video(chat_id=target, video=temp_path, caption=caption)
+                elif mtype == "voice" or getattr(src_msg, "voice", None):
+                    res = await client.send_voice(chat_id=target, voice=temp_path, caption=caption)
+                elif mtype == "audio" or getattr(src_msg, "audio", None):
+                    res = await client.send_audio(chat_id=target, audio=temp_path, caption=caption)
+                elif mtype == "animation" or getattr(src_msg, "animation", None):
+                    res = await client.send_animation(chat_id=target, animation=temp_path, caption=caption)
+                elif mtype == "sticker" or getattr(src_msg, "sticker", None):
+                    res = await client.send_sticker(chat_id=target, sticker=temp_path)
+                else:
+                    res = await client.send_document(chat_id=target, document=temp_path, caption=caption)
+                return getattr(res, "id", 0)
+
+            # Fallback: send text if media re-upload failed
+            if caption:
+                res = await client.send_message(chat_id=target, text=caption)
+                return getattr(res, "id", 0)
+            return 0
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
+
+    async def _reupload_album(
+        self,
+        client: Any,
+        src_chat: Any,
+        album_ids: List[int],
+        target: Any,
+        caption: Optional[str],
+    ) -> int:
+        temp_files: List[str] = []
+        try:
+            from pyrogram.types import InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo
+
+            msgs = []
+            if hasattr(client, "get_messages"):
+                try:
+                    raw_msgs = await client.get_messages(chat_id=src_chat, message_ids=album_ids)
+                    msgs = raw_msgs if isinstance(raw_msgs, list) else [raw_msgs]
+                except Exception as e:
+                    logger.debug("get_messages failed in _reupload_album: %s", e)
+
+            media_list = []
+            for i, m in enumerate(msgs):
+                if not m or not hasattr(client, "download_media"):
+                    continue
+                try:
+                    path = await client.download_media(m)
+                    if path and os.path.exists(path):
+                        temp_files.append(path)
+                        cap = caption if i == 0 else None
+                        if getattr(m, "photo", None):
+                            media_list.append(InputMediaPhoto(path, caption=cap))
+                        elif getattr(m, "video", None):
+                            media_list.append(InputMediaVideo(path, caption=cap))
+                        elif getattr(m, "audio", None):
+                            media_list.append(InputMediaAudio(path, caption=cap))
+                        else:
+                            media_list.append(InputMediaDocument(path, caption=cap))
+                except Exception as dl_err:
+                    logger.debug("download_media item failed in _reupload_album: %s", dl_err)
+
+            if media_list and hasattr(client, "send_media_group"):
+                res = await client.send_media_group(chat_id=target, media=media_list)
+                if isinstance(res, list) and res:
+                    return res[0].id
+                return getattr(res, "id", 0)
+
+            if caption:
+                res = await client.send_message(chat_id=target, text=caption)
+                return getattr(res, "id", 0)
+            return 0
+        finally:
+            for p in temp_files:
+                try:
+                    if os.path.exists(p):
+                        os.remove(p)
+                except Exception:
+                    pass
+
     async def _dispatch_to_telegram(self, client: Any, job: DeliveryJob) -> int:
         """Call pyrogram client methods and return the sent message ID."""
         data = job.payload_data
@@ -712,38 +878,81 @@ class DurableQueueManager:
         content_mode = data.get("content_mode", "AUTO")
         text = data.get("text", "")
         has_media = data.get("has_media", False)
+        album_ids = data.get("album_message_ids") or [src_msg_id]
+        is_album = bool(data.get("media_group_id")) and len(album_ids) > 1
 
+        caption = text if text else None
+
+        # 1. DIRECT_FORWARD
         if forward_mode == ForwardMode.DIRECT_FORWARD.value:
-            res = await client.forward_messages(
-                chat_id=target,
-                from_chat_id=src_chat,
-                message_ids=[src_msg_id],
-            )
-            if isinstance(res, list):
-                return res[0].id if res else 0
-            return getattr(res, "id", 0)
+            try:
+                res = await client.forward_messages(
+                    chat_id=target,
+                    from_chat_id=src_chat,
+                    message_ids=album_ids,
+                )
+                if isinstance(res, list) and res:
+                    return res[0].id
+                return getattr(res, "id", 0)
+            except Exception as fwd_err:
+                err_str = str(fwd_err).lower()
+                if "restrict" in err_str or "protect" in err_str or "forbidden" in err_str or "chatforwardsrestricted" in err_str:
+                    logger.info("Direct forward restricted (%s), falling back to copy/reupload", fwd_err)
+                else:
+                    raise
 
-        # COPY_MESSAGE path
+        # 2. ALBUM HANDLING (COPY / REUPLOAD)
+        if is_album:
+            try:
+                if hasattr(client, "copy_media_group"):
+                    res = await client.copy_media_group(
+                        chat_id=target,
+                        from_chat_id=src_chat,
+                        message_id=src_msg_id,
+                        captions=caption,
+                    )
+                    if isinstance(res, list) and res:
+                        return res[0].id
+                    return getattr(res, "id", 0)
+            except Exception as grp_err:
+                logger.info("copy_media_group failed (%s), falling back to re-upload bypass", grp_err)
+
+            return await self._reupload_album(client, src_chat, album_ids, target, caption)
+
+        # 3. TEXT_ONLY mode
         if content_mode == "TEXT_ONLY":
             res = await client.send_message(chat_id=target, text=text or "...")
             return getattr(res, "id", 0)
 
+        # 4. MEDIA_ONLY mode
         if content_mode == "MEDIA_ONLY":
             if has_media:
-                res = await client.copy_message(chat_id=target, from_chat_id=src_chat, message_id=src_msg_id)
-                return getattr(res, "id", 0)
+                try:
+                    res = await client.copy_message(chat_id=target, from_chat_id=src_chat, message_id=src_msg_id)
+                    return getattr(res, "id", 0)
+                except Exception as c_err:
+                    err_str = str(c_err).lower()
+                    if "restrict" in err_str or "protect" in err_str or "forbidden" in err_str or "chatforwardsrestricted" in err_str:
+                        return await self._reupload_media(client, src_chat, src_msg_id, target, None, data.get("media_type", ""))
+                    raise
             return 0
 
-        # AUTO / TEXT_AND_MEDIA
+        # 5. AUTO / TEXT_AND_MEDIA mode
         if has_media:
-            caption = text if text else None
-            res = await client.copy_message(
-                chat_id=target,
-                from_chat_id=src_chat,
-                message_id=src_msg_id,
-                caption=caption,
-            )
-            return getattr(res, "id", 0)
+            try:
+                res = await client.copy_message(
+                    chat_id=target,
+                    from_chat_id=src_chat,
+                    message_id=src_msg_id,
+                    caption=caption,
+                )
+                return getattr(res, "id", 0)
+            except Exception as c_err:
+                err_str = str(c_err).lower()
+                if "restrict" in err_str or "protect" in err_str or "forbidden" in err_str or "chatforwardsrestricted" in err_str:
+                    logger.info("copy_message restricted (%s), attempting re-upload bypass", c_err)
+                    return await self._reupload_media(client, src_chat, src_msg_id, target, caption, data.get("media_type", ""))
+                raise
 
         res = await client.send_message(chat_id=target, text=text or "...")
         return getattr(res, "id", 0)

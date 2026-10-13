@@ -86,12 +86,45 @@ class ClientPool:
         self._default = (api_id, api_hash)
         self._clients: Dict[str, ClientState] = {}
         self._credentials: Dict[str, tuple] = {}
+        self._time_limits: Dict[str, float] = {}
         if api_id and api_hash:
             self._credentials["default"] = self._default
         # session_id -> [{handler, event_type}] specs re-installed on reconnect.
         self._handlers: Dict[str, List[dict]] = {}
         self._stopped = False
         self._starting: Dict[str, asyncio.Lock] = {}
+
+    # ------------------------------------------------------------------ #
+    # Account Time-Limit Management
+    # ------------------------------------------------------------------ #
+    def set_time_limit(self, session_id: str, duration_seconds: float) -> None:
+        """Mark a session as time-limited until now + duration_seconds."""
+        until = time.time() + max(1.0, float(duration_seconds))
+        self._time_limits[session_id] = until
+        logger.warning(
+            "[ACCOUNT:TIME_LIMIT] Session %s paused for %.1fs (until %s)",
+            session_id[:8] if session_id else "?",
+            duration_seconds,
+            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(until)),
+        )
+
+    def is_time_limited(self, session_id: str) -> bool:
+        """Return True if session is currently time-limited."""
+        until = self._time_limits.get(session_id, 0.0)
+        if time.time() < until:
+            return True
+        if session_id in self._time_limits:
+            self._time_limits.pop(session_id, None)
+            logger.info("[ACCOUNT:TIME_LIMIT_EXPIRED] Session %s resumed automatically", session_id[:8])
+        return False
+
+    def remaining_limit_seconds(self, session_id: str) -> float:
+        """Return remaining seconds in limit, or 0.0 if not limited."""
+        until = self._time_limits.get(session_id, 0.0)
+        rem = max(0.0, until - time.time())
+        if rem <= 0.0 and session_id in self._time_limits:
+            self._time_limits.pop(session_id, None)
+        return rem
 
     # ------------------------------------------------------------------ #
     # Credentials
