@@ -23,7 +23,7 @@ from collections import defaultdict, deque
 from typing import Any, Optional
 
 from ...domain.entities import MessagePayload
-from ...domain.services import CaptionManagementEngine
+from ...domain.services import CaptionManagementEngine, safe_text_preview
 from ...domain.value_objects import ContentMode, ForwardMode
 from .album_aggregator import AlbumAggregator
 from .client_pool import ClientPool, payload_from_pyrogram
@@ -221,8 +221,8 @@ class MessageDispatcher:
             # pyrogram's MessageHandler already fires for private chats, groups,
             # supergroups AND channel posts — one registration covers every
             # chat type. EditedMessageHandler covers message/channel edits.
-            (self._make_handler("NEW_MESSAGE"), "message"),
-            (self._make_handler("EDITED_MESSAGE"), "edited_message"),
+            (self._make_handler("NEW_MESSAGE", session_id=session_id), "message"),
+            (self._make_handler("EDITED_MESSAGE", session_id=session_id), "edited_message"),
             (self._make_deleted_handler(), "deleted_messages"),
         ]
         for handler, event_type in handlers:
@@ -284,7 +284,7 @@ class MessageDispatcher:
                 logger.exception("Error in deleted_messages handler")
         return _del_handler
 
-    def _make_handler(self, trigger: str):
+    def _make_handler(self, trigger: str, session_id: Optional[str] = None):
         async def _handler(client, message):
             try:
                 payload: MessagePayload = payload_from_pyrogram(message)
@@ -292,9 +292,9 @@ class MessageDispatcher:
                 logger.error("payload translate failed: %s", tr_err, exc_info=True)
                 return
 
-            sid = getattr(client, "name", "") or getattr(client, "session_id", "session")
+            sid = str(session_id or getattr(client, "name", "") or getattr(client, "session_id", "session") or "session")
             eff_text = str(payload.effective_text or "")
-            text_preview = (eff_text[:60] + "...") if len(eff_text) > 60 else eff_text
+            text_preview = safe_text_preview(eff_text, 60)
             logger.info(
                 "[DISPATCH IN %s] %s chat=%s (%s) msg_id=%s media=%s text=%r",
                 sid[:12], trigger, payload.chat_title or "", payload.chat_id, payload.message_id,
@@ -321,7 +321,7 @@ class MessageDispatcher:
 
             # Album: bounded LRU aggregator with TTL
             if payload.media_group_id and trigger == "NEW_MESSAGE":
-                sid = getattr(client, "session_id", str(client))
+                sid = str(session_id or getattr(client, "session_id", str(client) or "session"))
                 await self._album_aggregator.ingest(sid, payload)
                 return
 
