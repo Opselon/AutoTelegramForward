@@ -29,13 +29,9 @@ type isoRulesClient struct {
 
 func (f *isoRulesClient) ListRules(ctx context.Context, in *pb.ListRulesRequest, opts ...grpc.CallOption) (*pb.ListRulesResponse, error) {
 	f.got = append(f.got, in.OwnerUserId)
-	out := &pb.ListRulesResponse{}
-	for _, r := range f.rules {
-		if r.OwnerUserId == in.OwnerUserId {
-			out.Rules = append(out.Rules, r)
-		}
-	}
-	return out, nil
+	// Deliberately return mixed-tenant rows: the handler must enforce the
+	// boundary even if a downstream service accidentally ignores OwnerUserId.
+	return &pb.ListRulesResponse{Rules: f.rules}, nil
 }
 
 func (f *isoRulesClient) UpdateRule(ctx context.Context, in *pb.UpdateRuleRequest, opts ...grpc.CallOption) (*pb.ForwardRule, error) {
@@ -54,13 +50,7 @@ type isoFilterClient struct {
 
 func (f *isoFilterClient) ListFilters(ctx context.Context, in *pb.ListFiltersRequest, opts ...grpc.CallOption) (*pb.ListFiltersResponse, error) {
 	f.got = append(f.got, in.OwnerUserId)
-	out := &pb.ListFiltersResponse{}
-	for _, fl := range f.filters {
-		if fl.OwnerUserId == in.OwnerUserId {
-			out.Filters = append(out.Filters, fl)
-		}
-	}
-	return out, nil
+	return &pb.ListFiltersResponse{Filters: f.filters}, nil
 }
 
 func (f *isoFilterClient) UpdateFilter(ctx context.Context, in *pb.UpdateFilterRequest, opts ...grpc.CallOption) (*pb.FilterRule, error) {
@@ -79,13 +69,7 @@ type isoAIClient struct {
 
 func (f *isoAIClient) ListAIConfigs(ctx context.Context, in *pb.ListAIConfigsRequest, opts ...grpc.CallOption) (*pb.ListAIConfigsResponse, error) {
 	f.got = append(f.got, in.OwnerUserId)
-	out := &pb.ListAIConfigsResponse{}
-	for _, c := range f.configs {
-		if c.OwnerUserId == in.OwnerUserId {
-			out.Configs = append(out.Configs, c)
-		}
-	}
-	return out, nil
+	return &pb.ListAIConfigsResponse{Configs: f.configs}, nil
 }
 
 func (f *isoAIClient) UpdateAIConfig(ctx context.Context, in *pb.UpdateAIConfigRequest, opts ...grpc.CallOption) (*pb.AIConfig, error) {

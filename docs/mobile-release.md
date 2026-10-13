@@ -13,6 +13,11 @@ under `android.artifacts`):
 | `AutoTelegramForward-<ver>-android-x86_64.apk` | x86_64 (emulators)     |
 | `AutoTelegramForward-<ver>-android-bundle.aab` | Play Store upload      |
 
+Production release builds require four GitHub Actions secrets: `ANDROID_KEYSTORE_BASE64`
+(base64-encoded release keystore), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+and `ANDROID_KEY_PASSWORD`. The workflow fails closed when any is absent; it never
+silently signs a published release with the ephemeral runner debug key.
+
 Install: download the APK matching your device, enable install-from-unknown-
 sources if prompted, and open the file. Verify first if you like:
 
