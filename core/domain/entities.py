@@ -636,7 +636,10 @@ class MessagePayload:
 
     @property
     def effective_text(self) -> str:
-        return self.caption if (self.has_media and self.caption) else self.text
+        raw = self.caption if (self.has_media and self.caption) else self.text
+        if raw is None:
+            return ""
+        return str(raw) if type(raw) is str else f"{raw}"
 
 
 @dataclass

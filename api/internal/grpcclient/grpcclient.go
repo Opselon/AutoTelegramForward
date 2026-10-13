@@ -1,19 +1,29 @@
 package grpcclient
 
 import (
-	"time"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	pb "autoforward/proto"
 )
 
-// Dial connects to the Python core's gRPC server.
+// Dial connects to the Python core's gRPC server with automatic retry policy.
 func Dial(addr string) (*grpc.ClientConn, error) {
+	retryConfig := `{
+		"methodConfig": [{
+			"name": [{"service": ""}],
+			"retryPolicy": {
+				"maxAttempts": 5,
+				"initialBackoff": "0.1s",
+				"maxBackoff": "1s",
+				"backoffMultiplier": 2.0,
+				"retryableStatusCodes": ["UNAVAILABLE"]
+			}
+		}]
+	}`
 	return grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithTimeout(5*time.Second),
+		grpc.WithDefaultServiceConfig(retryConfig),
 	)
 }
 

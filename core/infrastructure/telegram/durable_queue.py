@@ -456,6 +456,10 @@ class DurableQueueManager:
 
         # Attempt delivery to Telegram
         t0 = time.monotonic()
+        logger.info(
+            "[PIPELINE:DISPATCH] [%s] Dispatching rule=%s src=%s:%s -> tgt=%s (session=%s, attempt=%d)",
+            worker_id, job.rule_id[:8], job.source_chat_id, job.source_message_id, target, session_id, job.attempts + 1,
+        )
         try:
             target_msg_id = await self._dispatch_to_telegram(client, job)
             send_duration = time.monotonic() - t0
@@ -467,14 +471,6 @@ class DurableQueueManager:
                 self._queue_wait_sum += max(0.0, time.time() - float(job.created_at))
 
             # Delivery confirmed!
-            # v12.3 (ACID atomicity/durability): record the mapping BEFORE
-            # marking the job. Both are separate commits, so a crash between
-            # them leaves a window — mark_sent first leaves a SENT job with a
-            # PENDING mapping forever (the job is never replayed, so nothing
-            # ever fixes the mapping). Mapping first leaves a SENT mapping with
-            # a CLAIMED job, which the next worker/lease-recovery pass settles
-            # normally. Either way the message is not re-sent (Telegram already
-            # has it); this only decides which half-state is self-healing.
             await self._map.update_delivery(
                 rule_id=job.rule_id,
                 source_chat_id=job.source_chat_id,
@@ -483,11 +479,9 @@ class DurableQueueManager:
                 target_message_id=target_msg_id,
                 status=DeliveryStatus.SENT,
             )
-            # v14: the SENT marker is committed once per batch by the worker
-            # loop (mark_sent_batch) rather than here per job.
             self.stats["sent"] += 1
             logger.info(
-                "[%s] Sent rule=%s src=%s:%s -> tgt=%s msg_id=%s (%.2fs)",
+                "[PIPELINE:DELIVERED] [%s] Sent rule=%s src=%s:%s -> tgt=%s msg_id=%s (took %.2fs)",
                 worker_id,
                 job.rule_id[:8],
                 job.source_chat_id,

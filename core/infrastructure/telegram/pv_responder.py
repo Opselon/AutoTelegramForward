@@ -74,54 +74,71 @@ class AIPVResponder:
         self._ai_factory = ai_factory
         self._db = db
         self._last_replied_ts: Dict[str, float] = {}
-        self._cached_config: PVResponderConfig = self._load_config()
-        self._config_mtime: float = CONFIG_PATH.stat().st_mtime if CONFIG_PATH.exists() else 0.0
+        self._user_configs: Dict[int, PVResponderConfig] = {}
 
     @property
     def config(self) -> PVResponderConfig:
-        try:
-            if CONFIG_PATH.exists():
-                mtime = CONFIG_PATH.stat().st_mtime
-                if mtime != self._config_mtime:
-                    self._config_mtime = mtime
-                    data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-                    self._cached_config = PVResponderConfig.from_dict(data)
-        except Exception as exc:
-            logger.warning("Failed to refresh PV responder config from file: %s", exc)
-        return self._cached_config
+        return self.get_config_for_user(0)
 
     @config.setter
     def config(self, cfg: PVResponderConfig) -> None:
-        self._cached_config = cfg
+        self.save_config_for_user(0, cfg)
+
+    def _user_config_path(self, user_id: int) -> Path:
+        if not user_id:
+            return CONFIG_PATH
+        return CONFIG_PATH.parent / f"pv_responder_config_{user_id}.json"
+
+    def get_config_for_user(self, user_id: int = 0) -> PVResponderConfig:
+        if user_id in self._user_configs:
+            return self._user_configs[user_id]
+        path = self._user_config_path(user_id)
+        try:
+            if path.exists() and path.stat().st_size > 0:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                cfg = PVResponderConfig.from_dict(data)
+                self._user_configs[user_id] = cfg
+                return cfg
+        except Exception as exc:
+            logger.warning("Failed to load PV responder config for user %s: %s", user_id, exc)
+        cfg = PVResponderConfig()
+        self._user_configs[user_id] = cfg
+        return cfg
+
+    def save_config_for_user(self, user_id: int, cfg: PVResponderConfig) -> None:
+        self._user_configs[user_id] = cfg
+        path = self._user_config_path(user_id)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(cfg.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logger.error("Failed to save PV responder config for user %s: %s", user_id, exc)
 
     def _load_config(self) -> PVResponderConfig:
-        try:
-            if CONFIG_PATH.exists():
-                data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-                return PVResponderConfig.from_dict(data)
-        except Exception as exc:
-            logger.warning("Failed to load PV responder config from file: %s", exc)
-        return PVResponderConfig()
+        return self.get_config_for_user(0)
 
     def save_config(self, cfg: PVResponderConfig) -> None:
-        self._cached_config = cfg
-        try:
-            CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            CONFIG_PATH.write_text(json.dumps(cfg.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-            self._config_mtime = CONFIG_PATH.stat().st_mtime
-        except Exception as exc:
-            logger.error("Failed to save PV responder config to file: %s", exc)
+        self.save_config_for_user(0, cfg)
 
-    async def get_active_ai_config(self) -> Optional[Any]:
+    async def get_active_ai_config(self, user_id: int = 0) -> Optional[Any]:
         if not self._ai_repo:
             return None
-        if self.config.ai_config_id:
-            cfg = await self._ai_repo.get(self.config.ai_config_id)
-            if cfg and cfg.is_enabled:
-                return cfg
-        # Fallback to first enabled AI config
+        cfg = self.get_config_for_user(user_id)
+        if cfg.ai_config_id:
+            ai_c = (
+                await self._ai_repo.get_owned(cfg.ai_config_id, user_id)
+                if user_id and hasattr(self._ai_repo, "get_owned")
+                else await self._ai_repo.get(cfg.ai_config_id)
+            )
+            if ai_c and ai_c.is_enabled:
+                return ai_c
+        # Fallback to user's first enabled AI config
         try:
-            cfgs = await self._ai_repo.list_all()
+            cfgs = (
+                await self._ai_repo.list_by_owner(user_id)
+                if user_id and hasattr(self._ai_repo, "list_by_owner")
+                else await self._ai_repo.list_all()
+            )
             for c in cfgs:
                 if c.is_enabled:
                     return c
@@ -129,9 +146,23 @@ class AIPVResponder:
             pass
         return None
 
+    def _get_owner_user_id(self, client: Any) -> int:
+        session_id = getattr(client, "session_id", None) or getattr(client, "name", None)
+        if not session_id or not self._db:
+            return 0
+        try:
+            row = self._db.query_one("SELECT owner_user_id FROM sessions WHERE id=?", (str(session_id),))
+            if row and row["owner_user_id"]:
+                return int(row["owner_user_id"])
+        except Exception:
+            pass
+        return 0
+
     async def handle_message(self, client: Any, message: Any) -> bool:
         """Handle incoming private message on a user account."""
-        if not self.config.enabled:
+        owner_user_id = self._get_owner_user_id(client)
+        user_config = self.get_config_for_user(owner_user_id)
+        if not user_config.enabled:
             return False
 
         # 1. Validation checks
@@ -146,7 +177,7 @@ class AIPVResponder:
         if getattr(from_user, "is_self", False):
             return False
 
-        if self.config.ignore_bots and getattr(from_user, "is_bot", False):
+        if user_config.ignore_bots and getattr(from_user, "is_bot", False):
             return False
 
         text = (message.text or message.caption or "").strip()
@@ -156,13 +187,13 @@ class AIPVResponder:
         user_key = f"{getattr(client, 'session_id', 'client')}:{from_user.id}"
         now = time.time()
         last_ts = self._last_replied_ts.get(user_key, 0.0)
-        if now - last_ts < self.config.cooldown_seconds:
-            logger.debug("PV Responder: skipping %s due to cooldown (%.1fs < %ds)", user_key, now - last_ts, self.config.cooldown_seconds)
+        if now - last_ts < user_config.cooldown_seconds:
+            logger.debug("PV Responder: skipping %s due to cooldown (%.1fs < %ds)", user_key, now - last_ts, user_config.cooldown_seconds)
             return False
 
-        ai_cfg = await self.get_active_ai_config()
+        ai_cfg = await self.get_active_ai_config(owner_user_id)
         if not ai_cfg:
-            logger.warning("PV Responder is enabled but no active AI config was found")
+            logger.warning("PV Responder is enabled for user %s but no active AI config was found", owner_user_id)
             return False
 
         # 2. Extract recent conversation context for natural replies
@@ -170,7 +201,7 @@ class AIPVResponder:
         try:
             chat_id = chat.id
             history_msgs = []
-            async for m in client.get_chat_history(chat_id, limit=self.config.history_limit):
+            async for m in client.get_chat_history(chat_id, limit=user_config.history_limit):
                 if m.id == message.id:
                     continue
                 content = (m.text or m.caption or "").strip()
@@ -183,14 +214,14 @@ class AIPVResponder:
             logger.debug("Could not fetch chat history for context: %s", exc)
 
         # Build messages payload
-        messages = [{"role": "system", "content": self.config.persona_prompt}]
+        messages = [{"role": "system", "content": user_config.persona_prompt}]
         messages.extend(conversation_history)
         messages.append({"role": "user", "content": text})
 
         # 3. Simulated human typing delay
         calc_delay = min(
-            max(len(text) * 0.03 + random.uniform(1.8, 3.2), self.config.typing_delay_min),
-            self.config.typing_delay_max,
+            max(len(text) * 0.03 + random.uniform(1.8, 3.2), user_config.typing_delay_min),
+            user_config.typing_delay_max,
         )
 
         try:

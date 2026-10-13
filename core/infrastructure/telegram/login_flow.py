@@ -364,6 +364,7 @@ class LoginFlowManager:
             session = await self._sessions.create(
                 phone_number=state.phone_number,
                 session_string_encrypted=session_string,
+                owner_user_id=int(user_id),
             )
             session.user_id = str(me.id)
             session.username = me.username or ""

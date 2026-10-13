@@ -6,7 +6,7 @@ SRP: each class owns one business capability; CQRS-ish split per aggregate.
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from ..domain.entities import (
     AIConfig,
@@ -68,8 +68,12 @@ class SessionUseCases:
         return await self._repo.get_by_id(session_id)
 
     def _owns(self, entity_owner: int, owner_user_id: Optional[int]) -> bool:
-        # v12.1: shared IDOR guard — None keeps the legacy/admin path.
-        return owner_user_id is None or int(entity_owner or 0) == int(owner_user_id or 0)
+        # owner_user_id=None keeps admin/system scope; zero or empty fails closed.
+        if owner_user_id is None:
+            return True
+        if not owner_user_id:
+            return False
+        return int(entity_owner or 0) == int(owner_user_id)
 
     async def get_owned(self, session_id: str, owner_user_id: Optional[int]) -> Optional[TelegramSession]:
         s = await self._repo.get_by_id(session_id)
@@ -108,8 +112,9 @@ class SessionUseCases:
 # --------------------------------------------------------------------------- #
 
 class ForwardRuleUseCases:
-    def __init__(self, repo: IForwardRuleRepository) -> None:
+    def __init__(self, repo: IForwardRuleRepository, session_repo: Optional[Any] = None) -> None:
         self._repo = repo
+        self._session_repo = session_repo
 
     @staticmethod
     def _normalize_chat_id(val: str) -> str:
@@ -169,6 +174,10 @@ class ForwardRuleUseCases:
         )
         if not ok:
             raise ValueError(f"Invalid rule endpoints: {err}")
+        if self._session_repo and rule.session_id and getattr(rule, "owner_user_id", 0):
+            sess = await self._session_repo.get_by_id(rule.session_id)
+            if sess and getattr(sess, "owner_user_id", 0) and int(sess.owner_user_id) != int(rule.owner_user_id):
+                raise PermissionError(f"Session {rule.session_id} not owned by {rule.owner_user_id}")
         return await self._repo.add(rule)
 
     async def update(self, rule: ForwardRule, expected_version: Optional[int] = None) -> ForwardRule:
@@ -180,6 +189,10 @@ class ForwardRuleUseCases:
         )
         if not ok:
             raise ValueError(f"Invalid rule endpoints: {err}")
+        if self._session_repo and rule.session_id and getattr(rule, "owner_user_id", 0):
+            sess = await self._session_repo.get_by_id(rule.session_id)
+            if sess and getattr(sess, "owner_user_id", 0) and int(sess.owner_user_id) != int(rule.owner_user_id):
+                raise PermissionError(f"Session {rule.session_id} not owned by {rule.owner_user_id}")
         rule.mark_updated()
         return await self._repo.update(rule, expected_version=expected_version)
 
@@ -215,7 +228,12 @@ class ForwardRuleUseCases:
     # any other value must match the entity or the call is refused.
 
     def _owns(self, entity_owner: int, owner_user_id: Optional[int]) -> bool:
-        return owner_user_id is None or int(entity_owner or 0) == int(owner_user_id or 0)
+        # owner_user_id=None keeps admin/system scope; zero or empty fails closed.
+        if owner_user_id is None:
+            return True
+        if not owner_user_id:
+            return False
+        return int(entity_owner or 0) == int(owner_user_id)
 
     async def get_owned(self, rule_id: str, owner_user_id: Optional[int]) -> Optional[ForwardRule]:
         r = await self._repo.get_by_id(rule_id)
@@ -274,8 +292,12 @@ class FilterRuleUseCases:
         return await self._repo.list_by_owner(owner_user_id)
 
     def _owns(self, entity_owner: int, owner_user_id: Optional[int]) -> bool:
-        # v12.1: shared IDOR guard — None keeps the legacy/admin path.
-        return owner_user_id is None or int(entity_owner or 0) == int(owner_user_id or 0)
+        # owner_user_id=None keeps admin/system scope; zero or empty fails closed.
+        if owner_user_id is None:
+            return True
+        if not owner_user_id:
+            return False
+        return int(entity_owner or 0) == int(owner_user_id)
 
     async def get_owned(self, filter_id: str, owner_user_id: Optional[int]) -> Optional[FilterRule]:
         f = await self._repo.get_by_id(filter_id)
@@ -351,8 +373,12 @@ class AIConfigUseCases:
         return await self._repo.list_by_owner(owner_user_id)
 
     def _owns(self, entity_owner: int, owner_user_id: Optional[int]) -> bool:
-        # v12.1: shared IDOR guard — None keeps the legacy/admin path.
-        return owner_user_id is None or int(entity_owner or 0) == int(owner_user_id or 0)
+        # owner_user_id=None keeps admin/system scope; zero or empty fails closed.
+        if owner_user_id is None:
+            return True
+        if not owner_user_id:
+            return False
+        return int(entity_owner or 0) == int(owner_user_id)
 
     async def get_owned(self, config_id: str, owner_user_id: Optional[int]) -> Optional[AIConfig]:
         c = await self._repo.get_by_id(config_id)
@@ -443,8 +469,12 @@ class ApiCredentialUseCases:
         return await self._repo.get_by_id(cred_id)
 
     def _owns(self, entity_owner: int, owner_user_id):
-        # v12.1: shared IDOR guard — None keeps the legacy/admin path.
-        return owner_user_id is None or int(entity_owner or 0) == int(owner_user_id or 0)
+        # owner_user_id=None keeps admin/system scope; zero or empty fails closed.
+        if owner_user_id is None:
+            return True
+        if not owner_user_id:
+            return False
+        return int(entity_owner or 0) == int(owner_user_id)
 
     async def get_owned(self, cred_id: str, owner_user_id):
         c = await self._repo.get_by_id(cred_id)

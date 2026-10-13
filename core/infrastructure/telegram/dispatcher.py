@@ -293,11 +293,13 @@ class MessageDispatcher:
                 return
 
             sid = getattr(client, "name", "") or getattr(client, "session_id", "session")
+            eff_text = str(payload.effective_text or "")
+            text_preview = (eff_text[:60] + "...") if len(eff_text) > 60 else eff_text
             logger.info(
                 "[DISPATCH IN %s] %s chat=%s (%s) msg_id=%s media=%s text=%r",
                 sid[:12], trigger, payload.chat_title or "", payload.chat_id, payload.message_id,
                 getattr(payload.media_type, "value", payload.media_type),
-                payload.effective_text[:60] if payload.effective_text else "",
+                text_preview,
             )
 
             # AI PV Auto-Reply for direct messages on user accounts
