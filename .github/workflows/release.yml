@@ -321,7 +321,6 @@ jobs:
   # ------------------------------------------------------------------------ #
   docker:
     needs: meta
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -630,7 +629,7 @@ jobs:
   # ------------------------------------------------------------------------ #
   manifest:
     needs: [meta, binaries, api-binaries, docker, portable, mobile-android, ios-simulator, signed-ios]
-    if: always() && needs.meta.result == 'success'
+    if: always() && needs.meta.result == 'success' && needs.docker.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -739,7 +738,7 @@ jobs:
     # does not boot and serve HTTP must never publish. Its health assertion
     # accepts healthy OR degraded (placeholder CI credentials) but fails on
     # a missing/unparseable services payload.
-    needs: [meta, binaries, api-binaries, portable, mobile-android, ios-simulator, manifest, clean-install]
+    needs: [meta, binaries, api-binaries, docker, portable, mobile-android, ios-simulator, manifest, clean-install]
     if: |
       always() &&
       needs.meta.result == 'success' &&
@@ -747,6 +746,8 @@ jobs:
       needs.api-binaries.result != 'failure' &&
       needs.mobile-android.result != 'failure' &&
       needs.manifest.result == 'success' &&
+      needs.docker.result == 'success' &&
+      needs.ios-simulator.result == 'success' &&
       needs.clean-install.result == 'success'
     runs-on: ubuntu-latest
     steps:

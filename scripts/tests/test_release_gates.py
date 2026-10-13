@@ -160,3 +160,7 @@ def test_release_workflow_gates():
     assert "ProductVersion=${{ needs.meta.outputs.version }}" in workflow_text
     assert "CommitSHA=${GITHUB_SHA}" in workflow_text
     assert "d.get('status') == 'healthy'" in workflow_text
+    publish_text = workflow_text[workflow_text.index("  publish:"):]
+    assert "needs.docker.result == 'success'" in publish_text
+    assert "needs.ios-simulator.result == 'success'" in publish_text
+    assert "continue-on-error: true" not in workflow_text[workflow_text.index("  docker:"):workflow_text.index("  portable:")]
