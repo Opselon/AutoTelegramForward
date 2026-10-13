@@ -387,4 +387,52 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(req),
     }),
+
+  // ------------------------------------------------- Admin Control Plane
+  adminGetOverview: () => fetchJson<any>(`${API_BASE}/admin/overview`),
+  adminListUsers: (limit = 50, offset = 0) =>
+    fetchJson<{ users: any[]; total: number }>(`${API_BASE}/admin/users?limit=${limit}&offset=${offset}`),
+  adminSetUserStatus: (id: number | string, status: string) =>
+    fetchJson<{ success: boolean; message: string }>(`${API_BASE}/admin/users/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    }),
+  adminBroadcast: (message: string, target = 'all') =>
+    fetchJson<{ success: boolean; broadcast_id: string; total_recipients: number; message: string }>(
+      `${API_BASE}/admin/broadcast`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ message, target }),
+      },
+    ),
+  adminGetSettings: () => fetchJson<any>(`${API_BASE}/admin/settings`),
+  adminSaveSettings: (settings: {
+    force_sub_enabled: boolean
+    force_sub_channel: string
+    web_url: string
+    registration_open: boolean
+  }) =>
+    fetchJson<{ success: boolean; message: string }>(`${API_BASE}/admin/settings`, {
+      method: 'POST',
+      body: JSON.stringify(settings),
+    }),
+  adminListAdmins: () => fetchJson<{ admins: any[] }>(`${API_BASE}/admin/admins`),
+  adminAddAdmin: (userId: number) =>
+    fetchJson<{ success: boolean; message: string }>(`${API_BASE}/admin/admins`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
+    }),
+  adminRemoveAdmin: (userId: number | string) =>
+    fetchJson<{ success: boolean; message: string }>(`${API_BASE}/admin/admins/${userId}`, {
+      method: 'DELETE',
+    }),
+  adminListExtensions: () => fetchJson<{ extensions: any[] }>(`${API_BASE}/admin/extensions`),
+
+  // ------------------------------------------------- Client Self-Management
+  clientGetSettings: () => fetchJson<any>(`${API_BASE}/client/settings`),
+  clientSaveCredentials: (apiId: number, apiHash: string) =>
+    fetchJson<{ success: boolean; message: string }>(`${API_BASE}/client/credentials`, {
+      method: 'POST',
+      body: JSON.stringify({ api_id: apiId, api_hash: apiHash }),
+    }),
 }

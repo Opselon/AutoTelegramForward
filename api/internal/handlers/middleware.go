@@ -54,3 +54,17 @@ func (h *Handlers) RequireAuth(inner http.Handler) http.Handler {
 func (h *Handlers) StripPrefix(inner http.Handler) http.Handler {
 	return http.StripPrefix("/api/auth", inner)
 }
+
+// RequireAdmin ensures that the authenticated caller has server-verified IsAdmin true.
+func (h *Handlers) RequireAdmin(inner http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := identity(r)
+		if id == nil || !id.IsAdmin || id.UserID <= 0 {
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"error": "admin access required",
+			})
+			return
+		}
+		inner.ServeHTTP(w, r)
+	})
+}

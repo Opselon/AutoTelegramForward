@@ -756,3 +756,127 @@ message GetAccountRequest {
   int64 user_id = 1;
   string username = 2;        // either user_id or username
 }
+
+// -----------------------------------------------------------------------------
+// Admin & Client Control Plane
+// -----------------------------------------------------------------------------
+
+message AdminOverviewRequest {}
+message AdminOverviewResponse {
+  bool core_online = 1;
+  int64 uptime_seconds = 2;
+  int64 total_users = 3;
+  int64 active_rules = 4;
+  int64 queue_pending = 5;
+  int64 recent_errors = 6;
+  string system_status = 7;
+}
+
+message AdminUser {
+  int64 user_id = 1;
+  string username = 2;
+  string plan = 3;
+  string status = 4;
+  bool is_admin = 5;
+  int64 rules_count = 6;
+  int64 created_at = 7;
+}
+
+message AdminListUsersRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+message AdminListUsersResponse {
+  repeated AdminUser users = 1;
+  int64 total = 2;
+}
+
+message AdminSetUserStatusRequest {
+  int64 user_id = 1;
+  string status = 2;
+}
+
+message AdminBroadcastRequest {
+  int64 initiator_user_id = 1;
+  string message_text = 2;
+  string target = 3;
+}
+
+message AdminBroadcastResponse {
+  bool success = 1;
+  string broadcast_id = 2;
+  int64 total_recipients = 3;
+  string message = 4;
+}
+
+message AdminGetSettingsRequest {}
+message AdminSettingsResponse {
+  bool force_sub_enabled = 1;
+  string force_sub_channel = 2;
+  string web_url = 3;
+  bool registration_open = 4;
+}
+
+message AdminSaveSettingsRequest {
+  bool force_sub_enabled = 1;
+  string force_sub_channel = 2;
+  string web_url = 3;
+  bool registration_open = 4;
+}
+
+message AdminAdministrator {
+  int64 user_id = 1;
+  string role = 2;
+  int64 added_by = 3;
+  int64 created_at = 4;
+}
+
+message AdminListAdminsRequest {}
+message AdminListAdminsResponse {
+  repeated AdminAdministrator admins = 1;
+}
+
+message AdminAddAdminRequest {
+  int64 user_id = 1;
+  int64 added_by = 2;
+}
+
+message AdminRemoveAdminRequest {
+  int64 user_id = 1;
+  int64 removed_by = 2;
+}
+
+message ClientSettingsRequest {
+  int64 user_id = 1;
+}
+
+message ClientSettingsResponse {
+  int64 user_id = 1;
+  string plan = 2;
+  int64 quota_forwarded = 3;
+  string language = 4;
+  bool has_custom_credentials = 5;
+  int64 api_id = 6;
+  string api_hash_masked = 7;
+}
+
+message ClientSaveCredentialsRequest {
+  int64 user_id = 1;
+  int64 api_id = 2;
+  string api_hash = 3;
+}
+
+service AdminControlService {
+  rpc GetOverview(AdminOverviewRequest) returns (AdminOverviewResponse);
+  rpc ListUsers(AdminListUsersRequest) returns (AdminListUsersResponse);
+  rpc SetUserStatus(AdminSetUserStatusRequest) returns (StatusResponse);
+  rpc Broadcast(AdminBroadcastRequest) returns (AdminBroadcastResponse);
+  rpc GetSettings(AdminGetSettingsRequest) returns (AdminSettingsResponse);
+  rpc SaveSettings(AdminSaveSettingsRequest) returns (StatusResponse);
+  rpc ListAdmins(AdminListAdminsRequest) returns (AdminListAdminsResponse);
+  rpc AddAdmin(AdminAddAdminRequest) returns (StatusResponse);
+  rpc RemoveAdmin(AdminRemoveAdminRequest) returns (StatusResponse);
+  rpc GetClientSettings(ClientSettingsRequest) returns (ClientSettingsResponse);
+  rpc SaveClientCredentials(ClientSaveCredentialsRequest) returns (StatusResponse);
+}

@@ -496,6 +496,30 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_channel_cursors_updated
         ON channel_cursors(updated_at);
     """,
+    16: """
+    -- v16: Administrative Control Plane, Multi-Admin Governance & Broadcast Queue.
+    CREATE TABLE IF NOT EXISTS administrators (
+        user_id INTEGER PRIMARY KEY,
+        role TEXT NOT NULL DEFAULT 'admin',  -- 'owner' | 'admin'
+        added_by INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_administrators_role ON administrators(role);
+
+    CREATE TABLE IF NOT EXISTS broadcast_queue (
+        id TEXT PRIMARY KEY,
+        initiator_user_id INTEGER NOT NULL,
+        message_text TEXT NOT NULL,
+        target TEXT NOT NULL DEFAULT 'all',  -- 'all' | 'free' | 'vip'
+        status TEXT NOT NULL DEFAULT 'pending', -- pending | running | completed | failed | cancelled
+        total_recipients INTEGER NOT NULL DEFAULT 0,
+        sent_count INTEGER NOT NULL DEFAULT 0,
+        failed_count INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_broadcast_status ON broadcast_queue(status, created_at);
+    """,
 }
 
 # Columns added by additive migrations that must also work on a table carried
@@ -508,6 +532,7 @@ _ADDITIVE_COLUMNS = (
     # through a backup export, and overwrite another tenant's prompt templates.
     ("api_credentials", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_api_credentials_owner"),
     ("prompt_templates", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_prompt_templates_owner"),
+    ("users", "status", "TEXT NOT NULL DEFAULT 'active'", "idx_users_status"),
 )
 
 

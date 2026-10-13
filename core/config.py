@@ -12,6 +12,7 @@ class Config:
     api_id: int = 0
     api_hash: str = ""
     bot_token: str = ""
+    admin_user_id: int = 0          # immutable numeric ID of the primary owner administrator
     admin_ids: list = field(default_factory=list)
     master_key: str = "change-me"
     db_path: str = "data/atf.db"
@@ -90,8 +91,48 @@ class Config:
             val = os.environ.get(env_key)
             if val:
                 setattr(cfg, attr, cast(val))
-        admins = os.environ.get("ATF_ADMIN_IDS")
+        admins = os.environ.get("ATF_ADMIN_IDS") or os.environ.get("ADMIN_IDS")
         if admins:
-            cfg.admin_ids = [int(x) for x in admins.split(",") if x.strip().isdigit()]
+            parsed_admins = []
+            for part in admins.split(","):
+                part = part.strip()
+                if part.isdigit():
+                    parsed_admins.append(int(part))
+            if parsed_admins:
+                cfg.admin_ids = parsed_admins
+
+        owner_admin_env = os.environ.get("ADMIN_USER_ID") or os.environ.get("ATF_ADMIN_USER_ID")
+        if owner_admin_env:
+            cleaned = owner_admin_env.strip()
+            if cleaned.isdigit() and int(cleaned) > 0:
+                cfg.admin_user_id = int(cleaned)
+                if cfg.admin_user_id not in cfg.admin_ids:
+                    cfg.admin_ids.insert(0, cfg.admin_user_id)
+            else:
+                raise ValueError(
+                    f"ADMIN_USER_ID must be a positive integer Telegram user ID, got {owner_admin_env!r}"
+                )
+
+        # Standard Telegram Bot Token aliases
+        bot_token_env = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN")
+        if bot_token_env and not cfg.bot_token:
+            cfg.bot_token = bot_token_env.strip()
+
         cfg.disable_bot = os.environ.get("ATF_DISABLE_BOT", "").lower() in ("1", "true", "yes")
         return cfg
+
+    def validate(self) -> None:
+        """Validate startup configuration; fail fast on essential missing values."""
+        if not self.disable_bot:
+            if not self.bot_token:
+                raise ValueError(
+                    "TELEGRAM_BOT_TOKEN (or ATF_BOT_TOKEN) is required when bot is enabled. "
+                    "Configure it in your .env or environment before starting."
+                )
+            token = self.bot_token.strip()
+            if ":" not in token or not token.split(":", 1)[0].isdigit():
+                raise ValueError(
+                    "Invalid TELEGRAM_BOT_TOKEN format. Expected '<bot_id>:<secret>' issued by @BotFather."
+                )
+        if self.admin_user_id < 0:
+            raise ValueError("ADMIN_USER_ID must be a positive integer Telegram numeric ID.")

@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import autoforward_pb2 as autoforward__pb2
+from . import autoforward_pb2 as autoforward__pb2
 
 GRPC_GENERATED_VERSION = '1.84.0'
 GRPC_VERSION = grpc.__version__
@@ -2244,6 +2244,508 @@ class AccountControlService:
             '/autoforward.AccountControlService/GetAccount',
             autoforward__pb2.GetAccountRequest.SerializeToString,
             autoforward__pb2.WebAccount.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class AdminControlServiceStub:
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.GetOverview = channel.unary_unary(
+                '/autoforward.AdminControlService/GetOverview',
+                request_serializer=autoforward__pb2.AdminOverviewRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AdminOverviewResponse.FromString,
+                _registered_method=True)
+        self.ListUsers = channel.unary_unary(
+                '/autoforward.AdminControlService/ListUsers',
+                request_serializer=autoforward__pb2.AdminListUsersRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AdminListUsersResponse.FromString,
+                _registered_method=True)
+        self.SetUserStatus = channel.unary_unary(
+                '/autoforward.AdminControlService/SetUserStatus',
+                request_serializer=autoforward__pb2.AdminSetUserStatusRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.Broadcast = channel.unary_unary(
+                '/autoforward.AdminControlService/Broadcast',
+                request_serializer=autoforward__pb2.AdminBroadcastRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AdminBroadcastResponse.FromString,
+                _registered_method=True)
+        self.GetSettings = channel.unary_unary(
+                '/autoforward.AdminControlService/GetSettings',
+                request_serializer=autoforward__pb2.AdminGetSettingsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AdminSettingsResponse.FromString,
+                _registered_method=True)
+        self.SaveSettings = channel.unary_unary(
+                '/autoforward.AdminControlService/SaveSettings',
+                request_serializer=autoforward__pb2.AdminSaveSettingsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.ListAdmins = channel.unary_unary(
+                '/autoforward.AdminControlService/ListAdmins',
+                request_serializer=autoforward__pb2.AdminListAdminsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AdminListAdminsResponse.FromString,
+                _registered_method=True)
+        self.AddAdmin = channel.unary_unary(
+                '/autoforward.AdminControlService/AddAdmin',
+                request_serializer=autoforward__pb2.AdminAddAdminRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.RemoveAdmin = channel.unary_unary(
+                '/autoforward.AdminControlService/RemoveAdmin',
+                request_serializer=autoforward__pb2.AdminRemoveAdminRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.GetClientSettings = channel.unary_unary(
+                '/autoforward.AdminControlService/GetClientSettings',
+                request_serializer=autoforward__pb2.ClientSettingsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ClientSettingsResponse.FromString,
+                _registered_method=True)
+        self.SaveClientCredentials = channel.unary_unary(
+                '/autoforward.AdminControlService/SaveClientCredentials',
+                request_serializer=autoforward__pb2.ClientSaveCredentialsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+
+
+class AdminControlServiceServicer:
+    """Missing associated documentation comment in .proto file."""
+
+    def GetOverview(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListUsers(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SetUserStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Broadcast(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetSettings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SaveSettings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListAdmins(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddAdmin(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RemoveAdmin(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetClientSettings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SaveClientCredentials(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_AdminControlServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'GetOverview': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetOverview,
+                    request_deserializer=autoforward__pb2.AdminOverviewRequest.FromString,
+                    response_serializer=autoforward__pb2.AdminOverviewResponse.SerializeToString,
+            ),
+            'ListUsers': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListUsers,
+                    request_deserializer=autoforward__pb2.AdminListUsersRequest.FromString,
+                    response_serializer=autoforward__pb2.AdminListUsersResponse.SerializeToString,
+            ),
+            'SetUserStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetUserStatus,
+                    request_deserializer=autoforward__pb2.AdminSetUserStatusRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'Broadcast': grpc.unary_unary_rpc_method_handler(
+                    servicer.Broadcast,
+                    request_deserializer=autoforward__pb2.AdminBroadcastRequest.FromString,
+                    response_serializer=autoforward__pb2.AdminBroadcastResponse.SerializeToString,
+            ),
+            'GetSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSettings,
+                    request_deserializer=autoforward__pb2.AdminGetSettingsRequest.FromString,
+                    response_serializer=autoforward__pb2.AdminSettingsResponse.SerializeToString,
+            ),
+            'SaveSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.SaveSettings,
+                    request_deserializer=autoforward__pb2.AdminSaveSettingsRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'ListAdmins': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListAdmins,
+                    request_deserializer=autoforward__pb2.AdminListAdminsRequest.FromString,
+                    response_serializer=autoforward__pb2.AdminListAdminsResponse.SerializeToString,
+            ),
+            'AddAdmin': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddAdmin,
+                    request_deserializer=autoforward__pb2.AdminAddAdminRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'RemoveAdmin': grpc.unary_unary_rpc_method_handler(
+                    servicer.RemoveAdmin,
+                    request_deserializer=autoforward__pb2.AdminRemoveAdminRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'GetClientSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetClientSettings,
+                    request_deserializer=autoforward__pb2.ClientSettingsRequest.FromString,
+                    response_serializer=autoforward__pb2.ClientSettingsResponse.SerializeToString,
+            ),
+            'SaveClientCredentials': grpc.unary_unary_rpc_method_handler(
+                    servicer.SaveClientCredentials,
+                    request_deserializer=autoforward__pb2.ClientSaveCredentialsRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'autoforward.AdminControlService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('autoforward.AdminControlService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class AdminControlService:
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def GetOverview(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/GetOverview',
+            autoforward__pb2.AdminOverviewRequest.SerializeToString,
+            autoforward__pb2.AdminOverviewResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListUsers(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/ListUsers',
+            autoforward__pb2.AdminListUsersRequest.SerializeToString,
+            autoforward__pb2.AdminListUsersResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetUserStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/SetUserStatus',
+            autoforward__pb2.AdminSetUserStatusRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Broadcast(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/Broadcast',
+            autoforward__pb2.AdminBroadcastRequest.SerializeToString,
+            autoforward__pb2.AdminBroadcastResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/GetSettings',
+            autoforward__pb2.AdminGetSettingsRequest.SerializeToString,
+            autoforward__pb2.AdminSettingsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SaveSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/SaveSettings',
+            autoforward__pb2.AdminSaveSettingsRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAdmins(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/ListAdmins',
+            autoforward__pb2.AdminListAdminsRequest.SerializeToString,
+            autoforward__pb2.AdminListAdminsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddAdmin(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/AddAdmin',
+            autoforward__pb2.AdminAddAdminRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RemoveAdmin(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/RemoveAdmin',
+            autoforward__pb2.AdminRemoveAdminRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetClientSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/GetClientSettings',
+            autoforward__pb2.ClientSettingsRequest.SerializeToString,
+            autoforward__pb2.ClientSettingsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SaveClientCredentials(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AdminControlService/SaveClientCredentials',
+            autoforward__pb2.ClientSaveCredentialsRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
             options,
             channel_credentials,
             insecure,

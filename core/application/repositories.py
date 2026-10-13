@@ -401,6 +401,30 @@ class IUserRepository(ABC):
         ...
 
     @abstractmethod
+    async def get(self, user_id: int) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    async def list_all(self, limit: int = 100, offset: int = 0) -> List[dict]:
+        ...
+
+    @abstractmethod
+    async def count_all(self) -> int:
+        ...
+
+    @abstractmethod
+    async def set_status(self, user_id: int, status: str) -> None:
+        ...
+
+    @abstractmethod
+    async def set_admin(self, user_id: int, is_admin: int) -> None:
+        ...
+
+    @abstractmethod
+    async def set_plan(self, user_id: int, plan: str) -> None:
+        ...
+
+    @abstractmethod
     async def set_language(self, user_id: int, language: str) -> None:
         ...
 

@@ -1010,7 +1010,7 @@ class SqliteRuleStatsRepository(IRuleStatsRepository):
 
 
 class SqliteUserRepository(IUserRepository):
-    """Per-user language, plan, quota."""
+    """Per-user language, plan, quota, status."""
 
     def __init__(self, db: SqliteDatabase) -> None:
         self._db = db
@@ -1023,14 +1023,47 @@ class SqliteUserRepository(IUserRepository):
         now = int(time.time())
         self._db.execute(
             "INSERT INTO users (user_id, language, is_admin, plan, quota_forwarded,"
-            " quota_reset_at, created_at, updated_at)"
-            " VALUES (?,?,?,?,?,?,?,?)",
-            (uid, language, 0, "free", 0, now, now, now),
+            " quota_reset_at, created_at, updated_at, status)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (uid, language, 0, "free", 0, now, now, now, "active"),
         )
         return {
             "user_id": uid, "language": language, "is_admin": 0, "plan": "free",
-            "quota_forwarded": 0, "quota_reset_at": now,
+            "quota_forwarded": 0, "quota_reset_at": now, "status": "active",
         }
+
+    async def get(self, user_id: int) -> Optional[dict]:
+        row = self._db.query_one("SELECT * FROM users WHERE user_id=?", (int(user_id),))
+        return dict(row) if row else None
+
+    async def list_all(self, limit: int = 100, offset: int = 0) -> List[dict]:
+        rows = self._db.query_all(
+            "SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (max(1, int(limit)), max(0, int(offset)))
+        )
+        return [dict(r) for r in (rows or [])]
+
+    async def count_all(self) -> int:
+        row = self._db.query_one("SELECT COUNT(*) AS total FROM users")
+        return int(row["total"]) if row else 0
+
+    async def set_status(self, user_id: int, status: str) -> None:
+        self._db.execute(
+            "UPDATE users SET status=?, updated_at=? WHERE user_id=?",
+            (str(status), int(time.time()), int(user_id)),
+        )
+
+    async def set_admin(self, user_id: int, is_admin: int) -> None:
+        self._db.execute(
+            "UPDATE users SET is_admin=?, updated_at=? WHERE user_id=?",
+            (int(is_admin), int(time.time()), int(user_id)),
+        )
+
+    async def set_plan(self, user_id: int, plan: str) -> None:
+        self._db.execute(
+            "UPDATE users SET plan=?, updated_at=? WHERE user_id=?",
+            (str(plan), int(time.time()), int(user_id)),
+        )
 
     async def set_language(self, user_id: int, language: str) -> None:
         self._db.execute(
