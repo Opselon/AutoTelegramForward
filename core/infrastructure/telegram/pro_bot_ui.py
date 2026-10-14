@@ -2874,7 +2874,7 @@ class ProBotUI:
         @b.on_message(filters.command("connect") & filters.private)
         async def _connect_cmd(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
-            logger.info("Handling /connect from uid=%s", uid)
+            logger.info("=== HANDLING /CONNECT FOR UID=%s WITH TEXT %s ===", uid, text[:50] if "text" in locals() else "")
             if not uid:
                 return
             st = self._state(uid)
