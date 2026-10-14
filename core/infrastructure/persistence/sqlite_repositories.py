@@ -1218,6 +1218,30 @@ class SqliteMessageMapRepository(IMessageMapRepository):
         cur = self._db.execute("DELETE FROM message_map WHERE updated_at < ?", (cutoff,))
         return cur.rowcount
 
+    # --- v2.0 app update: Duplicate Filters content-level dedup -------------
+    async def was_content_forwarded(self, rule_id: str, content_hash: str) -> bool:
+        """True when this rule already forwarded this exact content fingerprint."""
+        row = self._db.query_one(
+            "SELECT 1 FROM content_dedup WHERE rule_id=? AND content_hash=?",
+            (rule_id, content_hash),
+        )
+        return row is not None
+
+    async def record_content_hash(self, rule_id: str, content_hash: str) -> None:
+        """Record a fingerprint. INSERT OR IGNORE keeps replay idempotent."""
+        self._db.execute(
+            "INSERT OR IGNORE INTO content_dedup (rule_id, content_hash, created_at)"
+            " VALUES (?, ?, ?)",
+            (rule_id, content_hash, _now()),
+        )
+
+    async def purge_content_hashes(self, rule_id: str, before_ts: int) -> int:
+        cur = self._db.execute(
+            "DELETE FROM content_dedup WHERE rule_id=? AND created_at < ?",
+            (rule_id, before_ts),
+        )
+        return cur.rowcount
+
 
 class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
     """SQLite implementation of the durable delivery jobs queue."""

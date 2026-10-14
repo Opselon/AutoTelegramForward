@@ -261,3 +261,101 @@ func TestEnrichCustomMetadataRejectsNothing(t *testing.T) {
 		}
 	}
 }
+
+// TestCleanerConfigNormalization covers the v2.0 cleaner feature's typed
+// contract: the nested config is validated, bounded, and non-string patterns
+// are dropped instead of stringified.
+func TestCleanerConfigNormalization(t *testing.T) {
+	t.Run("non-object cleaner config is dropped", func(t *testing.T) {
+		meta := map[string]any{"cleaner_config": "not-an-object"}
+		normalizeAdvancedMetadata(meta)
+		if _, ok := meta["cleaner_config"]; ok {
+			t.Fatalf("non-object cleaner_config must be dropped")
+		}
+	})
+
+	t.Run("booleans coerced and patterns filtered", func(t *testing.T) {
+		meta := map[string]any{
+			"cleaner_enabled": "true",
+			"cleaner_config": map[string]any{
+				"patterns":       []any{"spam", 42, nil, "  ", "ok"},
+				"remove_urls":    "yes",
+				"use_regex":      1,
+				"remove_emojis":  "on",
+				"case_sensitive": false,
+			},
+		}
+		normalizeAdvancedMetadata(meta)
+
+		if b, ok := meta["cleaner_enabled"].(bool); !ok || !b {
+			t.Fatalf("cleaner_enabled must be bool true, got %T(%v)", meta["cleaner_enabled"], meta["cleaner_enabled"])
+		}
+
+		cfg, ok := meta["cleaner_config"].(map[string]any)
+		if !ok {
+			t.Fatalf("cleaner_config must remain an object, got %T", meta["cleaner_config"])
+		}
+		pats, ok := cfg["patterns"].([]any)
+		if !ok || len(pats) != 2 {
+			t.Fatalf("patterns must be filtered to 2 strings, got %v", cfg["patterns"])
+		}
+		if pats[0] != "spam" || pats[1] != "ok" {
+			t.Fatalf("unexpected patterns: %v", pats)
+		}
+		for _, k := range []string{"remove_urls", "use_regex", "remove_emojis"} {
+			if b, ok := cfg[k].(bool); !ok || !b {
+				t.Fatalf("%s must be coerced to true, got %T(%v)", k, cfg[k], cfg[k])
+			}
+		}
+	})
+
+	t.Run("pattern array is bounded", func(t *testing.T) {
+		pats := make([]any, 0, maxCleanerPatterns+50)
+		for i := 0; i < maxCleanerPatterns+50; i++ {
+			pats = append(pats, "x")
+		}
+		meta := map[string]any{"cleaner_config": map[string]any{"patterns": pats}}
+		normalizeAdvancedMetadata(meta)
+		cfg, _ := meta["cleaner_config"].(map[string]any)
+		got, _ := cfg["patterns"].([]any)
+		if len(got) != maxCleanerPatterns {
+			t.Fatalf("patterns must be capped at %d, got %d", maxCleanerPatterns, len(got))
+		}
+	})
+
+	t.Run("v2 metadata round trips through enrichCustomMetadata", func(t *testing.T) {
+		rawBody := map[string]any{
+			"cleaner_enabled": true,
+			"cleaner_config": map[string]any{
+				"patterns":     []any{"spam"},
+				"remove_urls":  true,
+				"language":     "pt",
+			},
+			"sync_replies":         true,
+			"sync_edits":           true,
+			"sync_deletes":         true,
+			"show_forward_header":  true,
+			"duplicate_filters":    true,
+		}
+		rule := &pb.ForwardRule{Id: "r-v2", CustomMetadataJson: ""}
+		bodyJSON, err := json.Marshal(rawBody)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		enrichCustomMetadata(bodyJSON, rule)
+
+		var parsed map[string]any
+		if err := json.Unmarshal([]byte(rule.CustomMetadataJson), &parsed); err != nil {
+			t.Fatalf("metadata invalid: %v", err)
+		}
+		for _, k := range []string{
+			"cleaner_enabled", "cleaner_config", "sync_replies",
+			"sync_edits", "sync_deletes", "show_forward_header",
+			"duplicate_filters",
+		} {
+			if _, ok := parsed[k]; !ok {
+				t.Fatalf("v2 field %s missing from persisted metadata", k)
+			}
+		}
+	})
+}

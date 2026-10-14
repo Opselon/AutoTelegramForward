@@ -356,6 +356,10 @@ func enrichCustomMetadata(rawBody []byte, rule *pb.ForwardRule) {
 		"ocr_image_ai", "smart_ai_rewrite", "news_digest", "watermark", "watermark_text",
 		"ai_creativity", "ai_max_tokens", "paid_addons",
 		"whitelist_keywords", "blacklist_keywords", "link_buttons", "affiliate_kit",
+		// v2.0 app update: Cleaner, reply sync, language preference.
+		"cleaner_enabled", "cleaner_config",
+		"sync_replies", "sync_edits", "sync_deletes",
+		"language", "show_forward_header",
 	}
 	for _, k := range parityKeys {
 		if val, ok := raw[k]; ok {
@@ -415,6 +419,8 @@ func normalizeAdvancedMetadata(meta map[string]any) {
 		"debug_mode", "duplicate_filters", "crypto_mode", "auto_posting",
 		"power_control", "process_raw_text", "button_to_text",
 		"keyword_confirmation", "ocr_image_ai", "smart_ai_rewrite", "news_digest",
+		// v2.0 app update sync flags + cleaner gate.
+		"sync_replies", "sync_edits", "sync_deletes", "cleaner_enabled",
 	} {
 		if v, ok := meta[k]; ok {
 			meta[k] = toBool(v)
@@ -462,6 +468,9 @@ func normalizeAdvancedMetadata(meta map[string]any) {
 			delete(meta, "topic_id")
 		}
 	}
+
+	// v2.0 app update: validate the nested cleaner_config object.
+	normalizeCleanerConfig(meta)
 
 	// Enforce an overall payload ceiling so the metadata blob cannot be used
 	// to bloat the row without bound.
