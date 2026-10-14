@@ -23,7 +23,10 @@ class SecureStorageProd implements SecureTokenStore {
     : _storage =
           storage ??
           const FlutterSecureStorage(
-            aOptions: AndroidOptions(encryptedSharedPreferences: true),
+            aOptions: AndroidOptions(
+              encryptedSharedPreferences: true,
+              resetOnError: true,
+            ),
             iOptions: IOSOptions(
               accessibility: KeychainAccessibility.first_unlock_this_device,
             ),
@@ -33,32 +36,34 @@ class SecureStorageProd implements SecureTokenStore {
 
   @override
   Future<StoredCredentials> read() async {
-    final raw = await _storage.read(key: _kCredentialsKey);
-    if (raw == null || raw.isEmpty) {
-      return StoredCredentials.empty;
-    }
     try {
+      final raw = await _storage.read(key: _kCredentialsKey);
+      if (raw == null || raw.isEmpty) {
+        return StoredCredentials.empty;
+      }
       final decoded = jsonDecode(raw);
       if (decoded is Map<String, dynamic>) {
         return StoredCredentials.fromJson(decoded);
       }
-    } on FormatException {
-      await _storage.delete(key: _kCredentialsKey);
-    }
+    } catch (_) {}
     return StoredCredentials.empty;
   }
 
   @override
   Future<void> write(StoredCredentials credentials) async {
-    await _storage.write(
-      key: _kCredentialsKey,
-      value: jsonEncode(credentials.toJson()),
-    );
+    try {
+      await _storage.write(
+        key: _kCredentialsKey,
+        value: jsonEncode(credentials.toJson()),
+      );
+    } catch (_) {}
   }
 
   @override
   Future<void> clear() async {
-    await _storage.delete(key: _kCredentialsKey);
+    try {
+      await _storage.delete(key: _kCredentialsKey);
+    } catch (_) {}
   }
 }
 

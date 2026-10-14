@@ -9,7 +9,7 @@ def i18n():
 
 
 def test_supported_languages(i18n):
-    assert set(SUPPORTED_LANGUAGES) == {"en", "fa", "ru", "zh"}
+    assert set(SUPPORTED_LANGUAGES) == {"en", "fa", "ru", "zh", "pt", "uz", "id", "es", "fr", "it"}
     for lang in SUPPORTED_LANGUAGES:
         assert i18n.set_language(lang)
 

@@ -57,7 +57,18 @@ from .login_flow import LoginFlowManager
 
 logger = logging.getLogger("atf.botui")
 
-LANG_FLAG = {"en": "English 🇬🇧", "fa": "فارسی 🇮🇷", "ru": "Русский 🇷🇺", "zh": "中文 🇨🇳"}
+LANG_FLAG = {
+    "en": "English 🇬🇧",
+    "fa": "فارسی 🇮🇷",
+    "pt": "Português 🇵🇹",
+    "uz": "O'zbek 🇺🇿",
+    "ru": "Русский 🇷🇺",
+    "id": "Bahasa Indonesia 🇮🇩",
+    "es": "Español 🇪🇸",
+    "fr": "Français 🇫🇷",
+    "it": "Italiano 🇮🇹",
+    "zh": "中文 🇨🇳",
+}
 
 # Callback data must stay <= 64 bytes for Telegram. Keep keys short.
 CB = {
@@ -1249,6 +1260,13 @@ class ProBotUI:
             else ""
         )
 
+        bl_count = len(rule.blacklist)
+        wl_count = len(rule.whitelist)
+        cl_count = (1 if rule.cleaner_enabled else 0) + len(rule.clean_custom_words) + (1 if rule.remove_links else 0) + (1 if rule.remove_emojis else 0)
+        fl_count = (1 if rule.duplicate_filters else 0) + (1 if rule.block_links else 0) + (1 if rule.block_voice else 0) + (1 if rule.block_stickers else 0)
+        rep_count = len(rule.replacements)
+        delay_val = f"{rule.delay_seconds:.0f}s" if rule.delay_seconds > 0 else "0s"
+
         grp = rule.feature_group or "all"
         chips = {
             "all": "All",
@@ -1262,50 +1280,63 @@ class ProBotUI:
             f"⚡ **Auto Forward Messages — Task Management**\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"📋 **Task Name:** `{task_name}`\n\n"
-            f"📊 **Task Overview (Click to view):**\n"
+            f"📊 **Task Overview:**\n"
             f"• ⏻ **Forwarding Status:** `{status_text}`\n"
-            f"• ↪ **Source:** `{src_label}` (Telegram)\n"
-            f"• ➤ **Target:** `{dst_label}` (Telegram)\n"
+            f"• ↪ **Source:** `{src_label}` (`{rule.source_chat_id}`)\n"
+            f"• ➤ **Target:** `{dst_label}` (`{rule.target_chat_id}`)\n"
             f"• 🏷 **Show Forward Header:** `{fwd_hdr_status}`{warning_line}\n"
-            f"• 🐞 **Debug Mode:** `{debug_text}`\n"
-            f"• #️⃣ **Topic:** `{topic_str}`\n\n"
-            f"🎯 **Features (v2.0):**\n"
+            f"• 🐞 **Debug Mode:** `{debug_text}` | #️⃣ **Topic:** `{topic_str}`\n\n"
+            f"🎯 **Features (v2.0 Parity):**\n"
             f"• Edit: `{edit_sync_status}` | Delete: `{del_sync_status}` | Reply: `{rep_sync_status}`\n"
             f"• Show Header: `{fwd_hdr_status}` | Duplicate Filters: `{dup_status}`\n"
-            f"• Cleaner: `{cleaner_status}` | Delay: `{rule.delay_seconds:.0f}s`\n\n"
-            f"👤 **Sender Type:**\n"
-            f"• ⚡ `{sender_type}`\n\n"
-            f"✨ **Feature groups:** Choose & customize tools\n"
+            f"• Cleaner: `{cleaner_status}` | Delay: `{delay_val}`\n\n"
+            f"👤 **Sender Type:** `{sender_type}`\n"
             f"👑 **PAID ADDON:** Unlock premium features with credits\n"
         )
 
         rows: List[List[Tuple[str, str]]] = [
-            # Task Name Controls
-            [
-                ("✏️ Rename Task", f"rrn:{rule.id}"),
-                ("📋 Duplicate", f"rdup:{rule.id}"),
-                ("✏️ ویرایش پیش‌نویس (Draft Editor)", f"re:{rule.id}"),
-                ("🗑 Delete Task", f"rrm:{rule.id}"),
-            ],
-            # Status toggle
-            [
-                (f"⏻ Status: {status_text}", f"rtg:{rule.id}"),
-                (f"🐞 Debug: {debug_text}", f"rtgbg:{rule.id}"),
-            ],
-            # Edit Task Buttons (Green / Red / Blue / White)
+            # Top routing controls
             [
                 ("🟢 Edit Source", f"res:{rule.id}"),
                 ("🔴 Edit Target", f"ret:{rule.id}"),
             ],
             [
                 (f"🏷 Header: {fwd_hdr_status}", f"rtg_fwdhdr:{rule.id}"),
-                (f"💬 Reply Sync: {rep_sync_status}", f"rtg_repsync:{rule.id}"),
+                (f"#️⃣ Topic: {topic_str}", f"rtpc:{rule.id}"),
+            ],
+            # Features: 5 Toggle Pills (matching mobile screen)
+            [
+                (f"✔ Edit: {edit_sync_status}", f"red:{rule.id}"),
+                (f"✔ Delete: {del_sync_status}", f"rdl:{rule.id}"),
+                (f"✔ Reply: {rep_sync_status}", f"rtg_repsync:{rule.id}"),
             ],
             [
-                (f"#️⃣ Set up Forwarding Topic ({topic_str})", f"rtpc:{rule.id}"),
+                (f"✔ Header: {fwd_hdr_status}", f"rtg_fwdhdr:{rule.id}"),
+                (f"✔ Dup Filters: {dup_status}", f"rtg_dup:{rule.id}"),
+            ],
+            # 6 Modular Option Cards (matching mobile screen)
+            [
+                (f"🔤 Replace ({rep_count})", f"rtx:{rule.id}"),
+                (f"≡ₓ Blacklist ({bl_count})", f"rfl_bl:{rule.id}"),
+            ],
+            [
+                (f"≡✓ Whitelist ({wl_count})", f"rfl_wl:{rule.id}"),
+                (f"∷ Cleaner ({cl_count})", f"rcl:{rule.id}"),
+            ],
+            [
+                (f"⊶ Filters ({fl_count})", f"rfl:{rule.id}"),
+                (f"⏱ Set Delay ({delay_val})", f"rdly:{rule.id}"),
+            ],
+            # Task operations
+            [
+                (f"⏻ Status: {status_text}", f"rtg:{rule.id}"),
+                ("📋 Duplicate", f"rdup:{rule.id}"),
+                ("✏️ Rename", f"rrn:{rule.id}"),
+                ("✏️ Draft", f"re:{rule.id}"),
             ],
             [
                 ("🎚 Advanced Settings", f"radv:{rule.id}"),
+                ("🗑 Delete Task", f"rrm:{rule.id}"),
             ],
             # Feature groups tabs / chips
             [
@@ -1313,6 +1344,9 @@ class ProBotUI:
                 (f"● {chips['crypto']}" if grp == "crypto" else chips["crypto"], f"rgrp:{rule.id}:crypto"),
                 (f"● {chips['mmo']}" if grp == "mmo" else chips["mmo"], f"rgrp:{rule.id}:mmo"),
                 (f"● {chips['content']}" if grp == "content" else chips["content"], f"rgrp:{rule.id}:content"),
+            ],
+            [
+                ("🔙 بازگشت به لیست قوانین (Rules)", CB["rules"]),
             ],
         ]
 
@@ -1892,6 +1926,167 @@ class ProBotUI:
             [
                 ("♾ بدون محدودیت (0)", f"rmte_s:{rule.id}:0"),
                 ("✏️ ورود ثانیه دلخواه", f"rmte_c:{rule.id}"),
+            ],
+            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_delay_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render forward delay configuration menu with quick presets."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        current = rule.delay_seconds
+        curr_str = f"{current:.0f} ثانیه" if current > 0 else "بدون تأخیر (فوری 0s)"
+
+        text = (
+            "⏱ **تنظیم تأخیر در ارسال (Set Delay Forward)**\n\n"
+            f"قانون: **{src_label} ➔ {dst_label}**\n"
+            f"تأخیر فعلی: **{curr_str}**\n"
+            "────────────────────\n"
+            "با فعال‌سازی تأخیر، پیام‌ها پیش از فوروارد در صف به این میزان صبر می‌کنند تا ارسال طبیعی‌تر به نظر برسد و از لیمیت تلگرام جلوگیری شود.\n\n"
+            "👇 یکی از مقادیر پیش‌فرض را انتخاب کنید یا عدد دلخواه وارد کنید:"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                ("⚡ بدون تأخیر (0s)", f"rdly_s:{rule.id}:0"),
+                ("⏱ 3 ثانیه", f"rdly_s:{rule.id}:3"),
+            ],
+            [
+                ("⏱ 5 ثانیه", f"rdly_s:{rule.id}:5"),
+                ("⏱ 10 ثانیه", f"rdly_s:{rule.id}:10"),
+            ],
+            [
+                ("⏱ 30 ثانیه", f"rdly_s:{rule.id}:30"),
+                ("⏱ 60 ثانیه", f"rdly_s:{rule.id}:60"),
+            ],
+            [
+                ("✏️ ورود ثانیه دلخواه", f"rdly_c:{rule.id}"),
+            ],
+            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_blacklist_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render blacklist keyword configuration menu."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        bl = list(rule.blacklist or [])
+
+        items_str = "\n".join([f"• `{w}`" for w in bl[:20]]) if bl else "❌ هیچ کلمه‌ای در لیست سیاه نیست."
+        if len(bl) > 20:
+            items_str += f"\n... و {len(bl) - 20} کلمه دیگر"
+
+        text = (
+            "🚫 **لیست سیاه کلمات (Blacklist Keywords)**\n\n"
+            f"قانون: **{src_label} ➔ {dst_label}**\n"
+            f"تعداد کلمات مسدود: **{len(bl)}**\n"
+            "────────────────────\n"
+            "پیام‌هایی که شامل هریک از این کلمات باشند، فوروارد **نمی‌شوند**:\n\n"
+            f"{items_str}\n\n"
+            "👇 جهت مدیریت لیست سیاه انتخاب کنید:"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                ("➕ افزودن کلمه جدید", f"rfl_bl_add:{rule.id}"),
+                ("🗑 پاکسازی کل لیست", f"rfl_bl_clr:{rule.id}"),
+            ],
+            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_whitelist_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render whitelist keyword configuration menu."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        wl = list(rule.whitelist or [])
+
+        items_str = "\n".join([f"• `{w}`" for w in wl[:20]]) if wl else "❌ هیچ کلمه‌ای در لیست سفید نیست (تمام پیام‌ها مجازند)."
+        if len(wl) > 20:
+            items_str += f"\n... و {len(wl) - 20} کلمه دیگر"
+
+        text = (
+            "✅ **لیست سفید کلمات (Whitelist Keywords)**\n\n"
+            f"قانون: **{src_label} ➔ {dst_label}**\n"
+            f"تعداد کلمات مجاز: **{len(wl)}**\n"
+            "────────────────────\n"
+            "تنها پیام‌هایی فوروارد می‌شوند که حداقل شامل یکی از این کلمات باشند:\n\n"
+            f"{items_str}\n\n"
+            "👇 جهت مدیریت لیست سفید انتخاب کنید:"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                ("➕ افزودن کلمه جدید", f"rfl_wl_add:{rule.id}"),
+                ("🗑 پاکسازی کل لیست", f"rfl_wl_clr:{rule.id}"),
+            ],
+            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_watermark_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render watermark configuration menu."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        wm = rule.watermark
+
+        text = (
+            "🖼 **تنظیم واتر‌مارک (Watermark Text)**\n\n"
+            f"قانون: **{src_label} ➔ {dst_label}**\n"
+            f"متن فعلی: **{wm or 'تنظیم نشده (خالی)'}**\n"
+            "────────────────────\n"
+            "این متن به انتهای کپشن تصاویر و ویدیوها یا به صورت واتر‌مارک الصاق خواهد شد.\n\n"
+            "👇 جهت تغییر یا حذف انتخاب کنید:"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                ("✏️ تنظیم متن واتر‌مارک", f"rwm_set:{rule.id}"),
+                ("🗑 حذف واتر‌مارک", f"rwm_del:{rule.id}"),
+            ],
+            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_translate_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render target translation language picker."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        current = (rule.translate_lang or "").lower()
+        curr_label = current.upper() if current else "غیرفعال (Off)"
+
+        text = (
+            "🌐 **ترجمه خودکار پیام‌ها (Auto Translate)**\n\n"
+            f"قانون: **{src_label} ➔ {dst_label}**\n"
+            f"زبان مقصد فعلی: **{curr_label}**\n"
+            "────────────────────\n"
+            "پیام‌ها پیش از فوروارد به صورت خودکار به زبان انتخابی ترجمه خواهند شد.\n\n"
+            "👇 زبان مقصد موردنظر را انتخاب کنید:"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                ("❌ غیرفعال‌سازی (Off)", f"rtr_set:{rule.id}:none"),
+            ],
+            [
+                ("🇬🇧 English (EN)", f"rtr_set:{rule.id}:en"),
+                ("🇮🇷 فارسی (FA)", f"rtr_set:{rule.id}:fa"),
+            ],
+            [
+                ("🇷🇺 Русский (RU)", f"rtr_set:{rule.id}:ru"),
+                ("🇪🇸 Español (ES)", f"rtr_set:{rule.id}:es"),
+            ],
+            [
+                ("🇵🇹 Português (PT)", f"rtr_set:{rule.id}:pt"),
+                ("🇺🇿 O'zbek (UZ)", f"rtr_set:{rule.id}:uz"),
+            ],
+            [
+                ("🇮🇩 Bahasa Indonesia (ID)", f"rtr_set:{rule.id}:id"),
+                ("🇫🇷 Français (FR)", f"rtr_set:{rule.id}:fr"),
+            ],
+            [
+                ("🇮🇹 Italiano (IT)", f"rtr_set:{rule.id}:it"),
             ],
             [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
         ]
@@ -2567,7 +2762,8 @@ class ProBotUI:
         ])
 
     def _lang_menu(self) -> InlineKeyboardMarkup:
-        rows = [[(name, f'{CB["lang_set"]}:{code}')] for code, name in LANG_FLAG.items()]
+        items = [(name, f'{CB["lang_set"]}:{code}') for code, name in LANG_FLAG.items()]
+        rows = [items[i:i + 2] for i in range(0, len(items), 2)]
         rows.append([(self._t("ui_back"), CB["main"])])
         return self._kbd(rows)
 
@@ -4512,15 +4708,14 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^red:(.+)$"))
         async def _cb_rule_toggle_edit(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            rule = await self._rules.get(rule_id)
+            rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer("❌ قانون یافت نشد", show_alert=True)
             rule.ignore_edits = not rule.ignore_edits
-            await self._rules.update(rule)
+            await self._save_owned_rule(rule, uid)
             status = "نادیده گرفتن ادیت فعال شد ⏹" if rule.ignore_edits else "سینک ادیت مقصد فعال شد 🔄"
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
@@ -4528,18 +4723,15 @@ class ProBotUI:
 
         @b.on_callback_query(filters.regex(r"^rdl:(.+)$"))
         async def _cb_rule_toggle_delete(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
-            rule = await self._rules.get(rule_id)
+            rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer("❌ قانون یافت نشد", show_alert=True)
-            if not isinstance(rule.metadata, dict):
-                rule.metadata = {}
             new_val = not rule.sync_deletes
-            rule.metadata["sync_deletes"] = new_val
-            await self._rules.update(rule)
+            rule.sync_deletes = new_val
+            await self._save_owned_rule(rule, uid)
             status = "سینک حذف پیام فعال شد 🗑" if new_val else "نادیده گرفتن حذف فعال شد ⏹"
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
@@ -4869,6 +5061,319 @@ class ProBotUI:
             rule.news_digest = not rule.news_digest
             await self._save_owned_rule(rule, uid)
             await cq.answer(f"News Digest: {'ON' if rule.news_digest else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        # --- Delay Forward Handlers ---
+        @b.on_callback_query(filters.regex(r"^rdly:(.+)$"))
+        async def _cb_rule_delay_menu(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            text, kbd = self._render_delay_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rdly_s:(.+?):(.+)$"))
+        async def _cb_rule_delay_set(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":")
+            rule_id, sec_str = parts[1], parts[2]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            try:
+                rule.delay_seconds = float(sec_str)
+            except ValueError:
+                rule.delay_seconds = 0.0
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"تأخیر: {rule.delay_seconds:.0f} ثانیه")
+            text, kbd = self._render_delay_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rdly_c:(.+)$"))
+        async def _cb_rule_delay_custom(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            st = self._state(uid)
+            st.step = f"set_delay_{rule.id}"
+            await self._persist(uid, st)
+            prompt = (
+                f"⏱ **ورود میزان تأخیر دلخواه (Delay)**\n\n"
+                f"لطفاً عدد ثانیه تأخیر موردنظر را ارسال کنید (مثلاً `5` یا `15`)."
+            )
+            kbd = self._kbd([[("❌ انصراف", f"rdly:{rule.id}")]])
+            await self._safe_edit(cq, prompt, reply_markup=kbd)
+            await cq.answer()
+
+        # --- Blacklist Handlers ---
+        @b.on_callback_query(filters.regex(r"^rfl_bl:(.+)$"))
+        async def _cb_rule_blacklist_menu(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            text, kbd = self._render_blacklist_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rfl_bl_add:(.+)$"))
+        async def _cb_rule_blacklist_add(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            st = self._state(uid)
+            st.step = f"add_bl_{rule.id}"
+            await self._persist(uid, st)
+            prompt = (
+                f"🚫 **افزودن به لیست سیاه (Blacklist)**\n\n"
+                f"کلمات یا عبارات موردنظر را ارسال کنید (می‌توانید چند کلمه را با کاما یا در خطوط جداگانه ارسال کنید):"
+            )
+            kbd = self._kbd([[("❌ انصراف", f"rfl_bl:{rule.id}")]])
+            await self._safe_edit(cq, prompt, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rfl_bl_clr:(.+)$"))
+        async def _cb_rule_blacklist_clear(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.blacklist = []
+            await self._save_owned_rule(rule, uid)
+            await cq.answer("🗑 کل لیست سیاه پاکسازی شد")
+            text, kbd = self._render_blacklist_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rfl_bu:(.+)$"))
+        async def _cb_rule_blacklist_users(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            cnt = len(rule.blacklist_users)
+            await cq.answer(f"Blacklist Users: {cnt} blocked", show_alert=True)
+
+        @b.on_callback_query(filters.regex(r"^rfl_wu:(.+)$"))
+        async def _cb_rule_whitelist_users(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            cnt = len(rule.whitelist_users)
+            await cq.answer(f"Whitelist Users: {cnt} allowed", show_alert=True)
+
+        # --- Whitelist Handlers ---
+        @b.on_callback_query(filters.regex(r"^rfl_wl:(.+)$"))
+        async def _cb_rule_whitelist_menu(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            text, kbd = self._render_whitelist_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rfl_wl_add:(.+)$"))
+        async def _cb_rule_whitelist_add(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            st = self._state(uid)
+            st.step = f"add_wl_{rule.id}"
+            await self._persist(uid, st)
+            prompt = (
+                f"✅ **افزودن به لیست سفید (Whitelist)**\n\n"
+                f"کلمات مجاز را ارسال کنید (تنها پیام‌های حاوی این کلمات فوروارد خواهند شد):"
+            )
+            kbd = self._kbd([[("❌ انصراف", f"rfl_wl:{rule.id}")]])
+            await self._safe_edit(cq, prompt, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rfl_wl_clr:(.+)$"))
+        async def _cb_rule_whitelist_clear(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.whitelist = []
+            await self._save_owned_rule(rule, uid)
+            await cq.answer("🗑 کل لیست سفید پاکسازی شد")
+            text, kbd = self._render_whitelist_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        # --- Watermark Handlers ---
+        @b.on_callback_query(filters.regex(r"^rwm:(.+)$"))
+        async def _cb_rule_watermark_menu(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            text, kbd = self._render_watermark_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rwm_set:(.+)$"))
+        async def _cb_rule_watermark_set_prompt(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            st = self._state(uid)
+            st.step = f"set_wm_{rule.id}"
+            await self._persist(uid, st)
+            prompt = (
+                f"🖼 **تنظیم متن واتر‌مارک**\n\n"
+                f"متن یا آیدی موردنظر جهت الصاق به پیام‌ها را ارسال کنید:"
+            )
+            kbd = self._kbd([[("❌ انصراف", f"rwm:{rule.id}")]])
+            await self._safe_edit(cq, prompt, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rwm_del:(.+)$"))
+        async def _cb_rule_watermark_del(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.watermark = ""
+            await self._save_owned_rule(rule, uid)
+            await cq.answer("🗑 واتر‌مارک حذف شد")
+            text, kbd = self._render_watermark_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        # --- Translation Handlers ---
+        @b.on_callback_query(filters.regex(r"^rtr:(.+)$"))
+        async def _cb_rule_translate_menu(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            text, kbd = self._render_translate_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rtr_set:(.+?):(.+)$"))
+        async def _cb_rule_translate_set(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":")
+            rule_id, lang_code = parts[1], parts[2]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.translate_lang = "" if lang_code == "none" else lang_code
+            await self._save_owned_rule(rule, uid)
+            status_msg = f"زبان ترجمه: {lang_code.upper()}" if rule.translate_lang else "ترجمه غیرفعال شد"
+            await cq.answer(status_msg)
+            text, kbd = self._render_translate_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        # --- Scheduler, Power, Affiliate, Link Buttons & AI Callbacks ---
+        @b.on_callback_query(filters.regex(r"^rsch_auto:(.+)$"))
+        async def _cb_rule_toggle_auto_sched(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            curr = bool(rule.auto_post_scheduler.get("enabled", False))
+            rule.auto_post_scheduler["enabled"] = not curr
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"Auto Post Scheduler: {'ON' if not curr else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsch_pwr:(.+)$"))
+        async def _cb_rule_toggle_power_sched(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            curr = bool(rule.power_schedule.get("enabled", False))
+            rule.power_schedule["enabled"] = not curr
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"Power Schedule: {'ON' if not curr else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rafl:(.+)$"))
+        async def _cb_rule_toggle_affiliate(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            curr = bool(rule.affiliate_kit.get("enabled", False))
+            rule.affiliate_kit["enabled"] = not curr
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"Affiliate Kit: {'ON' if not curr else 'OFF'}")
+            text, kbd = self._render_advanced_settings(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rbtn:(.+)$"))
+        async def _cb_rule_link_buttons_info(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            btn_cnt = len(rule.link_buttons)
+            await cq.answer(f"Link Buttons: {btn_cnt} active", show_alert=True)
+
+        @b.on_callback_query(filters.regex(r"^rai_cfg:(.+)$"))
+        async def _cb_rule_ai_cfg_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            # Cycle creativity presets: 0.2 -> 0.7 -> 1.0
+            curr_c = rule.ai_creativity
+            next_c = 0.7 if curr_c == 0.2 else (1.0 if curr_c == 0.7 else 0.2)
+            rule.ai_creativity = next_c
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(f"AI Creativity: {next_c}")
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -6730,6 +7235,76 @@ class ProBotUI:
         card_text, kbd = self._render_rule_detail(rule)
         await message.reply_text(f"✅ تاپیک فوروارد روی `#{rule.topic_id or 'None'}` تنظیم شد.", reply_markup=kbd)
 
+    async def _step_set_delay(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+        try:
+            sec = max(0.0, float(text.strip()))
+            rule.delay_seconds = sec
+        except ValueError:
+            return await message.reply_text("⚠️ لطفاً فقط یک عدد معتبر (برحسب ثانیه) ارسال کنید (مثال: `5` یا `0`).")
+        await self._save_owned_rule(rule, uid)
+        st.step = ""
+        await self._persist(uid, st)
+        card_text, kbd = self._render_delay_menu(rule)
+        await message.reply_text(f"✅ میزان تأخیر فوروارد روی `{rule.delay_seconds:.0f}` ثانیه تنظیم شد.", reply_markup=kbd)
+
+    async def _step_add_bl(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+        new_words = [w.strip() for w in text.replace("\n", ",").split(",") if w.strip()]
+        bl = list(rule.blacklist or [])
+        for w in new_words:
+            if w not in bl:
+                bl.append(w)
+        rule.blacklist = bl
+        await self._save_owned_rule(rule, uid)
+        st.step = ""
+        await self._persist(uid, st)
+        card_text, kbd = self._render_blacklist_menu(rule)
+        await message.reply_text(f"✅ تعداد {len(new_words)} کلمه به لیست سیاه افزوده شد.", reply_markup=kbd)
+
+    async def _step_add_wl(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+        new_words = [w.strip() for w in text.replace("\n", ",").split(",") if w.strip()]
+        wl = list(rule.whitelist or [])
+        for w in new_words:
+            if w not in wl:
+                wl.append(w)
+        rule.whitelist = wl
+        await self._save_owned_rule(rule, uid)
+        st.step = ""
+        await self._persist(uid, st)
+        card_text, kbd = self._render_whitelist_menu(rule)
+        await message.reply_text(f"✅ تعداد {len(new_words)} کلمه به لیست سفید افزوده شد.", reply_markup=kbd)
+
+    async def _step_set_wm(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+        rule.watermark = text.strip()
+        await self._save_owned_rule(rule, uid)
+        st.step = ""
+        await self._persist(uid, st)
+        card_text, kbd = self._render_watermark_menu(rule)
+        await message.reply_text(f"✅ واتر‌مارک تنظیم شد: `{rule.watermark}`", reply_markup=kbd)
+
     async def _step_weburl_input(
         self, message: Message, st: "UiState", text: str
     ) -> None:
@@ -7120,6 +7695,18 @@ class ProBotUI:
         if st.step.startswith("set_topic_"):
             rule_id = st.step.split("set_topic_", 1)[1]
             return await self._step_set_topic(message, st, text, rule_id)
+        if st.step.startswith("set_delay_"):
+            rule_id = st.step.split("set_delay_", 1)[1]
+            return await self._step_set_delay(message, st, text, rule_id)
+        if st.step.startswith("add_bl_"):
+            rule_id = st.step.split("add_bl_", 1)[1]
+            return await self._step_add_bl(message, st, text, rule_id)
+        if st.step.startswith("add_wl_"):
+            rule_id = st.step.split("add_wl_", 1)[1]
+            return await self._step_add_wl(message, st, text, rule_id)
+        if st.step.startswith("set_wm_"):
+            rule_id = st.step.split("set_wm_", 1)[1]
+            return await self._step_set_wm(message, st, text, rule_id)
 
         handler = getattr(self, f"_step_{st.step}", None)
         if handler is None:

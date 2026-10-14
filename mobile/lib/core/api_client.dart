@@ -604,6 +604,7 @@ class ApiClient {
         token: jwt,
         userId: session.userId,
         username: session.username,
+        password: password,
         isAdmin: session.isAdmin,
         expiresAtIso: session.expiresAt.toIso8601String(),
       ),
