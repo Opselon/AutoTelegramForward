@@ -10,6 +10,7 @@ import '../../core/api_client.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../../l10n/app_messages.dart';
+import 'ai_config_editor_dialog.dart';
 
 class AiScreen extends StatefulWidget {
   const AiScreen({super.key});
@@ -55,9 +56,15 @@ class _AiScreenState extends State<AiScreen> {
                     ? exc.error.message
                     : t.get('state_error'),
       );
-    } catch (_) {
+    } catch (exc) {
+      // Never swallow: a network failure must not look like "no data".
       if (!mounted) return;
-      setState(() => _error = t.get('state_error'));
+      setState(
+        () =>
+            _error =
+                '${t.get('state_error')} '
+                '(${exc.toString().split('(').first.trim()})',
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -90,8 +97,61 @@ class _AiScreenState extends State<AiScreen> {
     try {
       await client.deleteAiConfig(config.id);
       await _load();
-    } catch (_) {
-      // Deletion error handled
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exc.error.message)));
+    } catch (exc) {
+      // Deletion failed: tell the user instead of vanishing silently.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Delete failed (${exc.toString().split('(').first.trim()})',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openEditor(AiConfig? existing) async {
+    final result = await showDialog<AiConfig>(
+      context: context,
+      builder: (_) => AiConfigEditorDialog(existing: existing),
+    );
+    if (result == null || !mounted) return;
+
+    final client = context.read<AppState>().buildApiClient();
+    try {
+      if (existing == null) {
+        await client.createAiConfig(result);
+      } else {
+        await client.updateAiConfig(existing.id, result);
+      }
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            existing == null ? 'AI config created' : 'AI config updated',
+          ),
+        ),
+      );
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(exc.error.message)));
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Save failed (${exc.toString().split('(').first.trim()})',
+          ),
+        ),
+      );
     }
   }
 
@@ -108,6 +168,11 @@ class _AiScreenState extends State<AiScreen> {
             onPressed: _loading ? null : _load,
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.add),
+        label: const Text('New AI config'),
+        onPressed: () => _openEditor(null),
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -186,6 +251,7 @@ class _AiScreenState extends State<AiScreen> {
                     subtitle: Text(
                       'Target: ${c.targetLanguage.isNotEmpty ? c.targetLanguage : 'same'} • Active: ${c.isEnabled ? "yes" : "no"}',
                     ),
+                    onTap: () => _openEditor(c),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, color: Colors.red),
                       onPressed: () => _delete(c),

@@ -102,6 +102,7 @@ def _rule_pb(r) -> pb.ForwardRule:
         is_paused=bool(getattr(r, "is_paused", False)),
         paused_until=int(getattr(r, "paused_until", 0) or 0),
         version=int(getattr(r, "version", 1) or 1),
+        owner_user_id=int(getattr(r, "owner_user_id", 0) or 0),
         custom_metadata_json=_json.dumps(getattr(r, "metadata", {}) or {}),
     )
 

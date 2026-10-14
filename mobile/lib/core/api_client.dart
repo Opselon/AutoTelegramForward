@@ -829,6 +829,27 @@ class ApiClient {
         listKey: 'logs',
       );
 
+  /// Centralized audit events (`GET /api/audit/events`) — the durable
+  /// PostgreSQL execution-assurance trail. Tenant-scoped server-side: the
+  /// backend pins the caller to their own numeric user id.
+  Future<List<AuditEvent>> queryAuditEvents({
+    int limit = 50,
+    String correlationId = '',
+    String outcome = '',
+    String service = '',
+  }) => _requestList(
+    method: 'GET',
+    path: '/api/audit/events',
+    query: {
+      'limit': limit,
+      if (correlationId.isNotEmpty) 'correlation_id': correlationId,
+      if (outcome.isNotEmpty) 'outcome': outcome,
+      if (service.isNotEmpty) 'service': service,
+    },
+    fromJson: AuditEvent.fromJson,
+    listKey: 'events',
+  );
+
   // ------------------------------------------------------------------ //
   // Telegram login lifecycle (`/api/telegram-login/*`, new in this PR)
   // ------------------------------------------------------------------ //
