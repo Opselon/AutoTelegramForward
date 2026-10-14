@@ -89,6 +89,7 @@ func APIKeyAuth(key string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" || r.URL.Path == "/health" ||
 			r.URL.Path == "/api/version" || r.URL.Path == "/api/v1/health/services" ||
+			r.URL.Path == "/api/health/services" ||
 			strings.HasPrefix(r.URL.Path, "/api/auth/") {
 			next.ServeHTTP(w, r)
 			return

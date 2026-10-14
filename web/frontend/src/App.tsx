@@ -2735,8 +2735,8 @@ export function App() {
             const nodes = [
               { key: 'web', title: isRtl ? 'درگاه وب (Rust)' : 'Web Gateway', sub: 'atf-web · :8088', color: '#f59e0b' },
               { key: 'api', title: isRtl ? 'کنترل‌پلین REST (Go)' : 'REST Control Plane', sub: 'atf-api · :8080', color: '#a855f7' },
-              { key: 'core', title: isRtl ? 'هسته پایتون + MTProto' : 'Python Core & MTProto', sub: 'atf · gRPC :6001', color: '#38bdf8' },
-              { key: 'logger', title: isRtl ? 'لاگر مرکزی' : 'Central Logger', sub: 'atf-logger · gRPC :6002', color: '#34d399' },
+              { key: 'core', title: isRtl ? 'هسته پایتون + MTProto' : 'Python Core & MTProto', sub: 'atf-core · gRPC :50051', color: '#38bdf8' },
+              { key: 'logger', title: isRtl ? 'لاگر مرکزی' : 'Central Logger', sub: 'atf-logger · gRPC :50052', color: '#34d399' },
             ]
             const svc = (k: string) => hmap[k]
             return (

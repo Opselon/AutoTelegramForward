@@ -13,6 +13,10 @@ import (
 // route is wrapped with it so data is scoped to the authenticated account.
 func (h *Handlers) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health/services" || r.URL.Path == "/api/health/services" || r.URL.Path == "/api/v1/health/services" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		auth := r.Header.Get("Authorization")
 		if !strings.HasPrefix(auth, "Bearer ") {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{
