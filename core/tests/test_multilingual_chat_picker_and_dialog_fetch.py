@@ -1,3 +1,4 @@
+from typing import Any, Optional
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from core.infrastructure.telegram.pro_bot_ui import ProBotUI, UiState
@@ -13,7 +14,7 @@ def test_translations_catalog_1_to_1_parity():
         assert lang in catalog, f"Missing language {lang} in catalog"
 
     ref_keys = set(catalog["en"].keys())
-    assert len(ref_keys) >= 345, f"Expected at least 345 keys, got {len(ref_keys)}"
+    assert len(ref_keys) >= 370, f"Expected at least 370 keys, got {len(ref_keys)}"
 
     for lang in SUPPORTED_LANGUAGES:
         lang_keys = set(catalog[lang].keys())
@@ -168,3 +169,78 @@ async def test_fetch_dialogs_admin_fallback():
     assert chats[0]["id"] == "-100999"
     assert chats[0]["title"] == "Admin Channel"
     assert chats[0]["kind"] == "channel"
+
+
+@pytest.mark.asyncio
+async def test_finish_rule_creation_english_localization():
+    """Finish rule creation presents English completion card for English users."""
+    i18n = I18n()
+    ui = object.__new__(ProBotUI)
+    ui.i18n = i18n
+    ui._states = {}
+    ui._t = lambda key, lang=None, **kw: i18n.t(key, lang=lang or "en", **kw)
+    ui._kbd = lambda rows: rows
+    ui._resolve_lang = lambda uid=None, user_obj=None: "en"
+    ui._persist = AsyncMock()
+    ui._rules = MagicMock()
+    ui._rules.create = AsyncMock()
+    ui._scope_uid = lambda user_id: user_id
+    ui._log = MagicMock()
+
+    session_mock = MagicMock()
+    session_mock.id = "sess_001"
+    ui._sessions = MagicMock()
+    ui._sessions.list_by_owner = AsyncMock(return_value=[session_mock])
+
+    event_mock = MagicMock()
+    event_mock.from_user.id = 5094837833
+    captured_messages = []
+
+    async def fake_safe_edit(target: Any, text: str, reply_markup: Any = None, **kw: Any) -> None:
+        captured_messages.append((text, reply_markup))
+
+    ui._safe_edit = fake_safe_edit
+
+    st = UiState(
+        step="rule_target",
+        lang="en",
+        user_id=5094837833,
+        rule_source="-1004400615270",
+        rule_target="-1003915313919",
+    )
+
+    await ui._finish_rule_creation(event_mock, st, "📢 Source A", "📢 Target B")
+
+    assert len(captured_messages) == 1
+    text, markup = captured_messages[0]
+    assert "Forwarding rule created and activated successfully!" in text
+    assert "Source:" in text
+    assert "Target:" in text
+    assert "Direct copy" in text
+    assert "Active & monitoring live" in text
+    assert "قانون هدایت با موفقیت" not in text
+
+    btn_labels = [b[0] for row in markup for b in row]
+    assert any("Advanced Settings" in lbl for lbl in btn_labels)
+    assert any("Add New Rule" in lbl for lbl in btn_labels)
+
+
+def test_main_menu_multilingual_labels():
+    """Main menu labels adapt directly to the user's resolved language."""
+    i18n = I18n()
+    ui = object.__new__(ProBotUI)
+    ui.i18n = i18n
+    ui._t = lambda key, lang=None, **kw: i18n.t(key, lang=lang or "en", **kw)
+    ui._is_admin = lambda user_id: False
+
+    ui._resolve_lang = lambda uid=None, user_obj=None: "en"
+    menu_en = ui._main_menu(uid=5094837833)
+    labels_en = [b.text for row in menu_en.inline_keyboard for b in row]
+    assert "Forward" in labels_en
+    assert any("Settings" in lbl for lbl in labels_en)
+
+    ui._resolve_lang = lambda uid=None, user_obj=None: "fa"
+    menu_fa = ui._main_menu(uid=12345)
+    labels_fa = [b.text for row in menu_fa.inline_keyboard for b in row]
+    assert any("فوروارد" in lbl for lbl in labels_fa)
+    assert any("تنظیمات" in lbl for lbl in labels_fa)
