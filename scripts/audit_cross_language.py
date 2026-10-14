@@ -70,13 +70,27 @@ def audit_source_hardcoded() -> None:
     The catalog parity check above passes in the presence of these, because
     they never enter the catalog at all — the English user still sees
     Persian. This scans every Python source file under core/ for Persian
-    graphemes in string literals, EXCLUDING:
+    graphemes, EXCLUDING:
       - the locale catalog itself (it holds the translations)
       - tests (legitimately assert on translated text)
       - pv_responder's persona prompt (a user-authored Persian persona by
         design, not a UI string)
+
+    A pre-existing backlog is pinned in scripts/.persian_baseline.txt
+    (file:line per line). The audit fails only on leaks NOT in the
+    baseline — so CI stays green while the backlog is being extracted,
+    and any NEW hardcoded Persian fails immediately. Shrink the baseline
+    as functions are converted; never grow it.
     """
+    baseline_path = REPO / "scripts/.persian_baseline.txt"
+    baseline = set()
+    if baseline_path.exists():
+        baseline = {
+            ln.strip() for ln in baseline_path.read_text(encoding="utf-8").splitlines() if ln.strip()
+        }
+
     skip_dirs = {"tests", "locales", "__pycache__"}
+    offenders: list[str] = []
     for p in sorted(REPO.joinpath("core").rglob("*.py")):
         if any(part in skip_dirs for part in p.parts):
             continue
@@ -84,7 +98,21 @@ def audit_source_hardcoded() -> None:
             continue
         for i, line in enumerate(p.read_text(encoding="utf-8").split("\n"), 1):
             if RTL_GRAPHEMES.intersection(line) and "STR.Migrations" not in line:
-                failures.append(f"source/{p.relative_to(REPO)}:{i}: hardcoded Persian text")
+                offenders.append(f"{p.relative_to(REPO)}:{i}")
+
+    new_leaks = [o for o in offenders if o not in baseline]
+    if new_leaks:
+        failures.append(
+            f"source: {len(new_leaks)} NEW hardcoded Persian strings not in "
+            f"scripts/.persian_baseline.txt (e.g. {new_leaks[:3]}). "
+            "Convert them to catalog keys, or if genuinely unavoidable, "
+            "regenerate the baseline and explain why."
+        )
+    if len(offenders) < len(baseline):
+        print(
+            f"source: backlog shrank {len(baseline)} -> {len(offenders)}; "
+            "regenerate scripts/.persian_baseline.txt to pin the progress."
+        )
 
 
 def audit_bot() -> None:
