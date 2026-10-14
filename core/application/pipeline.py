@@ -458,7 +458,7 @@ class DurableMessagePipeline:
             ctx.record_stage(PipelineStage.FILTER, False, reason=eval_res.reason, duration_ms=(time.monotonic() - t0) * 1000)
             self.metrics.filtered_total += 1
             logger.warning(
-                "[%s] Rule %s DROPPED msg %s by filter rule %s: %s",
+                "[PIPELINE:FILTER_DROP] [%s] Rule %s DROPPED msg %s by filter rule %s: %s",
                 ctx.correlation_id[:8], rule.id[:8], payload.message_id, rule.filter_rule_id or "none", eval_res.reason,
             )
             return
