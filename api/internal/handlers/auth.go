@@ -113,9 +113,30 @@ func (h *Handlers) AuthTMA(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid auth_date"})
 		return
 	}
+
+	now := time.Now().Unix()
+
+	// Future-dated auth_date: Telegram never issues these. A clock-skewed or
+	// malicious payload claiming a future date would otherwise create a token
+	// whose replay window has not even opened yet.
+	if authDate > now {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "init_data auth_date is in the future"})
+		return
+	}
+
 	// Reject tokens older than 24 hours to prevent replay attacks
-	if time.Now().Unix()-authDate > 86400 {
+	if now-authDate > 86400 {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "init_data expired"})
+		return
+	}
+
+	// Reject a literal duplicate query parameter. url.ParseQuery keeps only
+	// the last value for a repeated key, which changes the canonical
+	// data-check string and would be verified against a single hash — but a
+	// client can still smuggle a second `hash` past a naive parser. Refuse
+	// any init_data with a repeated key outright.
+	if strings.Contains(body.InitData, "&hash=") && strings.Count(body.InitData, "hash=") > 1 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed init_data: duplicate parameter"})
 		return
 	}
 

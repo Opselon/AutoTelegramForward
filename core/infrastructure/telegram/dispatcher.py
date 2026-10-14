@@ -23,7 +23,7 @@ from collections import defaultdict, deque
 from typing import Any, Optional
 
 from ...domain.entities import MessagePayload
-from ...domain.services import CaptionManagementEngine, safe_text_preview
+from ...domain.services import AdvancedSettingsEngine, CaptionManagementEngine, safe_text_preview
 from ...domain.value_objects import ContentMode, ForwardMode
 from .album_aggregator import AlbumAggregator
 from .client_pool import ClientPool, payload_from_pyrogram
@@ -354,6 +354,27 @@ class MessageDispatcher:
     # Outgoing sends (implements the use-case `sender` port)
     # ------------------------------------------------------------------ #
     async def _send(self, payload: MessagePayload, rule, text: str, evaluation) -> bool:
+        # Phase 2: apply the advanced content transforms (watermark, link
+        # buttons, affiliate kit) on the direct dispatch path too, so a rule
+        # behaves identically whether or not the durable queue is configured.
+        try:
+            text, _applied = AdvancedSettingsEngine.apply_content_transforms(text, rule, payload)
+        except Exception as exc:
+            logger.warning("advanced content transform failed for rule %s: %s", getattr(rule, "id", "?")[:8], exc)
+
+        # Phase 2: debug mode emits a structured diagnostic of exactly what the
+        # worker is about to send, without ever logging session material.
+        if bool(getattr(rule, "debug_mode", False)):
+            logger.info(
+                "[PIPELINE:DEBUG] rule=%s src=%s:%s tgt=%s topic=%s delay=%.1fs "
+                "media=%s text_len=%d preview=%r",
+                getattr(rule, "id", "?")[:8], payload.chat_id, payload.message_id,
+                getattr(rule, "target_chat_id", "?"), int(getattr(rule, "topic_id", None) or 0),
+                float(getattr(rule, "forward_delay_seconds", 0.0) or 0.0),
+                bool(payload.has_media), len(text or ""),
+                safe_text_preview(text, 60),
+            )
+
         targets = list(getattr(rule, "all_targets", [rule.target_chat_id]) or [rule.target_chat_id])
         if not targets:
             logger.warning(
@@ -403,7 +424,13 @@ class MessageDispatcher:
         if client is None:
             logger.warning("No live client for session %s", rule.session_id)
             return False
-        delay = float(getattr(rule, "delay_seconds", 0) or 0)
+
+        # Phase 2: the advanced dispatch delay is the authoritative setting.
+        # The legacy `delay_seconds` field is preserved as a fallback so rules
+        # created before the advanced UI keep their original behaviour.
+        delay = float(getattr(rule, "forward_delay_seconds", None) or 0)
+        if delay <= 0:
+            delay = float(getattr(rule, "delay_seconds", 0) or 0)
         if delay > 0:
             await asyncio.sleep(min(delay, 3600))
         ok_any = False
@@ -486,6 +513,14 @@ class MessageDispatcher:
 
         f_mode_val = getattr(getattr(rule, "forward_mode", None), "value", str(getattr(rule, "forward_mode", "COPY_MESSAGE")))
 
+        # Phase 2: route into the configured forum topic. Only a positive id
+        # addresses a real thread; 0/None means "no topic configured" and must
+        # not be passed (Telegram would reject a zero thread id).
+        topic_id = int(getattr(rule, "topic_id", None) or 0)
+        thread_kwargs: dict = {}
+        if topic_id > 0:
+            thread_kwargs["message_thread_id"] = topic_id
+
         # If intermediate hop was used, forward from intermediate channel C to B!
         if intermediate_msg_id and bool(getattr(rule, "use_intermediate", False)) and getattr(rule, "intermediate_channel_id", ""):
             inter_id_raw = str(rule.intermediate_channel_id).strip()
@@ -494,6 +529,7 @@ class MessageDispatcher:
                 res = await client.forward_messages(
                     chat_id=target, from_chat_id=inter_chat,
                     message_ids=[int(intermediate_msg_id)],
+                    **thread_kwargs,
                 )
                 return res[0] if isinstance(res, list) and res else (res or True)
             except Exception as exc:
@@ -508,7 +544,7 @@ class MessageDispatcher:
                     "forward from C (%s) → %s failed (%s) — falling back to copy",
                     inter_chat, target, tg_detail(exc),
                 )
-                return await self._deliver_copy(client, payload, rule, text, target, mode_val, caption_tmpl)
+                return await self._deliver_copy(client, payload, rule, text, target, mode_val, caption_tmpl, thread_kwargs)
 
         # A. NATIVE FORWARD — preserves Telegram's real forward header
         if f_mode_val == "DIRECT_FORWARD":
@@ -516,6 +552,7 @@ class MessageDispatcher:
                 res = await client.forward_messages(
                     chat_id=target, from_chat_id=int(payload.chat_id),
                     message_ids=[payload.message_id],
+                    **thread_kwargs,
                 )
                 return res[0] if isinstance(res, list) and res else (res or True)
             except Exception as exc:
@@ -535,7 +572,7 @@ class MessageDispatcher:
 
         # B. COPY MESSAGE path (also the fallback destination)
         try:
-            return await self._deliver_copy(client, payload, rule, text, target, mode_val, caption_tmpl)
+            return await self._deliver_copy(client, payload, rule, text, target, mode_val, caption_tmpl, thread_kwargs)
         except Exception as exc:
             key, sev, recoverable = tg_error(exc)
             if recoverable and f_mode_val == "DIRECT_FORWARD" and self._fallback_allowed(rule, key, True):
@@ -650,7 +687,8 @@ class MessageDispatcher:
             return await client.send_message(chat_id=target, text=fallback_text)
         raise RuntimeError("Protected content cannot be copied or re-uploaded")
 
-    async def _deliver_copy(self, client, payload, rule, text, target, mode_val, caption_tmpl) -> Any:
+    async def _deliver_copy(self, client, payload, rule, text, target, mode_val, caption_tmpl, thread_kwargs: Optional[dict] = None) -> Any:
+        thread_kwargs = thread_kwargs or {}
         # CUSTOM_HEADER_COPY / COPY_MESSAGE:
         if payload.has_media:
             raw_caption = text or caption_tmpl or ""
@@ -664,6 +702,7 @@ class MessageDispatcher:
                     chat_id=target, from_chat_id=int(payload.chat_id),
                     message_id=payload.message_id,
                     caption=(formatted_caption or None) if mode_val != "MEDIA_ONLY" else None,
+                    **thread_kwargs,
                 )
             except Exception as copy_exc:
                 err_str = str(copy_exc).lower()
@@ -675,11 +714,11 @@ class MessageDispatcher:
 
             if overflow_text and mode_val != "MEDIA_ONLY":
                 try:
-                    await client.send_message(chat_id=target, text=overflow_text)
+                    await client.send_message(chat_id=target, text=overflow_text, **thread_kwargs)
                 except Exception as exc:
                     logger.debug("Failed sending caption overflow text: %s", exc)
             elif mode_val == "TEXT_AND_MEDIA" and text and not overflow_text:
-                await client.send_message(chat_id=target, text=text)
+                await client.send_message(chat_id=target, text=text, **thread_kwargs)
             return res or True
 
         if mode_val == "MEDIA_ONLY":
@@ -688,5 +727,5 @@ class MessageDispatcher:
         body = text or caption_tmpl
         if not body:
             return False
-        res = await client.send_message(chat_id=target, text=body)
+        res = await client.send_message(chat_id=target, text=body, **thread_kwargs)
         return res or True

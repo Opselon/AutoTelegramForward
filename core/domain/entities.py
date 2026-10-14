@@ -728,6 +728,126 @@ class ForwardRule:
             self.metadata = {}
         self.metadata["paid_addons"] = dict(val or {})
 
+    # --- Phase 2: runtime-executable advanced settings ---------------------
+    # These properties are the single source of truth for the advanced task
+    # configuration. Both the durable queue and the direct dispatcher read
+    # them at *dispatch time*, so a change made in any client (bot, web, TMA,
+    # mobile) takes effect on the very next message without a restart.
+
+    @property
+    def forward_delay_seconds(self) -> float:
+        """Delay (seconds) applied before dispatch — anti-detection/scheduling."""
+        if not isinstance(self.metadata, dict):
+            return float(self.delay_seconds or 0.0)
+        raw = self.metadata.get("forward_delay_seconds", self.delay_seconds)
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            return float(self.delay_seconds or 0.0)
+        # Bounded: a delay is a scheduling hint, not an unbounded sleep. The
+        # hard cap keeps a misconfigured rule from stalling a worker forever.
+        return max(0.0, min(val, 3600.0))
+
+    @forward_delay_seconds.setter
+    def forward_delay_seconds(self, val: Optional[float]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        try:
+            self.metadata["forward_delay_seconds"] = max(0.0, min(float(val or 0.0), 3600.0))
+        except (TypeError, ValueError):
+            self.metadata["forward_delay_seconds"] = 0.0
+
+    @property
+    def edit_time_limit_seconds(self) -> int:
+        """Only sync edits made within this many seconds of the original."""
+        if not isinstance(self.metadata, dict):
+            return 0
+        try:
+            return max(0, int(self.metadata.get("edit_time_limit_seconds", 0)))
+        except (TypeError, ValueError):
+            return 0
+
+    @edit_time_limit_seconds.setter
+    def edit_time_limit_seconds(self, val: Optional[int]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        try:
+            self.metadata["edit_time_limit_seconds"] = max(0, int(val or 0))
+        except (TypeError, ValueError):
+            self.metadata["edit_time_limit_seconds"] = 0
+
+    @property
+    def keyword_confirmation(self) -> bool:
+        if not isinstance(self.metadata, dict):
+            return False
+        return bool(self.metadata.get("keyword_confirmation", False))
+
+    @keyword_confirmation.setter
+    def keyword_confirmation(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["keyword_confirmation"] = bool(val)
+
+    @property
+    def keyword_reply(self) -> str:
+        """Reply text sent when a whitelisted keyword triggers."""
+        if not isinstance(self.metadata, dict):
+            return ""
+        return str(self.metadata.get("keyword_reply") or "")
+
+    @keyword_reply.setter
+    def keyword_reply(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["keyword_reply"] = str(val or "")
+
+    @property
+    def auto_delete_seconds(self) -> int:
+        """Delete the forwarded message from the target after N seconds (0 = off)."""
+        if not isinstance(self.metadata, dict):
+            return 0
+        try:
+            return max(0, int(self.metadata.get("auto_delete_seconds", 0)))
+        except (TypeError, ValueError):
+            return 0
+
+    @auto_delete_seconds.setter
+    def auto_delete_seconds(self, val: Optional[int]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        try:
+            self.metadata["auto_delete_seconds"] = max(0, int(val or 0))
+        except (TypeError, ValueError):
+            self.metadata["auto_delete_seconds"] = 0
+
+    @property
+    def watermark_text(self) -> str:
+        """Watermark appended to forwarded text (alias of `watermark`)."""
+        if not isinstance(self.metadata, dict):
+            return ""
+        return str(self.metadata.get("watermark_text") or self.metadata.get("watermark") or "")
+
+    @watermark_text.setter
+    def watermark_text(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["watermark_text"] = str(val or "")
+
+    def is_addon_enabled(self, key: str) -> bool:
+        """Server-side paid-addon entitlement check.
+
+        A client-supplied `paid_addons` flag is NEVER trusted on its own: the
+        addon must be marked enabled in the persisted rule metadata. This is
+        the single enforcement point consulted by the pipeline before any
+        premium transformation runs.
+        """
+        if not isinstance(self.metadata, dict):
+            return False
+        addons = self.metadata.get("paid_addons", {})
+        if not isinstance(addons, dict):
+            return False
+        return bool(addons.get(key, False))
+
     @property
     def link_replacement(self) -> str:
         return str(self.metadata.get("link_replacement") or "") if isinstance(self.metadata, dict) else ""
@@ -1092,6 +1212,8 @@ class MessagePayload:
     caption_entities: Optional[List[Any]] = None
     reply_markup: Optional[Any] = None
     edit_date: Optional[int] = None
+    # epoch seconds of the message this edit replaces (0/None when unknown)
+    original_date: Optional[int] = None
     album_messages: List[Any] = field(default_factory=list)
 
     @property
