@@ -157,14 +157,18 @@ class LogControlServicer(pb_grpc.LogControlServiceServicer):
         level = (entry.level or "INFO").upper()
         if level not in self.VALID_LEVELS:
             level = "INFO"
+        # Ingest-time redaction (mission §6.5 defense-in-depth): producers
+        # already redact at AuditEvent construction; this pass guarantees no
+        # secret ever reaches disk, whatever the producer sent.
+        from .redaction import redact  # local import keeps module import light
         try:
             self._db.insert(
                 ts=entry.ts or int(time.time()),
                 level=level,
                 service=entry.service or "core",
                 category=entry.category or "system",
-                message=entry.message or "",
-                detail=entry.detail or "",
+                message=redact(entry.message or ""),
+                detail=redact(entry.detail or ""),
             )
         except Exception as exc:
             return pb.StatusResponse(success=False, message=str(exc))

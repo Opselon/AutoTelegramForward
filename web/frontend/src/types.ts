@@ -464,6 +464,58 @@ export interface PurgeLogsResponse {
   error?: string
 }
 
+// ---- Centralized audit events (observability platform) --------------------
+
+export interface AuditEventEntry {
+  event_id: string
+  schema_version?: string
+  event_type: string
+  event_category?: string
+  severity?: string
+  outcome?: string
+  ts_utc: number
+  service?: string
+  correlation_id?: string
+  operation_id?: string
+  tenant_id?: string
+  actor_type?: string
+  actor_id?: string
+  feature_id?: string
+  action?: string
+  resource_type?: string
+  resource_id?: string
+  rule_id?: string
+  queue_job_id?: string
+  reason_code?: string
+  duration_ms?: number
+  error_code?: string
+  error_class?: string
+  retryable?: boolean
+  result_summary?: string
+  metadata_json?: string
+}
+
+export interface QueryAuditEventsParams {
+  correlation_id?: string
+  operation_id?: string
+  feature_id?: string
+  service?: string
+  severity?: string
+  event_category?: string
+  outcome?: string
+  since?: number
+  until?: number
+  limit?: number
+  offset?: number
+  /** Admin-only cross-tenant query; the backend pins non-admins to their own id. */
+  owner_user_id?: number
+}
+
+export interface QueryAuditEventsResponse {
+  events: AuditEventEntry[]
+  total: number
+}
+
 export interface WebAccount {
   user_id: number;
   username: string;

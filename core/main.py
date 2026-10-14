@@ -145,6 +145,12 @@ def build_container(cfg: Config) -> dict:
             redacted_url = "postgresql://[REDACTED]"
         logger.info("Selected authoritative database backend: PostgreSQL (%s)", redacted_url)
         pg_pool = _create_postgres_pool(cfg.database_url)
+        # When called from inside a running loop, _create_postgres_pool
+        # returns an un-awaitable *coroutine* — repositories must NOT bind it
+        # directly (their DB calls would silently no-op). Stash it here and
+        # let _resolve_pg_pool() await + rebind before anything queries.
+        if asyncio.iscoroutine(pg_pool):
+            logger.info("PostgreSQL pool deferred: awaiting in _resolve_pg_pool")
         # Durable audit outbox shares the PostgreSQL boundary (mission Phase Five).
         from core.infrastructure.persistence.audit_outbox import AuditOutboxRepository
         audit_repo = AuditOutboxRepository(pg_pool)
@@ -312,7 +318,35 @@ def build_container(cfg: Config) -> dict:
         "pv_responder": pv_responder,
         "account_servicer": account_servicer,
         "settings": settings_repo,
+        # The raw pool (or its deferred coroutine) — awaited by _resolve_pg_pool.
+        "pg_pool_holder": pg_pool,
     }
+
+
+async def _resolve_pg_pool(container: dict) -> None:
+    """Await the deferred PostgreSQL pool and rebind every PG-backed object.
+
+    ``build_container`` is sync but ``_create_postgres_pool`` returns a
+    coroutine when a loop is already running, so the repositories initially
+    hold an un-awaited coroutine. Without this rebind their DB calls would
+    silently no-op (``_fetch_all_db`` falls through to ``return []``), which
+    is exactly the swallowed-connection-failure class the observability
+    mission forbids. Idempotent: no-op when the pool is already a pool.
+    """
+    pool = container.get("pg_pool_holder")
+    if pool is None or not asyncio.iscoroutine(pool):
+        return
+    resolved = await pool
+    # Rebind every repo that was constructed against the coroutine.
+    for key in ("rule_repo", "prompt_repo", "msg_map_repo", "queue_repo"):
+        obj = container.get(key)
+        if obj is not None and asyncio.iscoroutine(getattr(obj, "_db", None)):
+            obj._db = resolved
+    audit_repo = container.get("audit_repo")
+    if audit_repo is not None and asyncio.iscoroutine(getattr(audit_repo, "_db", None)):
+        audit_repo._db = resolved
+    container["pg_pool_holder"] = resolved
+    logger.info("PostgreSQL pool resolved and bound to repositories")
 
 
 async def serve_grpc(container: dict, cfg: Config):
@@ -433,6 +467,7 @@ async def main() -> None:
         container = build_container(cfg)
         if asyncio.iscoroutine(container):
             container = await container
+        await _resolve_pg_pool(container)
         grpc_server = await serve_grpc(container, cfg)
         await seed_default_credential(container, cfg)
         await sync_pool_credentials(container)
@@ -459,6 +494,7 @@ async def main() -> None:
     container = build_container(cfg)
     if asyncio.iscoroutine(container):
         container = await container
+    await _resolve_pg_pool(container)
     grpc_server = await serve_grpc(container, cfg)
     await seed_default_credential(container, cfg)
     await sync_pool_credentials(container)
