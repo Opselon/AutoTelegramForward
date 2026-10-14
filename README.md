@@ -1,272 +1,288 @@
-# AutoTelegramForward
+# AutoTelegramForward (v2.0)
 
 <p align="center">
-  <img src="docs/assets/social-preview.png" alt="AutoTelegramForward — Telegram Auto-Forwarding & Routing Suite" width="100%">
+  <img src="docs/assets/social-preview.png" alt="AutoTelegramForward — Production Telegram Auto-Forwarding & Routing Suite" width="100%">
 </p>
 
-[![Official Documentation](https://img.shields.io/badge/Docs-Official%20Website-0284c7?style=flat-square&logo=telegram)](https://opselon.github.io/AutoTelegramForward/)
-[![Interactive Playground](https://img.shields.io/badge/Playground-Live%20Sandbox-10b981?style=flat-square)](https://opselon.github.io/AutoTelegramForward/tools/playground/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <a href="https://github.com/Opselon/AutoTelegramForward/releases/latest"><img src="https://img.shields.io/github/v/release/Opselon/AutoTelegramForward?color=38bdf8&style=flat-square&logo=github&label=Release" alt="Release"></a>
+  <a href="https://github.com/Opselon/AutoTelegramForward/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Opselon/AutoTelegramForward/ci.yml?branch=master&style=flat-square&logo=githubactions&label=CI" alt="CI Status"></a>
+  <a href="https://github.com/Opselon/AutoTelegramForward/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/Opselon/AutoTelegramForward/codeql.yml?branch=master&style=flat-square&logo=github&label=CodeQL" alt="CodeQL Status"></a>
+  <a href="https://opselon.github.io/AutoTelegramForward/"><img src="https://img.shields.io/badge/Docs-Official%20Documentation-0284c7?style=flat-square&logo=gitbook" alt="Docs"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Go-1.27+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
+  <img src="https://img.shields.io/badge/Rust-1.90+-DEA584?style=flat-square&logo=rust&logoColor=white" alt="Rust">
+  <img src="https://img.shields.io/badge/Flutter-3.29+-02569B?style=flat-square&logo=flutter&logoColor=white" alt="Flutter">
+  <img src="https://img.shields.io/badge/Docker-Multi--Arch-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/Locales-10%20Languages%20(1:1%20Parity)-10b981?style=flat-square&logo=translate" alt="Locales">
+  <img src="https://img.shields.io/badge/Health-Live%20Topology%20Healthy-10b981?style=flat-square&logo=statuspage" alt="Live Health">
+</p>
 
 > 🌐 **Official Website, Documentation & Live Transformation Playground:** [https://opselon.github.io/AutoTelegramForward/](https://opselon.github.io/AutoTelegramForward/)
 
-A production-grade, microservice-based **Telegram MTProto auto-forwarding & routing suite** with an embedded Rust/React Web Dashboard, Go REST Control API, Python MTProto Core, and dedicated Logger Service.
+---
 
-## Architecture & Microservice Boundaries
+## ⚡ One-Command Installation (Zero Setup Hassle)
 
-```
-┌──────────────────┐   HTTP/JSON    ┌──────────────────────┐   HTTP/JSON   ┌───────────────┐
-│ React Dashboard  │ ─────────────► │   Rust Web Gateway   │ ────────────► │    Go API     │
-│   (Browser UI)   │                │   + BFF (:8088)      │               │   (:8080)     │
-└──────────────────┘                └──────────────────────┘               └───────┬───────┘
-                                                                                   │ gRPC
-                                    ┌──────────────────────┐     gRPC              │ (:50051)
-                                    │    Logger Service    │ ◄─────────────────────┼───────┐
-                                    │  (:50052, SQLite DB) │                       │       ▼
-                                    └──────────────────────┘               ┌───────┴──────────┐
-                                                                           │   Python Core    │
-                                                                           │ Bot + Forwarder  │
-                                                                           │  + SQLite (DDD)  │
-                                                                           └──────────────────┘
-```
+Install, configure, and launch the complete 4-microservice suite in seconds with a single command:
 
-1. **Rust Axum Web Gateway & React Dashboard (:8088)**
-   - Zero external static dependencies: React Single-Page Application assets are embedded directly into the Rust binary.
-   - High-performance reverse proxy for all `/api/*` endpoints to the Go Control Plane.
-   - Hardened security headers (`CSP`, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `X-XSS-Protection`).
-   - Dedicated health endpoint (`/healthz`) and gateway metadata (`/api/gateway`).
-
-2. **Go REST API & Control Plane (:8080)**
-   - Authoritative public REST control interface with OpenAPI schemas.
-   - Endpoints for managing forward rules, telegram sessions, stats, and audit logs.
-   - Communicates strictly via gRPC with Python Core and Logger; **no direct database coupling**.
-
-3. **Python Core / Telegram MTProto Engine (:50051)**
-   - Exclusive owner of Telegram sessions, MTProto client pools, and business routing logic.
-   - Domain-Driven Design (DDD): smart routing engine, duplicate message detection, link sanitization, AI rewriting.
-   - Exclusive writer to `data/atf.db` SQLite repository with encrypted credentials (AES-256-GCM).
-
-4. **Python Logger Service (:50052)**
-   - Autonomous observability microservice with dedicated storage (`data/atf_logs.db`).
-   - Retention policy, structured log indexing, queryable via gRPC and REST.
-
-5. **`atf` CLI & Unified Process Supervisor**
-   - Single-file orchestrator that coordinates orderly startup (`logger` → `core` → `api` → `web`), graceful shutdown, crash recovery, and health checks across Linux, macOS, and Windows.
-
-## Features
-
-- ✅ Auto-forward **Channel→Channel**, **PV→PV**, **Channel→PV**, **PV→Channel**
-- ✅ **Forward mode**: native forward (keeps author header) or clean copy
-- ✅ **Filters**: keyword whitelist/blacklist, regex, media types, length bounds, link removal
-- ✅ **AI rewrite**: OpenAI, Anthropic, Gemini, Groq, DeepSeek, 9Router, OpenRouter, any OpenAI-compatible endpoint
-- ✅ **Button-driven Pro UI** — everything in Telegram via inline buttons:
-  login (phone → code → 2FA), rules, filters, AI configs, logs, stats, backup
-- ✅ **Logger microservice** — debug logs queryable per-service/level/category,
-  in its own SQLite DB, via bot 📋 Logs panel or `GET /api/v1/logs`
-- ✅ In-bot account login (`/login` or 📱 button): phone → code → 2FA → encrypted session
-- ✅ **Backup / restore** sessions as encrypted `.atf` files
-- ✅ **Multi-language bot UI**: English, فارسی, Русский, 中文 (`/lang`)
-- ✅ **SQLite-first** multi-DB design — repository ports ready for PostgreSQL/MySQL
-- ✅ **Session & API-key encryption** at rest (AES-256-GCM)
-- ✅ **Bot-token-only operation** — every command works through the Telegram bot
-
-## Download & Install (One Single File — Every Service)
-
-Grab the single `atf` binary for your OS/CPU from
-[**Releases**](https://github.com/Opselon/AutoTelegramForward/releases/latest)
-— one command runs **everything** (Python Core + Logger + Go REST API + Rust/React Web Dashboard):
-
-| File | OS | CPU | Features |
-|---|---|---|---|
-| `atf-linux-x64` | Linux | x86_64 | Self-contained, zero external runtime |
-| `atf-linux-arm64` | Linux | aarch64 (Raspberry Pi 4/5, ARM VPS) | Self-contained, zero external runtime |
-| `atf-macos-x64` | macOS Intel | x86_64 | Self-contained, zero external runtime |
-| `atf-macos-arm64` | macOS Apple Silicon | arm64 | Self-contained, zero external runtime |
-| `atf-windows-x64.exe` | Windows | x64 / ARM64 (Prism) | Standalone Windows executable |
-
-**Linux / macOS / WSL:**
-
-```bash
-# 1. Download & grant execute permission
-curl -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-linux-x64 \
-  -o atf && chmod +x atf
-
-# 2. Easy Setup Wizard (only asks for Bot Token from @BotFather)
-./atf setup
-
-# 3. Start all 4 microservices with one command
-./atf start
-
-# 4. View live status of every microservice
-./atf status
-
-# 5. Access the React Web Dashboard
-# Open http://localhost:8088 in your browser
-```
-
-Verify integrity: `sha256sum -c SHA256SUMS.txt` (from the release page).
-
-**Windows (PowerShell):**
-
-```powershell
-curl.exe -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-windows-x64.exe -o atf.exe
-.\atf.exe setup
-.\atf.exe start
-.\atf.exe status
-# Open http://localhost:8088 in browser
-```
-
-**Docker Compose (All 4 Microservices, amd64 + arm64):**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/docker-compose.yml \
-  -o docker-compose.yml
-docker compose up -d        # or: atf docker up
-```
-
-**Kubernetes:**
-
-```bash
-atf k8s apply               # or: kubectl apply -f k8s/all-in-one.yaml
-```
-
-CLI commands (binary or source — identical):
-
-```bash
-atf setup       # first-time interactive or headless setup
-atf start       # start ALL 4 microservices (logger, core, api, web)
-atf stop        # graceful stop with cleanup
-atf restart     # safe restart
-atf status      # live health & listening port check
-atf health      # deep multi-layer diagnostics (DB, binaries, ports, docker)
-atf logs        # stream service logs in real time
-atf version     # show version and runtime mode (frozen/source)
-atf service install   # install systemd/launchd/TaskScheduler background service
-atf docker up/down    # full Docker Compose management
-atf k8s apply/status  # Kubernetes cluster operations
-atf test        # run the test suite
-```
-
-<details>
-<summary>Install from source (advanced)</summary>
-
-**Linux / macOS / WSL:**
-
+### 🐧 Linux / macOS / WSL (Universal Installer)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash
 ```
 
-**Windows (PowerShell):**
-
+### 🪟 Windows (PowerShell)
 ```powershell
 irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex
 ```
 
-Both installers set up git/Python, clone the repo, then hand off to `atf setup`,
-which asks **only for your Telegram bot token** (get one from [@BotFather](https://t.me/BotFather)).
-Everything else — venv, dependencies, config, encryption key — is automatic.
+### 📦 Standalone Single-File Binary (Zero Host Dependencies)
+No Python, Go, Rust, Node.js, or compiler toolchains required on your machine:
+```bash
+curl -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-linux-x64 -o atf && chmod +x atf
+./atf setup    # Interactive onboarding wizard (asks only for your Telegram Bot Token)
+./atf start    # Launches all 4 microservices simultaneously
+```
+
+### 🐳 Docker Compose (Multi-Arch: `amd64` + `arm64`)
+```bash
+curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/docker-compose.yml -o docker-compose.yml
+docker compose up -d
+```
+
+---
+
+## 🏛️ Architecture & Microservice Topology
+
+AutoTelegramForward v2.0 is engineered with strict, fail-closed microservice boundaries and Domain-Driven Design (DDD):
+
+```
+┌────────────────────────┐      ┌─────────────────────────┐
+│   React SPA Dashboard  │      │   Flutter Mobile App    │
+│  (Modern Browser UI)   │      │     (Android / iOS)     │
+└───────────┬────────────┘      └────────────┬────────────┘
+            │ HTTP / WebSocket               │ REST / JSON
+            ▼                                │
+┌────────────────────────┐                   │
+│    Rust Web Gateway    │ HTTP Reverse Proxy│
+│   + Axum BFF (:8088)   │ ──────────────────┼─────────────────────────┐
+└────────────────────────┘                   │                         │
+                                             ▼                         │
+                                ┌─────────────────────────┐            │
+                                │   Go REST API Gateway   │            │
+                                │  Control Plane (:8080)  │            │
+                                └────────────┬────────────┘            │
+                                             │ gRPC (:50051)           │ gRPC (:50052)
+                                             ▼                         ▼
+                                ┌─────────────────────────┐ ┌─────────────────────────┐
+                                │   Python MTProto Core   │ │   Central Logger Svc    │
+                                │  Forwarder Engine (:50051) │ (:50052, SQLite DB) │
+                                │  ClientPool + SQLite DB │ └─────────────────────────┘
+                                └─────────────────────────┘
+```
+
+1. **Rust Axum Web Gateway & React Dashboard (`:8088`)**
+   - Zero-dependency embedded web server: React SPA assets are compiled directly into the binary.
+   - High-throughput reverse proxy routing `/api/*` to the Go Control Plane.
+   - Hardened security headers (`CSP`, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `X-XSS-Protection`).
+   - Public health endpoint (`/healthz`) and live system topology viewer.
+
+2. **Go REST API & Control Plane (`:8080`)**
+   - Authoritative public REST control interface with OpenAPI documentation.
+   - High-performance authentication (Bearer JWT + TMA Telegram Mini App validation).
+   - Strict multi-tenant isolation guarding rules, sessions, filters, and AI configurations.
+   - Strictly decoupled from databases; communicates with backend engines solely via gRPC.
+
+3. **Python Core / Telegram MTProto Engine (`:50051`)**
+   - Exclusive owner of Telegram MTProto client pools, MTProto event loops, and business routing logic.
+   - Domain-Driven Design (DDD) rule evaluation pipeline, content sanitization, deduplication, and AI transformations.
+   - Encrypted SQLite persistence (`data/atf.db`) utilizing AES-256-GCM for sessions and keys.
+
+4. **Python Central Logger Service (`:50052`)**
+   - Autonomous telemetry and structured observability microservice with dedicated storage (`data/atf_logs.db`).
+   - Standardized `[PIPELINE:...]` logging with live retention, filtering, and queryable gRPC/REST APIs.
+
+5. **Flutter Mobile Client (Android & iOS)**
+   - Production native mobile application with secure credential and password persistence.
+   - Automated server URL reachability probing and protocol version compatibility checks.
+   - Full RTL/LTR multilingual interface mirroring 100% of dashboard capabilities.
+
+6. **`atf` Unified Process Supervisor CLI**
+   - Single-file orchestrator that coordinates orderly startup (`logger` -> `core` -> `api` -> `web`), graceful shutdown, crash recovery, and health checks across Linux, macOS, and Windows.
+
+---
+
+## 🚀 What is New in v2.0
+
+- 🧹 **Advanced Content Cleaner & Sanitizer**:
+  Strip links, `@mentions`, `#hashtags`, emojis, and custom regex patterns per rule, with preview and dynamic toggle.
+- 🧬 **Message Deduplication Engine**:
+  SHA-256 content and album fingerprinting to eliminate duplicate and repeated forwards across all channels.
+- 🔁 **Reply Synchronization (`sync_replies`)**:
+  Preserves conversational hierarchy across channels by automatically mapping and linking replies between source and target.
+- 🏷️ **Show Forward Header Toggle**:
+  Seamlessly choose between native Telegram quote forwarding (preserving author channel header) and clean direct copy.
+- 🌐 **10-Language 1:1 Parity**:
+  Comprehensive, 100% catalog parity (378 keys) across English (`en`), Persian (`fa`), Russian (`ru`), Chinese (`zh`), Portuguese (`pt`), Uzbek (`uz`), Indonesian (`id`), Spanish (`es`), French (`fr`), and Italian (`it`) with fail-closed English fallback.
+- 🎛️ **Interactive Telegram Bot Submenus**:
+  Full visual configuration for Cleaner, Filters, Delay, Blacklist, Whitelist, and Replacements with dynamic status badges.
+- 📊 **Modular Task Overview Modal**:
+  6 modular inspection cards in the React Dashboard for in-depth rule auditing and live parameter adjustments.
+- 🩺 **Live Topology & Services Health**:
+  Real-time sub-millisecond health probing across all 4 services with latency, uptime, and dynamic alerts.
+- 🛡️ **Hardened Multi-Tenant Defense**:
+  Strict fail-closed numeric Telegram ID authorization; zero cross-tenant leak of sessions, rules, or logs.
+- 📋 **Professional Structured Pipeline Logging**:
+  Uniform `[PIPELINE:DISPATCH]`, `[PIPELINE:DELIVERED]`, `[PIPELINE:DROP]` logs for complete auditing and troubleshooting.
+
+---
+
+## 🎛️ Feature Comparison Matrix
+
+| Feature | Telegram Bot UI | Web Dashboard | Mobile App (Flutter) | Go REST API |
+|---|:---:|:---:|:---:|:---:|
+| **Channel / Group / PV Forwarding** | ✅ | ✅ | ✅ | ✅ |
+| **Interactive Login (Phone/OTP/2FA)** | ✅ | ✅ | ✅ | ✅ |
+| **Cleaner & Pattern Removal** | ✅ | ✅ | ✅ | ✅ |
+| **Deduplication & Content Hashing** | ✅ | ✅ | ✅ | ✅ |
+| **Reply & Edit Synchronization** | ✅ | ✅ | ✅ | ✅ |
+| **Forward Header (Quote) Mode** | ✅ | ✅ | ✅ | ✅ |
+| **Delay & Scheduled Auto-Delete** | ✅ | ✅ | ✅ | ✅ |
+| **10 Languages Localization** | ✅ | ✅ | ✅ | ✅ |
+| **AI Rewriting (OpenAI/Claude/Gemini/DeepSeek)** | ✅ | ✅ | ✅ | ✅ |
+| **Live Topology & Health Probing** | ✅ | ✅ | ✅ | ✅ |
+| **Encrypted Backup & Migration (.atf)** | ✅ | ✅ | ✅ | ✅ |
+
+---
+
+## 📥 Download Official Releases
+
+Every platform release provides a self-contained executable embedding all microservices with zero external dependencies:
+
+| Binary Artifact | Platform | Architecture | Description |
+|---|---|---|---|
+| `atf-linux-x64` | Linux | x86_64 | Self-contained standalone single executable |
+| `atf-linux-arm64` | Linux | ARM64 / aarch64 | Raspberry Pi 4/5, ARM VPS, AWS Graviton |
+| `atf-macos-x64` | macOS | Intel x86_64 | macOS standalone binary |
+| `atf-macos-arm64` | macOS | Apple Silicon (M1–M4) | Native Apple Silicon binary |
+| `atf-windows-x64.exe` | Windows | x64 / ARM64 | Native Windows executable |
+| `AutoTelegramForward-*-arm64.apk` | Android | ARM64 | Mobile release APK |
+| `AutoTelegramForward-*-bundle.aab` | Android | Universal | Google Play Store bundle |
+
+👉 **Browse all downloadable artifacts on [Releases Page](https://github.com/Opselon/AutoTelegramForward/releases/latest)**.
+
+---
+
+## 💻 CLI Command Reference
+
+The unified `atf` CLI manages the entire lifecycle of all services:
 
 ```bash
-python atf.py start      # logger + bot + REST API live
+atf setup             # First-time interactive or headless setup wizard
+atf start             # Start ALL 4 microservices (logger -> core -> api -> web)
+atf stop              # Gracefully stop all microservices with state cleanup
+atf restart           # Safe sequential restart
+atf status            # Check live status, PIDs, and listening ports
+atf health            # Deep multi-layer diagnostics (DB, binaries, ports, gRPC)
+atf logs              # Real-time streaming service logs with filtering
+atf version           # Display version and runtime execution mode
+atf service install   # Install OS background daemon (systemd / launchd / TaskScheduler)
+atf docker up/down    # Full Docker Compose orchestration
+atf k8s apply/status  # Production Kubernetes cluster deployments
+atf test              # Run multi-stack test suites
 ```
 
-`start` launches three services: Logger (:6002) → Python core/bot (gRPC :6001)
-→ Go REST API (:8080, skipped automatically if Go isn't installed).
+---
 
-Other commands:
+## 🤖 Telegram Bot — Pro Button UI
 
-```bash
-python atf.py test          # run Python + Go test suites
-python atf.py update        # git pull + dependency refresh
-python atf.py restore x.atf # restore a session backup
-```
+Start the bot with `/start` to access the interactive panel without typing complex commands:
 
-<details>
-<summary>Manual setup (advanced)</summary>
+| Panel | Functionality |
+|---|---|
+| 📱 **Login** | Link a user account: Phone number -> Telegram OTP -> 2FA Password -> Encrypted session |
+| 🔀 **Rules** | Create, view, toggle, edit, or delete forwarding rules |
+| 🧹 **Cleaner** | Strip URLs, @mentions, #hashtags, emojis, and custom regex patterns |
+| 🎛️ **Filters** | Configure keyword whitelists, blacklists, and media filters |
+| 🤖 **AI Rewrite** | Connect OpenAI, Anthropic, Gemini, Groq, DeepSeek, or custom LLMs |
+| 📋 **Logs** | Browse debug logs filtered by service and log level |
+| 📊 **Stats** | Real-time forwarding counts, rate metrics, and system throughput |
+| 🌐 **Language** | Switch on-the-fly between all 10 supported languages |
+| 💾 **Backup** | Export and restore AES-256-GCM encrypted `.atf` configurations |
 
-```bash
-# 1. Environment
-uv venv .venv --python 3.11
-uv pip install pyrogram tgcrypto grpcio grpcio-tools protobuf httpx cryptography pyyaml pytest pytest-asyncio
+---
 
-# 2. Configure
-copy config.example.yaml config.yaml   # fill in api_id, api_hash, bot_token, master_key
+## 🔌 REST API Endpoints (Go Control Plane, `:8080`)
 
-# 3. Regenerate proto (only if you edit proto/autoforward.proto)
-python scripts/gen_proto.py
+All API endpoints are documented with OpenAPI schemas:
 
-# 4. Build & run
-cd api && go build -o atf-api.exe . && cd ..
-.venv\Scripts\python.exe -m core.main   # terminal 1 (bot + gRPC)
-cd api && .\atf-api.exe                  # terminal 2 (REST API)
-```
-
-</details>
-
-<details>
-<summary>Docker</summary>
-
-```bash
-cp .env.example .env        # paste your bot token
-docker compose up -d        # core + api, data persisted in a volume
-```
-
-</details>
-
-## Telegram Bot — Pro Button UI
-
-Open the bot and press **🚀 Start Panel** (`/start`). Everything is buttons —
-no typing commands:
-
-| Panel | Does |
-|-------|------|
-| 📱 Login | link a user account: phone → code → 2FA → encrypted session |
-| 🔀 Rules | list / add (source → target, routing, mode) / enable / delete |
-| 🎛 Filters | list / add (type, pattern, action) / delete |
-| 🤖 AI | list / add (provider, model, key, prompt) / delete |
-| 📋 Logs | browse debug logs (filter by service / level), powered by the Logger service |
-| 📊 Stats | live forwarding statistics |
-| 💾 Backup | export encrypted `.atf` session backups |
-| 🌐 Language | switch en / fa / ru / zh |
-
-## Telegram Bot Commands (also available)
-
-| Command | Purpose |
-|---------|---------|
-| `/start` `/help` | welcome + command list |
-| `/login` | link a user account (phone → code → 2FA) |
-| `/sessions` | list linked sessions |
-| `/rules` | list & add forwarding rules (`source_id target_id`) |
-| `/ai` | list & add AI configs (`provider model api_key`) |
-| `/lang` | switch language (en/fa/ru/zh) |
-| `/backup` `/restore` | session backup / restore |
-| `/stats` | live forwarding statistics |
-| `/cancel` | abort current operation |
-
-## REST API (Go, :8080)
-
-```
+```http
+# Health & Telemetry
 GET    /healthz
-GET    /api/v1/sessions        POST /api/v1/sessions/backup  POST /api/v1/sessions/restore
+GET    /api/v1/health/services
+
+# Forwarding Rules & Settings
+GET    /api/v1/rules
+POST   /api/v1/rules
+GET    /api/v1/rules/{id}
+PUT    /api/v1/rules/{id}
+DELETE /api/v1/rules/{id}
+POST   /api/v1/rules/{id}/pause
+POST   /api/v1/rules/{id}/resume
+
+# Session Management
+GET    /api/v1/sessions
+POST   /api/v1/sessions/backup
+POST   /api/v1/sessions/restore
 DELETE /api/v1/sessions/{id}
-GET    /api/v1/rules           POST /api/v1/rules            PUT/DELETE /api/v1/rules/{id}
-GET    /api/v1/filters         POST /api/v1/filters          PUT/DELETE /api/v1/filters/{id}
-GET    /api/v1/ai              POST /api/v1/ai               PUT/DELETE /api/v1/ai/{id}
-POST   /api/v1/ai/{id}/test    GET /api/v1/stats
-GET    /api/v1/logs?service=&level=&search=&limit=&since=     GET /api/v1/logs/stats
+
+# Filters & AI Configurations
+GET    /api/v1/filters
+POST   /api/v1/filters
+PUT    /api/v1/filters/{id}
+DELETE /api/v1/filters/{id}
+GET    /api/v1/ai
+POST   /api/v1/ai
+POST   /api/v1/ai/{id}/test
+
+# Observability Logs
+GET    /api/v1/logs?service=&level=&search=&limit=&since=
+GET    /api/v1/logs/stats
+POST   /api/v1/logs/purge
 ```
 
-Auth: set `ATF_API_KEY` and pass `X-API-Key` (or `Authorization: Bearer`) on every request.
+---
 
-## Tests
+## 🧪 Comprehensive Automated Test Suites
+
+AutoTelegramForward maintains strict test gates across every tier:
 
 ```bash
-.venv\Scripts\python.exe -m pytest core/tests logger/tests -q    # 42 tests: crypto, filters, repos, pipeline, gRPC, logger, pro-UI
-cd api && go test ./...                  # middleware + handler tests
+# Python MTProto Core (507+ tests: DDD, crypto, cleaner, pipeline, gRPC, FSM)
+pytest core/tests -q
+
+# Go REST API Control Plane (100% passing: auth, tenant isolation, metadata validation)
+cd api && go test -v ./...
+
+# Flutter Mobile Application (50+ tests: models, storage, isolation, localization)
+cd mobile && flutter test
 ```
 
-## Security Notes
+---
 
-- Session strings and AI API keys are **never stored in plaintext** — AES-256-GCM with a key derived from `master_key`.
-- Keep `master_key` safe; rotating it invalidates all stored sessions.
-- Set `admin_ids` in config to restrict bot admin commands.
+## 🔒 Security & Privacy Standard
+
+- **Zero Plaintext Credentials**: All session strings, bot tokens, and AI API keys are encrypted at rest with AES-256-GCM derived from your `master_key`.
+- **Fail-Closed Multi-Tenant Defense**: Authorization is strictly enforced using immutable numeric Telegram User IDs (`user.id`), never mutable usernames.
+- **Network Isolation**: Python Core and Logger microservices bind to private gRPC interfaces and do not expose unauthenticated public ports.
+- **Audit Logging**: Sensitive tokens and private credentials are automatically redacted (`[REDACTED]`) before reaching logs or error traces.
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
