@@ -378,3 +378,113 @@ class TestPipelineAppliesAdvancedSettings:
         skipped = [s for s in ctx.stage_results if s.stage.value == "DEDUPLICATE" and not s.success]
         assert any(s.reason == "edit_outside_time_window" for s in skipped), \
             "an edit outside edit_time_limit_seconds must be skipped by the pipeline"
+
+    @pytest.mark.asyncio
+    async def test_keyword_reply_enqueued_as_distinct_job(self):
+        """Keyword reply must be enqueued with job_kind="keyword_reply".
+
+        Without it, the reply collides with the primary forward's job id
+        (rule:chat:msg:target) and is silently deduplicated away — the user
+        configures a reply and nothing is ever sent.
+        """
+        from core.infrastructure.telegram.durable_queue import DurableQueueManager
+
+        rule = _rule(paid_addons={"keyword_reply": True})
+        rule.keyword_confirmation = True
+        rule.keyword_reply = "keyword matched!"
+        rule.whitelist = ["btc"]
+        rule.is_active = True
+
+        payload = _payload("buy BTC now")
+
+        calls: list[dict] = []
+        orig = DurableQueueManager.enqueue_delivery
+
+        async def fake_enqueue(self, r, p, target, text, evaluation=None, job_kind="forward"):
+            calls.append({"target": target, "text": text, "job_kind": job_kind})
+            return True
+
+        DurableQueueManager.enqueue_delivery = fake_enqueue
+        try:
+            mgr = DurableQueueManager.__new__(DurableQueueManager)
+            # 1. The primary forward enqueues normally.
+            await mgr.enqueue_delivery(rule, payload, "-100222", "buy BTC now", None)
+            # 2. The reply enqueues with a distinct kind.
+            reply = AdvancedSettingsEngine.classify_keyword_trigger("buy BTC now", rule)
+            assert reply == "keyword matched!"
+            await mgr.enqueue_delivery(rule, payload, "-100222", reply, None,
+                                       job_kind="keyword_reply")
+        finally:
+            DurableQueueManager.enqueue_delivery = orig
+
+        assert calls[0]["job_kind"] == "forward"
+        assert calls[1]["job_kind"] == "keyword_reply"
+        assert calls[1]["text"] == "keyword matched!"
+
+
+class TestKeywordReplyJobIsolation:
+    """A keyword-reply delivery is text-only and never re-ships the source media."""
+
+    @staticmethod
+    def _mgr_with_fake_queue():
+        import asyncio
+
+        from core.infrastructure.telegram.durable_queue import DurableQueueManager
+
+        class FakeQueueRepo:
+            async def get_pending_count(self):
+                return 0
+
+        mgr = DurableQueueManager.__new__(DurableQueueManager)
+        mgr._queue = FakeQueueRepo()
+        mgr._max_queue_size = 10000
+        mgr._notify_event = asyncio.Event()
+        mgr.stats = {"enqueued": 0, "backpressure_drops": 0}
+        return mgr
+
+    def test_reply_payload_is_flagged(self):
+        rule = _rule()
+        mgr = self._mgr_with_fake_queue()
+
+        captured: dict = {}
+        orig_atomic = type(mgr)._enqueue_atomic
+
+        async def fake_atomic(self, mapping, job):
+            captured["payload_data"] = job.payload_data
+            captured["job_id"] = job.id
+            return True
+
+        type(mgr)._enqueue_atomic = fake_atomic
+        try:
+            import asyncio
+            payload = _payload("buy BTC now")
+            asyncio.run(mgr.enqueue_delivery(rule, payload, "-100222", "hi", None,
+                                             job_kind="keyword_reply"))
+        finally:
+            type(mgr)._enqueue_atomic = orig_atomic
+
+        assert captured["payload_data"]["is_reply"] is True
+        assert "keyword_reply" in captured["job_id"]
+
+    def test_forward_payload_is_not_flagged(self):
+        rule = _rule()
+        mgr = self._mgr_with_fake_queue()
+
+        captured: dict = {}
+        orig_atomic = type(mgr)._enqueue_atomic
+
+        async def fake_atomic(self, mapping, job):
+            captured["payload_data"] = job.payload_data
+            captured["job_id"] = job.id
+            return True
+
+        type(mgr)._enqueue_atomic = fake_atomic
+        try:
+            import asyncio
+            payload = _payload("hello")
+            asyncio.run(mgr.enqueue_delivery(rule, payload, "-100222", "hello", None))
+        finally:
+            type(mgr)._enqueue_atomic = orig_atomic
+
+        assert captured["payload_data"].get("is_reply", False) is False
+        assert "keyword_reply" not in captured["job_id"]

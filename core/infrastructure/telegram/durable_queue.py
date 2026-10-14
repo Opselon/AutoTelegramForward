@@ -171,10 +171,16 @@ class DurableQueueManager:
         target_chat_id: str,
         text: str,
         evaluation: Any = None,
+        job_kind: str = "forward",
     ) -> bool:
         """Enqueue a delivery job for one target chat.
 
         Returns True if accepted, False if backpressured or already queued (idempotent).
+
+        ``job_kind`` discriminates the primary forward (``"forward"``) from
+        secondary side-effect deliveries such as the keyword-reply add-on
+        (``"keyword_reply"``). Without it both jobs produce the same id
+        (``rule:chat:msg:target``) and the reply is silently deduplicated away.
         """
         # 1. Backpressure guard
         pending_count = await self._queue.get_pending_count()
@@ -218,6 +224,9 @@ class DurableQueueManager:
             "debug_mode": bool(getattr(rule, "debug_mode", False)),
             "process_raw_text": bool(getattr(rule, "process_raw_text", False)),
             "button_to_text": bool(getattr(rule, "button_to_text", False)),
+            # A keyword-reply job is a pure-text follow-up: it must never
+            # re-copy or re-forward the source message's media.
+            "is_reply": job_kind != "forward",
         }
 
         # 3. Insert or update initial mapping as PENDING
@@ -239,7 +248,10 @@ class DurableQueueManager:
         # after a mid-unit crash is a harmless no-op rather than a duplicate.
         delay = float(getattr(rule, "delay_seconds", 0.0) or 0.0)
         next_retry_at = time.time() + delay if delay > 0 else 0.0
-        job_id = f"{rule.id}:{payload.chat_id}:{payload.message_id}:{target_chat_id}"
+        # The reply is a distinct deliverable, so it gets a distinct id —
+        # otherwise the primary forward's INSERT OR IGNORE swallows it.
+        suffix = "" if job_kind == "forward" else f":{job_kind}"
+        job_id = f"{rule.id}:{payload.chat_id}:{payload.message_id}:{target_chat_id}{suffix}"
 
         job = DeliveryJob(
             id=job_id,
@@ -924,6 +936,15 @@ class DurableQueueManager:
         has_media = data.get("has_media", False)
         album_ids = data.get("album_message_ids") or [src_msg_id]
         is_album = bool(data.get("media_group_id")) and len(album_ids) > 1
+
+        # Phase 2: a keyword-reply job is a pure-text follow-up. Force text-only
+        # dispatch regardless of the source message's media so the reply never
+        # re-copies or re-forwards the original attachment.
+        if bool(data.get("is_reply", False)):
+            forward_mode = "COPY_MESSAGE"
+            content_mode = "TEXT_ONLY"
+            is_album = False
+            has_media = False
 
         # --- Phase 2: advanced task-overview settings execute here -------------
         # `advanced_delay_seconds` is the authoritative Phase 2 field; the
