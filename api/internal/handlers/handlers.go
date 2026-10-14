@@ -2026,19 +2026,21 @@ func (h *Handlers) QueryAuditEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	limit := 100
 	if v := r.URL.Query().Get("limit"); v != "" {
-		if limit, err = strconv.Atoi(v); err != nil || limit < 1 || limit > 500 {
+		parsed, parseErr := strconv.Atoi(v)
+		if parseErr != nil || parsed < 1 || parsed > 500 {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid limit (1-500)"})
 			return
 		}
+		limit = parsed
 	}
-	q.Limit = int32(limit)
+	q.Limit = int32(limit) // safe: limit ∈ [1, 500]
 	if v := r.URL.Query().Get("offset"); v != "" {
 		off, err := strconv.Atoi(v)
-		if err != nil || off < 0 {
+		if err != nil || off < 0 || off > 1_000_000 {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid offset"})
 			return
 		}
-		q.Offset = int32(off)
+		q.Offset = int32(off) //nolint:gosec // bounded to [0, 1_000_000]
 	}
 	// Fail-closed tenant scoping: normal tenants are pinned to their own
 	// numeric user ID; only admins may query across tenants.
