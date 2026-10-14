@@ -539,6 +539,42 @@ class DurableMessagePipeline:
                 # No queue manager configured (standalone/mock mode)
                 enqueued_any = True
 
+        # Phase 2: keyword-confirmation / keyword-reply add-on. A matched
+        # whitelist keyword schedules the configured reply text to the same
+        # targets, as its own durable job. This runs *after* the primary
+        # enqueue so a reply failure can never drop or delay the forward
+        # itself; the reply is a secondary, best-effort side effect.
+        try:
+            reply_text = AdvancedSettingsEngine.classify_keyword_trigger(
+                payload.effective_text or ctx.transformed_text or "", rule,
+            )
+            if reply_text:
+                for target in targets:
+                    if self._queue is None:
+                        break
+                    # job_kind="keyword_reply" gives the reply its own
+                    # delivery-job id so it is not deduplicated against the
+                    # primary forward for the same target.
+                    await self._queue.enqueue_delivery(
+                        rule, payload, str(target), reply_text, eval_res,
+                        job_kind="keyword_reply",
+                    )
+                ctx.record_stage(
+                    PipelineStage.TRANSFORM, True,
+                    reason="keyword_reply:matched",
+                )
+                logger.info(
+                    "[PIPELINE:KEYWORD_REPLY] [%s] Rule %s keyword matched on msg %s — reply enqueued to %d target(s)",
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id, len(targets),
+                )
+        except Exception as exc:
+            # The keyword reply is an add-on side effect: a failure here must
+            # never turn an already-enqueued forward into a pipeline failure.
+            logger.warning(
+                "[PIPELINE:KEYWORD_REPLY] [%s] Rule %s keyword reply failed (%s) — forward unaffected",
+                ctx.correlation_id[:8], rule.id[:8], exc,
+            )
+
         ctx.record_stage(
             PipelineStage.ENQUEUE,
             enqueued_any,
