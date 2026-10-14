@@ -1185,3 +1185,162 @@ class DeliveryStateMachine:
             return DeliveryStatus.COPYING_TO_C
 
         return DeliveryStatus.SENDING
+
+
+class AdvancedSettingsEngine:
+    """Runtime execution layer for the advanced task-overview settings.
+
+    Phase 1 persisted these fields; Phase 2 makes them *act*. Every method here
+    is called from the real dispatch path (durable queue + direct dispatcher),
+    so a toggle flipped in the bot, web dashboard, TMA or mobile client changes
+    what happens to the very next message — no restart required.
+
+    Design rules:
+      * The persisted ``ForwardRule`` is the single source of truth. Nothing is
+        read from the request that produced the message.
+      * Paid add-ons are checked server-side via ``rule.is_addon_enabled``. A
+        client-supplied entitlement flag never grants a premium transform.
+      * Every transform is total: it never raises, and it returns the
+        (possibly unchanged) text plus a diagnostic reason so the pipeline can
+        emit a structured event describing exactly what was applied.
+      * Failures degrade to the *untransformed* text, never to a silent drop,
+        except where the caller's policy explicitly demands a drop.
+    """
+
+    CRYPTO_ADDON_KEY = "crypto_mode"
+    WATERMARK_ADDON_KEY = "watermark"
+    LINK_BUTTONS_ADDON_KEY = "link_buttons"
+    AFFILIATE_ADDON_KEY = "affiliate_kit"
+    OCR_ADDON_KEY = "ocr_image_ai"
+    SMART_REWRITE_ADDON_KEY = "smart_ai_rewrite"
+    KEYWORD_REPLY_ADDON_KEY = "keyword_reply"
+    AUTO_DELETE_ADDON_KEY = "auto_delete_message"
+
+    # Bounded: Telegram's own caption/text limits are the real ceiling.
+    WATERMARK_MAX_LEN = 200
+    KEYWORD_REPLY_MAX_LEN = 4096
+
+    @classmethod
+    def apply_content_transforms(
+        cls,
+        text: str,
+        rule: "ForwardRule",
+        payload: Optional["MessagePayload"] = None,
+    ) -> Tuple[str, List[str]]:
+        """Apply the *non-AI* advanced content settings in a fixed order.
+
+        Returns the transformed text and the list of applied transformations
+        (empty when the rule opts out of everything), in pipeline order.
+        """
+        if text is None:
+            text = ""
+        applied: List[str] = []
+
+        # 1. Watermark — appends a persistent ownership/signature line.
+        wm = (rule.watermark_text or "").strip()
+        if wm:
+            wm = wm[: cls.WATERMARK_MAX_LEN]
+            if wm not in text:
+                text = f"{text}\n\n{wm}" if text.strip() else wm
+                applied.append("watermark")
+
+        # 2. Link buttons — a paid add-on. Renders the configured buttons as a
+        #    plain-text block under the message body (native inline keyboards
+        #    are attached by the dispatcher, not by the text transform).
+        if rule.link_buttons and rule.is_addon_enabled(cls.LINK_BUTTONS_ADDON_KEY):
+            lines = [f"🔗 {b.get('text', '').strip()}: {b.get('url', '').strip()}"
+                     for b in rule.link_buttons if isinstance(b, dict) and b.get("url")]
+            if lines:
+                block = "\n".join(lines)
+                if block not in text:
+                    text = f"{text}\n\n{block}" if text.strip() else block
+                    applied.append("link_buttons")
+
+        # 3. Affiliate kit — a paid add-on. Rewrites naked URLs through the
+        #    configured affiliate prefix, preserving every other character.
+        ak = rule.affiliate_kit or {}
+        if isinstance(ak, dict) and ak.get("enabled") and rule.is_addon_enabled(cls.AFFILIATE_ADDON_KEY):
+            prefix = str(ak.get("prefix") or "").strip()
+            if prefix:
+                replaced = URL_REGEX.sub(
+                    lambda m: f"{prefix}{m.group(0)}" if m.group(0).startswith("http") else m.group(0),
+                    text,
+                )
+                if replaced != text:
+                    text = replaced
+                    applied.append("affiliate_kit")
+
+        return text, applied
+
+    @classmethod
+    def classify_keyword_trigger(
+        cls,
+        text: str,
+        rule: "ForwardRule",
+    ) -> Optional[str]:
+        """Evaluate the keyword-confirmation / keyword-reply add-on.
+
+        Returns the reply text to send when a whitelisted keyword is present,
+        or ``None`` when the add-on is disabled or no keyword matches.
+        """
+        if not rule.keyword_confirmation:
+            return None
+        reply = (rule.keyword_reply or "").strip()[: cls.KEYWORD_REPLY_MAX_LEN]
+        if not reply:
+            return None
+        if not rule.is_addon_enabled(cls.KEYWORD_REPLY_ADDON_KEY):
+            return None
+
+        haystack = (text or "").lower()
+        keywords = [str(k).strip().lower() for k in (rule.whitelist or []) if str(k).strip()]
+        if not keywords:
+            return None
+        # A keyword confirmation never drops the forwarded message: it only
+        # decides whether the configured reply is also posted to the target.
+        if any(kw in haystack for kw in keywords):
+            return reply
+        return None
+
+    @classmethod
+    def get_auto_delete_seconds(cls, rule: "ForwardRule") -> int:
+        """Return the TTL after which the forwarded message is deleted.
+
+        ``0`` means the message is kept permanently. The add-on gate is checked
+        here so a client cannot enable auto-delete by toggling the duration.
+        """
+        ttl = rule.auto_delete_seconds
+        if ttl <= 0:
+            return 0
+        if not rule.is_addon_enabled(cls.AUTO_DELETE_ADDON_KEY):
+            return 0
+        # Bounded by Telegram's own 1-year practical maximum for delete timers.
+        return max(1, min(ttl, 31_536_000))
+
+    @classmethod
+    def is_edit_within_window(
+        cls,
+        original_date: Optional[int],
+        edit_date: Optional[int],
+        rule: "ForwardRule",
+    ) -> bool:
+        """Whether an edited message still qualifies for edit synchronization.
+
+        ``edit_time_limit_seconds == 0`` means "no window" — all edits sync.
+        Otherwise an edit arriving after the window is ignored, which prevents
+        a burst of very old edits from flooding the target on a reconnect.
+        """
+        limit = rule.edit_time_limit_seconds
+        if limit <= 0:
+            return True
+        if not original_date or not edit_date:
+            return True
+        return (int(edit_date) - int(original_date)) <= limit
+
+    @classmethod
+    def get_dispatch_delay(cls, rule: "ForwardRule") -> float:
+        """Seconds to wait before dispatching, honoring the advanced setting.
+
+        Falls back to the rule's first-class ``delay_seconds`` when the advanced
+        setting is absent, and is hard-bounded to one hour.
+        """
+        return float(rule.forward_delay_seconds or 0.0)

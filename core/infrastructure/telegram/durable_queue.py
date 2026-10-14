@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ...application.repositories import IDeliveryQueueRepository, IMessageMapRepository
 from ...domain.entities import DeliveryJob, DeliveryStatus, ForwardMode, MessageMapping, MessagePayload
+from ...domain.services import AdvancedSettingsEngine
 from ...domain.value_objects import ContentMode
 from .errors import tg_detail, tg_error, wait_seconds
 
@@ -210,6 +211,13 @@ class DurableQueueManager:
             "forward_mode": forward_mode_val,
             "content_mode": mode_val,
             "delay_seconds": float(getattr(rule, "delay_seconds", 0.0) or 0.0),
+            # --- Phase 2: advanced task-overview settings reach the worker ---
+            "advanced_delay_seconds": AdvancedSettingsEngine.get_dispatch_delay(rule),
+            "auto_delete_seconds": AdvancedSettingsEngine.get_auto_delete_seconds(rule),
+            "topic_id": int(getattr(rule, "topic_id", None) or 0),
+            "debug_mode": bool(getattr(rule, "debug_mode", False)),
+            "process_raw_text": bool(getattr(rule, "process_raw_text", False)),
+            "button_to_text": bool(getattr(rule, "button_to_text", False)),
         }
 
         # 3. Insert or update initial mapping as PENDING
@@ -541,6 +549,17 @@ class DurableQueueManager:
                     await self._metrics.bump(forwarded=1)
                 except Exception:
                     pass
+
+            # --- Phase 2: auto-delete the forwarded message after the TTL -----
+            # The paid-addon gate was evaluated at enqueue time and the resolved
+            # TTL travelled in the payload, so this needs no extra DB read.
+            # A scheduling failure must never turn a successful forward into a
+            # failure: the message is already delivered and visible.
+            ttl = int(job.payload_data.get("auto_delete_seconds", 0) or 0)
+            if ttl > 0 and target_msg_id:
+                asyncio.create_task(
+                    self._schedule_auto_delete(client, target, int(target_msg_id), ttl, job.id)
+                )
             return (job.id, target_msg_id)
 
         except Exception as exc:
@@ -867,6 +886,31 @@ class DurableQueueManager:
                 except Exception:
                     pass
 
+    async def _schedule_auto_delete(
+        self, client: Any, target: Any, message_id: int, ttl: int, job_id: str
+    ) -> None:
+        """Delete a forwarded message from the target after ``ttl`` seconds.
+
+        The paid-addon entitlement is resolved at enqueue time; this coroutine
+        only carries out the already-authorized deletion. Any Telegram error
+        here is diagnostic-only: the forward itself already succeeded and must
+        never be reported as failed because the cleanup missed.
+        """
+        try:
+            await asyncio.sleep(min(ttl, 31_536_000))
+            await client.delete_messages(chat_id=target, message_ids=message_id)
+            logger.info(
+                "[PIPELINE:AUTO_DELETE] [%s] Deleted forwarded message %s in %s after %ds",
+                job_id, message_id, target, ttl,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "[PIPELINE:AUTO_DELETE] [%s] Failed to delete message %s in %s after %ds: %s",
+                job_id, message_id, target, ttl, tg_detail(exc),
+            )
+
     async def _dispatch_to_telegram(self, client: Any, job: DeliveryJob) -> int:
         """Call pyrogram client methods and return the sent message ID."""
         data = job.payload_data
@@ -881,7 +925,31 @@ class DurableQueueManager:
         album_ids = data.get("album_message_ids") or [src_msg_id]
         is_album = bool(data.get("media_group_id")) and len(album_ids) > 1
 
+        # --- Phase 2: advanced task-overview settings execute here -------------
+        # `advanced_delay_seconds` is the authoritative Phase 2 field; the
+        # legacy `delay_seconds` is kept as a fallback so existing rules that
+        # predate the advanced UI keep behaving exactly as before.
+        adv_delay = data.get("advanced_delay_seconds")
+        delay = float(adv_delay) if adv_delay is not None else float(data.get("delay_seconds", 0.0) or 0.0)
+        if delay > 0:
+            logger.debug(
+                "[DURABLE_QUEUE] applying advanced dispatch delay %.1fs for job %s -> %s",
+                delay, job.id, target,
+            )
+            await asyncio.sleep(min(delay, 3600.0))
+
         caption = text if text else None
+
+        # --- Phase 2: forum-topic routing -----------------------------------
+        # Telegram addresses a topic inside a supergroup with the
+        # `message_thread_id` parameter. When a rule configures `topic_id` the
+        # target must be the topic thread, not the group's General topic, or
+        # the message silently lands in the wrong place. Only a positive id is
+        # meaningful: 0/None means "no topic configured".
+        topic_id = int(data.get("topic_id", 0) or 0)
+        thread_kwargs: Dict[str, Any] = {}
+        if topic_id > 0:
+            thread_kwargs["message_thread_id"] = topic_id
 
         # 1. DIRECT_FORWARD
         if forward_mode == ForwardMode.DIRECT_FORWARD.value:
@@ -890,6 +958,7 @@ class DurableQueueManager:
                     chat_id=target,
                     from_chat_id=src_chat,
                     message_ids=album_ids,
+                    **thread_kwargs,
                 )
                 if isinstance(res, list) and res:
                     return res[0].id
@@ -910,6 +979,7 @@ class DurableQueueManager:
                         from_chat_id=src_chat,
                         message_id=src_msg_id,
                         captions=caption,
+                        **thread_kwargs,
                     )
                     if isinstance(res, list) and res:
                         return res[0].id
@@ -921,14 +991,16 @@ class DurableQueueManager:
 
         # 3. TEXT_ONLY mode
         if content_mode == "TEXT_ONLY":
-            res = await client.send_message(chat_id=target, text=text or "...")
+            res = await client.send_message(chat_id=target, text=text or "...", **thread_kwargs)
             return getattr(res, "id", 0)
 
         # 4. MEDIA_ONLY mode
         if content_mode == "MEDIA_ONLY":
             if has_media:
                 try:
-                    res = await client.copy_message(chat_id=target, from_chat_id=src_chat, message_id=src_msg_id)
+                    res = await client.copy_message(
+                        chat_id=target, from_chat_id=src_chat, message_id=src_msg_id, **thread_kwargs
+                    )
                     return getattr(res, "id", 0)
                 except Exception as c_err:
                     err_str = str(c_err).lower()
@@ -945,6 +1017,7 @@ class DurableQueueManager:
                     from_chat_id=src_chat,
                     message_id=src_msg_id,
                     caption=caption,
+                    **thread_kwargs,
                 )
                 return getattr(res, "id", 0)
             except Exception as c_err:
@@ -954,7 +1027,7 @@ class DurableQueueManager:
                     return await self._reupload_media(client, src_chat, src_msg_id, target, caption, data.get("media_type", ""))
                 raise
 
-        res = await client.send_message(chat_id=target, text=text or "...")
+        res = await client.send_message(chat_id=target, text=text or "...", **thread_kwargs)
         return getattr(res, "id", 0)
 
     # ------------------------------------------------------------------ #

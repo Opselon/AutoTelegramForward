@@ -149,3 +149,115 @@ func TestAuthTMA_SignatureVerification(t *testing.T) {
 		t.Errorf("expected 401 for expired init_data, got %d", recExpired.Code)
 	}
 }
+
+
+// TestNormalizeAdvancedMetadataValidation covers the Phase 2 typed-validation
+// contract: every known advanced field is coerced to its canonical type and an
+// out-of-range or malformed value is normalized instead of persisted as
+// garbage that could reach the worker.
+func TestNormalizeAdvancedMetadataValidation(t *testing.T) {
+	t.Run("negative and oversized delay is clamped", func(t *testing.T) {
+		meta := map[string]any{"forward_delay_seconds": -5.0}
+		normalizeAdvancedMetadata(meta)
+		if v, _ := toFloat(meta["forward_delay_seconds"]); v != 0 {
+			t.Fatalf("expected 0, got %v", v)
+		}
+
+		meta = map[string]any{"forward_delay_seconds": 999999.0}
+		normalizeAdvancedMetadata(meta)
+		if v, _ := toFloat(meta["forward_delay_seconds"]); v != maxDelaySeconds {
+			t.Fatalf("expected %v, got %v", maxDelaySeconds, v)
+		}
+	})
+
+	t.Run("non-numeric delay is dropped", func(t *testing.T) {
+		meta := map[string]any{"forward_delay_seconds": "soon"}
+		normalizeAdvancedMetadata(meta)
+		if _, ok := meta["forward_delay_seconds"]; ok {
+			t.Fatalf("malformed numeric field must be dropped")
+		}
+	})
+
+	t.Run("string truthiness coerced to boolean", func(t *testing.T) {
+		meta := map[string]any{"debug_mode": "true", "crypto_mode": "on", "auto_posting": "yes"}
+		normalizeAdvancedMetadata(meta)
+		for _, k := range []string{"debug_mode", "crypto_mode", "auto_posting"} {
+			if b, ok := meta[k].(bool); !ok || !b {
+				t.Fatalf("%s must be a true boolean, got %T(%v)", k, meta[k], meta[k])
+			}
+		}
+	})
+
+	t.Run("oversized watermark is truncated", func(t *testing.T) {
+		meta := map[string]any{"watermark_text": strings.Repeat("W", maxWatermarkLen+50)}
+		normalizeAdvancedMetadata(meta)
+		if s, ok := meta["watermark_text"].(string); !ok || len(s) != maxWatermarkLen {
+			t.Fatalf("watermark must be exactly %d chars, got %d", maxWatermarkLen, len(s))
+		}
+	})
+
+	t.Run("negative topic id normalized to zero", func(t *testing.T) {
+		meta := map[string]any{"topic_id": -3.0}
+		normalizeAdvancedMetadata(meta)
+		if v, ok := meta["topic_id"].(int); !ok || v != 0 {
+			t.Fatalf("expected 0, got %T(%v)", meta["topic_id"], meta["topic_id"])
+		}
+	})
+
+	t.Run("ai creativity out of range reset to default", func(t *testing.T) {
+		meta := map[string]any{"ai_creativity": 5.0}
+		normalizeAdvancedMetadata(meta)
+		if v, _ := toFloat(meta["ai_creativity"]); v != 0.7 {
+			t.Fatalf("expected 0.7 default, got %v", v)
+		}
+	})
+
+	t.Run("oversized metadata blob is trimmed to known fields", func(t *testing.T) {
+		meta := map[string]any{}
+		meta["topic_id"] = 1
+		meta["forward_delay_seconds"] = 5.0
+		meta["junk_padding"] = strings.Repeat("x", maxMetadataBytes)
+		normalizeAdvancedMetadata(meta)
+		if _, ok := meta["junk_padding"]; ok {
+			t.Fatalf("oversized blob must drop unknown fields")
+		}
+		if _, ok := meta["topic_id"]; !ok {
+			t.Fatalf("known fields must survive trimming")
+		}
+	})
+}
+
+// TestEnrichCustomMetadataRejectsNothing covers the Phase 2 parity list: a
+// client-supplied advanced setting must survive enrichment and re-appear in the
+// formatted JSON exactly once.
+func TestEnrichCustomMetadataRejectsNothing(t *testing.T) {
+	rawBody := map[string]any{
+		"topic_id":              7.0,
+		"debug_mode":            true,
+		"forward_delay_seconds": 4.5,
+		"auto_delete_seconds":   120.0,
+		"watermark_text":        "ATF",
+		"paid_addons":           map[string]any{"crypto_mode": true},
+		"keyword_reply":         "hello",
+	}
+	rule := &pb.ForwardRule{Id: "r1", CustomMetadataJson: ""}
+	bodyJSON, err := json.Marshal(rawBody)
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+	enrichCustomMetadata(bodyJSON, rule)
+
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(rule.CustomMetadataJson), &parsed); err != nil {
+		t.Fatalf("metadata json invalid: %v", err)
+	}
+	expected := []string{
+		"topic_id", "debug_mode", "forward_delay_seconds",
+		"auto_delete_seconds", "watermark_text", "paid_addons", "keyword_reply",
+	}
+	for _, k := range expected {
+		if _, ok := parsed[k]; !ok {
+			t.Fatalf("field %s missing from persisted metadata: %v", k, parsed)
+		}
+	}
+}

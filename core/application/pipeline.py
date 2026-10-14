@@ -27,7 +27,13 @@ from ..domain.entities import (
     MessageMapping,
     MessagePayload,
 )
-from ..domain.services import FilterEngine, LinkManagementEngine, RoutingPolicy, TransformationService
+from ..domain.services import (
+    AdvancedSettingsEngine,
+    FilterEngine,
+    LinkManagementEngine,
+    RoutingPolicy,
+    TransformationService,
+)
 from ..domain.value_objects import (
     AIFallbackPolicy,
     ContentMode,
@@ -192,6 +198,8 @@ class Normalizer:
             media_group_id=str(media_group_id) if media_group_id else None,
             is_service=is_service,
             is_edit=is_edit,
+            edit_date=int(getattr(raw, "edit_date", 0) or 0) or None,
+            original_date=date_ts,
         )
         return Normalizer._clean_payload(payload)
 
@@ -346,6 +354,23 @@ class DurableMessagePipeline:
             logger.info(
                 "[%s] Rule %s skipped msg %s: edit_ignored",
                 ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+            )
+            return
+
+        # Phase 2: edit-time window. An edit arriving outside the configured
+        # window is ignored, which stops a reconnect-time burst of very old
+        # edits from flooding the target. The check is defensive: a missing or
+        # malformed date never drops a legitimate edit.
+        if payload.is_edit and not AdvancedSettingsEngine.is_edit_within_window(
+            getattr(payload, "original_date", None),
+            getattr(payload, "edit_date", None) or getattr(payload, "date", None),
+            rule,
+        ):
+            ctx.record_stage(PipelineStage.DEDUPLICATE, False, reason="edit_outside_time_window")
+            self.metrics.dedup_skipped_total += 1
+            logger.info(
+                "[PIPELINE:EDIT_WINDOW] [%s] Rule %s skipped edit msg %s: outside edit_time_limit_seconds=%s",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id, rule.edit_time_limit_seconds,
             )
             return
 
@@ -584,6 +609,29 @@ class DurableMessagePipeline:
         footer = getattr(rule, "footer", "") or getattr(rule, "footer_text", "")
         if header or footer:
             text = self._filter_engine.apply_header_footer(text, header=header, footer=footer)
+
+        # Phase 2: advanced task-overview content transforms (watermark, link
+        # buttons, affiliate kit). These run AFTER the header/footer so the
+        # watermark anchors the very end of the rendered body.
+        try:
+            text, applied = AdvancedSettingsEngine.apply_content_transforms(text, rule, payload)
+            if applied:
+                ctx.record_stage(
+                    PipelineStage.TRANSFORM,
+                    True,
+                    reason="advanced_settings:" + ",".join(applied),
+                )
+                logger.info(
+                    "[PIPELINE:ADVANCED] [%s] Rule %s applied advanced transforms %s to msg %s",
+                    ctx.correlation_id[:8], rule.id[:8], applied, payload.message_id,
+                )
+        except Exception as exc:
+            # A content transform must never drop the message: log the failure
+            # and deliver the pre-transform text.
+            logger.warning(
+                "[PIPELINE:ADVANCED] [%s] Rule %s advanced transform failed (%s) — delivering untransformed text",
+                ctx.correlation_id[:8], rule.id[:8], exc,
+            )
 
         return text
 

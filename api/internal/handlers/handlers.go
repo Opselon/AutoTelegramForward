@@ -351,19 +351,176 @@ func enrichCustomMetadata(rawBody []byte, rule *pb.ForwardRule) {
 	parityKeys := []string{
 		"topic_id", "debug_mode", "sender_type", "feature_group",
 		"duplicate_filters", "crypto_mode", "auto_posting", "power_control",
-		"edit_time_limit_seconds", "process_raw_text", "button_to_text",
-		"ocr_image_ai", "smart_ai_rewrite", "news_digest", "watermark",
+		"forward_delay_seconds", "edit_time_limit_seconds", "process_raw_text", "button_to_text",
+		"keyword_confirmation", "keyword_reply", "auto_delete_seconds",
+		"ocr_image_ai", "smart_ai_rewrite", "news_digest", "watermark", "watermark_text",
 		"ai_creativity", "ai_max_tokens", "paid_addons",
+		"whitelist_keywords", "blacklist_keywords", "link_buttons", "affiliate_kit",
 	}
 	for _, k := range parityKeys {
 		if val, ok := raw[k]; ok {
 			meta[k] = val
 		}
 	}
+
+	// Phase 2: typed validation of the known advanced fields. An invalid value
+	// is normalized to a safe default rather than silently persisted, so a
+	// malformed client payload can never reach the worker as garbage.
+	normalizeAdvancedMetadata(meta)
+
 	if len(meta) > 0 {
 		if b, err := json.Marshal(meta); err == nil {
 			rule.CustomMetadataJson = string(b)
 		}
+	}
+}
+
+// metadataFieldCaps bounds the size and shape of the persisted advanced
+// settings. Without this, CustomMetadataJson is an unrestricted blob a client
+// could inflate without limit.
+const maxMetadataBytes = 64 * 1024
+const maxWatermarkLen = 200
+const maxKeywordReplyLen = 4096
+const maxDelaySeconds = 3600.0
+
+// normalizeAdvancedMetadata coerces known advanced fields into their canonical
+// types and rejects out-of-range or oversized values by substituting a safe
+// default. It never deletes unknown keys: they survive for forward
+// compatibility, but the worker only ever reads the documented ones.
+func normalizeAdvancedMetadata(meta map[string]any) {
+	if meta == nil {
+		return
+	}
+
+	// Numeric fields: bounded, non-negative.
+	for _, k := range []string{"forward_delay_seconds", "edit_time_limit_seconds", "auto_delete_seconds"} {
+		if v, ok := meta[k]; ok {
+			if f, err := toFloat(v); err == nil {
+				if f < 0 {
+					f = 0
+				}
+				if k == "forward_delay_seconds" && f > maxDelaySeconds {
+					f = maxDelaySeconds
+				}
+				meta[k] = f
+			} else {
+				// Not a number: treat as "unset" rather than persisting garbage.
+				delete(meta, k)
+			}
+		}
+	}
+
+	// Boolean fields.
+	for _, k := range []string{
+		"debug_mode", "duplicate_filters", "crypto_mode", "auto_posting",
+		"power_control", "process_raw_text", "button_to_text",
+		"keyword_confirmation", "ocr_image_ai", "smart_ai_rewrite", "news_digest",
+	} {
+		if v, ok := meta[k]; ok {
+			meta[k] = toBool(v)
+		}
+	}
+
+	// Bounded strings.
+	if v, ok := meta["watermark_text"]; ok {
+		if s, ok := v.(string); ok && len(s) > maxWatermarkLen {
+			meta["watermark_text"] = s[:maxWatermarkLen]
+		}
+	}
+	if v, ok := meta["keyword_reply"]; ok {
+		if s, ok := v.(string); ok && len(s) > maxKeywordReplyLen {
+			meta["keyword_reply"] = s[:maxKeywordReplyLen]
+		}
+	}
+
+	// Numeric AI settings with sane bounds.
+	if v, ok := meta["ai_creativity"]; ok {
+		if f, err := toFloat(v); err == nil {
+			if f < 0 || f > 1 {
+				f = 0.7
+			}
+			meta["ai_creativity"] = f
+		}
+	}
+	if v, ok := meta["ai_max_tokens"]; ok {
+		if f, err := toFloat(v); err == nil {
+			if f < 0 || f > 32000 {
+				f = 600
+			}
+			meta["ai_max_tokens"] = int(f)
+		}
+	}
+
+	// topic_id: a forum thread id is a positive integer.
+	if v, ok := meta["topic_id"]; ok {
+		if f, err := toFloat(v); err == nil {
+			if f < 0 {
+				f = 0
+			}
+			meta["topic_id"] = int(f)
+		} else {
+			delete(meta, "topic_id")
+		}
+	}
+
+	// Enforce an overall payload ceiling so the metadata blob cannot be used
+	// to bloat the row without bound.
+	if b, err := json.Marshal(meta); err == nil && len(b) > maxMetadataBytes {
+		// Keep the fields the worker actually consumes and drop the rest.
+		kept := map[string]any{}
+		for _, k := range []string{
+			"topic_id", "debug_mode", "sender_type", "duplicate_filters", "crypto_mode",
+			"auto_posting", "power_control", "forward_delay_seconds",
+			"edit_time_limit_seconds", "process_raw_text", "button_to_text",
+			"keyword_confirmation", "keyword_reply", "auto_delete_seconds",
+			"watermark_text", "ai_creativity", "ai_max_tokens", "paid_addons",
+		} {
+			if v, ok := meta[k]; ok {
+				kept[k] = v
+			}
+		}
+		for k := range meta {
+			if _, ok := kept[k]; !ok {
+				delete(meta, k)
+			}
+		}
+	}
+}
+
+// toFloat converts a JSON-decoded number (float64 by default) or a numeric
+// string to a float64, returning an error for anything else.
+func toFloat(v any) (float64, error) {
+	switch n := v.(type) {
+	case float64:
+		return n, nil
+	case float32:
+		return float64(n), nil
+	case int:
+		return float64(n), nil
+	case int64:
+		return float64(n), nil
+	case string:
+		return strconv.ParseFloat(n, 64)
+	default:
+		return 0, fmt.Errorf("not numeric: %T", v)
+	}
+}
+
+// toBool coerces any JSON scalar into a boolean, following YAML-style truthiness
+// so a client sending "true" (string) or 1 still gets a boolean.
+func toBool(v any) bool {
+	switch n := v.(type) {
+	case bool:
+		return n
+	case float64:
+		return n != 0
+	case int:
+		return n != 0
+	case string:
+		s := strings.ToLower(strings.TrimSpace(n))
+		return s == "true" || s == "1" || s == "yes" || s == "on"
+	default:
+		return false
 	}
 }
 
@@ -602,7 +759,10 @@ func (h *Handlers) DuplicateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cloned := *target
+	// proto.Clone is required: pb.ForwardRule embeds protoimpl.MessageState
+	// which contains a sync.Mutex — a shallow `*target` copy trips `go vet`
+	// ("assignment copies lock value") and would share the mutex.
+	cloned := proto.Clone(target).(*pb.ForwardRule)
 	cloned.Id = fmt.Sprintf("%s_copy_%d", target.Id, time.Now().Unix()%100000)
 	if cloned.Name != "" {
 		cloned.Name = cloned.Name + " (Copy)"
@@ -613,7 +773,7 @@ func (h *Handlers) DuplicateRule(w http.ResponseWriter, r *http.Request) {
 	cloned.CreatedAt = time.Now().Unix()
 	cloned.UpdatedAt = time.Now().Unix()
 
-	resp, err := h.c.Rules.CreateRule(ctx, &pb.CreateRuleRequest{Rule: &cloned})
+	resp, err := h.c.Rules.CreateRule(ctx, &pb.CreateRuleRequest{Rule: cloned})
 	if err != nil {
 		grpcError(w, err)
 		return
