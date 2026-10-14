@@ -788,9 +788,19 @@ async def test_dashboard_scoped_self_only_multi_lang():
     fake_b.last_name = "Builder"
     fake_b.username = "bob_b"
 
+    # Language is resolved per-user from the user's own Telegram client
+    # language_code — never from the process-wide i18n.current, which is
+    # shared across all tenants.
+    def client(lang: str) -> MagicMock:
+        u = MagicMock()
+        u.first_name = "Bob"
+        u.last_name = "Builder"
+        u.username = "bob_b"
+        u.language_code = lang
+        return u
+
     # In English
-    ui.i18n.current = "en"
-    text_en = await ui._main_text(TENANT_B, user=fake_b)
+    text_en = await ui._main_text(TENANT_B, user=client("en"))
     assert "Bob Builder" in text_en
     assert str(TENANT_B) in text_en
     assert "Connected phone: `None`" in text_en
@@ -799,20 +809,17 @@ async def test_dashboard_scoped_self_only_multi_lang():
     assert "+989" not in text_en
 
     # In Persian
-    ui.i18n.current = "fa"
-    text_fa = await ui._main_text(TENANT_B, user=fake_b)
+    text_fa = await ui._main_text(TENANT_B, user=client("fa"))
     assert "Bob Builder" in text_fa
     assert "شماره متصل: `None`" in text_fa
     assert "Scott" not in text_fa
 
     # In Russian
-    ui.i18n.current = "ru"
-    text_ru = await ui._main_text(TENANT_B, user=fake_b)
+    text_ru = await ui._main_text(TENANT_B, user=client("ru"))
     assert "Bob Builder" in text_ru
     assert "Подключенный номер: `None`" in text_ru
 
     # In Chinese
-    ui.i18n.current = "zh"
-    text_zh = await ui._main_text(TENANT_B, user=fake_b)
+    text_zh = await ui._main_text(TENANT_B, user=client("zh"))
     assert "Bob Builder" in text_zh
     assert "已绑手机：`None`" in text_zh

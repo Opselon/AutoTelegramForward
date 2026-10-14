@@ -297,6 +297,7 @@ func formatRuleJSON(rl *pb.ForwardRule) map[string]any {
 		"custom_caption_template":   rl.CustomCaptionTemplate,
 		"created_at":                rl.CreatedAt,
 		"updated_at":                rl.UpdatedAt,
+		"owner_user_id":             rl.OwnerUserId,
 		"name":                      rl.Name,
 		"description":               rl.Description,
 		"target_chat_ids":           rl.TargetChatIds,

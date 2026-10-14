@@ -335,7 +335,12 @@ class ProBotUI:
         return await self._rules.update_owned(rule, self._scope_uid(user_id), expected_version)
 
     def _resolve_lang(self, uid: Optional[int] = None, user_obj: Any = None) -> str:
-        """Resolve user's chosen language with fail-closed English fallback."""
+        """Resolve user's chosen language with fail-closed English fallback.
+
+        Resolution order: in-memory UiState → persisted DB row → the user's
+        own Telegram client language_code → 'en' (never the process-wide
+        i18n.current, which is shared across all users and would leak one
+        user's language choice into every other tenant's renders)."""
         if uid:
             states = getattr(self, "_states", None)
             if states and isinstance(states, dict):
@@ -360,14 +365,9 @@ class ProBotUI:
             if code in SUPPORTED_LANGUAGES:
                 return code
 
-        i18n = getattr(self, "i18n", None)
-        if i18n and getattr(i18n, "current", None):
-            cur = str(i18n.current).lower()
-            if cur in SUPPORTED_LANGUAGES:
-                return cur
         return "en"
 
-    def _state(self, uid: int) -> UiState:
+    def _state(self, uid: int, user: Any = None) -> UiState:
         st = self._states.get(uid)
         if st is None:
             st = UiState()
@@ -378,7 +378,7 @@ class ProBotUI:
             self._states[uid] = st
         st.user_id = int(uid)
         if not getattr(st, "lang", ""):
-            st.lang = self._resolve_lang(uid)
+            st.lang = self._resolve_lang(uid, user)
         return st
 
     def _load_state_sync(self, uid: int) -> Optional[dict]:
@@ -485,7 +485,7 @@ class ProBotUI:
         if not display_name:
             display_name = f"User {uid}" if uid else "Valued User"
 
-        lang = self.i18n.current or "fa"
+        lang = self._resolve_lang(uid, user)
 
         if lang == "fa":
             text = (
@@ -585,8 +585,8 @@ class ProBotUI:
     # ------------------------------------------------------------------ #
     # Menus
     # ------------------------------------------------------------------ #
-    async def _get_user_lang(self, uid: int) -> str:
-        return self._resolve_lang(uid)
+    async def _get_user_lang(self, uid: int, user: Any = None) -> str:
+        return self._resolve_lang(uid, user)
 
     async def _main_text(self, uid: int, user: Optional[Any] = None) -> str:
         """Main-menu dashboard: matches the Pro Telegram control panel design.
@@ -711,7 +711,9 @@ class ProBotUI:
         plan = "VIP Pro" if (active_rules > 0 or live_sessions > 0) else "Free"
         remaining = "Active" if plan == "VIP Pro" else "0 days"
 
-        lang = await self._get_user_lang(uid)
+        # Resolve per-user WITH the user object so the user's own Telegram
+        # client language wins (never the process-wide i18n.current).
+        lang = await self._get_user_lang(uid, user)
 
         if lang == "fa":
             session_status = "فعال 🟢" if live_sessions > 0 else ("ثبت‌شده 🟡" if total_sessions > 0 else "قطع‌شده 🔴")
@@ -985,7 +987,7 @@ class ProBotUI:
         return InlineKeyboardMarkup(rows)
 
     def _upgrade_text(self, uid: int = 0) -> str:
-        if self.i18n.current == "fa":
+        if self._resolve_lang(uid) == "fa":
             return (
                 "💎 **ارتقای سرویس و خرید اشتراک ویژه (VIP Upgrade)**\n\n"
                 "با ارتقا به نسخه ویژه، به پیشرفته‌ترین امکانات سیستم بدون هیچ محدودیتی دسترسی خواهید داشت:\n\n"
@@ -1024,7 +1026,7 @@ class ProBotUI:
         )
 
     def _client_settings_menu(self, uid: int = 0) -> InlineKeyboardMarkup:
-        is_fa = self.i18n.current == "fa"
+        is_fa = self._resolve_lang(uid) == "fa"
         is_adm = self._is_admin(uid) if uid else False
         rows = [
             [
@@ -1063,7 +1065,7 @@ class ProBotUI:
         return InlineKeyboardMarkup(rows)
 
     async def _render_admin_panel(self, uid: int) -> tuple[str, InlineKeyboardMarkup]:
-        is_fa = self.i18n.current == "fa"
+        is_fa = self._resolve_lang(uid) == "fa"
         total_users = 0
         active_rules = 0
         dlq_errors = await self._dlq_count()
@@ -3645,30 +3647,36 @@ class ProBotUI:
         @b.on_callback_query(filters.regex("^" + CB["lang_set"] + ":"))
         async def _cb_lang_set(_, cq: CallbackQuery):
             code = cq.data.split(":", 1)[1]
-            if self.i18n.set_language(code):
-                uid = cq.from_user.id if cq.from_user else 0
-                st = self._state(uid)
-                st.lang = code
-                if self._users is not None:
-                    try:
-                        await self._users.set_language(uid, code)
-                    except Exception:
-                        pass
+            uid = cq.from_user.id if cq.from_user else 0
+            # PERSISTENCE ONLY — never mutate the process-wide i18n.current:
+            # it is shared by every concurrent user, so one user's choice
+            # would leak into everyone else's renders. The language is read
+            # back per-user via _resolve_lang(uid).
+            if code not in SUPPORTED_LANGUAGES:
+                await cq.answer()
+                return
+            st = self._state(uid)
+            st.lang = code
+            if self._users is not None:
                 try:
-                    self._log.info("bot", "system", f"language set to {code}")
+                    await self._users.set_language(uid, code)
                 except Exception:
                     pass
-                await self._safe_edit(
-                    cq,
-                    await self._main_text(uid, user=cq.from_user),
-                    reply_markup=self._main_menu(),
-                )
+            try:
+                self._log.info("bot", "system", f"language set to {code} for user {uid}")
+            except Exception:
+                pass
+            await self._safe_edit(
+                cq,
+                await self._main_text(uid, user=cq.from_user),
+                reply_markup=self._main_menu(),
+            )
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["help"] + "$"))
         async def _cb_help(_, cq: CallbackQuery):
             btn_back = "⬅️ " + self._t("ui_back")
-            btn_sup = "🆘 " + ("پشتیبانی (@Capxi)" if self.i18n.current == "fa" else "Support (@Capxi)")
+            btn_sup = "🆘 " + ("پشتیبانی (@Capxi)" if self._resolve_lang(uid) == "fa" else "Support (@Capxi)")
             kbd = InlineKeyboardMarkup([
                 [InlineKeyboardButton(btn_sup, url="https://t.me/Capxi")],
                 [InlineKeyboardButton(btn_back, callback_data=CB["main"])],
@@ -3694,7 +3702,7 @@ class ProBotUI:
         async def _cb_upgrade(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             text = self._upgrade_text(uid)
-            is_fa = self.i18n.current == "fa"
+            is_fa = self._resolve_lang(uid) == "fa"
             btn_buy = "💎 خرید و فعال‌سازی اشتراک (@Capxi)" if is_fa else "💎 Buy VIP Subscription (@Capxi)"
             btn_back = "⬅️ " + self._t("ui_back")
             kbd = InlineKeyboardMarkup([
@@ -3753,7 +3761,7 @@ class ProBotUI:
                 except Exception:
                     pass
 
-            is_fa = self.i18n.current == "fa"
+            is_fa = self._resolve_lang(uid) == "fa"
             if is_fa:
                 lines = [
                     "📱 **کلیدهای اختصاصی تلگرام کاربر (Telegram API Credentials)**\n",
@@ -3819,7 +3827,7 @@ class ProBotUI:
             msg = (
                 "📱 لطفاً **API ID عددی** خود را ارسال نمایید:\n"
                 "(می‌توانید آن را از my.telegram.org دریافت کنید)"
-                if self.i18n.current == "fa"
+                if self._resolve_lang(uid) == "fa"
                 else "📱 Please send your numeric **Telegram API ID** (from my.telegram.org):"
             )
             await self._safe_edit(
@@ -7842,7 +7850,7 @@ class ProBotUI:
         if not clean.isdigit() or int(clean) <= 0:
             return await message.reply_text(
                 "❌ API ID نامعتبر است. لطفاً فقط یک عدد مثبت وارد نمایید:"
-                if self.i18n.current == "fa"
+                if self._resolve_lang(uid) == "fa"
                 else "❌ Invalid API ID. Please enter a valid positive number:",
                 reply_markup=self._cancel_kbd(),
             )
@@ -7851,7 +7859,7 @@ class ProBotUI:
         await self._persist(message.from_user.id, st)
         await message.reply_text(
             "🔑 اکنون **API Hash** (رشته ۳۲ حرفی) خود را ارسال نمایید:"
-            if self.i18n.current == "fa"
+            if self._resolve_lang(uid) == "fa"
             else "🔑 Now enter your 32-character **API Hash**:",
             reply_markup=self._cancel_kbd(),
         )
@@ -7862,7 +7870,7 @@ class ProBotUI:
         if len(api_hash) != 32:
             return await message.reply_text(
                 "❌ API Hash باید دقیقاً یک رشته ۳۲ کاراکتری هگزادسیمال باشد. لطفاً مجدداً ارسال کنید:"
-                if self.i18n.current == "fa"
+                if self._resolve_lang(uid) == "fa"
                 else "❌ API Hash must be exactly 32 hexadecimal characters. Please try again:",
                 reply_markup=self._cancel_kbd(),
             )
@@ -7895,7 +7903,7 @@ class ProBotUI:
         await message.reply_text(
             "✅ **کلیدهای اختصاصی شما با موفقیت ذخیره و فعال گردید.**\n"
             "از این پس نشست‌های جدید شما با کلیدهای شخصی خودتان متصل خواهند شد."
-            if self.i18n.current == "fa"
+            if self._resolve_lang(uid) == "fa"
             else "✅ **Your personal Telegram API credentials were saved successfully.**",
             reply_markup=self._client_settings_menu(uid),
         )

@@ -30,6 +30,13 @@ jobs:
       - name: Run Python tests
         run: python -m pytest -q core/tests logger/tests scripts/tests
 
+      - name: Cross-language catalog audit
+        # Every translation catalog (bot + mobile) must be 1:1 with the
+        # English reference: no missing/extra keys, no empty values, no
+        # Persian text stored under English keys (which rendered Persian
+        # to English users in production, October 2026).
+        run: python scripts/audit_cross_language.py
+
   go-tests:
     runs-on: ubuntu-latest
     steps:
