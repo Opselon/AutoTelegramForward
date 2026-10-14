@@ -168,8 +168,8 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
         content_mode VARCHAR(32) DEFAULT 'AUTO',
         metadata JSONB DEFAULT '{}'::jsonb,
         version INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
         message_category VARCHAR(32) DEFAULT 'ALL',
         intermediate_channel_id VARCHAR(128) DEFAULT '',
         intermediate_channel_name TEXT DEFAULT '',
@@ -250,7 +250,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             content_val, meta_json, rule_version, rule.created_at, rule.updated_at,
             int(getattr(rule, "owner_user_id", 0) or 0),
         )
-        await self._db.execute(query, params)
+        await _execute_db(self._db, query, params)
         return rule
 
     async def update(self, rule: ForwardRule, expected_version: Optional[int] = None) -> ForwardRule:
@@ -288,7 +288,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
                 version = %s, updated_at = %s, owner_user_id = %s
             WHERE id = %s AND version = %s
             """
-            result = await self._db.execute(query, (*common_params, rule.id, int(expected_version)))
+            result = await _execute_db(self._db, query, (*common_params, rule.id, int(expected_version)))
             rowcount = getattr(result, "rowcount", None)
             if rowcount == 0 or result == 0 or result == "UPDATE 0":
                 existing = await self.get_by_id(rule.id)
@@ -309,44 +309,44 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
                 version = %s, updated_at = %s, owner_user_id = %s
             WHERE id = %s
             """
-            await self._db.execute(query, (*common_params, rule.id))
+            await _execute_db(self._db, query, (*common_params, rule.id))
 
         rule.version = next_version
         return rule
 
     async def get_by_id(self, rule_id: str) -> Optional[ForwardRule]:
         query = "SELECT * FROM forward_rules WHERE id = %s"
-        row = await self._db.fetchone(query, (rule_id,))
+        row = await _fetch_one_db(self._db, query, (rule_id,))
         return self._row_to_entity(row) if row else None
 
     async def list_by_session(self, session_id: str, owner_user_id: int = 0) -> List[ForwardRule]:
         if owner_user_id:
             query = ("SELECT * FROM forward_rules WHERE session_id = %s AND owner_user_id = %s"
                      " ORDER BY created_at ASC")
-            rows = await self._db.fetchall(query, (session_id, int(owner_user_id)))
+            rows = await _fetch_all_db(self._db, query, (session_id, int(owner_user_id)))
         else:
             query = "SELECT * FROM forward_rules WHERE session_id = %s ORDER BY created_at ASC"
-            rows = await self._db.fetchall(query, (session_id,))
+            rows = await _fetch_all_db(self._db, query, (session_id,))
         return [self._row_to_entity(r) for r in rows]
 
     async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
         query = "SELECT * FROM forward_rules WHERE owner_user_id = %s ORDER BY created_at ASC"
-        rows = await self._db.fetchall(query, (int(owner_user_id),))
+        rows = await _fetch_all_db(self._db, query, (int(owner_user_id),))
         return [self._row_to_entity(r) for r in rows]
 
     async def list_all(self) -> List[ForwardRule]:
         query = "SELECT * FROM forward_rules ORDER BY created_at ASC"
-        rows = await self._db.fetchall(query, ())
+        rows = await _fetch_all_db(self._db, query, ())
         return [self._row_to_entity(r) for r in rows]
 
     async def list_active_by_source(self, source_chat_id: str) -> List[ForwardRule]:
         query = "SELECT * FROM forward_rules WHERE source_chat_id = %s AND is_active = TRUE"
-        rows = await self._db.fetchall(query, (str(source_chat_id),))
+        rows = await _fetch_all_db(self._db, query, (str(source_chat_id),))
         return [self._row_to_entity(r) for r in rows]
 
     async def delete(self, rule_id: str) -> bool:
         query = "DELETE FROM forward_rules WHERE id = %s"
-        res = await self._db.execute(query, (rule_id,))
+        res = await _execute_db(self._db, query, (rule_id,))
         count = getattr(res, "rowcount", None)
         if count is not None:
             return count > 0

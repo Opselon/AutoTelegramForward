@@ -95,7 +95,7 @@ def _create_postgres_pool(database_url: str):
     import asyncio
 
     async def _build():
-        return await asyncpg.create_pool(
+        pool = await asyncpg.create_pool(
             dsn=database_url,
             min_size=2,
             max_size=10,
@@ -103,16 +103,21 @@ def _create_postgres_pool(database_url: str):
             timeout=30.0,
             command_timeout=30.0,
         )
+        await initialize_postgres_schema(pool)
+        return pool
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
+        # Called from inside a running loop (normal async startup path):
+        # return the coroutine so the caller awaits it on the same loop.
+        return _build()
     except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        pass
+    # Called before any loop exists (early sync bootstrap path).
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        pool = loop.run_until_complete(_build())
-        loop.run_until_complete(initialize_postgres_schema(pool))
-        return pool
+        return loop.run_until_complete(_build())
     except Exception as exc:
         raise RuntimeError(
             f"Failed to initialize configured PostgreSQL database at {database_url}: {exc}"
@@ -413,7 +418,11 @@ async def main() -> None:
 
     if cfg.disable_bot:
         logger.info("ATF_DISABLE_BOT set: gRPC-only mode (no bot, no Telegram).")
+        # Await the PostgreSQL pool coroutine (created inside build_container
+        # when a running loop is present) before constructing repositories.
         container = build_container(cfg)
+        if asyncio.iscoroutine(container):
+            container = await container
         grpc_server = await serve_grpc(container, cfg)
         await seed_default_credential(container, cfg)
         await sync_pool_credentials(container)
@@ -438,6 +447,8 @@ async def main() -> None:
         sys.exit(1)
 
     container = build_container(cfg)
+    if asyncio.iscoroutine(container):
+        container = await container
     grpc_server = await serve_grpc(container, cfg)
     await seed_default_credential(container, cfg)
     await sync_pool_credentials(container)
