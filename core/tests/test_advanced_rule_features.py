@@ -219,6 +219,13 @@ async def test_pipeline_edit_policy():
 @pytest.mark.asyncio
 async def test_bot_ui_rule_card_rendering():
     from core.infrastructure.telegram.pro_bot_ui import ProBotUI
+    from core.infrastructure.telegram.i18n import I18n
+
+    # Render through the REAL catalog at fa: the panel must render Persian
+    # for Persian users and English for English users. Asserting on the
+    # catalog output is what pins the one-to-one language contract.
+    _i18n = I18n()
+    _i18n.set_language("fa")
 
     ui = object.__new__(ProBotUI)
     ui._render_rule_detail = ProBotUI._render_rule_detail.__get__(ui, ProBotUI)
@@ -226,7 +233,9 @@ async def test_bot_ui_rule_card_rendering():
     ui._render_replace_menu = ProBotUI._render_replace_menu.__get__(ui, ProBotUI)
     ui._render_header_footer_menu = ProBotUI._render_header_footer_menu.__get__(ui, ProBotUI)
     ui._kbd = ProBotUI._kbd.__get__(ui, ProBotUI)
-    ui._t = lambda key, **kw: key
+    ui._lang = "fa"
+    ui.i18n = _i18n
+    ui._t = lambda key, lang=None, **kw: _i18n.t(key, lang=lang or "fa", **kw)
 
     rule = ForwardRule(
         id="test-rule-id-12345",
