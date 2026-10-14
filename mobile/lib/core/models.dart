@@ -817,3 +817,72 @@ class ServerMeta {
         json['api_contract'] as String? ?? json['api_version'] as String? ?? '',
   );
 }
+
+/// One centralized audit event from the observability platform's durable
+/// PostgreSQL store (`GET /api/audit/events`).
+///
+/// Mirrors the server's AuditEventEntry proto: outcome uses the lifecycle
+/// vocabulary (RECEIVED / ACCEPTED / IN_PROGRESS / SUCCEEDED / FAILED /
+/// OUTCOME_UNCONFIRMED) — `OUTCOME_UNCONFIRMED` means the final result is
+/// genuinely unknown (e.g. a lost downstream response), never success.
+@immutable
+class AuditEvent {
+  const AuditEvent({
+    required this.eventId,
+    required this.eventType,
+    required this.timestamp,
+    this.outcome = '',
+    this.service = '',
+    this.severity = 'INFO',
+    this.correlationId = '',
+    this.ruleId = '',
+    this.featureId = '',
+    this.reasonCode = '',
+    this.resultSummary = '',
+    this.errorCode = '',
+    this.durationMs = 0,
+  });
+
+  final String eventId;
+  final String eventType;
+  final String timestamp;
+  final String outcome;
+  final String service;
+  final String severity;
+  final String correlationId;
+  final String ruleId;
+  final String featureId;
+  final String reasonCode;
+  final String resultSummary;
+  final String errorCode;
+  final int durationMs;
+
+  factory AuditEvent.fromJson(Map<String, dynamic> json) {
+    final ts = json['ts_utc'] as num? ?? 0;
+    String timeStr;
+    if (ts > 0) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(ts.toInt() * 1000);
+      timeStr =
+          '${dt.hour.toString().padLeft(2, '0')}:'
+          '${dt.minute.toString().padLeft(2, '0')}:'
+          '${dt.second.toString().padLeft(2, '0')}';
+    } else {
+      timeStr = '';
+    }
+    return AuditEvent(
+      eventId: json['event_id'] as String? ?? '',
+      eventType: json['event_type'] as String? ?? '',
+      timestamp: timeStr,
+      outcome: (json['outcome'] as String? ?? '').toUpperCase(),
+      service: json['service'] as String? ?? '',
+      severity: (json['severity'] as String? ?? 'INFO').toUpperCase(),
+      correlationId: json['correlation_id'] as String? ?? '',
+      ruleId: json['rule_id'] as String? ?? '',
+      featureId: json['feature_id'] as String? ?? '',
+      reasonCode: json['reason_code'] as String? ?? '',
+      resultSummary: json['result_summary'] as String? ?? '',
+      errorCode: json['error_code'] as String? ?? '',
+      durationMs: (json['duration_ms'] as num?)?.toInt() ?? 0,
+    );
+  }
+}

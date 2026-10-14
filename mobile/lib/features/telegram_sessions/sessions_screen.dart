@@ -60,9 +60,15 @@ class _SessionsScreenState extends State<SessionsScreen> {
                     ? exc.error.message
                     : t.get('state_error'),
       );
-    } catch (_) {
+    } catch (exc) {
+      // Never swallow: a network failure must not look like "no data".
       if (!mounted) return;
-      setState(() => _error = t.get('state_error'));
+      setState(
+        () =>
+            _error =
+                '${t.get('state_error')} '
+                '(${exc.toString().split('(').first.trim()})',
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }

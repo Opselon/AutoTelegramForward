@@ -54,9 +54,16 @@ class _RulesScreenState extends State<RulesScreen> {
                     ? exc.error.message
                     : t.get('state_error'),
       );
-    } catch (_) {
+    } catch (exc) {
+      // Never swallow a network/timeout failure as "no rules": surface it so
+      // an unreachable server is not indistinguishable from an empty account.
       if (!mounted) return;
-      setState(() => _error = t.get('state_error'));
+      setState(
+        () =>
+            _error =
+                '${t.get('state_error')} '
+                '(${exc.toString().split('(').first.trim()})',
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
