@@ -69,5 +69,68 @@ void main() {
         contains('+989121234567'),
       );
     });
+
+
+    // ---- 10-language parity guard --------------------------------------
+    // Every supported catalog must expose the complete key set, including
+    // the per-task config keys (replace rules, AI picker, add-ons).
+    test('every supported locale mirrors the full English key set', () {
+      const codes = [
+        'fa',
+        'es',
+        'fr',
+        'id',
+        'it',
+        'pt',
+        'ru',
+        'uz',
+        'zh',
+      ];
+      const probeKeys = <String>[
+        'rules_title',
+        'rules_replace_title',
+        'rules_replace_find',
+        'rules_replace_with',
+        'rules_replace_add',
+        'rules_replace_summary',
+        'rules_ai_pick_title',
+        'rules_ai_pick_none',
+        'rules_ai_pick_empty',
+        'rules_sec_processing',
+        'rules_sec_modify',
+        'rules_sec_ai',
+        'rules_sec_paid',
+        'action_save',
+        'action_cancel',
+        'action_delete',
+        'state_error',
+        'state_empty',
+      ];
+      for (final code in codes) {
+        final msgs = AppMessages(Locale(code));
+        for (final key in probeKeys) {
+          expect(
+            msgs.get(key),
+            isNot(key),
+            reason: '$code is missing translation key $key',
+          );
+        }
+      }
+      expect(
+        AppMessages.supportedLocales.map((l) => l.languageCode),
+        containsAll(const [
+          'en',
+          'fa',
+          'es',
+          'fr',
+          'id',
+          'it',
+          'pt',
+          'ru',
+          'uz',
+          'zh',
+        ]),
+      );
+    });
   });
 }
