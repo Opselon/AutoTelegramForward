@@ -326,7 +326,7 @@ class BotManager:
         @b.on_message(filters.private & ~filters.command([
             "start", "help", "lang", "login", "cancel", "sessions",
             "rules", "ai", "stats", "backup", "restore", "menu", "panel", "settings",
-        ]))
+        ]), group=1)
         async def _text(client, message: Message):
             await self._route_text(message)
 
