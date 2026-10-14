@@ -1052,7 +1052,7 @@ class ProBotUI:
                 )
             ])
         rows.append([
-            InlineKeyboardButton("🔙 بازگشت به منوی اصلی" if is_fa else "🔙 Back to Main Menu", callback_data=CB["main"])
+                InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["main"]),
         ])
         return InlineKeyboardMarkup(rows)
 
@@ -3276,7 +3276,7 @@ class ProBotUI:
                         InlineKeyboardButton("🗑 بازنشانی به پیش‌فرض سامانه", callback_data=CB["client_cred_reset"]),
                     ])
                 rows.append([
-                    InlineKeyboardButton("🔙 بازگشت به تنظیمات", callback_data=CB["settings"]),
+                    InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["settings"]),
                 ])
             else:
                 lines = [
@@ -3373,7 +3373,7 @@ class ProBotUI:
                 "• 🟢 درگاه وب (Web Gateway): برخط",
             ]
             kbd = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data=CB["admin"])],
+                [InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["admin"])],
             ])
             await self._safe_edit(cq, "\n".join(lines), reply_markup=kbd)
             await cq.answer()
@@ -3426,7 +3426,7 @@ class ProBotUI:
             if nav:
                 rows.append(nav)
 
-            rows.append([InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data=CB["admin"])])
+            rows.append([InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["admin"])])
             await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
             await cq.answer()
 
@@ -3543,7 +3543,7 @@ class ProBotUI:
                     ),
                     InlineKeyboardButton("✏️ تغییر کانال الزامی", callback_data=CB["adm_forcesub_set"]),
                 ],
-                [InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data=CB["admin"])],
+                [InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["admin"])],
             ]
             await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
             await cq.answer()
@@ -3600,7 +3600,7 @@ class ProBotUI:
                     ])
 
             rows.append([InlineKeyboardButton("➕ افزودن مدیر جدید", callback_data=CB["adm_admin_add"])])
-            rows.append([InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data=CB["admin"])])
+            rows.append([InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["admin"])])
             await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
             await cq.answer()
 
@@ -3646,7 +3646,7 @@ class ProBotUI:
             rows = [
                 [InlineKeyboardButton("🌐 تنظیم دامنه پنل وب", callback_data=CB["weburl_set"])],
                 [InlineKeyboardButton("🔐 کلیدهای API سراسری (Vault)", callback_data=CB["creds"])],
-                [InlineKeyboardButton("🔙 بازگشت به پنل مدیریت", callback_data=CB["admin"])],
+                [InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["admin"])],
             ]
             await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
             await cq.answer()
