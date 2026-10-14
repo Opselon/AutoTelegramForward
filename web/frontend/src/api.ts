@@ -345,7 +345,7 @@ export const api = {
       body: JSON.stringify(req),
     }),
   getServicesHealth: async (): Promise<ServicesHealthResponse> => {
-    return fetchJson<ServicesHealthResponse>(`${API_BASE}/health/services`)
+    return fetchJson<ServicesHealthResponse>('/api/v1/health/services')
   },
 
   // ------------------------------------------------- Authentication & Identity
