@@ -8,6 +8,8 @@
 *.atf
 config.yaml
 .env
+.env.*
+!.env.example
 k8s/custom-deploy.yaml
 k8s/secret.yaml
 atf.py.bak

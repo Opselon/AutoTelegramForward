@@ -202,10 +202,13 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
         domain_blocklist JSONB DEFAULT '[]'::jsonb,
         link_rewrite_map JSONB DEFAULT '{}'::jsonb,
         allowed_media_types JSONB DEFAULT '[]'::jsonb,
-        split_long_caption BOOLEAN DEFAULT TRUE
+        split_long_caption BOOLEAN DEFAULT TRUE,
+        owner_user_id BIGINT NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_pg_fwd_source ON forward_rules (source_chat_id, is_active);
     CREATE INDEX IF NOT EXISTS idx_pg_fwd_session ON forward_rules (session_id);
+    CREATE INDEX IF NOT EXISTS idx_pg_fwd_owner ON forward_rules (owner_user_id);
+    CREATE INDEX IF NOT EXISTS idx_pg_fwd_session_owner ON forward_rules (session_id, owner_user_id);
     """
 
     def __init__(self, db_client: Any) -> None:
@@ -228,13 +231,13 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             target_chat_name, target_chat_ids, routing_type, forward_mode, is_active,
             filter_rule_id, ai_config_id, remove_links, custom_caption_template,
             delay_seconds, skip_history, since_ts, ignore_edits, trigger_events,
-            content_mode, metadata, version, created_at, updated_at
+            content_mode, metadata, version, created_at, updated_at, owner_user_id
         ) VALUES (
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s,
             %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s
         )
         """
         params = (
@@ -245,6 +248,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             rule.custom_caption_template, float(rule.delay_seconds), bool(rule.skip_history),
             int(rule.since_ts or 0), bool(rule.ignore_edits), trigger_json,
             content_val, meta_json, rule_version, rule.created_at, rule.updated_at,
+            int(getattr(rule, "owner_user_id", 0) or 0),
         )
         await self._db.execute(query, params)
         return rule
@@ -270,6 +274,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             rule.custom_caption_template, float(rule.delay_seconds), bool(rule.skip_history),
             int(rule.since_ts or 0), bool(rule.ignore_edits),
             trigger_json, content_val, meta_json, next_version, rule.updated_at,
+            int(getattr(rule, "owner_user_id", 0) or 0),
         )
 
         if expected_version is not None:
@@ -280,7 +285,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
                 is_active = %s, filter_rule_id = %s, ai_config_id = %s, remove_links = %s,
                 custom_caption_template = %s, delay_seconds = %s, skip_history = %s, since_ts = %s,
                 ignore_edits = %s, trigger_events = %s, content_mode = %s, metadata = %s,
-                version = %s, updated_at = %s
+                version = %s, updated_at = %s, owner_user_id = %s
             WHERE id = %s AND version = %s
             """
             result = await self._db.execute(query, (*common_params, rule.id, int(expected_version)))
@@ -301,7 +306,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
                 is_active = %s, filter_rule_id = %s, ai_config_id = %s, remove_links = %s,
                 custom_caption_template = %s, delay_seconds = %s, skip_history = %s, since_ts = %s,
                 ignore_edits = %s, trigger_events = %s, content_mode = %s, metadata = %s,
-                version = %s, updated_at = %s
+                version = %s, updated_at = %s, owner_user_id = %s
             WHERE id = %s
             """
             await self._db.execute(query, (*common_params, rule.id))
@@ -434,6 +439,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             link_rewrite_map=_safe_dict(d.get("link_rewrite_map"), {}),
             allowed_media_types=_safe_list(d.get("allowed_media_types"), []),
             split_long_caption=bool(d.get("split_long_caption", True)),
+            owner_user_id=int(d.get("owner_user_id") or 0),
         )
 
 
@@ -557,6 +563,31 @@ class PostgresMessageMapRepository(IMessageMapRepository):
         cutoff = int(time.time()) - retention_seconds
         query = "DELETE FROM message_map WHERE updated_at < %s"
         res = await _execute_db(self._db, query, (cutoff,))
+        if isinstance(res, str) and res.startswith("DELETE "):
+            return int(res.split()[-1])
+        count = getattr(res, "rowcount", None)
+        return count if count is not None else 0
+
+    # --- v2.0 app update: Duplicate Filters content-level dedup -------------
+    async def was_content_forwarded(self, rule_id: str, content_hash: str) -> bool:
+        """True when this rule already forwarded this exact content fingerprint."""
+        query = "SELECT 1 FROM content_dedup WHERE rule_id = %s AND content_hash = %s"
+        row = await self._fetch_one(query, (rule_id, content_hash))
+        return row is not None
+
+    async def record_content_hash(self, rule_id: str, content_hash: str) -> None:
+        """Record a fingerprint. ON CONFLICT DO NOTHING keeps replay idempotent."""
+        now = int(time.time())
+        query = """
+        INSERT INTO content_dedup (rule_id, content_hash, created_at)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (rule_id, content_hash) DO NOTHING
+        """
+        await _execute_db(self._db, query, (rule_id, content_hash, now))
+
+    async def purge_content_hashes(self, rule_id: str, before_ts: int) -> int:
+        query = "DELETE FROM content_dedup WHERE rule_id = %s AND created_at < %s"
+        res = await _execute_db(self._db, query, (rule_id, int(before_ts)))
         if isinstance(res, str) and res.startswith("DELETE "):
             return int(res.split()[-1])
         count = getattr(res, "rowcount", None)
@@ -1100,6 +1131,147 @@ class PostgresPromptRepository(IPromptRepository):
             is_active=bool(d["is_active"]),
             created_at=int(d["created_at"]),
         )
+
+
+async def initialize_postgres_schema(db: Any) -> None:
+    """Ensure all required PostgreSQL tables, indexes, and additive columns exist.
+
+    Idempotent: safe to run on every startup against existing or clean databases.
+    """
+    ddl_statements = [
+        # 1. Delivery jobs queue
+        """
+        CREATE TABLE IF NOT EXISTS delivery_jobs (
+            id TEXT PRIMARY KEY,
+            rule_id TEXT NOT NULL,
+            source_chat_id TEXT NOT NULL,
+            source_message_id BIGINT NOT NULL,
+            target_chat_id TEXT NOT NULL,
+            payload_json JSONB NOT NULL DEFAULT '{}',
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            max_attempts INTEGER NOT NULL DEFAULT 5,
+            next_retry_at DOUBLE PRECISION NOT NULL DEFAULT 0,
+            lease_until DOUBLE PRECISION NOT NULL DEFAULT 0,
+            worker_id TEXT NOT NULL DEFAULT '',
+            error_detail TEXT NOT NULL DEFAULT '',
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            intermediate_chat_id TEXT NOT NULL DEFAULT '',
+            intermediate_message_id BIGINT,
+            delivery_stage TEXT NOT NULL DEFAULT 'DIRECT',
+            CONSTRAINT delivery_jobs_unique UNIQUE (rule_id, source_chat_id, source_message_id, target_chat_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_delivery_jobs_claim
+            ON delivery_jobs (status, next_retry_at, lease_until, created_at);
+        CREATE INDEX IF NOT EXISTS idx_delivery_jobs_rule ON delivery_jobs (rule_id);
+        CREATE INDEX IF NOT EXISTS idx_delivery_jobs_cleanup
+            ON delivery_jobs (status, updated_at);
+        """,
+        # 2. Message map for reply/edit/delete sync
+        """
+        CREATE TABLE IF NOT EXISTS message_map (
+            id TEXT PRIMARY KEY,
+            rule_id TEXT NOT NULL,
+            source_chat_id TEXT NOT NULL,
+            source_message_id BIGINT NOT NULL,
+            target_chat_id TEXT NOT NULL,
+            target_message_id BIGINT,
+            media_group_id TEXT NOT NULL DEFAULT '',
+            delivery_status TEXT NOT NULL DEFAULT 'PENDING',
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            CONSTRAINT message_map_unique UNIQUE (rule_id, source_chat_id, source_message_id, target_chat_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_msgmap_src ON message_map (source_chat_id, source_message_id);
+        CREATE INDEX IF NOT EXISTS idx_msgmap_tgt ON message_map (target_chat_id, target_message_id);
+        CREATE INDEX IF NOT EXISTS idx_msgmap_media ON message_map (media_group_id);
+        """,
+        # 3. Dead letter queue
+        """
+        CREATE TABLE IF NOT EXISTS dead_letter_queue (
+            id TEXT PRIMARY KEY,
+            job_id TEXT NOT NULL,
+            rule_id TEXT NOT NULL,
+            source_chat_id TEXT NOT NULL,
+            source_message_id BIGINT NOT NULL,
+            target_chat_id TEXT NOT NULL,
+            payload_json JSONB NOT NULL DEFAULT '{}',
+            error_message TEXT NOT NULL DEFAULT '',
+            error_category TEXT NOT NULL DEFAULT '',
+            dead_lettered_at BIGINT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_dlq_rule ON dead_letter_queue (rule_id, dead_lettered_at);
+        CREATE INDEX IF NOT EXISTS idx_dlq_ts ON dead_letter_queue (dead_lettered_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_dlq_job ON dead_letter_queue (job_id);
+        """,
+        # 4. Content fingerprint deduplication (v2.0)
+        """
+        CREATE TABLE IF NOT EXISTS content_dedup (
+            id BIGSERIAL PRIMARY KEY,
+            rule_id TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            created_at BIGINT NOT NULL,
+            CONSTRAINT content_dedup_unique UNIQUE (rule_id, content_hash)
+        );
+        CREATE INDEX IF NOT EXISTS idx_content_dedup_rule ON content_dedup (rule_id, created_at);
+        """,
+        # 5. Forward rules
+        PostgresForwardRuleRepository.DDL_SCHEMA,
+        # 6. Prompt templates & versions
+        PostgresPromptRepository.DDL_SCHEMA,
+        # 7. Rule stats, error log, and hourly metrics
+        """
+        CREATE TABLE IF NOT EXISTS rule_stats (
+            rule_id TEXT PRIMARY KEY,
+            forwarded BIGINT NOT NULL DEFAULT 0,
+            filtered BIGINT NOT NULL DEFAULT 0,
+            errors BIGINT NOT NULL DEFAULT 0,
+            last_forward_ts BIGINT NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS metrics_hourly (
+            ts_hour BIGINT PRIMARY KEY,
+            forwarded BIGINT NOT NULL DEFAULT 0,
+            filtered BIGINT NOT NULL DEFAULT 0,
+            errors BIGINT NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS error_log (
+            id BIGSERIAL PRIMARY KEY,
+            ts BIGINT NOT NULL,
+            user_id BIGINT,
+            session_id TEXT,
+            rule_id TEXT,
+            category TEXT NOT NULL,
+            error_name TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            detail TEXT NOT NULL DEFAULT '',
+            recoverable INTEGER NOT NULL DEFAULT 0,
+            chat_id TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_pg_error_ts ON error_log(ts);
+        CREATE INDEX IF NOT EXISTS idx_pg_error_category ON error_log(category, severity);
+        CREATE INDEX IF NOT EXISTS idx_pg_error_rule ON error_log(rule_id);
+        """,
+        # 8. Additive columns for safe upgrades
+        """
+        ALTER TABLE forward_rules ADD COLUMN IF NOT EXISTS owner_user_id BIGINT NOT NULL DEFAULT 0;
+        CREATE INDEX IF NOT EXISTS idx_pg_fwd_owner ON forward_rules (owner_user_id);
+        CREATE INDEX IF NOT EXISTS idx_pg_fwd_session_owner ON forward_rules (session_id, owner_user_id);
+        ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS owner_user_id BIGINT NOT NULL DEFAULT 0;
+        CREATE INDEX IF NOT EXISTS idx_pg_prompt_templates_owner ON prompt_templates (owner_user_id);
+        CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
+        """,
+    ]
+
+    for stmt in ddl_statements:
+        for query in stmt.strip().split(";"):
+            cleaned = query.strip()
+            if cleaned:
+                try:
+                    await _execute_db(db, cleaned)
+                except Exception:
+                    pass
+
 
 
 

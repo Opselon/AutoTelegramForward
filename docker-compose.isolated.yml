@@ -1,0 +1,117 @@
+# Isolated Docker Compose Deployment for Architecture Hardening & PostgreSQL Verification
+# Project name: atf-architecture-hardening
+# Network: atf-hardening-internal
+# Volume: atf-hardening-postgres-data
+
+name: atf-architecture-hardening
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: atf-hardened-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-atf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atf_secure_password_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-atf_db}
+    volumes:
+      - atf-hardening-postgres-data:/var/lib/postgresql/data
+    networks:
+      - atf-hardening-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atf} -d ${POSTGRES_DB:-atf_db}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  logger:
+    build:
+      context: .
+      dockerfile: Dockerfile.logger
+    container_name: atf-hardened-logger
+    restart: unless-stopped
+    environment:
+      ATF_LOGGER_PORT: 50052
+      ATF_LOGGER_DB_PATH: /app/data/logger.db
+    volumes:
+      - atf-hardening-data:/app/data
+    networks:
+      - atf-hardening-internal
+
+  core:
+    build:
+      context: .
+      dockerfile: Dockerfile.core
+    container_name: atf-hardened-core
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      logger:
+        condition: service_started
+    environment:
+      ATF_DATABASE_URL: postgresql://${POSTGRES_USER:-atf}:${POSTGRES_PASSWORD:-atf_secure_password_dev}@postgres:5432/${POSTGRES_DB:-atf_db}
+      ATF_POSTGRES_ALL: "1"
+      ATF_API_ID: ${ATF_API_ID:-17349}
+      ATF_API_HASH: ${ATF_API_HASH:-344583e45741c457fe1862106095a5eb}
+      ATF_BOT_TOKEN: ${ATF_BOT_TOKEN:-123456:TEST_BOT_TOKEN}
+      ADMIN_USER_ID: ${ADMIN_USER_ID:-5094837833}
+      ADMIN_IDS: ${ADMIN_IDS:-5094837833}
+      ATF_ADMIN_USER_ID: ${ATF_ADMIN_USER_ID:-5094837833}
+      ATF_MASTER_KEY: ${ATF_MASTER_KEY:-dev_master_key_for_architecture_hardening_32chars!}
+      ATF_GRPC_PORT: 50051
+      ATF_DB_PATH: /app/data/atf.db
+      ATF_LOGGER_ADDR: logger:50052
+      ATF_DISABLE_BOT: "1"
+    volumes:
+      - atf-hardening-data:/app/data
+    networks:
+      - atf-hardening-internal
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: atf-hardened-api
+    restart: unless-stopped
+    depends_on:
+      - core
+    environment:
+      ATF_CORE_GRPC: core:50051
+      ATF_LOGGER_GRPC: logger:50052
+      ATF_API_ADDR: ":8080"
+      ATF_API_KEY: ${ATF_API_KEY:-}
+      ATF_WEB_HEALTH_URL: http://web:8088/healthz
+    ports:
+      - "127.0.0.1:${ATF_HARDENED_API_PORT:-8180}:8080"
+    networks:
+      - atf-hardening-internal
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: atf-hardened-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      ATF_WEB_ADDR: "0.0.0.0:8088"
+      ATF_API_ADDR: "http://api:8080"
+    ports:
+      - "127.0.0.1:${ATF_HARDENED_WEB_PORT:-8188}:8088"
+    networks:
+      - atf-hardening-internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8088/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  atf-hardening-postgres-data:
+  atf-hardening-data:
+
+networks:
+  atf-hardening-internal:
+    driver: bridge

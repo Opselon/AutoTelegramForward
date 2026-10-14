@@ -365,6 +365,14 @@ class DurableMessagePipeline:
         if payload is None:
             return
 
+        if getattr(rule, "is_paused", False) and getattr(rule, "is_currently_paused", lambda: True)():
+            ctx.record_stage(PipelineStage.FILTER, False, reason="rule_paused")
+            logger.info(
+                "[PIPELINE:DROP] [%s] Rule %s is paused. Skipping forwarding for msg %s",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+            )
+            return
+
         # 3. DEDUPLICATE (Event level)
         t0 = time.monotonic()
         since = getattr(rule, "since_ts", 0) or 0
@@ -568,7 +576,10 @@ class DurableMessagePipeline:
         enqueued_any = False
         for target in targets:
             if self._queue is not None:
-                ok = await self._queue.enqueue_delivery(rule, payload, str(target), ctx.transformed_text, eval_res)
+                ok = await self._queue.enqueue_delivery(
+                    rule, payload, str(target), ctx.transformed_text, eval_res,
+                    correlation_id=ctx.correlation_id,
+                )
                 if ok:
                     enqueued_any = True
                     job_id = f"{rule.id}:{payload.chat_id}:{payload.message_id}:{target}"
@@ -613,6 +624,7 @@ class DurableMessagePipeline:
                     await self._queue.enqueue_delivery(
                         rule, payload, str(target), reply_text, eval_res,
                         job_kind="keyword_reply",
+                        correlation_id=ctx.correlation_id,
                     )
                 ctx.record_stage(
                     PipelineStage.TRANSFORM, True,

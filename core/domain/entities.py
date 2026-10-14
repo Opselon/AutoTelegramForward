@@ -120,6 +120,16 @@ class ForwardRule:
     preserve_signature: bool = False
     is_paused: bool = False
     paused_until: int = 0
+
+    def is_currently_paused(self, now: Optional[float] = None) -> bool:
+        """Return True if rule is explicitly paused and temporary pause (if any) has not elapsed."""
+        if not self.is_paused:
+            return False
+        if self.paused_until and self.paused_until > 0:
+            current_ts = time.time() if now is None else now
+            if current_ts >= self.paused_until:
+                return False
+        return True
     filter_rule_id: Optional[str] = None
     ai_config_id: Optional[str] = None
     remove_links: bool = False

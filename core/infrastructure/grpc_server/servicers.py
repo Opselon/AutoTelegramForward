@@ -3,7 +3,7 @@
 import time
 
 import logging
-from typing import Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import grpc
 
@@ -276,8 +276,9 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
 
 
 class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
-    def __init__(self, rules) -> None:
+    def __init__(self, rules, queue=None) -> None:
         self._rules = rules
+        self._queue = queue
 
     async def ListRules(self, request, context):
         owner = int(request.owner_user_id or 0)
@@ -564,16 +565,36 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         rule.paused_until = 0
         rule.mark_updated()
         await self._rules.update(rule)
+        if self._queue is not None:
+            try:
+                if hasattr(self._queue, "_db") and not hasattr(self._queue, "_db_path"):
+                    from ..persistence.postgres_repositories import _execute_db
+                    await _execute_db(
+                        self._queue._db,
+                        "UPDATE delivery_jobs SET next_retry_at = 0 WHERE rule_id = %s AND status = 'RETRY_WAIT'",
+                        (rule.id,),
+                    )
+                elif hasattr(self._queue, "_db") and hasattr(self._queue._db, "execute"):
+                    self._queue._db.execute(
+                        "UPDATE delivery_jobs SET next_retry_at = 0 WHERE rule_id = ? AND status = 'RETRY_WAIT'",
+                        (rule.id,),
+                    )
+            except Exception:
+                pass
         return pb.RuleActionResponse(success=True, message="resumed")
 
 
 class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
     """Live delivery stats, dead-letter queue inspection and replay."""
 
-    def __init__(self, db, rule_repo, pipeline=None) -> None:
+    def __init__(
+        self, db, rule_repo, pipeline=None, queue_repo=None, message_map_repo=None
+    ) -> None:
         self._db = db
         self._rules = rule_repo
         self._pipeline = pipeline
+        self._queue_repo = queue_repo
+        self._message_map_repo = message_map_repo
 
     def _q(self, sql: str, params: tuple = ()):
         try:
@@ -582,6 +603,30 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
             return cur.fetchall()
         except Exception:
             return []
+
+    async def _query_queue(self, sql: str, params: tuple = ()) -> list:
+        """Execute a query against delivery_jobs or dead_letter_queue across PostgreSQL and SQLite."""
+        if self._queue_repo is not None and hasattr(self._queue_repo, "_fetch_all"):
+            pg_sql = sql.replace("?", "%s")
+            return await self._queue_repo._fetch_all(pg_sql, params)
+        return self._q(sql, params)
+
+    async def _execute_queue(self, sql: str, params: tuple = ()) -> Any:
+        """Execute an insert/update/delete on delivery_jobs or dead_letter_queue across backends."""
+        if self._queue_repo is not None and hasattr(self._queue_repo, "_db") and not hasattr(self._queue_repo, "_db_path"):
+            from ..persistence.postgres_repositories import _execute_db
+            pg_sql = sql.replace("?", "%s")
+            if "INSERT OR IGNORE" in pg_sql:
+                pg_sql = pg_sql.replace("INSERT OR IGNORE", "INSERT")
+                if "VALUES" in pg_sql and "ON CONFLICT" not in pg_sql:
+                    pg_sql += " ON CONFLICT DO NOTHING"
+            return await _execute_db(self._queue_repo._db, pg_sql, params)
+        if hasattr(self._db, "execute"):
+            return self._db.execute(sql, params)
+        cur = self._db.connection.cursor()
+        cur.execute(sql, params)
+        self._db.connection.commit()
+        return cur
 
     async def _owner_rule_ids(self, owner_user_id: int) -> Optional[set]:
         """v12: resolve the rule ids a tenant may see. None = unscoped (admin)."""
@@ -616,10 +661,18 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
             forwarded += int(row[0] or 0)
             filtered += int(row[1] or 0)
             failed += int(row[2] or 0)
-        for row in self._q(f"SELECT COUNT(*) FROM delivery_jobs WHERE status IN ('PENDING','LEASED'){owner_clause}", owner_params):
-            in_queue = int(row[0] or 0)
-        for row in self._q(f"SELECT COALESCE(SUM(attempts),0) FROM delivery_jobs WHERE attempts > 1{owner_clause}", owner_params):
-            retries = int(row[0] or 0)
+
+        # Active jobs in queue: PENDING, CLAIMED, RETRY_WAIT
+        queue_sql = f"SELECT COUNT(*) FROM delivery_jobs WHERE status IN ('PENDING', 'CLAIMED', 'RETRY_WAIT'){owner_clause}"
+        for row in await self._query_queue(queue_sql, owner_params):
+            val = row[0] if isinstance(row, (tuple, list)) else list(row.values())[0] if hasattr(row, "values") else (row["count"] if isinstance(row, dict) else 0)
+            in_queue = int(val or 0)
+
+        retries_sql = f"SELECT COALESCE(SUM(attempts),0) FROM delivery_jobs WHERE attempts > 1{owner_clause}"
+        for row in await self._query_queue(retries_sql, owner_params):
+            val = row[0] if isinstance(row, (tuple, list)) else list(row.values())[0] if hasattr(row, "values") else (row["coalesce"] if isinstance(row, dict) else 0)
+            retries = int(val or 0)
+
         processed = forwarded + filtered + failed
 
         rules = []
@@ -661,8 +714,10 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
             ))
 
         dlq_total = 0
-        for row in self._q("SELECT COUNT(*) FROM dead_letter_queue WHERE 1=1" + owner_clause, owner_params):
-            dlq_total = int(row[0] or 0)
+        dlq_sql = "SELECT COUNT(*) FROM dead_letter_queue WHERE 1=1" + owner_clause
+        for row in await self._query_queue(dlq_sql, owner_params):
+            val = row[0] if isinstance(row, (tuple, list)) else list(row.values())[0] if hasattr(row, "values") else (row["count"] if isinstance(row, dict) else 0)
+            dlq_total = int(val or 0)
 
         return pb.DeliveryStatsResponse(
             processed_total=processed, forwarded_total=forwarded, failed_total=failed,
@@ -702,39 +757,71 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
         params = params + (limit,)
 
         entries = []
-        for row in self._q(sql, params):
-            entries.append(pb.DeadLetterEntry(
-                id=str(row[0]), rule_id=str(row[1]), source_chat_id=str(row[2]),
-                source_message_id=int(row[3] or 0), target_chat_id=str(row[4]),
-                attempts=int(row[5] or 0), last_error=str(row[6] or "")[:500],
-                error_category=str(row[7] or ""), dead_lettered_at=int(row[8] or 0),
-            ))
+        for r in await self._query_queue(sql, params):
+            if isinstance(r, (tuple, list)):
+                entries.append(pb.DeadLetterEntry(
+                    id=str(r[0]), rule_id=str(r[1]), source_chat_id=str(r[2]),
+                    source_message_id=int(r[3] or 0), target_chat_id=str(r[4]),
+                    attempts=int(r[5] or 0), last_error=str(r[6] or "")[:500],
+                    error_category=str(r[7] or ""), dead_lettered_at=int(r[8] or 0),
+                ))
+            elif hasattr(r, "keys"):
+                d = dict(r)
+                entries.append(pb.DeadLetterEntry(
+                    id=str(d.get("id", "")), rule_id=str(d.get("rule_id", "")),
+                    source_chat_id=str(d.get("source_chat_id", "")),
+                    source_message_id=int(d.get("source_message_id", 0) or 0),
+                    target_chat_id=str(d.get("target_chat_id", "")),
+                    attempts=int(d.get("attempts", 0) or 0),
+                    last_error=str(d.get("last_error") or d.get("error_message") or "")[:500],
+                    error_category=str(d.get("error_category", "")),
+                    dead_lettered_at=int(d.get("dead_lettered_at", 0) or 0),
+                ))
         return pb.ListDeadLetterResponse(entries=entries, total=len(entries))
 
     async def ReplayDeadLetter(self, request, context):
-        rows = self._q("SELECT * FROM dead_letter_queue WHERE id=?", (request.id,))
+        rows = await self._query_queue("SELECT * FROM dead_letter_queue WHERE id=?", (request.id,))
         if not rows:
             return pb.RuleActionResponse(success=False, message="not_found", error_code="not_found")
-        row = rows[0]
+        r = rows[0]
+        if isinstance(r, (tuple, list)):
+            row_id = r[0]
+            rule_id = r[2] if len(r) > 2 else ""
+            src_chat = r[3] if len(r) > 3 else ""
+            src_msg = r[4] if len(r) > 4 else 0
+            tgt_chat = r[5] if len(r) > 5 else ""
+            payload_json = r[6] if len(r) > 6 else "{}"
+        else:
+            d = dict(r) if hasattr(r, "keys") else r
+            row_id = d.get("id", "")
+            rule_id = d.get("rule_id", "")
+            src_chat = d.get("source_chat_id", "")
+            src_msg = d.get("source_message_id", 0)
+            tgt_chat = d.get("target_chat_id", "")
+            payload_json = d.get("payload_json", "{}")
+
         # v12: a tenant may only replay entries whose rule it owns.
         scope = await self._owner_rule_ids(int(request.owner_user_id or 0))
-        if scope is not None and row["rule_id"] not in scope:
+        if scope is not None and rule_id not in scope:
             logger.warning(
                 "ReplayDeadLetter: owner=%s denied replay of entry=%s rule=%s",
-                request.owner_user_id, request.id, row["rule_id"],
+                request.owner_user_id, request.id, rule_id,
             )
             return pb.RuleActionResponse(success=False, message="not_found", error_code="not_found")
         try:
-            self._db.execute(
+            import json as _json
+            import time as _time
+            payload_str = payload_json if isinstance(payload_json, str) else _json.dumps(payload_json or {})
+            now = int(_time.time())
+            await self._execute_queue(
                 "INSERT OR IGNORE INTO delivery_jobs "
                 "(id, rule_id, source_chat_id, source_message_id, target_chat_id, payload_json, "
                 "status, attempts, max_attempts, next_retry_at, lease_until, created_at, updated_at) "
-                "VALUES (?,?,?,?,?,?, 'PENDING', 0, 3, 0, 0, ?, ?)",
-                (f"replay-{row['id']}", row["rule_id"], row["source_chat_id"],
-                 int(row["source_message_id"]), row["target_chat_id"], row["payload_json"] or "{}",
-                 int(time.time()), int(time.time())),
+                "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, 3, 0, 0, ?, ?)",
+                (f"replay-{row_id}", str(rule_id), str(src_chat),
+                 int(src_msg or 0), str(tgt_chat), payload_str, now, now),
             )
-            self._db.execute("DELETE FROM dead_letter_queue WHERE id=?", (request.id,))
+            await self._execute_queue("DELETE FROM dead_letter_queue WHERE id=?", (request.id,))
             return pb.RuleActionResponse(success=True, message="requeued")
         except Exception as exc:
             return pb.RuleActionResponse(success=False, message=str(exc)[:200], error_code="replay_failed")
@@ -760,8 +847,8 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
         if where:
             sql += " WHERE " + " AND ".join(where)
         try:
-            cur = self._db.execute(sql, params)
-            return pb.RuleActionResponse(success=True, message=f"purged {cur.rowcount}")
+            await self._execute_queue(sql, params)
+            return pb.RuleActionResponse(success=True, message="purged")
         except Exception as exc:
             return pb.RuleActionResponse(success=False, message=str(exc)[:200], error_code="purge_failed")
 
