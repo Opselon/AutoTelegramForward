@@ -41,6 +41,7 @@ type Clients struct {
 	Account  pb.AccountControlServiceClient
 	Backup   pb.BackupControlServiceClient
 	Admin    pb.AdminControlServiceClient
+	Audit    pb.AuditControlServiceClient
 }
 
 // NewClients bundles the core service stubs.
@@ -55,6 +56,7 @@ func NewClients(conn *grpc.ClientConn) *Clients {
 		Account:  pb.NewAccountControlServiceClient(conn),
 		Backup:   pb.NewBackupControlServiceClient(conn),
 		Admin:    pb.NewAdminControlServiceClient(conn),
+		Audit:    pb.NewAuditControlServiceClient(conn),
 	}
 }
 

@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from . import autoforward_pb2 as autoforward__pb2
+import autoforward_pb2 as autoforward__pb2
 
 GRPC_GENERATED_VERSION = '1.84.0'
 GRPC_VERSION = grpc.__version__
@@ -1621,6 +1621,78 @@ class SystemStatusControlService:
             '/autoforward.SystemStatusControlService/GetSystemStats',
             autoforward__pb2.SystemStatsRequest.SerializeToString,
             autoforward__pb2.SystemStatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class AuditControlServiceStub:
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.QueryAuditEvents = channel.unary_unary(
+                '/autoforward.AuditControlService/QueryAuditEvents',
+                request_serializer=autoforward__pb2.QueryAuditEventsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.QueryAuditEventsResponse.FromString,
+                _registered_method=True)
+
+
+class AuditControlServiceServicer:
+    """Missing associated documentation comment in .proto file."""
+
+    def QueryAuditEvents(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_AuditControlServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'QueryAuditEvents': grpc.unary_unary_rpc_method_handler(
+                    servicer.QueryAuditEvents,
+                    request_deserializer=autoforward__pb2.QueryAuditEventsRequest.FromString,
+                    response_serializer=autoforward__pb2.QueryAuditEventsResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'autoforward.AuditControlService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('autoforward.AuditControlService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class AuditControlService:
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def QueryAuditEvents(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AuditControlService/QueryAuditEvents',
+            autoforward__pb2.QueryAuditEventsRequest.SerializeToString,
+            autoforward__pb2.QueryAuditEventsResponse.FromString,
             options,
             channel_credentials,
             insecure,

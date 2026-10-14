@@ -624,6 +624,67 @@ service SystemStatusControlService {
   rpc GetSystemStats(SystemStatsRequest) returns (SystemStatsResponse);
 }
 
+// -----------------------------------------------------------------------------
+// Centralized audit events (Phase Three) — durable, tenant-scoped event store.
+// Events are persisted by Core in PostgreSQL (audit_events table); queries are
+// always scoped server-side to the authorized tenant.
+// -----------------------------------------------------------------------------
+
+message QueryAuditEventsRequest {
+  string correlation_id = 1;
+  string operation_id = 2;
+  string feature_id = 3;
+  string service = 4;
+  string severity = 5;
+  string event_category = 6;
+  string outcome = 7;
+  int64 since = 8;
+  int64 until = 9;
+  int32 limit = 10;
+  int32 offset = 11;
+  // Server-side tenant scope: resolved from the authenticated principal by the
+  // Go API. A non-admin caller can never query another tenant's events.
+  int64 owner_user_id = 12;
+}
+
+message AuditEventEntry {
+  string event_id = 1;
+  string schema_version = 2;
+  string event_type = 3;
+  string event_category = 4;
+  string severity = 5;
+  string outcome = 6;
+  int64 ts_utc = 7;
+  string service = 8;
+  string correlation_id = 9;
+  string operation_id = 10;
+  string tenant_id = 11;
+  string actor_type = 12;
+  string actor_id = 13;
+  string feature_id = 14;
+  string action = 15;
+  string resource_type = 16;
+  string resource_id = 17;
+  string rule_id = 18;
+  string queue_job_id = 19;
+  string reason_code = 20;
+  int64 duration_ms = 21;
+  string error_code = 22;
+  string error_class = 23;
+  bool retryable = 24;
+  string result_summary = 25;
+  string metadata_json = 26;
+}
+
+message QueryAuditEventsResponse {
+  repeated AuditEventEntry events = 1;
+  int32 total = 2;
+}
+
+service AuditControlService {
+  rpc QueryAuditEvents(QueryAuditEventsRequest) returns (QueryAuditEventsResponse);
+}
+
 service LogControlService {
   rpc Log(LogRequest) returns (StatusResponse);
   rpc QueryLogs(QueryLogsRequest) returns (QueryLogsResponse);
