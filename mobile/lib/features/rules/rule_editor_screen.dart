@@ -182,8 +182,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
   String _aiConfigLabel(String id) {
     for (final c in _aiConfigs) {
-      if (c.id == id)
+      if (c.id == id) {
         return c.model.isNotEmpty ? '${c.provider} · ${c.model}' : c.provider;
+      }
     }
     return id;
   }
