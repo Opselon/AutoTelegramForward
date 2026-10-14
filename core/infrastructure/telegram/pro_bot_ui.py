@@ -2312,7 +2312,17 @@ class ProBotUI:
         for session in active_sessions:
             client = self._pool.get(session.id)
             if not client or not getattr(client, "is_connected", False):
-                continue
+                # Attempt to reconnect dropped sessions
+                sess_str = getattr(session, "session_string", "") or getattr(session, "session_string_encrypted", "")
+                if sess_str:
+                    try:
+                        await self._pool.start_with_session_string(session.id, sess_str, credential_id=getattr(session, "credential_id", "default"))
+                        client = self._pool.get(session.id)
+                    except Exception as exc:
+                        logger.warning("Could not reconnect session %s: %s", session.id, exc)
+                        continue
+                if not client or not getattr(client, "is_connected", False):
+                    continue
 
             try:
                 async with asyncio.timeout(6.0):
