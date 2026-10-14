@@ -52,7 +52,7 @@ from ...domain.entities import AIConfig, FilterRule, ForwardRule
 from ...domain.value_objects import AIProviderType, ForwardMode, RoutingType, RoutingDecision
 from .client_pool import ClientPool
 from .errors import SEV_ERROR, SEV_FATAL, tg_detail, tg_error
-from .i18n import I18n
+from .i18n import I18n, SUPPORTED_LANGUAGES
 from .login_flow import LoginFlowManager
 
 logger = logging.getLogger("atf.botui")
