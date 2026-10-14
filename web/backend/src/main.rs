@@ -111,7 +111,7 @@ async fn health_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse
 async fn gateway_info_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     Json(json!({
         "service": "atf-web-gateway",
-        "version": "1.2.2",
+        "version": env!("CARGO_PKG_VERSION"),
         "status": "healthy",
         "role": "unified_web_gateway_bff",
         "upstream_api": state.api_upstream,
@@ -134,6 +134,24 @@ async fn proxy_api_handler(
     let target_url = format!("{}{}", state.api_upstream, path_and_query);
 
     let (parts, body) = req.into_parts();
+
+    // Extract or generate Correlation ID
+    let corr_id = parts
+        .headers
+        .get("x-correlation-id")
+        .or_else(|| parts.headers.get("x-request-id"))
+        .or_else(|| parts.headers.get("traceparent"))
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| s.len() >= 8 && s.len() <= 128 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == ':'))
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            format!("corr-{:016x}", nanos)
+        });
+
     let body_bytes = match axum::body::to_bytes(body, 10 * 1024 * 1024).await {
         Ok(b) => b,
         Err(e) => {
@@ -155,6 +173,8 @@ async fn proxy_api_handler(
             upstream_req = upstream_req.header(name, value);
         }
     }
+    upstream_req = upstream_req.header("X-Correlation-ID", &corr_id);
+    upstream_req = upstream_req.header("X-Request-ID", &corr_id);
 
     if !body_bytes.is_empty() {
         upstream_req = upstream_req.body(body_bytes);
@@ -165,7 +185,14 @@ async fn proxy_api_handler(
             let status = StatusCode::from_u16(resp.status().as_u16())
                 .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
-            let mut response_builder = Response::builder().status(status);
+            let mut response_builder = Response::builder()
+                .status(status)
+                .header("X-Content-Type-Options", "nosniff")
+                .header("X-Frame-Options", "DENY")
+                .header("X-XSS-Protection", "1; mode=block")
+                .header("Referrer-Policy", "strict-origin-when-cross-origin")
+                .header("X-Correlation-ID", &corr_id)
+                .header("X-Request-ID", &corr_id);
 
             for (name, value) in resp.headers().iter() {
                 if name != header::TRANSFER_ENCODING && name != header::CONTENT_LENGTH {

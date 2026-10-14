@@ -479,6 +479,14 @@ class SmartRoutingEngine:
         if not rule.is_active:
             return False, "rule_inactive"
 
+        # Paused rules must never forward messages or enqueue forwarding work
+        if getattr(rule, "is_paused", False):
+            if hasattr(rule, "is_currently_paused"):
+                if rule.is_currently_paused():
+                    return False, "rule_paused"
+            else:
+                return False, "rule_paused"
+
         if not rule.matches_source(payload.chat_id):
             return False, "source_chat_mismatch"
 

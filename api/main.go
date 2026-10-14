@@ -14,7 +14,7 @@ import (
 func main() {
 	addr := getenv("ATF_API_ADDR", ":8080")
 	coreAddr := getenv("ATF_CORE_GRPC", "localhost:50051")
-	loggerAddr := getenv("ATF_LOGGER_ADDR", getenv("ATF_LOGGER_GRPC", "127.0.0.1:6002"))
+	loggerAddr := getenv("ATF_LOGGER_ADDR", getenv("ATF_LOGGER_GRPC", "127.0.0.1:50052"))
 	apiKey := getenv("ATF_API_KEY", "")
 
 	conn, err := grpcclient.Dial(coreAddr)
@@ -129,6 +129,8 @@ func main() {
 	if apiKey != "" {
 		handler = middleware.APIKeyAuth(apiKey, handler)
 	}
+	// Extract, validate, or generate end-to-end Correlation ID
+	handler = middleware.CorrelationID(handler)
 
 	log.Printf("AutoTelegramForward API listening on %s (core: %s)", addr, coreAddr)
 	if err := http.ListenAndServe(addr, handler); err != nil {

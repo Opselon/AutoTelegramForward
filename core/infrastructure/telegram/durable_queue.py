@@ -172,6 +172,7 @@ class DurableQueueManager:
         text: str,
         evaluation: Any = None,
         job_kind: str = "forward",
+        correlation_id: str = "",
     ) -> bool:
         """Enqueue a delivery job for one target chat.
 
@@ -227,6 +228,7 @@ class DurableQueueManager:
             # A keyword-reply job is a pure-text follow-up: it must never
             # re-copy or re-forward the source message's media.
             "is_reply": job_kind != "forward",
+            "correlation_id": correlation_id or getattr(payload, "correlation_id", "") or "",
         }
 
         # 3. Insert or update initial mapping as PENDING
@@ -278,7 +280,7 @@ class DurableQueueManager:
 
         return enqueued
 
-    async def _enqueue_atomic(self, mapping: MessageMapping, job: DeliveryJob) -> None:
+    async def _enqueue_atomic(self, mapping: MessageMapping, job: DeliveryJob) -> bool:
         """v12.3 (ACID atomicity): write the delivery job and its message mapping
         in ONE transaction.
 
@@ -290,20 +292,16 @@ class DurableQueueManager:
         no-op rather than a duplicate delivery.
         """
         db = getattr(self._queue, "_db", None) or getattr(self._map, "_db", None)
-        if db is None or not hasattr(db, "run_in_transaction"):
-            # In-memory or fake repos (tests): no transactional boundary to
-            # borrow — write sequentially. The unit guarantee is a
-            # real-database property; forcing it on mocks would break tests
-            # that drive the repos directly.
-            await self._map.add_or_update(mapping)
-            await self._queue.enqueue(job)
-            return None
-        # The repository writes are plain SQL with no awaits internally, so they
-        # can run under run_in_transaction on the running loop via a sync unit
-        # helper — we drive them directly (the async wrappers only call execute).
-        return db.run_in_transaction(
-            lambda conn: self._write_mapping_and_job(conn, mapping, job)
-        )
+        if db is not None and hasattr(db, "run_in_transaction"):
+            return bool(db.run_in_transaction(
+                lambda conn: self._write_mapping_and_job(conn, mapping, job)
+            ))
+
+        # Non-SQLite fallback (PostgreSQL, in-memory, or test doubles):
+        # write mapping and job, preserving the boolean enqueue outcome.
+        await self._map.add_or_update(mapping)
+        res = await self._queue.enqueue(job)
+        return True if res is None else bool(res)
 
     def _write_mapping_and_job(self, conn, mapping: MessageMapping, job: DeliveryJob) -> bool:
         """Both durable writes on one connection: commit together or roll back together.
@@ -484,13 +482,27 @@ class DurableQueueManager:
                 except Exception as exc:
                     logger.debug("Failed checking time limit for %s: %s", session_id, exc)
 
-        # Check if rule is still active
+        # Check if rule is still active or paused
         if self._rules is not None:
             rule_obj = await self._rules.get_by_id(job.rule_id)
-            if rule_obj and not rule_obj.is_active:
-                logger.info("[PIPELINE:DROP] [%s] Rule %s is disabled. Dropping job %s", worker_id, job.rule_id[:8], job.id)
-                await self._queue.mark_failed(job.id, "Rule disabled")
-                return None
+            if rule_obj:
+                if not rule_obj.is_active:
+                    logger.info("[PIPELINE:DROP] [%s] Rule %s is disabled. Dropping job %s", worker_id, job.rule_id[:8], job.id)
+                    await self._queue.mark_failed(job.id, "Rule disabled")
+                    return None
+                if getattr(rule_obj, "is_paused", False) and getattr(rule_obj, "is_currently_paused", lambda: True)():
+                    backoff = 5.0
+                    if getattr(rule_obj, "paused_until", 0) > 0:
+                        rem = float(rule_obj.paused_until) - time.time()
+                        if rem > 0:
+                            backoff = max(2.0, rem)
+                    _bump_target("retried")
+                    logger.info(
+                        "[PIPELINE:PAUSED] [%s] Rule %s is paused. Postponing job %s for %.1fs",
+                        worker_id, job.rule_id[:8], job.id, backoff,
+                    )
+                    await self._queue.mark_retry(job.id, f"Rule paused ({backoff:.1f}s)", backoff_seconds=backoff)
+                    return None
 
         client = self._pool.get(session_id) if self._pool is not None else None
         if client is None:

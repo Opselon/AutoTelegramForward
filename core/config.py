@@ -37,6 +37,7 @@ class Config:
     # v14 PostgreSQL (optional). When database_url is set the queue uses the
     # Postgres repositories (FOR UPDATE SKIP LOCKED); otherwise SQLite.
     database_url: str = ""
+    postgres_all: bool = False
 
     @classmethod
     def load(cls, config_path: str = None) -> "Config":
@@ -84,6 +85,7 @@ class Config:
             "ATF_QUEUE_LEASE_SECONDS": ("queue_lease_seconds", float),
             "ATF_QUEUE_MAX_PER_MINUTE": ("queue_max_per_minute_per_target", int),
             "ATF_DATABASE_URL": ("database_url", str),
+            "ATF_POSTGRES_ALL": ("postgres_all", lambda v: str(v).lower() in ("1", "true", "yes")),
             # v15 channel polling
             "ATF_CHANNEL_POLL_INTERVAL": ("channel_poll_interval", float),
         }

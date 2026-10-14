@@ -26,7 +26,10 @@ from core.infrastructure.grpc_server import servicers  # noqa: E402
 from core.infrastructure.persistence.database import SqliteDatabase  # noqa: E402
 from core.infrastructure.persistence.postgres_repositories import (  # noqa: E402
     PostgresDeliveryQueueRepository,
+    PostgresForwardRuleRepository,
     PostgresMessageMapRepository,
+    PostgresPromptRepository,
+    initialize_postgres_schema,
 )
 from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
     SqliteAIConfigRepository,
@@ -106,7 +109,14 @@ def _create_postgres_pool(database_url: str):
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    return loop.run_until_complete(_build())
+    try:
+        pool = loop.run_until_complete(_build())
+        loop.run_until_complete(initialize_postgres_schema(pool))
+        return pool
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to initialize configured PostgreSQL database at {database_url}: {exc}"
+        ) from exc
 
 
 def build_container(cfg: Config) -> dict:
@@ -119,11 +129,28 @@ def build_container(cfg: Config) -> dict:
     # the rest of the schema is per-service and unchanged.
     pg_pool = None
     if getattr(cfg, "database_url", ""):
+        import urllib.parse
+        try:
+            parsed = urllib.parse.urlsplit(cfg.database_url)
+            safe_netloc = parsed.hostname or "localhost"
+            if parsed.port:
+                safe_netloc = f"{safe_netloc}:{parsed.port}"
+            redacted_url = f"{parsed.scheme}://[REDACTED]@{safe_netloc}{parsed.path}"
+        except Exception:
+            redacted_url = "postgresql://[REDACTED]"
+        logger.info("Selected authoritative database backend: PostgreSQL (%s)", redacted_url)
         pg_pool = _create_postgres_pool(cfg.database_url)
+    else:
+        logger.info("Selected authoritative database backend: SQLite (%s)", cfg.db_path)
 
     db = SqliteDatabase(cfg.db_path)
     session_repo = SqliteSessionRepository(db, crypto)
-    rule_repo = SqliteForwardRuleRepository(db)
+    if pg_pool is not None and (getattr(cfg, "postgres_all", False) or os.environ.get("ATF_POSTGRES_ALL", "").lower() in ("1", "true")):
+        rule_repo = PostgresForwardRuleRepository(pg_pool)
+        prompt_repo = PostgresPromptRepository(pg_pool)
+    else:
+        rule_repo = SqliteForwardRuleRepository(db)
+        prompt_repo = SqlitePromptRepository(db)
     filter_repo = SqliteFilterRuleRepository(db)
     ai_repo = SqliteAIConfigRepository(db, crypto)
     cred_repo = SqliteApiCredentialRepository(db, crypto)
@@ -142,7 +169,6 @@ def build_container(cfg: Config) -> dict:
     else:
         msg_map_repo = SqliteMessageMapRepository(db)
         queue_repo = SqliteDeliveryQueueRepository(db)
-    prompt_repo = SqlitePromptRepository(db)
     factory = AIProviderFactory()
 
     prompt_service = PromptService(prompt_repo)
@@ -287,7 +313,7 @@ async def serve_grpc(container: dict, cfg: Config):
         servicers.SessionControlServicer(container["sessions"], container["pool"]), server
     )
     pb_grpc.add_ForwardRuleControlServiceServicer_to_server(
-        servicers.ForwardRuleControlServicer(container["rules"]), server
+        servicers.ForwardRuleControlServicer(container["rules"], queue=container.get("queue_repo")), server
     )
     pb_grpc.add_FilterControlServiceServicer_to_server(
         servicers.FilterControlServicer(container["filters"]), server
@@ -309,7 +335,11 @@ async def serve_grpc(container: dict, cfg: Config):
     )
     pb_grpc.add_DeliveryControlServiceServicer_to_server(
         servicers.DeliveryControlServicer(
-            container["db"], container["rules"], container.get("pipeline"),
+            container["db"],
+            container["rules"],
+            container.get("pipeline"),
+            queue_repo=container.get("queue_repo"),
+            message_map_repo=container.get("msg_map_repo"),
         ),
         server,
     )

@@ -4,6 +4,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"autoforward/internal/middleware"
 	pb "autoforward/proto"
 )
 
@@ -24,6 +25,7 @@ func Dial(addr string) (*grpc.ClientConn, error) {
 	return grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(retryConfig),
+		grpc.WithChainUnaryInterceptor(middleware.CorrelationUnaryClientInterceptor()),
 	)
 }
 
