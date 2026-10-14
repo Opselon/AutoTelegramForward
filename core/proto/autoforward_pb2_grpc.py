@@ -424,6 +424,11 @@ class ForwardRuleControlServiceStub:
                 request_serializer=autoforward__pb2.ListRulesRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.ListRulesResponse.FromString,
                 _registered_method=True)
+        self.GetRule = channel.unary_unary(
+                '/autoforward.ForwardRuleControlService/GetRule',
+                request_serializer=autoforward__pb2.GetRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ForwardRule.FromString,
+                _registered_method=True)
         self.CreateRule = channel.unary_unary(
                 '/autoforward.ForwardRuleControlService/CreateRule',
                 request_serializer=autoforward__pb2.CreateRuleRequest.SerializeToString,
@@ -460,6 +465,12 @@ class ForwardRuleControlServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
     def ListRules(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetRule(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -508,6 +519,11 @@ def add_ForwardRuleControlServiceServicer_to_server(servicer, server):
                     servicer.ListRules,
                     request_deserializer=autoforward__pb2.ListRulesRequest.FromString,
                     response_serializer=autoforward__pb2.ListRulesResponse.SerializeToString,
+            ),
+            'GetRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetRule,
+                    request_deserializer=autoforward__pb2.GetRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.ForwardRule.SerializeToString,
             ),
             'CreateRule': grpc.unary_unary_rpc_method_handler(
                     servicer.CreateRule,
@@ -567,6 +583,33 @@ class ForwardRuleControlService:
             '/autoforward.ForwardRuleControlService/ListRules',
             autoforward__pb2.ListRulesRequest.SerializeToString,
             autoforward__pb2.ListRulesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ForwardRuleControlService/GetRule',
+            autoforward__pb2.GetRuleRequest.SerializeToString,
+            autoforward__pb2.ForwardRule.FromString,
             options,
             channel_credentials,
             insecure,

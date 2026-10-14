@@ -477,6 +477,16 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         row = self._db.query_one("SELECT * FROM forward_rules WHERE id=?", (rule_id,))
         return self._row_to_entity(row) if row else None
 
+    async def get_owned(self, rule_id: str, owner_user_id: int) -> Optional[ForwardRule]:
+        """Single owner-scoped fetch. Fail-closed: returns None unless the row
+        exists AND belongs to owner_user_id. One indexed row instead of
+        list_by_owner's full scan — used by per-task actions at scale."""
+        row = self._db.query_one(
+            "SELECT * FROM forward_rules WHERE id=? AND owner_user_id=?",
+            (rule_id, int(owner_user_id)),
+        )
+        return self._row_to_entity(row) if row else None
+
     async def list_by_session(self, session_id: str, owner_user_id: int = 0) -> List[ForwardRule]:
         if owner_user_id:
             rows = self._db.query_all(

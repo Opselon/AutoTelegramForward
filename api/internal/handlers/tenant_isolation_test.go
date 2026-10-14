@@ -12,6 +12,8 @@ import (
 	pb "autoforward/proto"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // ---------------------------------------------------------------------------
@@ -32,6 +34,17 @@ func (f *isoRulesClient) ListRules(ctx context.Context, in *pb.ListRulesRequest,
 	// Deliberately return mixed-tenant rows: the handler must enforce the
 	// boundary even if a downstream service accidentally ignores OwnerUserId.
 	return &pb.ListRulesResponse{Rules: f.rules}, nil
+}
+
+// GetRule deliberately ignores OwnerUserId too: the handler must enforce
+// the boundary (fetchOwnedRule) even when the downstream service does not.
+func (f *isoRulesClient) GetRule(ctx context.Context, in *pb.GetRuleRequest, opts ...grpc.CallOption) (*pb.ForwardRule, error) {
+	for _, r := range f.rules {
+		if r.Id == in.RuleId {
+			return r, nil
+		}
+	}
+	return nil, status.Error(codes.NotFound, "rule not found")
 }
 
 func (f *isoRulesClient) UpdateRule(ctx context.Context, in *pb.UpdateRuleRequest, opts ...grpc.CallOption) (*pb.ForwardRule, error) {

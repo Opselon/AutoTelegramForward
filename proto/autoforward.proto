@@ -217,6 +217,14 @@ message ListRulesRequest {
   int64 owner_user_id = 2;    // scope results to one account (0 = all, admins only)
 }
 
+// GetRule: single owner-scoped fetch. Cheaper than ListRules-then-filter
+// for per-task actions (toggle/pause/edit) at scale — one indexed row
+// instead of enumerating the owner's whole rule list.
+message GetRuleRequest {
+  string rule_id = 1;
+  int64 owner_user_id = 2;    // mandatory: fail-closed when 0
+}
+
 message ListRulesResponse {
   repeated ForwardRule rules = 1;
 }
@@ -584,6 +592,7 @@ service SessionControlService {
 
 service ForwardRuleControlService {
   rpc ListRules(ListRulesRequest) returns (ListRulesResponse);
+  rpc GetRule(GetRuleRequest) returns (ForwardRule);
   rpc CreateRule(CreateRuleRequest) returns (ForwardRule);
   rpc UpdateRule(UpdateRuleRequest) returns (ForwardRule);
   rpc DeleteRule(DeleteRuleRequest) returns (StatusResponse);
