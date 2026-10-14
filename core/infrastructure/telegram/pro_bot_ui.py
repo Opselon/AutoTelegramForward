@@ -272,6 +272,11 @@ class ProBotUI:
     ) -> None:
         self.bot = bot
         self.i18n = i18n
+        # Default render language for the (rare) render paths that have no
+        # per-user context available. Per-user handlers resolve the user's
+        # own language via _resolve_lang(uid, user) and pass it to _t();
+        # this default must never be read for a specific user's render.
+        self._lang: str = "en"
         self._sessions = sessions
         self._rules = rules
         self._filters = filter_rules
@@ -411,7 +416,10 @@ class ProBotUI:
             logger.debug("ui state persist failed", exc_info=True)
 
     def _t(self, key: str, lang: Optional[str] = None, **kw) -> str:
-        cur_lang = lang or (getattr(self.i18n, "current", "en") if getattr(self, "i18n", None) else "en")
+        # Never read the process-wide i18n.current singleton here: one user's
+        # language choice must not leak into another user's render. Prefer the
+        # explicitly passed lang, then the per-UI default, then English.
+        cur_lang = lang or getattr(self, "_lang", None) or "en"
         return self.i18n.t(key, lang=cur_lang, **kw)
 
     @staticmethod
@@ -715,206 +723,65 @@ class ProBotUI:
         # client language wins (never the process-wide i18n.current).
         lang = await self._get_user_lang(uid, user)
 
-        if lang == "fa":
-            session_status = "فعال 🟢" if live_sessions > 0 else ("ثبت‌شده 🟡" if total_sessions > 0 else "قطع‌شده 🔴")
-            pv_status = "فعال 🟢" if pv_enabled else "غیرفعال 🔴"
-            lines = [
-                f"👋 خوش آمدید، **{display_name}**!",
-                "",
-                "📊 وضعیت سرویس: **در حال اجرا** ✅",
-                f"📋 تسک‌های فعال: **{active_rules}**",
-                "",
-                "🧩 **قوانین فعال:**",
-                f"• کلمات مسدودشده (Blacklist): **{blocked_kw}**",
-                f"• کلمات مجاز (Whitelist): **{allowed_kw}**",
-                f"• قوانین جایگزینی متن: **{replace_count}**",
-                f"• مدل‌های هوش مصنوعی فعال: **{active_ai}/{total_ai}** ({active_ai_model})",
-                f"• پاسخگوی خودکار پی‌وی (PV): **{pv_status}** (تأخیر: {pv_delays})",
-                "",
-                "نیاز به راهنمایی دارید؟ پشتیبانی: @Capxi",
-                "سفارش ربات، کانال‌های فارکس، کریپتو یا اتوماسیون؟ ارتباط: @Capxi",
-                "",
-                "━━━━━━━━━━━━━━━━━━━━",
-                "👤 **حساب کاربری (YOUR ACCOUNT)**",
-                "────────────────────",
-                f"نام نمایشی: `{display_name}`",
-                f"شناسه کاربری: `{uid_str}`",
-                f"شماره متصل: `{connected_phone}`",
-                f"سرور فعلی: `{server_name}`",
-                f"توکن وب: `{token_str}`",
-                "",
-                "💎 **اشتراک و پلن (SERVICE PLAN)**",
-                "────────────────────",
-                f"پلن فعلی: **{plan}**",
-                f"اعتبار باقی‌مانده: **{remaining}**",
-                "وضعیت سرویس: **Running ✅**",
-                "",
-                "📋 **تسک‌های فوروارد (FORWARDING TASKS)**",
-                "────────────────────",
-                f"تسک‌های در حال اجرا: **{active_rules}**",
-                f"فورواردشده (۲۴ ساعت): **{fwd_24h}**",
-                f"کل تسک‌ها: **{total_rules}**",
-                "",
-                "👥 **نشست‌ها (YOUR SESSIONS)**",
-                "────────────────────",
-                f"نشست‌های متصل: **{live_sessions}/{total_sessions}**",
-                f"وضعیت: **{session_status}**",
-                "",
-                "💰 **موجودی حساب (CREDITS BALANCE)**",
-                "────────────────────",
-                "موجودی فعلی: **0.00**",
-                "━━━━━━━━━━━━━━━━━━━━",
-            ]
-        elif lang == "ru":
-            session_status = "Активно 🟢" if live_sessions > 0 else ("Зарегистрировано 🟡" if total_sessions > 0 else "Отключено 🔴")
-            pv_status = "Активно 🟢" if pv_enabled else "Неактивно 🔴"
-            lines = [
-                f"👋 Добро пожаловать, **{display_name}**!",
-                "",
-                "📊 Статус сервиса: **Работает** ✅",
-                f"📋 Активные задачи: **{active_rules}**",
-                "",
-                "🧩 **Ваши правила и конфигурации:**",
-                f"• Заблокированные слова: **{blocked_kw}**",
-                f"• Разрешенные слова: **{allowed_kw}**",
-                f"• Правила замены текста: **{replace_count}**",
-                f"• Модели ИИ: **{active_ai}/{total_ai}** ({active_ai_model})",
-                f"• Автоответчик в ЛС (PV): **{pv_status}** (Задержка: {pv_delays})",
-                "",
-                "Нужна помощь? Поддержка: @Capxi",
-                "Разработка ботов, форекс, крипто, сайтов или автоматизация? Связь: @Capxi",
-                "",
-                "━━━━━━━━━━━━━━━━━━━━",
-                "👤 **ВАШ АККАУНТ (YOUR ACCOUNT)**",
-                "────────────────────",
-                f"Отображаемое имя: `{display_name}`",
-                f"ID пользователя: `{uid_str}`",
-                f"Подключенный номер: `{connected_phone}`",
-                f"Текущий сервер: `{server_name}`",
-                f"Веб-токен: `{token_str}`",
-                "",
-                "💎 **ТАРИФНЫЙ ПЛАН (SERVICE PLAN)**",
-                "────────────────────",
-                f"Текущий план: **{plan}**",
-                f"Оставшееся время: **{remaining}**",
-                "Статус сервиса: **Работает ✅**",
-                "",
-                "📋 **ЗАДАЧИ ПЕРЕСЫЛКИ (FORWARDING TASKS)**",
-                "────────────────────",
-                f"Активные задачи: **{active_rules}**",
-                f"Переслано (24ч): **{fwd_24h}**",
-                f"Всего задач: **{total_rules}**",
-                "",
-                "👥 **ВАШИ СЕССИИ (YOUR SESSIONS)**",
-                "────────────────────",
-                f"Подключенные сессии: **{live_sessions}/{total_sessions}**",
-                f"Статус: **{session_status}**",
-                "",
-                "💰 **БАЛАНС КРЕДИТОВ (CREDITS BALANCE)**",
-                "────────────────────",
-                "Текущий баланс: **0.00**",
-                "━━━━━━━━━━━━━━━━━━━━",
-            ]
-        elif lang == "zh":
-            session_status = "活跃 🟢" if live_sessions > 0 else ("已注册 🟡" if total_sessions > 0 else "未连接 🔴")
-            pv_status = "已启用 🟢" if pv_enabled else "未启用 🔴"
-            lines = [
-                f"👋 欢迎回来，**{display_name}**！",
-                "",
-                "📊 服务状态：**运行中** ✅",
-                f"📋 活跃任务：**{active_rules}**",
-                "",
-                "🧩 **您的规则与配置：**",
-                f"• 屏蔽关键词：**{blocked_kw}**",
-                f"• 允许关键词：**{allowed_kw}**",
-                f"• 文本替换规则：**{replace_count}**",
-                f"• 活跃 AI 模型：**{active_ai}/{total_ai}** ({active_ai_model})",
-                f"• 私聊回复 (PV)：**{pv_status}** (延迟: {pv_delays})",
-                "",
-                "需要帮助？联系支持：@Capxi",
-                "定制 Telegram 机器人、外汇、加密货币、网站或自动化？联系：@Capxi",
-                "",
-                "━━━━━━━━━━━━━━━━━━━━",
-                "👤 **您的账户 (YOUR ACCOUNT)**",
-                "────────────────────",
-                f"显示名称：`{display_name}`",
-                f"用户 ID：`{uid_str}`",
-                f"已绑手机：`{connected_phone}`",
-                f"当前服务器：`{server_name}`",
-                f"Web Token：`{token_str}`",
-                "",
-                "💎 **服务计划 (SERVICE PLAN)**",
-                "────────────────────",
-                f"当前计划：**{plan}**",
-                f"剩余时间：**{remaining}**",
-                "服务状态：**运行中 ✅**",
-                "",
-                "📋 **转发任务 (FORWARDING TASKS)**",
-                "────────────────────",
-                f"正在运行：**{active_rules}**",
-                f"24小时转发：**{fwd_24h}**",
-                f"总任务数：**{total_rules}**",
-                "",
-                "👥 **您的会话 (YOUR SESSIONS)**",
-                "────────────────────",
-                f"已连会话：**{live_sessions}/{total_sessions}**",
-                f"状态：**{session_status}**",
-                "",
-                "💰 **信用余额 (CREDITS BALANCE)**",
-                "────────────────────",
-                "当前余额：**0.00**",
-                "━━━━━━━━━━━━━━━━━━━━",
-            ]
-        else:
-            session_status = "Active 🟢" if live_sessions > 0 else ("Registered 🟡" if total_sessions > 0 else "Disconnected 🔴")
-            pv_status = "Active 🟢" if pv_enabled else "Inactive 🔴"
-            lines = [
-                f"👋 Welcome back, **{display_name}**!",
-                "",
-                "📊 Service status: Running ✅",
-                f"📋 Active Tasks: {active_rules}",
-                "",
-                "🧩 Rules & Configs currently applied:",
-                f"• Blocked keywords: {blocked_kw}",
-                f"• Allowed keywords: {allowed_kw}",
-                f"• Replace rules: {replace_count}",
-                f"• AI Configs active: {active_ai}/{total_ai} ({active_ai_model})",
-                f"• PV Smart Responder: {pv_status} (Typing delay: {pv_delays})",
-                "",
-                "Need help with an issue? Contact @Capxi.",
-                "Have an idea or need custom work for Telegram bots, forex, crypto, websites, SEO, or automation? Contact @Capxi.",
-                "",
-                "━━━━━━━━━━━━━━━━━━━━",
-                "👤 YOUR ACCOUNT",
-                "────────────────────",
-                f"Display name: `{display_name}`",
-                f"User ID: `{uid_str}`",
-                f"Connected phone: `{connected_phone}`",
-                f"Current server: `{server_name}`",
-                f"Token: `{token_str}`",
-                "",
-                "💎 SERVICE PLAN",
-                "────────────────────",
-                f"Current plan: **{plan}**",
-                f"Time remaining: **{remaining}**",
-                "Service status: Running ✅",
-                "",
-                "📋 FORWARDING TASKS",
-                "────────────────────",
-                f"Currently active tasks: **{active_rules}**",
-                f"Forwarded (24h): **{fwd_24h}**",
-                f"Total tasks: **{total_rules}**",
-                "",
-                "👥 YOUR SESSIONS",
-                "────────────────────",
-                f"Connected sessions: **{live_sessions}/{total_sessions}**",
-                f"Status: **{session_status}**",
-                "",
-                "💰 CREDITS BALANCE",
-                "────────────────────",
-                "Current balance: **0.00**",
-                "━━━━━━━━━━━━━━━━━━━━",
-            ]
+        session_status = (
+            self._t("ui_main_sess_active", lang=lang) if live_sessions > 0
+            else (self._t("ui_main_sess_registered", lang=lang) if total_sessions > 0
+                  else self._t("ui_main_sess_disconnected", lang=lang))
+        )
+        pv_status = self._t("ui_main_pv_on", lang=lang) if pv_enabled else self._t("ui_main_pv_off", lang=lang)
+        sep = self._t("ui_sep", lang=lang)
+        heavy = self._t("ui_main_sep_heavy", lang=lang)
+
+        def _t(key, **kw):
+            return self._t(key, lang=lang, **kw)
+
+        lines = [
+            _t("ui_main_welcome", name=display_name),
+            "",
+            _t("ui_main_service_status"),
+            _t("ui_main_active_tasks", n=active_rules),
+            "",
+            _t("ui_main_rules_header"),
+            _t("ui_main_blocked_kw", n=blocked_kw),
+            _t("ui_main_allowed_kw", n=allowed_kw),
+            _t("ui_main_replace_rules", n=replace_count),
+            _t("ui_main_ai_configs", a=active_ai, t=total_ai, model=active_ai_model),
+            _t("ui_main_pv_line", s=pv_status, d=pv_delays),
+            "",
+            _t("ui_main_support_1"),
+            _t("ui_main_support_2"),
+            "",
+            heavy,
+            _t("ui_main_account_header"),
+            sep,
+            _t("ui_main_display_name", n=display_name),
+            _t("ui_main_user_id", id=uid_str),
+            _t("ui_main_phone", p=connected_phone),
+            _t("ui_main_server", s=server_name),
+            _t("ui_main_token", t=token_str),
+            "",
+            _t("ui_main_plan_header"),
+            sep,
+            _t("ui_main_plan", p=plan),
+            _t("ui_main_remaining", r=remaining),
+            _t("ui_main_service_running"),
+            "",
+            _t("ui_main_tasks_header"),
+            sep,
+            _t("ui_main_active_tasks2", n=active_rules),
+            _t("ui_main_fwd_24h", n=fwd_24h),
+            _t("ui_main_total_tasks", n=total_rules),
+            "",
+            _t("ui_main_sessions_header"),
+            sep,
+            _t("ui_main_connected_sessions", a=live_sessions, b=total_sessions),
+            _t("ui_main_sess_status", s=session_status),
+            "",
+            _t("ui_main_credits_header"),
+            sep,
+            _t("ui_main_balance"),
+            heavy,
+        ]
 
         return "\n".join(lines)
 
@@ -1636,7 +1503,7 @@ class ProBotUI:
         rows.append([(f"🔙 {self._t('ui_rule_back_task')}", f"rd:{rule.id}")])
         return text, self._kbd(rows)
 
-    def _render_draft_editor(self, rule: ForwardRule, draft: Dict[str, Any]) -> Tuple[str, InlineKeyboardMarkup]:
+    def _render_draft_editor_legacy(self, rule: ForwardRule, draft: Dict[str, Any]) -> Tuple[str, InlineKeyboardMarkup]:
         """Render comprehensive draft editor screen where settings are staged safely."""
         src_label = draft.get("source_name") or draft.get("source_chat_id", "")
         dst_label = draft.get("target_name") or draft.get("target_chat_id", "")
@@ -1734,7 +1601,7 @@ class ProBotUI:
         ]
         return text, self._kbd(rows)
 
-    def _render_replace_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+    def _render_replace_menu_legacy(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
         """Render text replacement configuration menu."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -1774,7 +1641,7 @@ class ProBotUI:
                     del_row = []
             if del_row:
                 rows.append(del_row)
-            rows.append([("🗑 پاکسازی همه جایگزینی‌ها", f"rtxc:{rule.id}")])
+            rows.append([(self._t("ui_rep_btn_clear"), f"rtxc:{rule.id}")])
 
         rows.append([(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")])
         return "\n".join(lines), self._kbd(rows)
@@ -2096,93 +1963,93 @@ class ProBotUI:
         """Render comprehensive draft editor screen where settings are staged safely."""
         src_label = draft.get("source_name") or draft.get("source_chat_id", "")
         dst_label = draft.get("target_name") or draft.get("target_chat_id", "")
-        status_str = "🟢 فعال" if draft.get("is_active", True) else "🔴 غیرفعال"
+        status_str = self._t("ui_draft_status_on") if draft.get("is_active", True) else self._t("ui_draft_status_off")
 
         f_mode = draft.get("forward_mode", ForwardMode.COPY_MESSAGE.value)
         mode_val = getattr(f_mode, "value", str(f_mode))
         mode_names = {
-            "COPY_MESSAGE": "📋 کپی بدون تگ (Copy)",
-            "DIRECT_FORWARD": "↗️ فوروارد با تگ (Forward)",
-            "REWRITE_AI": "🤖 بازنویسی با AI",
+            "COPY_MESSAGE": self._t("ui_draft_mode_copy"),
+            "DIRECT_FORWARD": self._t("ui_draft_mode_forward"),
+            "REWRITE_AI": self._t("ui_draft_mode_ai"),
         }
         mode_title = mode_names.get(mode_val, mode_val)
 
         reps = draft.get("replacements") or {}
         reps_count = len(reps) if isinstance(reps, dict) else 0
-        reps_badge = f"{reps_count} مورد" if reps_count else "خالی"
+        reps_badge = self._t("ui_draft_count_n", n=reps_count) if reps_count else self._t("ui_draft_empty")
 
         hdr = str(draft.get("header") or "")
         ftr = str(draft.get("footer") or "")
-        hdr_badge = f"`{hdr[:14]}…`" if len(hdr) > 14 else (f"`{hdr}`" if hdr else "خالی")
-        ftr_badge = f"`{ftr[:14]}…`" if len(ftr) > 14 else (f"`{ftr}`" if ftr else "خالی")
+        hdr_badge = f"`{hdr[:14]}…`" if len(hdr) > 14 else (f"`{hdr}`" if hdr else self._t("ui_draft_empty"))
+        ftr_badge = f"`{ftr[:14]}…`" if len(ftr) > 14 else (f"`{ftr}`" if ftr else self._t("ui_draft_empty"))
 
-        lk_badge = "🚫 حذف" if draft.get("remove_links") else "🟢 مجاز"
-        vc_badge = "🚫 مسدود" if draft.get("block_voice") else "🟢 مجاز"
-        st_badge = "🚫 مسدود" if draft.get("block_stickers") else "🟢 مجاز"
-        em_badge = "🧹 پاکسازی" if draft.get("remove_emojis") else "🟢 حفظ"
-        ed_badge = "⏹ نادیده" if draft.get("ignore_edits") else "🔄 سینک"
-        dl_badge = "🗑 سینک" if draft.get("sync_deletes") else "⏹ نادیده"
+        lk_badge = self._t("ui_draft_remove") if draft.get("remove_links") else self._t("ui_draft_allowed")
+        vc_badge = self._t("ui_draft_blocked") if draft.get("block_voice") else self._t("ui_draft_allowed")
+        st_badge = self._t("ui_draft_blocked") if draft.get("block_stickers") else self._t("ui_draft_allowed")
+        em_badge = self._t("ui_draft_clean") if draft.get("remove_emojis") else self._t("ui_draft_keep")
+        ed_badge = self._t("ui_draft_ignore") if draft.get("ignore_edits") else self._t("ui_draft_sync")
+        dl_badge = self._t("ui_draft_delete_sync") if draft.get("sync_deletes") else self._t("ui_draft_ignore")
 
         album_names = {
-            "album": "🖼 آلبوم کامل",
-            "first": "1️⃣ فقط اولین مدیا",
-            "split": "🔀 تفکیک پیام‌ها",
+            "album": self._t("ui_album_full"),
+            "first": self._t("ui_album_first"),
+            "split": self._t("ui_album_split"),
         }
         alb_mode = str(draft.get("album_mode") or "album")
-        alb_badge = album_names.get(alb_mode, "🖼 آلبوم کامل")
+        alb_badge = album_names.get(alb_mode, self._t("ui_album_full"))
 
         text = (
-            "✏️ **پیش‌نویس ویرایش قانون (Draft Mode)**\n\n"
-            f"🆔 شناسه قانون: `{rule.id[:8]}` (نسخه دیتابیس: {rule.version})\n"
-            "────────────────────\n"
-            f"📡 **مبدأ:** `{src_label}` (`{draft.get('source_chat_id')}`)\n"
-            f"🎯 **مقصد:** `{dst_label}` (`{draft.get('target_chat_id')}`)\n"
-            f"📊 **وضعیت:** {status_str}\n"
-            f"⚡ **حالت ارسال:** {mode_title}\n"
-            "────────────────────\n"
-            f"🔤 **جایگزینی کلمات:** {reps_badge}\n"
-            f"📝 **هدر:** {hdr_badge} | **فوتر:** {ftr_badge}\n"
-            f"🔗 **لینک:** {lk_badge} | 🎙 **ویس:** {vc_badge}\n"
-            f"🎭 **استیکر:** {st_badge} | 😀 **ایموجی:** {em_badge}\n"
-            f"✏️ **ویرایش پیام:** {ed_badge} | 🗑 **حذف پیام:** {dl_badge}\n"
-            f"🖼 **چندتصویری:** {alb_badge}\n\n"
-            "💡 *تغییرات شما تا پیش از لمس «💾 ذخیره تغییرات»، در پیش‌نویس موقت نگهداری می‌شوند و قانون اصلی بدون تغییر باقی می‌ماند.*"
+            self._t("ui_draft_title") + "\n\n"
+            + self._t("ui_draft_rule_id", rid=rule.id[:8], v=rule.version) + "\n"
+            + self._t("ui_sep") + "\n"
+            + self._t("ui_draft_source", src=src_label, sid=draft.get('source_chat_id')) + "\n"
+            + self._t("ui_draft_target", dst=dst_label, tid=draft.get('target_chat_id')) + "\n"
+            + self._t("ui_draft_status", s=status_str) + "\n"
+            + self._t("ui_draft_fmode", m=mode_title) + "\n"
+            + self._t("ui_sep") + "\n"
+            + self._t("ui_draft_replace", n=reps_badge) + "\n"
+            + self._t("ui_draft_hf", h=hdr_badge, f=ftr_badge) + "\n"
+            + self._t("ui_draft_pair_links_voice", lk=lk_badge, vc=vc_badge) + "\n"
+            + self._t("ui_draft_pair_st_emoji", st=st_badge, em=em_badge) + "\n"
+            + self._t("ui_draft_pair_ed_del", ed=ed_badge, dl=dl_badge) + "\n"
+            + self._t("ui_draft_media", a=alb_badge) + "\n\n"
+            + self._t("ui_draft_hint")
         )
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                ("📡 تغییر مبدأ", f"ed_s:{rule.id}"),
-                ("🎯 تغییر مقصد", f"ed_t:{rule.id}"),
+                (self._t("ui_draft_btn_src"), f"ed_s:{rule.id}"),
+                (self._t("ui_draft_btn_dst"), f"ed_t:{rule.id}"),
             ],
             [
-                (f"⚡ حالت: {mode_val}", f"ed_m:{rule.id}"),
-                (f"🔄 وضعیت: {status_str}", f"ed_a:{rule.id}"),
+                (self._t("ui_draft_btn_mode", m=mode_val), f"ed_m:{rule.id}"),
+                (self._t("ui_draft_btn_status", s=status_str), f"ed_a:{rule.id}"),
             ],
             [
-                (f"🔗 لینک: {lk_badge}", f"ed_lk:{rule.id}"),
-                (f"🎙 ویس: {vc_badge}", f"ed_vc:{rule.id}"),
+                (self._t("ui_draft_btn_links", b=lk_badge), f"ed_lk:{rule.id}"),
+                (self._t("ui_draft_btn_voice", b=vc_badge), f"ed_vc:{rule.id}"),
             ],
             [
-                (f"🎭 استیکر: {st_badge}", f"ed_st:{rule.id}"),
-                (f"😀 ایموجی: {em_badge}", f"ed_em:{rule.id}"),
+                (self._t("ui_draft_btn_stickers", b=st_badge), f"ed_st:{rule.id}"),
+                (self._t("ui_draft_btn_emoji", b=em_badge), f"ed_em:{rule.id}"),
             ],
             [
-                (f"✏️ ادیت: {ed_badge}", f"ed_ed:{rule.id}"),
-                (f"🗑 حذف: {dl_badge}", f"ed_dl:{rule.id}"),
+                (self._t("ui_draft_btn_edit", b=ed_badge), f"ed_ed:{rule.id}"),
+                (self._t("ui_draft_btn_del", b=dl_badge), f"ed_dl:{rule.id}"),
             ],
             [
-                (f"🖼 آلبوم: {alb_badge}", f"ed_mg:{rule.id}"),
-                (f"🔤 جایگزینی ({reps_count})", f"rtx:{rule.id}"),
+                (self._t("ui_draft_btn_album", b=alb_badge), f"ed_mg:{rule.id}"),
+                (self._t("ui_draft_btn_replace", n=reps_count), f"rtx:{rule.id}"),
             ],
             [
-                (f"🤖 AI Rewrite: {draft.get('ai_status_badge', '❌ خاموش')}", f"r_ai:{rule.id}"),
+                (self._t("ui_draft_btn_ai", b=draft.get("ai_status_badge") or self._t("ui_draft_ai_off")), f"r_ai:{rule.id}"),
             ],
             [
-                ("📝 تنظیم هدر و فوتر", f"rhf:{rule.id}"),
+                (self._t("ui_draft_btn_hf"), f"rhf:{rule.id}"),
             ],
             [
-                ("💾 ذخیره تغییرات (Save)", f"ed_save:{rule.id}"),
-                ("❌ لغو ویرایش (Cancel)", f"ed_can:{rule.id}"),
+                (self._t("ui_draft_btn_save"), f"ed_save:{rule.id}"),
+                (self._t("ui_draft_btn_cancel"), f"ed_can:{rule.id}"),
             ],
             [
                 (f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}"),
@@ -2197,28 +2064,28 @@ class ProBotUI:
         reps = rule.replacements
 
         lines = [
-            "🔤 **تنظیمات جایگزینی متن (Text Replace)**\n",
-            f"قانون: **{src_label} ➔ {dst_label}**\n",
-            "────────────────────",
-            "📋 **لیست عبارات جایگزین فعال:**",
+            self._t("ui_rep_title") + "\n",
+            self._t("ui_rep_rule", s=src_label, d=dst_label) + "\n",
+            self._t("ui_sep"),
+            self._t("ui_rep_active_list"),
         ]
         if not reps:
-            lines.append("❌ هنوز هیچ جایگزینی برای این قانون تعریف نشده است.\n")
+            lines.append(self._t("ui_rep_none") + "\n")
         else:
             for idx, (old, new) in enumerate(reps.items(), start=1):
-                rep_display = f"`{new}`" if new else "*(حذف کامل کلمه)*"
+                rep_display = f"`{new}`" if new else self._t("ui_rep_word_deleted")
                 lines.append(f"{idx}. `{old}` ➔ {rep_display}")
             lines.append("")
 
         lines.extend([
-            "💡 **راهنما:**",
-            "برای اضافه کردن جایگزینی جدید روی دکمه «➕ افزودن جایگزینی» بزنید.",
-            "فرمت ارسال: `کلمه مبدأ -> کلمه مقصد`",
-            "جهت حذف یک کلمه: `کلمه حذفی ->`",
+            self._t("ui_rep_help_title"),
+            self._t("ui_rep_help_add"),
+            self._t("ui_rep_help_fmt"),
+            self._t("ui_rep_help_del"),
         ])
 
         rows: List[List[Tuple[str, str]]] = [
-            [("➕ افزودن جایگزینی جدید", f"rtxa:{rule.id}")],
+            [(self._t("ui_rep_btn_add"), f"rtxa:{rule.id}")],
         ]
         if reps:
             del_row: List[Tuple[str, str]] = []
@@ -2230,7 +2097,7 @@ class ProBotUI:
                     del_row = []
             if del_row:
                 rows.append(del_row)
-            rows.append([("🗑 پاکسازی همه جایگزینی‌ها", f"rtxc:{rule.id}")])
+            rows.append([(self._t("ui_rep_btn_clear"), f"rtxc:{rule.id}")])
 
         rows.append([(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")])
         return "\n".join(lines), self._kbd(rows)

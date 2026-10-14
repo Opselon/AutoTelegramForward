@@ -54,13 +54,37 @@ def check(name: str, lang: str, keys: dict[str, str], ref: dict[str, str]) -> No
             failures.append(
                 f"{name}/{lang}/{k}: placeholders differ (ref={sorted(need)}, got={sorted(got)})"
             )
-    # cross-leak (reference language only — translations legitimately use it)
+    # Cross-leak (reference language only — translations legitimately use it)
     if lang == "en":
         leaked = [k for k in ref_keys if any(c in RTL_GRAPHEMES for c in (keys.get(k) or ""))]
         if leaked:
             failures.append(
                 f"{name}/en: English strings contain Persian/Arabic text in {sorted(leaked)}"
             )
+
+
+def audit_source_hardcoded() -> None:
+    """Scanner for the real production defect: Persian STRINGS HARDCODED IN
+    SOURCE, bypassing the catalog entirely.
+
+    The catalog parity check above passes in the presence of these, because
+    they never enter the catalog at all — the English user still sees
+    Persian. This scans every Python source file under core/ for Persian
+    graphemes in string literals, EXCLUDING:
+      - the locale catalog itself (it holds the translations)
+      - tests (legitimately assert on translated text)
+      - pv_responder's persona prompt (a user-authored Persian persona by
+        design, not a UI string)
+    """
+    skip_dirs = {"tests", "locales", "__pycache__"}
+    for p in sorted(REPO.joinpath("core").rglob("*.py")):
+        if any(part in skip_dirs for part in p.parts):
+            continue
+        if p.name == "pv_responder.py":
+            continue
+        for i, line in enumerate(p.read_text(encoding="utf-8").split("\n"), 1):
+            if RTL_GRAPHEMES.intersection(line) and "STR.Migrations" not in line:
+                failures.append(f"source/{p.relative_to(REPO)}:{i}: hardcoded Persian text")
 
 
 def audit_bot() -> None:
@@ -113,4 +137,5 @@ def report() -> int:
 if __name__ == "__main__":
     audit_bot()
     audit_mobile()
+    audit_source_hardcoded()
     sys.exit(report())

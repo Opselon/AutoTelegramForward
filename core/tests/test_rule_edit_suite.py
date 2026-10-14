@@ -417,8 +417,12 @@ async def test_bot_ui_rendering_and_pagination(db, crypto):
     all_rules = await repo.list_all()
     assert len(all_rules) == 7
 
+    from core.infrastructure.telegram.i18n import I18n
+    _i18n = I18n(); _i18n.set_language("fa")
     ui = object.__new__(ProBotUI)
-    ui._t = lambda key, **kw: key
+    ui.i18n = _i18n
+    ui._lang = "fa"
+    ui._t = lambda key, lang=None, **kw: _i18n.t(key, lang=lang or "fa", **kw)
     ui._rules_menu = ProBotUI._rules_menu.__get__(ui, ProBotUI)
     ui._render_rules_list = ProBotUI._render_rules_list.__get__(ui, ProBotUI)
     ui._render_rule_detail = ProBotUI._render_rule_detail.__get__(ui, ProBotUI)
