@@ -152,17 +152,20 @@ class AppMessagesUz {
     'rules_ai_digest_sub': 'Avtomatik yangiliklar xulosasi',
     'rules_replace_title': 'Almashtirish qoidalari',
     'rules_replace_summary': '{count} ta almashtirish tartibda qo\'llanadi',
-    'rules_replace_empty': 'Hozircha almashtirish qoidalari yo\'q. Matnni qayta yozish uchun qo\'shing.',
+    'rules_replace_empty':
+        'Hozircha almashtirish qoidalari yo\'q. Matnni qayta yozish uchun qo\'shing.',
     'rules_replace_add': 'Almashtirish qo\'shish',
     'rules_replace_find': 'Topiladigan matn',
     'rules_replace_find_required': 'Topiladigan matn talab qilinadi',
     'rules_replace_with': 'Bilan almashtirish',
-    'rules_replace_with_hint': 'Topilgan matnni o\'chirish uchun bo\'sh qoldiring',
+    'rules_replace_with_hint':
+        'Topilgan matnni o\'chirish uchun bo\'sh qoldiring',
     'rules_replace_remove': '(o\'chirildi)',
     'rules_replace_move_up': 'Yuqoriga',
     'rules_ai_pick_title': 'AI konfiguratsiyasi',
     'rules_ai_pick_none': 'AI yo\'q (to\'g\'ridan-to\'g\'ri uzatish)',
-    'rules_ai_pick_empty': 'Hozircha AI konfiguratsiyalari yo\'q. AI ekranda yarating.',
+    'rules_ai_pick_empty':
+        'Hozircha AI konfiguratsiyalari yo\'q. AI ekranda yarating.',
     'rules_filters': 'Filtrlar',
     'rules_filter_mode': 'Filter mode',
     'rules_media_mode': 'Media handling',

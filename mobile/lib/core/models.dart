@@ -512,11 +512,12 @@ class ForwardRule {
       watermark:
           (json['watermark'] as String?) ??
           (meta['watermark'] as String? ?? ''),
-      replacements: meta['replacements'] is Map
-          ? (meta['replacements'] as Map).map(
-              (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
-            )
-          : const {},
+      replacements:
+          meta['replacements'] is Map
+              ? (meta['replacements'] as Map).map(
+                (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
+              )
+              : const {},
       aiCreativity:
           (json['ai_creativity'] as num?)?.toDouble() ??
           ((meta['ai_creativity'] as num?)?.toDouble() ?? 0.7),

@@ -70,22 +70,11 @@ void main() {
       );
     });
 
-
     // ---- 10-language parity guard --------------------------------------
     // Every supported catalog must expose the complete key set, including
     // the per-task config keys (replace rules, AI picker, add-ons).
     test('every supported locale mirrors the full English key set', () {
-      const codes = [
-        'fa',
-        'es',
-        'fr',
-        'id',
-        'it',
-        'pt',
-        'ru',
-        'uz',
-        'zh',
-      ];
+      const codes = ['fa', 'es', 'fr', 'id', 'it', 'pt', 'ru', 'uz', 'zh'];
       const probeKeys = <String>[
         'rules_title',
         'rules_replace_title',

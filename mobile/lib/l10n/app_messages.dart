@@ -179,7 +179,8 @@ class AppMessagesEn {
     'rules_filters_dup': 'Duplicate Filters',
     'rules_filters_dup_sub': 'Media & text deep fingerprint deduplication',
     'rules_filters_crypto': 'Crypto Mode',
-    'rules_filters_crypto_sub': 'Signal detection, wallet cleaner, pair parsing',
+    'rules_filters_crypto_sub':
+        'Signal detection, wallet cleaner, pair parsing',
     'rules_sched_auto': 'Auto Post Scheduler',
     'rules_sched_power': 'Power Control Schedule',
     'rules_time_delay': 'Set delay (seconds)',
@@ -194,7 +195,8 @@ class AppMessagesEn {
     'rules_ai_digest_sub': 'Automated news summary bullets',
     'rules_replace_title': 'Replace Rules',
     'rules_replace_summary': '{count} replacement(s) applied in order',
-    'rules_replace_empty': 'No replace rules yet. Add one to rewrite message text.',
+    'rules_replace_empty':
+        'No replace rules yet. Add one to rewrite message text.',
     'rules_replace_add': 'Add replacement',
     'rules_replace_find': 'Find text',
     'rules_replace_find_required': 'Text to find is required',

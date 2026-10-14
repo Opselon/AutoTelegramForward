@@ -138,7 +138,8 @@ class AppMessagesFr {
     'rules_filters_dup': 'Filtres en double',
     'rules_filters_dup_sub': 'Déduplication profonde des médias et textes',
     'rules_filters_crypto': 'Mode crypto',
-    'rules_filters_crypto_sub': 'Détection de signaux, nettoyage de portefeuille',
+    'rules_filters_crypto_sub':
+        'Détection de signaux, nettoyage de portefeuille',
     'rules_sched_auto': 'Planificateur de publications',
     'rules_sched_power': 'Planification de marche/arrêt',
     'rules_time_delay': 'Définir le délai (secondes)',
@@ -153,7 +154,8 @@ class AppMessagesFr {
     'rules_ai_digest_sub': 'Puces de résumé automatisé des actualités',
     'rules_replace_title': 'Règles de remplacement',
     'rules_replace_summary': '{count} remplacement(s) appliqués dans l\'ordre',
-    'rules_replace_empty': 'Aucune règle de remplacement. Ajoutez-en une pour réécrire le texte.',
+    'rules_replace_empty':
+        'Aucune règle de remplacement. Ajoutez-en une pour réécrire le texte.',
     'rules_replace_add': 'Ajouter un remplacement',
     'rules_replace_find': 'Texte à trouver',
     'rules_replace_find_required': 'Le texte à trouver est obligatoire',
@@ -163,7 +165,8 @@ class AppMessagesFr {
     'rules_replace_move_up': 'Monter',
     'rules_ai_pick_title': 'Configuration IA',
     'rules_ai_pick_none': 'Sans IA (transfert direct)',
-    'rules_ai_pick_empty': 'Aucune configuration IA. Créez-en une dans l\'écran IA.',
+    'rules_ai_pick_empty':
+        'Aucune configuration IA. Créez-en une dans l\'écran IA.',
     'rules_filters': 'Filtres',
     'rules_filter_mode': 'Filter mode',
     'rules_media_mode': 'Media handling',

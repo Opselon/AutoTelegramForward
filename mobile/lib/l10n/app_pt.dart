@@ -152,7 +152,8 @@ class AppMessagesPt {
     'rules_ai_digest_sub': 'Marcadores de resumo de notícias automatizado',
     'rules_replace_title': 'Regras de substituição',
     'rules_replace_summary': '{count} substituição(ões) aplicadas em ordem',
-    'rules_replace_empty': 'Ainda não há regras de substituição. Adicione uma para reescrever o texto.',
+    'rules_replace_empty':
+        'Ainda não há regras de substituição. Adicione uma para reescrever o texto.',
     'rules_replace_add': 'Adicionar substituição',
     'rules_replace_find': 'Texto a localizar',
     'rules_replace_find_required': 'O texto a localizar é obrigatório',
@@ -162,7 +163,8 @@ class AppMessagesPt {
     'rules_replace_move_up': 'Mover para cima',
     'rules_ai_pick_title': 'Configuração de IA',
     'rules_ai_pick_none': 'Sem IA (encaminhamento direto)',
-    'rules_ai_pick_empty': 'Ainda não há configurações de IA. Crie uma na tela de IA.',
+    'rules_ai_pick_empty':
+        'Ainda não há configurações de IA. Crie uma na tela de IA.',
     'rules_filters': 'Filtros',
     'rules_filter_mode': 'Filter mode',
     'rules_media_mode': 'Media handling',

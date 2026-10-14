@@ -145,14 +145,16 @@ class AppMessagesEs {
     'rules_proc_raw': 'Procesar texto sin formato',
     'rules_proc_btn2txt': 'Botón a texto',
     'rules_ai_ocr': 'OCR de imagen con IA',
-    'rules_ai_ocr_sub': 'Reconocimiento óptico de caracteres mediante IA de visión',
+    'rules_ai_ocr_sub':
+        'Reconocimiento óptico de caracteres mediante IA de visión',
     'rules_ai_rewrite': 'Reescritura inteligente con IA',
     'rules_ai_rewrite_sub': 'Reformulación inteligente de contenido con LLM',
     'rules_ai_digest': 'Resumen de noticias',
     'rules_ai_digest_sub': 'Viñetas de resumen de noticias automatizado',
     'rules_replace_title': 'Reglas de reemplazo',
     'rules_replace_summary': '{count} reemplazo(s) aplicados en orden',
-    'rules_replace_empty': 'Aún no hay reglas de reemplazo. Añade una para reescribir el texto.',
+    'rules_replace_empty':
+        'Aún no hay reglas de reemplazo. Añade una para reescribir el texto.',
     'rules_replace_add': 'Añadir reemplazo',
     'rules_replace_find': 'Texto a buscar',
     'rules_replace_find_required': 'El texto a buscar es obligatorio',
@@ -162,7 +164,8 @@ class AppMessagesEs {
     'rules_replace_move_up': 'Subir',
     'rules_ai_pick_title': 'Configuración de IA',
     'rules_ai_pick_none': 'Sin IA (reenvío directo)',
-    'rules_ai_pick_empty': 'Aún no hay configuraciones de IA. Crea una en la pantalla de IA.',
+    'rules_ai_pick_empty':
+        'Aún no hay configuraciones de IA. Crea una en la pantalla de IA.',
     'rules_filters': 'Filtros',
     'rules_filter_mode': 'Filter mode',
     'rules_media_mode': 'Media handling',

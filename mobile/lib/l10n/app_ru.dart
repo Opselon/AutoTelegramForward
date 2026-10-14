@@ -152,7 +152,8 @@ class AppMessagesRu {
     'rules_ai_digest_sub': 'Автоматическая выжимка новостей',
     'rules_replace_title': 'Правила замены',
     'rules_replace_summary': '{count} замен(ы) применяются по порядку',
-    'rules_replace_empty': 'Правил замены пока нет. Добавьте, чтобы переписывать текст сообщений.',
+    'rules_replace_empty':
+        'Правил замены пока нет. Добавьте, чтобы переписывать текст сообщений.',
     'rules_replace_add': 'Добавить замену',
     'rules_replace_find': 'Искомый текст',
     'rules_replace_find_required': 'Искомый текст обязателен',

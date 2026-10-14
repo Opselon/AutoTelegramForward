@@ -182,7 +182,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
   String _aiConfigLabel(String id) {
     for (final c in _aiConfigs) {
-      if (c.id == id) return c.model.isNotEmpty ? '${c.provider} · ${c.model}' : c.provider;
+      if (c.id == id)
+        return c.model.isNotEmpty ? '${c.provider} · ${c.model}' : c.provider;
     }
     return id;
   }
@@ -193,48 +194,52 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     final formKey = GlobalKey<FormState>();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.get('rules_replace_add')),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: findCtrl,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: t.get('rules_replace_find'),
-                ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? t.get('rules_replace_find_required') : null,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(t.get('rules_replace_add')),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: findCtrl,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: t.get('rules_replace_find'),
+                    ),
+                    validator:
+                        (v) =>
+                            (v == null || v.trim().isEmpty)
+                                ? t.get('rules_replace_find_required')
+                                : null,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: replaceCtrl,
+                    decoration: InputDecoration(
+                      labelText: t.get('rules_replace_with'),
+                      helperText: t.get('rules_replace_with_hint'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: replaceCtrl,
-                decoration: InputDecoration(
-                  labelText: t.get('rules_replace_with'),
-                  helperText: t.get('rules_replace_with_hint'),
-                ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(t.get('action_cancel')),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (formKey.currentState!.validate()) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+                child: Text(t.get('action_save')),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(t.get('action_cancel')),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            child: Text(t.get('action_save')),
-          ),
-        ],
-      ),
     );
     if (ok == true) {
       setState(() {
@@ -993,8 +998,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                             value: '',
                             groupValue: _selectedAiConfigId,
                             onChanged:
-                                (v) =>
-                                    setState(() => _selectedAiConfigId = ''),
+                                (v) => setState(() => _selectedAiConfigId = ''),
                             title: Text(t.get('rules_ai_pick_none')),
                           ),
                           ..._aiConfigs.map(
@@ -1003,8 +1007,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                               value: c.id,
                               groupValue: _selectedAiConfigId,
                               onChanged:
-                                  (v) =>
-                                      setState(() => _selectedAiConfigId = v ?? ''),
+                                  (v) => setState(
+                                    () => _selectedAiConfigId = v ?? '',
+                                  ),
                               title: Text(_aiConfigLabel(c.id)),
                               subtitle: Text(
                                 '${c.provider}${c.model.isNotEmpty ? ' · ${c.model}' : ''}',

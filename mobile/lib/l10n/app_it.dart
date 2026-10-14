@@ -152,7 +152,8 @@ class AppMessagesIt {
     'rules_ai_digest_sub': 'Punti elenco riepilogo notizie automatizzato',
     'rules_replace_title': 'Regole di sostituzione',
     'rules_replace_summary': '{count} sostituzioni applicate in ordine',
-    'rules_replace_empty': 'Nessuna regola di sostituzione. Aggiungine una per riscrivere il testo.',
+    'rules_replace_empty':
+        'Nessuna regola di sostituzione. Aggiungine una per riscrivere il testo.',
     'rules_replace_add': 'Aggiungi sostituzione',
     'rules_replace_find': 'Testo da trovare',
     'rules_replace_find_required': 'Il testo da trovare è obbligatorio',
@@ -162,7 +163,8 @@ class AppMessagesIt {
     'rules_replace_move_up': 'Sposta su',
     'rules_ai_pick_title': 'Configurazione IA',
     'rules_ai_pick_none': 'Senza IA (inoltro diretto)',
-    'rules_ai_pick_empty': 'Nessuna configurazione IA. Creane una nella schermata IA.',
+    'rules_ai_pick_empty':
+        'Nessuna configurazione IA. Creane una nella schermata IA.',
     'rules_filters': 'Filtri',
     'rules_filter_mode': 'Filter mode',
     'rules_media_mode': 'Media handling',

@@ -227,7 +227,8 @@ class AppMessagesZh {
     'settings_repository': 'GitHub 仓库',
     'settings_about': '关于',
     'settings_version': '版本',
-    'incompatible_server': '此服务器运行的是旧版 AutoTelegramForward。请更新到 {version} 或更高版本。',
+    'incompatible_server':
+        '此服务器运行的是旧版 AutoTelegramForward。请更新到 {version} 或更高版本。',
   };
 
   String get(String key, {Map<String, String>? params}) {

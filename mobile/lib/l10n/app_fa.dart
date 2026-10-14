@@ -182,7 +182,8 @@ class AppMessagesFa {
     'rules_ai_digest_sub': 'خلاصه خودکار اخبار',
     'rules_replace_title': 'قوانین جایگزینی',
     'rules_replace_summary': '{count} جایگزینی به ترتیب اعمال می‌شود',
-    'rules_replace_empty': 'هنوز قانون جایگزینی نیست. برای بازنویسی متن پیام یکی اضافه کنید.',
+    'rules_replace_empty':
+        'هنوز قانون جایگزینی نیست. برای بازنویسی متن پیام یکی اضافه کنید.',
     'rules_replace_add': 'افزودن جایگزینی',
     'rules_replace_find': 'متن یافتن',
     'rules_replace_find_required': 'متن جستجو الزامی است',
@@ -192,7 +193,8 @@ class AppMessagesFa {
     'rules_replace_move_up': 'انتقال به بالا',
     'rules_ai_pick_title': 'پیکربندی هوش مصنوعی',
     'rules_ai_pick_none': 'بدون هوش مصنوعی (فوروارد مستقیم)',
-    'rules_ai_pick_empty': 'هنوز پیکربندی هوش مصنوعی نیست. از بخش هوش مصنوعی بسازید.',
+    'rules_ai_pick_empty':
+        'هنوز پیکربندی هوش مصنوعی نیست. از بخش هوش مصنوعی بسازید.',
     'rules_filters': 'فیلترها',
     'rules_filter_mode': 'نوع اعمال فیلتر',
     'rules_media_mode': 'نوع رسانه‌ها',

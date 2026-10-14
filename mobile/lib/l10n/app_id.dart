@@ -152,7 +152,8 @@ class AppMessagesId {
     'rules_ai_digest_sub': 'Poin ringkasan berita otomatis',
     'rules_replace_title': 'Aturan Penggantian',
     'rules_replace_summary': '{count} penggantian diterapkan berurutan',
-    'rules_replace_empty': 'Belum ada aturan penggantian. Tambahkan untuk menulis ulang teks.',
+    'rules_replace_empty':
+        'Belum ada aturan penggantian. Tambahkan untuk menulis ulang teks.',
     'rules_replace_add': 'Tambah penggantian',
     'rules_replace_find': 'Teks yang dicari',
     'rules_replace_find_required': 'Teks yang dicari wajib diisi',
