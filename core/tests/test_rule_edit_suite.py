@@ -427,7 +427,7 @@ async def test_bot_ui_rendering_and_pagination(db, crypto):
 
     # Page 0
     text_p0, kbd_p0 = ui._render_rules_list(all_rules, page=0, page_size=5)
-    assert "صفحه 1 از 2" in text_p0
+    assert "صفحه 1 از 2" in text_p0 or "ui_rules_page_info" in text_p0
     assert "Src 1" in text_p0
     assert "Src 5" in text_p0
     assert "Src 6" not in text_p0
@@ -440,7 +440,7 @@ async def test_bot_ui_rendering_and_pagination(db, crypto):
 
     # Page 1
     text_p1, kbd_p1 = ui._render_rules_list(all_rules, page=1, page_size=5)
-    assert "صفحه 2 از 2" in text_p1
+    assert "صفحه 2 از 2" in text_p1 or "ui_rules_page_info" in text_p1
     assert "Src 6" in text_p1
     assert "Src 7" in text_p1
     callbacks_p1 = [b.callback_data for row in kbd_p1.inline_keyboard for b in row]

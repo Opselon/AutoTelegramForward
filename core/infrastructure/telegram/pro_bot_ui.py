@@ -167,6 +167,8 @@ class UiState:
     """Per-user UI flow state (FSM)."""
 
     step: str = ""
+    lang: str = ""
+    user_id: int = 0
     rule_source: str = ""
     rule_target: str = ""
     filter_id: Optional[str] = None
@@ -186,6 +188,8 @@ class UiState:
         """Serialize the FSM for the durable ui_states table."""
         return {
             "step": self.step,
+            "lang": getattr(self, "lang", ""),
+            "user_id": getattr(self, "user_id", 0),
             "rule_source": self.rule_source,
             "rule_target": self.rule_target,
             "ai_name": self.ai_name,
@@ -215,6 +219,8 @@ class UiState:
 
         return cls(
             step=cur.get("step", ""),
+            lang=cur.get("lang", ""),
+            user_id=int(cur.get("user_id", 0) or 0),
             rule_source=cur.get("rule_source", ""),
             rule_target=cur.get("rule_target", ""),
             filter_id=cur.get("filter_id"),
@@ -328,6 +334,39 @@ class ProBotUI:
         # transplanted into another user's conversation state is refused.
         return await self._rules.update_owned(rule, self._scope_uid(user_id), expected_version)
 
+    def _resolve_lang(self, uid: Optional[int] = None, user_obj: Any = None) -> str:
+        """Resolve user's chosen language with fail-closed English fallback."""
+        if uid:
+            states = getattr(self, "_states", None)
+            if states and isinstance(states, dict):
+                st = states.get(int(uid))
+                if st and getattr(st, "lang", None) and st.lang in SUPPORTED_LANGUAGES:
+                    return st.lang
+
+            users = getattr(self, "_users", None)
+            if users is not None and getattr(users, "_db", None) is not None:
+                try:
+                    row = users._db.query_one("SELECT language FROM users WHERE user_id=?", (int(uid),))
+                    if row and row.get("language") and row["language"].lower() in SUPPORTED_LANGUAGES:
+                        resolved = row["language"].lower()
+                        if states and isinstance(states, dict) and int(uid) in states:
+                            states[int(uid)].lang = resolved
+                        return resolved
+                except Exception:
+                    pass
+
+        if user_obj and getattr(user_obj, "language_code", None):
+            code = str(user_obj.language_code).lower().split("-")[0].split("_")[0]
+            if code in SUPPORTED_LANGUAGES:
+                return code
+
+        i18n = getattr(self, "i18n", None)
+        if i18n and getattr(i18n, "current", None):
+            cur = str(i18n.current).lower()
+            if cur in SUPPORTED_LANGUAGES:
+                return cur
+        return "en"
+
     def _state(self, uid: int) -> UiState:
         st = self._states.get(uid)
         if st is None:
@@ -337,6 +376,9 @@ class ProBotUI:
                 st = UiState.from_dict(resumed)
                 logger.debug("resumed ui state for %s → %s", uid, st.step)
             self._states[uid] = st
+        st.user_id = int(uid)
+        if not getattr(st, "lang", ""):
+            st.lang = self._resolve_lang(uid)
         return st
 
     def _load_state_sync(self, uid: int) -> Optional[dict]:
@@ -368,8 +410,9 @@ class ProBotUI:
         except Exception:
             logger.debug("ui state persist failed", exc_info=True)
 
-    def _t(self, key: str, **kw) -> str:
-        return self.i18n.t(key, **kw)
+    def _t(self, key: str, lang: Optional[str] = None, **kw) -> str:
+        cur_lang = lang or (getattr(self.i18n, "current", "en") if getattr(self, "i18n", None) else "en")
+        return self.i18n.t(key, lang=cur_lang, **kw)
 
     @staticmethod
     async def _safe_edit(target, text: str, reply_markup=None, **kw) -> None:
@@ -1118,7 +1161,7 @@ class ProBotUI:
                     InlineKeyboardButton("📦 پشتیبان‌گیری و مهاجرت سرور", callback_data=CB["migrate"]),
                 ],
                 [
-                    InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data=CB["main"]),
+                    InlineKeyboardButton(f"🔙 {self._t('ui_back_main_menu')}", callback_data=CB["main"]),
                 ],
             ]
         else:
@@ -1196,10 +1239,10 @@ class ProBotUI:
             if total_pages > 1:
                 nav_row: List[Tuple[str, str]] = []
                 if page > 0:
-                    nav_row.append(("◀️ قبلی", f"r_pg:{page - 1}"))
+                    nav_row.append((f"◀️ {self._t('ui_prev')}", f"r_pg:{page - 1}"))
                 nav_row.append((f"📄 {page + 1} / {total_pages}", "noop"))
                 if page < total_pages - 1:
-                    nav_row.append(("بعدی ▶️", f"r_pg:{page + 1}"))
+                    nav_row.append((f"{self._t('ui_next')} ▶️", f"r_pg:{page + 1}"))
                 rows.append(nav_row)
 
         rows.append([("⬅️ " + self._t("ui_back"), CB["main"])])
@@ -1233,7 +1276,7 @@ class ProBotUI:
 
         if total_pages > 1:
             lines.append("")
-            lines.append(f"📄 صفحه {page + 1} از {total_pages} (مجموع: {total_items} قانون)")
+            lines.append(self._t("ui_rules_page_info", page=page + 1, total=total_pages, count=total_items))
 
         return "\n".join(lines), self._rules_menu(rules_list, page=page, page_size=page_size)
 
@@ -1346,7 +1389,7 @@ class ProBotUI:
                 (f"● {chips['content']}" if grp == "content" else chips["content"], f"rgrp:{rule.id}:content"),
             ],
             [
-                ("🔙 بازگشت به لیست قوانین (Rules)", CB["rules"]),
+                (f"🔙 {self._t('ui_rule_back_rules')}", CB["rules"]),
             ],
         ]
 
@@ -1418,7 +1461,7 @@ class ProBotUI:
             ("⭐ View all (18) ➔", f"radon_all:{rule.id}"),
         ])
         rows.append([
-            ("⬅️ بازگشت به لیست قوانین", CB["rules"]),
+            (f"⬅️ {self._t('ui_rule_back_rules')}", CB["rules"]),
         ])
 
         return text, self._kbd(rows)
@@ -1574,7 +1617,7 @@ class ProBotUI:
             ],
             # Return button
             [
-                ("🔙 بازگشت به نمای تسک (Task Overview)", f"rd:{rule.id}"),
+                (f"🔙 {self._t('ui_rule_back_task')}", f"rd:{rule.id}"),
             ],
         ]
 
@@ -1625,7 +1668,7 @@ class ProBotUI:
                 pair.append((f"{lbl2} {on2}", f"radon_tg:{rule.id}:{k2}"))
             rows.append(pair)
 
-        rows.append([("🔙 بازگشت به نمای تسک", f"rd:{rule.id}")])
+        rows.append([(f"🔙 {self._t('ui_rule_back_task')}", f"rd:{rule.id}")])
         return text, self._kbd(rows)
 
     def _render_draft_editor(self, rule: ForwardRule, draft: Dict[str, Any]) -> Tuple[str, InlineKeyboardMarkup]:
@@ -1721,7 +1764,7 @@ class ProBotUI:
                 ("❌ لغو ویرایش (Cancel)", f"ed_can:{rule.id}"),
             ],
             [
-                ("⬅️ بازگشت به کارت قانون", f"rd:{rule.id}"),
+                (f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}"),
             ],
         ]
         return text, self._kbd(rows)
@@ -1768,7 +1811,7 @@ class ProBotUI:
                 rows.append(del_row)
             rows.append([("🗑 پاکسازی همه جایگزینی‌ها", f"rtxc:{rule.id}")])
 
-        rows.append([("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")])
+        rows.append([(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")])
         return "\n".join(lines), self._kbd(rows)
 
     def _render_header_footer_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
@@ -1798,7 +1841,7 @@ class ProBotUI:
                 ("✏️ تنظیم فوتر", f"rf_s:{rule.id}"),
                 ("🗑 حذف فوتر", f"rf_d:{rule.id}"),
             ],
-            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
         ]
         return "\n".join(lines), self._kbd(rows)
 
@@ -1850,7 +1893,7 @@ class ProBotUI:
                 (f"✂️ خطوط خالی: {spc_b}", f"rcl_spc:{rule.id}"),
                 (f"📝 کلمات سفارشی: {wrd_b}", f"rcl_wrd:{rule.id}"),
             ],
-            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -1893,7 +1936,7 @@ class ProBotUI:
                 (f"📝 متن: {txt_b}", f"rfl_txt:{rule.id}"),
                 (f"🎙 وویس: {voc_b}", f"rfl_voc:{rule.id}"),
             ],
-            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -1927,7 +1970,7 @@ class ProBotUI:
                 ("♾ بدون محدودیت (0)", f"rmte_s:{rule.id}:0"),
                 ("✏️ ورود ثانیه دلخواه", f"rmte_c:{rule.id}"),
             ],
-            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -1963,7 +2006,7 @@ class ProBotUI:
             [
                 ("✏️ ورود ثانیه دلخواه", f"rdly_c:{rule.id}"),
             ],
-            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -1992,7 +2035,7 @@ class ProBotUI:
                 ("➕ افزودن کلمه جدید", f"rfl_bl_add:{rule.id}"),
                 ("🗑 پاکسازی کل لیست", f"rfl_bl_clr:{rule.id}"),
             ],
-            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -2021,7 +2064,7 @@ class ProBotUI:
                 ("➕ افزودن کلمه جدید", f"rfl_wl_add:{rule.id}"),
                 ("🗑 پاکسازی کل لیست", f"rfl_wl_clr:{rule.id}"),
             ],
-            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -2045,7 +2088,7 @@ class ProBotUI:
                 ("✏️ تنظیم متن واتر‌مارک", f"rwm_set:{rule.id}"),
                 ("🗑 حذف واتر‌مارک", f"rwm_del:{rule.id}"),
             ],
-            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -2088,7 +2131,7 @@ class ProBotUI:
             [
                 ("🇮🇹 Italiano (IT)", f"rtr_set:{rule.id}:it"),
             ],
-            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -2113,7 +2156,7 @@ class ProBotUI:
         kbd = self._kbd([
             [("🔄 بازنشانی ستاپ (Restart Setup)", "pr_restart")],
             [("⚠️ ریست تنظیمات تسک‌ها (Reset Config)", "pr_reset_cfg")],
-            [("⬅️ بازگشت به منوی اصلی", CB["main"])],
+            [(f"⬅️ {self._t('ui_back_main_menu')}", CB["main"])],
         ])
         return text, kbd
 
@@ -2189,15 +2232,17 @@ class ProBotUI:
                 ("➖ اولویت (-10)", f"rsmpd:{rule.id}"),
             ],
             [("🧪 تست و شبیه‌سازی زنده قانون (Dry Run)", f"rsmtst:{rule.id}")],
-            [("⬅️ بازگشت به تنظیمات قانون", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
         ]
         return "\n".join(lines), self._kbd(rows)
 
-    def _render_chat_picker(self, st: UiState, role: str, page: int = 0) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render a rich, paginated dialog selection screen with inline buttons."""
-        chats = st.buffer.get("chats", []) if isinstance(st.buffer, dict) else []
+    def _render_chat_picker(self, st: UiState, role: str, page: int = 0, uid: Optional[int] = None) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render a rich, paginated dialog selection screen with inline buttons and fail-closed i18n."""
         rc = "s" if role == "source" else "t"
         page_size = 5
+
+        effective_uid = uid or getattr(st, "user_id", None)
+        cur_lang = self._resolve_lang(effective_uid) if hasattr(self, "_resolve_lang") else "en"
 
         def _clean_md(text: Any) -> str:
             if not text:
@@ -2213,6 +2258,8 @@ class ProBotUI:
         else:
             cancel_cb = CB["cancel"]
 
+        chats = st.buffer.get("chats", []) if isinstance(st.buffer, dict) else []
+
         if chats:
             total_items = len(chats)
             total_pages = max(1, (total_items + page_size - 1) // page_size)
@@ -2223,16 +2270,16 @@ class ProBotUI:
 
             if role == "source":
                 header = (
-                    "📥 **تغییر/انتخاب کانال یا گروه مبدأ (Source):**\n"
-                    "پیام‌های جدید از این گفتگو خوانده و رله خواهند شد.\n"
+                    f"{self._t('ui_src_sel', lang=cur_lang)}\n"
+                    f"*{self._t('ui_src_desc', lang=cur_lang)}*\n"
                     "────────────────────"
                 )
             else:
                 src_name = st.buffer.get("source_name") or st.rule_source
                 header = (
-                    f"✅ **مبدأ:** {src_name} (`{st.rule_source}`)\n\n"
-                    "📤 **تغییر/انتخاب کانال یا گروه مقصد (Target):**\n"
-                    "پیام‌ها به این گفتگو کپی و ارسال خواهند شد.\n"
+                    f"✅ **{self._t('ui_source', lang=cur_lang)}:** {src_name} (`{st.rule_source}`)\n\n"
+                    f"{self._t('ui_tgt_sel', lang=cur_lang)}\n"
+                    f"*{self._t('ui_tgt_desc', lang=cur_lang)}*\n"
                     "────────────────────"
                 )
 
@@ -2243,8 +2290,8 @@ class ProBotUI:
                 lines.append(f"{item['emoji']} **{idx}. {clean_title}**\n   🆔 `{item['id']}`{uname}")
 
             lines.append("────────────────────")
-            lines.append(f"📄 **صفحه {page + 1} از {total_pages}** (مجموع: {total_items} گفتگو)")
-            lines.append("👇 یکی از دکمه‌های زیر را لمس کنید یا شناسه/آیدی را بفرستید:")
+            lines.append(self._t("ui_picker_page_info", lang=cur_lang, page=page + 1, total=total_pages, count=total_items))
+            lines.append(self._t("ui_picker_prompt", lang=cur_lang))
             text = "\n".join(lines)
 
             rows: List[List[Tuple[str, str]]] = []
@@ -2256,77 +2303,102 @@ class ProBotUI:
 
             nav_row: List[Tuple[str, str]] = []
             if page > 0:
-                nav_row.append(("◀️ قبلی", f"pg:{rc}:{page - 1}"))
+                nav_row.append((f"◀️ {self._t('ui_prev', lang=cur_lang)}", f"pg:{rc}:{page - 1}"))
             nav_row.append((f"📄 {page + 1} / {total_pages}", "noop"))
             if page < total_pages - 1:
-                nav_row.append(("بعدی ▶️", f"pg:{rc}:{page + 1}"))
+                nav_row.append((f"{self._t('ui_next', lang=cur_lang)} ▶️", f"pg:{rc}:{page + 1}"))
             rows.append(nav_row)
 
             bottom_row: List[Tuple[str, str]] = [
-                ("🔄 تازه‌سازی لیست", f"rfc:{rc}"),
+                (self._t("ui_refresh_list", lang=cur_lang), f"rfc:{rc}"),
             ]
             if st.step == "rule_target":
-                bottom_row.append(("⬅️ تغییر مبدأ", "r_back_source"))
-            bottom_row.append(("❌ انصراف", cancel_cb))
+                bottom_row.append((self._t("ui_change_src", lang=cur_lang), "r_back_source"))
+            bottom_row.append((self._t("ui_cancel_back", lang=cur_lang), cancel_cb))
             rows.append(bottom_row)
             return text, self._kbd(rows)
 
         # Fallback when no chats could be fetched automatically
-        cur_lang = self._resolve_lang(None, user_obj=None)
         if role == "source":
             text = (
-                self._t("ui_src_sel", lang=cur_lang) + "\n\n"
-                + self._t("ui_no_dialog", lang=cur_lang) + "\n\n"
-                + self._t("ui_no_dialog_bytes", lang=cur_lang)
+                f"{self._t('ui_src_sel', lang=cur_lang)}\n\n"
+                f"{self._t('ui_no_dialog', lang=cur_lang)}\n\n"
+                f"{self._t('ui_no_dialog_bytes', lang=cur_lang)}"
             )
         else:
             src_name = st.buffer.get("source_name") or st.rule_source
             text = (
-                f"✅ {self._t('ui_src_sel', lang=cur_lang)}: {src_name} (`{st.rule_source}`)\n\n"
-                + self._t("ui_tgt_sel", lang=cur_lang) + "\n\n"
-                + self._t("ui_target_no_dialog", lang=cur_lang) + "\n\n"
-                + self._t('ui_target_byte', lang=cur_lang)
+                f"✅ **{self._t('ui_source', lang=cur_lang)}:** {src_name} (`{st.rule_source}`)\n\n"
+                f"{self._t('ui_tgt_sel', lang=cur_lang)}\n\n"
+                f"{self._t('ui_target_no_dialog', lang=cur_lang)}\n\n"
+                f"{self._t('ui_no_dialog_bytes', lang=cur_lang)}"
             )
 
         fallback_rows: List[List[Tuple[str, str]]] = [
-            [("🔄 تلاش مجدد برای دریافت لیست", f"rfc:{rc}")],
+            [(self._t("ui_refresh_list", lang=cur_lang), f"rfc:{rc}")],
         ]
         if st.step == "rule_target":
-            fallback_rows.append([("⬅️ تغییر مبدأ", "r_back_source")])
-        fallback_rows.append([("❌ انصراف", cancel_cb)])
+            fallback_rows.append([(self._t("ui_change_src", lang=cur_lang), "r_back_source")])
+        fallback_rows.append([(self._t("ui_cancel_back", lang=cur_lang), cancel_cb)])
         return text, self._kbd(fallback_rows)
 
     async def _fetch_dialogs(self, owner_user_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Fetch available channels/groups from connected session clients."""
+        """Fetch available channels/groups from connected session clients with structured pipeline logging."""
         _dlg_uid = int(owner_user_id or 0)
-        if not _dlg_uid:
-            return []
-        sessions = await self._sessions.list_by_owner(_dlg_uid)
+        logger.info("[PIPELINE:DIALOG_FETCH:START] Initiating dialog fetch for owner_user_id=%s", _dlg_uid)
+
+        sessions: List[Any] = []
+        if _dlg_uid:
+            try:
+                sessions = await self._sessions.list_by_owner(_dlg_uid)
+                logger.info("[PIPELINE:DIALOG_FETCH:BY_OWNER] Found %d session(s) for owner_user_id=%s", len(sessions), _dlg_uid)
+            except Exception as exc:
+                logger.warning("[PIPELINE:DIALOG_FETCH:WARN] list_by_owner(%s) failed: %s", _dlg_uid, exc)
+
+        if not sessions and (_dlg_uid == 0 or self._is_admin(_dlg_uid)):
+            try:
+                sessions = await self._sessions.list_all()
+                logger.info("[PIPELINE:DIALOG_FETCH:ADMIN_FALLBACK] Loaded %d session(s) from global list", len(sessions))
+            except Exception as exc:
+                logger.warning("[PIPELINE:DIALOG_FETCH:WARN] list_all() failed: %s", exc)
+
         active_sessions = [s for s in sessions if getattr(s, "is_active", True) and getattr(s, "is_authorized", False)]
         if not active_sessions and sessions:
-            active_sessions = sessions
+            active_sessions = [s for s in sessions if getattr(s, "is_active", True)] or sessions
+
+        logger.info("[PIPELINE:DIALOG_FETCH:SESSIONS] Candidate active sessions count=%d (total=%d)", len(active_sessions), len(sessions))
+        if not active_sessions:
+            logger.warning("[PIPELINE:DIALOG_FETCH:EMPTY] No active sessions found for owner_user_id=%s", _dlg_uid)
+            return []
 
         chats: List[Dict[str, Any]] = []
         seen_ids = set()
+        cur_lang = self._resolve_lang(_dlg_uid)
 
         for session in active_sessions:
             client = self._pool.get(session.id)
             if not client or not getattr(client, "is_connected", False):
-                # Attempt to reconnect dropped sessions
                 sess_str = getattr(session, "session_string", "") or getattr(session, "session_string_encrypted", "")
                 if sess_str:
                     try:
-                        await self._pool.start_with_session_string(session.id, sess_str, credential_id=getattr(session, "credential_id", "default"))
+                        logger.info("[PIPELINE:DIALOG_FETCH:RECONNECT] Reconnecting session %s...", session.id[:8])
+                        await self._pool.start_with_session_string(
+                            session.id, sess_str, credential_id=getattr(session, "credential_id", "default")
+                        )
                         client = self._pool.get(session.id)
                     except Exception as exc:
-                        logger.warning("Could not reconnect session %s: %s", session.id, exc)
+                        logger.warning("[PIPELINE:DIALOG_FETCH:RECONNECT_FAIL] Session %s reconnect failed: %s", session.id[:8], exc)
                         continue
-                if not client or not getattr(client, "is_connected", False):
-                    continue
+
+            if not client or not getattr(client, "is_connected", False):
+                logger.warning("[PIPELINE:DIALOG_FETCH:SESSION_DISCONNECTED] Session %s is not connected", session.id[:8])
+                continue
 
             try:
-                async with asyncio.timeout(6.0):
-                    async for dialog in client.get_dialogs(limit=80):  # type: ignore[union-attr]
+                logger.info("[PIPELINE:DIALOG_FETCH:SCAN] Scanning dialogs on session %s...", session.id[:8])
+                session_chats_count = 0
+                async with asyncio.timeout(12.0):
+                    async for dialog in client.get_dialogs(limit=100):
                         chat = getattr(dialog, "chat", None)
                         if not chat or chat.id in seen_ids:
                             continue
@@ -2353,7 +2425,7 @@ class ProBotUI:
 
                         title = getattr(chat, "title", None) or getattr(chat, "first_name", None) or str(chat.id)
                         if kind == "saved":
-                            title = self._t("ui_saved_messages", lang=cur_lang) if "cur_lang" in locals() else "Saved Messages"
+                            title = self._t("ui_saved_messages", lang=cur_lang)
 
                         chats.append({
                             "id": str(chat.id),
@@ -2362,11 +2434,14 @@ class ProBotUI:
                             "kind": kind,
                             "username": getattr(chat, "username", "") or "",
                         })
+                        session_chats_count += 1
+                logger.info("[PIPELINE:DIALOG_FETCH:SUCCESS] Session %s fetched %d chats", session.id[:8], session_chats_count)
             except Exception as exc:
-                logger.warning("Could not fetch dialogs for session %s: %s", session.id, exc)
+                logger.warning("[PIPELINE:DIALOG_FETCH:ERROR] Exception fetching dialogs for session %s: %s", session.id[:8], exc)
 
         priority = {"channel": 0, "group": 1, "saved": 2, "bot": 3, "user": 4}
         chats.sort(key=lambda c: priority.get(c["kind"], 99))
+        logger.info("[PIPELINE:DIALOG_FETCH:COMPLETE] Returned %d total dialogs for owner_user_id=%s", len(chats), _dlg_uid)
         return chats
 
     async def _finish_rule_creation(self, event: Any, st: UiState, source_title: str, target_title: str) -> None:
@@ -3156,6 +3231,8 @@ class ProBotUI:
             code = cq.data.split(":", 1)[1]
             if self.i18n.set_language(code):
                 uid = cq.from_user.id if cq.from_user else 0
+                st = self._state(uid)
+                st.lang = code
                 if self._users is not None:
                     try:
                         await self._users.set_language(uid, code)
@@ -3847,10 +3924,14 @@ class ProBotUI:
         @b.on_callback_query(filters.regex("^" + CB["rule_add"] + "$"))
         async def _cb_rule_add(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            cur_lang = self._resolve_lang(uid)
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
+            if not sessions and self._is_admin(uid):
+                sessions = await self._sessions.list_all()
+
             if not sessions:
                 await self._safe_edit(cq, 
-                    self._t("ui_no_sessions"), reply_markup=self._sessions_menu())
+                    self._t("ui_no_sessions", lang=cur_lang), reply_markup=self._sessions_menu())
                 return await cq.answer()
 
             st = self._state(uid)
@@ -3860,21 +3941,22 @@ class ProBotUI:
             st.buffer = {}
 
             try:
-                await cq.answer("⏳ در حال دریافت لیست گفتگوها...")
+                await cq.answer(self._t("ui_loading_dialogs", lang=cur_lang))
             except Exception:
                 pass
 
-            chats = await self._fetch_dialogs(self._scope_uid(uid))
+            chats = await self._fetch_dialogs(uid)
             st.buffer["chats"] = chats
             st.buffer["page"] = 0
             await self._persist(uid, st)
 
-            text, markup = self._render_chat_picker(st, role="source", page=0)
+            text, markup = self._render_chat_picker(st, role="source", page=0, uid=uid)
             await self._safe_edit(cq, text, reply_markup=markup)
 
         @b.on_callback_query(filters.regex(r"^ch:(s|t):(\d+)$"))
         async def _cb_pick_chat(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            cur_lang = self._resolve_lang(uid)
             st = self._state(uid)
             raw_data = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             parts = raw_data.split(":")
@@ -3883,7 +3965,7 @@ class ProBotUI:
 
             chats = st.buffer.get("chats", []) if isinstance(st.buffer, dict) else []
             if not (0 <= idx < len(chats)):
-                return await cq.answer("⚠️ گفتگو یافت نشد. لطفاً لیست را تازه‌سازی کنید.", show_alert=True)
+                return await cq.answer(self._t("ui_chat_not_found", lang=cur_lang), show_alert=True)
 
             selected = chats[idx]
             chat_id = selected["id"]
@@ -3899,7 +3981,7 @@ class ProBotUI:
             if rule_id and edit_role:
                 rule = await self._rules.get(rule_id)
                 if not rule:
-                    return await cq.answer("❌ این قانون یافت نشد یا ممکن است حذف شده باشد.", show_alert=True)
+                    return await cq.answer(self._t("ui_rule_not_found", lang=cur_lang), show_alert=True)
 
                 draft_obj = st.buffer.get("draft") if (in_draft and isinstance(st.buffer, dict)) else None
                 draft: Dict[str, Any] = draft_obj if isinstance(draft_obj, dict) else rule.to_draft()
@@ -3909,14 +3991,14 @@ class ProBotUI:
                 if edit_role == "source":
                     target_id = draft.get("target_chat_id") if in_draft else rule.target_chat_id
                     if str(chat_id).strip() == str(target_id).strip():
-                        return await cq.answer("❌ مبدأ نمی‌تواند با مقصد یکسان باشد (جلوگیری از ایجاد حلقه)!", show_alert=True)
+                        return await cq.answer(self._t("ui_loop_prevention_src", lang=cur_lang), show_alert=True)
 
                     if in_draft:
                         draft["source_chat_id"] = str(chat_id)
                         draft["source_name"] = selected["title"]
                         st.step = "rule_editing_draft"
                         await self._persist(uid, st)
-                        await cq.answer(f"✅ مبدأ پیش‌نویس تغییر کرد: {selected['title']}")
+                        await cq.answer(self._t("ui_src_selected", lang=cur_lang, title=selected['title']))
                         text, markup = self._render_draft_editor(rule, draft)
                         return await self._safe_edit(cq, text, reply_markup=markup)
                     else:
@@ -3926,25 +4008,25 @@ class ProBotUI:
                         try:
                             await self._save_owned_rule(rule, uid, expected_ver)
                         except ConcurrencyError:
-                            return await cq.answer("⚠️ خطا: این قانون هم‌زمان ویرایش شده است.", show_alert=True)
+                            return await cq.answer(self._t("ui_concurrency_error", lang=cur_lang), show_alert=True)
                         st.step = ""
                         st.buffer = {}
                         await self._persist(uid, st)
-                        await cq.answer(f"✅ مبدأ قانون تغییر کرد: {selected['title']}")
+                        await cq.answer(self._t("ui_src_selected", lang=cur_lang, title=selected['title']))
                         text, markup = self._render_rule_detail(rule)
                         return await self._safe_edit(cq, text, reply_markup=markup)
 
                 elif edit_role == "target":
                     source_id = draft.get("source_chat_id") if in_draft else rule.source_chat_id
                     if str(chat_id).strip() == str(source_id).strip():
-                        return await cq.answer("❌ مقصد نمی‌تواند با مبدأ یکسان باشد (جلوگیری از ایجاد حلقه)!", show_alert=True)
+                        return await cq.answer(self._t("ui_loop_prevention_tgt", lang=cur_lang), show_alert=True)
 
                     if in_draft:
                         draft["target_chat_id"] = str(chat_id)
                         draft["target_name"] = selected["title"]
                         st.step = "rule_editing_draft"
                         await self._persist(uid, st)
-                        await cq.answer(f"✅ مقصد پیش‌نویس تغییر کرد: {selected['title']}")
+                        await cq.answer(self._t("ui_tgt_selected", lang=cur_lang, title=selected['title']))
                         text, markup = self._render_draft_editor(rule, draft)
                         return await self._safe_edit(cq, text, reply_markup=markup)
                     else:
@@ -3954,11 +4036,11 @@ class ProBotUI:
                         try:
                             await self._save_owned_rule(rule, uid, expected_ver)
                         except ConcurrencyError:
-                            return await cq.answer("⚠️ خطا: این قانون هم‌زمان ویرایش شده است.", show_alert=True)
+                            return await cq.answer(self._t("ui_concurrency_error", lang=cur_lang), show_alert=True)
                         st.step = ""
                         st.buffer = {}
                         await self._persist(uid, st)
-                        await cq.answer(f"✅ مقصد قانون تغییر کرد: {selected['title']}")
+                        await cq.answer(self._t("ui_tgt_selected", lang=cur_lang, title=selected['title']))
                         text, markup = self._render_rule_detail(rule)
                         return await self._safe_edit(cq, text, reply_markup=markup)
 
@@ -3968,14 +4050,14 @@ class ProBotUI:
                 st.step = "rule_target"
                 st.buffer["page"] = 0
                 await self._persist(uid, st)
-                await cq.answer(f"✅ مبدأ: {selected['title']}", show_alert=False)
-                text, markup = self._render_chat_picker(st, role="target", page=0)
+                await cq.answer(self._t("ui_src_selected", lang=cur_lang, title=selected['title']), show_alert=False)
+                text, markup = self._render_chat_picker(st, role="target", page=0, uid=uid)
                 await self._safe_edit(cq, text, reply_markup=markup)
             else:
                 st.rule_target = chat_id
                 target_title = chat_title
                 source_title = st.buffer.get("source_name") or st.rule_source
-                await cq.answer("✅ در حال ایجاد قانون...", show_alert=False)
+                await cq.answer(self._t("ui_creating_rule", lang=cur_lang), show_alert=False)
                 await self._finish_rule_creation(cq, st, source_title, target_title)
 
         @b.on_callback_query(filters.regex(r"^pg:(s|t):(\d+)$"))
@@ -3991,7 +4073,7 @@ class ProBotUI:
                 st.buffer["page"] = page
             await self._persist(uid, st)
 
-            text, markup = self._render_chat_picker(st, role=role, page=page)
+            text, markup = self._render_chat_picker(st, role=role, page=page, uid=uid)
             try:
                 await self._safe_edit(cq, text, reply_markup=markup)
             except Exception:
@@ -4001,28 +4083,30 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^rfc:(s|t)$"))
         async def _cb_refresh_chats(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            cur_lang = self._resolve_lang(uid)
             st = self._state(uid)
             raw_data = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             parts = raw_data.split(":")
             role = "source" if parts[1] == "s" else "target"
 
             try:
-                await cq.answer("🔄 در حال تازه‌سازی لیست گفتگوها...")
+                await cq.answer(self._t("ui_refreshing_dialogs", lang=cur_lang))
             except Exception:
                 pass
 
-            chats = await self._fetch_dialogs(self._scope_uid(uid))
+            chats = await self._fetch_dialogs(uid)
             if isinstance(st.buffer, dict):
                 st.buffer["chats"] = chats
                 st.buffer["page"] = 0
             await self._persist(uid, st)
 
-            text, markup = self._render_chat_picker(st, role=role, page=0)
+            text, markup = self._render_chat_picker(st, role=role, page=0, uid=uid)
             await self._safe_edit(cq, text, reply_markup=markup)
 
         @b.on_callback_query(filters.regex(r"^r_cancel$"))
         async def _cb_rule_cancel(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            cur_lang = self._resolve_lang(uid)
             st = self._state(uid)
             st.step = ""
             st.rule_source = ""
@@ -4033,20 +4117,21 @@ class ProBotUI:
             rules = await self._rules.list_by_owner(uid) if uid else []
             text, kbd = self._render_rules_list(rules, page=0)
             await self._safe_edit(cq, text, reply_markup=kbd)
-            await cq.answer("❌ عملیات ایجاد قانون لغو شد")
+            await cq.answer(self._t("ui_op_cancelled", lang=cur_lang))
 
         @b.on_callback_query(filters.regex(r"^r_back_source$"))
         async def _cb_rule_back_source(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            cur_lang = self._resolve_lang(uid)
             st = self._state(uid)
             st.step = "rule_source"
             st.rule_target = ""
             if isinstance(st.buffer, dict):
                 st.buffer["page"] = 0
             await self._persist(uid, st)
-            text, markup = self._render_chat_picker(st, role="source", page=0)
+            text, markup = self._render_chat_picker(st, role="source", page=0, uid=uid)
             await self._safe_edit(cq, text, reply_markup=markup)
-            await cq.answer("⬅️ بازگشت به انتخاب مبدأ")
+            await cq.answer(self._t("ui_back_to_source", lang=cur_lang))
 
         @b.on_callback_query(filters.regex(r"^noop$"))
         async def _cb_noop(_, cq: CallbackQuery):
@@ -4066,7 +4151,7 @@ class ProBotUI:
             )
             confirm_kbd = self._kbd([
                 [("🗑 بله، حذف شود", f"rdelyes:{rid}")],
-                [("❌ انصراف و بازگشت", f"rd:{rid}")],
+                [(self._t("ui_cancel_back"), f"rd:{rid}")],
             ])
             await self._safe_edit(cq, confirm_text, reply_markup=confirm_kbd)
             await cq.answer()
@@ -4169,7 +4254,7 @@ class ProBotUI:
                 "`کلمه حذفی ->`\n\n"
                 "برای بازگشت می‌توانید دکمه زیر را لمس کنید:"
             )
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف و بازگشت", f"rtx:{rule_id}")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[(self._t("ui_cancel_back"), f"rtx:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rtxc:(.+)$"))
@@ -4610,7 +4695,7 @@ class ProBotUI:
             )
             kbd = self._kbd([
                 [("✅ بله، ریست کامل تنظیمات", "pr_reset_cfg_yes")],
-                [("❌ انصراف و بازگشت", "pr_view")],
+                [(self._t("ui_cancel_back"), "pr_view")],
             ])
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -5751,7 +5836,7 @@ class ProBotUI:
             st.buffer["in_draft"] = True
             st.buffer["edit_role"] = "source"
             st.buffer["page"] = 0
-            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
+            chats = await self._fetch_dialogs(uid)
             st.buffer["chats"] = chats
             await self._persist(uid, st)
 
@@ -5781,7 +5866,7 @@ class ProBotUI:
             st.buffer["in_draft"] = True
             st.buffer["edit_role"] = "target"
             st.buffer["page"] = 0
-            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
+            chats = await self._fetch_dialogs(uid)
             st.buffer["chats"] = chats
             await self._persist(uid, st)
 
@@ -5809,7 +5894,7 @@ class ProBotUI:
                 "edit_role": "source",
                 "page": 0,
             }
-            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
+            chats = await self._fetch_dialogs(uid)
             st.buffer["chats"] = chats
             await self._persist(uid, st)
 
@@ -5837,7 +5922,7 @@ class ProBotUI:
                 "edit_role": "target",
                 "page": 0,
             }
-            chats = await self._fetch_dialogs(self._scope_uid(cq.from_user.id if cq.from_user else 0))
+            chats = await self._fetch_dialogs(uid)
             st.buffer["chats"] = chats
             await self._persist(uid, st)
 
@@ -6554,7 +6639,7 @@ class ProBotUI:
             )
             kbd = self._kbd([
                 [("🗑 بله، حذف شود", f"ai_del_confirm:{aid}")],
-                [("⬅️ انصراف و بازگشت", f"aid:{aid}")],
+                [(self._t("ui_cancel_back"), f"aid:{aid}")],
             ])
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -7988,8 +8073,9 @@ class ProBotUI:
                     pass
             else:
                 try:
+                    cur_lang = self._resolve_lang(uid)
                     await self._safe_edit(cq, 
-                        f"⏳ در حال بررسی و تأیید کد: `{' '.join(digits)}`...",
+                        self._t("ui_verifying_code", lang=cur_lang, code=' '.join(digits)),
                     )
                 except Exception:
                     pass
@@ -8002,12 +8088,9 @@ class ProBotUI:
         logger.info("Received login code input from uid=%s (raw_len=%d, clean_len=%d)",
                     uid, len(text), len(clean))
         if len(clean) not in (5, 6):
+            cur_lang = self._resolve_lang(uid)
             await message.reply_text(
-                "❌ کد ورود باید ۵ یا ۶ رقم باشد.\n\n"
-                "💡 **الگوی ارسال:**\n"
-                "• بنویسید چسبیده به mycode: `mycode73737`\n"
-                "• یا از **کیپد عددی زیر** استفاده کنید\n"
-                "• یا ارقام را با **فاصله** بفرستید: `1 2 3 4 5`",
+                self._t("ui_login_code_invalid", lang=cur_lang),
                 reply_markup=self._code_keypad(st),
             )
             return
@@ -8304,7 +8387,7 @@ class ProBotUI:
             await message.reply_text(
                 "❌ مبدأ نمی‌تواند با مقصد یکسان باشد (جلوگیری از ایجاد حلقه)!\n"
                 "لطفاً شناسه یا یوزرنیم دیگری ارسال کنید:",
-                reply_markup=self._kbd([[("❌ انصراف و بازگشت", cancel_cb)]]),
+                reply_markup=self._kbd([[(self._t("ui_cancel_back"), cancel_cb)]]),
             )
             return
 
@@ -8395,7 +8478,7 @@ class ProBotUI:
             await message.reply_text(
                 "❌ مقصد نمی‌تواند با مبدأ یکسان باشد (جلوگیری از ایجاد حلقه)!\n"
                 "لطفاً شناسه یا یوزرنیم دیگری ارسال کنید:",
-                reply_markup=self._kbd([[("❌ انصراف و بازگشت", cancel_cb)]]),
+                reply_markup=self._kbd([[(self._t("ui_cancel_back"), cancel_cb)]]),
             )
             return
 
