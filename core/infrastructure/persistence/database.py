@@ -516,7 +516,8 @@ MIGRATIONS = {
         user_id INTEGER PRIMARY KEY,
         role TEXT NOT NULL DEFAULT 'admin',  -- 'owner' | 'admin'
         added_by INTEGER NOT NULL DEFAULT 0,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_administrators_role ON administrators(role);
 

@@ -47,12 +47,20 @@ class AdminService:
         now = int(time.time())
         try:
             if self._owner_user_id > 0:
-                self._db.execute(
-                    "INSERT INTO administrators (user_id, role, added_by, created_at) "
-                    "VALUES (?, 'owner', 0, ?) "
-                    "ON CONFLICT(user_id) DO UPDATE SET role='owner'",
-                    (self._owner_user_id, now),
-                )
+                try:
+                    self._db.execute(
+                        "INSERT INTO administrators (user_id, role, added_by, created_at, updated_at) "
+                        "VALUES (?, 'owner', 0, ?, ?) "
+                        "ON CONFLICT(user_id) DO UPDATE SET role='owner', updated_at=excluded.updated_at",
+                        (self._owner_user_id, now, now),
+                    )
+                except Exception:
+                    self._db.execute(
+                        "INSERT INTO administrators (user_id, role, added_by, created_at) "
+                        "VALUES (?, 'owner', 0, ?) "
+                        "ON CONFLICT(user_id) DO UPDATE SET role='owner'",
+                        (self._owner_user_id, now),
+                    )
                 self._db.execute(
                     "UPDATE users SET is_admin=1, updated_at=? WHERE user_id=?",
                     (now, self._owner_user_id),
@@ -60,11 +68,18 @@ class AdminService:
 
             for aid in self._in_memory_admins:
                 role = "owner" if aid == self._owner_user_id else "admin"
-                self._db.execute(
-                    "INSERT OR IGNORE INTO administrators (user_id, role, added_by, created_at) "
-                    "VALUES (?, ?, 0, ?)",
-                    (aid, role, now),
-                )
+                try:
+                    self._db.execute(
+                        "INSERT OR IGNORE INTO administrators (user_id, role, added_by, created_at, updated_at) "
+                        "VALUES (?, ?, 0, ?, ?)",
+                        (aid, role, now, now),
+                    )
+                except Exception:
+                    self._db.execute(
+                        "INSERT OR IGNORE INTO administrators (user_id, role, added_by, created_at) "
+                        "VALUES (?, ?, 0, ?)",
+                        (aid, role, now),
+                    )
                 self._db.execute(
                     "UPDATE users SET is_admin=1, updated_at=? WHERE user_id=?",
                     (now, aid),
@@ -166,12 +181,20 @@ class AdminService:
 
         now = int(time.time())
         role_clean = "owner" if role == "owner" else "admin"
-        self._db.execute(
-            "INSERT INTO administrators (user_id, role, added_by, created_at) "
-            "VALUES (?, ?, ?, ?) "
-            "ON CONFLICT(user_id) DO UPDATE SET role=excluded.role",
-            (uid, role_clean, int(added_by or 0), now),
-        )
+        try:
+            self._db.execute(
+                "INSERT INTO administrators (user_id, role, added_by, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET role=excluded.role, updated_at=excluded.updated_at",
+                (uid, role_clean, int(added_by or 0), now, now),
+            )
+        except Exception:
+            self._db.execute(
+                "INSERT INTO administrators (user_id, role, added_by, created_at) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET role=excluded.role",
+                (uid, role_clean, int(added_by or 0), now),
+            )
         self._db.execute(
             "UPDATE users SET is_admin=1, updated_at=? WHERE user_id=?",
             (now, uid),
