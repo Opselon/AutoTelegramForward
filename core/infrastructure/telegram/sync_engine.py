@@ -77,7 +77,7 @@ class SyncEngine:
                 age = now - int(msg_date)
                 if age > max_edit:
                     logger.info(
-                        "[SYNC_EDIT:TIME_EXCEEDED] Rule %s edit age %ds exceeds max_time_edit %ds",
+                        "[PIPELINE:SYNC_EDIT_TIME_EXCEEDED] Rule %s edit age %ds exceeds max_time_edit %ds",
                         rule.id[:8], age, max_edit,
                     )
                     continue
@@ -89,7 +89,7 @@ class SyncEngine:
                     eval_res = self._filter_engine.evaluate(payload, f_rule)
                     if eval_res.action == FilterAction.DROP:
                         logger.info(
-                            "[SYNC_EDIT:FILTER_DROP] Rule %s dropped edited msg %s: %s",
+                            "[PIPELINE:SYNC_EDIT_FILTER_DROP] Rule %s dropped edited msg %s: %s",
                             rule.id[:8], payload.message_id, eval_res.reason,
                         )
                         continue
@@ -99,14 +99,14 @@ class SyncEngine:
                 eff = payload.effective_text or ""
                 if "http://" in eff.lower() or "https://" in eff.lower() or "t.me/" in eff.lower():
                     logger.info(
-                        "[SYNC_EDIT:FILTER_DROP] Rule %s dropped edited msg %s: link_blocked",
+                        "[PIPELINE:SYNC_EDIT_FILTER_DROP] Rule %s dropped edited msg %s: link_blocked",
                         rule.id[:8], payload.message_id,
                     )
                     continue
 
             client = self._pool.get(rule.session_id)
             if client is None:
-                logger.warning("No live client for session %s to sync edit", rule.session_id)
+                logger.warning("[PIPELINE:SYNC_EDIT_NO_CLIENT] No live client for session %s to sync edit", rule.session_id)
                 continue
 
             target = int(m.target_chat_id) if m.target_chat_id.lstrip("-").isdigit() else m.target_chat_id
@@ -131,7 +131,7 @@ class SyncEngine:
                     )
                 synced_count += 1
                 logger.info(
-                    "Synced edit rule=%s src=%s:%s -> tgt=%s:%s",
+                    "[PIPELINE:SYNC_EDIT] Synced edit rule=%s src=%s:%s -> tgt=%s:%s",
                     rule.id[:8],
                     payload.chat_id,
                     payload.message_id,
@@ -144,10 +144,10 @@ class SyncEngine:
                     # Idempotent: text is already identical
                     synced_count += 1
                 elif "MessageIdInvalid" in err_str or "MESSAGE_ID_INVALID" in err_str:
-                    logger.debug("Target message %s:%s was deleted, cannot edit", target, target_msg_id)
+                    logger.debug("[PIPELINE:SYNC_EDIT_DELETED] Target message %s:%s was deleted, cannot edit", target, target_msg_id)
                 else:
                     logger.warning(
-                        "Edit sync failed rule=%s tgt=%s:%s: %s",
+                        "[PIPELINE:SYNC_EDIT_FAIL] Edit sync failed rule=%s tgt=%s:%s: %s",
                         rule.id[:8],
                         target,
                         target_msg_id,
@@ -192,7 +192,7 @@ class SyncEngine:
                     )
                     deleted_count += 1
                     logger.info(
-                        "Synced delete rule=%s src=%s:%s -> tgt=%s:%s",
+                        "[PIPELINE:SYNC_DELETE] Synced delete rule=%s src=%s:%s -> tgt=%s:%s",
                         rule.id[:8],
                         source_chat_id,
                         msg_id,
@@ -206,7 +206,7 @@ class SyncEngine:
                         deleted_count += 1
                     else:
                         logger.warning(
-                            "Delete sync failed rule=%s tgt=%s:%s: %s",
+                            "[PIPELINE:SYNC_DELETE_FAIL] Delete sync failed rule=%s tgt=%s:%s: %s",
                             rule.id[:8],
                             target,
                             target_msg_id,
@@ -263,13 +263,12 @@ class SyncEngine:
                 if sent:
                     replied_count += 1
                     logger.info(
-                        "[SYNC_REPLY] rule=%s src=%s:%s -> tgt=%s replied to %s",
+                        "[PIPELINE:SYNC_REPLY] rule=%s src=%s:%s -> tgt=%s replied to %s",
                         rule.id[:8], payload.chat_id, payload.message_id,
-                        target, m.target_message_id,
                     )
             except Exception as exc:
                 logger.warning(
-                    "Reply sync failed rule=%s tgt=%s:%s: %s",
+                    "[PIPELINE:SYNC_REPLY_FAIL] Reply sync failed rule=%s tgt=%s:%s: %s",
                     rule.id[:8], target, m.target_message_id, exc,
                 )
 

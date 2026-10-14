@@ -476,7 +476,7 @@ class DurableQueueManager:
                         if rem > 0:
                             _bump_target("retried")
                             logger.info(
-                                "[%s] Account %s is time-limited (%.1fs remaining). Pausing job %s",
+                                "[PIPELINE:TIME_LIMITED] [%s] Account %s is time-limited (%.1fs remaining). Pausing job %s",
                                 worker_id, session_id[:8], rem, job.id,
                             )
                             await self._queue.mark_retry(job.id, f"Account time-limited ({rem:.1f}s)", backoff_seconds=max(2.0, rem))
@@ -488,7 +488,7 @@ class DurableQueueManager:
         if self._rules is not None:
             rule_obj = await self._rules.get_by_id(job.rule_id)
             if rule_obj and not rule_obj.is_active:
-                logger.info("[%s] Rule %s is disabled. Dropping job %s", worker_id, job.rule_id[:8], job.id)
+                logger.info("[PIPELINE:DROP] [%s] Rule %s is disabled. Dropping job %s", worker_id, job.rule_id[:8], job.id)
                 await self._queue.mark_failed(job.id, "Rule disabled")
                 return None
 
@@ -496,7 +496,7 @@ class DurableQueueManager:
         if client is None:
             _bump_target("retried")
             logger.error(
-                "[%s] Cannot deliver job %s: No live client for session %s (rule=%s, tgt=%s)",
+                "[PIPELINE:NO_CLIENT] [%s] Cannot deliver job %s: No live client for session %s (rule=%s, tgt=%s)",
                 worker_id, job.id, session_id, job.rule_id[:8], target,
             )
             if self._log_client is not None:
@@ -591,7 +591,7 @@ class DurableQueueManager:
                 self.stats["unknown"] += 1
                 _bump_target("unknown")
                 logger.error(
-                    "[%s] Telegram call timed out on %s (result UNKNOWN). Marking job UNKNOWN to prevent duplicates. Rule=%s src=%s:%s error=%s",
+                    "[PIPELINE:DELIVERY_TIMEOUT] [%s] Telegram call timed out on %s (result UNKNOWN). Marking job UNKNOWN to prevent duplicates. Rule=%s src=%s:%s error=%s",
                     worker_id,
                     target,
                     job.rule_id[:8],
@@ -629,7 +629,7 @@ class DurableQueueManager:
                 self.stats["retried"] += 1
                 _bump_target("retried")
                 logger.warning(
-                    "[%s] FloodWait on %s: waiting %.1fs. Rule=%s src=%s:%s error=%s",
+                    "[PIPELINE:FLOODWAIT] [%s] FloodWait on %s: waiting %.1fs. Rule=%s src=%s:%s error=%s",
                     worker_id,
                     target,
                     wait_sec,
@@ -696,7 +696,7 @@ class DurableQueueManager:
                 self.stats["failed"] += 1
                 _bump_target("failed")
                 logger.error(
-                    "[%s] PERMANENT FAILURE delivering to %s (rule=%s, src=%s:%s): %s. Marking job FAILED.",
+                    "[PIPELINE:DELIVERY_FAIL] [%s] Permanent failure delivering to %s (rule=%s, src=%s:%s): %s. Marking job FAILED.",
                     worker_id,
                     target,
                     job.rule_id[:8],
@@ -712,7 +712,7 @@ class DurableQueueManager:
                             rule_obj.is_active = False
                             await self._rules.update(rule_obj)
                             logger.warning(
-                                "[AUTO_DISABLE] Automatically disabled task forward rule %s (source/target failed or banned: %s)",
+                                "[PIPELINE:AUTO_DISABLE] Automatically disabled task forward rule %s (source/target failed or banned: %s)",
                                 job.rule_id[:8], err_msg,
                             )
                     except Exception as dis_err:
@@ -749,7 +749,7 @@ class DurableQueueManager:
                 self.stats["retried"] += 1
                 _bump_target("retried")
                 logger.warning(
-                    "[%s] Transient send error on %s (attempt %d, rule=%s, src=%s:%s): %s. Retrying in %.1fs.",
+                    "[PIPELINE:RETRY] [%s] Transient send error on %s (attempt %d, rule=%s, src=%s:%s): %s. Retrying in %.1fs.",
                     worker_id,
                     target,
                     attempts,
