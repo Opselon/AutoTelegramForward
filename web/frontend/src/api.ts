@@ -24,6 +24,8 @@ import type {
   LogStats,
   PurgeLogsRequest,
   PurgeLogsResponse,
+  QueryAuditEventsParams,
+  QueryAuditEventsResponse,
   ServicesHealthResponse,
   AuthResponse,
   PVResponderConfig,
@@ -341,9 +343,25 @@ export const api = {
   },
   purgeLogs: (req: PurgeLogsRequest) =>
     fetchJson<PurgeLogsResponse>(`${API_BASE}/logs/purge`, {
-      method: 'POST',
-      body: JSON.stringify(req),
+      method: 'POST',      body: JSON.stringify(req),
     }),
+  // Centralized audit events (observability platform) — tenant-scoped server-side.
+  queryAuditEvents: async (params?: QueryAuditEventsParams): Promise<QueryAuditEventsResponse> => {
+    const q = new URLSearchParams()
+    if (params?.correlation_id) q.set('correlation_id', params.correlation_id)
+    if (params?.operation_id) q.set('operation_id', params.operation_id)
+    if (params?.feature_id) q.set('feature_id', params.feature_id)
+    if (params?.service) q.set('service', params.service)
+    if (params?.severity) q.set('severity', params.severity)
+    if (params?.event_category) q.set('event_category', params.event_category)
+    if (params?.outcome) q.set('outcome', params.outcome)
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.offset) q.set('offset', String(params.offset))
+    const url = `${API_BASE}/audit/events${q.toString() ? '?' + q.toString() : ''}`
+    const res = await fetchJson<any>(url)
+    if (res?.events) return res
+    return { events: [], total: 0 }
+  },
   getServicesHealth: async (): Promise<ServicesHealthResponse> => {
     return fetchJson<ServicesHealthResponse>('/api/v1/health/services')
   },

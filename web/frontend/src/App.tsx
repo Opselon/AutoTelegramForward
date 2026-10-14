@@ -41,6 +41,7 @@ import {
 } from 'lucide-react'
 import { api } from './api'
 import { AdminPanel } from './components/AdminPanel'
+import { AuditEventsPanel } from './components/AuditEventsPanel'
 import { ClientSettings } from './components/ClientSettings'
 import { TaskOverviewModal } from './components/TaskOverviewModal'
 import type {
@@ -69,7 +70,7 @@ import type {
 
 export function App() {
   const [lang, setLang] = useState<'fa' | 'en'>('fa')
-  const [activeTab, setActiveTab] = useState<'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'queue' | 'devops' | 'admin' | 'settings'>('rules')
+  const [activeTab, setActiveTab] = useState<'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('rules')
   const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(null)
   const [rules, setRules] = useState<ForwardRule[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
@@ -1184,6 +1185,22 @@ export function App() {
         >
           <Server size={15} />
           <span>{isRtl ? 'درگاه DevOps' : 'DevOps & Logs'}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('audit')}
+          className="btn"
+          style={{
+            background: activeTab === 'audit' ? 'rgba(34, 197, 94, 0.2)' : 'transparent',
+            color: activeTab === 'audit' ? '#4ade80' : '#94a3b8',
+            border: activeTab === 'audit' ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid transparent',
+            fontWeight: activeTab === 'audit' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Activity size={15} />
+          <span>{isRtl ? 'حسابرسی رویدادها' : 'Audit Events'}</span>
         </button>
 
         <button
@@ -3337,6 +3354,11 @@ export function App() {
       )}
 
       {/* TAB 8: ADMIN CONTROL PLANE */}
+      {activeTab === 'audit' && (
+        <AuditEventsPanel lang={lang} />
+      )}
+
+      {/* TAB 9: ADMIN */}
       {activeTab === 'admin' && currentUser?.is_admin && (
         <AdminPanel lang={lang} />
       )}

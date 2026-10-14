@@ -134,7 +134,13 @@ async def _fetch_all_db(db: Any, query: str, params: tuple | list = ()) -> List[
             return await db.fetchall(formatted, params)
         if hasattr(db, "fetch"):
             return await db.fetch(formatted, *params)
-        return []
+        # Fail loudly instead of returning [] — a silent empty result here
+        # would masquerade as "no rows found" and hide a broken connection
+        # (e.g. an un-awaited pool coroutine bound by mistake).
+        raise RuntimeError(
+            f"_fetch_all_db: db object of type {type(db).__name__} exposes no "
+            f"fetch/fetchall method — refusing to return a silent empty result"
+        )
 
 
 class PostgresForwardRuleRepository(IForwardRuleRepository):
