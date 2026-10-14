@@ -2895,13 +2895,16 @@ class ProBotUI:
             if not uid:
                 return
             st = self._state(uid)
-            st.step = ""
-            st.rule_source = ""
-            st.rule_target = ""
-            if isinstance(st.buffer, dict):
-                st.buffer.clear()
-            await self._persist(uid, st)
-            self._login.cancel(uid)
+            # Preserve active login flow to avoid "no_pending_login" errors
+            if not getattr(st, "step", "").startswith("login_"):
+                st.step = ""
+                st.rule_source = ""
+                st.rule_target = ""
+                if isinstance(st.buffer, dict):
+                    st.buffer.clear()
+                await self._persist(uid, st)
+                if self._login.has_pending(uid):
+                    await self._login.cancel(uid)
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
             if not sessions:
                 lang = await self._get_user_lang(uid)
