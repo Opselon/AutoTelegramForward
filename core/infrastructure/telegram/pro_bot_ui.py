@@ -586,14 +586,7 @@ class ProBotUI:
     # Menus
     # ------------------------------------------------------------------ #
     async def _get_user_lang(self, uid: int) -> str:
-        if uid and self._users is not None:
-            try:
-                u = await self._users.get_or_create(uid)
-                if u and u.get("language"):
-                    return str(u["language"]).lower()
-            except Exception:
-                pass
-        return str(self.i18n.current or "fa").lower()
+        return self._resolve_lang(uid)
 
     async def _main_text(self, uid: int, user: Optional[Any] = None) -> str:
         """Main-menu dashboard: matches the Pro Telegram control panel design.
@@ -950,75 +943,45 @@ class ProBotUI:
             return 0
 
     def _main_menu(self, uid: int = 0) -> InlineKeyboardMarkup:
-        is_fa = self.i18n.current == "fa"
+        cur_lang = self._resolve_lang(uid)
         is_adm = self._is_admin(uid) if uid else False
         rows = []
         if is_adm:
             rows.append([
                 InlineKeyboardButton(
-                    "👑 پنل مدیریت سامانه (Admin Panel)" if is_fa else "👑 Admin Control Plane",
+                    self._t("ui_main_menu_admin", lang=cur_lang),
                     callback_data=CB["admin"],
                 )
             ])
 
-        if is_fa:
-            rows.extend([
-                [
-                    InlineKeyboardButton("⚡ فوروارد (Forward)", callback_data=CB["rules"]),
-                    InlineKeyboardButton("🧹 فیلترها و اسپم", callback_data=CB["filters"]),
-                ],
-                [
-                    InlineKeyboardButton("➕ ایجاد قانون (Publish)", callback_data=CB["rule_add"]),
-                    InlineKeyboardButton("🤖 هوش مصنوعی (Clone)", callback_data=CB["ai"]),
-                ],
-                [
-                    InlineKeyboardButton("⚙️ تنظیمات (Settings)", callback_data=CB["settings"]),
-                    InlineKeyboardButton("🌐 پنل تحت وب (Web)", callback_data=CB["dashboard"]),
-                ],
-                [
-                    InlineKeyboardButton("💎 خرید اشتراک (Upgrade)", callback_data=CB["upgrade"]),
-                    InlineKeyboardButton("📊 آمار و گزارشات", callback_data=CB["stats"]),
-                ],
-                [
-                    InlineKeyboardButton("📖 راهنما و مستندات ↗", callback_data=CB["help"]),
-                    InlineKeyboardButton("🌐 تغییر زبان", callback_data=CB["lang"]),
-                ],
-                [
-                    InlineKeyboardButton("🆘 پشتیبانی اختصاصی (@Capxi)", url="https://t.me/Capxi"),
-                ],
-                [
-                    InlineKeyboardButton("🔌 مدیریت نشست‌ها (Disconnect)", callback_data=CB["sessions"]),
-                ],
-            ])
-        else:
-            rows.extend([
-                [
-                    InlineKeyboardButton("Forward", callback_data=CB["rules"]),
-                    InlineKeyboardButton("Spam", callback_data=CB["filters"]),
-                ],
-                [
-                    InlineKeyboardButton("Publish", callback_data=CB["rule_add"]),
-                    InlineKeyboardButton("Clone", callback_data=CB["ai"]),
-                ],
-                [
-                    InlineKeyboardButton("⚙️ Settings", callback_data=CB["settings"]),
-                    InlineKeyboardButton("🧩 Browse Addons", callback_data=CB["dashboard"]),
-                ],
-                [
-                    InlineKeyboardButton("💎 Upgrade", callback_data=CB["upgrade"]),
-                    InlineKeyboardButton("📊 Statistics", callback_data=CB["stats"]),
-                ],
-                [
-                    InlineKeyboardButton("📖 Documentation ↗", callback_data=CB["help"]),
-                    InlineKeyboardButton("🌐 Language", callback_data=CB["lang"]),
-                ],
-                [
-                    InlineKeyboardButton("🆘 Support (@Capxi)", url="https://t.me/Capxi"),
-                ],
-                [
-                    InlineKeyboardButton("🔌 Disconnect", callback_data=CB["sessions"]),
-                ],
-            ])
+        rows.extend([
+            [
+                InlineKeyboardButton(self._t("ui_main_menu_forward", lang=cur_lang), callback_data=CB["rules"]),
+                InlineKeyboardButton(self._t("ui_main_menu_filters", lang=cur_lang), callback_data=CB["filters"]),
+            ],
+            [
+                InlineKeyboardButton(self._t("ui_main_menu_publish", lang=cur_lang), callback_data=CB["rule_add"]),
+                InlineKeyboardButton(self._t("ui_main_menu_clone", lang=cur_lang), callback_data=CB["ai"]),
+            ],
+            [
+                InlineKeyboardButton(self._t("ui_main_menu_settings", lang=cur_lang), callback_data=CB["settings"]),
+                InlineKeyboardButton(self._t("ui_main_menu_web", lang=cur_lang), callback_data=CB["dashboard"]),
+            ],
+            [
+                InlineKeyboardButton(self._t("ui_main_menu_upgrade", lang=cur_lang), callback_data=CB["upgrade"]),
+                InlineKeyboardButton(self._t("ui_main_menu_stats", lang=cur_lang), callback_data=CB["stats"]),
+            ],
+            [
+                InlineKeyboardButton(self._t("ui_main_menu_help", lang=cur_lang), callback_data=CB["help"]),
+                InlineKeyboardButton(self._t("ui_main_menu_lang", lang=cur_lang), callback_data=CB["lang"]),
+            ],
+            [
+                InlineKeyboardButton(self._t("ui_main_menu_support", lang=cur_lang), url="https://t.me/Capxi"),
+            ],
+            [
+                InlineKeyboardButton(self._t("ui_main_menu_sessions", lang=cur_lang), callback_data=CB["sessions"]),
+            ],
+        ])
         return InlineKeyboardMarkup(rows)
 
     def _upgrade_text(self, uid: int = 0) -> str:
@@ -1847,6 +1810,462 @@ class ProBotUI:
 
     def _render_cleaner_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
         """Render cleaner settings menu for this task."""
+        uid = getattr(rule, "owner_user_id", 0)
+        cur_lang = self._resolve_lang(uid)
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+
+        url_b = self._t("ui_status_remove", lang=cur_lang) if rule.remove_links else self._t("ui_status_allowed", lang=cur_lang)
+        usr_b = self._t("ui_status_remove", lang=cur_lang) if rule.clean_usernames else self._t("ui_status_allowed", lang=cur_lang)
+        tag_b = self._t("ui_status_remove", lang=cur_lang) if rule.clean_hashtags else self._t("ui_status_allowed", lang=cur_lang)
+        emo_b = self._t("ui_status_clean", lang=cur_lang) if rule.remove_emojis else self._t("ui_status_keep", lang=cur_lang)
+        phn_b = self._t("ui_status_remove", lang=cur_lang) if rule.clean_phones else self._t("ui_status_allowed", lang=cur_lang)
+        btn_b = self._t("ui_status_remove", lang=cur_lang) if rule.clean_buttons else self._t("ui_status_allowed", lang=cur_lang)
+        spc_b = self._t("ui_status_clean", lang=cur_lang) if rule.clean_empty_lines else self._t("ui_status_keep", lang=cur_lang)
+        wrd_cnt = len(rule.clean_custom_words)
+        wrd_b = self._t("ui_words_count", lang=cur_lang, count=wrd_cnt) if wrd_cnt else self._t("ui_not_configured", lang=cur_lang)
+
+        text = (
+            f"{self._t('ui_cleaner_menu_title', lang=cur_lang)}\n\n"
+            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
+            "────────────────────\n"
+            f"{self._t('ui_cleaner_menu_desc', lang=cur_lang)}\n\n"
+            f"• 🔗 **{self._t('ui_rule_cleaner', lang=cur_lang)} (URLs):** {url_b}\n"
+            f"• 👤 **@Usernames:** {usr_b}\n"
+            f"• #️⃣ **#Hashtags:** {tag_b}\n"
+            f"• 😀 **Emojis:** {emo_b}\n"
+            f"• 📞 **Phone:** {phn_b}\n"
+            f"• 🔘 **Buttons:** {btn_b}\n"
+            f"• ✂️ **Empty Lines:** {spc_b}\n"
+            f"• 📝 **Custom Words:** {wrd_b}\n\n"
+            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                (f"🔗 Links: {url_b}", f"rcl_url:{rule.id}"),
+                (f"👤 Mentions: {usr_b}", f"rcl_usr:{rule.id}"),
+            ],
+            [
+                (f"#️⃣ Tags: {tag_b}", f"rcl_tag:{rule.id}"),
+                (f"😀 Emojis: {emo_b}", f"rcl_emo:{rule.id}"),
+            ],
+            [
+                (f"📞 Phones: {phn_b}", f"rcl_phn:{rule.id}"),
+                (f"🔘 Buttons: {btn_b}", f"rcl_btn:{rule.id}"),
+            ],
+            [
+                (f"✂️ Empty Lines: {spc_b}", f"rcl_spc:{rule.id}"),
+                (f"📝 Words: {wrd_b}", f"rcl_wrd:{rule.id}"),
+            ],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_filters_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render content filter settings menu for this task."""
+        uid = getattr(rule, "owner_user_id", 0)
+        cur_lang = self._resolve_lang(uid)
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+
+        lnk_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_links else self._t("ui_status_allowed", lang=cur_lang)
+        vid_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_video else self._t("ui_status_allowed", lang=cur_lang)
+        aud_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_audio else self._t("ui_status_allowed", lang=cur_lang)
+        stk_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_stickers else self._t("ui_status_allowed", lang=cur_lang)
+        txt_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_text else self._t("ui_status_allowed", lang=cur_lang)
+        voc_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_voice else self._t("ui_status_allowed", lang=cur_lang)
+
+        text = (
+            f"{self._t('ui_filters_menu_title', lang=cur_lang)}\n\n"
+            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
+            "────────────────────\n"
+            f"{self._t('ui_filters_menu_desc', lang=cur_lang)}\n\n"
+            f"• 🔗 **Link Filter:** {lnk_b}\n"
+            f"• 🎬 **Video Filter:** {vid_b}\n"
+            f"• 🎵 **Audio Filter:** {aud_b}\n"
+            f"• 🎭 **Sticker Filter:** {stk_b}\n"
+            f"• 📝 **Text Filter:** {txt_b}\n"
+            f"• 🎙 **Voice Filter:** {voc_b}\n\n"
+            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                (f"🔗 Links: {lnk_b}", f"rfl_lnk:{rule.id}"),
+                (f"🎬 Video: {vid_b}", f"rfl_vid:{rule.id}"),
+            ],
+            [
+                (f"🎵 Audio: {aud_b}", f"rfl_aud:{rule.id}"),
+                (f"🎭 Stickers: {stk_b}", f"rfl_stk:{rule.id}"),
+            ],
+            [
+                (f"📝 Text: {txt_b}", f"rfl_txt:{rule.id}"),
+                (f"🎙 Voice: {voc_b}", f"rfl_voc:{rule.id}"),
+            ],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_max_time_edit_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render max edit time configuration menu."""
+        uid = getattr(rule, "owner_user_id", 0)
+        cur_lang = self._resolve_lang(uid)
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        current = rule.max_time_edit
+        curr_str = f"{current}s" if current > 0 else "0 (unlimited)"
+
+        text = (
+            f"⏱ **Max Edit Time**\n\n"
+            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
+            f"Limit: **{curr_str}**\n"
+            "────────────────────\n"
+            "Messages edited in source chat will only be updated in destination if within this age limit.\n\n"
+            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                ("10m (600s)", f"rmte_s:{rule.id}:600"),
+                ("1h (3600s)", f"rmte_s:{rule.id}:3600"),
+            ],
+            [
+                ("24h (86400s)", f"rmte_s:{rule.id}:86400"),
+                ("48h (172800s)", f"rmte_s:{rule.id}:172800"),
+            ],
+            [
+                ("♾ 0 (unlimited)", f"rmte_s:{rule.id}:0"),
+                (self._t("ui_delay_custom", lang=cur_lang), f"rmte_c:{rule.id}"),
+            ],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_delay_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render forward delay configuration menu with quick presets."""
+        uid = getattr(rule, "owner_user_id", 0)
+        cur_lang = self._resolve_lang(uid)
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        current = rule.delay_seconds
+        curr_str = f"{current:.0f}s" if current > 0 else self._t("ui_delay_none", lang=cur_lang)
+
+        text = (
+            f"{self._t('ui_delay_title', lang=cur_lang)}\n\n"
+            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
+            f"{self._t('ui_delay_current', lang=cur_lang, val=curr_str)}\n"
+            "────────────────────\n"
+            f"{self._t('ui_delay_desc', lang=cur_lang)}\n\n"
+            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                (self._t("ui_delay_none", lang=cur_lang), f"rdly_s:{rule.id}:0"),
+                ("⏱ 3s", f"rdly_s:{rule.id}:3"),
+            ],
+            [
+                ("⏱ 5s", f"rdly_s:{rule.id}:5"),
+                ("⏱ 10s", f"rdly_s:{rule.id}:10"),
+            ],
+            [
+                ("⏱ 30s", f"rdly_s:{rule.id}:30"),
+                ("⏱ 60s", f"rdly_s:{rule.id}:60"),
+            ],
+            [
+                (self._t("ui_delay_custom", lang=cur_lang), f"rdly_c:{rule.id}"),
+            ],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_blacklist_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render blacklist keyword configuration menu."""
+        uid = getattr(rule, "owner_user_id", 0)
+        cur_lang = self._resolve_lang(uid)
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        bl = list(rule.blacklist or [])
+
+        items_str = "\n".join([f"• `{w}`" for w in bl[:20]]) if bl else self._t("ui_bl_empty", lang=cur_lang)
+        if len(bl) > 20:
+            items_str += f"\n... +{len(bl) - 20}"
+
+        text = (
+            f"{self._t('ui_bl_title', lang=cur_lang)}\n\n"
+            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
+            f"{self._t('ui_rule_blacklist', lang=cur_lang)}: **{len(bl)}**\n"
+            "────────────────────\n"
+            f"{self._t('ui_bl_desc', lang=cur_lang)}\n\n"
+            f"{items_str}\n\n"
+            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                (self._t("ui_kw_add_btn", lang=cur_lang), f"rfl_bl_add:{rule.id}"),
+                (self._t("ui_kw_clear_btn", lang=cur_lang), f"rfl_bl_clr:{rule.id}"),
+            ],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_whitelist_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render whitelist keyword configuration menu."""
+        uid = getattr(rule, "owner_user_id", 0)
+        cur_lang = self._resolve_lang(uid)
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        wl = list(rule.whitelist or [])
+
+        items_str = "\n".join([f"• `{w}`" for w in wl[:20]]) if wl else self._t("ui_wl_empty", lang=cur_lang)
+        if len(wl) > 20:
+            items_str += f"\n... +{len(wl) - 20}"
+
+        text = (
+            f"{self._t('ui_wl_title', lang=cur_lang)}\n\n"
+            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
+            f"{self._t('ui_rule_whitelist', lang=cur_lang)}: **{len(wl)}**\n"
+            "────────────────────\n"
+            f"{self._t('ui_wl_desc', lang=cur_lang)}\n\n"
+            f"{items_str}\n\n"
+            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                (self._t("ui_kw_add_btn", lang=cur_lang), f"rfl_wl_add:{rule.id}"),
+                (self._t("ui_kw_clear_btn", lang=cur_lang), f"rfl_wl_clr:{rule.id}"),
+            ],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_all_addons(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render all 18 Add-ons catalogue with toggle controls."""
+        task_name = rule.name or f"task_{rule.id[:8]}"
+        addons = rule.paid_addons
+        
+        all_18 = [
+            ("comments", "★ Channel Comments"),
+            ("every_n", "🔒 Forward Every N Messages"),
+            ("kw_confirm", "🔒 Keyword Confirmation"),
+            ("kw_reply", "🔒 Keyword Reply Thread"),
+            ("auto_del", "🔒 Auto Delete Messages"),
+            ("webhook", "🔒 Outbound Webhooks"),
+            ("crypto", "🪙 Crypto Mode"),
+            ("affiliate", "💲 Affiliate Kit"),
+            ("link_buttons", "🔗 Link Buttons"),
+            ("watermark", "🖼 Watermark Protection"),
+            ("duplicate", "🔀 Duplicate Filters"),
+            ("cleaner", "🧹 Cleaner Protocol"),
+            ("scheduler", "⏰ Auto Post Scheduler"),
+            ("power_schedule", "⏻ Power On/Off Schedule"),
+            ("raw_text", "📄 Process Raw Text"),
+            ("button_to_text", "🔘 Button To Text"),
+            ("ocr_ai", "👁 OCR Image AI"),
+            ("ai_rewrite", "✨ Smart AI Rewrite"),
+        ]
+
+        text = (
+            f"👑 **PAID ADDON Catalogue — 18 Modular Extensions**\n"
+            f"📋 **Task:** `{task_name}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"از این بخش می‌توانید افزونه‌های ماژولار و پیشرفته را برای این تسک فعال یا غیرفعال نمایید:\n"
+        )
+
+        rows: List[List[Tuple[str, str]]] = []
+        for i in range(0, len(all_18), 2):
+            pair = []
+            k1, lbl1 = all_18[i]
+            on1 = "🟢" if addons.get(k1) else "⚪"
+            pair.append((f"{lbl1} {on1}", f"radon_tg:{rule.id}:{k1}"))
+            if i + 1 < len(all_18):
+                k2, lbl2 = all_18[i + 1]
+                on2 = "🟢" if addons.get(k2) else "⚪"
+                pair.append((f"{lbl2} {on2}", f"radon_tg:{rule.id}:{k2}"))
+            rows.append(pair)
+
+        rows.append([(f"🔙 {self._t('ui_rule_back_task')}", f"rd:{rule.id}")])
+        return text, self._kbd(rows)
+
+    def _render_draft_editor(self, rule: ForwardRule, draft: Dict[str, Any]) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render comprehensive draft editor screen where settings are staged safely."""
+        src_label = draft.get("source_name") or draft.get("source_chat_id", "")
+        dst_label = draft.get("target_name") or draft.get("target_chat_id", "")
+        status_str = "🟢 فعال" if draft.get("is_active", True) else "🔴 غیرفعال"
+
+        f_mode = draft.get("forward_mode", ForwardMode.COPY_MESSAGE.value)
+        mode_val = getattr(f_mode, "value", str(f_mode))
+        mode_names = {
+            "COPY_MESSAGE": "📋 کپی بدون تگ (Copy)",
+            "DIRECT_FORWARD": "↗️ فوروارد با تگ (Forward)",
+            "REWRITE_AI": "🤖 بازنویسی با AI",
+        }
+        mode_title = mode_names.get(mode_val, mode_val)
+
+        reps = draft.get("replacements") or {}
+        reps_count = len(reps) if isinstance(reps, dict) else 0
+        reps_badge = f"{reps_count} مورد" if reps_count else "خالی"
+
+        hdr = str(draft.get("header") or "")
+        ftr = str(draft.get("footer") or "")
+        hdr_badge = f"`{hdr[:14]}…`" if len(hdr) > 14 else (f"`{hdr}`" if hdr else "خالی")
+        ftr_badge = f"`{ftr[:14]}…`" if len(ftr) > 14 else (f"`{ftr}`" if ftr else "خالی")
+
+        lk_badge = "🚫 حذف" if draft.get("remove_links") else "🟢 مجاز"
+        vc_badge = "🚫 مسدود" if draft.get("block_voice") else "🟢 مجاز"
+        st_badge = "🚫 مسدود" if draft.get("block_stickers") else "🟢 مجاز"
+        em_badge = "🧹 پاکسازی" if draft.get("remove_emojis") else "🟢 حفظ"
+        ed_badge = "⏹ نادیده" if draft.get("ignore_edits") else "🔄 سینک"
+        dl_badge = "🗑 سینک" if draft.get("sync_deletes") else "⏹ نادیده"
+
+        album_names = {
+            "album": "🖼 آلبوم کامل",
+            "first": "1️⃣ فقط اولین مدیا",
+            "split": "🔀 تفکیک پیام‌ها",
+        }
+        alb_mode = str(draft.get("album_mode") or "album")
+        alb_badge = album_names.get(alb_mode, "🖼 آلبوم کامل")
+
+        text = (
+            "✏️ **پیش‌نویس ویرایش قانون (Draft Mode)**\n\n"
+            f"🆔 شناسه قانون: `{rule.id[:8]}` (نسخه دیتابیس: {rule.version})\n"
+            "────────────────────\n"
+            f"📡 **مبدأ:** `{src_label}` (`{draft.get('source_chat_id')}`)\n"
+            f"🎯 **مقصد:** `{dst_label}` (`{draft.get('target_chat_id')}`)\n"
+            f"📊 **وضعیت:** {status_str}\n"
+            f"⚡ **حالت ارسال:** {mode_title}\n"
+            "────────────────────\n"
+            f"🔤 **جایگزینی کلمات:** {reps_badge}\n"
+            f"📝 **هدر:** {hdr_badge} | **فوتر:** {ftr_badge}\n"
+            f"🔗 **لینک:** {lk_badge} | 🎙 **ویس:** {vc_badge}\n"
+            f"🎭 **استیکر:** {st_badge} | 😀 **ایموجی:** {em_badge}\n"
+            f"✏️ **ویرایش پیام:** {ed_badge} | 🗑 **حذف پیام:** {dl_badge}\n"
+            f"🖼 **چندتصویری:** {alb_badge}\n\n"
+            "💡 *تغییرات شما تا پیش از لمس «💾 ذخیره تغییرات»، در پیش‌نویس موقت نگهداری می‌شوند و قانون اصلی بدون تغییر باقی می‌ماند.*"
+        )
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                ("📡 تغییر مبدأ", f"ed_s:{rule.id}"),
+                ("🎯 تغییر مقصد", f"ed_t:{rule.id}"),
+            ],
+            [
+                (f"⚡ حالت: {mode_val}", f"ed_m:{rule.id}"),
+                (f"🔄 وضعیت: {status_str}", f"ed_a:{rule.id}"),
+            ],
+            [
+                (f"🔗 لینک: {lk_badge}", f"ed_lk:{rule.id}"),
+                (f"🎙 ویس: {vc_badge}", f"ed_vc:{rule.id}"),
+            ],
+            [
+                (f"🎭 استیکر: {st_badge}", f"ed_st:{rule.id}"),
+                (f"😀 ایموجی: {em_badge}", f"ed_em:{rule.id}"),
+            ],
+            [
+                (f"✏️ ادیت: {ed_badge}", f"ed_ed:{rule.id}"),
+                (f"🗑 حذف: {dl_badge}", f"ed_dl:{rule.id}"),
+            ],
+            [
+                (f"🖼 آلبوم: {alb_badge}", f"ed_mg:{rule.id}"),
+                (f"🔤 جایگزینی ({reps_count})", f"rtx:{rule.id}"),
+            ],
+            [
+                (f"🤖 AI Rewrite: {draft.get('ai_status_badge', '❌ خاموش')}", f"r_ai:{rule.id}"),
+            ],
+            [
+                ("📝 تنظیم هدر و فوتر", f"rhf:{rule.id}"),
+            ],
+            [
+                ("💾 ذخیره تغییرات (Save)", f"ed_save:{rule.id}"),
+                ("❌ لغو ویرایش (Cancel)", f"ed_can:{rule.id}"),
+            ],
+            [
+                (f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}"),
+            ],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_replace_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render text replacement configuration menu."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        reps = rule.replacements
+
+        lines = [
+            "🔤 **تنظیمات جایگزینی متن (Text Replace)**\n",
+            f"قانون: **{src_label} ➔ {dst_label}**\n",
+            "────────────────────",
+            "📋 **لیست عبارات جایگزین فعال:**",
+        ]
+        if not reps:
+            lines.append("❌ هنوز هیچ جایگزینی برای این قانون تعریف نشده است.\n")
+        else:
+            for idx, (old, new) in enumerate(reps.items(), start=1):
+                rep_display = f"`{new}`" if new else "*(حذف کامل کلمه)*"
+                lines.append(f"{idx}. `{old}` ➔ {rep_display}")
+            lines.append("")
+
+        lines.extend([
+            "💡 **راهنما:**",
+            "برای اضافه کردن جایگزینی جدید روی دکمه «➕ افزودن جایگزینی» بزنید.",
+            "فرمت ارسال: `کلمه مبدأ -> کلمه مقصد`",
+            "جهت حذف یک کلمه: `کلمه حذفی ->`",
+        ])
+
+        rows: List[List[Tuple[str, str]]] = [
+            [("➕ افزودن جایگزینی جدید", f"rtxa:{rule.id}")],
+        ]
+        if reps:
+            del_row: List[Tuple[str, str]] = []
+            for idx, old in enumerate(list(reps.keys())[:6]):
+                display_k = old[:10]
+                del_row.append((f"❌ {display_k}", f"rtxd:{rule.id}:{idx}"))
+                if len(del_row) == 2:
+                    rows.append(del_row)
+                    del_row = []
+            if del_row:
+                rows.append(del_row)
+            rows.append([("🗑 پاکسازی همه جایگزینی‌ها", f"rtxc:{rule.id}")])
+
+        rows.append([(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")])
+        return "\n".join(lines), self._kbd(rows)
+
+    def _render_header_footer_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render header and footer configuration menu."""
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        hdr = rule.header
+        ftr = rule.footer
+
+        lines = [
+            "📝 **تنظیمات هدر و فوتر (پیشوند و پسوند پیام)**\n",
+            f"قانون: **{src_label} ➔ {dst_label}**\n",
+            "────────────────────",
+            "📌 **هدر فعلی (ابتدای پیام):**",
+            f"`{hdr}`\n" if hdr else "❌ تنظیم نشده است.\n",
+            "📌 **فوتر فعلی (انتهای پیام):**",
+            f"`{ftr}`\n" if ftr else "❌ تنظیم نشده است.\n",
+            "💡 هدر و فوتر به صورت خودکار به متن تمام پیام‌های ارسالی این قانون اضافه خواهند شد.",
+        ]
+
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                ("✏️ تنظیم هدر", f"rh_s:{rule.id}"),
+                ("🗑 حذف هدر", f"rh_d:{rule.id}"),
+            ],
+            [
+                ("✏️ تنظیم فوتر", f"rf_s:{rule.id}"),
+                ("🗑 حذف فوتر", f"rf_d:{rule.id}"),
+            ],
+            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+        ]
+        return "\n".join(lines), self._kbd(rows)
+
+    def _render_cleaner_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render cleaner settings menu for this task."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
 
@@ -2447,6 +2866,7 @@ class ProBotUI:
     async def _finish_rule_creation(self, event: Any, st: UiState, source_title: str, target_title: str) -> None:
         """Persist ForwardRule and present the completion card."""
         uid: int = int(event.from_user.id if getattr(event, "from_user", None) else (event.chat.id if getattr(event, "chat", None) else 0))
+        cur_lang = self._resolve_lang(uid)
 
         def _norm_ep(s: str) -> str:
             s = (s or "").strip().lower()
@@ -2460,14 +2880,10 @@ class ProBotUI:
             if isinstance(st.buffer, dict):
                 st.buffer.clear()
             await self._persist(uid, st)
-            err_text = (
-                "⚠️ **خطای حلقه (Loop Detected)!**\n\n"
-                "شناسه کانال مبدأ و مقصد قانون نمی‌تواند یکسان باشد. فوروارد پیام از یک چت به خودش مجاز نیست.\n"
-                "لطفاً مجدداً با مبدأ یا مقصد متفاوت تلاش کنید."
-            )
+            err_text = self._t("ui_loop_detected_title", lang=cur_lang)
             markup = self._kbd([
-                [("➕ تلاش مجدد", CB["rule_add"])],
-                [("🏠 منوی اصلی", CB["main"])],
+                [(self._t("ui_retry", lang=cur_lang), CB["rule_add"])],
+                [(f"🏠 {self._t('ui_main_title', lang=cur_lang)}", CB["main"])],
             ])
             if hasattr(event, "edit_message_text"):
                 await self._safe_edit(event, err_text, reply_markup=markup)
@@ -2492,7 +2908,7 @@ class ProBotUI:
             if isinstance(st.buffer, dict):
                 st.buffer.clear()
             await self._persist(uid, st)
-            msg_text = self._t("ui_no_sessions")
+            msg_text = self._t("ui_no_sessions", lang=cur_lang)
             if hasattr(event, "edit_message_text"):
                 await self._safe_edit(event, msg_text, reply_markup=self._sessions_menu())
             else:
@@ -2525,18 +2941,18 @@ class ProBotUI:
             await self._persist(uid, st)
 
             success_text = (
-                "🎉 **قانون هدایت با موفقیت ایجاد و فعال شد!**\n\n"
-                f"📥 **مبدأ:** {source_title}\n"
+                f"{self._t('ui_rule_created_header', lang=cur_lang)}\n\n"
+                f"📥 **{self._t('ui_source', lang=cur_lang)}:** {source_title}\n"
                 f"   🆔 `{st.rule_source}`\n\n"
-                f"📤 **مقصد:** {target_title}\n"
+                f"📤 **{self._t('ui_target', lang=cur_lang)}:** {target_title}\n"
                 f"   🆔 `{st.rule_target}`\n\n"
-                "⚙️ **نحوه فوروارد:** کپی مستقیم (بدون نقل‌قول و تگ منبع)\n"
-                "🟢 **وضعیت:** فعال و در حال مانیتورینگ زنده"
+                f"{self._t('ui_rule_fwd_mode_desc', lang=cur_lang)}\n"
+                f"{self._t('ui_rule_status_monitoring', lang=cur_lang)}"
             )
             markup = self._kbd([
-                [("⚙️ تنظیمات و فیلترهای پیشرفته این قانون", f"rd:{rule.id}")],
-                [("➕ افزودن قانون جدید", CB["rule_add"]), ("⚡ مشاهده قوانین", CB["rules"])],
-                [("🏠 منوی اصلی", CB["main"])],
+                [(self._t("ui_rule_adv_settings", lang=cur_lang), f"rd:{rule.id}")],
+                [(self._t("ui_rule_add_new", lang=cur_lang), CB["rule_add"]), (self._t("ui_rule_view_all", lang=cur_lang), CB["rules"])],
+                [(f"🏠 {self._t('ui_main_title', lang=cur_lang)}", CB["main"])],
             ])
 
             if hasattr(event, "edit_message_text"):
