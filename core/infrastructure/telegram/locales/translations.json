@@ -319,7 +319,16 @@
         "ui_wm_del": "🗑 Remove Watermark",
         "ui_tr_title": "Auto Translation Target Language",
         "ui_tr_disable": "🚫 Disable Translation",
-        "ui_cancel_back": "❌ Cancel & Back"
+        "ui_cancel_back": "❌ Cancel & Back",
+        "ui_src_sel": "📥 **Select Source Channel or Group (Source):**",
+        "ui_tgt_sel": "📤 **Select Target Channel or Group (Target):**",
+        "ui_no_dialog": "⚠️ Source dialog list not found automatically (or you are not in any channels yet).",
+        "ui_target_no_dialog": "⚠️ Session dialog list could not be fetched automatically.",
+        "ui_no_dialog_bytes": "✍️ Please enter numeric ID, username, or link manually:\n• Numeric ID: -1001234567890\n• Public ID: @channel_username\n• Private Link: https://t.me/c/1234567890",
+        "ui_saved_messages": "Saved Messages",
+        "ui_refresh_list": "🔄 Refresh List",
+        "ui_change_src": "⬅️ Change Source",
+        "ui_target_byte": "e.g. -1009876543210 or @target_channel"
     },
     "fa": {
         "ai_add_hint": "پیکربندی را بفرستید:\n`provider model api_key`\nمثلاً `openai gpt-4o-mini sk-...`\nتأمین‌کنندگان: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -641,7 +650,16 @@
         "ui_wm_del": "🗑 حذف واتر‌مارک",
         "ui_tr_title": "تنظیم زبان مقصد ترجمه خودکار",
         "ui_tr_disable": "🚫 غیرفعال‌سازی ترجمه",
-        "ui_cancel_back": "❌ انصراف و بازگشت"
+        "ui_cancel_back": "❌ انصراف و بازگشت",
+        "ui_src_sel": "📥 **انتخاب کانال یا گروه مبدأ (Source):**",
+        "ui_tgt_sel": "📤 **انتخاب کانال یا گروه مقصد (Target):**",
+        "ui_no_dialog": "⚠️ لیست گفتگوهای سشن به صورت خودکار یافت نشد (یا هنوز در کانالی عضو نیستید).",
+        "ui_target_no_dialog": "⚠️ لیست گفتگوهای سشن به صورت خودکار یافت نشد.",
+        "ui_no_dialog_bytes": "✍️ لطفاً شناسه عددی، یوزرنیم یا لینک کانال مبدأ را دستی بفرستید:\n• شناسه عددی: `-1001234567890`\n• آیدی عمومی: `@channel_username`\n• لینک اختصاصی: `https://t.me/c/1234567890`",
+        "ui_saved_messages": "پیام‌های ذخیره شده (Saved Messages)",
+        "ui_refresh_list": "🔄 تازه‌سازی لیست",
+        "ui_change_src": "⬅️ تغییر مبدأ",
+        "ui_target_byte": "مثلاً: -1009876543210 یا @target_channel"
     },
     "ru": {
         "ai_add_hint": "Отправьте конфигурацию:\n`провайдер модель api_key`\nнапример `openai gpt-4o-mini sk-...`\nПровайдеры: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -963,7 +981,16 @@
         "ui_wm_del": "🗑 Удалить водяной знак",
         "ui_tr_title": "Язык целевого перевода",
         "ui_tr_disable": "🚫 Отключить перевод",
-        "ui_cancel_back": "❌ Отмена и назад"
+        "ui_cancel_back": "❌ Отмена и назад",
+        "ui_src_sel": "📥 **Выбор исходного канала или группы (Source):**",
+        "ui_tgt_sel": "📤 **Выбор целевого канала или группы (Target):**",
+        "ui_no_dialog": "⚠️ Список диалогов не найден автоматически (или вы пока не состоите в каналах).",
+        "ui_target_no_dialog": "⚠️ Не удалось автоматически получить список диалогов.",
+        "ui_no_dialog_bytes": "✍️ Введите числовой ID, юзернейм или ссылку вручную:\n• Числовой ID: -1001234567890\n• Юзернейм: @channel_username\n• Приватная ссылка: https://t.me/c/1234567890",
+        "ui_saved_messages": "Сохраненные сообщения",
+        "ui_refresh_list": "🔄 Обновить список",
+        "ui_change_src": "⬅️ Сменить источник",
+        "ui_target_byte": "Например: -1009876543210 или @target_channel"
     },
     "zh": {
         "ai_add_hint": "发送 AI 配置：\n`provider model api_key`\n例如 `openai gpt-4o-mini sk-...`\n供应商：openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -1285,7 +1312,16 @@
         "ui_wm_del": "🗑 移除水印",
         "ui_tr_title": "自动翻译目标语言",
         "ui_tr_disable": "🚫 禁用翻译",
-        "ui_cancel_back": "❌ 取消并返回"
+        "ui_cancel_back": "❌ 取消并返回",
+        "ui_src_sel": "📥 **选择源频道或群组 (Source):**",
+        "ui_tgt_sel": "📤 **选择目标频道或群组 (Target):**",
+        "ui_no_dialog": "⚠️ 源对话记录未自动查找到 (或尚未加入任何频道)。",
+        "ui_target_no_dialog": "⚠️ 会话对话记录未自动查找到。",
+        "ui_no_dialog_bytes": "✍️ 请手动输入数字 ID、用户名或链接：\n• 数字 ID: -1001234567890\n• 用户名: @channel_username\n• 私人链接: https://t.me/c/1234567890",
+        "ui_saved_messages": "已保存的消息",
+        "ui_refresh_list": "🔄 刷新列表",
+        "ui_change_src": "⬅️ 更改来源",
+        "ui_target_byte": "例如: -1009876543210 或 @target_channel"
     },
     "pt": {
         "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -1607,7 +1643,16 @@
         "ui_wm_del": "🗑 Remover Marca d'Água",
         "ui_tr_title": "Idioma de Destino da Tradução Automática",
         "ui_tr_disable": "🚫 Desativar Tradução",
-        "ui_cancel_back": "❌ Cancelar e Voltar"
+        "ui_cancel_back": "❌ Cancelar e Voltar",
+        "ui_src_sel": "📥 **Selecionar Canal ou Grupo de Origem:**",
+        "ui_tgt_sel": "📤 **Selecionar Canal ou Grupo de Destino (Target):**",
+        "ui_no_dialog": "⚠️ Lista de diálogos não encontrada (ou você ainda não está em canais).",
+        "ui_target_no_dialog": "⚠️ Lista de diálogos da sessão não pôde ser obtida automaticamente.",
+        "ui_no_dialog_bytes": "⚠️ Lista de diálogos da sessão não pôde ser obtida automaticamente.",
+        "ui_saved_messages": "Mensagens Salvas",
+        "ui_refresh_list": "🔄 Atualizar Lista",
+        "ui_change_src": "⬅️ Alterar Origem",
+        "ui_target_byte": "Ex: -1009876543210 ou @target_channel"
     },
     "uz": {
         "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -1929,7 +1974,16 @@
         "ui_wm_del": "🗑 Suv belgisini o'chirish",
         "ui_tr_title": "Avtomatik tarjima maqsad tili",
         "ui_tr_disable": "🚫 Tarjimani o'chirish",
-        "ui_cancel_back": "❌ Bekor qilish va qaytish"
+        "ui_cancel_back": "❌ Bekor qilish va qaytish",
+        "ui_src_sel": "📥 **Manba kanal yoki guruhini tanlash (Source):**",
+        "ui_tgt_sel": "📤 **Manzil kanal yoki guruhini tanlash (Target):**",
+        "ui_no_dialog": "⚠️ Dialoglar ruyxati avtomatik topilmadi (yoki siz hali kanallarda emasiz).",
+        "ui_target_no_dialog": "⚠️ Sessiya dialoglari ro'yxati avtomatik topilmadi.",
+        "ui_no_dialog_bytes": "✍️ Iltimos, raqamli ID, foydalanuvchi nomi yoki havolani qo'lda yuboring:\n• Raqamli ID: -1001234567890\n• Foydalanuvchi nomi: @channel_username\n• Xususiy havola: https://t.me/c/1234567890",
+        "ui_saved_messages": "Saqlangan xabarlar",
+        "ui_refresh_list": "🔄 Ro'yxatni yangilash",
+        "ui_change_src": "⬅️ Manbani o'zgartirish",
+        "ui_target_byte": "Masalan: -1009876543210 yoki @target_channel"
     },
     "id": {
         "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -2251,7 +2305,16 @@
         "ui_wm_del": "🗑 Hapus Tanda Air",
         "ui_tr_title": "Bahasa Target Terjemahan Otomatis",
         "ui_tr_disable": "🚫 Nonaktifkan Terjemahan",
-        "ui_cancel_back": "❌ Batal & Kembali"
+        "ui_cancel_back": "❌ Batal & Kembali",
+        "ui_src_sel": "📥 **Pilih Saluran atau Grup Sumber (Source):**",
+        "ui_tgt_sel": "📤 **Pilih Saluran atau Grup Target (Target):**",
+        "ui_no_dialog": "⚠️ Daftar dialog tidak ditemukan otomatis (atau Anda belum bergabung dengan kanal).",
+        "ui_target_no_dialog": "⚠️ Daftar dialog sesi tidak ditemukan otomatis.",
+        "ui_no_dialog_bytes": "✍️ Masukkan ID angka, username, atau tautan secara manual:\n• ID Angka: -1001234567890\n• ID Publik: @channel_username\n• Tautan Pribadi: https://t.me/c/1234567890",
+        "ui_saved_messages": "Pesan Tersimpan",
+        "ui_refresh_list": "🔄 Segarkan Daftar",
+        "ui_change_src": "⬅️ Ubah Sumber",
+        "ui_target_byte": "Cth: -1009876543210 atau @target_channel"
     },
     "es": {
         "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -2573,7 +2636,16 @@
         "ui_wm_del": "🗑 Eliminar Marca de Agua",
         "ui_tr_title": "Idioma de Destino de Traducción Automática",
         "ui_tr_disable": "🚫 Desactivar Traducción",
-        "ui_cancel_back": "❌ Cancelar y Volver"
+        "ui_cancel_back": "❌ Cancelar y Volver",
+        "ui_src_sel": "📥 **Seleccionar Canal o Grupo de Origen (Source):**",
+        "ui_tgt_sel": "📤 **Seleccionar Canal o Grupo de Destino (Target):**",
+        "ui_no_dialog": "⚠️ Lista de diálogos no encontrada automáticamente (o aún no estás en canales).",
+        "ui_target_no_dialog": "⚠️ No se pudo obtener la lista de diálogos de la sesión.",
+        "ui_no_dialog_bytes": "✍️ Envía manualmente el ID, usuario o enlace:\n• ID Numérico: -1001234567890\n• ID Público: @channel_username\n• Enlace Privado: https://t.me/c/1234567890",
+        "ui_saved_messages": "Mensajes Guardados",
+        "ui_refresh_list": "🔄 Actualizar Lista",
+        "ui_change_src": "⬅️ Cambiar Origen",
+        "ui_target_byte": "Ej: -1009876543210 o @target_channel"
     },
     "fr": {
         "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -2895,7 +2967,16 @@
         "ui_wm_del": "🗑 Supprimer le filigrane",
         "ui_tr_title": "Langue Cible de Traduction Automatique",
         "ui_tr_disable": "🚫 Désactiver la Traduction",
-        "ui_cancel_back": "❌ Annuler et Retour"
+        "ui_cancel_back": "❌ Annuler et Retour",
+        "ui_src_sel": "📥 **Sélectionner le Canal source (Source):**",
+        "ui_tgt_sel": "📤 **Sélectionner le Canal de destination:**",
+        "ui_no_dialog": "⚠️ Liste des dialogues non trouvée (ou canaux non rejoints).",
+        "ui_target_no_dialog": "⚠️ Liste des dialogues de session non récupérée.",
+        "ui_no_dialog_bytes": "✍️ Saisissez manuellement l'ID, l'username ou le lien:\n• ID Numérique: -1001234567890\n• ID Public: @channel_username\n• Lien privé: https://t.me/c/1234567890",
+        "ui_saved_messages": "Messages Enregistrés",
+        "ui_refresh_list": "🔄 Rafraîchir la liste",
+        "ui_change_src": "⬅️ Changer Source",
+        "ui_target_byte": "Ex: -1009876543210 ou @target_channel"
     },
     "it": {
         "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -3217,6 +3298,15 @@
         "ui_wm_del": "🗑 Rimuovi Filigrana",
         "ui_tr_title": "Lingua di Destinazione Traduzione Automatica",
         "ui_tr_disable": "🚫 Disattiva Traduzione",
-        "ui_cancel_back": "❌ Annulla e Indietro"
+        "ui_cancel_back": "❌ Annulla e Indietro",
+        "ui_src_sel": "📥 **Seleziona il Canale di origine (Source):**",
+        "ui_tgt_sel": "📤 **Seleziona il Canale di destinazione (Target):**",
+        "ui_no_dialog": "⚠️ Elenco dei dialoghi non trovato (o alcun canale raggiunto).",
+        "ui_target_no_dialog": "⚠️ Elenco dei dialoghi della sessione non recuperato.",
+        "ui_no_dialog_bytes": "✍️ Inserisci manualmente l'ID, il nome utente o il link:\n• ID Numerico: -1001234567890\n• ID Pubblico: @channel_username\n• Link privato: https://t.me/c/1234567890",
+        "ui_saved_messages": "Messaggi Salvati",
+        "ui_refresh_list": "🔄 Aggiorna Elenco",
+        "ui_change_src": "⬅️ Modifica Origine",
+        "ui_target_byte": "Es: -1009876543210 o @target_channel"
     }
 }

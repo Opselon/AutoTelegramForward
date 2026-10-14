@@ -2272,24 +2272,20 @@ class ProBotUI:
             return text, self._kbd(rows)
 
         # Fallback when no chats could be fetched automatically
+        cur_lang = self._resolve_lang(None, user_obj=None)
         if role == "source":
             text = (
-                "📥 **انتخاب کانال یا گروه مبدأ (Source):**\n\n"
-                "⚠️ لیست گفتگوهای سشن به صورت خودکار یافت نشد (یا هنوز در کانالی عضو نیستید).\n\n"
-                "✍️ لطفاً شناسه عددی، یوزرنیم یا لینک کانال مبدأ را دستی بفرستید:\n"
-                "👈 نمونه‌ها:\n"
-                "• شناسه عددی: `-1001234567890`\n"
-                "• آیدی عمومی: `@channel_username`\n"
-                "• لینک اختصاصی: `https://t.me/c/1234567890`"
+                self._t("ui_src_sel", lang=cur_lang) + "\n\n"
+                + self._t("ui_no_dialog", lang=cur_lang) + "\n\n"
+                + self._t("ui_no_dialog_bytes", lang=cur_lang)
             )
         else:
             src_name = st.buffer.get("source_name") or st.rule_source
             text = (
-                f"✅ **مبدأ:** {src_name} (`{st.rule_source}`)\n\n"
-                "📤 **انتخاب کانال یا گروه مقصد (Target):**\n\n"
-                "⚠️ لیست گفتگوهای سشن به صورت خودکار یافت نشد.\n\n"
-                "✍️ لطفاً شناسه عددی، یوزرنیم یا لینک مقصد را بفرستید:\n"
-                "👈 مثلاً: `-1009876543210` یا `@target_channel`"
+                f"✅ {self._t('ui_src_sel', lang=cur_lang)}: {src_name} (`{st.rule_source}`)\n\n"
+                + self._t("ui_tgt_sel", lang=cur_lang) + "\n\n"
+                + self._t("ui_target_no_dialog", lang=cur_lang) + "\n\n"
+                + self._t('ui_target_byte', lang=cur_lang)
             )
 
         fallback_rows: List[List[Tuple[str, str]]] = [
@@ -2347,7 +2343,7 @@ class ProBotUI:
 
                         title = getattr(chat, "title", None) or getattr(chat, "first_name", None) or str(chat.id)
                         if kind == "saved":
-                            title = "پیام‌های ذخیره شده (Saved Messages)"
+                            title = self._t("ui_saved_messages", lang=cur_lang) if "cur_lang" in locals() else "Saved Messages"
 
                         chats.append({
                             "id": str(chat.id),
@@ -2874,7 +2870,7 @@ class ProBotUI:
         @b.on_message(filters.command("connect") & filters.private)
         async def _connect_cmd(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
-            logger.info("=== HANDLING /CONNECT FOR UID=%s WITH TEXT %s ===", uid, text[:50] if "text" in locals() else "")
+            logger.info("Handling /connect from uid=%s", uid)
             if not uid:
                 return
             st = self._state(uid)
