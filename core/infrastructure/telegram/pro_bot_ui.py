@@ -1236,6 +1236,18 @@ class ProBotUI:
         debug_text = "ON 🟢" if rule.debug_mode else "OFF"
         sender_type = rule.sender_type or "Personal Telegram Account"
         topic_str = f"#{rule.topic_id}" if rule.topic_id else "None"
+        fwd_hdr_status = "Yes 🟢" if rule.show_forward_header else "No ⚪"
+        dup_status = "ON 🟢" if rule.duplicate_filters else "OFF ⚪"
+        rep_sync_status = "ON 🟢" if rule.sync_replies else "OFF ⚪"
+        edit_sync_status = "OFF ⚪" if rule.ignore_edits else "ON 🟢"
+        del_sync_status = "ON 🟢" if rule.sync_deletes else "OFF ⚪"
+        cleaner_status = "ON 🟢" if rule.cleaner_enabled else "OFF ⚪"
+
+        warning_line = (
+            "\n⚠️ *Reply, Edit, Replace, Translate will not work when show header*\n"
+            if rule.show_forward_header
+            else ""
+        )
 
         grp = rule.feature_group or "all"
         chips = {
@@ -1245,7 +1257,7 @@ class ProBotUI:
             "content": "Content",
         }
 
-        # Header and Task Overview text matching the Telegram Mini App
+        # Header and Task Overview text matching the Telegram Mini App & Mobile screen
         text = (
             f"⚡ **Auto Forward Messages — Task Management**\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -1254,8 +1266,13 @@ class ProBotUI:
             f"• ⏻ **Forwarding Status:** `{status_text}`\n"
             f"• ↪ **Source:** `{src_label}` (Telegram)\n"
             f"• ➤ **Target:** `{dst_label}` (Telegram)\n"
+            f"• 🏷 **Show Forward Header:** `{fwd_hdr_status}`{warning_line}\n"
             f"• 🐞 **Debug Mode:** `{debug_text}`\n"
             f"• #️⃣ **Topic:** `{topic_str}`\n\n"
+            f"🎯 **Features (v2.0):**\n"
+            f"• Edit: `{edit_sync_status}` | Delete: `{del_sync_status}` | Reply: `{rep_sync_status}`\n"
+            f"• Show Header: `{fwd_hdr_status}` | Duplicate Filters: `{dup_status}`\n"
+            f"• Cleaner: `{cleaner_status}` | Delay: `{rule.delay_seconds:.0f}s`\n\n"
             f"👤 **Sender Type:**\n"
             f"• ⚡ `{sender_type}`\n\n"
             f"✨ **Feature groups:** Choose & customize tools\n"
@@ -1279,6 +1296,10 @@ class ProBotUI:
             [
                 ("🟢 Edit Source", f"res:{rule.id}"),
                 ("🔴 Edit Target", f"ret:{rule.id}"),
+            ],
+            [
+                (f"🏷 Header: {fwd_hdr_status}", f"rtg_fwdhdr:{rule.id}"),
+                (f"💬 Reply Sync: {rep_sync_status}", f"rtg_repsync:{rule.id}"),
             ],
             [
                 (f"#️⃣ Set up Forwarding Topic ({topic_str})", f"rtpc:{rule.id}"),
@@ -4720,6 +4741,36 @@ class ProBotUI:
             await self._save_owned_rule(rule, uid)
             st = "فعال شد 🟢" if rule.debug_mode else "غیرفعال شد ⚪"
             await cq.answer(f"دیباگ: {st}")
+            text, kbd = self._render_rule_detail(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtg_fwdhdr:(.+)$"))
+        async def _cb_rule_toggle_fwd_header(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.show_forward_header = not rule.show_forward_header
+            await self._save_owned_rule(rule, uid)
+            st = "فعال شد 🟢" if rule.show_forward_header else "غیرفعال شد ⚪"
+            await cq.answer(f"نمایش هدر مبدأ: {st}")
+            text, kbd = self._render_rule_detail(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rtg_repsync:(.+)$"))
+        async def _cb_rule_toggle_reply_sync(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+            rule.sync_replies = not rule.sync_replies
+            await self._save_owned_rule(rule, uid)
+            st = "فعال شد 🟢" if rule.sync_replies else "غیرفعال شد ⚪"
+            await cq.answer(f"همگام‌سازی ریپلای: {st}")
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 

@@ -200,6 +200,13 @@ class Normalizer:
             is_edit=is_edit,
             edit_date=int(getattr(raw, "edit_date", 0) or 0) or None,
             original_date=date_ts,
+            # v2.0 app update — Reply feature: a reply's target is needed by
+            # SyncEngine.handle_reply to mirror the conversation in the target.
+            reply_to_message_id=(
+                int(getattr(raw, "reply_to_message_id", 0) or 0) or None
+            ) if not isinstance(raw, dict) else (
+                int(raw.get("reply_to_message_id", 0) or 0) or None
+            ),
         )
         return Normalizer._clean_payload(payload)
 
@@ -222,6 +229,24 @@ class Normalizer:
 # =====================================================================
 # DurableMessagePipeline Coordinator
 # =====================================================================
+
+def _content_fingerprint(payload: "MessagePayload") -> str:
+    """Stable content fingerprint for the Duplicate Filters feature.
+
+    Normalizes whitespace and case so a re-post with added newlines or a
+    different casing still matches. Media is keyed by kind + album id, not by
+    binary content (the pipeline never downloads media at filter time).
+    """
+    import hashlib
+
+    body = (payload.text or "") + "||" + (payload.caption or "")
+    normalized = " ".join(body.split()).casefold()
+    media_key = str(getattr(payload.media_type, "value", payload.media_type))
+    if payload.media_group_id:
+        media_key += f":album:{payload.media_group_id}"
+    raw = f"{normalized}|{media_key}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
 
 class DurableMessagePipeline:
     """Production-Grade message pipeline coordinator implementing P1."""
@@ -331,6 +356,10 @@ class DurableMessagePipeline:
         )
         return ctx
 
+    @staticmethod
+    def _content_fingerprint(payload: "MessagePayload") -> str:
+        return _content_fingerprint(payload)
+
     async def _process_for_rule(self, ctx: PipelineContext, rule: ForwardRule) -> None:
         payload = ctx.payload
         if payload is None:
@@ -384,6 +413,32 @@ class DurableMessagePipeline:
                     ctx.correlation_id[:8], rule.id[:8], payload.message_id,
                 )
                 return
+
+        # v2.0 app update — Duplicate Filters: drop a message whose *content*
+        # was already forwarded under this rule, even when it is a different
+        # message id. Two different ids carrying byte-identical text (a channel
+        # re-posting the same announcement) would otherwise both be delivered.
+        # The hash is scoped to (rule, target set, normalized body + media kind)
+        # so the same text going to a different audience is not collapsed.
+        if bool(getattr(rule, "duplicate_filters", False)) and self._map is not None:
+            content_hash = self._content_fingerprint(payload)
+            if content_hash:
+                try:
+                    already = await self._map.was_content_forwarded(rule.id, content_hash)
+                except Exception:
+                    already = False  # a dedup-store hiccup must never drop a message
+                if already:
+                    ctx.record_stage(PipelineStage.DEDUPLICATE, False, reason="duplicate_content")
+                    self.metrics.dedup_skipped_total += 1
+                    logger.info(
+                        "[PIPELINE:DUP_FILTER] [%s] Rule %s skipped msg %s: duplicate content (hash=%s)",
+                        ctx.correlation_id[:8], rule.id[:8], payload.message_id, content_hash[:8],
+                    )
+                    return
+                try:
+                    await self._map.record_content_hash(rule.id, content_hash)
+                except Exception:
+                    pass  # best-effort: recording failure only weakens dedup
 
         ctx.record_stage(PipelineStage.DEDUPLICATE, True, reason="unique", duration_ms=(time.monotonic() - t0) * 1000)
 
@@ -607,6 +662,28 @@ class DurableMessagePipeline:
         self, ctx: PipelineContext, payload: MessagePayload, rule: ForwardRule, evaluation: EvaluationResult
     ) -> Optional[str]:
         text = payload.effective_text or ""
+
+        # v2.0 app update — Cleaner: strip configured content (patterns, URLs,
+        # @mentions, #hashtags, emoji) before any other transform sees the text.
+        # Runs first so downstream replacement/AI stages operate on cleaned
+        # input and cannot resurrect removed content.
+        cleaner = rule.build_cleaner() if hasattr(rule, "build_cleaner") else None
+        if cleaner is not None:
+            try:
+                cleaned = cleaner.clean(text)
+                if cleaned != text:
+                    logger.info(
+                        "[PIPELINE:CLEANER] [%s] Rule %s cleaned msg %s: len %d -> %d",
+                        ctx.correlation_id[:8], rule.id[:8], payload.message_id, len(text), len(cleaned),
+                    )
+                    text = cleaned
+            except Exception as exc:
+                # A cleaner failure must never drop the message — deliver
+                # uncleaned text and record why.
+                logger.warning(
+                    "[PIPELINE:CLEANER] [%s] Rule %s cleaner failed (%s) — delivering uncleaned text",
+                    ctx.correlation_id[:8], rule.id[:8], exc,
+                )
 
         # Link Management Engine (Entity-aware, domain allowlist/blocklist, SSRF protected)
         link_policy = getattr(rule, "link_policy", "PRESERVE_ALL")

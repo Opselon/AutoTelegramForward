@@ -214,3 +214,63 @@ class SyncEngine:
                         )
 
         return deleted_count
+
+    async def handle_reply(self, payload: MessagePayload) -> int:
+        """Propagate a reply made in the source chat onto the mapped target.
+
+        v2.0 app update — "Reply" feature: when a user replies to a forwarded
+        message in the source chat, the same reply text is posted in the target
+        chat as a reply *to the mapped target message*, so the conversation
+        context survives the crossing.
+
+        Returns the number of target messages replied to.
+        """
+        replied_id = getattr(payload, "reply_to_message_id", None)
+        if not replied_id:
+            return 0
+
+        mappings = await self._map.get_by_source(str(payload.chat_id), int(replied_id))
+        if not mappings:
+            return 0
+
+        text = (payload.text or payload.caption or "").strip()
+        if not text:
+            return 0
+
+        replied_count = 0
+        for m in mappings:
+            if m.delivery_status != DeliveryStatus.SENT or not m.target_message_id:
+                continue
+
+            rule = await self._rules.get_by_id(m.rule_id)
+            if not rule or not rule.is_active:
+                continue
+            if not getattr(rule, "sync_replies", False):
+                continue
+
+            client = self._pool.get(rule.session_id)
+            if client is None:
+                continue
+
+            target = int(m.target_chat_id) if m.target_chat_id.lstrip("-").isdigit() else m.target_chat_id
+
+            try:
+                sent = await client.send_message(
+                    chat_id=target,
+                    text=text,
+                    reply_to_message_id=int(m.target_message_id),
+                )
+                if sent:
+                    replied_count += 1
+                    logger.info(
+                        "[SYNC_REPLY] rule=%s src=%s:%s -> tgt=%s replied to %s",
+                        rule.id[:8], payload.chat_id, payload.message_id,
+                        target, m.target_message_id,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Reply sync failed rule=%s tgt=%s:%s: %s",
+                    rule.id[:8], target, m.target_message_id, exc,
+                )
+
+        return replied_count

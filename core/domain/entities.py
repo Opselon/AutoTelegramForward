@@ -1,3 +1,4 @@
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -18,6 +19,20 @@ from .value_objects import (
 
 def _new_id() -> str:
     return str(uuid.uuid4())
+
+
+# Local compiled patterns for CleanerRule. Defined here rather than imported
+# from services.py to keep entities.py free of a services -> entities cycle.
+_CLEANER_URL_RE = re.compile(
+    r"https?://[^\s]+|www\.[^\s]+|(?:https?://)?(?:t(?:elegram)?\.(?:me|dog))/[^\s]+",
+    re.IGNORECASE,
+)
+_CLEANER_MENTION_RE = re.compile(r"@[A-Za-z0-9_]{4,64}")
+_CLEANER_HASHTAG_RE = re.compile(r"#\w+")
+_CLEANER_EMOJI_RE = re.compile(
+    r"[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\ufe00-\ufe0f]",
+    flags=re.UNICODE,
+)
 
 
 def _now() -> int:
@@ -461,6 +476,80 @@ class ForwardRule:
         if not isinstance(self.metadata, dict):
             self.metadata = {}
         self.metadata["duplicate_filters"] = bool(val)
+
+    # --- Cleaner (v2.0 app update) -----------------------------------------
+    # The cleaner is carried as metadata and resolved to a CleanerRule at
+    # transform time. Kept on the rule (not a separate table) because it is
+    # per-task configuration, not a shared resource.
+    @property
+    def cleaner_enabled(self) -> bool:
+        return bool(self.metadata.get("cleaner_enabled", False)) if isinstance(self.metadata, dict) else False
+
+    @cleaner_enabled.setter
+    def cleaner_enabled(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["cleaner_enabled"] = bool(val)
+
+    @property
+    def cleaner_config(self) -> dict:
+        if not isinstance(self.metadata, dict):
+            return {}
+        cfg = self.metadata.get("cleaner_config")
+        return cfg if isinstance(cfg, dict) else {}
+
+    @cleaner_config.setter
+    def cleaner_config(self, val: dict) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["cleaner_config"] = val if isinstance(val, dict) else {}
+
+    def build_cleaner(self) -> Optional["CleanerRule"]:
+        """Materialize the configured cleaner, or None when disabled/empty."""
+        if not self.cleaner_enabled:
+            return None
+        cfg = self.cleaner_config
+        if not cfg:
+            return None
+        try:
+            return CleanerRule(
+                id=f"{self.id}:cleaner",
+                name=str(cfg.get("name") or "cleaner"),
+                patterns=[str(p) for p in (cfg.get("patterns") or [])
+                          if isinstance(p, str) and p.strip()],
+                use_regex=bool(cfg.get("use_regex", False)),
+                remove_urls=bool(cfg.get("remove_urls", False)),
+                remove_mentions=bool(cfg.get("remove_mentions", False)),
+                remove_hashtags=bool(cfg.get("remove_hashtags", False)),
+                remove_emojis=bool(cfg.get("remove_emojis", False)),
+                apply_to_caption=bool(cfg.get("apply_to_caption", True)),
+                case_sensitive=bool(cfg.get("case_sensitive", False)),
+                is_active=True,
+                owner_user_id=self.owner_user_id,
+            )
+        except Exception:
+            return None
+
+    # --- Show-forward-header convenience flag (v2.0 app update) ------------
+    # DIRECT_FORWARD on Telegram keeps the original sender header; COPY_MESSAGE
+    # (the engine default) is a clean copy. The UI toggle maps to forward_mode.
+    @property
+    def show_forward_header(self) -> bool:
+        return getattr(self, "forward_mode", None) == ForwardMode.DIRECT_FORWARD
+
+    @show_forward_header.setter
+    def show_forward_header(self, val: bool) -> None:
+        self.forward_mode = ForwardMode.DIRECT_FORWARD if bool(val) else ForwardMode.COPY_MESSAGE
+
+    @property
+    def sync_replies(self) -> bool:
+        return bool(self.metadata.get("sync_replies", False)) if isinstance(self.metadata, dict) else False
+
+    @sync_replies.setter
+    def sync_replies(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["sync_replies"] = bool(val)
 
     @property
     def crypto_mode(self) -> bool:
@@ -1126,6 +1215,69 @@ class FilterRule:
     min_message_length: int = 0
     max_message_length: int = 0
     owner_user_id: int = 0
+
+
+@dataclass
+class CleanerRule:
+    """Content cleaner — strips specific text/regex from a message body.
+
+    Implements the "Cleaner" feature from the v2.0 app update: delete specific
+    content (words, URLs, @handles, #hashtags, emoji, or raw patterns) from
+    forwarded messages based on user conditions.
+
+    Semantics:
+    - ``patterns`` are removed literally (regex when ``use_regex``).
+    - ``remove_urls`` strips http(s)/t.me links. ``remove_mentions`` strips
+      @username. ``remove_hashtags`` strips #tags. ``remove_emojis`` strips
+      pictographs (delegated to the existing EMOJI_REGEX).
+    - ``apply_to_caption`` also cleans media captions, not just bodies.
+    - Everything is a removal-only transform: it never drops a message.
+    """
+    id: str = field(default_factory=_new_id)
+    name: str = ""
+    patterns: List[str] = field(default_factory=list)
+    use_regex: bool = False
+    remove_urls: bool = False
+    remove_mentions: bool = False
+    remove_hashtags: bool = False
+    remove_emojis: bool = False
+    apply_to_caption: bool = True
+    case_sensitive: bool = False
+    is_active: bool = True
+    owner_user_id: int = 0
+
+    def clean(self, text: str) -> str:
+        """Return ``text`` with the configured content removed."""
+        if not text:
+            return text
+        out = text
+        for pat in self.patterns:
+            if not pat:
+                continue
+            try:
+                if self.use_regex:
+                    flags = 0 if self.case_sensitive else re.IGNORECASE
+                    out = re.sub(pat, "", out, flags=flags)
+                elif self.case_sensitive:
+                    out = out.replace(pat, "")
+                else:
+                    out = re.sub(re.escape(pat), "", out, flags=re.IGNORECASE)
+            except re.error:
+                # A malformed pattern must not break forwarding.
+                continue
+        if self.remove_urls:
+            out = _CLEANER_URL_RE.sub("", out)
+        if self.remove_mentions:
+            out = _CLEANER_MENTION_RE.sub("", out)
+        if self.remove_hashtags:
+            out = _CLEANER_HASHTAG_RE.sub("", out)
+        if self.remove_emojis:
+            out = _CLEANER_EMOJI_RE.sub("", out)
+        # Collapse the whitespace holes the removals punched out so the
+        # rendered message does not show "word  word" artifacts.
+        out = re.sub(r"[ \t]{2,}", " ", out)
+        out = re.sub(r"\n{3,}", "\n\n", out)
+        return out.strip()
 
 
 @dataclass

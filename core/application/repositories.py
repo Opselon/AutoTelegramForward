@@ -454,6 +454,19 @@ class IMessageMapRepository(ABC):
     ) -> List[MessageMapping]:
         ...
 
+    # v2.0 app update: Duplicate Filters content-level dedup.
+    @abstractmethod
+    async def was_content_forwarded(self, rule_id: str, content_hash: str) -> bool:
+        ...
+
+    @abstractmethod
+    async def record_content_hash(self, rule_id: str, content_hash: str) -> None:
+        ...
+
+    @abstractmethod
+    async def purge_content_hashes(self, rule_id: str, before_ts: int) -> int:
+        ...
+
     @abstractmethod
     async def update_delivery(
         self,

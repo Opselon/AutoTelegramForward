@@ -50,6 +50,21 @@ export interface ForwardRule {
   sender_type?: string
   feature_group?: string
   duplicate_filters?: boolean
+  cleaner_enabled?: boolean
+  cleaner_config?: {
+    patterns?: string[]
+    use_regex?: boolean
+    remove_urls?: boolean
+    remove_mentions?: boolean
+    remove_hashtags?: boolean
+    remove_emojis?: boolean
+    apply_to_caption?: boolean
+    case_sensitive?: boolean
+  }
+  show_forward_header?: boolean
+  sync_replies?: boolean
+  sync_edits?: boolean
+  sync_deletes?: boolean
   crypto_mode?: boolean
   whitelist_keywords?: string[]
   blacklist_keywords?: string[]
@@ -117,6 +132,21 @@ export interface SaveRuleRequest {
   sender_type?: string
   feature_group?: string
   duplicate_filters?: boolean
+  cleaner_enabled?: boolean
+  cleaner_config?: {
+    patterns?: string[]
+    use_regex?: boolean
+    remove_urls?: boolean
+    remove_mentions?: boolean
+    remove_hashtags?: boolean
+    remove_emojis?: boolean
+    apply_to_caption?: boolean
+    case_sensitive?: boolean
+  }
+  show_forward_header?: boolean
+  sync_replies?: boolean
+  sync_edits?: boolean
+  sync_deletes?: boolean
   crypto_mode?: boolean
   whitelist_keywords?: string[]
   blacklist_keywords?: string[]

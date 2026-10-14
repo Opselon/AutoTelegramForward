@@ -213,6 +213,12 @@ class ForwardRule {
     this.aiCreativity = 0.7,
     this.aiMaxTokens = 600,
     this.paidAddons = const {},
+    // v2.0 app update fields
+    this.cleanerEnabled = false,
+    this.cleanerConfig = const {},
+    this.showForwardHeader = false,
+    this.syncReplies = true,
+    this.syncEdits = true,
   });
 
   final String id;
@@ -242,6 +248,13 @@ class ForwardRule {
   final double aiCreativity;
   final int aiMaxTokens;
   final Map<String, bool> paidAddons;
+
+  // v2.0 app update fields
+  final bool cleanerEnabled;
+  final Map<String, dynamic> cleanerConfig;
+  final bool showForwardHeader;
+  final bool syncReplies;
+  final bool syncEdits;
 
   /// VIP / intermediate-channel routing. When the server exposes
   /// `intermediate_channel_id` the rule funnels through it first.
@@ -313,6 +326,11 @@ class ForwardRule {
     double? aiCreativity,
     int? aiMaxTokens,
     Map<String, bool>? paidAddons,
+    bool? cleanerEnabled,
+    Map<String, dynamic>? cleanerConfig,
+    bool? showForwardHeader,
+    bool? syncReplies,
+    bool? syncEdits,
   }) => ForwardRule(
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
@@ -357,6 +375,11 @@ class ForwardRule {
     aiCreativity: aiCreativity ?? this.aiCreativity,
     aiMaxTokens: aiMaxTokens ?? this.aiMaxTokens,
     paidAddons: paidAddons ?? this.paidAddons,
+    cleanerEnabled: cleanerEnabled ?? this.cleanerEnabled,
+    cleanerConfig: cleanerConfig ?? this.cleanerConfig,
+    showForwardHeader: showForwardHeader ?? this.showForwardHeader,
+    syncReplies: syncReplies ?? this.syncReplies,
+    syncEdits: syncEdits ?? this.syncEdits,
   );
 
   Map<String, dynamic> toCreateJson() => {
@@ -384,6 +407,11 @@ class ForwardRule {
     'ai_creativity': aiCreativity,
     'ai_max_tokens': aiMaxTokens,
     'paid_addons': paidAddons,
+    'cleaner_enabled': cleanerEnabled,
+    'cleaner_config': cleanerConfig,
+    'show_forward_header': showForwardHeader,
+    'sync_replies': syncReplies,
+    'sync_edits': syncEdits,
     if (intermediateChannelId.isNotEmpty)
       'intermediate_channel_id': intermediateChannelId,
     'use_vip_routing': useVipRouting,
@@ -483,6 +511,21 @@ class ForwardRule {
           (json['ai_max_tokens'] as num?)?.toInt() ??
           ((meta['ai_max_tokens'] as num?)?.toInt() ?? 600),
       paidAddons: parsedAddons,
+      cleanerEnabled:
+          (json['cleaner_enabled'] as bool?) ??
+          (meta['cleaner_enabled'] as bool? ?? false),
+      cleanerConfig:
+          (json['cleaner_config'] as Map<String, dynamic>?) ??
+          ((meta['cleaner_config'] as Map<String, dynamic>?) ?? const {}),
+      showForwardHeader:
+          (json['show_forward_header'] as bool?) ??
+          (meta['show_forward_header'] as bool? ?? false),
+      syncReplies:
+          (json['sync_replies'] as bool?) ??
+          (meta['sync_replies'] as bool? ?? true),
+      syncEdits:
+          (json['sync_edits'] as bool?) ??
+          (meta['sync_edits'] as bool? ?? true),
       filters:
           (json['filters'] as List<dynamic>?)
               ?.map((e) => e.toString())

@@ -8,7 +8,14 @@ library;
 import 'package:flutter/widgets.dart';
 
 import '../core/api_client.dart';
+import 'app_es.dart';
 import 'app_fa.dart';
+import 'app_fr.dart';
+import 'app_id.dart';
+import 'app_it.dart';
+import 'app_pt.dart';
+import 'app_ru.dart';
+import 'app_uz.dart';
 
 class AppMessagesEn {
   static const Map<String, String> _map = {
@@ -257,17 +264,43 @@ class AppMessages {
   static const LocalizationsDelegate<AppMessages> delegate =
       _AppMessagesDelegate();
 
-  static const supportedLocales = <Locale>[Locale('en'), Locale('fa')];
+  static const supportedLocales = <Locale>[
+    Locale('en'),
+    Locale('fa'),
+    Locale('pt'),
+    Locale('uz'),
+    Locale('ru'),
+    Locale('id'),
+    Locale('es'),
+    Locale('fr'),
+    Locale('it'),
+  ];
 
   static const en = _en;
 
   bool get isRtl => locale.languageCode == 'fa';
 
   String get(String key, {Map<String, String>? params}) {
-    if (locale.languageCode == 'fa') {
-      return AppMessagesFa.instance.get(key, params: params);
+    switch (locale.languageCode) {
+      case 'fa':
+        return AppMessagesFa.instance.get(key, params: params);
+      case 'pt':
+        return AppMessagesPt.instance.get(key, params: params);
+      case 'uz':
+        return AppMessagesUz.instance.get(key, params: params);
+      case 'ru':
+        return AppMessagesRu.instance.get(key, params: params);
+      case 'id':
+        return AppMessagesId.instance.get(key, params: params);
+      case 'es':
+        return AppMessagesEs.instance.get(key, params: params);
+      case 'fr':
+        return AppMessagesFr.instance.get(key, params: params);
+      case 'it':
+        return AppMessagesIt.instance.get(key, params: params);
+      default:
+        return _en.get(key, params: params);
     }
-    return _en.get(key, params: params);
   }
 
   /// Translates a [LoginChallenge] state into a localised sentence.

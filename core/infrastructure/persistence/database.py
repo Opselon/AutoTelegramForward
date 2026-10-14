@@ -259,6 +259,20 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_msgmap_rule_src ON message_map(rule_id, source_chat_id, source_message_id);
     CREATE INDEX IF NOT EXISTS idx_msgmap_media ON message_map(media_group_id);
 
+    -- v2.0 app update: Duplicate Filters — content-level dedup store.
+    -- One row per (rule, content hash): a re-posted message with a different
+    -- message id but byte-identical normalized content lands here and is
+    -- skipped by the pipeline. Scoped to the rule so the same text aiming at
+    -- a different audience is never collapsed.
+    CREATE TABLE IF NOT EXISTS content_dedup (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule_id TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        UNIQUE(rule_id, content_hash)
+    );
+    CREATE INDEX IF NOT EXISTS idx_content_dedup_rule ON content_dedup(rule_id, content_hash);
+
     -- Durable delivery jobs queue for non-blocking asynchronous workers and restart recovery
     CREATE TABLE IF NOT EXISTS delivery_jobs (
         id TEXT PRIMARY KEY,

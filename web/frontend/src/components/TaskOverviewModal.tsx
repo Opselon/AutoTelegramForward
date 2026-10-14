@@ -312,6 +312,42 @@ export function TaskOverviewModal({
                   </div>
                 </div>
 
+                {/* Show Forward Header row (v2.0 app update matching screenshot) */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    padding: '8px 0',
+                    borderTop: '1px solid #334155',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '12px', color: '#cbd5e1' }}>Show Forward Header</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle('show_forward_header')}
+                      style={{
+                        background: draft.show_forward_header ? '#22c55e' : '#334155',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '2px 10px',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {draft.show_forward_header ? 'Yes' : 'No'}
+                    </button>
+                  </div>
+                  {draft.show_forward_header && (
+                    <div style={{ fontSize: '10px', color: '#ef4444', fontStyle: 'italic' }}>
+                      *Reply, Edit, Replace, Translate will not work when show header
+                    </div>
+                  )}
+                </div>
+
                 {/* Debug Mode row */}
                 <div
                   style={{
@@ -533,6 +569,133 @@ export function TaskOverviewModal({
                   <SlidersHorizontal size={14} />
                   Advanced Settings
                 </button>
+              </div>
+
+              {/* v2.0 App Update — Features Section matching mobile screenshot */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '16px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#f1f5f9' }}>Features</span>
+                  <span style={{ fontSize: '11px', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    Explain &gt;
+                  </span>
+                </div>
+
+                {/* 5 Toggle Pills matching screenshot (top half of Features) */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                  {[
+                    { key: 'sync_edits' as const, label: 'Edit', active: Boolean(draft.sync_edits ?? true) },
+                    { key: 'sync_deletes' as const, label: 'Delete', active: Boolean(draft.sync_deletes ?? true) },
+                    { key: 'sync_replies' as const, label: 'Reply', active: Boolean(draft.sync_replies ?? true) },
+                    { key: 'show_forward_header' as const, label: 'Show Forward Header', active: Boolean(draft.show_forward_header) },
+                    { key: 'duplicate_filters' as const, label: 'Duplicate Filters', active: Boolean(draft.duplicate_filters ?? true) },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => handleToggle(item.key)}
+                      style={{
+                        backgroundColor: item.active ? '#dcfce7' : '#334155',
+                        color: item.active ? '#166534' : '#94a3b8',
+                        border: 'none',
+                        borderRadius: '20px',
+                        padding: '6px 14px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <span>{item.active ? '✔' : '○'}</span>
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* 6 Modular Option Cards (2x3 grid) matching screenshot */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {[
+                    {
+                      title: 'Replace',
+                      icon: '< >',
+                      iconColor: '#a855f7',
+                      status: `Activated: ${Object.keys((draft as any).replacements || {}).length}`,
+                      onClick: () => setCurrentTab('advanced'),
+                    },
+                    {
+                      title: 'Blacklist',
+                      icon: '≡ₓ',
+                      iconColor: '#ef4444',
+                      status: `Activated: ${(draft.blacklist_keywords || []).length}`,
+                      onClick: () => setCurrentTab('advanced'),
+                    },
+                    {
+                      title: 'Whitelist',
+                      icon: '≡✓',
+                      iconColor: '#22c55e',
+                      status: `Activated: ${(draft.whitelist_keywords || []).length}`,
+                      onClick: () => setCurrentTab('advanced'),
+                    },
+                    {
+                      title: 'Cleaner',
+                      icon: '∷',
+                      iconColor: '#f97316',
+                      status: `Activated: ${draft.cleaner_enabled ? '1' : '0'}`,
+                      onClick: () => handleToggle('cleaner_enabled'),
+                    },
+                    {
+                      title: 'Filters',
+                      icon: '⊶',
+                      iconColor: '#3b82f6',
+                      status: `Activated: ${(draft.duplicate_filters ? 1 : 0)}`,
+                      onClick: () => setCurrentTab('advanced'),
+                    },
+                    {
+                      title: 'Set Delay',
+                      icon: '⏱',
+                      iconColor: '#eab308',
+                      status: `Delay Current: ${draft.forward_delay_seconds || 0}s`,
+                      onClick: () => setCurrentTab('advanced'),
+                    },
+                  ].map((card) => (
+                    <div
+                      key={card.title}
+                      onClick={card.onClick}
+                      style={{
+                        backgroundColor: '#0f172a',
+                        border: '1px solid #334155',
+                        borderRadius: '10px',
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                        transition: 'border-color 0.15s',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: card.iconColor, fontWeight: 700, fontSize: '13px' }}>{card.icon}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#f1f5f9' }}>{card.title} &gt;</span>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8' }}>{card.status}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Feature Groups Filter Chips */}
