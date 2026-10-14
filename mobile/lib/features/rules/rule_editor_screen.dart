@@ -67,6 +67,13 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   bool _ignoreEdits = false;
   String _albumMode = 'album';
 
+  /// Per-task text replace rules (find -> replace), edited in order.
+  List<MapEntry<String, String>> _replacements = [];
+
+  /// Tenant's AI configs for the per-task AI picker.
+  List<AiConfig> _aiConfigs = const [];
+  String _selectedAiConfigId = '';
+
   List<TelegramSession> _sessions = const [];
   bool _saving = false;
   String? _error;
@@ -113,6 +120,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _smartAiRewrite = r?.smartAiRewrite ?? false;
     _newsDigest = r?.newsDigest ?? false;
     _paidAddons = Map.of(r?.paidAddons ?? {});
+    _replacements = List.of(
+      r?.replacements.entries.toList() ?? const <MapEntry<String, String>>[],
+    );
+    _selectedAiConfigId = r?.aiConfigId ?? '';
     _blockVoice = r?.blockVoice ?? false;
     _blockStickers = r?.blockStickers ?? false;
     _removeEmojis = r?.removeEmojis ?? false;
@@ -121,6 +132,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _albumMode = r?.albumMode ?? 'album';
 
     _loadSessions();
+    _loadAiConfigs();
   }
 
   @override
@@ -154,6 +166,87 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       });
     } catch (_) {
       // Sessions loading failure handled gracefully
+    }
+  }
+
+  Future<void> _loadAiConfigs() async {
+    final client = context.read<AppState>().buildApiClient();
+    try {
+      final list = await client.listAiConfigs();
+      if (!mounted) return;
+      setState(() => _aiConfigs = list);
+    } catch (_) {
+      // AI picker is optional: leave the list empty on failure.
+    }
+  }
+
+  String _aiConfigLabel(String id) {
+    for (final c in _aiConfigs) {
+      if (c.id == id) {
+        return c.model.isNotEmpty ? '${c.provider} · ${c.model}' : c.provider;
+      }
+    }
+    return id;
+  }
+
+  Future<void> _addReplacementDialog(AppMessages t) async {
+    final findCtrl = TextEditingController();
+    final replaceCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(t.get('rules_replace_add')),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: findCtrl,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: t.get('rules_replace_find'),
+                    ),
+                    validator:
+                        (v) =>
+                            (v == null || v.trim().isEmpty)
+                                ? t.get('rules_replace_find_required')
+                                : null,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: replaceCtrl,
+                    decoration: InputDecoration(
+                      labelText: t.get('rules_replace_with'),
+                      helperText: t.get('rules_replace_with_hint'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(t.get('action_cancel')),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (formKey.currentState!.validate()) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+                child: Text(t.get('action_save')),
+              ),
+            ],
+          ),
+    );
+    if (ok == true) {
+      setState(() {
+        _replacements = List.of(_replacements)
+          ..add(MapEntry(findCtrl.text.trim(), replaceCtrl.text));
+      });
     }
   }
 
@@ -217,6 +310,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       smartAiRewrite: _smartAiRewrite,
       newsDigest: _newsDigest,
       watermark: _watermarkCtrl.text.trim(),
+      replacements: Map.fromEntries(_replacements),
+      aiConfigId: _selectedAiConfigId,
       paidAddons: _paidAddons,
       blockVoice: _blockVoice,
       blockStickers: _blockStickers,
@@ -380,7 +475,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                   Expanded(
                     child: SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Forwarding Status'),
+                      title: Text(t.get('rules_sec_status')),
                       subtitle: Text(_isEnabled ? 'RUNNING' : 'PAUSED'),
                       value: _isEnabled,
                       onChanged: (v) => setState(() => _isEnabled = v),
@@ -389,7 +484,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                   Expanded(
                     child: SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Debug Mode'),
+                      title: Text(t.get('rules_sec_debug')),
                       subtitle: Text(_debugMode ? 'ON' : 'OFF'),
                       value: _debugMode,
                       onChanged: (v) => setState(() => _debugMode = v),
@@ -651,13 +746,13 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           Icons.shield_outlined,
                           color: Colors.blue,
                         ),
-                        title: const Text('Filters (?)'),
+                        title: Text(t.get('rules_sec_filters')),
                         subtitle: Text(
                           'Duplicate: ${_duplicateFilters ? "ON" : "OFF"} • Crypto: ${_cryptoMode ? "ON" : "OFF"}',
                         ),
                         children: [
                           SwitchListTile(
-                            title: const Text('Duplicate Filters'),
+                            title: Text(t.get('rules_filters_dup')),
                             subtitle: const Text(
                               'Media & text deep fingerprint deduplication',
                             ),
@@ -666,7 +761,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                 (v) => setState(() => _duplicateFilters = v),
                           ),
                           SwitchListTile(
-                            title: const Text('Crypto Mode'),
+                            title: Text(t.get('rules_filters_crypto')),
                             subtitle: const Text(
                               'Signal detection, wallet cleaner, pair parsing',
                             ),
@@ -682,18 +777,18 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           Icons.schedule_rounded,
                           color: Colors.amber,
                         ),
-                        title: const Text('Schedules (?)'),
+                        title: Text(t.get('rules_sec_schedules')),
                         subtitle: Text(
                           'Auto Posting: ${_autoPosting ? "ON" : "OFF"} • Power: ${_powerControl ? "ON" : "OFF"}',
                         ),
                         children: [
                           SwitchListTile(
-                            title: const Text('Auto Post Scheduler'),
+                            title: Text(t.get('rules_sched_auto')),
                             value: _autoPosting,
                             onChanged: (v) => setState(() => _autoPosting = v),
                           ),
                           SwitchListTile(
-                            title: const Text('Power Control Schedule'),
+                            title: Text(t.get('rules_sched_power')),
                             value: _powerControl,
                             onChanged: (v) => setState(() => _powerControl = v),
                           ),
@@ -706,7 +801,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           Icons.timer_outlined,
                           color: Colors.purple,
                         ),
-                        title: const Text('Time Forward (?)'),
+                        title: Text(t.get('rules_sec_time_forward')),
                         subtitle: Text('Delay & Edit Time limits'),
                         children: [
                           Padding(
@@ -744,19 +839,19 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           Icons.settings_suggest_outlined,
                           color: Colors.teal,
                         ),
-                        title: const Text('Processing Messages (?)'),
+                        title: Text(t.get('rules_sec_processing')),
                         subtitle: Text(
                           'Raw Text: ${_processRawText ? "ON" : "OFF"} • Btn2Txt: ${_buttonToText ? "ON" : "OFF"}',
                         ),
                         children: [
                           SwitchListTile(
-                            title: const Text('Process Raw Text'),
+                            title: Text(t.get('rules_proc_raw')),
                             value: _processRawText,
                             onChanged:
                                 (v) => setState(() => _processRawText = v),
                           ),
                           SwitchListTile(
-                            title: const Text('Button To Text'),
+                            title: Text(t.get('rules_proc_btn2txt')),
                             value: _buttonToText,
                             onChanged: (v) => setState(() => _buttonToText = v),
                           ),
@@ -769,8 +864,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           Icons.edit_note_rounded,
                           color: Colors.orange,
                         ),
-                        title: const Text('Modify Content (?)'),
-                        subtitle: const Text('Header, Footer, Watermark'),
+                        title: Text(t.get('rules_sec_modify')),
+                        subtitle: Text(t.get('rules_sec_modify_sub')),
                         children: [
                           Padding(
                             padding: const EdgeInsets.all(8),
@@ -805,17 +900,145 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         ],
                       ),
 
+                      // Replace Rules Category
+                      ExpansionTile(
+                        leading: const Icon(
+                          Icons.find_replace_rounded,
+                          color: Colors.cyan,
+                        ),
+                        title: Text(t.get('rules_replace_title')),
+                        subtitle: Text(
+                          t.get(
+                            'rules_replace_summary',
+                            params: {'count': '${_replacements.length}'},
+                          ),
+                        ),
+                        children: [
+                          if (_replacements.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                t.get('rules_replace_empty'),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          for (var i = 0; i < _replacements.length; i++)
+                            ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.swap_horiz, size: 18),
+                              title: Text(
+                                _replacements[i].key,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                _replacements[i].value.isEmpty
+                                    ? t.get('rules_replace_remove')
+                                    : _replacements[i].value,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (i > 0)
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.arrow_upward,
+                                        size: 18,
+                                      ),
+                                      tooltip: t.get('rules_replace_move_up'),
+                                      onPressed:
+                                          () => setState(() {
+                                            final tmp = _replacements[i - 1];
+                                            _replacements[i - 1] =
+                                                _replacements[i];
+                                            _replacements[i] = tmp;
+                                          }),
+                                    ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                    ),
+                                    tooltip: t.get('action_delete'),
+                                    onPressed:
+                                        () => setState(
+                                          () => _replacements.removeAt(i),
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.add, size: 18),
+                              label: Text(t.get('rules_replace_add')),
+                              onPressed: () => _addReplacementDialog(t),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // AI Selection (per-task AI config binding)
+                      ExpansionTile(
+                        leading: const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Colors.deepPurple,
+                        ),
+                        title: Text(t.get('rules_ai_pick_title')),
+                        subtitle: Text(
+                          _selectedAiConfigId.isEmpty
+                              ? t.get('rules_ai_pick_none')
+                              : _aiConfigLabel(_selectedAiConfigId),
+                        ),
+                        children: [
+                          RadioListTile<String>(
+                            dense: true,
+                            value: '',
+                            groupValue: _selectedAiConfigId,
+                            onChanged:
+                                (v) => setState(() => _selectedAiConfigId = ''),
+                            title: Text(t.get('rules_ai_pick_none')),
+                          ),
+                          ..._aiConfigs.map(
+                            (c) => RadioListTile<String>(
+                              dense: true,
+                              value: c.id,
+                              groupValue: _selectedAiConfigId,
+                              onChanged:
+                                  (v) => setState(
+                                    () => _selectedAiConfigId = v ?? '',
+                                  ),
+                              title: Text(_aiConfigLabel(c.id)),
+                              subtitle: Text(
+                                '${c.provider}${c.model.isNotEmpty ? ' · ${c.model}' : ''}',
+                              ),
+                            ),
+                          ),
+                          if (_aiConfigs.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                t.get('rules_ai_pick_empty'),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                        ],
+                      ),
+
                       // AI Features Category
                       ExpansionTile(
                         leading: const Icon(
                           Icons.auto_awesome_rounded,
                           color: Colors.indigo,
                         ),
-                        title: const Text('AI Features'),
-                        subtitle: const Text('Creativity 0.7 - Max Tokens 600'),
+                        title: Text(t.get('rules_sec_ai')),
+                        subtitle: Text(t.get('rules_sec_ai_sub')),
                         children: [
                           SwitchListTile(
-                            title: const Text('OCR Image AI'),
+                            title: Text(t.get('rules_ai_ocr')),
                             subtitle: const Text(
                               'Optical character recognition via vision AI',
                             ),
@@ -823,7 +1046,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                             onChanged: (v) => setState(() => _ocrImageAi = v),
                           ),
                           SwitchListTile(
-                            title: const Text('Smart AI Rewrite'),
+                            title: Text(t.get('rules_ai_rewrite')),
                             subtitle: const Text(
                               'LLM intelligent content rephrasing',
                             ),
@@ -832,7 +1055,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                 (v) => setState(() => _smartAiRewrite = v),
                           ),
                           SwitchListTile(
-                            title: const Text('News Digest'),
+                            title: Text(t.get('rules_ai_digest')),
                             subtitle: const Text(
                               'Automated news summary bullets',
                             ),
@@ -848,10 +1071,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           Icons.workspace_premium_rounded,
                           color: Colors.amber,
                         ),
-                        title: const Text('👑 PAID ADDON Catalogue (18)'),
-                        subtitle: const Text(
-                          'Channel Comments, Webhooks, TTL & more',
-                        ),
+                        title: Text(t.get('rules_sec_paid')),
+                        subtitle: Text(t.get('rules_sec_paid_sub')),
                         children: [
                           ...[
                             'channel_comments',

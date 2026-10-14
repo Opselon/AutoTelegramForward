@@ -297,6 +297,7 @@ func formatRuleJSON(rl *pb.ForwardRule) map[string]any {
 		"custom_caption_template":   rl.CustomCaptionTemplate,
 		"created_at":                rl.CreatedAt,
 		"updated_at":                rl.UpdatedAt,
+		"owner_user_id":             rl.OwnerUserId,
 		"name":                      rl.Name,
 		"description":               rl.Description,
 		"target_chat_ids":           rl.TargetChatIds,
@@ -360,6 +361,13 @@ func enrichCustomMetadata(rawBody []byte, rule *pb.ForwardRule) {
 		"cleaner_enabled", "cleaner_config",
 		"sync_replies", "sync_edits", "sync_deletes",
 		"language", "show_forward_header",
+		// Per-task text modifications (mobile/web editor parity with the bot):
+		// replace rules, content trimming, blocking, routing extras.
+		"replacements", "header", "footer",
+		"block_voice", "block_stickers", "remove_emojis",
+		"link_replacement", "album_mode", "clean_words",
+		"message_category", "detection_criteria", "use_intermediate",
+		"intermediate_mode", "fallback_mode", "priority", "multi_route",
 	}
 	for _, k := range parityKeys {
 		if val, ok := raw[k]; ok {
@@ -890,35 +898,46 @@ func (h *Handlers) GetRule(w http.ResponseWriter, r *http.Request) {
 	id := identity(r)
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{OwnerUserId: id.UserID})
+	rule, err := h.fetchOwnedRule(ctx, id.UserID, r.PathValue("id"))
 	if err != nil {
 		grpcError(w, err)
 		return
 	}
-	for _, rule := range resp.Rules {
-		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
-			writeJSON(w, http.StatusOK, formatRuleJSON(rule))
-			return
-		}
+	if rule == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Rule not found"})
+		return
 	}
-	writeJSON(w, http.StatusNotFound, map[string]string{"error": "Rule not found"})
+	writeJSON(w, http.StatusOK, formatRuleJSON(rule))
+}
+
+// fetchOwnedRule returns the caller's rule by ID via the owner-scoped
+// single-row RPC (GetRule). Returns nil (not an error) when the rule
+// does not exist or belongs to another tenant — fail-closed.
+func (h *Handlers) fetchOwnedRule(ctx context.Context, ownerUserID int64, ruleID string) (*pb.ForwardRule, error) {
+	if ownerUserID == 0 || ruleID == "" {
+		return nil, nil
+	}
+	rule, err := h.c.Rules.GetRule(ctx, &pb.GetRuleRequest{RuleId: ruleID, OwnerUserId: ownerUserID})
+	if err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() == codes.NotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if rule == nil || rule.Id == "" || rule.OwnerUserId != ownerUserID {
+		return nil, nil // defense-in-depth: never trust the server blindly
+	}
+	return rule, nil
 }
 
 func (h *Handlers) ToggleRule(w http.ResponseWriter, r *http.Request) {
 	id := identity(r)
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	resp, err := h.c.Rules.ListRules(ctx, &pb.ListRulesRequest{OwnerUserId: id.UserID})
+	target, err := h.fetchOwnedRule(ctx, id.UserID, r.PathValue("id"))
 	if err != nil {
 		grpcError(w, err)
 		return
-	}
-	var target *pb.ForwardRule
-	for _, rule := range resp.Rules {
-		if rule.OwnerUserId == id.UserID && rule.Id == r.PathValue("id") {
-			target = rule
-			break
-		}
 	}
 	if target == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Rule not found"})

@@ -54,9 +54,8 @@ def mock_pro_bot_ui():
 @pytest.mark.asyncio
 async def test_main_text_formatting_english(mock_pro_bot_ui):
     ui = mock_pro_bot_ui
-    ui.i18n.current = "en"
-
     fake_user = MagicMock()
+    fake_user.language_code = "en"
     fake_user.first_name = "Mr Scott"
     fake_user.last_name = "BAUER"
     fake_user.username = "scottbauer"
@@ -102,9 +101,10 @@ async def test_main_text_formatting_english(mock_pro_bot_ui):
 @pytest.mark.asyncio
 async def test_main_text_formatting_persian(mock_pro_bot_ui):
     ui = mock_pro_bot_ui
-    ui.i18n.current = "fa"
-
+    # The user's own Telegram client language is Persian. The bot must
+    # resolve per-user (never the process-wide i18n.current).
     fake_user = MagicMock()
+    fake_user.language_code = "fa"
     fake_user.first_name = "Scott"
     fake_user.last_name = ""
     fake_user.username = None
@@ -120,7 +120,6 @@ async def test_main_text_formatting_persian(mock_pro_bot_ui):
 
 def test_main_menu_buttons_structure(mock_pro_bot_ui):
     ui = mock_pro_bot_ui
-    ui.i18n.current = "en"
 
     kbd = ui._main_menu()
     rows = kbd.inline_keyboard
@@ -163,12 +162,15 @@ def test_main_menu_buttons_structure(mock_pro_bot_ui):
 
 def test_upgrade_text(mock_pro_bot_ui):
     ui = mock_pro_bot_ui
-    ui.i18n.current = "en"
     en_text = ui._upgrade_text()
     assert "VIP Features" in en_text
     assert "@Capxi" in en_text
 
-    ui.i18n.current = "fa"
-    fa_text = ui._upgrade_text()
+    # Persian: simulate the user's own client language by seeding an
+    # in-memory UiState for this user (the per-user resolution path).
+    uid = 123456
+    st = ui._state(uid)
+    st.lang = "fa"
+    fa_text = ui._upgrade_text(uid)
     assert "اشتراک ویژه" in fa_text
     assert "@Capxi" in fa_text

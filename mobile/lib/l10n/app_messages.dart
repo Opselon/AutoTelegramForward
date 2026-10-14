@@ -16,6 +16,7 @@ import 'app_it.dart';
 import 'app_pt.dart';
 import 'app_ru.dart';
 import 'app_uz.dart';
+import 'app_zh.dart';
 
 class AppMessagesEn {
   static const Map<String, String> _map = {
@@ -150,7 +151,63 @@ class AppMessagesEn {
     'rules_source': 'Source channel',
     'rules_target': 'Destination channel',
     'rules_session': 'Telegram session',
+    'nav_stats': 'Statistics',
+    'rules_cleaner': 'Cleaner',
+    'rules_content_mode': 'Content mode',
+    'rules_duplicate_filters': 'Duplicate filter',
+    'rules_edit': 'Edit task',
+    'rules_forward_mode': 'Forward mode',
+    'rules_show_forward_header': 'Show header',
+    'rules_status_active': 'RUNNING',
+    'rules_status_paused': 'PAUSED',
+    'rules_sync_edits': 'Sync edits',
+    'rules_sync_replies': 'Sync replies',
+    'settings_server_url': 'Server URL',
     'rules_intermediate': 'Intermediate (VIP) channel',
+    'rules_sec_status': 'Forwarding Status',
+    'rules_sec_debug': 'Debug Mode',
+    'rules_sec_filters': 'Filters',
+    'rules_sec_schedules': 'Schedules',
+    'rules_sec_time_forward': 'Time Forward',
+    'rules_sec_processing': 'Processing Messages',
+    'rules_sec_modify': 'Modify Content',
+    'rules_sec_modify_sub': 'Header, footer, watermark',
+    'rules_sec_ai': 'AI Features',
+    'rules_sec_ai_sub': 'Creativity & token limits',
+    'rules_sec_paid': 'PAID ADDON Catalogue',
+    'rules_sec_paid_sub': 'Channel comments, webhooks, TTL & more',
+    'rules_filters_dup': 'Duplicate Filters',
+    'rules_filters_dup_sub': 'Media & text deep fingerprint deduplication',
+    'rules_filters_crypto': 'Crypto Mode',
+    'rules_filters_crypto_sub':
+        'Signal detection, wallet cleaner, pair parsing',
+    'rules_sched_auto': 'Auto Post Scheduler',
+    'rules_sched_power': 'Power Control Schedule',
+    'rules_time_delay': 'Set delay (seconds)',
+    'rules_time_edit_limit': 'Max edit time (seconds)',
+    'rules_proc_raw': 'Process Raw Text',
+    'rules_proc_btn2txt': 'Button To Text',
+    'rules_ai_ocr': 'OCR Image AI',
+    'rules_ai_ocr_sub': 'Optical character recognition via vision AI',
+    'rules_ai_rewrite': 'Smart AI Rewrite',
+    'rules_ai_rewrite_sub': 'LLM intelligent content rephrasing',
+    'rules_ai_digest': 'News Digest',
+    'rules_ai_digest_sub': 'Automated news summary bullets',
+    'rules_replace_title': 'Replace Rules',
+    'rules_replace_summary': '{count} replacement(s) applied in order',
+    'rules_replace_empty':
+        'No replace rules yet. Add one to rewrite message text.',
+    'rules_replace_add': 'Add replacement',
+    'rules_replace_find': 'Find text',
+    'rules_replace_find_required': 'Text to find is required',
+    'rules_replace_with': 'Replace with',
+    'rules_replace_with_hint': 'Leave empty to remove the matched text',
+    'rules_replace_remove': '(removed)',
+    'rules_replace_move_up': 'Move up',
+    'rules_ai_pick_title': 'AI Configuration',
+    'rules_ai_pick_none': 'No AI (direct forwarding)',
+    'rules_ai_pick_empty':
+        'No AI configurations yet. Create one from the AI screen.',
     'rules_filters': 'Filters',
     'rules_filter_mode': 'Filter mode',
     'rules_media_mode': 'Media handling',
@@ -274,6 +331,7 @@ class AppMessages {
     Locale('es'),
     Locale('fr'),
     Locale('it'),
+    Locale('zh'),
   ];
 
   static const en = _en;
@@ -298,6 +356,8 @@ class AppMessages {
         return AppMessagesFr.instance.get(key, params: params);
       case 'it':
         return AppMessagesIt.instance.get(key, params: params);
+      case 'zh':
+        return AppMessagesZh.instance.get(key, params: params);
       default:
         return _en.get(key, params: params);
     }

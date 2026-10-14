@@ -185,6 +185,7 @@ class ForwardRule {
     this.headerTemplate = '',
     this.footerTemplate = '',
     this.aiConfigId = '',
+    this.replacements = const {},
     this.useVipRouting = false,
     this.blockVoice = false,
     this.blockStickers = false,
@@ -269,6 +270,10 @@ class ForwardRule {
   final String footerTemplate;
   final String aiConfigId;
 
+  /// Per-task text replace rules: find -> replace. Applied by the core
+  /// pipeline in deterministic order; empty string replaces with removal.
+  final Map<String, String> replacements;
+
   /// Bot & Web parity media toggles
   final bool blockVoice;
   final bool blockStickers;
@@ -299,6 +304,7 @@ class ForwardRule {
     String? headerTemplate,
     String? footerTemplate,
     String? aiConfigId,
+    Map<String, String>? replacements,
     bool? blockVoice,
     bool? blockStickers,
     bool? removeEmojis,
@@ -347,6 +353,7 @@ class ForwardRule {
     headerTemplate: headerTemplate ?? this.headerTemplate,
     footerTemplate: footerTemplate ?? this.footerTemplate,
     aiConfigId: aiConfigId ?? this.aiConfigId,
+    replacements: replacements ?? this.replacements,
     blockVoice: blockVoice ?? this.blockVoice,
     blockStickers: blockStickers ?? this.blockStickers,
     removeEmojis: removeEmojis ?? this.removeEmojis,
@@ -404,6 +411,7 @@ class ForwardRule {
     'smart_ai_rewrite': smartAiRewrite,
     'news_digest': newsDigest,
     'watermark': watermark,
+    'replacements': replacements,
     'ai_creativity': aiCreativity,
     'ai_max_tokens': aiMaxTokens,
     'paid_addons': paidAddons,
@@ -504,6 +512,12 @@ class ForwardRule {
       watermark:
           (json['watermark'] as String?) ??
           (meta['watermark'] as String? ?? ''),
+      replacements:
+          meta['replacements'] is Map
+              ? (meta['replacements'] as Map).map(
+                (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
+              )
+              : const {},
       aiCreativity:
           (json['ai_creativity'] as num?)?.toDouble() ??
           ((meta['ai_creativity'] as num?)?.toDouble() ?? 0.7),

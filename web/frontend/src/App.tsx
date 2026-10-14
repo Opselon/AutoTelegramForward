@@ -69,7 +69,21 @@ import type {
 } from './types'
 
 export function App() {
-  const [lang, setLang] = useState<'fa' | 'en'>('fa')
+  // Language follows the user, not a hardcoded default:
+  // previously this defaulted to 'fa' so every user's first dashboard render
+  // was Persian even when their account language was English.
+  const [lang, setLang] = useState<'fa' | 'en'>(() => {
+    try {
+      const stored = localStorage.getItem('atf_lang')
+      if (stored === 'fa' || stored === 'en') return stored
+    } catch { /* storage blocked */ }
+    const nav = (navigator.language || 'en').toLowerCase()
+    return nav.startsWith('fa') ? 'fa' : 'en'
+  })
+
+  useEffect(() => {
+    try { localStorage.setItem('atf_lang', lang) } catch { /* ignore */ }
+  }, [lang])
   const [activeTab, setActiveTab] = useState<'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('rules')
   const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(null)
   const [rules, setRules] = useState<ForwardRule[]>([])

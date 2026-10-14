@@ -291,6 +291,26 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             rows = await self._rules.list_by_owner(owner)
         return pb.ListRulesResponse(rules=[_rule_pb(r) for r in rows])
 
+    async def GetRule(self, request, context):
+        owner = int(request.owner_user_id or 0)
+        if not owner:
+            # Fail-closed: an unscoped single-row read must never return a row.
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("owner_user_id is required")
+            return pb.ForwardRule()
+        get_owned = getattr(self._rules, "get_owned", None)
+        if get_owned is None:
+            entity = await self._rules.get_by_id(request.rule_id)
+            if entity is None or int(getattr(entity, "owner_user_id", 0) or 0) != owner:
+                entity = None
+        else:
+            entity = await get_owned(request.rule_id, owner)
+        if entity is None:
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details("rule not found")
+            return pb.ForwardRule()
+        return _rule_pb(entity)
+
     async def CreateRule(self, request, context):
         from ...domain.entities import ForwardRule as Entity
         from ...domain.value_objects import ForwardMode as FM, RoutingType as RT
