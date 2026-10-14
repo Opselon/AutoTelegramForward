@@ -1989,3 +1989,77 @@ func (h *Handlers) SetPVResponder(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, cfg)
 }
+
+// ---------------------------------------------------------- audit event queries
+// QueryAuditEvents serves GET /audit/events — tenant-scoped centralized audit
+// event search. The tenant scope is resolved server-side from the authenticated
+// principal; only admins may omit it (cross-tenant operational view).
+func (h *Handlers) QueryAuditEvents(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	id := identity(r)
+	if h.c.Audit == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "audit backend unavailable"})
+		return
+	}
+	q := &pb.QueryAuditEventsRequest{
+		CorrelationId: r.URL.Query().Get("correlation_id"),
+		OperationId:   r.URL.Query().Get("operation_id"),
+		FeatureId:     r.URL.Query().Get("feature_id"),
+		Service:       r.URL.Query().Get("service"),
+		Severity:      strings.ToUpper(r.URL.Query().Get("severity")),
+		EventCategory: r.URL.Query().Get("event_category"),
+		Outcome:       strings.ToUpper(r.URL.Query().Get("outcome")),
+	}
+	var err error
+	if v := r.URL.Query().Get("since"); v != "" {
+		if q.Since, err = strconv.ParseInt(v, 10, 64); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid since"})
+			return
+		}
+	}
+	if v := r.URL.Query().Get("until"); v != "" {
+		if q.Until, err = strconv.ParseInt(v, 10, 64); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid until"})
+			return
+		}
+	}
+	limit := 100
+	if v := r.URL.Query().Get("limit"); v != "" {
+		parsed, parseErr := strconv.Atoi(v)
+		if parseErr != nil || parsed < 1 || parsed > 500 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid limit (1-500)"})
+			return
+		}
+		limit = parsed
+	}
+	q.Limit = int32(limit) // safe: limit ∈ [1, 500]
+	if v := r.URL.Query().Get("offset"); v != "" {
+		off, err := strconv.Atoi(v)
+		if err != nil || off < 0 || off > 1_000_000 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid offset"})
+			return
+		}
+		q.Offset = int32(off) //nolint:gosec // bounded to [0, 1_000_000]
+	}
+	// Fail-closed tenant scoping: normal tenants are pinned to their own
+	// numeric user ID; only admins may query across tenants.
+	if !id.IsAdmin {
+		if id.UserID == 0 {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "tenant scope required"})
+			return
+		}
+		q.OwnerUserId = id.UserID
+	} else if v := r.URL.Query().Get("owner_user_id"); v != "" {
+		if q.OwnerUserId, err = strconv.ParseInt(v, 10, 64); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid owner_user_id"})
+			return
+		}
+	}
+	resp, err := h.c.Audit.QueryAuditEvents(ctx, q)
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}

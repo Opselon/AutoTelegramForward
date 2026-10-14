@@ -1664,6 +1664,108 @@ var SystemStatusControlService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	AuditControlService_QueryAuditEvents_FullMethodName = "/autoforward.AuditControlService/QueryAuditEvents"
+)
+
+// AuditControlServiceClient is the client API for AuditControlService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type AuditControlServiceClient interface {
+	QueryAuditEvents(ctx context.Context, in *QueryAuditEventsRequest, opts ...grpc.CallOption) (*QueryAuditEventsResponse, error)
+}
+
+type auditControlServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAuditControlServiceClient(cc grpc.ClientConnInterface) AuditControlServiceClient {
+	return &auditControlServiceClient{cc}
+}
+
+func (c *auditControlServiceClient) QueryAuditEvents(ctx context.Context, in *QueryAuditEventsRequest, opts ...grpc.CallOption) (*QueryAuditEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryAuditEventsResponse)
+	err := c.cc.Invoke(ctx, AuditControlService_QueryAuditEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AuditControlServiceServer is the server API for AuditControlService service.
+// All implementations must embed UnimplementedAuditControlServiceServer
+// for forward compatibility.
+type AuditControlServiceServer interface {
+	QueryAuditEvents(context.Context, *QueryAuditEventsRequest) (*QueryAuditEventsResponse, error)
+	mustEmbedUnimplementedAuditControlServiceServer()
+}
+
+// UnimplementedAuditControlServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAuditControlServiceServer struct{}
+
+func (UnimplementedAuditControlServiceServer) QueryAuditEvents(context.Context, *QueryAuditEventsRequest) (*QueryAuditEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method QueryAuditEvents not implemented")
+}
+func (UnimplementedAuditControlServiceServer) mustEmbedUnimplementedAuditControlServiceServer() {}
+func (UnimplementedAuditControlServiceServer) testEmbeddedByValue()                             {}
+
+// UnsafeAuditControlServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AuditControlServiceServer will
+// result in compilation errors.
+type UnsafeAuditControlServiceServer interface {
+	mustEmbedUnimplementedAuditControlServiceServer()
+}
+
+func RegisterAuditControlServiceServer(s grpc.ServiceRegistrar, srv AuditControlServiceServer) {
+	// If the following call panics, it indicates UnimplementedAuditControlServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AuditControlService_ServiceDesc, srv)
+}
+
+func _AuditControlService_QueryAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAuditEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuditControlServiceServer).QueryAuditEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuditControlService_QueryAuditEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuditControlServiceServer).QueryAuditEvents(ctx, req.(*QueryAuditEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AuditControlService_ServiceDesc is the grpc.ServiceDesc for AuditControlService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AuditControlService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "autoforward.AuditControlService",
+	HandlerType: (*AuditControlServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "QueryAuditEvents",
+			Handler:    _AuditControlService_QueryAuditEvents_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "autoforward.proto",
+}
+
+const (
 	LogControlService_Log_FullMethodName       = "/autoforward.LogControlService/Log"
 	LogControlService_QueryLogs_FullMethodName = "/autoforward.LogControlService/QueryLogs"
 	LogControlService_LogStats_FullMethodName  = "/autoforward.LogControlService/LogStats"

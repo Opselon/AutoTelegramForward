@@ -265,6 +265,8 @@ class DurableMessagePipeline:
         ai_transformer: Optional[Any] = None,
         prompt_service: Optional[Any] = None,
         pool: Optional[Any] = None,
+        log_client: Optional[Any] = None,
+        audit_repo: Optional[Any] = None,
     ) -> None:
         self._rules = rule_repo
         self._filters = filter_repo
@@ -278,10 +280,52 @@ class DurableMessagePipeline:
         self._ai_transformer = ai_transformer
         self._prompt_service = prompt_service
         self._pool = pool
+        self._log_client = log_client
+        self._audit_repo = audit_repo
         self.metrics = PipelineMetrics()
 
     # -----------------------------------------------------------------
     # Main Entry Point
+    # -----------------------------------------------------------------
+    async def _audit(self, ctx: "PipelineContext", event_type: str, outcome: str,
+                     severity: str = "INFO", reason_code: str = "", rule_id: str = "",
+                     feature_id: str = "FWD_MESSAGE_DELIVERY", **kw) -> None:
+        """Emit one structured audit event through the Central Logger (best-effort,
+        never blocks forwarding). Audit events carry ids and reason codes — never
+        message content (mission §12 minimum-necessary principle)."""
+        if self._log_client is None:
+            return
+        try:
+            from core.infrastructure.persistence.audit_events import AuditEvent
+            evt = AuditEvent(
+                event_type=event_type, service="core", outcome=outcome,
+                severity=severity, reason_code=reason_code,
+                correlation_id=ctx.correlation_id, rule_id=rule_id,
+                feature_id=feature_id, **kw,
+            )
+            detail = evt.to_dict()
+            self._log_client.log(
+                severity if severity != "WARN" else "WARN",
+                "core", "audit",
+                f"{event_type} outcome={outcome}" + (f" reason={reason_code}" if reason_code else ""),
+                detail,
+            )
+        except Exception:
+            pass  # never break the forwarding path for observability
+        # Durable audit write (PostgreSQL audit_events) when available — also
+        # best-effort: a Logger outage must never stop forwarding (§9.1).
+        if self._audit_repo is not None:
+            try:
+                from core.infrastructure.persistence.audit_events import AuditEvent
+                await self._audit_repo.record(AuditEvent(
+                    event_type=event_type, service="core", outcome=outcome,
+                    severity=severity, reason_code=reason_code,
+                    correlation_id=ctx.correlation_id, rule_id=rule_id,
+                    feature_id=feature_id, **kw,
+                ))
+            except Exception:
+                pass
+
     # -----------------------------------------------------------------
     async def process(self, raw_message: Any, trigger: str = "NEW_MESSAGE") -> PipelineContext:
         ctx = PipelineContext(trigger=trigger, raw_message=raw_message)
@@ -328,6 +372,10 @@ class DurableMessagePipeline:
 
         if not valid_rules:
             ctx.record_stage(PipelineStage.FILTER, False, reason="no_matching_rules")
+            reason_code = "RULE_NOT_MATCHED" if active_rules else "RULE_DISABLED"
+            await self._audit(ctx, "forward.dropped", "FAILED", reason_code=reason_code,
+                              message_id=str(payload.message_id),
+                              result_summary=f"no matching rule for chat {payload.chat_id}")
             if not active_rules:
                 logger.info(
                     "[PIPELINE:NO_RULES] [%s] Message %s from chat %s: No active forward rules exist for this source",
@@ -367,6 +415,9 @@ class DurableMessagePipeline:
 
         if getattr(rule, "is_paused", False) and getattr(rule, "is_currently_paused", lambda: True)():
             ctx.record_stage(PipelineStage.FILTER, False, reason="rule_paused")
+            await self._audit(ctx, "forward.dropped", "FAILED", reason_code="RULE_PAUSED",
+                              rule_id=rule.id, message_id=str(payload.message_id),
+                              result_summary="rule is paused")
             logger.info(
                 "[PIPELINE:DROP] [%s] Rule %s is paused. Skipping forwarding for msg %s",
                 ctx.correlation_id[:8], rule.id[:8], payload.message_id,
@@ -591,12 +642,19 @@ class DurableMessagePipeline:
                         target_chat_id=str(target),
                     )
                     self.metrics.enqueued_total += 1
+                    await self._audit(ctx, "forward.enqueued", "ACCEPTED",
+                                      rule_id=rule.id, message_id=str(payload.message_id),
+                                      queue_job_id=job_id, result_summary=f"queued to {target}")
                     logger.info(
                         "[PIPELINE:ENQUEUE] [%s] Rule %s enqueued msg %s -> target %s (job_id=%s)",
                         ctx.correlation_id[:8], rule.id[:8], payload.message_id, target, job_id,
                     )
                 else:
                     self.metrics.backpressure_drops += 1
+                    await self._audit(ctx, "forward.enqueue_failed", "FAILED",
+                                      severity="ERROR", reason_code="QUEUE_ENQUEUE_FAILED",
+                                      rule_id=rule.id, message_id=str(payload.message_id),
+                                      result_summary=f"backpressure drop for target {target}")
                     logger.error(
                         "[PIPELINE:ENQUEUE_DROP] [%s] Rule %s failed to enqueue msg %s for target %s (queue full / backpressure drop)",
                         ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,

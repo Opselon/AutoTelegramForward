@@ -87,6 +87,8 @@ func main() {
 	dashMux.HandleFunc("GET /logs", h.QueryLogs)
 	dashMux.HandleFunc("GET /logs/stats", h.LogStats)
 	dashMux.HandleFunc("POST /logs/purge", h.PurgeLogs)
+	// Centralized audit event queries — tenant-scoped server-side (Phase Three).
+	dashMux.HandleFunc("GET /audit/events", h.QueryAuditEvents)
 	dashMux.HandleFunc("GET /health/services", h.ServicesHealth)
 	// AI Rewrite prompt templates — authenticated + ownership-scoped (same surface
 	// as /ai-configs). NOT on /api/v1/*: that prefix bypasses RequireAuth, so

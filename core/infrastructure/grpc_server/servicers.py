@@ -1224,3 +1224,67 @@ class BackupControlServicer(pb_grpc.BackupControlServiceServicer):
         except Exception as exc:
             logger.warning("BackupImport failed: %s", exc)
             return pb.BackupImportResponse(success=False, error=str(exc))
+
+
+class AuditControlServicer(pb_grpc.AuditControlServiceServicer):
+    """Tenant-scoped audit event queries backed by the PostgreSQL audit store
+    (mission Phase Three). The Go API resolves the authorized tenant from the
+    authenticated principal and passes it as owner_user_id — this servicer
+    never trusts client-side tenant claims beyond that contract."""
+
+    def __init__(self, audit_repo):
+        self._audit = audit_repo
+
+    async def QueryAuditEvents(self, request, context):
+        if self._audit is None:
+            return pb.QueryAuditEventsResponse(events=[], total=0)
+        rows = await self._audit.query(
+            tenant_id=str(request.owner_user_id) if request.owner_user_id else "",
+            correlation_id=request.correlation_id or "",
+            operation_id=request.operation_id or "",
+            feature_id=request.feature_id or "",
+            service=request.service or "",
+            severity=request.severity or "",
+            event_category=request.event_category or "",
+            outcome=request.outcome or "",
+            since=request.since or 0,
+            until=request.until or 0,
+            limit=request.limit or 100,
+            offset=request.offset or 0,
+        )
+
+        def _s(v):
+            return "" if v is None else str(v)
+
+        events = [
+            pb.AuditEventEntry(
+                event_id=_s(r.get("event_id")),
+                schema_version=_s(r.get("schema_version")),
+                event_type=_s(r.get("event_type")),
+                event_category=_s(r.get("event_category")),
+                severity=_s(r.get("severity")),
+                outcome=_s(r.get("outcome")),
+                ts_utc=int(r.get("ts_utc") or 0),
+                service=_s(r.get("service")),
+                correlation_id=_s(r.get("correlation_id")),
+                operation_id=_s(r.get("operation_id")),
+                tenant_id=_s(r.get("tenant_id")),
+                actor_type=_s(r.get("actor_type")),
+                actor_id=_s(r.get("actor_id")),
+                feature_id=_s(r.get("feature_id")),
+                action=_s(r.get("action")),
+                resource_type=_s(r.get("resource_type")),
+                resource_id=_s(r.get("resource_id")),
+                rule_id=_s(r.get("rule_id")),
+                queue_job_id=_s(r.get("queue_job_id")),
+                reason_code=_s(r.get("reason_code")),
+                duration_ms=int(r.get("duration_ms") or 0),
+                error_code=_s(r.get("error_code")),
+                error_class=_s(r.get("error_class")),
+                retryable=bool(r.get("retryable") or False),
+                result_summary=_s(r.get("result_summary")),
+                metadata_json=_s(r.get("metadata")),
+            )
+            for r in rows
+        ]
+        return pb.QueryAuditEventsResponse(events=events, total=len(events))

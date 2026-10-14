@@ -145,8 +145,12 @@ def build_container(cfg: Config) -> dict:
             redacted_url = "postgresql://[REDACTED]"
         logger.info("Selected authoritative database backend: PostgreSQL (%s)", redacted_url)
         pg_pool = _create_postgres_pool(cfg.database_url)
+        # Durable audit outbox shares the PostgreSQL boundary (mission Phase Five).
+        from core.infrastructure.persistence.audit_outbox import AuditOutboxRepository
+        audit_repo = AuditOutboxRepository(pg_pool)
     else:
         logger.info("Selected authoritative database backend: SQLite (%s)", cfg.db_path)
+        audit_repo = None
 
     db = SqliteDatabase(cfg.db_path)
     session_repo = SqliteSessionRepository(db, crypto)
@@ -241,6 +245,7 @@ def build_container(cfg: Config) -> dict:
         ai_transformer=ai_transformer,
         prompt_service=prompt_service,
         pool=pool,
+        audit_repo=audit_repo,
     )
     from core.infrastructure.telegram.pv_responder import AIPVResponder  # noqa: E402
     pv_responder = AIPVResponder(ai_repo=ai_repo, ai_factory=factory, db=db)
@@ -294,6 +299,7 @@ def build_container(cfg: Config) -> dict:
         "metrics": metrics_repo, "rule_stats": rule_stats_repo,
         "users": user_repo,
         "msg_map": msg_map_repo,
+        "audit_repo": audit_repo,
         "queue_repo": queue_repo,
         "queue_manager": queue_manager,
         "sync_engine": sync_engine,
@@ -347,6 +353,10 @@ async def serve_grpc(container: dict, cfg: Config):
             message_map_repo=container.get("msg_map_repo"),
         ),
         server,
+    )
+    # Centralized audit events (Phase Three): tenant-scoped durable queries.
+    pb_grpc.add_AuditControlServiceServicer_to_server(
+        servicers.AuditControlServicer(container.get("audit_repo")), server,
     )
     from core.infrastructure.grpc_server.account_servicer import AccountControlServicer
 
@@ -473,6 +483,9 @@ async def main() -> None:
     # build_container before the LogClient existed) so delivery successes
     # reach the central log too.
     container["queue_manager"]._log_client = log_client
+    # Same for the forwarding pipeline's audit emitter (Phase Six telemetry).
+    if getattr(container["pipeline"], "_log_client", None) is None:
+        container["pipeline"]._log_client = log_client
 
     # TASK 03 / audit D1: persisted auth state machine, so a login in
     # progress survives a restart instead of vanishing without explanation.
