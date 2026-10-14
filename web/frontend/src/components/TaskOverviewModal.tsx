@@ -28,7 +28,16 @@ interface Props {
   lang?: 'fa' | 'en'
 }
 
-type TabType = 'overview' | 'advanced' | 'all_addons'
+type TabType =
+  | 'overview'
+  | 'advanced'
+  | 'all_addons'
+  | 'replace'
+  | 'blacklist'
+  | 'whitelist'
+  | 'cleaner'
+  | 'filters'
+  | 'delay'
 type FeatureGroupType = 'all' | 'crypto' | 'mmo' | 'content'
 
 export function TaskOverviewModal({
@@ -48,6 +57,19 @@ export function TaskOverviewModal({
   const [saving, setSaving] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
   const [showTopicPrompt, setShowTopicPrompt] = useState(false)
+
+  // Subview input states for v2.0 cards
+  const [newReplaceFrom, setNewReplaceFrom] = useState('')
+  const [newReplaceTo, setNewReplaceTo] = useState('')
+  const [newBlWord, setNewBlWord] = useState('')
+  const [newWlWord, setNewWlWord] = useState('')
+  const [newCleanerPattern, setNewCleanerPattern] = useState('')
+
+  const listPatterns = (val: any): string[] => {
+    if (!val) return []
+    if (Array.isArray(val)) return val
+    return []
+  }
 
   useEffect(() => {
     if (rule) {
@@ -636,42 +658,42 @@ export function TaskOverviewModal({
                       icon: '< >',
                       iconColor: '#a855f7',
                       status: `Activated: ${Object.keys((draft as any).replacements || {}).length}`,
-                      onClick: () => setCurrentTab('advanced'),
+                      onClick: () => setCurrentTab('replace'),
                     },
                     {
                       title: 'Blacklist',
                       icon: '≡ₓ',
                       iconColor: '#ef4444',
                       status: `Activated: ${(draft.blacklist_keywords || []).length}`,
-                      onClick: () => setCurrentTab('advanced'),
+                      onClick: () => setCurrentTab('blacklist'),
                     },
                     {
                       title: 'Whitelist',
                       icon: '≡✓',
                       iconColor: '#22c55e',
                       status: `Activated: ${(draft.whitelist_keywords || []).length}`,
-                      onClick: () => setCurrentTab('advanced'),
+                      onClick: () => setCurrentTab('whitelist'),
                     },
                     {
                       title: 'Cleaner',
                       icon: '∷',
                       iconColor: '#f97316',
                       status: `Activated: ${draft.cleaner_enabled ? '1' : '0'}`,
-                      onClick: () => handleToggle('cleaner_enabled'),
+                      onClick: () => setCurrentTab('cleaner'),
                     },
                     {
                       title: 'Filters',
                       icon: '⊶',
                       iconColor: '#3b82f6',
-                      status: `Activated: ${(draft.duplicate_filters ? 1 : 0)}`,
-                      onClick: () => setCurrentTab('advanced'),
+                      status: `Activated: ${((draft.duplicate_filters ? 1 : 0) + [draft.block_text, draft.block_links, draft.block_voice, draft.block_stickers].filter(Boolean).length)}`,
+                      onClick: () => setCurrentTab('filters'),
                     },
                     {
                       title: 'Set Delay',
                       icon: '⏱',
                       iconColor: '#eab308',
-                      status: `Delay Current: ${draft.forward_delay_seconds || 0}s`,
-                      onClick: () => setCurrentTab('advanced'),
+                      status: `Delay Current: ${draft.forward_delay_seconds || draft.delay_seconds || 0}s`,
+                      onClick: () => setCurrentTab('delay'),
                     },
                   ].map((card) => (
                     <div
@@ -1262,6 +1284,841 @@ export function TaskOverviewModal({
                     </div>
                   )
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* 1. CLEANER ENGINE VIEW (v2.0) */}
+          {currentTab === 'cleaner' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('overview')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#38bdf8',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: 0,
+                  }}
+                >
+                  ← Back to Task Overview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggle('cleaner_enabled')}
+                  style={{
+                    backgroundColor: draft.cleaner_enabled ? '#16a34a' : '#475569',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '16px',
+                    padding: '4px 12px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {draft.cleaner_enabled ? '● Cleaner Active' : '○ Cleaner Inactive'}
+                </button>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '4px' }}>
+                  Automatic Stripping Rules
+                </div>
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '12px' }}>
+                  Cleaned content is stripped before forwarding so sensitive elements never leak to targets.
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {[
+                    { key: 'remove_urls', label: '🔗 Strip URLs' },
+                    { key: 'remove_mentions', label: '👤 Strip Mentions (@)' },
+                    { key: 'remove_hashtags', label: '#️⃣ Strip Hashtags (#)' },
+                    { key: 'remove_emojis', label: '😀 Strip Emojis' },
+                    { key: 'apply_to_caption', label: '📝 Clean Captions' },
+                    { key: 'case_sensitive', label: '🔤 Case Sensitive' },
+                    { key: 'use_regex', label: '⚙️ Regex Engine' },
+                  ].map((opt) => {
+                    const cfg = (draft.cleaner_config || {}) as any
+                    const isActive = Boolean(cfg[opt.key] ?? false)
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => {
+                          const updatedCfg = { ...cfg, [opt.key]: !isActive }
+                          setDraft({
+                            ...draft,
+                            cleaner_enabled: true,
+                            cleaner_config: updatedCfg,
+                          })
+                        }}
+                        style={{
+                          backgroundColor: isActive ? '#065f46' : '#0f172a',
+                          color: isActive ? '#6ee7b7' : '#94a3b8',
+                          border: `1px solid ${isActive ? '#059669' : '#334155'}`,
+                          borderRadius: '8px',
+                          padding: '8px 10px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <span>{opt.label}</span>
+                        <span>{isActive ? '✔' : '○'}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Patterns to Strip */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                  Custom Patterns to Strip
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                  <input
+                    type="text"
+                    placeholder="Enter word, phrase, or ad text..."
+                    value={newCleanerPattern}
+                    onChange={(e) => setNewCleanerPattern(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newCleanerPattern.trim()) {
+                        e.preventDefault()
+                        const cfg = (draft.cleaner_config || {}) as any
+                        const pats = listPatterns(cfg.patterns)
+                        if (!pats.includes(newCleanerPattern.trim())) {
+                          setDraft({
+                            ...draft,
+                            cleaner_enabled: true,
+                            cleaner_config: { ...cfg, patterns: [...pats, newCleanerPattern.trim()] },
+                          })
+                          setNewCleanerPattern('')
+                        }
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #475569',
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newCleanerPattern.trim()) return
+                      const cfg = (draft.cleaner_config || {}) as any
+                      const pats = listPatterns(cfg.patterns)
+                      if (!pats.includes(newCleanerPattern.trim())) {
+                        setDraft({
+                          ...draft,
+                          cleaner_enabled: true,
+                          cleaner_config: { ...cfg, patterns: [...pats, newCleanerPattern.trim()] },
+                        })
+                        setNewCleanerPattern('')
+                      }
+                    }}
+                    style={{
+                      backgroundColor: '#f97316',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '0 14px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {listPatterns((draft.cleaner_config as any)?.patterns).map((p, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        backgroundColor: '#0f172a',
+                        border: '1px solid #475569',
+                        color: '#f8fafc',
+                        borderRadius: '12px',
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <span>{p}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cfg = (draft.cleaner_config || {}) as any
+                          const pats = listPatterns(cfg.patterns).filter((_, i) => i !== idx)
+                          setDraft({
+                            ...draft,
+                            cleaner_config: { ...cfg, patterns: pats },
+                          })
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: '12px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  {listPatterns((draft.cleaner_config as any)?.patterns).length === 0 && (
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>No custom strip patterns added yet.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. TEXT REPLACEMENTS VIEW (< >) */}
+          {currentTab === 'replace' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('overview')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#38bdf8',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  ← Back to Task Overview
+                </button>
+                <span style={{ fontSize: '12px', color: '#a855f7', fontWeight: 600 }}>
+                  Active Rules: {Object.keys((draft as any).replacements || {}).length}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                  Add Text Replacement
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px', gap: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Find text..."
+                    value={newReplaceFrom}
+                    onChange={(e) => setNewReplaceFrom(e.target.value)}
+                    style={{
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #475569',
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Replace with..."
+                    value={newReplaceTo}
+                    onChange={(e) => setNewReplaceTo(e.target.value)}
+                    style={{
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #475569',
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newReplaceFrom.trim()) return
+                      const reps = { ...(draft.replacements || {}), [newReplaceFrom.trim()]: newReplaceTo }
+                      setDraft({ ...draft, replacements: reps })
+                      setNewReplaceFrom('')
+                      setNewReplaceTo('')
+                    }}
+                    style={{
+                      backgroundColor: '#a855f7',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Replacements List */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
+                  Active Replacements
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {Object.entries((draft as any).replacements || {}).map(([from, to], idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        backgroundColor: '#0f172a',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        border: '1px solid #334155',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                        <code style={{ color: '#f87171' }}>{from}</code>
+                        <span style={{ color: '#64748b' }}>➔</span>
+                        <code style={{ color: '#4ade80' }}>{to as string}</code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const reps = { ...((draft as any).replacements || {}) }
+                          delete reps[from]
+                          setDraft({ ...draft, replacements: reps })
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          padding: '2px',
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                  {Object.keys((draft as any).replacements || {}).length === 0 && (
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>No text replacements configured.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 3. BLACKLIST VIEW (≡ₓ) */}
+          {currentTab === 'blacklist' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('overview')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#38bdf8',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  ← Back to Task Overview
+                </button>
+                <span style={{ fontSize: '12px', color: '#ef4444', fontWeight: 600 }}>
+                  Blacklisted: {(draft.blacklist_keywords || []).length}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                  Add Blacklisted Keyword or Domain
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Enter banned word or phrase..."
+                    value={newBlWord}
+                    onChange={(e) => setNewBlWord(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newBlWord.trim()) {
+                        e.preventDefault()
+                        const list = draft.blacklist_keywords || []
+                        if (!list.includes(newBlWord.trim())) {
+                          setDraft({ ...draft, blacklist_keywords: [...list, newBlWord.trim()] })
+                          setNewBlWord('')
+                        }
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #475569',
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newBlWord.trim()) return
+                      const list = draft.blacklist_keywords || []
+                      if (!list.includes(newBlWord.trim())) {
+                        setDraft({ ...draft, blacklist_keywords: [...list, newBlWord.trim()] })
+                        setNewBlWord('')
+                      }
+                    }}
+                    style={{
+                      backgroundColor: '#ef4444',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '0 14px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
+                  Blocked Words
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {(draft.blacklist_keywords || []).map((w, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        backgroundColor: '#450a0a',
+                        border: '1px solid #991b1b',
+                        color: '#fca5a5',
+                        borderRadius: '12px',
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <span>{w}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const list = (draft.blacklist_keywords || []).filter((_, i) => i !== idx)
+                          setDraft({ ...draft, blacklist_keywords: list })
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#f87171',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: '12px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  {(draft.blacklist_keywords || []).length === 0 && (
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>No words in blacklist.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 4. WHITELIST VIEW (≡✓) */}
+          {currentTab === 'whitelist' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('overview')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#38bdf8',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  ← Back to Task Overview
+                </button>
+                <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: 600 }}>
+                  Whitelisted: {(draft.whitelist_keywords || []).length}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                  Add Required Keyword or Domain
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Enter required word or phrase..."
+                    value={newWlWord}
+                    onChange={(e) => setNewWlWord(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newWlWord.trim()) {
+                        e.preventDefault()
+                        const list = draft.whitelist_keywords || []
+                        if (!list.includes(newWlWord.trim())) {
+                          setDraft({ ...draft, whitelist_keywords: [...list, newWlWord.trim()] })
+                          setNewWlWord('')
+                        }
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #475569',
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newWlWord.trim()) return
+                      const list = draft.whitelist_keywords || []
+                      if (!list.includes(newWlWord.trim())) {
+                        setDraft({ ...draft, whitelist_keywords: [...list, newWlWord.trim()] })
+                        setNewWlWord('')
+                      }
+                    }}
+                    style={{
+                      backgroundColor: '#22c55e',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '0 14px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
+                  Required Whitelist Words
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {(draft.whitelist_keywords || []).map((w, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        backgroundColor: '#052e16',
+                        border: '1px solid #15803d',
+                        color: '#86efac',
+                        borderRadius: '12px',
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <span>{w}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const list = (draft.whitelist_keywords || []).filter((_, i) => i !== idx)
+                          setDraft({ ...draft, whitelist_keywords: list })
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#4ade80',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: '12px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  {(draft.whitelist_keywords || []).length === 0 && (
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>No whitelist restrictions (all permitted).</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 5. FILTERS VIEW (⊶) */}
+          {currentTab === 'filters' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('overview')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#38bdf8',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  ← Back to Task Overview
+                </button>
+                <span style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 600 }}>Media & Type Filters</span>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                  Filter Message Types
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[
+                    { key: 'duplicate_filters' as const, label: '🔀 Duplicate Filters (SHA-256 Fingerprint)', active: Boolean(draft.duplicate_filters) },
+                    { key: 'block_text' as const, label: '📝 Block Text Messages', active: Boolean(draft.block_text) },
+                    { key: 'block_voice' as const, label: '🎙 Block Voice Messages', active: Boolean(draft.block_voice) },
+                    { key: 'block_stickers' as const, label: '🎭 Block Stickers', active: Boolean(draft.block_stickers) },
+                    { key: 'block_links' as const, label: '🔗 Block Links', active: Boolean(draft.block_links) },
+                    { key: 'block_video' as const, label: '🎬 Block Video Messages', active: Boolean(draft.block_video) },
+                    { key: 'block_audio' as const, label: '🎵 Block Audio Files', active: Boolean(draft.block_audio) },
+                  ].map((f) => (
+                    <div
+                      key={f.key}
+                      style={{
+                        backgroundColor: '#0f172a',
+                        borderRadius: '8px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        border: '1px solid #334155',
+                      }}
+                    >
+                      <span style={{ fontSize: '12px', color: '#e2e8f0', fontWeight: 500 }}>{f.label}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggle(f.key)}
+                        style={{
+                          backgroundColor: f.active ? '#ef4444' : '#334155',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '12px',
+                          padding: '3px 10px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {f.active ? 'BLOCKED' : 'ALLOWED'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 6. SET DELAY VIEW (⏱) */}
+          {currentTab === 'delay' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('overview')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#38bdf8',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  ← Back to Task Overview
+                </button>
+                <span style={{ fontSize: '12px', color: '#eab308', fontWeight: 600 }}>
+                  Current Delay: {draft.forward_delay_seconds || draft.delay_seconds || 0}s
+                </span>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '6px' }}>
+                  Configure Forward Delay
+                </div>
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '14px' }}>
+                  Adds an asynchronous pause before forwarding each message to prevent Telegram rate limits and simulate natural human posting.
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '6px' }}>
+                    Delay in Seconds: <strong>{draft.forward_delay_seconds || draft.delay_seconds || 0}s</strong>
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="120"
+                    value={draft.forward_delay_seconds || draft.delay_seconds || 0}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value) || 0
+                      setDraft({ ...draft, forward_delay_seconds: v, delay_seconds: v })
+                    }}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                </div>
+
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '8px' }}>
+                  Quick Presets:
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                  {[
+                    { label: '⚡ 0s (Instant)', sec: 0 },
+                    { label: '⏱ 3s', sec: 3 },
+                    { label: '⏱ 5s', sec: 5 },
+                    { label: '⏱ 10s', sec: 10 },
+                    { label: '⏱ 15s', sec: 15 },
+                    { label: '⏱ 30s', sec: 30 },
+                    { label: '⏱ 60s', sec: 60 },
+                    { label: '⏱ 120s', sec: 120 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.sec}
+                      type="button"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          forward_delay_seconds: preset.sec,
+                          delay_seconds: preset.sec,
+                        })
+                      }
+                      style={{
+                        backgroundColor:
+                          (draft.forward_delay_seconds || draft.delay_seconds || 0) === preset.sec
+                            ? '#eab308'
+                            : '#0f172a',
+                        color:
+                          (draft.forward_delay_seconds || draft.delay_seconds || 0) === preset.sec
+                            ? '#000000'
+                            : '#f1f5f9',
+                        border: '1px solid #334155',
+                        borderRadius: '8px',
+                        padding: '8px 4px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}

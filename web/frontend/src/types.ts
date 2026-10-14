@@ -65,6 +65,12 @@ export interface ForwardRule {
   sync_replies?: boolean
   sync_edits?: boolean
   sync_deletes?: boolean
+  block_text?: boolean
+  block_links?: boolean
+  block_voice?: boolean
+  block_stickers?: boolean
+  block_video?: boolean
+  block_audio?: boolean
   crypto_mode?: boolean
   whitelist_keywords?: string[]
   blacklist_keywords?: string[]
@@ -147,6 +153,12 @@ export interface SaveRuleRequest {
   sync_replies?: boolean
   sync_edits?: boolean
   sync_deletes?: boolean
+  block_text?: boolean
+  block_links?: boolean
+  block_voice?: boolean
+  block_stickers?: boolean
+  block_video?: boolean
+  block_audio?: boolean
   crypto_mode?: boolean
   whitelist_keywords?: string[]
   blacklist_keywords?: string[]

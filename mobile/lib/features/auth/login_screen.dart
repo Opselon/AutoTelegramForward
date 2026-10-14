@@ -36,8 +36,21 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    final state = context.read<AppState>();
+    if (state.savedUsername.isNotEmpty) {
+      _usernameCtrl.text = state.savedUsername;
+    }
+    if (state.savedPassword.isNotEmpty) {
+      _passwordCtrl.text = state.savedPassword;
+    }
+  }
+
+  @override
   void dispose() {
-    _usernameCtrl.disposeNavigator();
+    _usernameCtrl.dispose();
+    _passwordCtrl.dispose();
     super.dispose();
   }
 
@@ -65,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordCtrl.text,
       );
       if (!mounted) return;
-      await state.onLoginSuccess(session);
+      await state.onLoginSuccess(session, password: _passwordCtrl.text);
     } on ApiException catch (exc) {
       if (!mounted) return;
       setState(() {
@@ -268,11 +281,5 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
-  }
-}
-
-extension on TextEditingController {
-  void disposeNavigator() {
-    dispose();
   }
 }

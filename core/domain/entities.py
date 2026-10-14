@@ -188,6 +188,13 @@ class ForwardRule:
                 pass
             if self.fallback_mode == "COPY_MESSAGE" and self.metadata.get("fallback_mode"):
                 self.fallback_mode = str(self.metadata["fallback_mode"])
+            if "show_forward_header" in self.metadata:
+                self.show_forward_header = bool(self.metadata["show_forward_header"])
+            if self.delay_seconds == 0.0 and ("forward_delay_seconds" in self.metadata or "delay_seconds" in self.metadata):
+                try:
+                    self.delay_seconds = float(self.metadata.get("forward_delay_seconds") or self.metadata.get("delay_seconds") or 0.0)
+                except (ValueError, TypeError):
+                    pass
         # Fallback mode MUST NEVER be native forward
         if self.fallback_mode is None:
             self.fallback_mode = ForwardMode.COPY_MESSAGE
@@ -252,6 +259,12 @@ class ForwardRule:
             return {}
         reps = self.metadata.get("replacements")
         return reps if isinstance(reps, dict) else {}
+
+    @replacements.setter
+    def replacements(self, val: Dict[str, str]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["replacements"] = dict(val or {})
 
     @property
     def header(self) -> str:
@@ -428,6 +441,12 @@ class ForwardRule:
     def sync_deletes(self) -> bool:
         return bool(self.metadata.get("sync_deletes", False)) if isinstance(self.metadata, dict) else False
 
+    @sync_deletes.setter
+    def sync_deletes(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["sync_deletes"] = bool(val)
+
     @property
     def album_mode(self) -> str:
         return str(self.metadata.get("album_mode") or "album") if isinstance(self.metadata, dict) else "album"
@@ -483,7 +502,12 @@ class ForwardRule:
     # per-task configuration, not a shared resource.
     @property
     def cleaner_enabled(self) -> bool:
-        return bool(self.metadata.get("cleaner_enabled", False)) if isinstance(self.metadata, dict) else False
+        if isinstance(self.metadata, dict) and "cleaner_enabled" in self.metadata:
+            return bool(self.metadata["cleaner_enabled"])
+        # If legacy cleaner fields are active, consider cleaner enabled
+        if bool(self.remove_links or self.clean_usernames or self.clean_hashtags or self.remove_emojis or self.clean_custom_words):
+            return True
+        return False
 
     @cleaner_enabled.setter
     def cleaner_enabled(self, val: bool) -> None:
@@ -508,20 +532,41 @@ class ForwardRule:
         """Materialize the configured cleaner, or None when disabled/empty."""
         if not self.cleaner_enabled:
             return None
-        cfg = self.cleaner_config
-        if not cfg:
+        raw_cfg = self.cleaner_config
+        if not isinstance(raw_cfg, dict) or not raw_cfg:
+            # Check if any legacy cleaner settings are present
+            if not (self.clean_custom_words or self.remove_links or self.clean_usernames or self.clean_hashtags or self.remove_emojis):
+                return None
+            raw_cfg = {}
+        cfg = dict(raw_cfg)
+
+        # Merge legacy fields if not explicitly specified in cfg
+        patterns = list(cfg.get("patterns") or []) if isinstance(cfg.get("patterns"), list) else []
+        if self.clean_custom_words:
+            for w in self.clean_custom_words:
+                sw = str(w).strip()
+                if sw and sw not in patterns:
+                    patterns.append(sw)
+
+        remove_urls = bool(cfg.get("remove_urls", self.remove_links))
+        remove_mentions = bool(cfg.get("remove_mentions", self.clean_usernames))
+        remove_hashtags = bool(cfg.get("remove_hashtags", self.clean_hashtags))
+        remove_emojis = bool(cfg.get("remove_emojis", self.remove_emojis))
+
+        clean_pats = [str(p) for p in patterns if isinstance(p, str) and p.strip()]
+        if not clean_pats and not (remove_urls or remove_mentions or remove_hashtags or remove_emojis):
             return None
+
         try:
             return CleanerRule(
                 id=f"{self.id}:cleaner",
                 name=str(cfg.get("name") or "cleaner"),
-                patterns=[str(p) for p in (cfg.get("patterns") or [])
-                          if isinstance(p, str) and p.strip()],
+                patterns=clean_pats,
                 use_regex=bool(cfg.get("use_regex", False)),
-                remove_urls=bool(cfg.get("remove_urls", False)),
-                remove_mentions=bool(cfg.get("remove_mentions", False)),
-                remove_hashtags=bool(cfg.get("remove_hashtags", False)),
-                remove_emojis=bool(cfg.get("remove_emojis", False)),
+                remove_urls=remove_urls,
+                remove_mentions=remove_mentions,
+                remove_hashtags=remove_hashtags,
+                remove_emojis=remove_emojis,
                 apply_to_caption=bool(cfg.get("apply_to_caption", True)),
                 case_sensitive=bool(cfg.get("case_sensitive", False)),
                 is_active=True,

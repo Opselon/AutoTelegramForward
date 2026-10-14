@@ -123,5 +123,32 @@ void main() {
       final stored = await tokenStore.read();
       expect(stored.token, isEmpty);
     });
+
+    test('retains saved credentials and password across restoration', () async {
+      await tokenStore.write(
+        StoredCredentials(
+          serverUrl: 'https://custom.atf.com/',
+          token: 'saved-token',
+          userId: 42,
+          username: 'tester',
+          password: 'SecretPassword123!',
+          isAdmin: false,
+          expiresAtIso:
+              DateTime.now().add(const Duration(days: 5)).toIso8601String(),
+        ),
+      );
+
+      final state = AppState(
+        env: env,
+        tokenStore: tokenStore,
+        preferenceStore: prefStore,
+      );
+      await state.restore();
+
+      expect(state.isAuthenticated, isTrue);
+      expect(state.username, 'tester');
+      expect(state.savedUsername, 'tester');
+      expect(state.savedPassword, 'SecretPassword123!');
+    });
   });
 }

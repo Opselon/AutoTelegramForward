@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Dict
 
-SUPPORTED_LANGUAGES = ["en", "fa", "ru", "zh"]
+SUPPORTED_LANGUAGES = ["en", "fa", "ru", "zh", "pt", "uz", "id", "es", "fr", "it"]
 DEFAULT_LANGUAGE = "en"
 
 _FALLBACK = DEFAULT_LANGUAGE

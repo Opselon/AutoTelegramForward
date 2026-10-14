@@ -37,6 +37,8 @@ class AppState extends ChangeNotifier {
   String? _token;
   int _userId = 0;
   String _username = '';
+  String _savedUsername = '';
+  String _savedPassword = '';
   bool _isAdmin = false;
   SessionStatus _status;
   ThemeMode _themeMode;
@@ -47,6 +49,8 @@ class AppState extends ChangeNotifier {
   String? get authToken => _token;
   int get userId => _userId;
   String get username => _username;
+  String get savedUsername => _savedUsername;
+  String get savedPassword => _savedPassword;
   bool get isAdmin => _isAdmin;
   SessionStatus get status => _status;
   ThemeMode get themeMode => _themeMode;
@@ -59,6 +63,9 @@ class AppState extends ChangeNotifier {
   /// [authenticated] or [unauthenticated]; never throws.
   Future<void> restore() async {
     final creds = await tokenStore.read();
+    _savedUsername = creds.username;
+    _savedPassword = creds.password;
+
     final storedLanguage = await preferenceStore.getString(PrefKeys.language);
     final storedTheme = await preferenceStore.getString(PrefKeys.themeMode);
     final storedServer = await preferenceStore.getString(
@@ -84,6 +91,32 @@ class AppState extends ChangeNotifier {
       _isAdmin = creds.isAdmin;
       _serverUrl = creds.serverUrl;
       _status = SessionStatus.authenticated;
+    } else if (creds.username.isNotEmpty &&
+        creds.password.isNotEmpty &&
+        _serverUrl.isNotEmpty) {
+      // Re-login seamlessly with saved credentials so user is not prompted again when app is closed and reopened
+      try {
+        final client = buildApiClient();
+        final session = await client.login(
+          username: creds.username,
+          password: creds.password,
+        );
+        _token = session.token;
+        _userId = session.userId;
+        _username = session.username;
+        _isAdmin = session.isAdmin;
+        _serverUrl = session.serverUrl;
+        _status = SessionStatus.authenticated;
+      } catch (_) {
+        _token = null;
+        _userId = 0;
+        _username = creds.username;
+        _isAdmin = false;
+        _status =
+            creds.token.isNotEmpty
+                ? SessionStatus.expired
+                : SessionStatus.unauthenticated;
+      }
     } else {
       _token = null;
       _userId = 0;
@@ -146,8 +179,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> onLoginSuccess(AuthSession session) async {
+  Future<void> onLoginSuccess(
+    AuthSession session, {
+    String password = '',
+  }) async {
     await preferenceStore.setString(PrefKeys.lastServerUrl, session.serverUrl);
+    _savedUsername = session.username;
+    if (password.isNotEmpty) {
+      _savedPassword = password;
+    }
     _applySession(session);
   }
 
@@ -156,6 +196,7 @@ class AppState extends ChangeNotifier {
     _token = null;
     _userId = 0;
     _username = '';
+    _savedPassword = '';
     _isAdmin = false;
     _status = SessionStatus.unauthenticated;
     notifyListeners();

@@ -17,6 +17,7 @@ class StoredCredentials {
     required this.username,
     required this.isAdmin,
     required this.expiresAtIso,
+    this.password = '',
   });
 
   final String serverUrl;
@@ -25,6 +26,7 @@ class StoredCredentials {
   final String username;
   final bool isAdmin;
   final String expiresAtIso;
+  final String password;
 
   bool get isValid {
     if (token.isEmpty || serverUrl.isEmpty) return false;
@@ -37,6 +39,7 @@ class StoredCredentials {
     'token': token,
     'user_id': userId,
     'username': username,
+    'password': password,
     'is_admin': isAdmin,
     'expires_at': expiresAtIso,
   };
@@ -47,6 +50,7 @@ class StoredCredentials {
         token: json['token'] as String? ?? '',
         userId: (json['user_id'] as num?)?.toInt() ?? 0,
         username: json['username'] as String? ?? '',
+        password: json['password'] as String? ?? '',
         isAdmin: json['is_admin'] as bool? ?? false,
         expiresAtIso: json['expires_at'] as String? ?? '',
       );
@@ -56,6 +60,7 @@ class StoredCredentials {
     token: '',
     userId: 0,
     username: '',
+    password: '',
     isAdmin: false,
     expiresAtIso: '',
   );
