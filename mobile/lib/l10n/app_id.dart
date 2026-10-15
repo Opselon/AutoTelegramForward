@@ -243,7 +243,68 @@ class AppMessagesId {
     'rules_sync_edits': 'Sinkronkan Edit',
     'rules_sync_replies': 'Sinkronkan Balasan',
     'settings_server_url': 'URL Server',
+    // ---- v18 log control + full control (appended) ----
+    'logs_scope_task': 'Tugas',
+    'logs_scope_service': 'Layanan',
+    'logs_all_tasks': 'Semua tugas',
+    'logs_all': 'Semua',
+    'logs_search_hint': 'Cari pesan dan detail…',
+    'logs_order_toggle_desc': 'Terbaru dulu — ketuk untuk terlama dulu',
+    'logs_page_size': '{n} per halaman',
+    'logs_export_evidence': 'Ekspor bukti',
+    'logs_export_json': 'Ekspor sebagai JSON',
+    'logs_export_json_sub': 'Catatan terstruktur lengkap',
+    'logs_export_csv': 'Ekspor sebagai CSV',
+    'logs_export_csv_sub': 'Satu baris per peristiwa, siap untuk spreadsheet',
+    'logs_export_copied': 'Ekspor disalin',
+    'logs_export_failed': 'Ekspor gagal: {error}',
+    'logs_copy': 'Salin',
+    'logs_history_from': 'riwayat sejak {date}',
+    'logs_newer': 'Lebih baru',
+    'logs_older': 'Lebih lama',
+    'logs_end_of_history': 'Akhir riwayat',
+    'logs_show_all_tasks': 'Tampilkan semua tugas',
+    'logs_scope_task_chip': 'tugas:{id}',
+    'logs_scope_corr_chip': 'kor:{id}',
+    'logs_detail_label': 'detail',
+    'logs_truncated_display':
+        '… dipotong untuk tampilan; Salin tetap memberi ekspor lengkap',
+    'rules_full_control': 'Kontrol penuh',
+    'rules_full_control_desc':
+        'Setiap pengaturan per tugas yang dipatuhi mesin, divalidasi di server.',
+    'rules_full_control_open': 'Buka',
+    'rules_logs_action': 'Log tugas ini',
+    'rules_logs_title': 'Log tugas',
+    'rules_settings_count': '{n} pengaturan',
+    'rules_settings_reload': 'Muat ulang',
+    'rules_settings_no_changes': 'Tanpa perubahan',
+    'rules_settings_change_count': '{n} perubahan',
+    'rules_settings_apply': 'Terapkan',
+    'rules_settings_load_failed': 'Tidak dapat memuat pengaturan tugas',
+    'rules_settings_save_failed': 'Tidak dapat menyimpan pengaturan',
+    'rules_settings_unavailable':
+        'Server ini tidak menyediakan pengaturan per tugas.',
+    'rules_settings_applied': '{n} pengaturan diterapkan',
+    'rules_settings_required': 'wajib',
+    'rules_settings_invalid': '{kind} tidak valid',
+    'rules_settings_min': 'minimal {min}',
+    'rules_settings_max': 'maksimal {max}',
+    'rules_settings_saving': 'Menyimpan…',
+    'rules_settings_json_hint': 'Objek JSON',
+    'rules_settings_list_hint': 'dipisahkan koma',
+    'rules_settings_int_hint': 'bilangan bulat',
+    'rules_settings_number_hint': 'angka',
+    // ---- v18 log level chips (appended) ----
+    'logs_level_errors': 'Error',
+    'logs_level_warnings': 'Peringatan',
+    'logs_level_info': 'Info',
+    'logs_level_debug': 'Debug',
   };
+
+  /// Every key this catalog defines. Exposed so the parity test can compare
+  /// the compiled maps instead of scraping source text, where a value's
+  /// quoting style can hide a key from a regex.
+  static Iterable<String> get knownKeys => _map.keys;
 
   String get(String key, {Map<String, String>? params}) {
     final value = _map[key] ?? key;

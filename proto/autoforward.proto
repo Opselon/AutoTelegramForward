@@ -487,6 +487,11 @@ message LogEntry {
   string category = 4; // login | forward | filter | ai | system | rule | session
   string message = 5;
   string detail = 6;   // JSON blob with structured context
+  // --- v18: the record is attributable, so history can be sliced per task and
+  // per tenant instead of being one anonymous stream.
+  string rule_id = 7;         // owning task, when the event belongs to one
+  int64 user_id = 8;          // tenant the event belongs to (0 = system-wide)
+  string correlation_id = 9;  // ties a log to its audit event / API request
 }
 
 message LogRequest {
@@ -497,9 +502,18 @@ message QueryLogsRequest {
   string level = 1;
   string service = 2;
   string category = 3;
+  // v18: matches the message OR the detail blob, so searching a rule id,
+  // correlation id or chat id finds the record wherever it was written.
   string search = 4;
   int32 limit = 5;
-  int64 since = 6;
+  int64 since = 6;            // inclusive lower ts bound (0 = unbounded)
+  string rule_id = 7;         // v18: one task's history
+  int64 until = 8;            // v18: inclusive upper ts bound (0 = unbounded)
+  int32 offset = 9;           // v18: deep paging into old history
+  bool ascending = 10;        // v18: oldest-first (timeline/replay views)
+  repeated string levels = 11; // v18: multi-select severity filter
+  int64 user_id = 12;         // v18: tenant scope (0 = every tenant)
+  string correlation_id = 13; // v18: jump straight to one request's trail
 }
 
 message PurgeLogsRequest {
@@ -509,6 +523,7 @@ message PurgeLogsRequest {
   string category = 3;
   // Keep the last N hours of history. 0 = no time-based protection.
   int64 older_than_hours = 4;
+  string rule_id = 5;         // v18: purge one task's history only
 }
 
 message PurgeLogsResponse {
@@ -520,15 +535,25 @@ message PurgeLogsResponse {
 
 message QueryLogsResponse {
   repeated LogEntry logs = 1;
+  // v18: the real match count for the filter, not the size of this page, so a
+  // client can show "1–50 of 12,431" and page through all of history.
   int32 total = 2;
+  bool has_more = 3;   // v18: another page exists after this one
 }
 
-message LogStatsRequest {}
+message LogStatsRequest {
+  string rule_id = 1;  // v18: scope the counts to one task ("" = all)
+  int64 user_id = 2;   // v18: tenant scope (0 = every tenant)
+}
 
 message LogStatsResponse {
   int64 total = 1;
   map<string, int32> by_level = 2;
   map<string, int32> by_category = 3;
+  map<string, int32> by_rule = 4;    // v18: which task produced how much
+  map<string, int32> by_service = 5; // v18: which service produced how much
+  int64 oldest_ts = 6;               // v18: how far back history actually goes
+  int64 newest_ts = 7;               // v18: newest record on disk
 }
 
 // -----------------------------------------------------------------------------

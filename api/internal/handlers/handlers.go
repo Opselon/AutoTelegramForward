@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -2026,32 +2027,163 @@ func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // ------------------------------------------------------------------ logs
+
+// logFilters is the full v18 query surface. Every field is optional: an empty
+// filter means "the whole archive", and offset walks backwards through all of
+// it, so an operator can reach the oldest record rather than only the newest
+// page.
+type logFilters struct {
+	Level         string
+	Levels        []string
+	Service       string
+	Category      string
+	Search        string
+	RuleID        string
+	CorrelationID string
+	UserID        int64
+	Since         int64
+	Until         int64
+	Limit         int32
+	Offset        int32
+	Ascending     bool
+}
+
+func parseLogFilters(r *http.Request) logFilters {
+	q := r.URL.Query()
+	f := logFilters{
+		Level:         q.Get("level"),
+		Service:       q.Get("service"),
+		Category:      q.Get("category"),
+		Search:        q.Get("search"),
+		RuleID:        q.Get("rule_id"),
+		CorrelationID: q.Get("correlation_id"),
+		Ascending:     q.Get("order") == "asc" || q.Get("ascending") == "true" || q.Get("ascending") == "1",
+		Limit:         100,
+	}
+	// levels=a,b,c (or repeated ?levels=) is the multi-select severity filter.
+	for _, raw := range q["levels"] {
+		for _, part := range strings.Split(raw, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				f.Levels = append(f.Levels, part)
+			}
+		}
+	}
+	if v := q.Get("limit"); v != "" {
+		if n, ok := parseInt32(v, maxLogPageSize); ok && n > 0 {
+			f.Limit = n
+		}
+	}
+	if v := q.Get("offset"); v != "" {
+		if n, ok := parseInt32(v, maxLogOffset); ok {
+			f.Offset = n
+		}
+	}
+	// page is the friendly 1-based form of offset (page=3&limit=50 -> offset=100).
+	// `page` is bounded before the multiplication: (page-1)*limit wraps inside
+	// int64 for a page large enough, which would land on a negative offset and
+	// silently serve the wrong end of the archive.
+	if v := q.Get("page"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 1 && n <= int64(maxLogOffset) {
+			off := (n - 1) * int64(f.Limit)
+			if off > int64(maxLogOffset) {
+				off = int64(maxLogOffset)
+			}
+			f.Offset = int32(off)
+		}
+	}
+	if v := q.Get("since"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+			f.Since = n
+		}
+	}
+	if v := q.Get("until"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+			f.Until = n
+		}
+	}
+	// Time window shorthand: ?hours=6 is "the last 6 hours", which is what an
+	// operator actually reaches for. `since` wins when both are given.
+	if f.Since == 0 {
+		if v := q.Get("hours"); v != "" {
+			if n, ok := parseInt32(v, 24*366); ok && n > 0 {
+				f.Since = time.Now().Add(-time.Duration(n) * time.Hour).Unix()
+			}
+		}
+	}
+	// ?mine=1 scopes to the caller's own tenant; admins may name a user_id.
+	if v := q.Get("user_id"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			f.UserID = n
+		}
+	}
+	if f.UserID == 0 && (q.Get("mine") == "1" || q.Get("mine") == "true") {
+		f.UserID = identity(r).UserID
+	}
+	return f
+}
+
+// Bounds for the paging window. A caller-supplied offset or page is narrowed to
+// int32, so the bound has to be explicit: strconv.Atoi returns an int whose width
+// follows the architecture, and an unbounded cast to int32 wraps negative — which
+// would turn "the oldest events" into "the newest ones".
+const (
+	maxLogPageSize int32 = 500
+	maxLogOffset   int32 = 1 << 20
+)
+
+// parseInt32 parses a non-negative decimal that must fit in [0, max].
+//
+// Parsing at bitSize 32 does the range check: it returns an error for anything
+// outside int32, so the narrowing conversion below cannot wrap. Bounding an
+// int64 value by hand instead leaves that safety invisible to static analysis
+// (and to the next reader), even when it is correct.
+func parseInt32(s string, max int32) (int32, bool) {
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err != nil || n < 0 || int32(n) > max {
+		return 0, false
+	}
+	return int32(n), true
+}
+
+func (f logFilters) toRequest() *pb.QueryLogsRequest {
+	return &pb.QueryLogsRequest{
+		Level: f.Level, Levels: f.Levels, Service: f.Service, Category: f.Category,
+		Search: f.Search, RuleId: f.RuleID, CorrelationId: f.CorrelationID,
+		UserId: f.UserID, Since: f.Since, Until: f.Until,
+		Limit: f.Limit, Offset: f.Offset, Ascending: f.Ascending,
+	}
+}
+
+func logEntryJSON(l *pb.LogEntry) map[string]any {
+	return map[string]any{
+		"ts":             l.Ts,
+		"level":          l.Level,
+		"severity":       l.Level,
+		"service":        l.Service,
+		"category":       l.Category,
+		"message":        l.Message,
+		"detail":         l.Detail,
+		"error_name":     l.Category,
+		"id":             l.Ts,
+		"rule_id":        l.RuleId,
+		"user_id":        l.UserId,
+		"correlation_id": l.CorrelationId,
+	}
+}
+
+// QueryLogs returns one page of history plus the real match count, so the UI can
+// show "1–50 of 12,431" and keep paging until has_more is false.
 func (h *Handlers) QueryLogs(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	q := r.URL.Query()
-	limit := int32(100)
 	if h.c.Logs == nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{
 			"error": "logger service unavailable",
 		})
 		return
 	}
-	if v := q.Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 500 {
-			limit = int32(n)
-		}
-	}
-	since := int64(0)
-	if v := q.Get("since"); v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
-			since = n
-		}
-	}
-	resp, err := h.c.Logs.QueryLogs(ctx, &pb.QueryLogsRequest{
-		Service: q.Get("service"), Level: q.Get("level"),
-		Search: q.Get("search"), Limit: limit, Since: since,
-	})
+	f := parseLogFilters(r)
+	resp, err := h.c.Logs.QueryLogs(ctx, f.toRequest())
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -2062,22 +2194,138 @@ func (h *Handlers) QueryLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]map[string]any, 0, len(logs))
 	for _, l := range logs {
-		out = append(out, map[string]any{
-			"ts":         l.Ts,
-			"level":      l.Level,
-			"severity":   l.Level,
-			"service":    l.Service,
-			"category":   l.Category,
-			"message":    l.Message,
-			"detail":     l.Detail,
-			"error_name": l.Category,
-			"id":         l.Ts,
-		})
+		out = append(out, logEntryJSON(l))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"logs":  out,
-		"total": len(out),
+		"logs":     out,
+		"total":    resp.Total,
+		"count":    len(out),
+		"offset":   f.Offset,
+		"limit":    f.Limit,
+		"has_more": resp.HasMore,
 	})
+}
+
+// RuleLogs is the per-task view: ownership is checked first, and the rule id is
+// forced onto the filter so a caller cannot widen the read past their own task.
+func (h *Handlers) RuleLogs(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	if h.c.Logs == nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{
+			"error": "logger service unavailable",
+		})
+		return
+	}
+	ruleID := r.PathValue("id")
+	if ruleID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rule id required"})
+		return
+	}
+	// Fail-closed: a foreign (or unknown) rule 404s rather than leaking its log
+	// stream, which contains chat ids and message fragments.
+	if !h.ownsRule(ctx, ruleID, identity(r).UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
+		return
+	}
+	f := parseLogFilters(r)
+	f.RuleID = ruleID
+	f.UserID = 0 // attribution is via the rule, not the tenant filter
+	resp, err := h.c.Logs.QueryLogs(ctx, f.toRequest())
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	logs := resp.Logs
+	if logs == nil {
+		logs = []*pb.LogEntry{}
+	}
+	out := make([]map[string]any, 0, len(logs))
+	for _, l := range logs {
+		out = append(out, logEntryJSON(l))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rule_id":  ruleID,
+		"logs":     out,
+		"total":    resp.Total,
+		"count":    len(out),
+		"offset":   f.Offset,
+		"limit":    f.Limit,
+		"has_more": resp.HasMore,
+	})
+}
+
+// ExportLogs streams the filtered history as a downloadable file. It pages
+// through the logger in batches rather than raising the page ceiling, so an
+// export of a 100k-row archive does not need a 100k-row RPC.
+func (h *Handlers) ExportLogs(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	if h.c.Logs == nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{
+			"error": "logger service unavailable",
+		})
+		return
+	}
+	f := parseLogFilters(r)
+	f.Ascending = true // an archive is read oldest-first
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "json"
+	}
+	const batch = 500
+	const maxRows = 50000 // hard stop so one request cannot exhaust memory
+	var rows []*pb.LogEntry
+	var total int32
+	for offset := int32(0); len(rows) < maxRows; offset += batch {
+		page := f
+		page.Limit = batch
+		page.Offset = offset
+		resp, err := h.c.Logs.QueryLogs(ctx, page.toRequest())
+		if err != nil {
+			grpcError(w, err)
+			return
+		}
+		total = resp.Total
+		rows = append(rows, resp.Logs...)
+		if !resp.HasMore || len(resp.Logs) == 0 {
+			break
+		}
+	}
+	stamp := time.Now().UTC().Format("20060102-150405")
+	switch format {
+	case "csv":
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition",
+			fmt.Sprintf("attachment; filename=\"atf-logs-%s.csv\"", stamp))
+		cw := csv.NewWriter(w)
+		_ = cw.Write([]string{"ts", "iso_time", "level", "service", "category",
+			"rule_id", "user_id", "correlation_id", "message", "detail"})
+		for _, l := range rows {
+			_ = cw.Write([]string{
+				strconv.FormatInt(l.Ts, 10),
+				time.Unix(l.Ts, 0).UTC().Format(time.RFC3339),
+				l.Level, l.Service, l.Category, l.RuleId,
+				strconv.FormatInt(l.UserId, 10), l.CorrelationId,
+				l.Message, l.Detail,
+			})
+		}
+		cw.Flush()
+	default:
+		out := make([]map[string]any, 0, len(rows))
+		for _, l := range rows {
+			out = append(out, logEntryJSON(l))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition",
+			fmt.Sprintf("attachment; filename=\"atf-logs-%s.json\"", stamp))
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"exported_at": time.Now().UTC().Format(time.RFC3339),
+			"total_match": total,
+			"rows":        len(out),
+			"logs":        out,
+		})
+	}
 }
 
 func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
@@ -2089,7 +2337,11 @@ func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	resp, err := h.c.Logs.LogStats(ctx, &pb.LogStatsRequest{})
+	req := &pb.LogStatsRequest{RuleId: r.URL.Query().Get("rule_id")}
+	if v := r.URL.Query().Get("mine"); v == "1" || v == "true" {
+		req.UserId = identity(r).UserID
+	}
+	resp, err := h.c.Logs.LogStats(ctx, req)
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -2098,6 +2350,10 @@ func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 		"total":       resp.Total,
 		"by_level":    resp.ByLevel,
 		"by_category": resp.ByCategory,
+		"by_rule":     resp.ByRule,
+		"by_service":  resp.ByService,
+		"oldest_ts":   resp.OldestTs,
+		"newest_ts":   resp.NewestTs,
 	})
 }
 
@@ -2117,6 +2373,7 @@ func (h *Handlers) PurgeLogs(w http.ResponseWriter, r *http.Request) {
 		Level          string `json:"level"`
 		Service        string `json:"service"`
 		Category       string `json:"category"`
+		RuleID         string `json:"rule_id"`
 		OlderThanHours int64  `json:"older_than_hours"`
 	}
 	_ = bind(w, r, &body)
@@ -2130,6 +2387,9 @@ func (h *Handlers) PurgeLogs(w http.ResponseWriter, r *http.Request) {
 	if body.Category == "" {
 		body.Category = q.Get("category")
 	}
+	if body.RuleID == "" {
+		body.RuleID = q.Get("rule_id")
+	}
 	if body.OlderThanHours == 0 {
 		if v := q.Get("older_than_hours"); v != "" {
 			if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
@@ -2141,10 +2401,16 @@ func (h *Handlers) PurgeLogs(w http.ResponseWriter, r *http.Request) {
 	if body.OlderThanHours == 0 {
 		body.OlderThanHours = 24
 	}
+	// A purge scoped to one task must not touch a task the caller does not own.
+	if body.RuleID != "" && !h.ownsRule(ctx, body.RuleID, identity(r).UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
+		return
+	}
 	resp, err := h.c.Logs.PurgeLogs(ctx, &pb.PurgeLogsRequest{
 		Level:          body.Level,
 		Service:        body.Service,
 		Category:       body.Category,
+		RuleId:         body.RuleID,
 		OlderThanHours: body.OlderThanHours,
 	})
 	if err != nil {

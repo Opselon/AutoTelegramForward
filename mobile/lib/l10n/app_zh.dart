@@ -231,7 +231,65 @@ class AppMessagesZh {
     'settings_version': '版本',
     'incompatible_server':
         '此服务器运行的是旧版 AutoTelegramForward。请更新到 {version} 或更高版本。',
+    // ---- v18 log control + full control (appended) ----
+    'logs_scope_task': '任务',
+    'logs_scope_service': '服务',
+    'logs_all_tasks': '全部任务',
+    'logs_all': '全部',
+    'logs_search_hint': '搜索消息与详情…',
+    'logs_order_toggle_desc': '最新优先 — 点击切换为最早优先',
+    'logs_page_size': '每页 {n} 条',
+    'logs_export_evidence': '导出证据',
+    'logs_export_json': '导出为 JSON',
+    'logs_export_json_sub': '完整结构化记录',
+    'logs_export_csv': '导出为 CSV',
+    'logs_export_csv_sub': '每条事件一行，可直接用于表格',
+    'logs_export_copied': '已复制导出内容',
+    'logs_export_failed': '导出失败：{error}',
+    'logs_copy': '复制',
+    'logs_history_from': '历史自 {date} 起',
+    'logs_newer': '更新',
+    'logs_older': '更早',
+    'logs_end_of_history': '已到历史末尾',
+    'logs_show_all_tasks': '显示全部任务',
+    'logs_scope_task_chip': '任务:{id}',
+    'logs_scope_corr_chip': '关联:{id}',
+    'logs_detail_label': '详情',
+    'logs_truncated_display': '…显示已截断；复制仍可获得完整导出',
+    'rules_full_control': '完全控制',
+    'rules_full_control_desc': '引擎遵循的每个任务设置，均在服务端校验。',
+    'rules_full_control_open': '打开',
+    'rules_logs_action': '此任务的日志',
+    'rules_logs_title': '任务日志',
+    'rules_settings_count': '{n} 项设置',
+    'rules_settings_reload': '重新加载',
+    'rules_settings_no_changes': '无更改',
+    'rules_settings_change_count': '{n} 项更改',
+    'rules_settings_apply': '应用',
+    'rules_settings_load_failed': '无法加载任务设置',
+    'rules_settings_save_failed': '无法保存设置',
+    'rules_settings_unavailable': '此服务器未提供任务设置。',
+    'rules_settings_applied': '已应用 {n} 项设置',
+    'rules_settings_required': '必填',
+    'rules_settings_invalid': '{kind} 无效',
+    'rules_settings_min': '不得小于 {min}',
+    'rules_settings_max': '不得大于 {max}',
+    'rules_settings_saving': '正在保存…',
+    'rules_settings_json_hint': 'JSON 对象',
+    'rules_settings_list_hint': '以逗号分隔',
+    'rules_settings_int_hint': '整数',
+    'rules_settings_number_hint': '数字',
+    // ---- v18 log level chips (appended) ----
+    'logs_level_errors': '错误',
+    'logs_level_warnings': '警告',
+    'logs_level_info': '信息',
+    'logs_level_debug': '调试',
   };
+
+  /// Every key this catalog defines. Exposed so the parity test can compare
+  /// the compiled maps instead of scraping source text, where a value's
+  /// quoting style can hide a key from a regex.
+  static Iterable<String> get knownKeys => _map.keys;
 
   String get(String key, {Map<String, String>? params}) {
     final value = _map[key];

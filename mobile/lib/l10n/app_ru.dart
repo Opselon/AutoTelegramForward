@@ -243,7 +243,68 @@ class AppMessagesRu {
     'rules_sync_edits': 'Синхронизация правок',
     'rules_sync_replies': 'Синхронизация ответов',
     'settings_server_url': 'URL сервера',
+    // ---- v18 log control + full control (appended) ----
+    'logs_scope_task': 'Задача',
+    'logs_scope_service': 'Сервис',
+    'logs_all_tasks': 'Все задачи',
+    'logs_all': 'Все',
+    'logs_search_hint': 'Поиск по сообщению и деталям…',
+    'logs_order_toggle_desc': 'Сначала новые — нажмите, чтобы сначала старые',
+    'logs_page_size': '{n} на страницу',
+    'logs_export_evidence': 'Экспорт доказательств',
+    'logs_export_json': 'Экспорт в JSON',
+    'logs_export_json_sub': 'Полные структурированные записи',
+    'logs_export_csv': 'Экспорт в CSV',
+    'logs_export_csv_sub': 'Одна строка на событие, готово для таблиц',
+    'logs_export_copied': 'Экспорт скопирован',
+    'logs_export_failed': 'Ошибка экспорта: {error}',
+    'logs_copy': 'Копировать',
+    'logs_history_from': 'история с {date}',
+    'logs_newer': 'Новее',
+    'logs_older': 'Старее',
+    'logs_end_of_history': 'Конец истории',
+    'logs_show_all_tasks': 'Показать все задачи',
+    'logs_scope_task_chip': 'задача:{id}',
+    'logs_scope_corr_chip': 'корр:{id}',
+    'logs_detail_label': 'детали',
+    'logs_truncated_display':
+        '… сокращено для отображения; копирование даёт полный экспорт',
+    'rules_full_control': 'Полный контроль',
+    'rules_full_control_desc':
+        'Все настройки задачи, которые учитывает движок, с проверкой на сервере.',
+    'rules_full_control_open': 'Открыть',
+    'rules_logs_action': 'Журналы этой задачи',
+    'rules_logs_title': 'Журналы задачи',
+    'rules_settings_count': '{n} настроек',
+    'rules_settings_reload': 'Обновить',
+    'rules_settings_no_changes': 'Без изменений',
+    'rules_settings_change_count': '{n} изменений',
+    'rules_settings_apply': 'Применить',
+    'rules_settings_load_failed': 'Не удалось загрузить настройки задачи',
+    'rules_settings_save_failed': 'Не удалось сохранить настройки',
+    'rules_settings_unavailable':
+        'Этот сервер не предоставляет настройки задач.',
+    'rules_settings_applied': 'Применено настроек: {n}',
+    'rules_settings_required': 'обязательно',
+    'rules_settings_invalid': 'недопустимое значение {kind}',
+    'rules_settings_min': 'не меньше {min}',
+    'rules_settings_max': 'не больше {max}',
+    'rules_settings_saving': 'Сохранение…',
+    'rules_settings_json_hint': 'Объект JSON',
+    'rules_settings_list_hint': 'через запятую',
+    'rules_settings_int_hint': 'целое число',
+    'rules_settings_number_hint': 'число',
+    // ---- v18 log level chips (appended) ----
+    'logs_level_errors': 'Ошибки',
+    'logs_level_warnings': 'Предупреждения',
+    'logs_level_info': 'Инфо',
+    'logs_level_debug': 'Отладка',
   };
+
+  /// Every key this catalog defines. Exposed so the parity test can compare
+  /// the compiled maps instead of scraping source text, where a value's
+  /// quoting style can hide a key from a regex.
+  static Iterable<String> get knownKeys => _map.keys;
 
   String get(String key, {Map<String, String>? params}) {
     final value = _map[key] ?? key;

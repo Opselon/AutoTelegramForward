@@ -9,6 +9,8 @@ import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../../l10n/app_messages.dart';
 import 'rule_editor_screen.dart';
+import 'rule_settings_sheet.dart';
+import '../logs/logs_screen.dart';
 
 class RulesScreen extends StatefulWidget {
   const RulesScreen({super.key});
@@ -340,6 +342,41 @@ class _RulesScreenState extends State<RulesScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.tune_outlined,
+                                              size: 20,
+                                            ),
+                                            tooltip: t.get(
+                                              'rules_full_control',
+                                            ),
+                                            onPressed:
+                                                () => showRuleSettingsSheet(
+                                                  context,
+                                                  ruleId: r.id,
+                                                  ruleLabel: srcTitle,
+                                                ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.receipt_long_outlined,
+                                              size: 20,
+                                            ),
+                                            tooltip: t.get('rules_logs_action'),
+                                            onPressed:
+                                                () => Navigator.of(
+                                                  context,
+                                                ).push(
+                                                  MaterialPageRoute<void>(
+                                                    builder:
+                                                        (_) => LogsScreen(
+                                                          initialRuleId: r.id,
+                                                          initialRuleLabel:
+                                                              srcTitle,
+                                                        ),
+                                                  ),
+                                                ),
+                                          ),
                                           IconButton(
                                             icon: const Icon(
                                               Icons.copy_outlined,

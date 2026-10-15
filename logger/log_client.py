@@ -120,10 +120,30 @@ class LogClient:
         category: str,
         message: str,
         detail: Optional[dict] = None,
+        rule_id: str = "",
+        user_id: int = 0,
+        correlation_id: str = "",
     ) -> None:
         if not self._enabled or self._stub is None:
             return
         try:
+            # Promote ids found in the structured detail onto the record's own
+            # columns. Every existing call site writes rule_id/correlation_id
+            # into its detail blob already, so this single rule makes the whole
+            # codebase attributable (per-task history is then an indexed lookup)
+            # without touching hundreds of call sites.
+            if isinstance(detail, dict):
+                if not rule_id:
+                    rule_id = str(detail.get("rule_id") or detail.get("rule") or "")
+                if not correlation_id:
+                    correlation_id = str(detail.get("correlation_id") or "")
+                if not user_id:
+                    user_id = int(
+                        detail.get("user_id") or detail.get("owner_user_id") or 0
+                    )
+            # v18 attribution travels with the record, so the log explorer can
+            # answer "show me this task's history" and "show me everything this
+            # user did" without grepping free text.
             entry = _pb().LogEntry(
                 ts=int(time.time()),
                 level=level.upper(),
@@ -131,6 +151,9 @@ class LogClient:
                 category=category,
                 message=message,
                 detail=json.dumps(detail, ensure_ascii=False, default=str) if detail else "",
+                rule_id=rule_id or "",
+                user_id=int(user_id or 0),
+                correlation_id=correlation_id or "",
             )
             try:
                 self._queue.put_nowait(entry)
@@ -156,31 +179,40 @@ class LogClient:
         except Exception:
             pass  # never break the caller
 
-    def debug(self, service: str, category: str, message: str, detail=None) -> None:
-        self.log("DEBUG", service, category, message, detail)
+    def debug(self, service: str, category: str, message: str, detail=None, **kw) -> None:
+        self.log("DEBUG", service, category, message, detail, **kw)
 
-    def info(self, service: str, category: str, message: str, detail=None) -> None:
-        self.log("INFO", service, category, message, detail)
+    def info(self, service: str, category: str, message: str, detail=None, **kw) -> None:
+        self.log("INFO", service, category, message, detail, **kw)
 
-    def warn(self, service: str, category: str, message: str, detail=None) -> None:
-        self.log("WARN", service, category, message, detail)
+    def warn(self, service: str, category: str, message: str, detail=None, **kw) -> None:
+        self.log("WARN", service, category, message, detail, **kw)
 
-    def error(self, service: str, category: str, message: str, detail=None) -> None:
-        self.log("ERROR", service, category, message, detail)
+    def error(self, service: str, category: str, message: str, detail=None, **kw) -> None:
+        self.log("ERROR", service, category, message, detail, **kw)
 
-    async def query(self, level="", service="", category="", search="", limit=100, since=0):
+    async def query(
+        self, level="", service="", category="", search="", limit=100, since=0,
+        rule_id="", until=0, offset=0, ascending=False, levels=None,
+        user_id=0, correlation_id="",
+    ):
         self.connect()
         pb = _pb()
         req = pb.QueryLogsRequest(
             level=level, service=service, category=category,
             search=search, limit=limit, since=since,
+            rule_id=rule_id, until=until, offset=offset,
+            ascending=ascending, levels=list(levels or []),
+            user_id=int(user_id or 0), correlation_id=correlation_id,
         )
         return await self._stub.QueryLogs(req)
 
-    async def stats(self):
+    async def stats(self, rule_id="", user_id=0):
         self.connect()
         pb = _pb()
-        return await self._stub.LogStats(pb.LogStatsRequest())
+        return await self._stub.LogStats(
+            pb.LogStatsRequest(rule_id=rule_id, user_id=int(user_id or 0))
+        )
 
     async def close(self) -> None:
         if self._task and not self._task.done():
@@ -222,12 +254,18 @@ class CentralLogHandler(logging.Handler):
             if record.exc_info:
                 import traceback as _tb
                 detail = {"traceback": "".join(_tb.format_exception(*record.exc_info))[-1500:]}
+            # Call sites attach context with logger.warning(..., extra={...});
+            # picking it up here means a module does not have to thread a
+            # rule_id through every function just to be attributable.
             self._client.log(
                 "WARN" if record.levelname == "WARNING" else record.levelname,
                 "core",
                 record.name.replace("atf.", "") or "core",
                 msg,
                 detail,
+                rule_id=str(getattr(record, "rule_id", "") or ""),
+                user_id=int(getattr(record, "user_id", 0) or 0),
+                correlation_id=str(getattr(record, "correlation_id", "") or ""),
             )
         except Exception:
             self.handleError(record)

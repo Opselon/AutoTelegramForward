@@ -246,7 +246,69 @@ class AppMessagesEs {
     'rules_sync_edits': 'Sincronizar ediciones',
     'rules_sync_replies': 'Sincronizar respuestas',
     'settings_server_url': 'URL del servidor',
+    // ---- v18 log control + full control (appended) ----
+    'logs_scope_task': 'Tarea',
+    'logs_scope_service': 'Servicio',
+    'logs_all_tasks': 'Todas las tareas',
+    'logs_all': 'Todas',
+    'logs_search_hint': 'Buscar mensaje y detalles…',
+    'logs_order_toggle_desc':
+        'Más recientes primero — toca para más antiguos primero',
+    'logs_page_size': '{n} por página',
+    'logs_export_evidence': 'Exportar evidencia',
+    'logs_export_json': 'Exportar como JSON',
+    'logs_export_json_sub': 'Registros estructurados completos',
+    'logs_export_csv': 'Exportar como CSV',
+    'logs_export_csv_sub': 'Una fila por evento, lista para hoja de cálculo',
+    'logs_export_copied': 'Exportación copiada',
+    'logs_export_failed': 'Error al exportar: {error}',
+    'logs_copy': 'Copiar',
+    'logs_history_from': 'historial desde {date}',
+    'logs_newer': 'Más recientes',
+    'logs_older': 'Más antiguos',
+    'logs_end_of_history': 'Fin del historial',
+    'logs_show_all_tasks': 'Mostrar todas las tareas',
+    'logs_scope_task_chip': 'tarea:{id}',
+    'logs_scope_corr_chip': 'corr:{id}',
+    'logs_detail_label': 'detalles',
+    'logs_truncated_display':
+        '… truncado para mostrar; Copiar aún entrega la exportación completa',
+    'rules_full_control': 'Control total',
+    'rules_full_control_desc':
+        'Todos los ajustes por tarea que respeta el motor, validados en el servidor.',
+    'rules_full_control_open': 'Abrir',
+    'rules_logs_action': 'Registros de esta tarea',
+    'rules_logs_title': 'Registros de la tarea',
+    'rules_settings_count': '{n} ajustes',
+    'rules_settings_reload': 'Recargar',
+    'rules_settings_no_changes': 'Sin cambios',
+    'rules_settings_change_count': '{n} cambios',
+    'rules_settings_apply': 'Aplicar',
+    'rules_settings_load_failed':
+        'No se pudieron cargar los ajustes de la tarea',
+    'rules_settings_save_failed': 'No se pudieron guardar los ajustes',
+    'rules_settings_unavailable': 'Este servidor no expone ajustes por tarea.',
+    'rules_settings_applied': '{n} ajustes aplicados',
+    'rules_settings_required': 'obligatorio',
+    'rules_settings_invalid': '{kind} no válido',
+    'rules_settings_min': 'debe ser al menos {min}',
+    'rules_settings_max': 'debe ser como máximo {max}',
+    'rules_settings_saving': 'Guardando…',
+    'rules_settings_json_hint': 'Objeto JSON',
+    'rules_settings_list_hint': 'separado por comas',
+    'rules_settings_int_hint': 'entero',
+    'rules_settings_number_hint': 'número',
+    // ---- v18 log level chips (appended) ----
+    'logs_level_errors': 'Errores',
+    'logs_level_warnings': 'Avisos',
+    'logs_level_info': 'Información',
+    'logs_level_debug': 'Depuración',
   };
+
+  /// Every key this catalog defines. Exposed so the parity test can compare
+  /// the compiled maps instead of scraping source text, where a value's
+  /// quoting style can hide a key from a regex.
+  static Iterable<String> get knownKeys => _map.keys;
 
   String get(String key, {Map<String, String>? params}) {
     final value = _map[key] ?? key;

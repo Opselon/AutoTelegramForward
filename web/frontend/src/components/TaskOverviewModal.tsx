@@ -16,9 +16,11 @@ import {
   Trash2,
   Edit2,
   Hash,
+  ScrollText,
 } from 'lucide-react'
 import type { ForwardRule } from '../types'
 import { TaskControlPanel } from './TaskControlPanel'
+import { TaskLogsPanel } from './TaskLogsPanel'
 
 interface Props {
   rule: ForwardRule | null
@@ -32,6 +34,7 @@ interface Props {
 type TabType =
   | 'overview'
   | 'control'
+  | 'logs'
   | 'advanced'
   | 'all_addons'
   | 'replace'
@@ -617,6 +620,31 @@ export function TaskOverviewModal({
                 >
                   <SlidersHorizontal size={14} />
                   Full Control & Sources
+                </button>
+
+                {/* This task's complete history: paged, searchable, exportable. */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('logs')}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#1f2937',
+                    color: '#f9fafb',
+                    border: '1px solid #374151',
+                    borderRadius: '12px',
+                    padding: '12px',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    marginTop: '8px',
+                  }}
+                >
+                  <ScrollText size={14} />
+                  Task Logs
                 </button>
               </div>
 
@@ -2179,6 +2207,8 @@ export function TaskOverviewModal({
           >
             Cancel
           </button>
+          {currentTab === 'logs' && <TaskLogsPanel ruleId={draft.id} lang={lang} />}
+
           {currentTab === 'control' && (
             <TaskControlPanel
               rule={draft}

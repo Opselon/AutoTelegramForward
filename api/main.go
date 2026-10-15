@@ -98,6 +98,11 @@ func main() {
 	dashMux.HandleFunc("GET /logs", h.QueryLogs)
 	dashMux.HandleFunc("GET /logs/stats", h.LogStats)
 	dashMux.HandleFunc("POST /logs/purge", h.PurgeLogs)
+	// v18: a downloadable copy of the filtered history (json|csv), so evidence
+	// can leave the box without an operator screen-scraping the console.
+	dashMux.HandleFunc("GET /logs/export", h.ExportLogs)
+	// v18: one task's complete history, ownership-checked before the read.
+	dashMux.HandleFunc("GET /rules/{id}/logs", h.RuleLogs)
 	// Centralized audit event queries — tenant-scoped server-side (Phase Three).
 	dashMux.HandleFunc("GET /audit/events", h.QueryAuditEvents)
 	dashMux.HandleFunc("GET /health/services", h.ServicesHealth)
@@ -139,9 +144,12 @@ func main() {
 
 	var handler http.Handler = mux
 	handler = middleware.RequestLogger(handler)
-	// Mirror every 4xx/5xx into the central logger so the dashboard Log
-	// Explorer shows API failures without ssh/journalctl.
-	handler = middleware.ErrorLogger(&middleware.ErrorLogSink{Client: clients.Logs}, handler)
+	// v18: AccessLogger mirrors EVERY request — success and failure — into the
+	// central logger, carrying the verified actor, the subject rule and the
+	// correlation id. Previously only 4xx/5xx were persisted, so the dashboard
+	// Log Explorer could show what went wrong but never the full history of
+	// what was actually done.
+	handler = middleware.AccessLogger(&middleware.ErrorLogSink{Client: clients.Logs}, handler)
 	if apiKey != "" {
 		handler = middleware.APIKeyAuth(apiKey, handler)
 	}

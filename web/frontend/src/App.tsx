@@ -128,6 +128,14 @@ export function App() {
   const [logSearch, setLogSearch] = useState<string>('')
   const [logAutoRefresh, setLogAutoRefresh] = useState<boolean>(true)
   const [logStats, setLogStats] = useState<LogStats | null>(null)
+  // v18 history controls: which task, which way, and how far back.
+  const [logFilterRule, setLogFilterRule] = useState<string>('all')
+  const [logOrder, setLogOrder] = useState<'desc' | 'asc'>('desc')
+  const [logPageSize, setLogPageSize] = useState<number>(100)
+  const [logOffset, setLogOffset] = useState<number>(0)
+  const [logTotal, setLogTotal] = useState<number>(0)
+  const [logHasMore, setLogHasMore] = useState<boolean>(false)
+  const [logExporting, setLogExporting] = useState<boolean>(false)
   const [purging, setPurging] = useState(false)
   const [purgeWindowH, setPurgeWindowH] = useState<number>(24)
   const [purgeResult, setPurgeResult] = useState<{ purged: number; remaining: number } | null>(null)
@@ -260,32 +268,70 @@ export function App() {
     }
   }
 
-  const fetchLogs = async (srv = logFilterService, lvl = logFilterLevel, srch = logSearch) => {
+  /**
+   * v18 log fetch: one page of history with the real match count. `offset`
+   * walks backwards, so the console can reach the oldest record instead of
+   * only ever showing the newest 100 rows.
+   */
+  const fetchLogs = async (
+    srv = logFilterService,
+    lvl = logFilterLevel,
+    srch = logSearch,
+    opts?: { rule?: string; order?: 'desc' | 'asc'; offset?: number; limit?: number },
+  ) => {
+    const rule = opts?.rule ?? logFilterRule
+    const order = opts?.order ?? logOrder
+    const offset = opts?.offset ?? logOffset
+    const limit = opts?.limit ?? logPageSize
     try {
-      const params: any = { limit: 100 }
+      const params: any = { limit, offset, ascending: order === 'asc' }
       if (srv !== 'all') params.service = srv
       if (lvl !== 'all') params.level = lvl
       if (srch.trim()) params.search = srch.trim()
-      const [fetchedLogs, stats] = await Promise.all([
-        api.getLogs(params).catch(() => []),
-        api.getLogStats().catch(() => null),
+      if (rule !== 'all') params.rule_id = rule
+      const [page, stats] = await Promise.all([
+        api.getLogsPage(params).catch(() => null),
+        api.getLogStats(rule !== 'all' ? { rule_id: rule } : undefined).catch(() => null),
       ])
-      setLogs(Array.isArray(fetchedLogs) ? fetchedLogs : [])
+      setLogs(Array.isArray(page?.logs) ? page!.logs : [])
+      setLogTotal(page?.total ?? 0)
+      setLogHasMore(!!page?.has_more)
       if (stats) setLogStats(stats)
     } catch {}
+  }
+
+  const handleExportLogs = async (format: 'json' | 'csv') => {
+    if (logExporting) return
+    setLogExporting(true)
+    try {
+      await api.exportLogs({
+        service: logFilterService !== 'all' ? logFilterService : undefined,
+        level: logFilterLevel !== 'all' ? logFilterLevel : undefined,
+        search: logSearch.trim() || undefined,
+        rule_id: logFilterRule !== 'all' ? logFilterRule : undefined,
+        format,
+      })
+      showToast(isRtl ? 'خروجی لاگ دانلود شد' : 'Log export downloaded')
+    } catch (e: any) {
+      showToast(e?.message || (isRtl ? 'خطا در خروجی گرفتن' : 'Export failed'))
+    } finally {
+      setLogExporting(false)
+    }
   }
 
   const handlePurgeLogs = async () => {
     if (purging) return
     const keepH = Math.max(0, purgeWindowH)
     const label = keepH > 0 ? `قدیمی‌تر از ${keepH} ساعت` : 'تمام لاگ‌ها (بدون حفاظت زمانی)'
-    if (!window.confirm(`حذف ${logFilterLevel !== 'all' ? `سطح ${logFilterLevel} ` : ''}${logFilterService !== 'all' ? `سرویس ${logFilterService} ` : ''}${label}؟ این عمل قابل بازگشت نیست.`)) return
+    const ruleLabel = logFilterRule !== 'all' ? `تسک ${logFilterRule.slice(0, 8)} ` : ''
+    if (!window.confirm(`حذف ${ruleLabel}${logFilterLevel !== 'all' ? `سطح ${logFilterLevel} ` : ''}${logFilterService !== 'all' ? `سرویس ${logFilterService} ` : ''}${label}؟ این عمل قابل بازگشت نیست.`)) return
     setPurging(true)
     setPurgeResult(null)
     try {
       const res = await api.purgeLogs({
         level: logFilterLevel !== 'all' ? logFilterLevel : undefined,
         service: logFilterService !== 'all' ? logFilterService : undefined,
+        rule_id: logFilterRule !== 'all' ? logFilterRule : undefined,
         older_than_hours: keepH,
       })
       if (res?.success) {
@@ -428,7 +474,11 @@ export function App() {
       api.getServicesHealth().then(setServicesHealth).catch(() => setServicesHealth(null))
     }, 10000)
     return () => { clearInterval(logTimer); clearInterval(healthTimer) }
-  }, [activeTab, logAutoRefresh, logFilterService, logFilterLevel, logSearch])
+    // v18 history controls are part of the query, so the poller must re-arm
+    // when they change — otherwise auto-refresh would silently re-fetch a
+    // stale offset and the operator would watch a page they had navigated away
+    // from.
+  }, [activeTab, logAutoRefresh, logFilterService, logFilterLevel, logSearch, logFilterRule, logOrder, logOffset, logPageSize])
 
   // Rules Handlers
   const handleToggleRule = async (id: string) => {
@@ -1501,7 +1551,14 @@ export function App() {
                   <div className="channel-flow-mobile" style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, border: '1px solid rgba(255, 255, 255, 0.05)', overflow: 'hidden' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0 }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>{isRtl ? 'کانال مبدأ (A)' : 'Source A'}</div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>
+                          {isRtl ? 'کانال مبدأ (A)' : 'Source A'}
+                          {extraSourceCount(rule) > 0 && (
+                            <span className="badge" style={{ fontSize: '0.62rem', marginInlineStart: 6, background: 'rgba(59, 130, 246, 0.18)', color: '#93c5fd' }}>
+                              +{extraSourceCount(rule)}
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {rule.source_chat_name || rule.source_chat_id}
                         </div>
@@ -2974,6 +3031,63 @@ export function App() {
                     <option value="DEBUG">🔍 DEBUG</option>
                   </select>
                 </div>
+
+                {/* v18: scope the console to one task's history. This is the
+                    same attribution the per-task Logs tab renders, surfaced
+                    where an operator already has the global view open. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'تسک:' : 'Task:'}</span>
+                  <select
+                    value={logFilterRule}
+                    onChange={(e) => {
+                      setLogFilterRule(e.target.value)
+                      setLogOffset(0)
+                      fetchLogs(logFilterService, logFilterLevel, logSearch, { rule: e.target.value, offset: 0 })
+                    }}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#e2e8f0',
+                      borderRadius: 8,
+                      padding: '5px 10px',
+                      fontSize: '0.8rem',
+                      maxWidth: 220,
+                    }}
+                  >
+                    <option value="all">{isRtl ? 'همه تسک‌ها' : 'All tasks'}</option>
+                    {(Array.isArray(rules) ? rules : []).map((r: any) => (
+                      <option key={r.id} value={r.id}>
+                        {(r.name || r.id.slice(0, 8)).slice(0, 28)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* v18: read direction — newest-first for triage, oldest-first
+                    for replaying how a task behaved. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'ترتیب:' : 'Order:'}</span>
+                  <select
+                    value={logOrder}
+                    onChange={(e) => {
+                      const order = e.target.value as 'desc' | 'asc'
+                      setLogOrder(order)
+                      setLogOffset(0)
+                      fetchLogs(logFilterService, logFilterLevel, logSearch, { order, offset: 0 })
+                    }}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#e2e8f0',
+                      borderRadius: 8,
+                      padding: '5px 10px',
+                      fontSize: '0.8rem',
+                    }}
+                  >
+                    <option value="desc">{isRtl ? 'جدیدترین اول' : 'Newest first'}</option>
+                    <option value="asc">{isRtl ? 'قدیمی‌ترین اول' : 'Oldest first'}</option>
+                  </select>
+                </div>
               </div>
 
               {/* Text Search Input */}
@@ -3012,8 +3126,16 @@ export function App() {
             {/* Quick Metrics Badges */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, fontSize: '0.75rem' }}>
               <span className="badge badge-gray">
-                {isRtl ? 'تعداد نمایش داده شده:' : 'Showing:'} {Array.isArray(logs) ? logs.length : 0}
+                {logTotal === 0
+                  ? (isRtl ? 'بدون رویداد' : 'no events')
+                  : `${logTotal === 0 ? 0 : logOffset + 1}–${logOffset + (Array.isArray(logs) ? logs.length : 0)} / ${logTotal.toLocaleString()}`}
               </span>
+              {logStats?.oldest_ts ? (
+                <span className="badge badge-gray" title={isRtl ? 'قدیمی‌ترین رکورد موجود' : 'oldest record on disk'}>
+                  {isRtl ? 'تاریخچه از' : 'history from'}{' '}
+                  {new Date(logStats.oldest_ts * 1000).toLocaleDateString()}
+                </span>
+              ) : null}
               {logStats && (
                 <>
                   <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399' }}>
@@ -3030,6 +3152,72 @@ export function App() {
                   </span>
                 </>
               )}
+            </div>
+
+            {/* v18 history navigation: offset paging over the full archive plus
+                a downloadable copy of exactly what is on screen. */}
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+              marginBottom: 14, padding: '10px 12px',
+              background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10,
+            }}>
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                📜 {isRtl ? 'پیمایش تاریخچه:' : 'History:'}
+              </span>
+              <button
+                onClick={() => {
+                  const next = Math.max(0, logOffset - logPageSize)
+                  setLogOffset(next)
+                  fetchLogs(logFilterService, logFilterLevel, logSearch, { offset: next })
+                }}
+                disabled={logOffset === 0}
+                className="btn btn-secondary" style={{ padding: '5px 12px', fontSize: '0.72rem' }}
+              >
+                ⬆ {isRtl ? 'جدیدتر' : 'Newer'}
+              </button>
+              <button
+                onClick={() => {
+                  const next = logOffset + logPageSize
+                  setLogOffset(next)
+                  fetchLogs(logFilterService, logFilterLevel, logSearch, { offset: next })
+                }}
+                disabled={!logHasMore}
+                className="btn btn-secondary" style={{ padding: '5px 12px', fontSize: '0.72rem' }}
+              >
+                ⬇ {isRtl ? 'قدیمی‌تر' : 'Older'}
+              </button>
+              <label style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {isRtl ? 'اندازه صفحه' : 'Page size'}
+                <select
+                  value={logPageSize}
+                  onChange={(e) => {
+                    const size = Number(e.target.value)
+                    setLogPageSize(size)
+                    setLogOffset(0)
+                    fetchLogs(logFilterService, logFilterLevel, logSearch, { limit: size, offset: 0 })
+                  }}
+                  style={{ background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '4px 6px', fontSize: '0.72rem' }}
+                >
+                  {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+              <span style={{ fontSize: '0.68rem', color: logHasMore ? '#fbbf24' : '#34d399' }}>
+                {logHasMore
+                  ? (isRtl ? '⋯ رویدادهای قدیمی‌تری وجود دارد' : '⋯ older events exist')
+                  : (isRtl ? '✓ به انتهای تاریخچه رسیدید' : '✓ reached the end of history')}
+              </span>
+              <button
+                onClick={() => handleExportLogs('json')} disabled={logExporting}
+                className="btn btn-secondary" style={{ padding: '5px 12px', fontSize: '0.72rem' }}
+              >
+                {logExporting ? '⏳ ...' : '⬇ JSON'}
+              </button>
+              <button
+                onClick={() => handleExportLogs('csv')} disabled={logExporting}
+                className="btn btn-secondary" style={{ padding: '5px 12px', fontSize: '0.72rem' }}
+              >
+                {logExporting ? '⏳ ...' : '⬇ CSV'}
+              </button>
             </div>
 
             {/* Log purge controls — keeps the archive from growing unbounded. */}
@@ -3269,6 +3457,57 @@ export function App() {
                             {l.service || 'core'}
                             {l.category ? `:${l.category}` : ''}
                           </span>
+
+                          {/* v18 attribution: which task (and which API call)
+                              produced this line. Clicking narrows the whole
+                              console to that subject instead of making the
+                              operator retype an id into the search box. */}
+                          {l.rule_id && (
+                            <button
+                              onClick={() => {
+                                setLogFilterRule(l.rule_id as string)
+                                setLogOffset(0)
+                                fetchLogs(logFilterService, logFilterLevel, logSearch, { rule: l.rule_id as string, offset: 0 })
+                              }}
+                              title={isRtl ? 'فیلتر روی این تسک' : 'Filter to this task'}
+                              style={{
+                                color: '#f472b6',
+                                background: 'rgba(236, 72, 153, 0.14)',
+                                border: '1px solid rgba(236, 72, 153, 0.35)',
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                fontSize: '0.68rem',
+                                flexShrink: 0,
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              task:{(l.rule_id as string).slice(0, 8)}
+                            </button>
+                          )}
+                          {l.correlation_id && (
+                            <button
+                              onClick={() => {
+                                setLogSearch(l.correlation_id as string)
+                                setLogOffset(0)
+                                fetchLogs(logFilterService, logFilterLevel, l.correlation_id as string, { offset: 0 })
+                              }}
+                              title={isRtl ? 'پیدا کردن کل مسیر این درخواست' : 'Trace this request end to end'}
+                              style={{
+                                color: '#38bdf8',
+                                background: 'rgba(56, 189, 248, 0.12)',
+                                border: '1px solid rgba(56, 189, 248, 0.3)',
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                fontSize: '0.68rem',
+                                flexShrink: 0,
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              corr:{(l.correlation_id as string).slice(0, 8)}
+                            </button>
+                          )}
 
                           {/* Message */}
                           <span style={{ color: isErr ? '#fca5a5' : '#f1f5f9', fontWeight: isErr ? 600 : 400 }}>
@@ -4032,6 +4271,19 @@ export function App() {
       )}
     </div>
   )
+}
+
+/**
+ * v18 multi-source tasks forward from every listed channel, but only the
+ * primary is rendered in the flow diagram. Surface the remainder as a count so
+ * a task fed by 4 channels does not look identical to one fed by a single
+ * channel.
+ */
+function extraSourceCount(rule: any): number {
+  const ids: string[] = Array.isArray(rule?.source_chat_ids) ? rule.source_chat_ids.filter(Boolean) : []
+  if (ids.length > 1) return ids.length - 1
+  const names: string[] = Array.isArray(rule?.source_chat_names) ? rule.source_chat_names.filter(Boolean) : []
+  return names.length > 1 ? names.length - 1 : 0
 }
 
 function UserBar({ lang }: { lang: 'fa' | 'en' }) {

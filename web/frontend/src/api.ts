@@ -21,6 +21,8 @@ import type {
   SimulateResponse,
   StatsResponse,
   LogItem,
+  LogPage,
+  LogQuery,
   LogStats,
   PurgeLogsRequest,
   PurgeLogsResponse,
@@ -55,6 +57,12 @@ async function getDeliveryStatsAny(): Promise<any> {
   } catch {
     return null
   }
+}
+
+/** Bearer header for raw fetches (downloads, blobs) outside fetchJson. */
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('auth_token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -354,20 +362,102 @@ export const api = {
       body: JSON.stringify(req),
     }),
   getLogs: async (params?: { service?: string; level?: string; search?: string; limit?: number }): Promise<LogItem[]> => {
-    const q = new URLSearchParams()
-    if (params?.service) q.set('service', params.service)
-    if (params?.level) q.set('level', params.level)
-    if (params?.search) q.set('search', params.search)
-    if (params?.limit) q.set('limit', String(params.limit))
-    const url = `${API_BASE}/logs${q.toString() ? '?' + q.toString() : ''}`
-    const res = await fetchJson<any>(url)
-    if (Array.isArray(res)) return res
-    if (Array.isArray(res?.logs)) return res.logs
-    if (Array.isArray(res?.items)) return res.items
-    return []
+    const page = await api.getLogsPage(params)
+    return page.logs
   },
-  getLogStats: async (): Promise<LogStats> => {
-    return fetchJson<LogStats>(`${API_BASE}/logs/stats`)
+  /**
+   * v18: the paging form of the log query. Returns the real match count and
+   * has_more alongside this page, which is what makes deep history reachable
+   * instead of "the newest N rows and nothing older".
+   */
+  getLogsPage: async (params?: LogQuery): Promise<LogPage> => {
+    const q = new URLSearchParams()
+    if (params?.service && params.service !== 'all') q.set('service', params.service)
+    if (params?.level && params.level !== 'all') q.set('level', params.level)
+    if (params?.levels?.length) params.levels.forEach((l) => q.append('levels', l))
+    if (params?.category) q.set('category', params.category)
+    if (params?.search) q.set('search', params.search)
+    if (params?.rule_id) q.set('rule_id', params.rule_id)
+    if (params?.correlation_id) q.set('correlation_id', params.correlation_id)
+    if (params?.user_id) q.set('user_id', String(params.user_id))
+    if (params?.mine) q.set('mine', '1')
+    if (params?.since) q.set('since', String(params.since))
+    if (params?.until) q.set('until', String(params.until))
+    if (params?.hours) q.set('hours', String(params.hours))
+    if (params?.offset) q.set('offset', String(params.offset))
+    if (params?.page) q.set('page', String(params.page))
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.ascending) q.set('order', 'asc')
+    const res = await fetchJson<any>(`${API_BASE}/logs${q.toString() ? '?' + q.toString() : ''}`)
+    const logs: LogItem[] = Array.isArray(res) ? res : Array.isArray(res?.logs) ? res.logs : []
+    const limit = res?.limit ?? params?.limit ?? 100
+    return {
+      logs,
+      total: typeof res?.total === 'number' ? res.total : logs.length,
+      count: typeof res?.count === 'number' ? res.count : logs.length,
+      offset: typeof res?.offset === 'number' ? res.offset : params?.offset ?? 0,
+      limit,
+      has_more: typeof res?.has_more === 'boolean' ? res.has_more : logs.length >= limit,
+    }
+  },
+  /** v18: one task's complete history, ownership-checked server-side. */
+  getRuleLogs: async (ruleId: string, params?: LogQuery): Promise<LogPage> => {
+    const q = new URLSearchParams()
+    if (params?.level && params.level !== 'all') q.set('level', params.level)
+    if (params?.levels?.length) params.levels.forEach((l) => q.append('levels', l))
+    if (params?.search) q.set('search', params.search)
+    if (params?.hours) q.set('hours', String(params.hours))
+    if (params?.since) q.set('since', String(params.since))
+    if (params?.until) q.set('until', String(params.until))
+    if (params?.offset) q.set('offset', String(params.offset))
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.ascending) q.set('order', 'asc')
+    const res = await fetchJson<any>(
+      `${API_BASE}/rules/${encodeURIComponent(ruleId)}/logs${q.toString() ? '?' + q.toString() : ''}`,
+    )
+    const logs: LogItem[] = Array.isArray(res?.logs) ? res.logs : []
+    const limit = res?.limit ?? params?.limit ?? 100
+    return {
+      logs,
+      total: typeof res?.total === 'number' ? res.total : logs.length,
+      count: logs.length,
+      offset: typeof res?.offset === 'number' ? res.offset : params?.offset ?? 0,
+      limit,
+      has_more: typeof res?.has_more === 'boolean' ? res.has_more : logs.length >= limit,
+      rule_id: res?.rule_id,
+    }
+  },
+  /** v18: download the filtered history (json | csv) with the auth header. */
+  exportLogs: async (params?: LogQuery & { format?: 'json' | 'csv' }): Promise<void> => {
+    const q = new URLSearchParams()
+    if (params?.service && params.service !== 'all') q.set('service', params.service)
+    if (params?.level && params.level !== 'all') q.set('level', params.level)
+    if (params?.levels?.length) params.levels.forEach((l) => q.append('levels', l))
+    if (params?.category) q.set('category', params.category)
+    if (params?.search) q.set('search', params.search)
+    if (params?.rule_id) q.set('rule_id', params.rule_id)
+    if (params?.correlation_id) q.set('correlation_id', params.correlation_id)
+    if (params?.since) q.set('since', String(params.since))
+    if (params?.until) q.set('until', String(params.until))
+    if (params?.hours) q.set('hours', String(params.hours))
+    q.set('format', params?.format || 'json')
+    const res = await fetch(`${API_BASE}/logs/export?${q.toString()}`, { headers: authHeaders() })
+    if (!res.ok) throw new Error(`Export failed (${res.status})`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `atf-logs-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.${params?.format || 'json'}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  },
+  getLogStats: async (params?: { rule_id?: string; mine?: boolean }): Promise<LogStats> => {
+    const q = new URLSearchParams()
+    if (params?.rule_id) q.set('rule_id', params.rule_id)
+    if (params?.mine) q.set('mine', '1')
+    return fetchJson<LogStats>(`${API_BASE}/logs/stats${q.toString() ? '?' + q.toString() : ''}`)
   },
   purgeLogs: (req: PurgeLogsRequest) =>
     fetchJson<PurgeLogsResponse>(`${API_BASE}/logs/purge`, {
