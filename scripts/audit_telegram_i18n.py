@@ -166,13 +166,23 @@ def changed_python_files() -> tuple[list[str], str]:
     event_base = os.getenv("GITHUB_BASE_REF")
     if event_base:
         base = f"origin/{event_base}"
-    subprocess.run(
-        ["git", "fetch", "--no-tags", "origin", base.removeprefix("origin/")],
-        cwd=ROOT, check=False, capture_output=True, text=True,
+    # Prefer the ref already supplied by checkout. Fetch only when absent,
+    # and bound network operations so a transient GitHub hiccup cannot hang CI.
+    present = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", base],
+        cwd=ROOT, check=False, capture_output=True, text=True, timeout=5,
     )
+    if present.returncode != 0:
+        try:
+            subprocess.run(
+                ["git", "fetch", "--no-tags", "origin", base.removeprefix("origin/")],
+                cwd=ROOT, check=False, capture_output=True, text=True, timeout=15,
+            )
+        except subprocess.TimeoutExpired:
+            pass
     result = subprocess.run(
         ["git", "diff", "--name-only", "--diff-filter=ACMRT", f"{base}...HEAD"],
-        cwd=ROOT, check=False, capture_output=True, text=True,
+        cwd=ROOT, check=False, capture_output=True, text=True, timeout=10,
     )
     if result.returncode != 0:
         # A shallow/local checkout may lack the merge base. Fall back to all
