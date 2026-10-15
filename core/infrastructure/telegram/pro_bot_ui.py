@@ -4188,14 +4188,12 @@ class ProBotUI:
             st.step = "rule_clean_words_input"
             st.buffer = {"rule_id": rule_id}
             await self._persist(uid, st)
-            prompt = (
-                "📝 **تنظیم کلمات حذفی سفارشی (Custom Words):**\n\n"
-                "کلماتی که می‌خواهید به طور خودکار از پیام‌ها پاک شوند را ارسال کنید.\n"
-                "(می‌توانید کلمات را با کاما (,) یا در خطوط جداگانه ارسال کنید).\n\n"
-                "برای پاکسازی همه کلمات عبارت `clear` را بفرستید.\n"
-                self._t("ui_cancel_hint")
+            prompt = self._t("ui_custom_words_prompt")
+            await self._safe_edit(
+                cq,
+                prompt,
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rcl:{rule_id}")]]),
             )
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rcl:{rule_id}")]]))
             await cq.answer()
 
         # ---------------- Filters Callbacks ----------------
