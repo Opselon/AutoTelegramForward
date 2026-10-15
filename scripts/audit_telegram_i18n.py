@@ -36,7 +36,7 @@ VISIBLE_KEYWORDS = {
 I18N_MARKERS = ("_t(", ".t(", "i18n.", "translate(", "gettext(")
 TECHNICAL = re.compile(
     r"^(?:https?://|@[A-Za-z0-9_]{3,}|[A-Z][A-Z0-9_]{2,}|"
-    r"[a-z_][a-z0-9_]*(?:_[a-z0-9_]+)*|\d+(?:\\.\d+)?|"
+    r"[a-z_][a-z0-9_]*(?:_[a-z0-9_]+)*|\d+(?:\.\d+)?|"
     r"\s*|[\W_]+)$"
 )
 RTL = re.compile(r"[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]")
