@@ -92,6 +92,8 @@ class AppMessagesEn {
     'dash_failed': 'Failed',
     'dash_health': 'Service health',
     'dash_recent_errors': 'Recent errors',
+    'diag_title': 'Preflight checks',
+    'diag_all_ok': 'No problems found — every task is healthy.',
 
     // sessions
     'sessions_title': 'Telegram sessions',

@@ -907,3 +907,100 @@ class AuditEvent {
     );
   }
 }
+
+/// One finding from the server's preflight diagnostics pass.
+///
+/// Mirrors a single entry of `GET /api/diagnostics`'s `findings` array: a
+/// severity, a human sentence, and — critically — a remediation hint, so the
+/// client can tell the user what to *do* rather than only what is wrong.
+@immutable
+class DiagnosticFinding {
+  const DiagnosticFinding({
+    required this.id,
+    required this.severity,
+    required this.scope,
+    required this.title,
+    required this.detail,
+    required this.remediation,
+  });
+
+  final String id;
+
+  /// error | warning | info
+  final String severity;
+
+  /// service | session | ai | rule
+  final String scope;
+  final String title;
+  final String detail;
+  final String remediation;
+
+  bool get isError => severity == 'error';
+  bool get isWarning => severity == 'warning';
+
+  factory DiagnosticFinding.fromJson(Map<String, dynamic> json) =>
+      DiagnosticFinding(
+        id: json['id'] as String? ?? '',
+        severity: (json['severity'] as String? ?? 'info').toLowerCase(),
+        scope: json['scope'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+        detail: json['detail'] as String? ?? '',
+        remediation: json['remediation'] as String? ?? '',
+      );
+}
+
+/// Full preflight report: an overall grade plus the ranked findings behind it.
+@immutable
+class DiagnosticsReport {
+  const DiagnosticsReport({
+    required this.status,
+    required this.score,
+    required this.errorCount,
+    required this.warningCount,
+    required this.infoCount,
+    required this.services,
+    required this.rulesScanned,
+    required this.aiConfigsScanned,
+    required this.findings,
+  });
+
+  /// healthy | warning | critical
+  final String status;
+
+  /// 0-100; the server floors this at zero.
+  final int score;
+  final int errorCount;
+  final int warningCount;
+  final int infoCount;
+  final List<ServiceHealth> services;
+  final int rulesScanned;
+  final int aiConfigsScanned;
+  final List<DiagnosticFinding> findings;
+
+  bool get isHealthy => status == 'healthy';
+
+  factory DiagnosticsReport.fromJson(Map<String, dynamic> json) {
+    final counts = (json['counts'] as Map?)?.cast<String, dynamic>() ?? {};
+    final scanned = (json['scanned'] as Map?)?.cast<String, dynamic>() ?? {};
+    final rawServices = (json['services'] as List?) ?? const [];
+    final rawFindings = (json['findings'] as List?) ?? const [];
+
+    return DiagnosticsReport(
+      status: (json['status'] as String? ?? 'healthy').toLowerCase(),
+      score: (json['score'] as num?)?.toInt() ?? 0,
+      errorCount: (counts['error'] as num?)?.toInt() ?? 0,
+      warningCount: (counts['warning'] as num?)?.toInt() ?? 0,
+      infoCount: (counts['info'] as num?)?.toInt() ?? 0,
+      services: rawServices
+          .whereType<Map>()
+          .map((e) => ServiceHealth.fromJson(e.cast<String, dynamic>()))
+          .toList(growable: false),
+      rulesScanned: (scanned['rules'] as num?)?.toInt() ?? 0,
+      aiConfigsScanned: (scanned['ai_configs'] as num?)?.toInt() ?? 0,
+      findings: rawFindings
+          .whereType<Map>()
+          .map((e) => DiagnosticFinding.fromJson(e.cast<String, dynamic>()))
+          .toList(growable: false),
+    );
+  }
+}

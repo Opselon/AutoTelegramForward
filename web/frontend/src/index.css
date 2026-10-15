@@ -634,3 +634,279 @@ textarea {
     gap: 16px !important;
   }
 }
+
+/* ================================================================== */
+/* UI/UX upgrade layer — motion tokens, focus rings, preflight cards   */
+/* ================================================================== */
+
+:root {
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --focus-ring: 0 0 0 3px rgba(99, 102, 241, 0.45);
+  --success: #10b981;
+  --warning: #f59e0b;
+  --critical: #ef4444;
+}
+
+/* Keyboard users need a visible ring; mouse users should not see one. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.35);
+  color: #fff;
+}
+
+/* Interactive surfaces get a consistent, cheap transition. */
+.btn,
+.input-field,
+.glass-panel,
+.badge {
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    color var(--dur-base) var(--ease-out);
+}
+
+.btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Cards lift slightly instead of merely changing hue on hover. */
+.glass-panel.lift:hover,
+.rule-card:hover,
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.35),
+    0 0 0 1px var(--border-glow);
+}
+
+/* Brand gradient text for headings / KPI numbers. */
+.text-gradient {
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Loading skeleton — used while a panel fetches its own data. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: var(--radius-sm);
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------------------------------------------- preflight panel */
+.preflight {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.preflight--healthy {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.preflight--warning {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.preflight--critical {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.preflight-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.preflight-title {
+  font-weight: 800;
+  font-size: 0.92rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.preflight-score {
+  font-variant-numeric: tabular-nums;
+}
+
+.preflight-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.preflight-services {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-top: var(--space-md);
+}
+
+.preflight-chip {
+  font-size: 0.7rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 600;
+}
+
+.preflight-chip--up {
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--success);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.preflight-chip--down {
+  background: rgba(239, 68, 68, 0.14);
+  color: var(--critical);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.preflight-findings {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.finding {
+  border-left: 3px solid var(--border-color);
+  background: rgba(2, 6, 23, 0.5);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+}
+
+.finding--error {
+  border-left-color: var(--critical);
+}
+.finding--warning {
+  border-left-color: var(--warning);
+}
+.finding--info {
+  border-left-color: #60a5fa;
+}
+
+.finding-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.finding--error .finding-title {
+  color: var(--critical);
+}
+.finding--warning .finding-title {
+  color: var(--warning);
+}
+.finding--info .finding-title {
+  color: #60a5fa;
+}
+
+.finding-detail {
+  font-size: 0.75rem;
+  color: #cbd5e1;
+  margin-top: 4px;
+}
+
+.finding-fix {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.preflight-ok {
+  margin-top: var(--space-md);
+  font-size: 0.8rem;
+  color: var(--success);
+}
+
+/* Respect the user's motion preference: kill decorative animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .glass-panel.lift:hover,
+  .rule-card:hover,
+  .hover-lift:hover {
+    transform: none;
+  }
+}
+
+/* Print: drop chrome, keep the data readable. */
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .app-header,
+  .bottom-nav,
+  .btn {
+    display: none !important;
+  }
+  .glass-panel {
+    border-color: #ccc;
+    backdrop-filter: none;
+  }
+}

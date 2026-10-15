@@ -28,9 +28,18 @@ class _SessionsScreenState extends State<SessionsScreen> {
   bool _loading = false;
   String? _error;
 
+  /// One-shot guard: `didChangeDependencies` can fire more than once, and a
+  /// second fetch on every theme/locale change would hammer the API.
+  bool _bootstrapped = false;
+
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_bootstrapped) return;
+    _bootstrapped = true;
+    // Must run here, not in initState: this screen reads AppMessages (via
+    // Localizations) and AppState (via Provider) — both are inherited widgets,
+    // and depending on them before initState completes throws.
     _load();
   }
 

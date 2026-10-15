@@ -35,9 +35,15 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   String? _error;
 
+  bool _prefilled = false;
+
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_prefilled) return;
+    _prefilled = true;
+    // Pre-fill from the persisted session. Reading AppState is an inherited
+    // widget lookup, so it cannot happen in initState.
     final state = context.read<AppState>();
     if (state.savedUsername.isNotEmpty) {
       _usernameCtrl.text = state.savedUsername;
