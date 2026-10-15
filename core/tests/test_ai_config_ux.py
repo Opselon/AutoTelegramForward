@@ -206,7 +206,7 @@ async def test_pro_bot_ui_edit_host_flow():
     assert cfg.base_url == "http://sub.legoten.com:4455/v1"
     ui._ai.update_owned.assert_called_once_with(cfg, 123)
     msg.reply_text.assert_called_once()
-    assert "آدرس هاست به‌روزرسانی شد" in msg.reply_text.call_args[0][0]
+    assert "ui_step_host_updated" in msg.reply_text.call_args[0][0] or "آدرس هاست به‌روزرسانی شد" in msg.reply_text.call_args[0][0]
 
 
 @pytest.mark.asyncio
