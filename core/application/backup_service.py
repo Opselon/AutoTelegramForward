@@ -642,6 +642,40 @@ def deserialize_bundle(text: str) -> Dict[str, Any]:
     return doc
 
 
+
+_SESSION_BACKUP_PREFIX = "atf-session:v1:"
+
+
+def encrypt_session_backup(bundle: Dict[str, Any], crypto: Any) -> str:
+    """Encrypt a per-session backup with the installation's AES-GCM key.
+
+    This format is intentionally installation-bound. Cross-installation
+    migrations must use the passphrase-protected full-bundle export instead.
+    """
+    payload = json.dumps(bundle, separators=(",", ":"), ensure_ascii=False)
+    return _SESSION_BACKUP_PREFIX + crypto.encrypt(payload)
+
+
+def decrypt_session_backup(blob: str, crypto: Any) -> Dict[str, Any]:
+    """Decrypt current session backups and read legacy base64-only backups.
+
+    Legacy support is import-only; all newly exported files use authenticated
+    encryption. Callers must remove downloaded temporary files after import.
+    """
+    import base64
+
+    if blob.startswith(_SESSION_BACKUP_PREFIX):
+        payload = crypto.decrypt(blob[len(_SESSION_BACKUP_PREFIX):])
+    else:
+        # Compatibility with old .atf files that were merely base64-encoded.
+        payload = base64.urlsafe_b64decode(blob.encode("ascii")).decode("utf-8")
+    value = json.loads(payload)
+    if not isinstance(value, dict) or not value.get("session_string"):
+        raise ValueError("invalid session backup payload")
+    return value
+
+
+
 def encrypt_bundle(plaintext: str, passphrase: str) -> str:
     """Encrypt a serialized bundle with a user passphrase (AES-GCM).
 
