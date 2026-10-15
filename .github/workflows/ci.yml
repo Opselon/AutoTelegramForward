@@ -30,6 +30,12 @@ jobs:
       - name: Run Python tests
         run: python -m pytest -q core/tests logger/tests scripts/tests
 
+      - name: Telegram UI hardcoded-string guard
+        # New visible strings in Telegram UI handlers, callbacks, and button
+        # labels must use the user's locale catalog. Existing debt is tracked
+        # separately; this guard is change-scoped and fail-closed.
+        run: python scripts/audit_telegram_i18n.py
+
       - name: Cross-language catalog audit
         # Every translation catalog (bot + mobile) must be 1:1 with the
         # English reference: no missing/extra keys, no empty values, no
