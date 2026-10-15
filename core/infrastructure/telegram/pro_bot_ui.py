@@ -6014,7 +6014,7 @@ class ProBotUI:
                 "کلمات یا عبارات مورد نظر را با کاما (virgool) جدا کرده و ارسال کنید.\n"
                 "نمونه:\n"
                 "`VIP, SIGNAL, GOLD, تحلیل اختصاصی`\n\n"
-                "برای حذف تمام کلیدواژه‌ها عبارت `حذف` را ارسال کنید.\n"
+                "برای حذف تمام کلیدواژه‌ها عبارت `حذف` را ارسال کنید.\n" +
                 self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
@@ -6037,7 +6037,7 @@ class ProBotUI:
                 "نمونه‌ها:\n"
                 "• `(?i)TP\\d+\\s+HIT`\n"
                 "• `(?i)(gold|xauusd)\\s+(buy|sell)`\n\n"
-                "برای حذف Regex عبارت `حذف` را ارسال کنید.\n"
+                "برای حذف Regex عبارت `حذف` را ارسال کنید.\n" +
                 self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
@@ -6192,7 +6192,7 @@ class ProBotUI:
                 "• `-1001234567890`\n"
                 "• `@my_intermediate_channel`\n"
                 "• `https://t.me/+uVg1efOFMEc2NTNk`\n\n"
-                "⚠️ *نکته ضد لوپ: کانال واسط نباید با کانال مبدأ یا مقصد یکسان باشد.*\n\n"
+                "⚠️ *نکته ضد لوپ: کانال واسط نباید با کانال مبدأ یا مقصد یکسان باشد.*\n\n" +
                 self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
@@ -6213,7 +6213,7 @@ class ProBotUI:
                 "🏷 **تنظیم هدر اختصاصی کپی (Custom Header):**\n\n"
                 "متنی که می‌خواهید به عنوان هدر ویژه در ابتدای پیام‌های کپی‌شده قرار گیرد را ارسال کنید.\n"
                 "نمونه:\n"
-                "💎 `VIP Alert | تحلیل طلایی اختصاصی`\n\n"
+                "💎 `VIP Alert | تحلیل طلایی اختصاصی`\n\n" +
                 self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
@@ -6236,7 +6236,7 @@ class ProBotUI:
                 "1. تشخیص نوع پیام (VIP یا کاربر عادی)\n"
                 "2. تطبیق با قانون و اولویت مسیر\n"
                 "3. مسیر انتقال (مستقیم یا کانال واسط)\n"
-                "4. متن پیش‌نمایش به همراه هدرها و فیلترها\n\n"
+                "4. متن پیش‌نمایش به همراه هدرها و فیلترها\n\n" +
                 self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
