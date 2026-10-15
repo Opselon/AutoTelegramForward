@@ -542,7 +542,7 @@ class ProBotUI:
 
         return (
             f"{self._t('ui_login_code')}\n\n"
-            f"🔢 کد وارد شده: `[ {code_box} ]`"
+            f"{self._t('ui_login_code_entered')} `[ {code_box} ]`"
         )
 
     def _render_welcome_onboarding(self, uid: int, user: Optional[Any] = None) -> Tuple[str, InlineKeyboardMarkup]:
@@ -945,9 +945,16 @@ class ProBotUI:
             [("⬅️ " + self._t("ui_back"), CB["main"])],
         ])
 
-    def _rules_menu(self, rules: Optional[list] = None, page: int = 0, page_size: int = 5) -> InlineKeyboardMarkup:
+    def _rules_menu(
+        self,
+        rules: Optional[list] = None,
+        page: int = 0,
+        page_size: int = 5,
+        lang: Optional[str] = None,
+    ) -> InlineKeyboardMarkup:
+        cur_lang = lang or _BOT_RENDER_LANGUAGE.get() or "en"
         rows: List[List[Tuple[str, str]]] = [
-            [("➕ " + self._t("ui_rule_add"), CB["rule_add"])],
+            [("➕ " + self._t("ui_rule_add", lang=cur_lang), CB["rule_add"])],
         ]
         if rules:
             total_items = len(rules)
@@ -963,20 +970,20 @@ class ProBotUI:
                 dst = (r.target_chat_name or r.target_chat_id)[:12]
                 rows.append([
                     (f"{status_icon} {src} ➔ {dst}", f"rd:{r.id}"),
-                    ("✏️ ویرایش", f"re:{r.id}"),
+                    (self._t("ui_rule_edit_btn", lang=cur_lang), f"re:{r.id}"),
                     ("🗑", f'{CB["rule_del"]}:{r.id}'),
                 ])
 
             if total_pages > 1:
                 nav_row: List[Tuple[str, str]] = []
                 if page > 0:
-                    nav_row.append((f"◀️ {self._t('ui_prev')}", f"r_pg:{page - 1}"))
+                    nav_row.append((f"◀️ {self._t('ui_prev', lang=cur_lang)}", f"r_pg:{page - 1}"))
                 nav_row.append((f"📄 {page + 1} / {total_pages}", "noop"))
                 if page < total_pages - 1:
-                    nav_row.append((f"{self._t('ui_next')} ▶️", f"r_pg:{page + 1}"))
+                    nav_row.append((f"{self._t('ui_next', lang=cur_lang)} ▶️", f"r_pg:{page + 1}"))
                 rows.append(nav_row)
 
-        rows.append([("⬅️ " + self._t("ui_back"), CB["main"])])
+        rows.append([("⬅️ " + self._t("ui_back", lang=cur_lang), CB["main"])])
         return self._kbd(rows)
 
     def _render_rules_list(
@@ -1012,7 +1019,7 @@ class ProBotUI:
             lines.append("")
             lines.append(self._t("ui_rules_page_info", lang=lang, page=page + 1, total=total_pages, count=total_items))
 
-        return "\n".join(lines), self._rules_menu(rules_list, page=page, page_size=page_size)
+        return "\n".join(lines), self._rules_menu(rules_list, page=page, page_size=page_size, lang=lang)
 
     def _render_rule_detail(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
         lang = self._lang_for(rule)
@@ -1406,7 +1413,7 @@ class ProBotUI:
             f"👑 **PAID ADDON Catalogue — 18 Modular Extensions**\n"
             f"📋 **Task:** `{task_name}`\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"از این بخش می‌توانید افزونه‌های ماژولار و پیشرفته را برای این تسک فعال یا غیرفعال نمایید:\n"
+            f"{self._t('ui_addon_catalogue_desc')}\n"
         )
 
         rows: List[List[Tuple[str, str]]] = []
@@ -2340,7 +2347,7 @@ class ProBotUI:
                 prov = self._provider_label(prov_val)
                 label = f"{status} {c.name or 'AI'} [{prov} • {c.model}]"
                 rows.append([(label, f"aid:{c.id}")])
-        rows.append([("💬 پاسخگوی هوشمند پی‌وی (AI PV Assistant)", "pv:menu")])
+        rows.append([(self._t("ui_btn_ai_pv_assistant"), "pv:menu")])
         rows.append([("➕ " + self._t("ui_ai_add"), CB["ai_add"])])
         rows.append([("⬅️ " + self._t("ui_back"), CB["main"])])
         return self._kbd(rows)
@@ -2639,7 +2646,7 @@ class ProBotUI:
                 lang = await self._get_user_lang(uid)
                 if lang == "fa":
                     c_text = self._t("ui_cancelled")
-                    btn_connect = "🚀 تلاش مجدد برای اتصال"
+                    btn_connect = self._t("ui_retry_connect")
                     btn_menu = self._t("ui_back_main_menu")
                 elif lang == "ru":
                     c_text = "❌ Операция отменена."
@@ -2723,19 +2730,17 @@ class ProBotUI:
                         r.max_time_edit = secs
                         await self._save_owned_rule(r, uid)
                     await message.reply_text(
-                        f"✅ سقف مجاز زمان ویرایش پیام‌ها (`max_time_edit`) برای تمام تسک‌های شما به **{secs} ثانیه** تنظیم شد."
+                        self._t("ui_mte_global_set", secs=secs)
                     )
                     return
 
                 rules = await self._rules.list_by_owner(uid) if uid else []
                 if not rules:
-                    await message.reply_text("❌ شما هیچ تسک فعالی برای تنظیم محدودیت زمانی ادیت ندارید.")
+                    await message.reply_text(self._t("ui_forward_cmd_no_rules"))
                     return
 
                 text = (
-                    "⏱ **تنظیم محدودیت زمان ویرایش پیام (Max Time Edit)**\n\n"
-                    "می‌توانید دستور را به صورت `/forward <ثانیه>` ارسال کنید (مثلاً `/forward 3600`) "
-                    "یا تسک مورد نظر خود را از لیست زیر انتخاب فرمایید:"
+                    self._t("ui_forward_cmd_prompt")
                 )
                 _, kbd = self._render_rules_list(rules, page=0)
                 await message.reply_text(text, reply_markup=kbd)
@@ -2841,7 +2846,7 @@ class ProBotUI:
             if not cfgs:
                 lines.append(self._t("ui_none"))
             else:
-                lines.append("👇 برای بررسی سلامت، تست اتصال یا تغییر تنظیمات، روی هر پیکربندی کلیک کنید:")
+                lines.append(self._t("ui_ai_menu_click_hint"))
             for c in cfgs:
                 status = "🟢" if c.is_enabled else "🔴"
                 lines.append(
@@ -2918,7 +2923,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_help(_, cq: CallbackQuery):
             btn_back = "⬅️ " + self._t("ui_back")
-            btn_sup = "🆘 " + ("پشتیبانی (@Capxi)" if self._resolve_lang(uid) == "fa" else "Support (@Capxi)")
+            btn_sup = self._t("ui_support_btn", lang=self._resolve_lang(uid))
             kbd = InlineKeyboardMarkup([
                 [InlineKeyboardButton(btn_sup, url="https://t.me/Capxi")],
                 [InlineKeyboardButton(btn_back, callback_data=CB["main"])],
@@ -2949,7 +2954,7 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             text = self._upgrade_text(uid)
             is_fa = self._resolve_lang(uid) == "fa"
-            btn_buy = "💎 خرید و فعال‌سازی اشتراک (@Capxi)" if is_fa else "💎 Buy VIP Subscription (@Capxi)"
+            btn_buy = self._t("ui_buy_btn", lang=self._resolve_lang(uid))
             btn_back = "⬅️ " + self._t("ui_back")
             kbd = InlineKeyboardMarkup([
                 [InlineKeyboardButton(btn_buy, url="https://t.me/Capxi")],
@@ -3066,7 +3071,7 @@ class ProBotUI:
         async def _cb_admin_panel(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ فقط مدیران سامانه مجاز به دسترسی هستند.", show_alert=True)
+                return await cq.answer(self._t("ui_owner_only_alert"), show_alert=True)
             text, kbd = await self._render_admin_panel(uid)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -3407,9 +3412,9 @@ class ProBotUI:
                     logger.warning("Force-sub verification check error: %s", exc)
 
             if not is_member:
-                return await cq.answer("⚠️ شما هنوز در کانال عضو نشده‌اید! لطفاً ابتدا عضو شوید.", show_alert=True)
+                return await cq.answer(self._t("ui_not_joined_alert"), show_alert=True)
 
-            await cq.answer("✅ عضویت شما با موفقیت تأیید گردید! خوش آمدید.", show_alert=True)
+            await cq.answer(self._t("ui_join_verified_alert"), show_alert=True)
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
             if not sessions:
                 text, kbd = self._render_welcome_onboarding(uid, user=cq.from_user)
@@ -3443,7 +3448,7 @@ class ProBotUI:
                     lang = await self._get_user_lang(uid)
                     if lang == "fa":
                         c_text = self._t("ui_cancelled")
-                        btn_connect = "🚀 تلاش مجدد برای اتصال"
+                        btn_connect = self._t("ui_retry_connect")
                         btn_menu = self._t("ui_back_main_menu")
                     elif lang == "ru":
                         c_text = "❌ Операция отменена."
@@ -3811,11 +3816,10 @@ class ProBotUI:
             rule = await self._rules.get(rid)
             name = (rule.source_chat_name or rule.source_chat_id) if rule else rid[:8]
             confirm_text = (
-                f"⚠️ **تأیید حذف قانون**\n\n"
-                f"آیا مطمئن هستید که می‌خواهید قانون «`{name}`» را حذف کنید؟"
+                self._t("ui_confirm_delete_rule") + "\n\n" + self._t("ui_confirm_delete_rule_body", name=name)
             )
             confirm_kbd = self._kbd([
-                [("🗑 بله، حذف شود", f"rdelyes:{rid}")],
+                [(self._t("ui_confirm_yes_delete"), f"rdelyes:{rid}")],
                 [(self._t("ui_cancel_back"), f"rd:{rid}")],
             ])
             await self._safe_edit(cq, confirm_text, reply_markup=confirm_kbd)
@@ -3915,14 +3919,7 @@ class ProBotUI:
             st.buffer = {"rule_id": rule_id}
             await self._persist(cq.from_user.id, st)
             prompt = (
-                "✏️ **افزودن عبارت جایگزین (Text Replace):**\n\n"
-                "عبارت مبدأ و عبارت جدید را به یکی از فرمت‌های زیر بفرستید:\n\n"
-                "`کلمه قدیمی -> کلمه جدید`\n"
-                "`@OldChannel -> @MyChannel`\n"
-                "`تخفیف ۱۰٪ -> تخفیف ۵۰٪`\n\n"
-                "💡 **جهت حذف کامل یک کلمه:** کافیست بعد از `->` چیزی ننویسید:\n"
-                "`کلمه حذفی ->`\n\n"
-                "برای بازگشت می‌توانید دکمه زیر را لمس کنید:"
+                self._t("ui_rep_rule_instructions")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[(self._t("ui_cancel_back"), f"rtx:{rule_id}")]]))
             await cq.answer()
@@ -3941,7 +3938,7 @@ class ProBotUI:
                 rule.metadata = {}
             rule.metadata["replacements"] = {}
             await self._rules.update(rule)
-            await cq.answer("🗑 همه جایگزینی‌ها پاکسازی شدند")
+            await cq.answer(self._t("ui_rep_all_cleared_alert"))
             text, kbd = self._render_replace_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -3956,7 +3953,7 @@ class ProBotUI:
             idx = int(idx_str)
             rule = await self._rules.get(rule_id)
             if not rule or not rule.replacements:
-                return await cq.answer("❌ موردی یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rep_none_found_alert"), show_alert=True)
             keys = list(rule.replacements.keys())
             if 0 <= idx < len(keys):
                 target_key = keys[idx]
@@ -4074,7 +4071,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.remove_links = not bool(rule.remove_links)
             await self._save_owned_rule(rule, uid)
-            status = "حذف لینک‌ها فعال شد 🚫" if rule.remove_links else "حفظ لینک‌ها مجاز شد 🟢"
+            status = self._t("ui_clean_urls_on") if rule.remove_links else self._t("ui_clean_urls_off")
             await cq.answer(status)
             text, kbd = self._render_cleaner_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4090,7 +4087,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.clean_usernames = not bool(rule.clean_usernames)
             await self._save_owned_rule(rule, uid)
-            status = "حذف منشن‌ها فعال شد 🚫" if rule.clean_usernames else "حفظ منشن‌ها مجاز شد 🟢"
+            status = self._t("ui_clean_mentions_on") if rule.clean_usernames else self._t("ui_clean_mentions_off")
             await cq.answer(status)
             text, kbd = self._render_cleaner_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4106,7 +4103,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.clean_hashtags = not bool(rule.clean_hashtags)
             await self._save_owned_rule(rule, uid)
-            status = "حذف هشتگ‌ها فعال شد 🚫" if rule.clean_hashtags else "حفظ هشتگ‌ها مجاز شد 🟢"
+            status = self._t("ui_clean_hashtags_on") if rule.clean_hashtags else self._t("ui_clean_hashtags_off")
             await cq.answer(status)
             text, kbd = self._render_cleaner_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4122,7 +4119,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.remove_emojis = not bool(rule.remove_emojis)
             await self._save_owned_rule(rule, uid)
-            status = "پاکسازی ایموجی فعال شد 🧹" if rule.remove_emojis else "حفظ ایموجی مجاز شد 🟢"
+            status = self._t("ui_clean_emojis_on") if rule.remove_emojis else self._t("ui_clean_emojis_off")
             await cq.answer(status)
             text, kbd = self._render_cleaner_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4138,7 +4135,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.clean_phones = not bool(rule.clean_phones)
             await self._save_owned_rule(rule, uid)
-            status = "حذف شماره تماس فعال شد 🚫" if rule.clean_phones else "حفظ شماره تماس مجاز شد 🟢"
+            status = self._t("ui_clean_phones_on") if rule.clean_phones else self._t("ui_clean_phones_off")
             await cq.answer(status)
             text, kbd = self._render_cleaner_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4154,7 +4151,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.clean_buttons = not bool(rule.clean_buttons)
             await self._save_owned_rule(rule, uid)
-            status = "حذف دکمه‌های شیشه‌ای فعال شد 🚫" if rule.clean_buttons else "حفظ دکمه‌ها مجاز شد 🟢"
+            status = self._t("ui_clean_buttons_on") if rule.clean_buttons else self._t("ui_clean_buttons_off")
             await cq.answer(status)
             text, kbd = self._render_cleaner_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4170,7 +4167,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.clean_empty_lines = not bool(rule.clean_empty_lines)
             await self._save_owned_rule(rule, uid)
-            status = "پاکسازی خطوط خالی فعال شد ✂️" if rule.clean_empty_lines else "حفظ خطوط خالی مجاز شد 🟢"
+            status = self._t("ui_clean_empty_lines_on") if rule.clean_empty_lines else self._t("ui_clean_empty_lines_off")
             await cq.answer(status)
             text, kbd = self._render_cleaner_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4221,7 +4218,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_links = not bool(rule.block_links)
             await self._save_owned_rule(rule, uid)
-            status = "فیلتر لینک فعال شد (پیام‌های دارای لینک مسدود می‌شوند) 🚫" if rule.block_links else "فیلتر لینک غیرفعال شد 🟢"
+            status = self._t("ui_filter_link_on") if rule.block_links else self._t("ui_filter_link_off")
             await cq.answer(status)
             text, kbd = self._render_filters_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4237,7 +4234,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_video = not bool(rule.block_video)
             await self._save_owned_rule(rule, uid)
-            status = "مسدودسازی ویدیو فعال شد 🚫" if rule.block_video else "ارسال ویدیو مجاز شد 🟢"
+            status = self._t("ui_block_video_on") if rule.block_video else self._t("ui_block_video_off")
             await cq.answer(status)
             text, kbd = self._render_filters_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4253,7 +4250,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_audio = not bool(rule.block_audio)
             await self._save_owned_rule(rule, uid)
-            status = "مسدودسازی فایل صوتی فعال شد 🚫" if rule.block_audio else "ارسال فایل صوتی مجاز شد 🟢"
+            status = self._t("ui_block_audio_on") if rule.block_audio else self._t("ui_block_audio_off")
             await cq.answer(status)
             text, kbd = self._render_filters_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4269,7 +4266,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_stickers = not bool(rule.block_stickers)
             await self._save_owned_rule(rule, uid)
-            status = "مسدودسازی استیکر فعال شد 🚫" if rule.block_stickers else "ارسال استیکر مجاز شد 🟢"
+            status = self._t("ui_block_stickers_on") if rule.block_stickers else self._t("ui_block_stickers_off")
             await cq.answer(status)
             text, kbd = self._render_filters_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4285,7 +4282,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_text = not bool(rule.block_text)
             await self._save_owned_rule(rule, uid)
-            status = "مسدودسازی پیام متنی فعال شد 🚫" if rule.block_text else "ارسال پیام متنی مجاز شد 🟢"
+            status = self._t("ui_block_text_on") if rule.block_text else self._t("ui_block_text_off")
             await cq.answer(status)
             text, kbd = self._render_filters_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4301,7 +4298,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_voice = not bool(rule.block_voice)
             await self._save_owned_rule(rule, uid)
-            status = "مسدودسازی وویس فعال شد 🚫" if rule.block_voice else "ارسال وویس مجاز شد 🟢"
+            status = self._t("ui_block_voice_on") if rule.block_voice else self._t("ui_block_voice_off")
             await cq.answer(status)
             text, kbd = self._render_filters_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4332,7 +4329,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.max_time_edit = secs
             await self._save_owned_rule(rule, uid)
-            msg = f"سقف زمان ادیت به {secs} ثانیه تغییر کرد ✅" if secs > 0 else "محدودیت زمان ادیت برداشته شد (نامحدود) ✅"
+            msg = self._t("ui_mte_secs_changed", secs=secs) if secs > 0 else self._t("ui_mte_unlimited")
             await cq.answer(msg)
             text, kbd = self._render_max_time_edit_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4365,7 +4362,7 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             st = UiState()
             await self._persist(uid, st)
-            await cq.answer("✅ ستاپ راه‌اندازی با موفقیت بازنشانی شد.")
+            await cq.answer(self._t("ui_setup_reset_done"))
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
             if not sessions:
                 text, kbd = self._render_welcome_onboarding(uid, user=cq.from_user)
@@ -4378,13 +4375,10 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_profile_reset_cfg_prompt(_, cq: CallbackQuery):
             text = (
-                "⚠️ **هشدار بازنشانی تنظیمات (Reset Config)**\n\n"
-                "آیا مطمئن هستید که می‌خواهید تمام تنظیمات پیشرفته (هدر، فوتر، پاک‌کننده، فیلترها و کلمات حذفی) "
-                "تمام قوانین خود را به حالت اولیه بازگردانید؟\n\n"
-                "*(قوانین و سشن‌های شما حذف نخواهند شد، فقط تنظیمات آن‌ها ریست می‌شوند)*"
+                self._t("ui_reset_config_confirmation")
             )
             kbd = self._kbd([
-                [("✅ بله، ریست کامل تنظیمات", "pr_reset_cfg_yes")],
+                [(self._t("ui_reset_config_confirm_button"), "pr_reset_cfg_yes")],
                 [(self._t("ui_cancel_back"), "pr_view")],
             ])
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4404,7 +4398,7 @@ class ProBotUI:
                 r.max_time_edit = 86400
                 r.remove_links = False
                 await self._save_owned_rule(r, uid)
-            await cq.answer("✅ تمام تنظیمات با موفقیت ریست شدند.", show_alert=True)
+            await cq.answer(self._t("ui_all_configs_reset_alert"), show_alert=True)
             body, kbd = await self._render_profile_menu(uid, cq.from_user)
             await self._safe_edit(cq, body, reply_markup=kbd)
 
@@ -4431,7 +4425,7 @@ class ProBotUI:
                 rule.metadata = {}
             rule.metadata["remove_links"] = rule.remove_links
             await self._rules.update(rule)
-            status = "حذف لینک‌ها فعال شد 🚫" if rule.remove_links else "حفظ لینک‌ها مجاز شد 🟢"
+            status = self._t("ui_clean_urls_on") if rule.remove_links else self._t("ui_clean_urls_off")
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4451,7 +4445,7 @@ class ProBotUI:
             new_val = not rule.block_voice
             rule.metadata["block_voice"] = new_val
             await self._rules.update(rule)
-            status = "مسدودسازی ویس فعال شد 🚫" if new_val else "ارسال ویس مجاز شد 🟢"
+            status = self._t("ui_block_voice_on") if new_val else self._t("ui_block_voice_off")
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4471,7 +4465,7 @@ class ProBotUI:
             new_val = not rule.block_stickers
             rule.metadata["block_stickers"] = new_val
             await self._rules.update(rule)
-            status = "مسدودسازی استیکر فعال شد 🚫" if new_val else "ارسال استیکر مجاز شد 🟢"
+            status = self._t("ui_block_stickers_on") if new_val else self._t("ui_block_stickers_off")
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4491,7 +4485,7 @@ class ProBotUI:
             new_val = not rule.remove_emojis
             rule.metadata["remove_emojis"] = new_val
             await self._rules.update(rule)
-            status = "پاکسازی خودکار ایموجی‌ها فعال شد 🧹" if new_val else "حفظ ایموجی‌ها فعال شد 🟢"
+            status = self._t("ui_clean_emoji_on") if new_val else self._t("ui_clean_emoji_off")
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4507,7 +4501,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.ignore_edits = not rule.ignore_edits
             await self._save_owned_rule(rule, uid)
-            status = "نادیده گرفتن ادیت فعال شد ⏹" if rule.ignore_edits else "سینک ادیت مقصد فعال شد 🔄"
+            status = self._t("ui_clean_ignore_edits_on") if rule.ignore_edits else self._t("ui_clean_ignore_edits_off")
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4524,7 +4518,7 @@ class ProBotUI:
             new_val = not rule.sync_deletes
             rule.sync_deletes = new_val
             await self._save_owned_rule(rule, uid)
-            status = "سینک حذف پیام فعال شد 🗑" if new_val else "نادیده گرفتن حذف فعال شد ⏹"
+            status = self._t("ui_clean_sync_deletes_on") if new_val else self._t("ui_clean_sync_deletes_off")
             await cq.answer(status)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4546,8 +4540,8 @@ class ProBotUI:
             next_mode = cycle.get(cur, "album")
             rule.metadata["album_mode"] = next_mode
             await self._rules.update(rule)
-            names = {"album": "🖼 آلبوم کامل", "first": "1️⃣ فقط اولین مدیا", "split": "🔀 تفکیک پیام‌ها"}
-            await cq.answer(f"چندتصویری: {names.get(next_mode, next_mode)}")
+            names = {"album": self._t("ui_media_album_label"), "first": self._t("ui_media_first_label"), "split": self._t("ui_media_split_label")}
+            await cq.answer(self._t("ui_media_group_alert", mode=names.get(next_mode, next_mode)))
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -4569,8 +4563,8 @@ class ProBotUI:
             )
             await self._rules.update(rule)
             mode_names = {
-                ForwardMode.COPY_MESSAGE: "📋 کپی بدون تگ",
-                ForwardMode.DIRECT_FORWARD: "↗️ فوروارد با تگ",
+                ForwardMode.COPY_MESSAGE: self._t("ui_fmode_copy_msg"),
+                ForwardMode.DIRECT_FORWARD: self._t("ui_fmode_direct_fwd"),
             }
             await cq.answer(f"حالت ارسال: {mode_names.get(rule.forward_mode, rule.forward_mode.value)}")
             text, kbd = self._render_rule_detail(rule)
@@ -4584,11 +4578,11 @@ class ProBotUI:
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد یا متعلق به شما نیست", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner_alert"), show_alert=True)
             rule.is_active = not rule.is_active
             await self._save_owned_rule(rule, uid)
-            status = "فعال شد 🟢" if rule.is_active else "غیرفعال شد 🔴"
-            await cq.answer(f"وضعیت: {status}")
+            status = self._t("ui_rule_status_on") if rule.is_active else self._t("ui_rule_status_off")
+            await cq.answer(self._t("ui_rule_status_alert", status=status))
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -4602,14 +4596,14 @@ class ProBotUI:
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             text = (
-                f"⚠️ **آیا از حذف این قانون اطمینان دارید؟**\n\n"
-                f"📡 مبدأ: `{rule.source_chat_name or rule.source_chat_id}`\n"
-                f"🎯 مقصد: `{rule.target_chat_name or rule.target_chat_id}`\n\n"
-                "این عملیات غیرقابل بازگشت است."
+                self._t("ui_rule_delete_confirm_full") + "\n\n"
+                + f"📡 {self._t('ui_rule_source')}: `{rule.source_chat_name or rule.source_chat_id}`\n"
+                + f"🎯 {self._t('ui_rule_target')}: `{rule.target_chat_name or rule.target_chat_id}`\n\n"
+                + self._t("ui_rule_delete_confirm_note")
             )
             kbd = self._kbd([
-                [("🗑 بله، حذف شود", f"rrm_confirm:{rule.id}")],
-                [("❌ انصراف", f"rd:{rule.id}")],
+                [(self._t("ui_confirm_yes_delete"), f"rrm_confirm:{rule.id}")],
+                [(self._t("ui_cancel_back"), f"rd:{rule.id}")],
             ])
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -4624,7 +4618,7 @@ class ProBotUI:
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             await self._rules.delete(rule_id)
-            await cq.answer("🗑 قانون با موفقیت حذف شد", show_alert=True)
+            await cq.answer(self._t("ui_rule_deleted_alert"), show_alert=True)
             rules = await self._rules.list_by_owner(uid) if uid else []
             text, kbd = self._render_rules_list(rules, page=0)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4641,7 +4635,7 @@ class ProBotUI:
             draft = rule.to_draft()
             new_rule = ForwardRule(
                 session_id=rule.session_id,
-                name=f"{rule.name} (کپی)" if rule.name else "قانون جدید (کپی)",
+                name=f"{rule.name} (Copy)" if rule.name else "New Rule (Copy)",
                 source_chat_id=rule.source_chat_id,
                 source_chat_name=rule.source_chat_name,
                 target_chat_id=rule.target_chat_id,
@@ -4653,7 +4647,7 @@ class ProBotUI:
             new_rule.apply_draft(draft)
             new_rule.owner_user_id = uid
             saved = await self._save_owned_rule(new_rule, uid)
-            await cq.answer("📑 قانون با موفقیت تکثیر شد!", show_alert=True)
+            await cq.answer(self._t("ui_rule_duplicated_alert"), show_alert=True)
             text, kbd = self._render_rule_detail(saved)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -4697,7 +4691,7 @@ class ProBotUI:
             await self._save_owned_rule(rule, uid)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
-            await cq.answer(f"دسته: {grp}")
+            await cq.answer(self._t("ui_rule_category_alert", grp=grp))
 
         @b.on_callback_query(filters.regex(r"^(?:radon|radon_tg):(.+?):(.+)$"))
         @self._localized_handler
@@ -4715,7 +4709,7 @@ class ProBotUI:
             addons[addon_key] = not curr
             rule.paid_addons = addons
             await self._save_owned_rule(rule, uid)
-            st_text = "فعال شد 🟢" if not curr else "غیرفعال شد ⚪"
+            st_text = self._t("ui_rule_status_on") if not curr else self._t("ui_rule_status_off_white")
             await cq.answer(f"{addon_key}: {st_text}")
             if is_modal:
                 text, kbd = self._render_all_addons(rule)
@@ -4734,8 +4728,8 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.debug_mode = not rule.debug_mode
             await self._save_owned_rule(rule, uid)
-            st = "فعال شد 🟢" if rule.debug_mode else "غیرفعال شد ⚪"
-            await cq.answer(f"دیباگ: {st}")
+            st = self._t("ui_rule_status_on") if rule.debug_mode else self._t("ui_rule_status_off_white")
+            await cq.answer(self._t("ui_rule_debug_alert", st=st))
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -4750,8 +4744,8 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.show_forward_header = not rule.show_forward_header
             await self._save_owned_rule(rule, uid)
-            st = "فعال شد 🟢" if rule.show_forward_header else "غیرفعال شد ⚪"
-            await cq.answer(f"نمایش هدر مبدأ: {st}")
+            st = self._t("ui_rule_status_on") if rule.show_forward_header else self._t("ui_rule_status_off_white")
+            await cq.answer(self._t("ui_rule_fwd_header_alert", st=st))
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -4766,8 +4760,8 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.sync_replies = not rule.sync_replies
             await self._save_owned_rule(rule, uid)
-            st = "فعال شد 🟢" if rule.sync_replies else "غیرفعال شد ⚪"
-            await cq.answer(f"همگام‌سازی ریپلای: {st}")
+            st = self._t("ui_rule_status_on") if rule.sync_replies else self._t("ui_rule_status_off_white")
+            await cq.answer(self._t("ui_rule_sync_replies_alert", st=st))
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -4905,7 +4899,7 @@ class ProBotUI:
             except ValueError:
                 rule.delay_seconds = 0.0
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"تأخیر: {rule.delay_seconds:.0f} ثانیه")
+            await cq.answer(self._t("ui_delay_status_alert", delay=f"{rule.delay_seconds:.0f}"))
             text, kbd = self._render_delay_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -4922,8 +4916,7 @@ class ProBotUI:
             st.step = f"set_delay_{rule.id}"
             await self._persist(uid, st)
             prompt = (
-                f"⏱ **ورود میزان تأخیر دلخواه (Delay)**\n\n"
-                f"لطفاً عدد ثانیه تأخیر موردنظر را ارسال کنید (مثلاً `5` یا `15`)."
+                self._t("ui_delay_menu_title") + "\n\n" + self._t("ui_prompt_enter_delay")
             )
             kbd = self._kbd([[("❌ انصراف", f"rdly:{rule.id}")]])
             await self._safe_edit(cq, prompt, reply_markup=kbd)
@@ -4956,8 +4949,7 @@ class ProBotUI:
             st.step = f"add_bl_{rule.id}"
             await self._persist(uid, st)
             prompt = (
-                f"🚫 **افزودن به لیست سیاه (Blacklist)**\n\n"
-                f"کلمات یا عبارات موردنظر را ارسال کنید (می‌توانید چند کلمه را با کاما یا در خطوط جداگانه ارسال کنید):"
+                self._t("ui_prompt_add_blacklist")
             )
             kbd = self._kbd([[("❌ انصراف", f"rfl_bl:{rule.id}")]])
             await self._safe_edit(cq, prompt, reply_markup=kbd)
@@ -4974,7 +4966,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.blacklist = []
             await self._save_owned_rule(rule, uid)
-            await cq.answer("🗑 کل لیست سیاه پاکسازی شد")
+            await cq.answer(self._t("ui_blacklist_cleared_alert"))
             text, kbd = self._render_blacklist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5029,8 +5021,7 @@ class ProBotUI:
             st.step = f"add_wl_{rule.id}"
             await self._persist(uid, st)
             prompt = (
-                f"✅ **افزودن به لیست سفید (Whitelist)**\n\n"
-                f"کلمات مجاز را ارسال کنید (تنها پیام‌های حاوی این کلمات فوروارد خواهند شد):"
+                self._t("ui_prompt_add_whitelist")
             )
             kbd = self._kbd([[("❌ انصراف", f"rfl_wl:{rule.id}")]])
             await self._safe_edit(cq, prompt, reply_markup=kbd)
@@ -5047,7 +5038,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.whitelist = []
             await self._save_owned_rule(rule, uid)
-            await cq.answer("🗑 کل لیست سفید پاکسازی شد")
+            await cq.answer(self._t("ui_whitelist_cleared_alert"))
             text, kbd = self._render_whitelist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5078,8 +5069,7 @@ class ProBotUI:
             st.step = f"set_wm_{rule.id}"
             await self._persist(uid, st)
             prompt = (
-                f"🖼 **تنظیم متن واتر‌مارک**\n\n"
-                f"متن یا آیدی موردنظر جهت الصاق به پیام‌ها را ارسال کنید:"
+                self._t("ui_prompt_set_watermark")
             )
             kbd = self._kbd([[("❌ انصراف", f"rwm:{rule.id}")]])
             await self._safe_edit(cq, prompt, reply_markup=kbd)
@@ -5096,7 +5086,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.watermark = ""
             await self._save_owned_rule(rule, uid)
-            await cq.answer("🗑 واتر‌مارک حذف شد")
+            await cq.answer(self._t("ui_watermark_deleted_alert"))
             text, kbd = self._render_watermark_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5126,7 +5116,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.translate_lang = "" if lang_code == "none" else lang_code
             await self._save_owned_rule(rule, uid)
-            status_msg = f"زبان ترجمه: {lang_code.upper()}" if rule.translate_lang else "ترجمه غیرفعال شد"
+            status_msg = f"{self._t('ui_adv_btn_translate')}: {lang_code.upper()}" if rule.translate_lang else self._t("ui_filter_link_off")
             await cq.answer(status_msg)
             text, kbd = self._render_translate_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -5224,11 +5214,9 @@ class ProBotUI:
             await self._persist(uid, st)
             text = (
                 f"#️⃣ **Set up Forwarding Topic**\n\n"
-                f"لطفاً شناسه تاپیک مقصد (Topic ID / Message Thread ID) را به صورت عدد ارسال کنید.\n"
-                f"شناسه فعلی: `{rule.topic_id or 'None'}`\n\n"
-                f"برای حذف تاپیک، عدد `0` را ارسال کنید."
+                + self._t("ui_prompt_set_topic", topic=rule.topic_id or "None")
             )
-            kbd = self._kbd([[("❌ انصراف", f"rd:{rule.id}")]])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rd:{rule.id}")]])
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
@@ -5244,11 +5232,7 @@ class ProBotUI:
             st = self._state(uid)
             st.step = f"rename_rule_{rule.id}"
             await self._persist(uid, st)
-            text = (
-                f"✏️ **تغییر نام تسک (Task Name)**\n\n"
-                f"نام فعلی: `{rule.name or f'task_{rule.id[:8]}'}`\n\n"
-                f"لطفاً نام جدید تسک را ارسال کنید:"
-            )
+            text = self._t("ui_prompt_set_task_name", name=rule.name or f'task_{rule.id[:8]}')
             kbd = self._kbd([[("❌ انصراف", f"rd:{rule.id}")]])
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -5287,7 +5271,7 @@ class ProBotUI:
             await self._persist(uid, st)
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
-            await cq.answer("✏️ حالت پیش‌نویس ویرایش فعال شد")
+            await cq.answer(self._t("ui_rule_draft_mode_on_alert"))
 
         @b.on_callback_query(filters.regex(r"^ed_save:(.+)$"))
         @self._localized_handler
@@ -5304,28 +5288,28 @@ class ProBotUI:
 
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
             if not isinstance(draft, dict):
-                return await cq.answer("⚠️ داده‌های پیش‌نویس منقضی شده‌اند. لطفاً دوباره وارد شوید.", show_alert=True)
+                return await cq.answer(self._t("ui_draft_expired_alert"), show_alert=True)
 
             src = str(draft.get("source_chat_id", "")).strip()
             dst = str(draft.get("target_chat_id", "")).strip()
             if not src or not dst:
-                return await cq.answer("❌ مبدأ یا مقصد نمی‌توانند خالی باشند.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_src_dst_empty_alert"), show_alert=True)
             if src == dst:
-                return await cq.answer("❌ مبدأ و مقصد نمی‌توانند یکسان باشند (جلوگیری از ایجاد حلقه)!", show_alert=True)
+                return await cq.answer(self._t("ui_rule_src_dst_same_alert"), show_alert=True)
 
             rule.apply_draft(draft)
             expected_version = st.buffer.get("version")
             try:
                 await self._rules.update(rule, expected_version=expected_version)
             except ConcurrencyError:
-                return await cq.answer("⚠️ خطا: این قانون هم‌زمان ویرایش شده است. تغییرات جدید را بررسی کنید.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_concurrent_edit_error"), show_alert=True)
             except Exception as exc:
-                return await cq.answer(f"❌ خطا در ذخیره‌سازی: {exc}", show_alert=True)
+                return await cq.answer(self._t("ui_rule_save_error_alert", exc=str(exc)), show_alert=True)
 
             st.step = ""
             st.buffer = {}
             await self._persist(uid, st)
-            await cq.answer("💾 تغییرات قانون با موفقیت ذخیره و اعمال شدند", show_alert=True)
+            await cq.answer(self._t("ui_rule_saved_alert"), show_alert=True)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5343,33 +5327,31 @@ class ProBotUI:
             prompt_id = str(draft.get("prompt_id") or "")
             pol = str(draft.get("ai_fallback_policy") or "DROP")
             tmo = draft.get("ai_timeout_seconds") or 15.0
-            lines = ["🤖 **بازنویسی هوشمند پیام (AI Rewrite)**", ""]
+            lines = [self._t("ui_ai_menu_title"), ""]
             if cfg_id:
                 try:
                     cfg = await self._ai.get(cfg_id)
-                    lines.append(f"🧠 پیکربندی: `{cfg.name}` [{self._provider_label(cfg.provider.value)}/{cfg.model}]" if cfg else f"🧠 پیکربندی: `{cfg_id[:8]}` (یافت نشد!)")
+                    lines.append(f"🧠 {self._t('ui_ai_title')}: `{cfg.name}` [{self._provider_label(cfg.provider.value)}/{cfg.model}]" if cfg else f"🧠 {self._t('ui_ai_title')}: `{cfg_id[:8]}`")
                 except Exception:
-                    lines.append(f"🧠 پیکربندی: `{cfg_id[:8]}`")
+                    lines.append(f"🧠 {self._t('ui_ai_title')}: `{cfg_id[:8]}`")
             else:
-                lines.append("🧠 پیکربندی: ❌ خاموش (پیام‌ها بدون تغییر فوروارد می‌شوند)")
+                lines.append(self._t("ui_ai_cfg_status_off"))
             if prompt_id and self._prompts:
                 try:
                     tpl = await self._prompts.get_template(prompt_id)
-                    lines.append(f"📝 پرامپت: {tpl.name} (v{tpl.current_version})" if tpl else f"📝 پرامپت: `{prompt_id[:8]}` (یافت نشد!)")
+                    lines.append(f"📝 {tpl.name} (v{tpl.current_version})" if tpl else f"📝 `{prompt_id[:8]}`")
                 except Exception:
                     pass
             lines += [
-                f"⚠️ رفتار خطا: **{pol}**" + (" (ارسال متن اصلی)" if pol == "SEND_ORIGINAL" else " (عدم ارسال)" if pol == "DROP" else ""),
+                f"⚠️ {pol}" + (" (SEND_ORIGINAL)" if pol == "SEND_ORIGINAL" else " (DROP)" if pol == "DROP" else ""),
                 f"⏱ Timeout: {tmo}s",
-                "",
-                "💡 این مرحله فقط وقتی پیکربندی AI انتخاب شده باشد اجرا می‌شود.",
             ]
             rows: List[List[Tuple[str, str]]] = [
-                [("🧠 انتخاب پیکربندی AI", f"r_ai_cfg:{rule_id}")],
-                [("📝 انتخاب پرامپت", f"r_ai_prompt:{rule_id}")],
-                [("⚠️ تغییر رفتار خطا", f"r_ai_policy:{rule_id}")],
-                [("🧪 تست با متن نمونه", f"r_ai_test:{rule_id}")],
-                [("⬅️ بازگشت به ادیتور", f"rd:{rule_id}")],
+                [(self._t("ui_ai_btn_pick_config"), f"r_ai_cfg:{rule_id}")],
+                [(self._t("ui_ai_btn_pick_prompt"), f"r_ai_prompt:{rule_id}")],
+                [(self._t("ui_ai_btn_change_policy"), f"r_ai_policy:{rule_id}")],
+                [(self._t("ui_ai_btn_test_sample"), f"r_ai_test:{rule_id}")],
+                [(self._t("ui_ai_btn_back_to_editor"), f"rd:{rule_id}")],
             ]
             return "\n".join(lines), self._kbd(rows)
 
@@ -5383,7 +5365,7 @@ class ProBotUI:
             if not isinstance(draft, dict) or st.buffer.get("rule_id") != rule_id:
                 rule = await self._owned_rule(rule_id, uid)
                 if not rule:
-                    return await cq.answer("❌ قانون یافت نشد یا متعلق به شما نیست", show_alert=True)
+                    return await cq.answer(self._t("ui_rule_not_found_or_not_owner_alert"), show_alert=True)
                 draft = rule.to_draft()
             draft["ai_status_badge"] = _ai_badge(draft)
             text, kbd = await _render_ai_menu(rule_id, draft)
@@ -5400,13 +5382,13 @@ class ProBotUI:
             cfgs = await self._ai.list_by_owner(uid) if (self._ai and uid) else []
             current = str(draft.get("ai_config_id") or "")
             rows: List[List[Tuple[str, str]]] = [
-                [("❌ خاموش (بدون بازنویسی)", f"r_aicset:{rule_id}:")],
+                [(self._t("ui_ai_opt_off"), f"r_aicset:{rule_id}:")],
             ]
             for c in cfgs:
                 mark = "✅" if c.id == current else ("🟢" if c.is_enabled else "🔴")
                 rows.append([(f"{mark} {c.name} [{self._provider_label(c.provider.value)}/{c.model}]", f"r_aicset:{rule_id}:{c.id}")])
             rows.append([(self._t("ui_back"), f"r_ai:{rule_id}")])
-            await self._safe_edit(cq, "🧠 انتخاب پیکربندی AI برای بازنویسی:", reply_markup=self._kbd(rows))
+            await self._safe_edit(cq, self._t("ui_ai_pick_cfg_title"), reply_markup=self._kbd(rows))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_aicset:(.+?):(.*)$"))
@@ -5426,7 +5408,7 @@ class ProBotUI:
             await self._persist(uid, st)
             text, kbd = await _render_ai_menu(rule_id, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
-            await cq.answer("✅ پیکربندی AI ثبت شد (در Save نهایی می‌آید)")
+            await cq.answer(self._t("ui_ai_cfg_staged_alert"))
 
         @b.on_callback_query(filters.regex(r"^r_ai_prompt:(.+)$"))
         @self._localized_handler
@@ -5439,14 +5421,14 @@ class ProBotUI:
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else {}
             current = str(draft.get("prompt_id") or "")
             rows: List[List[Tuple[str, str]]] = [
-                [("⬜ بدون پرامپت سیستمی", f"r_aipset:{rule_id}:")],
+                [(self._t("ui_ai_opt_no_prompt"), f"r_aipset:{rule_id}:")],
             ]
             if self._prompts:
                 for t in await self._prompts.list_templates():
                     mark = "✅" if t.id == current else ("⭐" if t.is_system else "👤")
                     rows.append([(f"{mark} {t.name} (v{t.current_version})", f"r_aipset:{rule_id}:{t.id}")])
             rows.append([(self._t("ui_back"), f"r_ai:{rule_id}")])
-            await self._safe_edit(cq, "📝 انتخاب پرامپت بازنویسی (هر دو رابط بات و داشبورد همین‌ها را می‌بینند):", reply_markup=self._kbd(rows))
+            await self._safe_edit(cq, self._t("ui_ai_pick_prompt_title"), reply_markup=self._kbd(rows))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_aipset:(.+?):(.*)$"))
@@ -5465,7 +5447,7 @@ class ProBotUI:
             await self._persist(uid, st)
             text, kbd = await _render_ai_menu(rule_id, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
-            await cq.answer("✅ پرامپت ثبت شد (در Save نهایی می‌آید)")
+            await cq.answer(self._t("ui_ai_prompt_staged_alert"))
 
         @b.on_callback_query(filters.regex(r"^r_ai_policy:(.+)$"))
         @self._localized_handler
@@ -5474,13 +5456,13 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
             rows: List[List[Tuple[str, str]]] = [
-                [("🟢 SEND_ORIGINAL — ارسال متن اصلی", f"r_aifset:{rule_id}:SEND_ORIGINAL")],
+                [(self._t("ui_ai_policy_send_orig"), f"r_aifset:{rule_id}:SEND_ORIGINAL")],
                 [("🔴 DROP — عدم ارسال (Fail Closed)", f"r_aifset:{rule_id}:DROP")],
                 [("🔁 RETRY — تلاش مجدد", f"r_aifset:{rule_id}:RETRY")],
-                [("🔒 QUARANTINE — قرنطینه", f"r_aifset:{rule_id}:QUARANTINE")],
+                [(self._t("ui_ai_policy_quarantine"), f"r_aifset:{rule_id}:QUARANTINE")],
                 [(self._t("ui_back"), f"r_ai:{rule_id}")],
             ]
-            await self._safe_edit(cq, "⚠️ اگر AI در دسترس نباشد یا خروجی نامعتبر باشد چه اتفاقی بیفتد؟", reply_markup=self._kbd(rows))
+            await self._safe_edit(cq, self._t("ui_ai_pick_policy_title"), reply_markup=self._kbd(rows))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_aifset:(.+?):(.+)$"))
@@ -5514,9 +5496,9 @@ class ProBotUI:
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else {}
             cfg_id = str(draft.get("ai_config_id") or "")
             if not cfg_id:
-                return await cq.answer("⚠️ اول یک پیکربندی AI انتخاب کنید", show_alert=True)
+                return await cq.answer(self._t("ui_ai_must_pick_cfg_alert"), show_alert=True)
             sample = str(draft.get("ai_test_text") or "💎 XAUUSD SIGNAL: BUY NOW @ 2655 | TP 2680 | SL 2640 https://t.me/signal #gold")
-            await self._safe_edit(cq, f"⏳ در حال تست بازنویسی…\n\nمتن نمونه:\n{sample[:200]}", reply_markup=self._kbd([[(self._t("ui_back"), f"r_ai:{rule_id}")]]))
+            await self._safe_edit(cq, self._t("ui_ai_testing_rewrite", sample=sample[:200]), reply_markup=self._kbd([[(self._t("ui_back"), f"r_ai:{rule_id}")]]))
             try:
                 prompt_id = str(draft.get("prompt_id") or "")
                 if prompt_id and self._prompts and self._ai_transformer:
@@ -5530,16 +5512,16 @@ class ProBotUI:
                           "execution_duration_ms": 0.0, "model_used": "", "prompt_version_used": 0}
             if result.get("success"):
                 body = (
-                    "✅ **نتیجه تست بازنویسی:**\n\n"
-                    f"{result.get('transformed_text') or '(خالی)'}\n\n"
-                    f"⏱ {result.get('execution_duration_ms', 0):.0f}ms"
+                    self._t("ui_ai_test_result_title") + "\n\n"
+                    + f"{result.get('transformed_text') or self._t('ui_empty')}\n\n"
+                    + f"⏱ {result.get('execution_duration_ms', 0):.0f}ms"
                     + (f" | 🧠 {result.get('model_used')}" if result.get("model_used") else "")
                     + (f" | 📝 v{result.get('prompt_version_used')}" if result.get("prompt_version_used") else "")
                 )
             else:
                 body = f"❌ **خطا در تست:**\n`{result.get('error_message') or 'unknown'}`"
             await self._safe_edit(cq, body, reply_markup=self._kbd([
-                [("🔄 تست مجدد", f"r_ai_test:{rule_id}")],
+                [("🔄 " + self._t("ui_retry"), f"r_ai_test:{rule_id}")],
                 [(self._t("ui_back"), f"r_ai:{rule_id}")],
             ]))
             await cq.answer()
@@ -5558,7 +5540,7 @@ class ProBotUI:
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
-            await cq.answer("❌ ویرایش پیش‌نویس لغو شد و هیچ تغییری ذخیره نگردید")
+            await cq.answer(self._t("ui_draft_edit_cancelled_alert"))
             if rule:
                 text, kbd = self._render_rule_detail(rule)
                 await self._safe_edit(cq, text, reply_markup=kbd)
@@ -5575,7 +5557,7 @@ class ProBotUI:
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد یا متعلق به شما نیست", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner_alert"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5709,7 +5691,7 @@ class ProBotUI:
             new_mode = ForwardMode.DIRECT_FORWARD.value if cur_val == ForwardMode.COPY_MESSAGE.value else ForwardMode.COPY_MESSAGE.value
             draft["forward_mode"] = new_mode
             await self._persist(uid, st)
-            await cq.answer("حالت ارسال تغییر یافت")
+            await cq.answer(self._t("ui_send_mode_changed_alert"))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5733,8 +5715,8 @@ class ProBotUI:
 
             draft["is_active"] = not bool(draft.get("is_active", True))
             await self._persist(uid, st)
-            stat = "فعال" if draft["is_active"] else "غیرفعال"
-            await cq.answer(f"وضعیت در پیش‌نویس: {stat}")
+            stat = self._t("ui_rule_enabled_short") if draft["is_active"] else self._t("ui_rule_disabled_short")
+            await cq.answer(self._t("ui_draft_status_alert", status=stat))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5758,8 +5740,8 @@ class ProBotUI:
 
             draft["remove_links"] = not bool(draft.get("remove_links", False))
             await self._persist(uid, st)
-            stat = "حذف لینک‌ها 🚫" if draft["remove_links"] else "مجاز 🟢"
-            await cq.answer(f"لینک: {stat}")
+            stat = self._t("ui_stat_remove_links_word") if draft["remove_links"] else self._t("ui_stat_allowed_word")
+            await cq.answer(self._t("ui_clean_url_status", stat=stat))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5784,7 +5766,7 @@ class ProBotUI:
             draft["block_voice"] = not bool(draft.get("block_voice", False))
             await self._persist(uid, st)
             stat = "مسدود 🚫" if draft["block_voice"] else "مجاز 🟢"
-            await cq.answer(f"ویس: {stat}")
+            await cq.answer(self._t("ui_clean_voice_status", stat=stat))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5809,7 +5791,7 @@ class ProBotUI:
             draft["block_stickers"] = not bool(draft.get("block_stickers", False))
             await self._persist(uid, st)
             stat = "مسدود 🚫" if draft["block_stickers"] else "مجاز 🟢"
-            await cq.answer(f"استیکر: {stat}")
+            await cq.answer(self._t("ui_clean_sticker_status", stat=stat))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5833,8 +5815,8 @@ class ProBotUI:
 
             draft["remove_emojis"] = not bool(draft.get("remove_emojis", False))
             await self._persist(uid, st)
-            stat = "پاکسازی 🧹" if draft["remove_emojis"] else "حفظ 🟢"
-            await cq.answer(f"ایموجی: {stat}")
+            stat = self._t("ui_stat_clean_word") if draft["remove_emojis"] else self._t("ui_stat_keep_word")
+            await cq.answer(self._t("ui_clean_emoji_status", stat=stat))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5858,8 +5840,8 @@ class ProBotUI:
 
             draft["ignore_edits"] = not bool(draft.get("ignore_edits", False))
             await self._persist(uid, st)
-            stat = "نادیده ⏹" if draft["ignore_edits"] else "سینک 🔄"
-            await cq.answer(f"ویرایش پیام: {stat}")
+            stat = self._t("ui_stat_ignore_word") if draft["ignore_edits"] else self._t("ui_stat_sync_word")
+            await cq.answer(self._t("ui_clean_edit_status", stat=stat))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5883,8 +5865,8 @@ class ProBotUI:
 
             draft["sync_deletes"] = not bool(draft.get("sync_deletes", False))
             await self._persist(uid, st)
-            stat = "سینک 🗑" if draft["sync_deletes"] else "نادیده ⏹"
-            await cq.answer(f"حذف پیام: {stat}")
+            stat = self._t("ui_stat_sync_del_word") if draft["sync_deletes"] else self._t("ui_stat_ignore_word")
+            await cq.answer(self._t("ui_clean_delete_status", stat=stat))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5911,8 +5893,8 @@ class ProBotUI:
             next_mode = cycle.get(cur, "album")
             draft["album_mode"] = next_mode
             await self._persist(uid, st)
-            names = {"album": "🖼 آلبوم کامل", "first": "1️⃣ فقط اولین مدیا", "split": "🔀 تفکیک پیام‌ها"}
-            await cq.answer(f"چندتصویری: {names.get(next_mode, next_mode)}")
+            names = {"album": self._t("ui_media_album_label"), "first": self._t("ui_media_first_label"), "split": self._t("ui_media_split_label")}
+            await cq.answer(self._t("ui_media_group_alert", mode=names.get(next_mode, next_mode)))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5951,19 +5933,19 @@ class ProBotUI:
                 rule.use_intermediate = True
                 rule.message_category = "VIP_ONLY"
                 rule.forward_mode = ForwardMode.CUSTOM_HEADER_COPY
-                ans = "💎 تغییر به مسیر ۲ (A ➔ C ➔ B)"
+                ans = self._t("ui_smart_path2_alert")
             elif use_mid:
                 # Currently Route 2 -> Switch to Route 3 (Native A -> B)
                 rule.use_intermediate = False
                 rule.message_category = "ALL"
                 rule.forward_mode = ForwardMode.DIRECT_FORWARD
-                ans = "↗️ تغییر به مسیر ۳ (Native Forward A ➔ B)"
+                ans = self._t("ui_smart_path3_alert")
             else:
                 # Currently Route 3 -> Switch to Route 1 (Direct Copy A -> B)
                 rule.use_intermediate = False
                 rule.message_category = "ALL"
                 rule.forward_mode = ForwardMode.COPY_MESSAGE
-                ans = "📋 تغییر به مسیر ۱ (Direct Copy A ➔ B)"
+                ans = self._t("ui_smart_path1_alert")
 
             if not isinstance(rule.metadata, dict):
                 rule.metadata = {}
@@ -5994,7 +5976,8 @@ class ProBotUI:
                 rule.metadata = {}
             rule.metadata["detection_criteria"] = rule.detection_criteria
             await self._rules.update(rule)
-            await cq.answer(f"منطق شروط: {nxt} ({'همه شروط' if nxt == 'ALL' else 'حداقل یکی'})")
+            desc = self._t("ui_logic_all") if nxt == "ALL" else self._t("ui_logic_any")
+            await cq.answer(self._t("ui_match_logic_alert", nxt=nxt, desc=desc))
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -6054,8 +6037,8 @@ class ProBotUI:
                 rule.metadata = {}
             rule.metadata["message_category"] = nxt
             await self._rules.update(rule)
-            labels = {"ALL": "🌟 همه پیام‌ها", "VIP_ONLY": "💎 فقط VIP", "NORMAL_ONLY": "👤 فقط عادی"}
-            await cq.answer(f"دسته پیام: {labels.get(nxt, nxt)}")
+            labels = {"ALL": self._t("ui_cat_all"), "VIP_ONLY": self._t("ui_cat_vip"), "NORMAL_ONLY": self._t("ui_cat_normal")}
+            await cq.answer(self._t("ui_msg_cat_alert", cat=labels.get(nxt, nxt)))
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -6075,7 +6058,7 @@ class ProBotUI:
                 rule.metadata = {}
             rule.metadata["use_intermediate"] = rule.use_intermediate
             await self._rules.update(rule)
-            ans = "🟢 ارسال به کانال واسط فعال شد" if rule.use_intermediate else "🔴 ارسال به کانال واسط خاموش شد"
+            ans = self._t("ui_interm_route_on") if rule.use_intermediate else self._t("ui_interm_route_off")
             await cq.answer(ans)
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -6101,9 +6084,9 @@ class ProBotUI:
             rule.forward_mode = nxt_mode
             await self._rules.update(rule)
             names = {
-                ForwardMode.COPY_MESSAGE: "📋 کپی بدون تگ",
-                ForwardMode.DIRECT_FORWARD: "↗️ فوروارد با تگ",
-                ForwardMode.CUSTOM_HEADER_COPY: "🏷 کپی با هدر اختصاصی",
+                ForwardMode.COPY_MESSAGE: self._t("ui_fmode_copy_msg"),
+                ForwardMode.DIRECT_FORWARD: self._t("ui_fmode_direct_fwd"),
+                ForwardMode.CUSTOM_HEADER_COPY: self._t("ui_fmode_custom_header"),
             }
             await cq.answer(f"حالت: {names.get(nxt_mode, str(nxt_mode))}")
             text, kbd = self._render_smart_menu(rule)
@@ -6124,7 +6107,7 @@ class ProBotUI:
                 rule.metadata = {}
             rule.metadata["priority"] = rule.priority
             await self._rules.update(rule)
-            await cq.answer(f"اولویت: {rule.priority}")
+            await cq.answer(self._t("ui_priority_alert", priority=rule.priority))
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -6144,7 +6127,7 @@ class ProBotUI:
                 rule.metadata = {}
             rule.metadata["priority"] = rule.priority
             await self._rules.update(rule)
-            await cq.answer(f"اولویت: {rule.priority}")
+            await cq.answer(self._t("ui_priority_alert", priority=rule.priority))
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -6163,7 +6146,7 @@ class ProBotUI:
                 rule.metadata = {}
             rule.metadata["custom_header"] = ""
             await self._rules.update(rule)
-            await cq.answer("🗑 هدر اختصاصی حذف شد")
+            await cq.answer(self._t("ui_custom_header_deleted_alert"))
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -6276,15 +6259,9 @@ class ProBotUI:
             from core.infrastructure.ai.providers import OpenAICompatibleProvider
             default_url = OpenAICompatibleProvider.default_base_urls.get(provider, "")
             st.buffer["default_base_url"] = default_url
-            prompt_text = (
-                f"🌐 **تنظیم آدرس سرور / هاست ({self._provider_label(provider)}):**\n\n"
-                f"آدرس پیش‌فرض:\n`{default_url or 'ندارد (نیازمند آدرس دستی)'}`\n\n"
-                "✍️ اگر مایلید از هاست اختصاصی یا پورت دیگری استفاده کنید، آدرس آن را ارسال نمایید:\n"
-                "(مثال: `http://sub.legoten.com:4455/v1`)\n\n"
-                "یا برای استفاده از آدرس پیش‌فرض دکمه زیر را لمس کنید:"
-            )
+            prompt_text = self._t("ui_prompt_enter_base_url", provider=self._provider_label(provider), default_url=default_url or self._t("ui_none_manual"))
             kbd = self._kbd([
-                [("✅ استفاده از پیش‌فرض (یا بعدی)", "ai_url_default")],
+                [(self._t("ui_btn_use_default_host"), "ai_url_default")],
                 [("❌ " + self._t("ui_cancel"), CB["cancel"])],
             ])
             await self._persist(cq.from_user.id, st)
@@ -6303,7 +6280,7 @@ class ProBotUI:
             await self._persist(cq.from_user.id, st)
             msg_text = (
                 self._t("ui_ai_model")
-                + "\n(از لیست زیر انتخاب کنید یا نام مدل دلخواه مانند `coding` را تایپ کنید):"
+                + self._t("ui_prompt_select_model_or_type")
             )
             if kb is not None:
                 await self._safe_edit(cq, msg_text, reply_markup=kb)
@@ -6334,7 +6311,7 @@ class ProBotUI:
             aid = str(cq.data or "").split(":", 1)[1]
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
-                await cq.answer("❌ این پیکربندی یافت نشد.", show_alert=True)
+                await cq.answer(self._t("ui_ai_config_not_found_alert"), show_alert=True)
                 _d_uid = self._scope_uid(cq.from_user.id if cq.from_user else 0)
                 cfgs = await (self._ai.list_all() if _d_uid is None else self._ai.list_by_owner(cq.from_user.id))
                 return await self._safe_edit(cq, self._t("ui_ai_title"), reply_markup=self._ai_menu(cfgs))
@@ -6349,7 +6326,7 @@ class ProBotUI:
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 return await cq.answer(self._t("ui_ai_config_not_found"), show_alert=True)
-            await cq.answer("⏳ در حال بررسی سلامت اتصال و سنجش پینگ...", show_alert=False)
+            await cq.answer(self._t("ui_ai_checking_health_alert"), show_alert=False)
             ok, reply_or_err, latency = await self._ai.health_check_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             health_info = {
                 "ok": ok,
@@ -6370,14 +6347,14 @@ class ProBotUI:
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 return await cq.answer(self._t("ui_ai_config_not_found"), show_alert=True)
-            await cq.answer("⏳ در حال ارسال متن نمونه جهت بازنویسی...", show_alert=False)
-            sample_text = "سلام! این یک پیام آزمایشی جهت سنجش کارکرد هوش مصنوعی در فوروارد تلگرام است."
+            await cq.answer(self._t("ui_ai_sending_sample_alert"), show_alert=False)
+            sample_text = self._t("ui_ai_sample_probe_text")
             ok, reply = await self._ai.test_rewrite_owned(aid, sample_text, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if ok:
-                body = f"✅ **تست بازنویسی با موفقیت انجام شد:**\n\n📝 **پاسخ مدل ({cfg.model}):**\n`{reply[:1000]}`"
+                body = self._t("ui_ai_test_success_body", model=cfg.model, reply=reply[:1000])
             else:
-                body = f"❌ **خطا در بازنویسی:**\n\n`{reply[:1000]}`"
-            kbd = self._kbd([[("⬅️ بازگشت به پیکربندی", f"aid:{aid}")]])
+                body = self._t("ui_ai_test_failed_body", reply=reply[:1000])
+            kbd = self._kbd([[(self._t("ui_back_to_config"), f"aid:{aid}")]])
             await self._safe_edit(cq, body, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ai_tog:(.+)"))
@@ -6392,8 +6369,8 @@ class ProBotUI:
                 await self._ai.update_owned(cfg, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             except PermissionError:
                 return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
-            status_text = "فعال شد 🟢" if cfg.is_enabled else "غیرفعال شد 🔴"
-            await cq.answer(f"وضعیت با موفقیت {status_text}", show_alert=False)
+            status_text = self._t("ui_rule_status_on") if cfg.is_enabled else self._t("ui_rule_status_off")
+            await cq.answer(self._t("ui_ai_status_changed_alert", status=status_text), show_alert=False)
             text, kbd = self._render_ai_detail(cfg)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -6404,13 +6381,9 @@ class ProBotUI:
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
                 return await cq.answer(self._t("ui_ai_config_not_found"), show_alert=True)
-            text = (
-                f"⚠️ **آیا از حذف این پیکربندی هوش مصنوعی اطمینان دارید؟**\n\n"
-                f"🏷 نام: `{cfg.name}`\n"
-                f"🆔 شناسه: `{cfg.id[:8]}`"
-            )
+            text = self._t("ui_ai_delete_confirm_title", name=cfg.name, id=cfg.id[:8])
             kbd = self._kbd([
-                [("🗑 بله، حذف شود", f"ai_del_confirm:{aid}")],
+                [(self._t("ui_confirm_yes_delete"), f"ai_del_confirm:{aid}")],
                 [(self._t("ui_cancel_back"), f"aid:{aid}")],
             ])
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -6426,9 +6399,9 @@ class ProBotUI:
                 await self._ai.delete_owned(aid, None if self._is_admin(auid) else auid)
             except PermissionError:
                 return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
-            await cq.answer("✅ پیکربندی حذف شد.", show_alert=True)
+            await cq.answer(self._t("ui_ai_config_deleted_alert"), show_alert=True)
             cfgs = await (self._ai.list_all() if self._is_admin(auid) else self._ai.list_by_owner(auid))
-            lines = [self._t("ui_ai_title"), "", "✅ پیکربندی با موفقیت حذف گردید."]
+            lines = [self._t("ui_ai_title"), "", self._t("ui_ai_config_deleted_body_full")]
             await self._safe_edit(cq, "\n".join(lines), reply_markup=self._ai_menu(cfgs))
 
         @b.on_callback_query(filters.regex(r"^ai_eh:(.+)"))
@@ -6442,14 +6415,8 @@ class ProBotUI:
             st.step = "ai_edit_host"
             st.buffer["ai_edit_id"] = aid
             await self._persist(cq.from_user.id, st)
-            current = cfg.base_url or "(پیش‌فرض)"
-            text = (
-                f"🌐 **تغییر آدرس سرور / هاست:**\n\n"
-                f"آدرس فعلی: `{current}`\n\n"
-                "✍️ لطفاً آدرس هاست جدید را ارسال کنید:\n"
-                "(مثال: `http://sub.legoten.com:4455/v1`)\n"
-                "یا برای بازنشانی به حالت پیش‌فرض عبارت `default` را بفرستید:"
-            )
+            current = cfg.base_url or "(default)"
+            text = self._t("ui_prompt_change_base_url", current=current)
             kbd = self._kbd([
                 [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
             ])
@@ -6467,12 +6434,7 @@ class ProBotUI:
             st.step = "ai_edit_model"
             st.buffer["ai_edit_id"] = aid
             await self._persist(cq.from_user.id, st)
-            text = (
-                f"🧠 **تغییر مدل هوش مصنوعی:**\n\n"
-                f"مدل فعلی: `{cfg.model}`\n\n"
-                "✍️ لطفاً نام مدل جدید را تایپ و ارسال کنید:\n"
-                "(مثال: `coding` یا `gpt-4o-mini`)"
-            )
+            text = self._t("ui_prompt_change_model", model=cfg.model)
             kbd = self._kbd([
                 [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
             ])
@@ -6490,11 +6452,7 @@ class ProBotUI:
             st.step = "ai_edit_key"
             st.buffer["ai_edit_id"] = aid
             await self._persist(cq.from_user.id, st)
-            text = (
-                f"🔑 **تغییر کلید API:**\n\n"
-                "✍️ لطفاً کلید دسترسی جدید را ارسال کنید:\n"
-                "(پیام حاوی کلید پس از دریافت جهت امنیت حذف خواهد شد)"
-            )
+            text = self._t("ui_prompt_change_api_key")
             kbd = self._kbd([
                 [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
             ])
@@ -6523,7 +6481,7 @@ class ProBotUI:
             cfg = resp.get_config_for_user(uid)
             cfg.enabled = not cfg.enabled
             resp.save_config_for_user(uid, cfg)
-            status_msg = "پاسخگوی پی‌وی فعال شد 🟢" if cfg.enabled else "پاسخگوی پی‌وی غیرفعال شد 🔴"
+            status_msg = self._t("ui_pv_enabled_alert") if cfg.enabled else self._t("ui_pv_disabled_alert")
             await cq.answer(status_msg)
             lang = await self._get_user_lang(uid)
             text, kbd = self._render_pv_menu(uid, lang=lang)
@@ -6554,29 +6512,21 @@ class ProBotUI:
                 from core.infrastructure.telegram.pv_responder import DEFAULT_PERSONA
                 cfg.persona_prompt = DEFAULT_PERSONA
                 resp.save_config_for_user(uid, cfg)
-                await cq.answer("✅ لحن خودمانی و جذاب تنظیم شد.")
+                await cq.answer(self._t("ui_pv_persona_friendly_alert"))
                 lang = await self._get_user_lang(uid)
                 text, kbd = self._render_pv_menu(uid, lang=lang)
                 await self._safe_edit(cq, text, reply_markup=kbd)
             elif p_type == "business":
-                cfg.persona_prompt = (
-                    "شما صاحب این اکانت شخصی تلگرام هستید. با لحنی کاملاً مؤدبانه، حرفه‌ای، "
-                    "محترمانه و در عین حال روان و انسانی به زبان فارسی به پیام‌ها پاسخ دهید. "
-                    "هرگز اشاره نکن که هوش مصنوعی یا ربات هستی. پاسخ‌ها موجز و صریح باشند."
-                )
+                cfg.persona_prompt = self._t("ui_pv_formal_prompt_text")
                 resp.save_config_for_user(uid, cfg)
-                await cq.answer("✅ لحن کاری و محترمانه تنظیم شد.")
+                await cq.answer(self._t("ui_pv_persona_formal_alert"))
                 lang = await self._get_user_lang(uid)
                 text, kbd = self._render_pv_menu(uid, lang=lang)
                 await self._safe_edit(cq, text, reply_markup=kbd)
             elif p_type == "short":
-                cfg.persona_prompt = (
-                    "شما صاحب اکانت تلگرام هستید. پیام‌ها را بسیار کوتاه، خودمانی، "
-                    "سریع و حداکثر در یک یا دو جمله جذاب و دوستانه پاسخ بده. "
-                    "اصلاً شبیه ربات نباش و هرگز نگو بات هستی."
-                )
+                cfg.persona_prompt = self._t("ui_pv_concise_prompt_text")
                 resp.save_config_for_user(uid, cfg)
-                await cq.answer("✅ لحن کوتاه و سریع تنظیم شد.")
+                await cq.answer(self._t("ui_pv_persona_concise_alert"))
                 lang = await self._get_user_lang(uid)
                 text, kbd = self._render_pv_menu(uid, lang=lang)
                 await self._safe_edit(cq, text, reply_markup=kbd)
@@ -6584,12 +6534,8 @@ class ProBotUI:
                 st = self._state(uid)
                 st.step = "pv_persona_input"
                 await self._persist(uid, st)
-                prompt_text = (
-                    "✍️ **تنظیم پرامپت اختصاصی برای هوش مصنوعی پی‌وی:**\n\n"
-                    "لطفاً دستورالعمل یا شخصیت دلخواه خود را به زبان فارسی ارسال کنید.\n"
-                    "مثال: «مثل یک دوست صمیمی و پرانرژی حرف بزن و بگو فعلاً بیرون هستم و شب پیام میدم»"
-                )
-                await self._safe_edit(cq, prompt_text, reply_markup=self._kbd([[("❌ انصراف", "pv:persona")]]))
+                prompt_text = self._t("ui_pv_custom_prompt_intro")
+                await self._safe_edit(cq, prompt_text, reply_markup=self._kbd([[("❌ " + self._t("ui_cancel"), "pv:persona")]]))
                 await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^pv:delays$"))
@@ -6623,7 +6569,7 @@ class ProBotUI:
                 cfg.typing_delay_min = 3.5
                 cfg.typing_delay_max = 6.5
             resp.save_config_for_user(uid, cfg)
-            await cq.answer("✅ زمان‌بندی تأخیر با موفقیت اعمال شد.")
+            await cq.answer(self._t("ui_pv_delay_applied_alert"))
             lang = await self._get_user_lang(uid)
             text, kbd = self._render_pv_menu(uid, lang=lang)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -6637,12 +6583,7 @@ class ProBotUI:
             st = self._state(uid)
             st.step = "pv_test_input"
             await self._persist(uid, st)
-            prompt = (
-                "🧪 **تست شبیه‌سازی پاسخگوی هوشمند پی‌وی:**\n\n"
-                "یک پیام نمونه که ممکن است مخاطبی برای شما بفرستد ارسال کنید "
-                "(مثلاً: «سلام چطوری؟ کجایی؟» یا «سلام فایل پروژه آماده شد؟»)\n"
-                "تا ببینید هوش مصنوعی با شخصیت انتخابی شما چگونه پاسخ می‌دهد."
-            )
+            prompt = self._t("ui_pv_simulation_guide")
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", "pv:menu")]]))
             await cq.answer()
 
@@ -7090,7 +7031,7 @@ class ProBotUI:
         st.step = ""
         await self._persist(uid, st)
         card_text, kbd = self._render_rule_detail(rule)
-        await message.reply_text(f"✅ نام تسک به `{rule.name}` تغییر یافت.", reply_markup=kbd)
+        await message.reply_text(self._t("ui_step_task_name_updated", name=rule.name), reply_markup=kbd)
 
     async def _step_set_topic(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
         uid = message.from_user.id if message.from_user else 0
@@ -7104,12 +7045,12 @@ class ProBotUI:
             tid = int(clean_txt)
             rule.topic_id = tid if tid > 0 else 0
         except ValueError:
-            return await message.reply_text("⚠️ لطفاً فقط یک عدد معتبر ارسال کنید (یا 0 برای غیرفعال‌سازی).")
+            return await message.reply_text(self._t("ui_step_topic_invalid_error"))
         await self._save_owned_rule(rule, uid)
         st.step = ""
         await self._persist(uid, st)
         card_text, kbd = self._render_rule_detail(rule)
-        await message.reply_text(f"✅ تاپیک فوروارد روی `#{rule.topic_id or 'None'}` تنظیم شد.", reply_markup=kbd)
+        await message.reply_text(self._t("ui_step_topic_saved", topic=rule.topic_id or "None"), reply_markup=kbd)
 
     async def _step_set_delay(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
         uid = message.from_user.id if message.from_user else 0
@@ -7122,12 +7063,12 @@ class ProBotUI:
             sec = max(0.0, float(text.strip()))
             rule.delay_seconds = sec
         except ValueError:
-            return await message.reply_text("⚠️ لطفاً فقط یک عدد معتبر (برحسب ثانیه) ارسال کنید (مثال: `5` یا `0`).")
+            return await message.reply_text(self._t("ui_step_delay_invalid_error"))
         await self._save_owned_rule(rule, uid)
         st.step = ""
         await self._persist(uid, st)
         card_text, kbd = self._render_delay_menu(rule)
-        await message.reply_text(f"✅ میزان تأخیر فوروارد روی `{rule.delay_seconds:.0f}` ثانیه تنظیم شد.", reply_markup=kbd)
+        await message.reply_text(self._t("ui_step_delay_saved", delay=rule.delay_seconds), reply_markup=kbd)
 
     async def _step_add_bl(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
         uid = message.from_user.id if message.from_user else 0
@@ -7146,7 +7087,7 @@ class ProBotUI:
         st.step = ""
         await self._persist(uid, st)
         card_text, kbd = self._render_blacklist_menu(rule)
-        await message.reply_text(f"✅ تعداد {len(new_words)} کلمه به لیست سیاه افزوده شد.", reply_markup=kbd)
+        await message.reply_text(self._t("ui_step_blacklist_saved", count=len(new_words)), reply_markup=kbd)
 
     async def _step_add_wl(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
         uid = message.from_user.id if message.from_user else 0
@@ -7165,7 +7106,7 @@ class ProBotUI:
         st.step = ""
         await self._persist(uid, st)
         card_text, kbd = self._render_whitelist_menu(rule)
-        await message.reply_text(f"✅ تعداد {len(new_words)} کلمه به لیست سفید افزوده شد.", reply_markup=kbd)
+        await message.reply_text(self._t("ui_step_whitelist_saved", count=len(new_words)), reply_markup=kbd)
 
     async def _step_set_wm(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
         uid = message.from_user.id if message.from_user else 0
@@ -7179,7 +7120,7 @@ class ProBotUI:
         st.step = ""
         await self._persist(uid, st)
         card_text, kbd = self._render_watermark_menu(rule)
-        await message.reply_text(f"✅ واتر‌مارک تنظیم شد: `{rule.watermark}`", reply_markup=kbd)
+        await message.reply_text(self._t("ui_step_watermark_saved", watermark=rule.watermark), reply_markup=kbd)
 
     async def _step_weburl_input(
         self, message: Message, st: "UiState", text: str
@@ -7208,18 +7149,14 @@ class ProBotUI:
         clean = (text or "").strip()
         if not clean.isdigit() or int(clean) <= 0:
             return await message.reply_text(
-                "❌ API ID نامعتبر است. لطفاً فقط یک عدد مثبت وارد نمایید:"
-                if self._resolve_lang(uid) == "fa"
-                else "❌ Invalid API ID. Please enter a valid positive number:",
+                self._t("ui_step_api_id_prompt"),
                 reply_markup=self._cancel_kbd(),
             )
         st.buffer["client_api_id"] = int(clean)
         st.step = "client_api_hash"
         await self._persist(message.from_user.id, st)
         await message.reply_text(
-            "🔑 اکنون **API Hash** (رشته ۳۲ حرفی) خود را ارسال نمایید:"
-            if self._resolve_lang(uid) == "fa"
-            else "🔑 Now enter your 32-character **API Hash**:",
+            self._t("ui_step_api_hash_prompt"),
             reply_markup=self._cancel_kbd(),
         )
 
@@ -7228,9 +7165,7 @@ class ProBotUI:
         uid = message.from_user.id
         if len(api_hash) != 32:
             return await message.reply_text(
-                "❌ API Hash باید دقیقاً یک رشته ۳۲ کاراکتری هگزادسیمال باشد. لطفاً مجدداً ارسال کنید:"
-                if self._resolve_lang(uid) == "fa"
-                else "❌ API Hash must be exactly 32 hexadecimal characters. Please try again:",
+                self._t("ui_step_api_hash_invalid"),
                 reply_markup=self._cancel_kbd(),
             )
         api_id = int(st.buffer.get("client_api_id", 0))
@@ -7260,10 +7195,7 @@ class ProBotUI:
                 pass
 
         await message.reply_text(
-            "✅ **کلیدهای اختصاصی شما با موفقیت ذخیره و فعال گردید.**\n"
-            "از این پس نشست‌های جدید شما با کلیدهای شخصی خودتان متصل خواهند شد."
-            if self._resolve_lang(uid) == "fa"
-            else "✅ **Your personal Telegram API credentials were saved successfully.**",
+            self._t("ui_step_custom_api_saved"),
             reply_markup=self._client_settings_menu(uid),
         )
 
@@ -7276,7 +7208,7 @@ class ProBotUI:
 
         bcast_text = (message.text or "").strip()
         if not bcast_text:
-            return await message.reply_text("❌ متن پیام نمی‌تواند خالی باشد.", reply_markup=self._cancel_kbd())
+            return await message.reply_text(self._t("ui_step_empty_text_error"), reply_markup=self._cancel_kbd())
 
         st.buffer["bcast_text"] = bcast_text
         st.step = ""
@@ -7289,15 +7221,10 @@ class ProBotUI:
             except Exception:
                 pass
 
-        preview_text = (
-            f"📢 **پیش‌نمایش پیام همگانی:**\n\n"
-            f"{bcast_text}\n\n"
-            f"👥 تعداد کل دریافت‌کنندگان واجد شرایط: `{count}`\n"
-            f"⚠️ پیام به صورت پس‌زمینه و با رعایت محدودیت Rate Limit ارسال خواهد شد."
-        )
+        preview_text = self._t("ui_step_broadcast_preview", text=bcast_text, count=count)
         kbd = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ تایید و ارسال همگانی", callback_data=CB["adm_bcast_confirm"])],
-            [InlineKeyboardButton("❌ انصراف", callback_data=CB["adm_bcast_cancel"])],
+            [InlineKeyboardButton(self._t("ui_step_broadcast_btn_confirm"), callback_data=CB["adm_bcast_confirm"])],
+            [InlineKeyboardButton(self._t("ui_cancel"), callback_data=CB["adm_bcast_cancel"])],
         ])
         await message.reply_text(preview_text, reply_markup=kbd)
 
@@ -7331,7 +7258,7 @@ class ProBotUI:
         st.step = ""
         await self._persist(uid, st)
         text_panel, kbd_panel = await self._render_admin_panel(uid)
-        await message.reply_text(f"✅ کانال عضویت اجباری با موفقیت به `{channel}` تنظیم و فعال شد.", reply_markup=kbd_panel)
+        await message.reply_text(self._t("ui_step_force_sub_channel_saved", channel=channel), reply_markup=kbd_panel)
 
     async def _step_admin_add_id(self, message: Message, st: "UiState", text: str) -> None:
         uid = message.from_user.id
@@ -7342,7 +7269,7 @@ class ProBotUI:
 
         clean = (text or "").strip()
         if not clean.isdigit() or int(clean) <= 0:
-            return await message.reply_text("❌ شناسه عددی نامعتبر است. فقط یک عدد مثبت وارد نمایید:", reply_markup=self._cancel_kbd())
+            return await message.reply_text(self._t("ui_step_invalid_user_id"), reply_markup=self._cancel_kbd())
 
         target_uid = int(clean)
         st.step = ""
@@ -7352,10 +7279,10 @@ class ProBotUI:
             try:
                 self._admin_service.add_admin(target_uid, added_by=uid)
             except Exception as exc:
-                return await message.reply_text(f"❌ خطا در افزودن مدیر: {exc}")
+                return await message.reply_text(self._t("ui_step_admin_add_error", exc=exc))
 
         text_panel, kbd_panel = await self._render_admin_panel(uid)
-        await message.reply_text(f"✅ دسترسی مدیریت برای کاربر `{target_uid}` فعال گردید.", reply_markup=kbd_panel)
+        await message.reply_text(self._t("ui_step_admin_added", uid=target_uid), reply_markup=kbd_panel)
 
     async def _run_broadcast_job(self, bcast_id: str, admin_uid: int, text: str) -> None:
         recipients = []
@@ -7857,7 +7784,7 @@ class ProBotUI:
             try:
                 fail_text = self._t(trans_key, error=detail)
             except Exception:
-                fail_text = f"❌ ارسال کد ناموفق بود: {result}"
+                fail_text = self._t("ui_login_send_fail", result=result)
 
             await message.reply_text(fail_text, reply_markup=self._cancel_kbd())
             return
@@ -7894,7 +7821,7 @@ class ProBotUI:
             digits = digits[:-1]
             st.buffer["code_digits"] = digits
             await self._persist(uid, st)
-            await cq.answer(f"{digits or 'پاک شد'}")
+            await cq.answer(f"{digits or self._t('ui_login_code_cleared')}")
             try:
                 await self._safe_edit(cq, 
                     self._login_code_text(st),
@@ -7956,7 +7883,7 @@ class ProBotUI:
             result = await self._login.submit_code(uid, clean_code)
         except Exception as exc:
             logger.exception("submit_code failed for uid=%s: %s", uid, exc)
-            await message.reply_text(f"❌ خطا در تأیید کد: `{type(exc).__name__}: {exc}`", reply_markup=self._cancel_kbd())
+            await message.reply_text(self._t("ui_login_code_verify_error", type=type(exc).__name__, exc=exc), reply_markup=self._cancel_kbd())
             return
 
         logger.info("submit_code result for uid=%s: %r", uid, result)
@@ -7977,7 +7904,7 @@ class ProBotUI:
             result = await self._login.submit_password(uid, text)
         except Exception as exc:
             logger.exception("submit_password failed for uid=%s: %s", uid, exc)
-            await message.reply_text(f"❌ خطا در تأیید رمز دو مرحله‌ای: `{type(exc).__name__}: {exc}`", reply_markup=self._cancel_kbd())
+            await message.reply_text(self._t("ui_login_2fa_verify_error", type=type(exc).__name__, exc=exc), reply_markup=self._cancel_kbd())
             return
         await self._finish_login(message, st, result, uid=uid)
 
@@ -7996,11 +7923,7 @@ class ProBotUI:
             await self._persist(uid, st)
             retry_btn = self._kbd([[("🔄 " + self._t("ui_login_retry", lang=lang), CB["login_retry"])]]) if phone else self._cancel_kbd()
             if result == "code_expired":
-                text = (
-                    "⌛ این کد منقضی شده یا توسط تلگرام مسدود شده است.\n\n"
-                    "💡 **علت:** ارسال کد خالی در چت، سیستم ضدسرقت تلگرام را فعال کرده و کد را باطل می‌کند.\n\n"
-                    "👇 دکمه «🔄 دریافت مجدد کد» را بزنید و سپس کد جدید را چسبیده با mycode (مانند: `mycode73737`) یا با **کیپد عددی** وارد کنید:"
-                )
+                text = self._t("ui_login_code_expired_prompt")
                 await message.reply_text(text, reply_markup=retry_btn)
             else:
                 await message.reply_text(self._t("ui_login_expired", lang=lang, phone=phone), reply_markup=retry_btn)
@@ -8249,7 +8172,7 @@ class ProBotUI:
             draft["source_name"] = matched_title
             st.step = "rule_editing_draft"
             await self._persist(uid, st)
-            await message.reply_text(f"✅ مبدأ پیش‌نویس تغییر یافت: {matched_title}")
+            await message.reply_text(self._t("ui_step_src_draft_updated", title=matched_title))
             text_out, markup = self._render_draft_editor(rule, draft)
             await message.reply_text(text_out, reply_markup=markup)
         else:
@@ -8259,12 +8182,12 @@ class ProBotUI:
             try:
                 await self._save_owned_rule(rule, uid, expected_ver)
             except ConcurrencyError:
-                await message.reply_text("⚠️ خطا: این قانون هم‌زمان ویرایش شده است.", reply_markup=self._main_menu())
+                await message.reply_text(self._t("ui_step_rule_concurrent_edit_error"), reply_markup=self._main_menu())
                 return
             st.step = ""
             st.buffer = {}
             await self._persist(uid, st)
-            await message.reply_text(f"✅ مبدأ قانون با موفقیت تغییر یافت: {matched_title}")
+            await message.reply_text(self._t("ui_step_src_rule_updated", title=matched_title))
             text_out, markup = self._render_rule_detail(rule)
             await message.reply_text(text_out, reply_markup=markup)
 
@@ -8340,7 +8263,7 @@ class ProBotUI:
             draft["target_name"] = matched_title
             st.step = "rule_editing_draft"
             await self._persist(uid, st)
-            await message.reply_text(f"✅ مقصد پیش‌نویس تغییر یافت: {matched_title}")
+            await message.reply_text(self._t("ui_step_dst_draft_updated", title=matched_title))
             text_out, markup = self._render_draft_editor(rule, draft)
             await message.reply_text(text_out, reply_markup=markup)
         else:
@@ -8350,12 +8273,12 @@ class ProBotUI:
             try:
                 await self._save_owned_rule(rule, uid, expected_ver)
             except ConcurrencyError:
-                await message.reply_text("⚠️ خطا: این قانون هم‌زمان ویرایش شده است.", reply_markup=self._main_menu())
+                await message.reply_text(self._t("ui_step_rule_concurrent_edit_error"), reply_markup=self._main_menu())
                 return
             st.step = ""
             st.buffer = {}
             await self._persist(uid, st)
-            await message.reply_text(f"✅ مقصد قانون با موفقیت تغییر یافت: {matched_title}")
+            await message.reply_text(self._t("ui_step_dst_rule_updated", title=matched_title))
             text_out, markup = self._render_rule_detail(rule)
             await message.reply_text(text_out, reply_markup=markup)
 
@@ -8376,7 +8299,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(uid, st)
             text_out, kbd = self._render_rule_detail(rule)
-            await message.reply_text("❌ ویرایش لغو شد و تغییرات پیش‌نویس ذخیره نشدند.", reply_markup=kbd)
+            await message.reply_text(self._t("ui_step_edit_cancelled_draft_discarded"), reply_markup=kbd)
             return
 
         draft_obj = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
@@ -8404,7 +8327,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(message.from_user.id, st)
             menu_text, menu_kbd = self._render_replace_menu(rule)
-            await message.reply_text("❌ عملیات افزودن جایگزینی لغو شد.", reply_markup=menu_kbd)
+            await message.reply_text(self._t("ui_step_replace_cancelled"), reply_markup=menu_kbd)
             return
 
         lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
@@ -8469,7 +8392,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(message.from_user.id, st)
             menu_text, menu_kbd = self._render_header_footer_menu(rule)
-            await message.reply_text("❌ تنظیم هدر لغو شد.", reply_markup=menu_kbd)
+            await message.reply_text(self._t("ui_step_header_cancelled"), reply_markup=menu_kbd)
             return
 
         if not isinstance(rule.metadata, dict):
@@ -8481,7 +8404,7 @@ class ProBotUI:
         st.buffer = {}
         await self._persist(message.from_user.id, st)
 
-        await message.reply_text("✅ **هدر با موفقیت تنظیم شد.**")
+        await message.reply_text(self._t("ui_step_header_saved"))
         menu_text, menu_kbd = self._render_header_footer_menu(rule)
         await message.reply_text(menu_text, reply_markup=menu_kbd)
 
@@ -8501,7 +8424,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(message.from_user.id, st)
             menu_text, menu_kbd = self._render_header_footer_menu(rule)
-            await message.reply_text("❌ تنظیم فوتر لغو شد.", reply_markup=menu_kbd)
+            await message.reply_text(self._t("ui_step_footer_cancelled"), reply_markup=menu_kbd)
             return
 
         if not isinstance(rule.metadata, dict):
@@ -8513,7 +8436,7 @@ class ProBotUI:
         st.buffer = {}
         await self._persist(message.from_user.id, st)
 
-        await message.reply_text("✅ **فوتر با موفقیت تنظیم شد.**")
+        await message.reply_text(self._t("ui_step_footer_saved"))
         menu_text, menu_kbd = self._render_header_footer_menu(rule)
         await message.reply_text(menu_text, reply_markup=menu_kbd)
 
@@ -8546,7 +8469,7 @@ class ProBotUI:
         st.buffer = {}
         await self._persist(message.from_user.id, st)
 
-        await message.reply_text(f"✅ **لیست {len(words)} کلمه جهت حذف با موفقیت ذخیره شد.**")
+        await message.reply_text(self._t("ui_step_clean_words_saved", count=len(words)))
         menu_text, menu_kbd = self._render_cleaner_menu(rule)
         await message.reply_text(menu_text, reply_markup=menu_kbd)
 
@@ -8572,7 +8495,7 @@ class ProBotUI:
 
         if not clean.isdigit():
             await message.reply_text(
-                "❌ لطفاً فقط یک عدد صحیح معتبر بر حسب ثانیه ارسال کنید (مثلاً `3600`):",
+                self._t("ui_step_seconds_integer_error"),
                 reply_markup=self._cancel_kbd(),
             )
             return
@@ -8585,7 +8508,7 @@ class ProBotUI:
         st.buffer = {}
         await self._persist(message.from_user.id, st)
 
-        await message.reply_text(f"✅ **محدودیت زمان ویرایش پیام روی {val} ثانیه تنظیم شد.**")
+        await message.reply_text(self._t("ui_step_mte_saved", val=val))
         menu_text, menu_kbd = self._render_max_time_edit_menu(rule)
         await message.reply_text(menu_text, reply_markup=menu_kbd)
 
@@ -8607,7 +8530,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(message.from_user.id, st)
             m_text, m_kbd = self._render_smart_menu(rule)
-            await message.reply_text("❌ تنظیم کانال واسط لغو شد.", reply_markup=m_kbd)
+            await message.reply_text(self._t("ui_step_interm_cancelled"), reply_markup=m_kbd)
             return
 
         # Loop prevention check
@@ -8676,7 +8599,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(message.from_user.id, st)
             m_text, m_kbd = self._render_smart_menu(rule)
-            await message.reply_text("❌ تنظیم هدر اختصاصی لغو شد.", reply_markup=m_kbd)
+            await message.reply_text(self._t("ui_step_custom_hdr_cancelled"), reply_markup=m_kbd)
             return
 
         rule.custom_header = text.strip()
@@ -8689,7 +8612,7 @@ class ProBotUI:
         st.buffer = {}
         await self._persist(message.from_user.id, st)
 
-        await message.reply_text("✅ **هدر اختصاصی کپی با موفقیت ذخیره شد.**")
+        await message.reply_text(self._t("ui_step_custom_copy_header_saved"))
         m_text, m_kbd = self._render_smart_menu(rule)
         await message.reply_text(m_text, reply_markup=m_kbd)
 
@@ -8709,7 +8632,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(message.from_user.id, st)
             m_text, m_kbd = self._render_smart_menu(rule)
-            await message.reply_text("❌ تنظیم کلیدواژه‌ها لغو شد.", reply_markup=m_kbd)
+            await message.reply_text(self._t("ui_step_keywords_cancelled"), reply_markup=m_kbd)
             return
 
         raw = text.strip()
@@ -8719,12 +8642,12 @@ class ProBotUI:
         if raw in ("حذف", "پاک", "none", "clear", "حذف همه"):
             rule.detection_criteria.pop("text_contains", None)
             rule.detection_criteria.pop("keywords", None)
-            ans = "🗑 کلیدواژه‌های متنی حذف شدند."
+            ans = self._t("ui_step_keywords_removed")
         else:
             kws = [k.strip() for k in raw.replace("،", ",").split(",") if k.strip()]
             rule.detection_criteria["text_contains"] = kws
             rule.detection_criteria["keywords"] = kws
-            ans = f"✅ {len(kws)} کلیدواژه ذخیره شد: " + ", ".join(f"`{k}`" for k in kws)
+            ans = self._t("ui_step_keywords_saved", count=len(kws), keywords=", ".join(f"`{k}`" for k in kws))
 
         if not isinstance(rule.metadata, dict):
             rule.metadata = {}
@@ -8755,7 +8678,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(message.from_user.id, st)
             m_text, m_kbd = self._render_smart_menu(rule)
-            await message.reply_text("❌ تنظیم Regex لغو شد.", reply_markup=m_kbd)
+            await message.reply_text(self._t("ui_step_regex_cancelled"), reply_markup=m_kbd)
             return
 
         raw = text.strip()
@@ -8765,7 +8688,7 @@ class ProBotUI:
         if raw in ("حذف", "پاک", "none", "clear"):
             rule.detection_criteria.pop("regex_pattern", None)
             rule.detection_criteria.pop("text_regex", None)
-            ans = "🗑 الگوی Regex حذف شد."
+            ans = self._t("ui_step_regex_removed")
         else:
             import re
             try:
@@ -8775,7 +8698,7 @@ class ProBotUI:
                 return
             rule.detection_criteria["regex_pattern"] = raw
             rule.detection_criteria["text_regex"] = raw
-            ans = f"✅ الگوی Regex با موفقیت ذخیره شد:\n`{raw}`"
+            ans = self._t("ui_step_regex_saved", raw=raw)
 
         if not isinstance(rule.metadata, dict):
             rule.metadata = {}
@@ -8806,7 +8729,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(message.from_user.id, st)
             m_text, m_kbd = self._render_smart_menu(rule)
-            await message.reply_text("❌ تست هوشمند لغو شد.", reply_markup=m_kbd)
+            await message.reply_text(self._t("ui_step_sim_cancelled"), reply_markup=m_kbd)
             return
 
         st.step = ""
@@ -8847,7 +8770,7 @@ class ProBotUI:
         matched, reason = engine.evaluate_rule(payload, rule)
         is_vip, vip_reason = engine.is_vip_origin(payload, rule)
         detected_cat = "VIP" if is_vip else ("NORMAL" if not payload.forward_origin else "UNKNOWN_ORIGIN")
-        cat_labels = {"ALL": "🌟 عمومی", "VIP": "💎 VIP", "NORMAL": "👤 عادی (بدون فوروارد)", "UNKNOWN_ORIGIN": "❓ منشأ ناشناخته"}
+        cat_labels = {"ALL": self._t("ui_cat_all"), "VIP": self._t("ui_cat_vip"), "NORMAL": self._t("ui_cat_normal"), "UNKNOWN_ORIGIN": "❓"}
 
         crit = getattr(rule, "detection_criteria", {}) or {}
         m_mode = (crit.get("match_mode") or "ANY").upper()
@@ -8855,41 +8778,34 @@ class ProBotUI:
         rx = crit.get("regex_pattern") or crit.get("text_regex") or ""
 
         route_label = {
-            RoutingDecision.BRANDING_VIA_C: "💎 مسیر ۲: برندینگ واسط (A ➔ C ➔ B)",
-            RoutingDecision.DIRECT_COPY: "📋 مسیر ۱: ارسال مستقیم و تمیز (A ➔ B)",
-            RoutingDecision.DIRECT_FORWARD: "↗️ مسیر ۳: فوروارد رسمی مستقیم (A ➔ B)",
-            RoutingDecision.CUSTOM_HEADER_COPY: "🏷 کپی با هدر اختصاصی (A ➔ B)",
-            RoutingDecision.DROP: "⛔ عدم ارسال (عدم تطبیق با قانون)",
+            RoutingDecision.BRANDING_VIA_C: self._t("ui_sim_decision_c"),
+            RoutingDecision.DIRECT_COPY: self._t("ui_sim_decision_copy"),
+            RoutingDecision.DIRECT_FORWARD: self._t("ui_sim_decision_fwd"),
+            RoutingDecision.CUSTOM_HEADER_COPY: self._t("ui_sim_decision_custom_hdr"),
+            RoutingDecision.DROP: self._t("ui_sim_decision_drop"),
         }.get(decision, str(decision))
 
         action_lines = []
         if matched and decision != RoutingDecision.DROP:
             if decision == RoutingDecision.BRANDING_VIA_C:
-                action_lines.append(f"1️⃣ کپی بدون تگ یا Re-upload به C ➔ `{rule.intermediate_channel_name or rule.intermediate_channel_id}`")
-                action_lines.append(f"2️⃣ فوروارد نیتیو اختصاصی از C به B ➔ `{rule.target_chat_name or rule.target_chat_id}`")
+                action_lines.append(self._t("ui_sim_step_c1", target=rule.intermediate_channel_name or rule.intermediate_channel_id))
+                action_lines.append(self._t("ui_sim_step_c2", target=rule.target_chat_name or rule.target_chat_id))
             elif decision == RoutingDecision.DIRECT_FORWARD:
-                action_lines.append(f"• فوروارد مستقیم از A به B ➔ `{rule.target_chat_name or rule.target_chat_id}`")
+                action_lines.append(self._t("ui_sim_step_fwd", target=rule.target_chat_name or rule.target_chat_id))
             else:
-                action_lines.append(f"• کپی مستقیم از A به B ➔ `{rule.target_chat_name or rule.target_chat_id}`")
+                action_lines.append(self._t("ui_sim_step_copy", target=rule.target_chat_name or rule.target_chat_id))
         else:
-            action_lines.append("• هیچ پیامی ارسال نخواهد شد (عدم تطبیق با شروط).")
+            action_lines.append(self._t("ui_sim_step_none"))
 
+        match_status_text = self._t("ui_sim_match_ok") if matched else self._t("ui_sim_match_fail")
         result_text = (
-            "🧪 **نتیجه شبیه‌سازی و تست زنده روتینگ هوشمند (Dry Run):**\n"
+            self._t("ui_sim_dry_run_title") +
             "────────────────────\n"
-            f"📋 **قانون مورد تست:** `{rule.id[:8]}` ({rule.source_chat_name or rule.source_chat_id} ➔ {rule.target_chat_name or rule.target_chat_id})\n"
-            f"🎯 **وضعیت تطبیق کلی:** {'✅ تطبیق موفق' if matched else '❌ عدم تطبیق'}\n"
-            f"🏷 **رده پیام ورودی:** {cat_labels.get(detected_cat, detected_cat)}\n"
-            f"🛣 **مسیر انتخابی روتینگ:**\n**{route_label}**\n\n"
-            f"🔍 **تحلیل شروط موتور:**\n"
-            f"• منطق ترکیب شروط: `{m_mode}`\n"
-            f"• فیلتر کلیدواژه‌ها: `{', '.join(kws) if kws else 'تعیین نشده'}`\n"
-            f"• فیلتر Regex: `{rx if rx else 'تعیین نشده'}`\n"
-            f"• دلیل تصمیم: `{route_reason or reason}`\n\n"
-            "🚀 **مراحل عملیات اجرایی:**\n" +
-            "\n".join(action_lines) + "\n\n"
-            "🛡 **سیاست محتوای قفل:** در صورت Restricted بودن فوروارد، دانلود و Clean Copy خودکار انجام می‌شود.\n"
-            "🔒 **کنترل ضد لوپ:** پیام ارسالی به عنوان پیام ورودی جدید پردازش نخواهد شد."
+            f"📋 **Task:** `{rule.id[:8]}` ({rule.source_chat_name or rule.source_chat_id} ➔ {rule.target_chat_name or rule.target_chat_id})\n"
+            + self._t("ui_sim_match_summary", match=match_status_text, cat=cat_labels.get(detected_cat, detected_cat), route=route_label)
+            + self._t("ui_sim_analysis", mode=m_mode, kws=', '.join(kws) if kws else self._t("ui_clean_not_set"), rx=rx if rx else self._t("ui_clean_not_set"), reason=route_reason or reason)
+            + "\n".join(action_lines) + "\n\n"
+            + self._t("ui_sim_footer_notes")
         )
         await message.reply_text(result_text)
         m_text, m_kbd = self._render_smart_menu(rule)
@@ -8950,14 +8866,9 @@ class ProBotUI:
         from core.infrastructure.ai.providers import OpenAICompatibleProvider
         default_url = OpenAICompatibleProvider.default_base_urls.get(provider, "")
         st.buffer["default_base_url"] = default_url
-        prompt_text = (
-            f"🌐 **تنظیم آدرس سرور / هاست ({self._provider_label(provider)}):**\n\n"
-            f"آدرس پیش‌فرض:\n`{default_url or 'ندارد (نیازمند آدرس دستی)'}`\n\n"
-            "✍️ لطفاً آدرس سرور را ارسال کنید (مثال: `http://sub.legoten.com:4455/v1`):\n"
-            "یا برای استفاده از پیش‌فرض دکمه زیر را لمس نمایید:"
-        )
+        prompt_text = self._t("ui_step_prompt_server_url", provider=self._provider_label(provider), default_url=default_url or self._t("ui_none_manual"))
         kbd = self._kbd([
-            [("✅ استفاده از پیش‌فرض (یا بعدی)", "ai_url_default")],
+            [(self._t("ui_btn_use_default_host"), "ai_url_default")],
             [("❌ " + self._t("ui_cancel", lang=lang), CB["cancel"])],
         ])
         await self._persist(message.from_user.id, st)
@@ -8975,9 +8886,9 @@ class ProBotUI:
         kb = self._model_picker(st, st.ai_provider)
         await self._persist(message.from_user.id, st)
         msg_text = (
-            f"✅ آدرس ذخیره شد: `{url or 'پیش‌فرض'}`\n\n"
+            self._t("ui_step_host_saved_banner", url=url or "default")
             + self._t("ui_ai_model", lang=lang)
-            + "\n(از لیست زیر انتخاب کنید یا نام مدل دلخواه مانند `coding` را تایپ کنید):"
+            + self._t("ui_prompt_select_model_or_type")
         )
         if kb is not None:
             await message.reply_text(msg_text, reply_markup=kb)
@@ -9022,7 +8933,7 @@ class ProBotUI:
                 "error": reply_or_err if not ok else "",
             }
             detail_text, detail_kbd = self._render_ai_detail(created, health_info=health_info)
-            banner = "✅ **پیکربندی هوش مصنوعی با موفقیت ثبت و آزمایش شد!**\n\n" if ok else "⚠️ **پیکربندی ذخیره شد اما تست اتصال با خطا مواجه گردید!**\n\n"
+            banner = self._t("ui_step_ai_registered_tested") if ok else self._t("ui_step_ai_saved_test_failed")
             await message.reply_text(banner + detail_text, reply_markup=detail_kbd)
         except Exception as exc:
             await self._record_error("ai", exc, user_id=user_id)
@@ -9066,7 +8977,7 @@ class ProBotUI:
             "error": reply_or_err if not ok else "",
         }
         detail_text, detail_kbd = self._render_ai_detail(cfg, health_info=health_info)
-        await message.reply_text("✅ آدرس هاست به‌روزرسانی شد:\n\n" + detail_text, reply_markup=detail_kbd)
+        await message.reply_text(self._t("ui_step_host_updated") + "\n\n" + detail_text, reply_markup=detail_kbd)
 
     async def _step_ai_edit_model(self, message: Message, st: UiState, text: str) -> None:
         lang = self._lang_for(st)
@@ -9093,7 +9004,7 @@ class ProBotUI:
             "error": reply_or_err if not ok else "",
         }
         detail_text, detail_kbd = self._render_ai_detail(cfg, health_info=health_info)
-        await message.reply_text("✅ مدل با موفقیت تغییر کرد:\n\n" + detail_text, reply_markup=detail_kbd)
+        await message.reply_text(self._t("ui_step_model_updated") + "\n\n" + detail_text, reply_markup=detail_kbd)
 
     async def _step_ai_edit_key(self, message: Message, st: UiState, text: str) -> None:
         lang = self._lang_for(st)
@@ -9124,7 +9035,7 @@ class ProBotUI:
             "error": reply_or_err if not ok else "",
         }
         detail_text, detail_kbd = self._render_ai_detail(cfg, health_info=health_info)
-        await message.reply_text("✅ کلید API با موفقیت به‌روزرسانی شد:\n\n" + detail_text, reply_markup=detail_kbd)
+        await message.reply_text(self._t("ui_step_api_key_updated") + "\n\n" + detail_text, reply_markup=detail_kbd)
 
     async def _step_pv_persona_input(self, message: Message, st: UiState, text: str) -> None:
         uid = message.from_user.id if message.from_user else 0
@@ -9133,18 +9044,18 @@ class ProBotUI:
         await self._persist(uid, st)
         resp = getattr(self, "_pv_responder", None)
         if not resp:
-            await message.reply_text("❌ ماژول پاسخگوی پی‌وی یافت نشد.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_step_pv_module_not_found"), reply_markup=self._main_menu())
             return
         lang = await self._get_user_lang(uid)
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
             text_out, kbd = self._render_pv_menu(uid, lang=lang)
-            await message.reply_text("❌ تنظیم پرامپت لغو شد.", reply_markup=kbd)
+            await message.reply_text(self._t("ui_pv_prompt_cancelled"), reply_markup=kbd)
             return
 
         cfg = resp.get_config_for_user(uid)
         cfg.persona_prompt = text.strip()
         resp.save_config_for_user(uid, cfg)
-        await message.reply_text("✅ پرامپت و شخصیت پاسخگوی پی‌وی با موفقیت ثبت گردید!")
+        await message.reply_text(self._t("ui_step_pv_prompt_saved"))
         text_out, kbd = self._render_pv_menu(uid, lang=lang)
         await message.reply_text(text_out, reply_markup=kbd)
 
@@ -9155,22 +9066,22 @@ class ProBotUI:
         await self._persist(uid, st)
         resp = getattr(self, "_pv_responder", None)
         if not resp:
-            await message.reply_text("❌ ماژول پاسخگوی پی‌وی یافت نشد.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_step_pv_module_not_found"), reply_markup=self._main_menu())
             return
         lang = await self._get_user_lang(uid)
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
             text_out, kbd = self._render_pv_menu(uid, lang=lang)
-            await message.reply_text("❌ تست لغو شد.", reply_markup=kbd)
+            await message.reply_text(self._t("ui_pv_test_cancelled"), reply_markup=kbd)
             return
 
         cfg = resp.get_config_for_user(uid)
         ai_cfg = await resp.get_active_ai_config(uid)
         if not ai_cfg:
             text_out, kbd = self._render_pv_menu(uid, lang=lang)
-            await message.reply_text("⚠️ هیچ هوش مصنوعی فعالی برای اکانت شما یافت نشد. لطفاً در بخش AI یک مدل فعال کنید.", reply_markup=kbd)
+            await message.reply_text(self._t("ui_step_pv_no_active_ai_error"), reply_markup=kbd)
             return
 
-        wait_msg = await message.reply_text("⏳ در حال پردازش پیام با شخصیت تنظیم‌شده و شبیه‌سازی تایپینگ...")
+        wait_msg = await message.reply_text(self._t("ui_step_pv_simulating_typing"))
         try:
             from core.infrastructure.ai.providers import OpenAICompatibleProvider, AIProviderFactory
             prov_key = ai_cfg.provider.value if hasattr(ai_cfg.provider, "value") else str(ai_cfg.provider)
@@ -9187,12 +9098,13 @@ class ProBotUI:
             else:
                 reply_text = await provider.rewrite(ai_cfg, text.strip())
 
-            body = (
-                "🧪 **نتیجه شبیه‌سازی پاسخگوی هوشمند پی‌وی:**\n\n"
-                f"👤 **پیام ورودی مخاطب:**\n«{text.strip()}»\n\n"
-                f"🤖 **پاسخ شبیه‌سازی‌شده (مدل {ai_cfg.model}):**\n"
-                f"«{reply_text.strip()}»\n\n"
-                f"⏱ تاخیر شبیه‌سازی تایپینگ: `{cfg.typing_delay_min:.1f}` تا `{cfg.typing_delay_max:.1f}` ثانیه"
+            body = self._t(
+                "ui_pv_sim_result_body",
+                text=text.strip(),
+                model=ai_cfg.model,
+                reply=reply_text.strip(),
+                min_t=cfg.typing_delay_min,
+                max_t=cfg.typing_delay_max,
             )
             try:
                 await wait_msg.delete()
@@ -9206,4 +9118,4 @@ class ProBotUI:
             except Exception:
                 pass
             text_out, kbd = self._render_pv_menu()
-            await message.reply_text(f"❌ خطا در اجرای تست هوش مصنوعی: {exc}", reply_markup=kbd)
+            await message.reply_text(self._t("ui_step_pv_test_error", exc=exc), reply_markup=kbd)
