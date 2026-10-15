@@ -820,7 +820,8 @@
     "ui_footer_prompt": "📝 **Set message footer (suffix)**\n\nSend the text to place at the end of every forwarded message, such as a channel name or link.\n\nUse the cancel button below to stop.",
     "ui_header_removed": "🗑 Header removed successfully.",
     "ui_footer_removed": "🗑 Footer removed successfully.",
-    "ui_custom_words_prompt": "📝 **Custom words to remove**\n\nSend words to remove automatically from messages. Separate them with commas or new lines.\nSend `clear` to remove all custom words.\n\nUse the cancel button below to stop."
+    "ui_custom_words_prompt": "📝 **Custom words to remove**\n\nSend words to remove automatically from messages. Separate them with commas or new lines.\nSend `clear` to remove all custom words.\n\nUse the cancel button below to stop.",
+    "ui_rule_max_edit_prompt": "⏱ **Maximum allowed edit time (seconds)**\n\nSend a number of seconds (for example, 1800 for half an hour or 86400 for one day).\n\nUse the cancel button below to stop."
   },
   "fa": {
     "ai_add_hint": "پیکربندی را بفرستید:\n`provider model api_key`\nمثلاً `openai gpt-4o-mini sk-...`\nتأمین‌کنندگان: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -1643,7 +1644,8 @@
     "ui_footer_prompt": "📝 **تنظیم فوتر پیام (پسوند)**\n\nمتنی را ارسال کنید که به انتهای همه پیام‌های فورواردشده اضافه شود؛ مانند شناسه کانال یا لینک.\n\nبرای لغو از دکمه زیر استفاده کنید.",
     "ui_header_removed": "🗑 هدر با موفقیت حذف شد.",
     "ui_footer_removed": "🗑 فوتر با موفقیت حذف شد.",
-    "ui_custom_words_prompt": "📝 **کلمات سفارشی برای حذف**\n\nکلماتی را ارسال کنید که باید خودکار از پیام‌ها حذف شوند. آن‌ها را با کاما یا خط جدا کنید.\nبرای حذف همه کلمات سفارشی، عبارت `clear` را بفرستید.\n\nبرای لغو از دکمه زیر استفاده کنید."
+    "ui_custom_words_prompt": "📝 **کلمات سفارشی برای حذف**\n\nکلماتی را ارسال کنید که باید خودکار از پیام‌ها حذف شوند. آن‌ها را با کاما یا خط جدا کنید.\nبرای حذف همه کلمات سفارشی، عبارت `clear` را بفرستید.\n\nبرای لغو از دکمه زیر استفاده کنید.",
+    "ui_rule_max_edit_prompt": "⏱ **حداکثر زمان مجاز ویرایش (ثانیه)**\n\nتعداد ثانیه را ارسال کنید (مثلاً ۱۸۰۰ برای نیم ساعت یا ۸۶۴۰۰ برای یک روز).\n\nبرای توقف، از دکمه لغو زیر استفاده کنید."
   },
   "ru": {
     "ai_add_hint": "Отправьте конфигурацию:\n`провайдер модель api_key`\nнапример `openai gpt-4o-mini sk-...`\nПровайдеры: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -2466,7 +2468,8 @@
     "ui_footer_prompt": "📝 **Подпись сообщения (суффикс)**\n\nОтправьте текст для добавления в конец каждого пересылаемого сообщения, например имя канала или ссылку.\n\nДля отмены нажмите кнопку ниже.",
     "ui_header_removed": "🗑 Заголовок успешно удалён.",
     "ui_footer_removed": "🗑 Подпись успешно удалена.",
-    "ui_custom_words_prompt": "📝 **Слова для автоматического удаления**\n\nОтправьте слова, которые нужно удалять из сообщений. Разделяйте их запятыми или новыми строками.\nОтправьте `clear`, чтобы удалить все пользовательские слова.\n\nДля отмены нажмите кнопку ниже."
+    "ui_custom_words_prompt": "📝 **Слова для автоматического удаления**\n\nОтправьте слова, которые нужно удалять из сообщений. Разделяйте их запятыми или новыми строками.\nОтправьте `clear`, чтобы удалить все пользовательские слова.\n\nДля отмены нажмите кнопку ниже.",
+    "ui_rule_max_edit_prompt": "⏱ **Максимальное время редактирования (секунды)**\n\nОтправьте число секунд (например, 1800 для получаса или 86400 для одного дня).\n\nЧтобы остановить операцию, нажмите «Отмена» ниже."
   },
   "zh": {
     "ai_add_hint": "发送 AI 配置：\n`provider model api_key`\n例如 `openai gpt-4o-mini sk-...`\n供应商：openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -3289,7 +3292,8 @@
     "ui_footer_prompt": "📝 **设置消息页脚（后缀）**\n\n发送要附加到每条转发消息末尾的文本，例如频道名称或链接。\n\n点击下方按钮取消。",
     "ui_header_removed": "🗑 页眉已成功移除。",
     "ui_footer_removed": "🗑 页脚已成功移除。",
-    "ui_custom_words_prompt": "📝 **要删除的自定义词语**\n\n发送要自动从消息中删除的词语，使用逗号或换行分隔。\n发送 `clear` 可清除所有自定义词语。\n\n点击下方按钮取消。"
+    "ui_custom_words_prompt": "📝 **要删除的自定义词语**\n\n发送要自动从消息中删除的词语，使用逗号或换行分隔。\n发送 `clear` 可清除所有自定义词语。\n\n点击下方按钮取消。",
+    "ui_rule_max_edit_prompt": "⏱ **允许编辑的最长时间（秒）**\n\n请输入秒数（例如，1800 表示半小时，86400 表示一天）。\n\n如需停止，请点击下方取消按钮。"
   },
   "pt": {
     "ai_add_hint": "Envie a configuração de IA assim:\n`provider model api_key`\nex.: `openai gpt-4o-mini sk-...`\nProvedores: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -4112,7 +4116,8 @@
     "ui_footer_prompt": "📝 **Definir rodapé da mensagem (sufixo)**\n\nEnvie o texto a adicionar ao fim de cada mensagem encaminhada, como nome de canal ou link.\n\nUse o botão abaixo para cancelar.",
     "ui_header_removed": "🗑 Cabeçalho removido com sucesso.",
     "ui_footer_removed": "🗑 Rodapé removido com sucesso.",
-    "ui_custom_words_prompt": "📝 **Palavras personalizadas para remover**\n\nEnvie as palavras que devem ser removidas automaticamente das mensagens. Separe por vírgulas ou linhas.\nEnvie `clear` para remover todas as palavras personalizadas.\n\nUse o botão abaixo para cancelar."
+    "ui_custom_words_prompt": "📝 **Palavras personalizadas para remover**\n\nEnvie as palavras que devem ser removidas automaticamente das mensagens. Separe por vírgulas ou linhas.\nEnvie `clear` para remover todas as palavras personalizadas.\n\nUse o botão abaixo para cancelar.",
+    "ui_rule_max_edit_prompt": "⏱ **Tempo máximo permitido para edição (segundos)**\n\nEnvie um número de segundos (por exemplo, 1800 para meia hora ou 86400 para um dia).\n\nUse o botão cancelar abaixo para parar."
   },
   "uz": {
     "ai_add_hint": "IL sozlamasini shunday yuboring:\n`provider model api_key`\nmasalan `openai gpt-4o-mini sk-...`\nProvayderlar: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -4935,7 +4940,8 @@
     "ui_footer_prompt": "📝 **Xabar pastki matnini sozlash (suffiks)**\n\nHar bir uzatilgan xabar oxiriga qo‘shiladigan matnni, masalan kanal nomi yoki havolani yuboring.\n\nBekor qilish uchun pastdagi tugmani bosing.",
     "ui_header_removed": "🗑 Sarlavha muvaffaqiyatli olib tashlandi.",
     "ui_footer_removed": "🗑 Pastki matn muvaffaqiyatli olib tashlandi.",
-    "ui_custom_words_prompt": "📝 **O‘chiriladigan maxsus so‘zlar**\n\nXabarlardan avtomatik o‘chiriladigan so‘zlarni yuboring. Vergul yoki yangi qator bilan ajrating.\nBarcha maxsus so‘zlarni o‘chirish uchun `clear` yuboring.\n\nBekor qilish uchun pastdagi tugmani bosing."
+    "ui_custom_words_prompt": "📝 **O‘chiriladigan maxsus so‘zlar**\n\nXabarlardan avtomatik o‘chiriladigan so‘zlarni yuboring. Vergul yoki yangi qator bilan ajrating.\nBarcha maxsus so‘zlarni o‘chirish uchun `clear` yuboring.\n\nBekor qilish uchun pastdagi tugmani bosing.",
+    "ui_rule_max_edit_prompt": "⏱ **Tahrirlash uchun ruxsat etilgan maksimal vaqt (soniya)**\n\nSoniyani yuboring (masalan, yarim soat uchun 1800 yoki bir kun uchun 86400).\n\nTo‘xtatish uchun quyidagi bekor qilish tugmasidan foydalaning."
   },
   "id": {
     "ai_add_hint": "Kirim konfigurasi AI sebagai:\n`provider model api_key`\nmis. `openai gpt-4o-mini sk-...`\nPenyedia: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -5758,7 +5764,8 @@
     "ui_footer_prompt": "📝 **Atur footer pesan (akhiran)**\n\nKirim teks untuk ditambahkan di akhir setiap pesan yang diteruskan, seperti nama kanal atau tautan.\n\nGunakan tombol di bawah untuk membatalkan.",
     "ui_header_removed": "🗑 Header berhasil dihapus.",
     "ui_footer_removed": "🗑 Footer berhasil dihapus.",
-    "ui_custom_words_prompt": "📝 **Kata khusus untuk dihapus**\n\nKirim kata yang akan dihapus otomatis dari pesan. Pisahkan dengan koma atau baris baru.\nKirim `clear` untuk menghapus semua kata khusus.\n\nGunakan tombol di bawah untuk membatalkan."
+    "ui_custom_words_prompt": "📝 **Kata khusus untuk dihapus**\n\nKirim kata yang akan dihapus otomatis dari pesan. Pisahkan dengan koma atau baris baru.\nKirim `clear` untuk menghapus semua kata khusus.\n\nGunakan tombol di bawah untuk membatalkan.",
+    "ui_rule_max_edit_prompt": "⏱ **Waktu edit maksimum yang diizinkan (detik)**\n\nKirim jumlah detik (misalnya, 1800 untuk setengah jam atau 86400 untuk satu hari).\n\nGunakan tombol batal di bawah untuk berhenti."
   },
   "es": {
     "ai_add_hint": "Envía la configuración de IA así:\n`provider model api_key`\nej. `openai gpt-4o-mini sk-...`\nProveedores: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -6581,7 +6588,8 @@
     "ui_footer_prompt": "📝 **Configurar pie del mensaje (sufijo)**\n\nEnvía el texto que se añadirá al final de cada mensaje reenviado, como un nombre de canal o enlace.\n\nUsa el botón de abajo para cancelar.",
     "ui_header_removed": "🗑 Encabezado eliminado correctamente.",
     "ui_footer_removed": "🗑 Pie eliminado correctamente.",
-    "ui_custom_words_prompt": "📝 **Palabras personalizadas para eliminar**\n\nEnvía las palabras que se eliminarán automáticamente de los mensajes. Sepáralas con comas o líneas nuevas.\nEnvía `clear` para borrar todas las palabras personalizadas.\n\nUsa el botón de abajo para cancelar."
+    "ui_custom_words_prompt": "📝 **Palabras personalizadas para eliminar**\n\nEnvía las palabras que se eliminarán automáticamente de los mensajes. Sepáralas con comas o líneas nuevas.\nEnvía `clear` para borrar todas las palabras personalizadas.\n\nUsa el botón de abajo para cancelar.",
+    "ui_rule_max_edit_prompt": "⏱ **Tiempo máximo permitido para editar (segundos)**\n\nEnvía un número de segundos (por ejemplo, 1800 para media hora o 86400 para un día).\n\nUsa el botón de cancelar de abajo para detener la operación."
   },
   "fr": {
     "ai_add_hint": "Envoyez la configuration IA ainsi :\n`provider model api_key`\nex. `openai gpt-4o-mini sk-...`\nFournisseurs : openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -7404,7 +7412,8 @@
     "ui_footer_prompt": "📝 **Définir le pied de message (suffixe)**\n\nEnvoyez le texte à ajouter à la fin de chaque message transféré, comme un nom de canal ou un lien.\n\nUtilisez le bouton ci-dessous pour annuler.",
     "ui_header_removed": "🗑 En-tête supprimé avec succès.",
     "ui_footer_removed": "🗑 Pied de page supprimé avec succès.",
-    "ui_custom_words_prompt": "📝 **Mots personnalisés à supprimer**\n\nEnvoyez les mots à supprimer automatiquement des messages. Séparez-les par des virgules ou des lignes.\nEnvoyez `clear` pour supprimer tous les mots personnalisés.\n\nUtilisez le bouton ci-dessous pour annuler."
+    "ui_custom_words_prompt": "📝 **Mots personnalisés à supprimer**\n\nEnvoyez les mots à supprimer automatiquement des messages. Séparez-les par des virgules ou des lignes.\nEnvoyez `clear` pour supprimer tous les mots personnalisés.\n\nUtilisez le bouton ci-dessous pour annuler.",
+    "ui_rule_max_edit_prompt": "⏱ **Durée maximale autorisée pour modifier (secondes)**\n\nEnvoyez un nombre de secondes (par exemple, 1800 pour une demi-heure ou 86400 pour un jour).\n\nUtilisez le bouton Annuler ci-dessous pour arrêter."
   },
   "it": {
     "ai_add_hint": "Invia la configurazione IA così:\n`provider model api_key`\nes. `openai gpt-4o-mini sk-...`\nProvider: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -8227,6 +8236,7 @@
     "ui_footer_prompt": "📝 **Imposta piè di messaggio (suffisso)**\n\nInvia il testo da aggiungere alla fine di ogni messaggio inoltrato, ad esempio il nome di un canale o un link.\n\nUsa il pulsante qui sotto per annullare.",
     "ui_header_removed": "🗑 Intestazione rimossa correttamente.",
     "ui_footer_removed": "🗑 Piè di pagina rimosso correttamente.",
-    "ui_custom_words_prompt": "📝 **Parole personalizzate da rimuovere**\n\nInvia le parole da rimuovere automaticamente dai messaggi. Separale con virgole o nuove righe.\nInvia `clear` per eliminare tutte le parole personalizzate.\n\nUsa il pulsante qui sotto per annullare."
+    "ui_custom_words_prompt": "📝 **Parole personalizzate da rimuovere**\n\nInvia le parole da rimuovere automaticamente dai messaggi. Separale con virgole o nuove righe.\nInvia `clear` per eliminare tutte le parole personalizzate.\n\nUsa il pulsante qui sotto per annullare.",
+    "ui_rule_max_edit_prompt": "⏱ **Tempo massimo consentito per la modifica (secondi)**\n\nInvia un numero di secondi (ad esempio, 1800 per mezz'ora o 86400 per un giorno).\n\nUsa il pulsante Annulla qui sotto per interrompere."
   }
 }
