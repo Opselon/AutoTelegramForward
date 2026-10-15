@@ -259,7 +259,7 @@ async def test_cancellation_and_loop_prevention(db, crypto):
     st.buffer = {"rule_id": rule.id, "in_draft": False}
     await ProBotUI._step_rule_edit_source(ui, msg, st, "-1002")
     # Warning message returned, rule untouched
-    assert "جلوگیری از ایجاد حلقه" in msg.reply_text.call_args[0][0]
+    assert msg.reply_text.call_args[0][0] == "ui_loop_prevention_src"
     live = await repo.get_by_id(rule.id)
     assert live is not None
     assert live.source_chat_id == "-1001"
