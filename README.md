@@ -283,6 +283,15 @@ cd mobile && flutter test
 
 ---
 
+## 🤖 Agent & Contributor Guidelines
+
+Autonomous AI agents and developers working on this codebase must follow the mandatory engineering rules documented in [`docs/agent-rules.md`](docs/agent-rules.md) and [`AGENTS.md`](AGENTS.md):
+- **Mandatory Multilingual UI**: Zero hardcoded UI strings; strict 1:1 catalog parity across all 10 supported locales (`en`, `fa`, `ru`, `zh`, `pt`, `uz`, `id`, `es`, `fr`, `it`) with English fallback.
+- **Fail-Closed Multi-Tenant Isolation**: Authoritative checks using immutable numeric Telegram User IDs.
+- **Pre-Commit Quality Gates**: Mandatory execution and passing of `scripts/audit_cross_language.py` and `scripts/audit_telegram_i18n.py`.
+
+---
+
 ## 📄 License
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
