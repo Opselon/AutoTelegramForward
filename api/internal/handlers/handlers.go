@@ -290,6 +290,7 @@ func formatRuleJSON(rl *pb.ForwardRule) map[string]any {
 		"is_active":                 rl.IsActive,
 		"filter_rule_id":            rl.FilterRuleId,
 		"ai_config_id":              rl.AiConfigId,
+		"prompt_id":                 metaMap["prompt_id"],
 		"ai_fallback_policy":        rl.AiFallbackPolicy,
 		"ai_prompt_version":         rl.AiPromptVersion,
 		"ai_timeout_seconds":        rl.AiTimeoutSeconds,
@@ -368,6 +369,8 @@ func enrichCustomMetadata(rawBody []byte, rule *pb.ForwardRule) {
 		"link_replacement", "album_mode", "clean_words",
 		"message_category", "detection_criteria", "use_intermediate",
 		"intermediate_mode", "fallback_mode", "priority", "multi_route",
+		// AI Rewrite parity
+		"ai_config_id", "prompt_id", "ai_fallback_policy", "ai_prompt_version", "ai_timeout_seconds",
 	}
 	for _, k := range parityKeys {
 		if val, ok := raw[k]; ok {

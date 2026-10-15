@@ -185,6 +185,7 @@ class ForwardRule {
     this.headerTemplate = '',
     this.footerTemplate = '',
     this.aiConfigId = '',
+    this.promptId = '',
     this.replacements = const {},
     this.useVipRouting = false,
     this.blockVoice = false,
@@ -269,6 +270,7 @@ class ForwardRule {
   final String headerTemplate;
   final String footerTemplate;
   final String aiConfigId;
+  final String promptId;
 
   /// Per-task text replace rules: find -> replace. Applied by the core
   /// pipeline in deterministic order; empty string replaces with removal.
@@ -304,6 +306,7 @@ class ForwardRule {
     String? headerTemplate,
     String? footerTemplate,
     String? aiConfigId,
+    String? promptId,
     Map<String, String>? replacements,
     bool? blockVoice,
     bool? blockStickers,
@@ -353,6 +356,7 @@ class ForwardRule {
     headerTemplate: headerTemplate ?? this.headerTemplate,
     footerTemplate: footerTemplate ?? this.footerTemplate,
     aiConfigId: aiConfigId ?? this.aiConfigId,
+    promptId: promptId ?? this.promptId,
     replacements: replacements ?? this.replacements,
     blockVoice: blockVoice ?? this.blockVoice,
     blockStickers: blockStickers ?? this.blockStickers,
@@ -430,6 +434,7 @@ class ForwardRule {
     'header_template': headerTemplate,
     'footer_template': footerTemplate,
     if (aiConfigId.isNotEmpty) 'ai_config_id': aiConfigId,
+    if (promptId.isNotEmpty) 'prompt_id': promptId,
     'block_voice': blockVoice,
     'block_stickers': blockStickers,
     'remove_emojis': removeEmojis,
@@ -551,6 +556,8 @@ class ForwardRule {
       headerTemplate: json['header_template'] as String? ?? '',
       footerTemplate: json['footer_template'] as String? ?? '',
       aiConfigId: json['ai_config_id'] as String? ?? '',
+      promptId:
+          json['prompt_id'] as String? ?? (meta['prompt_id'] as String? ?? ''),
       blockVoice:
           (json['block_voice'] as bool?) ??
           (meta['block_voice'] as bool? ?? false),

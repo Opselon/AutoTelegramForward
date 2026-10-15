@@ -879,6 +879,17 @@ class DurableMessagePipeline:
             is_caption=payload.has_media,
         )
 
+        logger.info(
+            "[PIPELINE:AI_REWRITE:START] [%s] Rule %s initiating AI rewrite (cfg=%s, prompt=%s:v%s, tmo=%.1fs, caption=%s)",
+            ctx.correlation_id[:8],
+            rule.id[:8],
+            rule.ai_config_id,
+            prompt_id or "default",
+            prompt_ver or 1,
+            req.timeout_seconds,
+            payload.has_media,
+        )
+
         resp = await self._ai_transformer.transform(
             req,
             primary_config_id=rule.ai_config_id,
@@ -888,10 +899,26 @@ class DurableMessagePipeline:
         if resp.success:
             self.metrics.ai_transforms_success += 1
             evaluation.rewritten_text = resp.transformed_text
+            logger.info(
+                "[PIPELINE:AI_REWRITE:SUCCESS] [%s] Rule %s transformed %d chars in %.2fms (model=%s, failover=%s)",
+                ctx.correlation_id[:8],
+                rule.id[:8],
+                len(resp.transformed_text or ""),
+                getattr(resp, "execution_duration_ms", 0.0),
+                getattr(resp, "model_used", "") or "unknown",
+                getattr(resp, "is_failover", False),
+            )
             return resp.transformed_text
 
         # AI Transformation Failed -> Execute fallback policy
         self.metrics.ai_transforms_failed += 1
+        logger.warning(
+            "[PIPELINE:AI_REWRITE:FAILED] [%s] Rule %s AI transform failed (code=%s, err=%s)",
+            ctx.correlation_id[:8],
+            rule.id[:8],
+            resp.error_code,
+            resp.error_message,
+        )
         return self._handle_ai_fallback(ctx, text, rule, resp.error_code, resp.error_message)
 
     def _handle_ai_fallback(
@@ -912,18 +939,21 @@ class DurableMessagePipeline:
         if policy == AIFallbackPolicy.SEND_ORIGINAL:
             self.metrics.ai_fallback_send_original += 1
             logger.warning(
-                "[%s] AI transform failed (%s: %s). Policy: SEND_ORIGINAL. Forwarding original.",
-                ctx.correlation_id,
+                "[PIPELINE:AI_REWRITE:FALLBACK] [%s] Rule %s AI failed (%s: %s). Policy: SEND_ORIGINAL -> forwarding original text (%d chars).",
+                ctx.correlation_id[:8],
+                rule.id[:8],
                 error_code,
                 error_message,
+                len(original_text or ""),
             )
             return original_text
 
         if policy == AIFallbackPolicy.DROP:
             self.metrics.ai_fallback_drops += 1
             logger.warning(
-                "[%s] AI transform failed (%s: %s). Policy: DROP. Dropping message.",
-                ctx.correlation_id,
+                "[PIPELINE:AI_REWRITE:FALLBACK] [%s] Rule %s AI failed (%s: %s). Policy: DROP -> dropping message fail-closed.",
+                ctx.correlation_id[:8],
+                rule.id[:8],
                 error_code,
                 error_message,
             )
@@ -938,8 +968,9 @@ class DurableMessagePipeline:
         if policy == AIFallbackPolicy.RETRY:
             self.metrics.ai_fallback_retries += 1
             logger.warning(
-                "[%s] AI transform failed (%s: %s). Policy: RETRY.",
-                ctx.correlation_id,
+                "[PIPELINE:AI_REWRITE:FALLBACK] [%s] Rule %s AI failed (%s: %s). Policy: RETRY.",
+                ctx.correlation_id[:8],
+                rule.id[:8],
                 error_code,
                 error_message,
             )

@@ -104,6 +104,9 @@ def _rule_pb(r) -> pb.ForwardRule:
         version=int(getattr(r, "version", 1) or 1),
         owner_user_id=int(getattr(r, "owner_user_id", 0) or 0),
         custom_metadata_json=_json.dumps(getattr(r, "metadata", {}) or {}),
+        ai_fallback_policy=getattr(getattr(r, "ai_fallback_policy", None), "value", str(getattr(r, "ai_fallback_policy", "DROP"))),
+        ai_prompt_version=int(getattr(r, "ai_prompt_version", 0) or 0),
+        ai_timeout_seconds=float(getattr(r, "ai_timeout_seconds", 15.0) or 15.0),
     )
 
 
@@ -325,6 +328,10 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             is_active=r.is_active or True,
             remove_links=r.remove_links,
             custom_caption_template=r.custom_caption_template,
+            ai_config_id=r.ai_config_id or None,
+            ai_fallback_policy=r.ai_fallback_policy or "DROP",
+            ai_prompt_version=int(r.ai_prompt_version or 0),
+            ai_timeout_seconds=float(r.ai_timeout_seconds or 15.0),
             # Smart fields
             name=r.name or "",
             description=r.description or "",
@@ -357,6 +364,19 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             paused_until=int(r.paused_until or 0),
             owner_user_id=int(r.owner_user_id or 0),
         )
+        if r.custom_metadata_json:
+            try:
+                merged = _json.loads(r.custom_metadata_json)
+                if isinstance(merged, dict):
+                    if not isinstance(entity.metadata, dict):
+                        entity.metadata = {}
+                    entity.metadata.update(merged)
+                    if not entity.ai_config_id and merged.get("ai_config_id"):
+                        entity.ai_config_id = str(merged["ai_config_id"])
+                    if merged.get("prompt_id"):
+                        entity.prompt_id = str(merged["prompt_id"])
+            except Exception:
+                pass
         try:
             created = await self._rules.create(entity)
         except ValueError as exc:
@@ -452,6 +472,7 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             existing.is_paused = bool(r.is_paused)
         if r.paused_until:
             existing.paused_until = int(r.paused_until)
+        merged = {}
         if r.custom_metadata_json:
             try:
                 merged = _json.loads(r.custom_metadata_json)
@@ -459,8 +480,31 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
                     if not isinstance(existing.metadata, dict):
                         existing.metadata = {}
                     existing.metadata.update(merged)
+                    if "ai_config_id" in merged:
+                        existing.ai_config_id = str(merged["ai_config_id"] or "") or None
+                    if "prompt_id" in merged:
+                        if merged["prompt_id"]:
+                            existing.prompt_id = str(merged["prompt_id"])
+                        else:
+                            existing.metadata.pop("prompt_id", None)
             except Exception:
                 pass
+
+        # AI Rewrite configuration
+        if r.ai_config_id:
+            existing.ai_config_id = r.ai_config_id
+        elif r.ai_config_id == "" and (r.custom_metadata_json and "ai_config_id" in merged):
+            existing.ai_config_id = None
+        if r.ai_fallback_policy:
+            try:
+                from ...domain.entities import AIFallbackPolicy
+                existing.ai_fallback_policy = AIFallbackPolicy(str(r.ai_fallback_policy).upper())
+            except Exception:
+                pass
+        if r.ai_prompt_version:
+            existing.ai_prompt_version = int(r.ai_prompt_version)
+        if r.ai_timeout_seconds and r.ai_timeout_seconds > 0:
+            existing.ai_timeout_seconds = float(r.ai_timeout_seconds)
 
         existing.mark_updated()
         try:
