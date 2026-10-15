@@ -84,3 +84,19 @@ def test_direct_button_label_with_fstring_is_rejected() -> None:
 def test_callback_payload_is_not_treated_as_visible_copy() -> None:
     source = 'InlineKeyboardButton(self._t("ui_disable", lang=lang), callback_data="disable_rule_42")'
     assert AUDIT.scan_source("ui.py", source) == []
+
+
+def test_added_line_filter_ignores_legacy_literals_but_catches_new_ones() -> None:
+    source = (
+        'await bot.send_message(chat_id, "Legacy text")\\n'
+        'await bot.send_message(chat_id, "New untranslated text")'
+    )
+    findings = AUDIT.scan_source("ui.py", source, {2})
+    assert len(findings) == 1
+    assert "New untranslated text" in findings[0]
+
+
+def test_full_scan_mode_is_available_for_deep_audits() -> None:
+    import inspect
+
+    assert "--all" in inspect.getsource(AUDIT.main)
