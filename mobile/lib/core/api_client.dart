@@ -829,14 +829,167 @@ class ApiClient {
     retryable: false,
   );
 
-  Future<List<LogEntry>> queryLogs({int limit = 40, String level = ''}) =>
-      _requestList(
-        method: 'GET',
-        path: '/api/logs',
-        query: {'limit': limit, if (level.isNotEmpty) 'level': level},
-        fromJson: LogEntry.fromJson,
-        listKey: 'logs',
-      );
+  /// Every controllable per-task setting (`GET /api/rules/settings/schema`).
+  /// Fetched once and cached by the caller; it is server metadata, not per-rule
+  /// state.
+  Future<RuleSettingsSchema> ruleSettingsSchema() => _request(
+    method: 'GET',
+    path: '/api/rules/settings/schema',
+    fromJson: RuleSettingsSchema.fromJson,
+    retryable: true,
+  );
+
+  /// The effective settings for one task (`GET /api/rules/{id}/settings`).
+  /// Ownership is enforced server-side.
+  Future<Map<String, dynamic>> getRuleSettings(String ruleId) => _request(
+    method: 'GET',
+    path: '/api/rules/$ruleId/settings',
+    fromJson: (json) => (json['settings'] as Map<String, dynamic>?) ?? json,
+    retryable: true,
+  );
+
+  /// Applies a validated batch of settings (`PATCH /api/rules/{id}/settings`).
+  /// The server rejects an unknown name, a wrong type or an out-of-range value,
+  /// so the thrown [ApiException] carries the server's own explanation.
+  Future<Map<String, dynamic>> updateRuleSettings(
+    String ruleId,
+    Map<String, dynamic> values, {
+    bool replaceAll = false,
+  }) => _request(
+    method: 'PATCH',
+    path: '/api/rules/$ruleId/settings',
+    body: {'settings': values, 'replace_all': replaceAll},
+    fromJson: (json) => json,
+    retryable: false,
+  );
+
+  Future<List<LogEntry>> queryLogs({
+    int limit = 40,
+    String level = '',
+    String ruleId = '',
+    String service = '',
+    String search = '',
+  }) => _requestList(
+    method: 'GET',
+    path: '/api/logs',
+    query: {
+      'limit': limit,
+      if (level.isNotEmpty) 'level': level,
+      if (ruleId.isNotEmpty) 'rule_id': ruleId,
+      if (service.isNotEmpty) 'service': service,
+      if (search.isNotEmpty) 'search': search,
+    },
+    fromJson: LogEntry.fromJson,
+    listKey: 'logs',
+  );
+
+  /// One page of the archive with the real match count (`GET /api/logs`).
+  ///
+  /// [offset] walks back through history, [ascending] flips direction, so a
+  /// client can reach the oldest event a task ever produced instead of being
+  /// stuck with the newest window.
+  Future<LogPage> queryLogsPage({
+    int limit = 50,
+    int offset = 0,
+    bool ascending = false,
+    String level = '',
+    List<String> levels = const [],
+    String service = '',
+    String category = '',
+    String search = '',
+    String ruleId = '',
+    String correlationId = '',
+    int userId = 0,
+    int since = 0,
+    int until = 0,
+  }) => _request(
+    method: 'GET',
+    path: '/api/logs',
+    query: {
+      'limit': limit,
+      'offset': offset,
+      'ascending': ascending,
+      if (level.isNotEmpty) 'level': level,
+      if (levels.isNotEmpty) 'levels': levels.join(','),
+      if (service.isNotEmpty) 'service': service,
+      if (category.isNotEmpty) 'category': category,
+      if (search.isNotEmpty) 'search': search,
+      if (ruleId.isNotEmpty) 'rule_id': ruleId,
+      if (correlationId.isNotEmpty) 'correlation_id': correlationId,
+      if (userId > 0) 'user_id': userId,
+      if (since > 0) 'since': since,
+      if (until > 0) 'until': until,
+    },
+    fromJson: LogPage.fromJson,
+    retryable: true,
+  );
+
+  /// One task's complete history (`GET /api/rules/{id}/logs`). Ownership is
+  /// enforced server-side, so this can never widen a read past the caller's own
+  /// tasks.
+  Future<LogPage> ruleLogs(
+    String ruleId, {
+    int limit = 50,
+    int offset = 0,
+    bool ascending = false,
+    String level = '',
+    String search = '',
+    int since = 0,
+  }) => _request(
+    method: 'GET',
+    path: '/api/rules/$ruleId/logs',
+    query: {
+      'limit': limit,
+      'offset': offset,
+      'ascending': ascending,
+      if (level.isNotEmpty) 'level': level,
+      if (search.isNotEmpty) 'search': search,
+      if (since > 0) 'since': since,
+    },
+    fromJson: LogPage.fromJson,
+    retryable: true,
+  );
+
+  /// Archive aggregates for the current filter (`GET /api/logs/stats`).
+  Future<LogStats> logStats({String ruleId = '', int since = 0}) => _request(
+    method: 'GET',
+    path: '/api/logs/stats',
+    query: {
+      if (ruleId.isNotEmpty) 'rule_id': ruleId,
+      if (since > 0) 'since': since,
+    },
+    fromJson: LogStats.fromJson,
+    retryable: true,
+  );
+
+  /// Downloads log evidence as JSON or CSV (`GET /api/logs/export`) and returns
+  /// it as text. The raw body is returned rather than written to disk because
+  /// the app has no file-system dependency; callers copy or share the string.
+  Future<String> exportLogs({
+    String format = 'json',
+    int limit = 5000,
+    String level = '',
+    String service = '',
+    String search = '',
+    String ruleId = '',
+    int since = 0,
+  }) async {
+    final response = await _sendWithRetry(
+      method: 'GET',
+      path: '/api/logs/export',
+      query: {
+        'format': format,
+        'limit': limit,
+        if (level.isNotEmpty) 'level': level,
+        if (service.isNotEmpty) 'service': service,
+        if (search.isNotEmpty) 'search': search,
+        if (ruleId.isNotEmpty) 'rule_id': ruleId,
+        if (since > 0) 'since': since,
+      },
+      retryable: true,
+    );
+    return response.body;
+  }
 
   /// Centralized audit events (`GET /api/audit/events`) — the durable
   /// PostgreSQL execution-assurance trail. Tenant-scoped server-side: the

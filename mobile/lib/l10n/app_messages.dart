@@ -285,7 +285,68 @@ class AppMessagesEn {
     // server compat
     'incompatible_server':
         'This server is running an older AutoTelegramForward release. Update it to {version} or newer.',
+    // ---- v18 log control + full control (appended) ----
+    'logs_scope_task': 'Task',
+    'logs_scope_service': 'Service',
+    'logs_all_tasks': 'All tasks',
+    'logs_all': 'All',
+    'logs_search_hint': 'Search message + detail…',
+    'logs_order_toggle_desc': 'Newest first — tap for oldest first',
+    'logs_page_size': '{n} / page',
+    'logs_export_evidence': 'Export evidence',
+    'logs_export_json': 'Export as JSON',
+    'logs_export_json_sub': 'Full structured records',
+    'logs_export_csv': 'Export as CSV',
+    'logs_export_csv_sub': 'One row per event, spreadsheet-ready',
+    'logs_export_copied': 'Export copied',
+    'logs_export_failed': 'Export failed: {error}',
+    'logs_copy': 'Copy',
+    'logs_history_from': 'history from {date}',
+    'logs_newer': 'Newer',
+    'logs_older': 'Older',
+    'logs_end_of_history': 'End of history',
+    'logs_show_all_tasks': 'Show all tasks',
+    'logs_scope_task_chip': 'task:{id}',
+    'logs_scope_corr_chip': 'corr:{id}',
+    'logs_detail_label': 'detail',
+    'logs_truncated_display':
+        '… truncated for display; Copy still yields the full export',
+    'rules_full_control': 'Full control',
+    'rules_full_control_desc':
+        'Every per-task setting the engine honours, validated on the server.',
+    'rules_full_control_open': 'Open',
+    'rules_logs_action': 'Logs for this task',
+    'rules_logs_title': 'Task logs',
+    'rules_settings_count': '{n} settings',
+    'rules_settings_reload': 'Reload',
+    'rules_settings_no_changes': 'No changes',
+    'rules_settings_change_count': '{n} changes',
+    'rules_settings_apply': 'Apply',
+    'rules_settings_load_failed': 'Could not load task settings',
+    'rules_settings_save_failed': 'Could not save settings',
+    'rules_settings_unavailable':
+        'This server does not expose per-task settings.',
+    'rules_settings_applied': '{n} settings applied',
+    'rules_settings_required': 'required',
+    'rules_settings_invalid': 'invalid {kind}',
+    'rules_settings_min': 'must be at least {min}',
+    'rules_settings_max': 'must be at most {max}',
+    'rules_settings_saving': 'Saving…',
+    'rules_settings_json_hint': 'JSON object',
+    'rules_settings_list_hint': 'comma separated',
+    'rules_settings_int_hint': 'integer',
+    'rules_settings_number_hint': 'number',
+    // ---- v18 log level chips (appended) ----
+    'logs_level_errors': 'Errors',
+    'logs_level_warnings': 'Warnings',
+    'logs_level_info': 'Info',
+    'logs_level_debug': 'Debug',
   };
+
+  /// Every key this catalog defines. Exposed so the parity test can compare
+  /// the compiled maps instead of scraping source text, where a value's
+  /// quoting style can hide a key from a regex.
+  static Iterable<String> get knownKeys => _map.keys;
 
   const AppMessagesEn();
 

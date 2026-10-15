@@ -245,7 +245,68 @@ class AppMessagesUz {
     'rules_sync_edits': 'Tahrirlarni sinxronlash',
     'rules_sync_replies': 'Javoblarni sinxronlash',
     'settings_server_url': 'Server manzili',
+    // ---- v18 log control + full control (appended) ----
+    'logs_scope_task': 'Vazifa',
+    'logs_scope_service': 'Xizmat',
+    'logs_all_tasks': 'Barcha vazifalar',
+    'logs_all': 'Barchasi',
+    'logs_search_hint': 'Xabar va tafsilotlarni qidirish…',
+    'logs_order_toggle_desc': 'Eng yangi birinchi — eng eskisi uchun bosing',
+    'logs_page_size': 'Sahifada {n} ta',
+    'logs_export_evidence': 'Dalillarni eksport qilish',
+    'logs_export_json': 'JSON sifatida eksport',
+    'logs_export_json_sub': 'To‘liq tuzilgan yozuvlar',
+    'logs_export_csv': 'CSV sifatida eksport',
+    'logs_export_csv_sub': 'Har bir hodisa uchun bitta qator, jadvalga tayyor',
+    'logs_export_copied': 'Eksport nusxalandi',
+    'logs_export_failed': 'Eksport amalga oshmadi: {error}',
+    'logs_copy': 'Nusxalash',
+    'logs_history_from': '{date} dan tarix',
+    'logs_newer': 'Yangiroq',
+    'logs_older': 'Eskiroq',
+    'logs_end_of_history': 'Tarix oxiri',
+    'logs_show_all_tasks': 'Barcha vazifalarni ko‘rsatish',
+    'logs_scope_task_chip': 'vazifa:{id}',
+    'logs_scope_corr_chip': 'korr:{id}',
+    'logs_detail_label': 'tafsilot',
+    'logs_truncated_display':
+        '… ko‘rsatish uchun qisqartirildi; Nusxalash to‘liq eksportni beradi',
+    'rules_full_control': 'To‘liq nazorat',
+    'rules_full_control_desc':
+        'Dvigatel hisobga oladigan har bir vazifa sozlamasi, serverda tekshiriladi.',
+    'rules_full_control_open': 'Ochish',
+    'rules_logs_action': 'Bu vazifaning jurnallari',
+    'rules_logs_title': 'Vazifa jurnallari',
+    'rules_settings_count': '{n} sozlama',
+    'rules_settings_reload': 'Qayta yuklash',
+    'rules_settings_no_changes': 'O‘zgarish yo‘q',
+    'rules_settings_change_count': '{n} o‘zgarish',
+    'rules_settings_apply': 'Qo‘llash',
+    'rules_settings_load_failed': 'Vazifa sozlamalarini yuklab bo‘lmadi',
+    'rules_settings_save_failed': 'Sozlamalarni saqlab bo‘lmadi',
+    'rules_settings_unavailable':
+        'Bu server vazifa sozlamalarini taqdim etmaydi.',
+    'rules_settings_applied': '{n} sozlama qo‘llandi',
+    'rules_settings_required': 'majburiy',
+    'rules_settings_invalid': 'noto‘g‘ri {kind}',
+    'rules_settings_min': 'kamida {min} bo‘lishi kerak',
+    'rules_settings_max': 'ko‘pi bilan {max} bo‘lishi kerak',
+    'rules_settings_saving': 'Saqlanmoqda…',
+    'rules_settings_json_hint': 'JSON obyekt',
+    'rules_settings_list_hint': 'vergul bilan ajratilgan',
+    'rules_settings_int_hint': 'butun son',
+    'rules_settings_number_hint': 'son',
+    // ---- v18 log level chips (appended) ----
+    'logs_level_errors': 'Xatolar',
+    'logs_level_warnings': 'Ogohlantirishlar',
+    'logs_level_info': 'Ma‘lumot',
+    'logs_level_debug': 'Tuzatish',
   };
+
+  /// Every key this catalog defines. Exposed so the parity test can compare
+  /// the compiled maps instead of scraping source text, where a value's
+  /// quoting style can hide a key from a regex.
+  static Iterable<String> get knownKeys => _map.keys;
 
   String get(String key, {Map<String, String>? params}) {
     final value = _map[key] ?? key;

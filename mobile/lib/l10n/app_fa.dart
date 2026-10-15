@@ -272,7 +272,68 @@ class AppMessagesFa {
     // server compat
     'incompatible_server':
         'سرور از نسخه قدیمی اتوتلگرام استفاده می‌کند. سرور را به نسخه {version} یا جدیدتر ارتقا دهید.',
+    // ---- v18 log control + full control (appended) ----
+    'logs_scope_task': 'تسک',
+    'logs_scope_service': 'سرویس',
+    'logs_all_tasks': 'همه تسک\u200cها',
+    'logs_all': 'همه',
+    'logs_search_hint': 'جستجو در پیام و جزئیات…',
+    'logs_order_toggle_desc': 'جدیدترین اول — برای قدیمی\u200cترین اول بزنید',
+    'logs_page_size': '{n} در صفحه',
+    'logs_export_evidence': 'خروجی گرفتن از شواهد',
+    'logs_export_json': 'خروجی JSON',
+    'logs_export_json_sub': 'رکوردهای کامل و ساختاریافته',
+    'logs_export_csv': 'خروجی CSV',
+    'logs_export_csv_sub': 'یک ردیف برای هر رویداد، آمادهٔ صفحه\u200cگسترده',
+    'logs_export_copied': 'خروجی کپی شد',
+    'logs_export_failed': 'خروجی گرفتن ناموفق بود: {error}',
+    'logs_copy': 'کپی',
+    'logs_history_from': 'تاریخچه از {date}',
+    'logs_newer': 'جدیدتر',
+    'logs_older': 'قدیمی\u200cتر',
+    'logs_end_of_history': 'پایان تاریخچه',
+    'logs_show_all_tasks': 'نمایش همهٔ تسک\u200cها',
+    'logs_scope_task_chip': 'تسک:{id}',
+    'logs_scope_corr_chip': 'شناسه:{id}',
+    'logs_detail_label': 'جزئیات',
+    'logs_truncated_display':
+        '… برای نمایش کوتاه شد؛ با کپی خروجی کامل دریافت می\u200cشود',
+    'rules_full_control': 'کنترل کامل',
+    'rules_full_control_desc':
+        'همهٔ تنظیمات هر تسک که موتور رعایت می\u200cکند، با اعتبارسنجی سمت سرور.',
+    'rules_full_control_open': 'باز کردن',
+    'rules_logs_action': 'لاگ\u200cهای این تسک',
+    'rules_logs_title': 'لاگ\u200cهای تسک',
+    'rules_settings_count': '{n} تنظیم',
+    'rules_settings_reload': 'بارگذاری مجدد',
+    'rules_settings_no_changes': 'بدون تغییر',
+    'rules_settings_change_count': '{n} تغییر',
+    'rules_settings_apply': 'اعمال',
+    'rules_settings_load_failed': 'تنظیمات تسک بارگذاری نشد',
+    'rules_settings_save_failed': 'تنظیمات ذخیره نشد',
+    'rules_settings_unavailable':
+        'این سرور تنظیمات هر تسک را ارائه نمی\u200cدهد.',
+    'rules_settings_applied': '{n} تنظیم اعمال شد',
+    'rules_settings_required': 'الزامی',
+    'rules_settings_invalid': '{kind} نامعتبر',
+    'rules_settings_min': 'باید حداقل {min} باشد',
+    'rules_settings_max': 'باید حداکثر {max} باشد',
+    'rules_settings_saving': 'در حال ذخیره…',
+    'rules_settings_json_hint': 'شیء JSON',
+    'rules_settings_list_hint': 'جداشده با کاما',
+    'rules_settings_int_hint': 'عدد صحیح',
+    'rules_settings_number_hint': 'عدد',
+    // ---- v18 log level chips (appended) ----
+    'logs_level_errors': 'خطاها',
+    'logs_level_warnings': 'هشدارها',
+    'logs_level_info': 'اطلاعات',
+    'logs_level_debug': 'اشکال\u200cزدایی',
   };
+
+  /// Every key this catalog defines. Exposed so the parity test can compare
+  /// the compiled maps instead of scraping source text, where a value's
+  /// quoting style can hide a key from a regex.
+  static Iterable<String> get knownKeys => _map.keys;
 
   String get(String key, {Map<String, String>? params}) {
     final value = _map[key];

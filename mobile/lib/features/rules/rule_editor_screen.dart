@@ -12,6 +12,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'rule_settings_sheet.dart';
+
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
@@ -832,6 +834,61 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           ),
                         ],
                       ),
+
+                      // Full control: the ~50 remaining per-task knobs, driven
+                      // by the server's own registry so nothing has to be
+                      // mirrored or kept in sync by hand.
+                      if (widget.rule != null)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.teal.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.teal.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.tune, color: Colors.teal),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      t.get('rules_full_control'),
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    Text(
+                                      t.get('rules_full_control_desc'),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              FilledButton.tonal(
+                                onPressed:
+                                    () => showRuleSettingsSheet(
+                                      context,
+                                      ruleId: widget.rule!.id,
+                                      ruleLabel:
+                                          _nameCtrl.text.trim().isNotEmpty
+                                              ? _nameCtrl.text.trim()
+                                              : widget.rule!.sourceChatTitle,
+                                    ),
+                                child: Text(t.get('rules_full_control_open')),
+                              ),
+                            ],
+                          ),
+                        ),
 
                       // Processing Messages Category
                       ExpansionTile(

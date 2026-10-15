@@ -2,7 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:autoforward_mobile/core/api_client.dart';
+import 'package:autoforward_mobile/l10n/app_es.dart';
 import 'package:autoforward_mobile/l10n/app_fa.dart';
+import 'package:autoforward_mobile/l10n/app_fr.dart';
+import 'package:autoforward_mobile/l10n/app_id.dart';
+import 'package:autoforward_mobile/l10n/app_it.dart';
+import 'package:autoforward_mobile/l10n/app_pt.dart';
+import 'package:autoforward_mobile/l10n/app_ru.dart';
+import 'package:autoforward_mobile/l10n/app_uz.dart';
+import 'package:autoforward_mobile/l10n/app_zh.dart';
 import 'package:autoforward_mobile/l10n/app_messages.dart';
 
 void main() {
@@ -120,6 +128,104 @@ void main() {
           'zh',
         ]),
       );
+    });
+
+    // ---- exact set parity, both directions ------------------------------
+    // The probe list above can only catch a *missing* key for keys someone
+    // remembered to list. This compares the compiled maps, so a key added to
+    // one locale only — or to English only — fails here, and a value's quoting
+    // style cannot hide it from the check.
+    test('every locale defines exactly the English key set', () {
+      final en = AppMessagesEn.knownKeys.toSet();
+      expect(en, isNotEmpty);
+
+      final catalogs = <String, Iterable<String>>{
+        'fa': AppMessagesFa.knownKeys,
+        'es': AppMessagesEs.knownKeys,
+        'fr': AppMessagesFr.knownKeys,
+        'id': AppMessagesId.knownKeys,
+        'it': AppMessagesIt.knownKeys,
+        'pt': AppMessagesPt.knownKeys,
+        'ru': AppMessagesRu.knownKeys,
+        'uz': AppMessagesUz.knownKeys,
+        'zh': AppMessagesZh.knownKeys,
+      };
+
+      catalogs.forEach((code, keys) {
+        final set = keys.toSet();
+        expect(
+          en.difference(set),
+          isEmpty,
+          reason: '$code is missing ${en.difference(set)}',
+        );
+        expect(
+          set.difference(en),
+          isEmpty,
+          reason: '$code has keys English does not: ${set.difference(en)}',
+        );
+      });
+    });
+
+    // ---- the v18 log-control surface -------------------------------------
+    test('log control and full control keys resolve in every locale', () {
+      const keys = <String>[
+        'logs_scope_task',
+        'logs_scope_service',
+        'logs_all_tasks',
+        'logs_search_hint',
+        'logs_order_toggle_desc',
+        'logs_page_size',
+        'logs_export_evidence',
+        'logs_export_json',
+        'logs_export_csv',
+        'logs_copy',
+        'logs_history_from',
+        'logs_newer',
+        'logs_older',
+        'logs_end_of_history',
+        'logs_scope_task_chip',
+        'logs_scope_corr_chip',
+        'logs_level_errors',
+        'logs_level_warnings',
+        'logs_level_info',
+        'logs_level_debug',
+        'rules_full_control',
+        'rules_full_control_desc',
+        'rules_logs_action',
+        'rules_logs_title',
+        'rules_settings_count',
+        'rules_settings_apply',
+        'rules_settings_min',
+        'rules_settings_max',
+        'rules_settings_invalid',
+      ];
+      for (final locale in AppMessages.supportedLocales) {
+        final msgs = AppMessages(locale);
+        for (final key in keys) {
+          expect(
+            msgs.get(key),
+            isNot(key),
+            reason: '${locale.languageCode} is missing $key',
+          );
+        }
+      }
+    });
+
+    // English must never carry right-to-left characters: it is the fallback for
+    // every other locale, so a stray Persian value would leak into a UI that
+    // renders left-to-right.
+    test('English values contain no right-to-left characters', () {
+      final rtl = RegExp(
+        r'[\u0590-\u05FF\u0600-\u06FF\u0700-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFF]',
+      );
+      final en = AppMessages(const Locale('en'));
+      for (final key in AppMessagesEn.knownKeys) {
+        expect(
+          rtl.hasMatch(en.get(key)),
+          isFalse,
+          reason: 'English value for $key contains RTL characters',
+        );
+      }
     });
   });
 }

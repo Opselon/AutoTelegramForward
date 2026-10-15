@@ -244,7 +244,70 @@ class AppMessagesIt {
     'rules_sync_edits': 'Sincronizza modifiche',
     'rules_sync_replies': 'Sincronizza risposte',
     'settings_server_url': 'URL del server',
+    // ---- v18 log control + full control (appended) ----
+    'logs_scope_task': 'Attività',
+    'logs_scope_service': 'Servizio',
+    'logs_all_tasks': 'Tutte le attività',
+    'logs_all': 'Tutte',
+    'logs_search_hint': 'Cerca messaggio e dettagli…',
+    'logs_order_toggle_desc': 'Più recenti prima — tocca per più vecchi prima',
+    'logs_page_size': '{n} per pagina',
+    'logs_export_evidence': 'Esporta prove',
+    'logs_export_json': 'Esporta come JSON',
+    'logs_export_json_sub': 'Record strutturati completi',
+    'logs_export_csv': 'Esporta come CSV',
+    'logs_export_csv_sub':
+        'Una riga per evento, pronta per il foglio di calcolo',
+    'logs_export_copied': 'Esportazione copiata',
+    'logs_export_failed': 'Esportazione non riuscita: {error}',
+    'logs_copy': 'Copia',
+    'logs_history_from': 'cronologia dal {date}',
+    'logs_newer': 'Più recenti',
+    'logs_older': 'Più vecchi',
+    'logs_end_of_history': 'Fine della cronologia',
+    'logs_show_all_tasks': 'Mostra tutte le attività',
+    'logs_scope_task_chip': 'attività:{id}',
+    'logs_scope_corr_chip': 'corr:{id}',
+    'logs_detail_label': 'dettagli',
+    'logs_truncated_display':
+        '… troncato per la visualizzazione; Copia fornisce comunque l’esportazione completa',
+    'rules_full_control': 'Controllo completo',
+    'rules_full_control_desc':
+        'Ogni impostazione per attività rispettata dal motore, convalidata sul server.',
+    'rules_full_control_open': 'Apri',
+    'rules_logs_action': 'Log di questa attività',
+    'rules_logs_title': 'Log delle attività',
+    'rules_settings_count': '{n} impostazioni',
+    'rules_settings_reload': 'Ricarica',
+    'rules_settings_no_changes': 'Nessuna modifica',
+    'rules_settings_change_count': '{n} modifiche',
+    'rules_settings_apply': 'Applica',
+    'rules_settings_load_failed':
+        'Impossibile caricare le impostazioni dell’attività',
+    'rules_settings_save_failed': 'Impossibile salvare le impostazioni',
+    'rules_settings_unavailable':
+        'Questo server non espone impostazioni per attività.',
+    'rules_settings_applied': '{n} impostazioni applicate',
+    'rules_settings_required': 'obbligatorio',
+    'rules_settings_invalid': '{kind} non valido',
+    'rules_settings_min': 'deve essere almeno {min}',
+    'rules_settings_max': 'deve essere al massimo {max}',
+    'rules_settings_saving': 'Salvataggio…',
+    'rules_settings_json_hint': 'Oggetto JSON',
+    'rules_settings_list_hint': 'separati da virgole',
+    'rules_settings_int_hint': 'intero',
+    'rules_settings_number_hint': 'numero',
+    // ---- v18 log level chips (appended) ----
+    'logs_level_errors': 'Errori',
+    'logs_level_warnings': 'Avvisi',
+    'logs_level_info': 'Informazioni',
+    'logs_level_debug': 'Debug',
   };
+
+  /// Every key this catalog defines. Exposed so the parity test can compare
+  /// the compiled maps instead of scraping source text, where a value's
+  /// quoting style can hide a key from a regex.
+  static Iterable<String> get knownKeys => _map.keys;
 
   String get(String key, {Map<String, String>? params}) {
     final value = _map[key] ?? key;

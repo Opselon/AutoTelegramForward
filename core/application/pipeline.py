@@ -309,6 +309,12 @@ class DurableMessagePipeline:
                 "core", "audit",
                 f"{event_type} outcome={outcome}" + (f" reason={reason_code}" if reason_code else ""),
                 detail,
+                # v18: the ids travel as columns too, so "this task's history"
+                # and "this message's trail" are index lookups rather than
+                # free-text scans over the detail blob.
+                rule_id=rule_id or "",
+                user_id=int(kw.get("owner_user_id", 0) or kw.get("user_id", 0) or 0),
+                correlation_id=ctx.correlation_id or "",
             )
         except Exception:
             pass  # never break the forwarding path for observability

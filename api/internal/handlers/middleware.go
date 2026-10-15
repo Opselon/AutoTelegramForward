@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"autoforward/internal/middleware"
 	pb "autoforward/proto"
 )
 
@@ -45,6 +46,12 @@ func (h *Handlers) authMiddleware(next http.Handler) http.Handler {
 			Username: resp.Username,
 			IsAdmin:  resp.IsAdmin,
 		}))
+		// Hand the verified actor to the access logger. It is set here, after
+		// verification, so a spoofed client header can never reach the archive.
+		if m := middleware.Meta(r.Context()); m != nil {
+			m.UserID = resp.UserId
+			m.Username = resp.Username
+		}
 		next.ServeHTTP(w, r)
 	})
 }

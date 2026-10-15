@@ -464,20 +464,69 @@ export interface LogItem {
   error_name?: string
   message?: string
   detail: string
+  /** v18: the task this event belongs to (empty for system-wide events). */
   rule_id?: string
+  /** v18: the tenant this event belongs to (0 = system-wide). */
+  user_id?: number
+  /** v18: ties this record to its API request / audit event. */
+  correlation_id?: string
   chat_id?: string
+}
+
+/** v18: a page of history plus the real match count and depth metadata. */
+export interface LogPage {
+  logs: LogItem[]
+  /** Every row matching the filter, not just this page. */
+  total: number
+  /** Rows in this page. */
+  count: number
+  offset: number
+  limit: number
+  has_more: boolean
+  rule_id?: string
+}
+
+export interface LogQuery {
+  level?: string
+  /** Multi-select severities (takes precedence over `level`). */
+  levels?: string[]
+  service?: string
+  category?: string
+  search?: string
+  rule_id?: string
+  correlation_id?: string
+  user_id?: number
+  /** Scope to the caller's own tenant. */
+  mine?: boolean
+  since?: number
+  until?: number
+  /** "The last N hours" shorthand for `since`. */
+  hours?: number
+  offset?: number
+  page?: number
+  limit?: number
+  ascending?: boolean
 }
 
 export interface LogStats {
   total: number
   by_level: Record<string, number>
   by_category: Record<string, number>
+  /** v18: which task produced how much history. */
+  by_rule?: Record<string, number>
+  /** v18: which service produced how much history. */
+  by_service?: Record<string, number>
+  /** v18: how far back the archive actually goes. */
+  oldest_ts?: number
+  newest_ts?: number
 }
 
 export interface PurgeLogsRequest {
   level?: string
   service?: string
   category?: string
+  /** v18: purge one task's history only (ownership checked server-side). */
+  rule_id?: string
   /** Keep logs newer than this many hours. 0 = no protection. */
   older_than_hours?: number
 }

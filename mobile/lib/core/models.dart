@@ -803,6 +803,12 @@ class LogEntry {
     required this.category,
     required this.message,
     this.eventCode = '',
+    this.tsSeconds = 0,
+    this.service = '',
+    this.detail = '',
+    this.ruleId = '',
+    this.userId = 0,
+    this.correlationId = '',
   });
 
   final String timestamp;
@@ -811,17 +817,259 @@ class LogEntry {
   final String message;
   final String eventCode;
 
-  factory LogEntry.fromJson(Map<String, dynamic> json) => LogEntry(
-    timestamp:
-        json['timestamp'] as String? ??
-        json['ts'] as String? ??
-        json['time'] as String? ??
-        '',
-    level: (json['level'] as String? ?? 'info').toLowerCase(),
-    category: json['category'] as String? ?? json['source'] as String? ?? '',
-    message: json['message'] as String? ?? json['event'] as String? ?? '',
-    eventCode: json['event_code'] as String? ?? '',
+  /// Unix seconds. The API's canonical field; [timestamp] is kept for the
+  /// legacy string form and for display.
+  final int tsSeconds;
+
+  /// Emitting microservice (`core`, `api`, `logger`, `web`).
+  final String service;
+
+  /// Structured payload. Search matches this too, which is why the console can
+  /// find an event by a value that only ever existed inside the JSON blob.
+  final String detail;
+
+  /// Which forwarding task produced this event. Empty means system-wide.
+  final String ruleId;
+
+  /// Whose action produced this event. Zero means no human actor.
+  final int userId;
+
+  /// Ties every event of one request/forwarding hop together.
+  final String correlationId;
+
+  bool get isError => level == 'error';
+  bool get isWarning => level == 'warning' || level == 'warn';
+
+  DateTime? get when {
+    if (tsSeconds > 0) {
+      return DateTime.fromMillisecondsSinceEpoch(tsSeconds * 1000);
+    }
+    return DateTime.tryParse(timestamp);
+  }
+
+  String get levelUpper => level.toUpperCase();
+
+  factory LogEntry.fromJson(Map<String, dynamic> json) {
+    final rawTs = json['ts'] ?? json['timestamp'] ?? json['time'];
+    final seconds =
+        rawTs is int
+            ? rawTs
+            : rawTs is num
+            ? rawTs.toInt()
+            : int.tryParse('$rawTs') ?? 0;
+    return LogEntry(
+      timestamp: rawTs is String ? rawTs : (seconds > 0 ? '$seconds' : ''),
+      tsSeconds: seconds,
+      level: (json['level'] as String? ?? 'info').toLowerCase(),
+      category: json['category'] as String? ?? json['source'] as String? ?? '',
+      message: json['message'] as String? ?? json['event'] as String? ?? '',
+      eventCode: json['event_code'] as String? ?? '',
+      service: json['service'] as String? ?? '',
+      detail: json['detail'] as String? ?? '',
+      ruleId: json['rule_id'] as String? ?? '',
+      userId:
+          (json['user_id'] as num?)?.toInt() ??
+          int.tryParse('${json['user_id'] ?? ''}') ??
+          0,
+      correlationId: json['correlation_id'] as String? ?? '',
+    );
+  }
+}
+
+/// One page of archived log history plus the real match count.
+///
+/// [total] is the number of events matching the filter across the whole
+/// archive — not the size of this page — so the client can render
+/// "1–50 of 12,431" and keep walking backwards until [hasMore] is false.
+@immutable
+class LogPage {
+  const LogPage({
+    required this.logs,
+    required this.total,
+    required this.hasMore,
+    this.offset = 0,
+    this.limit = 0,
+  });
+
+  final List<LogEntry> logs;
+  final int total;
+  final bool hasMore;
+  final int offset;
+  final int limit;
+
+  bool get isEmpty => logs.isEmpty;
+
+  factory LogPage.fromJson(Map<String, dynamic> json) {
+    final raw = json['logs'];
+    final logs =
+        raw is List
+            ? raw
+                .whereType<Map<String, dynamic>>()
+                .map(LogEntry.fromJson)
+                .toList(growable: false)
+            : const <LogEntry>[];
+    final total = (json['total'] as num?)?.toInt() ?? logs.length;
+    return LogPage(
+      logs: logs,
+      total: total,
+      hasMore: json['has_more'] as bool? ?? false,
+      offset: (json['offset'] as num?)?.toInt() ?? 0,
+      limit: (json['limit'] as num?)?.toInt() ?? logs.length,
+    );
+  }
+}
+
+/// Aggregate view of the archive for the current filter
+/// (`GET /api/logs/stats`).
+@immutable
+class LogStats {
+  const LogStats({
+    this.total = 0,
+    this.errors = 0,
+    this.warnings = 0,
+    this.byLevel = const {},
+    this.byRule = const {},
+    this.byService = const {},
+    this.oldestTs = 0,
+    this.newestTs = 0,
+  });
+
+  final int total;
+  final int errors;
+  final int warnings;
+  final Map<String, int> byLevel;
+  final Map<String, int> byRule;
+  final Map<String, int> byService;
+  final int oldestTs;
+  final int newestTs;
+
+  static Map<String, int> _counts(Object? raw) {
+    if (raw is! Map) return const {};
+    return raw.map((k, v) => MapEntry('$k', (v as num?)?.toInt() ?? 0));
+  }
+
+  factory LogStats.fromJson(Map<String, dynamic> json) => LogStats(
+    total: (json['total'] as num?)?.toInt() ?? 0,
+    errors: (json['errors'] as num?)?.toInt() ?? 0,
+    warnings: (json['warnings'] as num?)?.toInt() ?? 0,
+    byLevel: _counts(json['by_level']),
+    byRule: _counts(json['by_rule']),
+    byService: _counts(json['by_service']),
+    oldestTs: (json['oldest_ts'] as num?)?.toInt() ?? 0,
+    newestTs: (json['newest_ts'] as num?)?.toInt() ?? 0,
   );
+}
+
+/// One controllable per-task setting, described by the server's registry
+/// (`GET /api/rules/settings/schema`).
+///
+/// The client never hardcodes setting names or their bounds: the server owns
+/// validation, and this mirrors it so the editor can render the right control
+/// and refuse an out-of-range value before a round-trip.
+@immutable
+class RuleSettingSpec {
+  const RuleSettingSpec({
+    required this.key,
+    required this.kind,
+    required this.group,
+    required this.label,
+    this.help = '',
+    this.defaultValue,
+    this.choices = const [],
+    this.minimum,
+    this.maximum,
+    this.nullable = false,
+    this.itemKind = 'any',
+  });
+
+  final String key;
+
+  /// `bool` | `int` | `float` | `str` | `list` | `dict`.
+  final String kind;
+  final String group;
+  final String label;
+  final String help;
+  final Object? defaultValue;
+  final List<String> choices;
+  final num? minimum;
+  final num? maximum;
+  final bool nullable;
+  final String itemKind;
+
+  bool get isBool => kind == 'bool';
+  bool get isNumber => kind == 'int' || kind == 'float';
+  bool get isList => kind == 'list';
+  bool get isDict => kind == 'dict';
+
+  factory RuleSettingSpec.fromJson(Map<String, dynamic> json) {
+    final rawChoices = json['choices'];
+    return RuleSettingSpec(
+      key: json['key'] as String? ?? '',
+      kind: json['kind'] as String? ?? 'str',
+      group: json['group'] as String? ?? 'general',
+      label: json['label'] as String? ?? '',
+      help: json['help'] as String? ?? '',
+      defaultValue: json['default'],
+      choices:
+          rawChoices is List
+              ? rawChoices.map((e) => '$e').toList(growable: false)
+              : const [],
+      minimum: json['minimum'] as num?,
+      maximum: json['maximum'] as num?,
+      nullable: json['nullable'] as bool? ?? false,
+      itemKind: json['item_kind'] as String? ?? 'any',
+    );
+  }
+}
+
+/// The full settings registry, plus the group ordering the server chose so the
+/// UI presents groups in a deliberate order rather than alphabetically.
+@immutable
+class RuleSettingsSchema {
+  const RuleSettingsSchema({
+    required this.settings,
+    required this.groups,
+    this.version = 0,
+  });
+
+  final List<RuleSettingSpec> settings;
+  final List<String> groups;
+  final int version;
+
+  Map<String, List<RuleSettingSpec>> get byGroup {
+    final out = <String, List<RuleSettingSpec>>{};
+    for (final spec in settings) {
+      out.putIfAbsent(spec.group, () => <RuleSettingSpec>[]).add(spec);
+    }
+    return out;
+  }
+
+  RuleSettingSpec? specFor(String key) {
+    for (final spec in settings) {
+      if (spec.key == key) return spec;
+    }
+    return null;
+  }
+
+  factory RuleSettingsSchema.fromJson(Map<String, dynamic> json) {
+    final raw = json['settings'];
+    return RuleSettingsSchema(
+      version: (json['version'] as num?)?.toInt() ?? 0,
+      groups:
+          json['groups'] is List
+              ? (json['groups'] as List)
+                  .map((e) => '$e')
+                  .toList(growable: false)
+              : const [],
+      settings:
+          raw is List
+              ? raw
+                  .whereType<Map<String, dynamic>>()
+                  .map(RuleSettingSpec.fromJson)
+                  .toList(growable: false)
+              : const [],
+    );
+  }
 }
 
 /// Compatibility metadata advertised by `GET /api/v1/health`.
