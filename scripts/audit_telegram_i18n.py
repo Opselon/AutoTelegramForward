@@ -122,6 +122,44 @@ def scan_source(path: str, source: str, changed_lines: set[int] | None = None) -
     return findings
 
 
+def literal_signatures(source: str) -> set[str]:
+    """Extract visible literal call signatures without classifying their language."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    signatures: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = _call_name(node.func)
+        if name not in VISIBLE_CALLS and not (
+            name.startswith(("send_", "reply_", "edit_"))
+            and name not in {"send", "reply", "edit"}
+        ):
+            continue
+        candidates: list[ast.AST] = []
+        if node.args:
+            position = {"send_message": 1}.get(name, 0)
+            if name in {"edit_message_text", "edit_message_caption"} and len(node.args) >= 3:
+                position = 2
+            if position < len(node.args):
+                candidates.append(node.args[position])
+        for kw in node.keywords:
+            if kw.arg in VISIBLE_KEYWORDS:
+                candidates.append(kw.value)
+        for arg in candidates:
+            if not isinstance(arg, (ast.Constant, ast.JoinedStr)):
+                continue
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                value = arg.value
+            else:
+                value = ast.get_source_segment(source, arg) or ""
+            excerpt = value.replace("\\n", " ")[:100]
+            signatures.add(f"{name}(): {excerpt!r}")
+    return signatures
+
+
 def changed_python_files() -> tuple[list[str], str]:
     base = os.getenv("I18N_AUDIT_BASE", "origin/main")
     # GitHub pull_request supplies the target branch; local runs can set base.
@@ -216,11 +254,7 @@ def main() -> int:
                 )
                 baseline_signatures = set()
                 if baseline_result.returncode == 0:
-                    baseline_signatures = {
-                        item.split(": untranslated UI literal in ", 1)[1]
-                        for item in scan_source(relative, baseline_result.stdout)
-                        if ": untranslated UI literal in " in item
-                    }
+                    baseline_signatures = literal_signatures(baseline_result.stdout)
                 FAILURES.extend(
                     item for item in current_findings
                     if ": untranslated UI literal in " not in item
