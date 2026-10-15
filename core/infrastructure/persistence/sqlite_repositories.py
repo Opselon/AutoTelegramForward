@@ -72,6 +72,29 @@ def _safe_list(raw, default=None):
         return default or []
 
 
+def _rule_meta_json(rule) -> str:
+    """Serialise rule metadata, mirroring name/description into it.
+
+    forward_rules has no name or description column, so a task renamed through
+    the Telegram bot or the REST API was accepted, reported as saved, and then
+    silently lost on the next reload. `metadata` is the JSON column every rule
+    already carries, so mirroring persists the value with no schema migration;
+    `_row_to_entity` reads it back.
+    """
+    meta = dict(rule.metadata) if isinstance(rule.metadata, dict) else {}
+    name = str(getattr(rule, "name", "") or "")
+    description = str(getattr(rule, "description", "") or "")
+    if name:
+        meta["name"] = name
+    else:
+        meta.pop("name", None)
+    if description:
+        meta["description"] = description
+    else:
+        meta.pop("description", None)
+    return json.dumps(meta)
+
+
 def _safe_dict(raw, default=None):
     try:
         val = json.loads(raw) if raw else default
@@ -260,7 +283,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                                if isinstance(getattr(rule, "trigger_events", None), list)
                                else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
                     enum_str(getattr(rule, "content_mode", None), ContentMode.AUTO.value),
-                    json.dumps(rule.metadata or {}), rule_version, rule.created_at, rule.updated_at,
+                    _rule_meta_json(rule), rule_version, rule.created_at, rule.updated_at,
                     ai_prompt_ver, ai_fallback, ai_timeout, ai_sec,
                     int(getattr(rule, "owner_user_id", 0) or 0),
                     *self._smart_params(rule),
@@ -286,7 +309,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                                    if isinstance(getattr(rule, "trigger_events", None), list)
                                    else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
                         enum_str(getattr(rule, "content_mode", None), ContentMode.AUTO.value),
-                        json.dumps(rule.metadata or {}), rule.created_at, rule.updated_at,
+                        _rule_meta_json(rule), rule.created_at, rule.updated_at,
                     ),
                 )
             else:
@@ -303,7 +326,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]
         )
         content_val = enum_str(getattr(rule, "content_mode", None), ContentMode.AUTO.value)
-        meta_json = json.dumps(rule.metadata or {})
+        meta_json = _rule_meta_json(rule)
 
         ai_fallback = enum_str(getattr(rule, "ai_fallback_policy", None), AIFallbackPolicy.DROP.value)
         ai_prompt_ver = int(getattr(rule, "ai_prompt_version", 0) or 0)
@@ -414,6 +437,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             fallback_mode = ForwardMode.COPY_MESSAGE
 
         detection_criteria = _safe_dict(_col("detection_criteria", "{}"), {})
+        meta = _safe_dict(row["metadata"] if "metadata" in cols else "{}", {})
 
         return ForwardRule(
             id=row["id"], session_id=row["session_id"],
@@ -435,7 +459,10 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             ai_prompt_version=ai_ver,
             ai_timeout_seconds=ai_timeout,
             ai_secondary_config_id=ai_sec,
-            metadata=_safe_dict(row["metadata"] if "metadata" in cols else "{}", {}),
+            metadata=meta,
+            # name/description live in metadata (see _rule_meta_json)
+            name=str(meta.get("name") or ""),
+            description=str(meta.get("description") or ""),
             version=rule_version,
             created_at=row["created_at"], updated_at=row["updated_at"],
             # Smart Forwarding Rules fields (v8)
@@ -513,9 +540,24 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         return [self._row_to_entity(r) for r in rows]
 
     async def list_active_by_source(self, source_chat_id: str) -> List[ForwardRule]:
+        """Active rules that watch ``source_chat_id``.
+
+        A task may watch several sources: its primary ``source_chat_id`` plus the
+        ids in ``detection_criteria.source_chat_ids``. The extra ids are matched
+        with SQLite's JSON1 so the primary branch still uses idx_rules_source,
+        and ``json_valid`` guards rows whose detection_criteria is not JSON — an
+        invalid document would otherwise raise inside json_each and abort the
+        whole query, silently stopping forwarding for EVERY rule.
+        """
+        cid = str(source_chat_id)
         rows = self._db.query_all(
-            "SELECT * FROM forward_rules WHERE source_chat_id=? AND is_active=1",
-            (str(source_chat_id),),
+            "SELECT * FROM forward_rules WHERE is_active=1 AND ("
+            "  source_chat_id = ?"
+            "  OR (json_valid(detection_criteria) AND EXISTS ("
+            "        SELECT 1 FROM json_each(detection_criteria, '$.source_chat_ids')"
+            "        WHERE value = ?))"
+            ")",
+            (cid, cid),
         )
         return [self._row_to_entity(r) for r in rows]
 

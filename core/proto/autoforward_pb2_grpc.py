@@ -459,6 +459,21 @@ class ForwardRuleControlServiceStub:
                 request_serializer=autoforward__pb2.PauseRuleRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.RuleActionResponse.FromString,
                 _registered_method=True)
+        self.GetRuleSettings = channel.unary_unary(
+                '/autoforward.ForwardRuleControlService/GetRuleSettings',
+                request_serializer=autoforward__pb2.RuleSettingsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.RuleSettingsResponse.FromString,
+                _registered_method=True)
+        self.UpdateRuleSettings = channel.unary_unary(
+                '/autoforward.ForwardRuleControlService/UpdateRuleSettings',
+                request_serializer=autoforward__pb2.UpdateRuleSettingsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.RuleSettingsResponse.FromString,
+                _registered_method=True)
+        self.GetRuleSettingsSchema = channel.unary_unary(
+                '/autoforward.ForwardRuleControlService/GetRuleSettingsSchema',
+                request_serializer=autoforward__pb2.RuleSettingsSchemaRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.RuleSettingsResponse.FromString,
+                _registered_method=True)
 
 
 class ForwardRuleControlServiceServicer:
@@ -512,6 +527,26 @@ class ForwardRuleControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetRuleSettings(self, request, context):
+        """Schema-driven per-task settings: full read/write control of every setting
+        the server supports, validated against the registry (not trusted raw).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateRuleSettings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetRuleSettingsSchema(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ForwardRuleControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -554,6 +589,21 @@ def add_ForwardRuleControlServiceServicer_to_server(servicer, server):
                     servicer.ResumeRule,
                     request_deserializer=autoforward__pb2.PauseRuleRequest.FromString,
                     response_serializer=autoforward__pb2.RuleActionResponse.SerializeToString,
+            ),
+            'GetRuleSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetRuleSettings,
+                    request_deserializer=autoforward__pb2.RuleSettingsRequest.FromString,
+                    response_serializer=autoforward__pb2.RuleSettingsResponse.SerializeToString,
+            ),
+            'UpdateRuleSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateRuleSettings,
+                    request_deserializer=autoforward__pb2.UpdateRuleSettingsRequest.FromString,
+                    response_serializer=autoforward__pb2.RuleSettingsResponse.SerializeToString,
+            ),
+            'GetRuleSettingsSchema': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetRuleSettingsSchema,
+                    request_deserializer=autoforward__pb2.RuleSettingsSchemaRequest.FromString,
+                    response_serializer=autoforward__pb2.RuleSettingsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -772,6 +822,87 @@ class ForwardRuleControlService:
             '/autoforward.ForwardRuleControlService/ResumeRule',
             autoforward__pb2.PauseRuleRequest.SerializeToString,
             autoforward__pb2.RuleActionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetRuleSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ForwardRuleControlService/GetRuleSettings',
+            autoforward__pb2.RuleSettingsRequest.SerializeToString,
+            autoforward__pb2.RuleSettingsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateRuleSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ForwardRuleControlService/UpdateRuleSettings',
+            autoforward__pb2.UpdateRuleSettingsRequest.SerializeToString,
+            autoforward__pb2.RuleSettingsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetRuleSettingsSchema(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ForwardRuleControlService/GetRuleSettingsSchema',
+            autoforward__pb2.RuleSettingsSchemaRequest.SerializeToString,
+            autoforward__pb2.RuleSettingsResponse.FromString,
             options,
             channel_credentials,
             insecure,

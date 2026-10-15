@@ -180,6 +180,45 @@ message ForwardRule {
   string ai_fallback_policy = 48;
   int32 ai_prompt_version = 49;
   double ai_timeout_seconds = 50;
+
+  // ---- v17: complete per-task control surface ---------------------------
+  // Multi-source: a task forwards from its primary `source_chat_id` plus any id
+  // in this list, so one task can cover several channels without duplicating
+  // every downstream setting. `source_chat_id` stays authoritative for legacy
+  // clients and remains the first entry on read.
+  repeated string source_chat_ids = 51;
+  repeated string source_chat_names = 52;
+
+  // Per-task behaviour that previously existed only in the Telegram bot.
+  string content_mode = 53;    // AUTO | TEXT_ONLY | MEDIA_ONLY | TEXT_AND_MEDIA
+  double delay_seconds = 54;   // per-task send delay (independent of rate limit)
+  bool skip_history = 55;      // do not backfill messages that predate the rule
+  int64 since_ts = 56;         // only forward messages newer than this unix time
+  bool ignore_edits = 57;      // do not re-forward edited messages
+  bool sync_edits = 58;        // mirror later edits into the target
+  bool sync_deletes = 59;      // mirror deletions into the target
+  repeated string trigger_events = 60;  // NEW_MESSAGE | EDITED_MESSAGE | DELETED_MESSAGE
+  string topic_id = 61;                 // forum topic inside the target chat
+  string ai_secondary_config_id = 62;   // failover AI config
+  string prompt_id = 63;                // pinned prompt template (see ai_prompt_version)
+  string link_policy = 64;              // PRESERVE_ALL | STRIP_ALL | ALLOWLIST | BLOCKLIST
+  repeated string domain_allowlist = 65;
+  repeated string domain_blocklist = 66;
+  repeated string allowed_media_types = 67;
+  bool split_long_caption = 68;
+  double album_aggregation_window_seconds = 69;
+  string intermediate_target_chat_id = 70;
+  string intermediate_mode = 71;        // NONE | PUBLISH | GATE
+  string retry_policy_json = 72;        // JSON object, e.g. {"max_attempts":3}
+  string proxy_json = 73;               // JSON object or "null" when unset
+
+  // Full settings snapshot: every per-task setting known to the server,
+  // including the ~56 metadata-backed ones (block_voice, remove_emojis,
+  // cleaner_config, ai_creativity, ...). Read-only here — write through
+  // UpdateRuleSettings so values are validated against the settings schema
+  // instead of being trusted from the wire. `custom_metadata_json` remains the
+  // unvalidated escape hatch for keys the schema does not know.
+  string settings_json = 74;
 }
 
 message CreateRuleRequest {
@@ -205,7 +244,46 @@ message ResolveChatResponse {
 
 message UpdateRuleRequest {
   ForwardRule rule = 1;
+  // Optional. When non-empty, ONLY the named ForwardRule fields are applied.
+  // This is what makes a true partial update possible: proto3 scalars cannot
+  // distinguish "unset" from "zero", so without a mask a client can never set
+  // delay_seconds to 0, is_paused to false, or priority to 0 — the value is
+  // silently treated as "not provided". When the mask is empty the legacy
+  // present-only behaviour applies.
+  repeated string update_mask = 2;
 }
+
+// ------------------------------------------------------------------ settings
+// Every per-task setting the server knows about, including the metadata-backed
+// ones the Telegram bot edits. A schema-driven surface means the API has full
+// control today without a new proto field per setting, and a new bot setting
+// becomes API-controllable by adding one entry to the server's registry.
+message RuleSettingsRequest {
+  string rule_id = 1;
+  int64 owner_user_id = 2;
+}
+
+message RuleSettingsResponse {
+  bool success = 1;
+  string error_code = 2;
+  string message = 3;
+  // Effective values, keyed by setting name.
+  string settings_json = 4;
+  // Field specs (kind, default, choices, bounds, label) for rendering controls.
+  string schema_json = 5;
+}
+
+message UpdateRuleSettingsRequest {
+  string rule_id = 1;
+  int64 owner_user_id = 2;
+  // Values to apply, keyed by setting name. Unknown keys are rejected.
+  string settings_json = 3;
+  // true  = the request is the complete settings state (unlisted keys reset)
+  // false = merge only the keys present in settings_json
+  bool replace_all = 4;
+}
+
+message RuleSettingsSchemaRequest {}
 
 message DeleteRuleRequest {
   string id = 1;
@@ -599,6 +677,11 @@ service ForwardRuleControlService {
   rpc TestRule(TestRuleRequest) returns (TestRuleResponse);
   rpc PauseRule(PauseRuleRequest) returns (RuleActionResponse);
   rpc ResumeRule(PauseRuleRequest) returns (RuleActionResponse);
+  // Schema-driven per-task settings: full read/write control of every setting
+  // the server supports, validated against the registry (not trusted raw).
+  rpc GetRuleSettings(RuleSettingsRequest) returns (RuleSettingsResponse);
+  rpc UpdateRuleSettings(UpdateRuleSettingsRequest) returns (RuleSettingsResponse);
+  rpc GetRuleSettingsSchema(RuleSettingsSchemaRequest) returns (RuleSettingsResponse);
 }
 
 service DeliveryControlService {

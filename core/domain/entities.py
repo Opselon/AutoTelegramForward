@@ -447,6 +447,12 @@ class ForwardRule:
     def sync_edits(self) -> bool:
         return bool(self.metadata.get("sync_edits", False)) if isinstance(self.metadata, dict) else False
 
+    @sync_edits.setter
+    def sync_edits(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["sync_edits"] = bool(val)
+
     @property
     def sync_deletes(self) -> bool:
         return bool(self.metadata.get("sync_deletes", False)) if isinstance(self.metadata, dict) else False
@@ -460,6 +466,12 @@ class ForwardRule:
     @property
     def album_mode(self) -> str:
         return str(self.metadata.get("album_mode") or "album") if isinstance(self.metadata, dict) else "album"
+
+    @album_mode.setter
+    def album_mode(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["album_mode"] = str(val or "album")
 
     # --- Task Overview & Routing Extensions (Screens 1 & 5) ---
     @property
@@ -1009,6 +1021,12 @@ class ForwardRule:
     def link_replacement(self) -> str:
         return str(self.metadata.get("link_replacement") or "") if isinstance(self.metadata, dict) else ""
 
+    @link_replacement.setter
+    def link_replacement(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["link_replacement"] = str(val or "")
+
     @property
     def enabled(self) -> bool:
         return bool(self.is_active)
@@ -1019,6 +1037,43 @@ class ForwardRule:
         if not s_ids and self.source_chat_id:
             return [str(self.source_chat_id)]
         return [str(s) for s in s_ids]
+
+    @source_chat_ids.setter
+    def source_chat_ids(self, val) -> None:
+        """Set the full source list for this task.
+
+        Multi-source is stored in detection_criteria (an existing JSON column)
+        so no schema migration is needed. The first entry is mirrored into
+        `source_chat_id` because the dispatcher, the duplicate guard and older
+        API clients still read the primary source.
+        """
+        if not isinstance(self.detection_criteria, dict):
+            self.detection_criteria = {}
+        seen: set = set()
+        uniq: List[str] = []
+        for raw in val or []:
+            s = str(raw).strip()
+            if s and s not in seen:
+                seen.add(s)
+                uniq.append(s)
+        self.detection_criteria["source_chat_ids"] = uniq
+        if uniq:
+            self.source_chat_id = uniq[0]
+
+    @property
+    def source_chat_names(self) -> List[str]:
+        """Display names aligned with `source_chat_ids` (may be shorter)."""
+        if not isinstance(self.detection_criteria, dict):
+            return []
+        return [str(x) for x in (self.detection_criteria.get("source_chat_names") or [])]
+
+    @source_chat_names.setter
+    def source_chat_names(self, val) -> None:
+        if not isinstance(self.detection_criteria, dict):
+            self.detection_criteria = {}
+        self.detection_criteria["source_chat_names"] = [
+            str(x) for x in (val or []) if str(x).strip()
+        ]
 
     @property
     def forward_origin_chat_ids(self) -> List[str]:

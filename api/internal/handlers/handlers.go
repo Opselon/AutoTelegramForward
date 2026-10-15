@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"autoforward/internal/grpcclient"
 	pb "autoforward/proto"
@@ -290,7 +291,6 @@ func formatRuleJSON(rl *pb.ForwardRule) map[string]any {
 		"is_active":                 rl.IsActive,
 		"filter_rule_id":            rl.FilterRuleId,
 		"ai_config_id":              rl.AiConfigId,
-		"prompt_id":                 metaMap["prompt_id"],
 		"ai_fallback_policy":        rl.AiFallbackPolicy,
 		"ai_prompt_version":         rl.AiPromptVersion,
 		"ai_timeout_seconds":        rl.AiTimeoutSeconds,
@@ -324,6 +324,41 @@ func formatRuleJSON(rl *pb.ForwardRule) map[string]any {
 		"version":                   rl.Version,
 		"custom_metadata_json":      rl.CustomMetadataJson,
 		"metadata":                  metaMap,
+		// ---- v17: complete per-task control surface --------------------
+		"source_chat_ids":                  rl.SourceChatIds,
+		"source_chat_names":                rl.SourceChatNames,
+		"content_mode":                     rl.ContentMode,
+		"delay_seconds":                    rl.DelaySeconds,
+		"skip_history":                     rl.SkipHistory,
+		"since_ts":                         rl.SinceTs,
+		"ignore_edits":                     rl.IgnoreEdits,
+		"sync_edits":                       rl.SyncEdits,
+		"sync_deletes":                     rl.SyncDeletes,
+		"trigger_events":                   rl.TriggerEvents,
+		"topic_id":                         preferString(rl.TopicId, metaMap["topic_id"]),
+		"ai_secondary_config_id":           rl.AiSecondaryConfigId,
+		"link_policy":                      rl.LinkPolicy,
+		"domain_allowlist":                 rl.DomainAllowlist,
+		"domain_blocklist":                 rl.DomainBlocklist,
+		"allowed_media_types":              rl.AllowedMediaTypes,
+		"split_long_caption":               rl.SplitLongCaption,
+		"album_aggregation_window_seconds": rl.AlbumAggregationWindowSeconds,
+		"intermediate_target_chat_id":      rl.IntermediateTargetChatId,
+		"intermediate_mode":                rl.IntermediateMode,
+		"retry_policy":                     decodedJSONObject(rl.RetryPolicyJson),
+		"retry_policy_json":                rl.RetryPolicyJson,
+		"proxy":                            decodedJSONValue(rl.ProxyJson),
+		"proxy_json":                       rl.ProxyJson,
+		"prompt_id":                        preferString(rl.PromptId, metaMap["prompt_id"]),
+	}
+	// The full settings snapshot: every per-task setting the server knows about,
+	// keyed by name, so a client can render the whole task from one response
+	// instead of probing field by field.
+	if rl.SettingsJson != "" {
+		var settings map[string]any
+		if err := json.Unmarshal([]byte(rl.SettingsJson), &settings); err == nil {
+			res["settings"] = settings
+		}
 	}
 	for k, v := range metaMap {
 		if _, exists := res[k]; !exists {
@@ -606,6 +641,186 @@ func (h *Handlers) resolveChat(ctx context.Context, sessionID, handle string, ow
 	return resp.ChatId, ""
 }
 
+// decodedJSONObject unmarshals a JSON object field, tolerating "" / garbage so a
+// malformed column can never fail the whole response.
+func decodedJSONObject(raw string) any {
+	if raw == "" {
+		return map[string]any{}
+	}
+	var out any
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return map[string]any{}
+	}
+	if out == nil {
+		return map[string]any{}
+	}
+	return out
+}
+
+func decodedJSONValue(raw string) any {
+	if raw == "" {
+		return nil
+	}
+	var out any
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// preferString returns the proto field when it is set, otherwise the value that
+// came in through metadata. Older clients (and the bot) store topic_id/prompt_id
+// in metadata, so the response must surface whichever one actually holds a value
+// instead of reporting the empty proto field.
+func preferString(protoValue string, fallback any) any {
+	if protoValue != "" {
+		return protoValue
+	}
+	if fallback == nil {
+		return ""
+	}
+	return fallback
+}
+
+func containsString(list []string, want string) bool {
+	for _, v := range list {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}
+
+// extractUpdateMask reads the field list for a true partial update.
+//
+// proto3 scalars cannot distinguish "unset" from "zero", so without a mask a
+// caller can never set delay_seconds to 0 or is_paused to false. The mask is
+// read from the body (protojson would discard an unknown key) or, failing that,
+// from ?update_mask=a,b,c so it works with an ordinary HTML form or curl call.
+func extractUpdateMask(r *http.Request, body []byte) []string {
+	var asObject map[string]json.RawMessage
+	if err := json.Unmarshal(body, &asObject); err == nil {
+		for _, key := range []string{"update_mask", "updateMask"} {
+			if raw, ok := asObject[key]; ok {
+				var list []string
+				if err := json.Unmarshal(raw, &list); err == nil {
+					return cleanMask(list)
+				}
+				var single string
+				if err := json.Unmarshal(raw, &single); err == nil {
+					return cleanMask([]string{single})
+				}
+			}
+		}
+	}
+	for _, key := range []string{"update_mask", "updateMask", "fields"} {
+		if q := r.URL.Query().Get(key); q != "" {
+			return cleanMask(splitCSV(q))
+		}
+	}
+	return nil
+}
+
+func splitCSV(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func cleanMask(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, f := range in {
+		if f = strings.TrimSpace(f); f != "" && !containsString(out, f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// resolveSourceChats canonicalises a task's whole source list.
+//
+// A task can forward from several channels into one target. `source_chat_id`
+// stays authoritative (it is what the dispatcher and older clients read) and is
+// always the first entry of the resolved list, so a client that only knows the
+// single-source field keeps working unchanged.
+func (h *Handlers) resolveSourceChats(ctx context.Context, sessionID string, rule *pb.ForwardRule, ownerID int64) ([]string, string) {
+	raw := make([]string, 0, len(rule.SourceChatIds)+1)
+	if rule.SourceChatId != "" {
+		raw = append(raw, rule.SourceChatId)
+	}
+	raw = append(raw, rule.SourceChatIds...)
+
+	resolved := make([]string, 0, len(raw))
+	for _, candidate := range raw {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		numeric, errStr := h.resolveChat(ctx, sessionID, candidate, ownerID)
+		if errStr != "" {
+			return nil, errStr
+		}
+		if numeric == "" {
+			numeric = candidate
+		}
+		if !containsString(resolved, numeric) {
+			resolved = append(resolved, numeric)
+		}
+	}
+	if len(resolved) == 0 {
+		return nil, "source_empty"
+	}
+	rule.SourceChatIds = resolved
+	rule.SourceChatId = resolved[0]
+	return resolved, ""
+}
+
+// applyMaskToRule clears every field the mask does not name, so a partial update
+// can only ever touch what the caller listed.
+//
+// The core enforces the same mask, but relying on that alone would make the
+// gateway's behaviour depend on the core's discipline: any future code path that
+// forgot the mask would silently apply the whole body. Clearing here means an
+// unnamed field is not even on the wire.
+//
+// session_id/id/owner_user_id are exempt: the handler needs them to resolve the
+// endpoints, scope the rule, and forward the caller's identity.
+func applyMaskToRule(rule *pb.ForwardRule, mask []string) {
+	if len(mask) == 0 || rule == nil {
+		return
+	}
+	named := make(map[string]struct{}, len(mask))
+	for _, f := range mask {
+		named[normalizeFieldName(f)] = struct{}{}
+	}
+	msg := rule.ProtoReflect()
+	msg.Range(func(fd protoreflect.FieldDescriptor, _ protoreflect.Value) bool {
+		if _, ok := named[normalizeFieldName(string(fd.Name()))]; ok {
+			return true
+		}
+		if _, ok := named[normalizeFieldName(fd.JSONName())]; ok {
+			return true
+		}
+		switch fd.Name() {
+		case "session_id", "id", "owner_user_id":
+			return true
+		}
+		msg.Clear(fd)
+		return true
+	})
+}
+
+// normalizeFieldName folds snake_case and camelCase together so a mask entry
+// matches whether the client wrote delay_seconds or delaySeconds.
+func normalizeFieldName(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, "_", ""))
+}
+
 func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 	id := identity(r)
 	body, err := io.ReadAll(r.Body)
@@ -631,17 +846,14 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 	// Always store canonical numeric chat ids: the dispatcher calls
 	// int(chat_id) before sending, so a username would break delivery.
 	ctx, cancel0 := withTimeout(r)
-	sid, errS := h.resolveChat(ctx, rule.SessionId, rule.SourceChatId, id.UserID)
+	resolvedSources, errS := h.resolveSourceChats(ctx, rule.SessionId, &rule, id.UserID)
 	cancel0()
 	if errS != "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
 		return
 	}
-	if sid != "" {
-		rule.SourceChatId = sid
-		if rule.SourceChatName == "" {
-			rule.SourceChatName = rule.SourceChatId
-		}
+	if rule.SourceChatName == "" {
+		rule.SourceChatName = resolvedSources[0]
 	}
 	ctx, cancel1 := withTimeout(r)
 	tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId, id.UserID)
@@ -692,9 +904,11 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	owned := false
+	var current *pb.ForwardRule
 	for _, rl := range listResp.Rules {
 		if rl.OwnerUserId == id.UserID && rl.Id == r.PathValue("id") {
 			owned = true
+			current = rl
 			break
 		}
 	}
@@ -708,6 +922,7 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
 		return
 	}
+	updateMask := extractUpdateMask(r, body)
 	var rule pb.ForwardRule
 	opts := protojson.UnmarshalOptions{DiscardUnknown: true}
 	if err := opts.Unmarshal(body, &rule); err != nil {
@@ -716,7 +931,33 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 	}
 	enrichCustomMetadata(body, &rule)
 
+	// Drop everything the mask does not name before anything else runs, so the
+	// resolver and the core both see only the fields the caller actually asked
+	// to change.
+	if len(updateMask) > 0 {
+		applyMaskToRule(&rule, updateMask)
+	}
+
 	rule.Id = r.PathValue("id")
+	// With a mask, an absent field means "leave alone" — so the endpoint values
+	// the resolver needs are taken from the stored rule instead of the (empty)
+	// request body.
+	if len(updateMask) > 0 {
+		if current != nil {
+			if rule.SessionId == "" {
+				rule.SessionId = current.SessionId
+			}
+		}
+		if !containsString(updateMask, "source_chat_id") && !containsString(updateMask, "source_chat_ids") {
+			rule.SourceChatId, rule.SourceChatIds = "", nil
+		}
+		if !containsString(updateMask, "target_chat_id") {
+			rule.TargetChatId = ""
+		}
+		if !containsString(updateMask, "intermediate_channel_id") {
+			rule.IntermediateChannelId = ""
+		}
+	}
 	if rule.SourceChatId != "" && rule.TargetChatId != "" {
 		if ok, errCode := checkRuleEndpoints(rule.SourceChatId, rule.TargetChatId, rule.IntermediateChannelId, rule.UseIntermediate); !ok {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -727,12 +968,13 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Canonicalize any username/link endpoints to numeric ids (same contract
-	// as CreateRule — see the resolveChat doc comment).
-	if sid, errS := h.resolveChat(ctx, rule.SessionId, rule.SourceChatId, id.UserID); errS != "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
-		return
-	} else if sid != "" {
-		rule.SourceChatId = sid
+	// as CreateRule — see the resolveChat doc comment). Every source is resolved,
+	// not just the primary, so a multi-source task cannot store a raw username.
+	if len(rule.SourceChatIds) > 0 || rule.SourceChatId != "" {
+		if _, errS := h.resolveSourceChats(ctx, rule.SessionId, &rule, id.UserID); errS != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
+			return
+		}
 	}
 	if tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId, id.UserID); errT != "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errT, "code": "target_resolve_failed"})
@@ -749,7 +991,7 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	rule.OwnerUserId = id.UserID
-	resp, err := h.c.Rules.UpdateRule(ctx, &pb.UpdateRuleRequest{Rule: &rule})
+	resp, err := h.c.Rules.UpdateRule(ctx, &pb.UpdateRuleRequest{Rule: &rule, UpdateMask: updateMask})
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -863,6 +1105,164 @@ func (h *Handlers) RestartRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, formatRuleJSON(resp))
+}
+
+// GetRuleSettings returns the effective per-task settings plus the schema that
+// describes them, so a client renders controls from server metadata instead of
+// hard-coding a list that drifts from the bot's own panels.
+func (h *Handlers) GetRuleSettings(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+
+	if !h.ownsRule(ctx, r.PathValue("id"), id.UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
+		return
+	}
+	resp, err := h.c.Rules.GetRuleSettings(ctx, &pb.RuleSettingsRequest{
+		RuleId:      r.PathValue("id"),
+		OwnerUserId: id.UserID,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeSettingsResponse(w, http.StatusOK, resp, 0)
+}
+
+// UpdateRuleSettings applies a validated batch of per-task settings. Validation
+// lives on the server: an unknown name, a wrong type or an out-of-range value is
+// rejected here rather than stored and tripped over at forwarding time.
+func (h *Handlers) UpdateRuleSettings(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+
+	if !h.ownsRule(ctx, r.PathValue("id"), id.UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
+		return
+	}
+	settings, replaceAll, err := parseSettingsBody(body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error(), "code": "invalid_body"})
+		return
+	}
+	encoded, err := json.Marshal(settings)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error(), "code": "invalid_body"})
+		return
+	}
+	resp, err := h.c.Rules.UpdateRuleSettings(ctx, &pb.UpdateRuleSettingsRequest{
+		RuleId:       r.PathValue("id"),
+		OwnerUserId:  id.UserID,
+		SettingsJson: string(encoded),
+		ReplaceAll:   replaceAll,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeSettingsResponse(w, http.StatusOK, resp, len(settings))
+}
+
+// GetRuleSettingsSchema describes every setting without touching a rule, so a
+// client can build the whole editor before the user has one.
+func (h *Handlers) GetRuleSettingsSchema(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+
+	resp, err := h.c.Rules.GetRuleSettingsSchema(ctx, &pb.RuleSettingsSchemaRequest{})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeSettingsResponse(w, http.StatusOK, resp, 0)
+}
+
+// parseSettingsBody accepts {"settings": {...}, "replace_all": true} and the bare
+// {"setting": value, ...} shape, because the second is what a hand-written curl
+// call naturally looks like.
+func parseSettingsBody(body []byte) (map[string]any, bool, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, false, fmt.Errorf("invalid JSON: %w", err)
+	}
+	replaceAll := false
+	if v, ok := raw["replace_all"]; ok {
+		_ = json.Unmarshal(v, &replaceAll)
+	} else if v, ok := raw["replaceAll"]; ok {
+		_ = json.Unmarshal(v, &replaceAll)
+	}
+	if v, ok := raw["settings"]; ok {
+		var settings map[string]any
+		if err := json.Unmarshal(v, &settings); err != nil {
+			return nil, false, fmt.Errorf("settings must be an object")
+		}
+		return settings, replaceAll, nil
+	}
+	delete(raw, "replace_all")
+	delete(raw, "replaceAll")
+	settings := make(map[string]any, len(raw))
+	for k, v := range raw {
+		var decoded any
+		if err := json.Unmarshal(v, &decoded); err != nil {
+			return nil, false, fmt.Errorf("invalid value for %s", k)
+		}
+		settings[k] = decoded
+	}
+	return settings, replaceAll, nil
+}
+
+func writeSettingsResponse(w http.ResponseWriter, status int, resp *pb.RuleSettingsResponse, requested int) {
+	if resp == nil {
+		writeJSON(w, status, map[string]any{"success": false, "error": "empty response"})
+		return
+	}
+	out := map[string]any{
+		"success": resp.GetSuccess(),
+		"message": resp.GetMessage(),
+	}
+	if code := resp.GetErrorCode(); code != "" {
+		out["error_code"] = code
+	}
+	if resp.GetSettingsJson() != "" {
+		var settings map[string]any
+		if err := json.Unmarshal([]byte(resp.GetSettingsJson()), &settings); err == nil {
+			out["settings"] = settings
+		}
+	}
+	if resp.GetSchemaJson() != "" {
+		var schema map[string]any
+		if err := json.Unmarshal([]byte(resp.GetSchemaJson()), &schema); err == nil {
+			out["schema"] = schema
+		}
+	}
+	if !resp.GetSuccess() {
+		// A rejected write is a client error, not a 200 with a false flag, so the
+		// caller cannot mistake it for success by checking the status alone.
+		writeJSON(w, settingsErrorStatus(resp.GetErrorCode()), out)
+		return
+	}
+	if requested > 0 {
+		out["requested"] = requested
+	}
+	writeJSON(w, status, out)
+}
+
+func settingsErrorStatus(code string) int {
+	switch code {
+	case "not_found":
+		return http.StatusNotFound
+	case "unauthorized":
+		return http.StatusForbidden
+	default:
+		return http.StatusBadRequest
+	}
 }
 
 func (h *Handlers) DeleteRule(w http.ResponseWriter, r *http.Request) {

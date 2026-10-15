@@ -27,6 +27,29 @@ export interface ForwardRule {
     [key: string]: any
   }
   link_policy: string
+  // ---- v17: full per-task control surface -------------------------------
+  // Multi-source: the task forwards from its primary source_chat_id plus every
+  // id here, so one task can cover several channels with one set of settings.
+  source_chat_ids?: string[]
+  source_chat_names?: string[]
+  content_mode?: string
+  skip_history?: boolean
+  since_ts?: number
+  ignore_edits?: boolean
+  sync_edits?: boolean
+  sync_deletes?: boolean
+  trigger_events?: string[]
+  topic_id?: string
+  ai_secondary_config_id?: string | null
+  allowed_media_types?: string[]
+  album_aggregation_window_seconds?: number
+  intermediate_target_chat_id?: string
+  intermediate_mode?: string
+  retry_policy?: Record<string, any>
+  proxy?: Record<string, any> | null
+  // Every per-task setting the server knows about, keyed by name. Read-only
+  // here: write through updateRuleSettings so values are validated server-side.
+  settings?: Record<string, any>
   custom_header: string
   custom_footer: string
   split_long_caption: boolean
@@ -664,4 +687,40 @@ export interface DiagnosticsResponse {
   services: Array<{ name: string; online: boolean; detail?: string }>
   scanned: { rules: number; sessions: number; ai_configs: number }
   findings: DiagnosticFinding[]
+}
+
+
+// ---------------------------------------------------------------------------
+// Per-task settings (server-driven schema)
+// ---------------------------------------------------------------------------
+
+/** One controllable per-task setting, as described by the server. */
+export interface RuleSettingSpec {
+  key: string
+  kind: 'bool' | 'int' | 'float' | 'str' | 'list' | 'dict'
+  default: any
+  group: string
+  label: string
+  help?: string
+  choices?: string[]
+  minimum?: number
+  maximum?: number
+  nullable?: boolean
+  item_kind?: string
+}
+
+export interface RuleSettingsSchema {
+  version: number
+  count: number
+  groups: string[]
+  settings: RuleSettingSpec[]
+}
+
+export interface RuleSettingsResponse {
+  success: boolean
+  message?: string
+  error_code?: string
+  settings?: Record<string, any>
+  schema?: RuleSettingsSchema
+  requested?: number
 }

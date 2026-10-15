@@ -145,6 +145,28 @@ async def _fetch_all_db(db: Any, query: str, params: tuple | list = ()) -> List[
         )
 
 
+def _rule_meta_json(rule) -> str:
+    """Serialise rule metadata, mirroring name/description into it.
+
+    forward_rules has no name or description column, so a task renamed through
+    the Telegram bot or the REST API was accepted, reported as saved, and then
+    silently lost on the next reload. `metadata` is the JSON column every rule
+    already carries, so mirroring persists the value with no schema migration.
+    """
+    meta = dict(rule.metadata) if isinstance(rule.metadata, dict) else {}
+    name = str(getattr(rule, "name", "") or "")
+    description = str(getattr(rule, "description", "") or "")
+    if name:
+        meta["name"] = name
+    else:
+        meta.pop("name", None)
+    if description:
+        meta["description"] = description
+    else:
+        meta.pop("description", None)
+    return json.dumps(meta)
+
+
 class PostgresForwardRuleRepository(IForwardRuleRepository):
     """Production-grade PostgreSQL repository for ForwardRule entity.
 
@@ -230,7 +252,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]
         )
         content_val = enum_str(getattr(rule, "content_mode", None), ContentMode.AUTO.value)
-        meta_json = json.dumps(rule.metadata or {})
+        meta_json = _rule_meta_json(rule)
         targets_json = json.dumps(rule.target_chat_ids or [])
 
         query = """
@@ -271,7 +293,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]
         )
         content_val = enum_str(getattr(rule, "content_mode", None), ContentMode.AUTO.value)
-        meta_json = json.dumps(rule.metadata or {})
+        meta_json = _rule_meta_json(rule)
         targets_json = json.dumps(rule.target_chat_ids or [])
 
         common_params = (
@@ -355,8 +377,23 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
         return [self._row_to_entity(r) for r in rows]
 
     async def list_active_by_source(self, source_chat_id: str) -> List[ForwardRule]:
-        query = "SELECT * FROM forward_rules WHERE source_chat_id = %s AND is_active = TRUE"
-        rows = await _fetch_all_db(self._db, query, (str(source_chat_id),))
+        """Active rules that watch ``source_chat_id`` (primary or multi-source).
+
+        The extra sources of a task live in detection_criteria.source_chat_ids;
+        `jsonb_typeof` keeps a row whose detection_criteria is not a JSON object
+        from raising and taking the whole query down with it.
+        """
+        query = (
+            "SELECT * FROM forward_rules WHERE is_active = TRUE AND ("
+            "  source_chat_id = %s"
+            "  OR (jsonb_typeof(detection_criteria) = 'object' AND EXISTS ("
+            "        SELECT 1 FROM jsonb_array_elements_text("
+            "          COALESCE(detection_criteria->'source_chat_ids', '[]'::jsonb)) AS s"
+            "        WHERE s = %s))"
+            ")"
+        )
+        cid = str(source_chat_id)
+        rows = await _fetch_all_db(self._db, query, (cid, cid))
         return [self._row_to_entity(r) for r in rows]
 
     async def delete(self, rule_id: str) -> bool:
@@ -418,6 +455,8 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             ai_timeout_seconds=ai_timeout,
             ai_secondary_config_id=ai_sec,
             metadata=_safe_dict(d.get("metadata"), {}),
+            name=str(_safe_dict(d.get("metadata"), {}).get("name") or ""),
+            description=str(_safe_dict(d.get("metadata"), {}).get("description") or ""),
             version=int(d.get("version", 1) or 1),
             created_at=d["created_at"],
             updated_at=d["updated_at"],

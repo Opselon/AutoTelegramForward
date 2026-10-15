@@ -57,12 +57,23 @@ func main() {
 	dashMux.HandleFunc("POST /rules", h.CreateRule)
 	dashMux.HandleFunc("GET /rules/{id}", h.GetRule)
 	dashMux.HandleFunc("PUT /rules/{id}", h.UpdateRule)
+	// PATCH is the partial-update form: the body carries only what changes and
+	// `update_mask` (body array or ?update_mask=a,b) names it, which is the only
+	// way to set a value to zero/false/empty.
+	dashMux.HandleFunc("PATCH /rules/{id}", h.UpdateRule)
 	dashMux.HandleFunc("DELETE /rules/{id}", h.DeleteRule)
 	dashMux.HandleFunc("POST /rules/{id}/toggle", h.ToggleRule)
 	dashMux.HandleFunc("POST /rules/{id}/duplicate", h.DuplicateRule)
 	dashMux.HandleFunc("POST /rules/{id}/stop", h.StopRule)
 	dashMux.HandleFunc("POST /rules/{id}/restart", h.RestartRule)
 	dashMux.HandleFunc("POST /rules/{id}/route-path", h.RoutePathQuickSet)
+	// Per-task settings: the full control surface the Telegram bot edits, plus
+	// the schema that describes it. /rules/settings/schema needs no rule, so an
+	// editor can be built before the user owns anything.
+	dashMux.HandleFunc("GET /rules/settings/schema", h.GetRuleSettingsSchema)
+	dashMux.HandleFunc("GET /rules/{id}/settings", h.GetRuleSettings)
+	dashMux.HandleFunc("PUT /rules/{id}/settings", h.UpdateRuleSettings)
+	dashMux.HandleFunc("PATCH /rules/{id}/settings", h.UpdateRuleSettings)
 	dashMux.HandleFunc("GET /sessions", h.ListSessions)
 	dashMux.HandleFunc("POST /sessions/{id}/backup", h.BackupSession)
 	dashMux.HandleFunc("DELETE /sessions/{id}", h.TerminateSession)

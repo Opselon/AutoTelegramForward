@@ -1,0 +1,348 @@
+"""Declarative registry of per-task (per-rule) feature settings.
+
+The Telegram bot edits these through hand-written panels; the REST/gRPC control
+plane needs the same reach. A registry — instead of one proto field per setting —
+is what keeps the two in sync: adding an entry here is what makes a setting
+readable and writable through the API, and it gives the dashboard the metadata
+(kind, default, bounds) it needs to render a control instead of hard-coding one.
+
+Every entry is read and written through the *entity property*, never by poking
+`metadata` directly, so a write here behaves exactly like the same change made
+from the bot, and defaults/normalisation stay in one place.
+
+Settings that already have a first-class `ForwardRule` field (forward_mode,
+content_mode, delay_seconds, sync_edits, prompt_id, ...) are deliberately NOT
+listed: they belong on the rule itself, and a second write path could disagree
+with the first.
+"""
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
+
+__all__ = [
+    "SettingSpec",
+    "SettingError",
+    "SETTING_SPECS",
+    "SCHEMA_VERSION",
+    "coerce_value",
+    "read_settings",
+    "apply_settings",
+    "schema",
+]
+
+SCHEMA_VERSION = 1
+
+
+class SettingError(ValueError):
+    """A setting name is unknown, or its value failed validation."""
+
+    def __init__(self, code: str, message: str, key: str = "") -> None:
+        super().__init__(message)
+        self.code = code
+        self.key = key
+
+
+@dataclass(frozen=True)
+class SettingSpec:
+    """One controllable per-task setting."""
+
+    kind: str  # bool | int | float | str | list | dict
+    default: Any
+    group: str = "general"
+    label: str = ""
+    help: str = ""
+    choices: Tuple[str, ...] = ()
+    minimum: Optional[float] = None
+    maximum: Optional[float] = None
+    nullable: bool = False
+    item_kind: str = "any"  # for kind == "list"
+
+    def to_dict(self, key: str) -> Dict[str, Any]:
+        out: Dict[str, Any] = {
+            "key": key,
+            "kind": self.kind,
+            "default": self.default,
+            "group": self.group,
+            "label": self.label or key.replace("_", " ").title(),
+            "nullable": self.nullable,
+        }
+        if self.help:
+            out["help"] = self.help
+        if self.choices:
+            out["choices"] = list(self.choices)
+        if self.minimum is not None:
+            out["minimum"] = self.minimum
+        if self.maximum is not None:
+            out["maximum"] = self.maximum
+        if self.kind == "list":
+            out["item_kind"] = self.item_kind
+        return out
+
+
+def _s(**kw: Any) -> SettingSpec:
+    return SettingSpec(**kw)
+
+
+# --------------------------------------------------------------------------- #
+# The registry. Keys are the entity property names.
+# --------------------------------------------------------------------------- #
+SETTING_SPECS: Dict[str, SettingSpec] = {
+    # ---- content cleanup -------------------------------------------------
+    "header": _s(kind="str", default="", group="cleanup",
+                 help="Text prepended to every forwarded message."),
+    "footer": _s(kind="str", default="", group="cleanup",
+                 help="Text appended to every forwarded message."),
+    "replacements": _s(kind="dict", default={}, group="cleanup",
+                       help="Literal find/replace pairs applied to the text."),
+    "link_replacement": _s(kind="str", default="", group="cleanup"),
+    "clean_usernames": _s(kind="bool", default=False, group="cleanup"),
+    "clean_hashtags": _s(kind="bool", default=False, group="cleanup"),
+    "clean_phones": _s(kind="bool", default=False, group="cleanup"),
+    "clean_buttons": _s(kind="bool", default=False, group="cleanup"),
+    "clean_empty_lines": _s(kind="bool", default=False, group="cleanup"),
+    "clean_custom_words": _s(kind="list", default=[], group="cleanup",
+                             item_kind="str",
+                             help="Words stripped from the text."),
+    "remove_emojis": _s(kind="bool", default=False, group="cleanup"),
+    "cleaner_enabled": _s(kind="bool", default=False, group="cleanup",
+                          help="Master switch for the cleaner pipeline."),
+    "cleaner_config": _s(kind="dict", default={}, group="cleanup",
+                         help="Per-rule cleaner rules (which patterns to strip)."),
+
+    # ---- media filtering -------------------------------------------------
+    "block_text": _s(kind="bool", default=False, group="media"),
+    "block_voice": _s(kind="bool", default=False, group="media"),
+    "block_audio": _s(kind="bool", default=False, group="media"),
+    "block_video": _s(kind="bool", default=False, group="media"),
+    "block_stickers": _s(kind="bool", default=False, group="media"),
+    "block_links": _s(kind="bool", default=False, group="media",
+                      help="Drop messages that contain a link."),
+    "album_mode": _s(kind="str", default="album", group="media",
+                     help="How grouped albums are delivered."),
+    "watermark": _s(kind="str", default="", group="media"),
+    "watermark_text": _s(kind="str", default="", group="media"),
+
+    # ---- sending behaviour ----------------------------------------------
+    "duplicate_filters": _s(kind="bool", default=False, group="sending",
+                            help="Suppress messages already forwarded before."),
+    "max_time_edit": _s(kind="int", default=86400, group="sending",
+                        minimum=0, maximum=2592000,
+                        help="Seconds after which an edit is no longer mirrored."),
+    "edit_time_limit_seconds": _s(kind="int", default=0, group="sending",
+                                  minimum=0, maximum=2592000),
+    "forward_delay_seconds": _s(kind="float", default=0.0, group="sending",
+                                minimum=0, maximum=86400),
+    "auto_delete_seconds": _s(kind="int", default=0, group="sending",
+                              minimum=0, maximum=604800,
+                              help="Delete the forwarded copy after N seconds (0 = keep)."),
+    "debug_mode": _s(kind="bool", default=False, group="sending",
+                     help="Log every decision for this task."),
+    "sync_replies": _s(kind="bool", default=False, group="sending",
+                       help="Keep replies attached to the forwarded copy."),
+    "process_raw_text": _s(kind="bool", default=False, group="sending",
+                           help="Run the pipeline on raw text before any parsing."),
+    "feature_group": _s(kind="str", default="all", group="sending"),
+    "sender_type": _s(kind="str", default="Personal Telegram Account", group="sending"),
+
+    # ---- keywords / replies ---------------------------------------------
+    "keyword_confirmation": _s(kind="bool", default=False, group="keywords"),
+    "keyword_reply": _s(kind="str", default="", group="keywords"),
+    "translate_lang": _s(kind="str", default="", group="keywords",
+                         help="Target language for auto-translation ('' = off)."),
+
+    # ---- audience filters ------------------------------------------------
+    "blacklist": _s(kind="list", default=[], group="audience", item_kind="str",
+                    help="Substrings that block a message."),
+    "whitelist": _s(kind="list", default=[], group="audience", item_kind="str",
+                    help="If set, only matching messages are forwarded."),
+    "blacklist_users": _s(kind="list", default=[], group="audience",
+                          item_kind="str",
+                          help="Sender ids/usernames never forwarded."),
+    "whitelist_users": _s(kind="list", default=[], group="audience",
+                          item_kind="str"),
+
+    # ---- AI --------------------------------------------------------------
+    "ai_creativity": _s(kind="float", default=0.7, group="ai",
+                        minimum=0, maximum=2,
+                        help="Sampling temperature used for this task's rewrites."),
+    "ai_max_tokens": _s(kind="int", default=600, group="ai",
+                        minimum=1, maximum=100000),
+    "ocr_image_ai": _s(kind="bool", default=False, group="ai",
+                       help="Run OCR on images and forward the extracted text."),
+    "news_digest": _s(kind="bool", default=False, group="ai"),
+    "smart_ai_rewrite": _s(kind="bool", default=False, group="ai",
+                           help="Let the AI decide whether a message needs rewriting."),
+    "crypto_mode": _s(kind="bool", default=False, group="ai"),
+    "paid_addons": _s(kind="dict", default={}, group="ai"),
+
+    # ---- automation ------------------------------------------------------
+    "auto_post_scheduler": _s(kind="dict", default={"enabled": False},
+                              group="automation"),
+    "auto_posting": _s(kind="bool", default=False, group="automation",
+                       help="Convenience view of auto_post_scheduler.enabled."),
+    "power_control": _s(kind="bool", default=False, group="automation",
+                        help="Convenience view of power_schedule.enabled."),
+    "power_schedule": _s(kind="dict", default={"enabled": False},
+                         group="automation"),
+    "button_to_text": _s(kind="bool", default=False, group="automation"),
+    "link_buttons": _s(kind="list", default=[], group="automation",
+                       item_kind="str"),
+    "affiliate_kit": _s(kind="dict", default={}, group="automation"),
+}
+
+_GROUP_ORDER = ("general", "cleanup", "media", "sending", "keywords",
+                "audience", "ai", "automation")
+
+
+# --------------------------------------------------------------------------- #
+# Validation
+# --------------------------------------------------------------------------- #
+def coerce_value(key: str, value: Any) -> Any:
+    """Validate and normalise one setting value, or raise :class:`SettingError`.
+
+    Validation is the point of this layer: the bot's widgets enforce these rules
+    in the UI, so an API that trusted the wire would be able to store values the
+    bot itself would refuse.
+    """
+    spec = SETTING_SPECS.get(key)
+    if spec is None:
+        raise SettingError("unknown_setting", f"unknown setting {key!r}", key)
+
+    if value is None:
+        if spec.nullable:
+            return None
+        raise SettingError("invalid_type", f"{key} may not be null", key)
+
+    kind = spec.kind
+    # bool must be checked before int: in Python `True` is an `int`.
+    if kind == "bool":
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int) and value in (0, 1):
+            return bool(value)
+        raise SettingError("invalid_type", f"{key} expects a boolean", key)
+
+    if kind == "int":
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise SettingError("invalid_type", f"{key} expects an integer", key)
+        return _bounded(key, value, spec)
+
+    if kind == "float":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise SettingError("invalid_type", f"{key} expects a number", key)
+        return _bounded(key, float(value), spec)
+
+    if kind == "str":
+        if not isinstance(value, str):
+            raise SettingError("invalid_type", f"{key} expects a string", key)
+        value = value.strip()
+        if spec.choices and value and value not in spec.choices:
+            raise SettingError(
+                "invalid_choice",
+                f"{key} must be one of {', '.join(spec.choices)}",
+                key,
+            )
+        return value
+
+    if kind == "list":
+        if not isinstance(value, (list, tuple)):
+            raise SettingError("invalid_type", f"{key} expects a list", key)
+        if spec.item_kind == "str":
+            out: List[str] = []
+            for item in value:
+                if not isinstance(item, str):
+                    raise SettingError("invalid_type",
+                                       f"{key} expects a list of strings", key)
+                s = item.strip()
+                if s:
+                    out.append(s)
+            return out
+        return list(value)
+
+    if kind == "dict":
+        if not isinstance(value, dict):
+            raise SettingError("invalid_type", f"{key} expects an object", key)
+        # JSON keys are always strings; normalising here keeps equality checks
+        # between a read and a re-write from failing on int keys.
+        return {str(k): v for k, v in value.items()}
+
+    raise SettingError("invalid_spec", f"{key} has an unsupported kind", key)
+
+
+def _bounded(key: str, value: Any, spec: SettingSpec) -> Any:
+    if spec.minimum is not None and value < spec.minimum:
+        raise SettingError("out_of_range",
+                           f"{key} must be >= {spec.minimum}", key)
+    if spec.maximum is not None and value > spec.maximum:
+        raise SettingError("out_of_range",
+                           f"{key} must be <= {spec.maximum}", key)
+    return value
+
+
+# --------------------------------------------------------------------------- #
+# Read / write
+# --------------------------------------------------------------------------- #
+def read_settings(rule: Any) -> Dict[str, Any]:
+    """Current effective value of every registered setting on ``rule``."""
+    out: Dict[str, Any] = {}
+    for key in SETTING_SPECS:
+        try:
+            out[key] = getattr(rule, key)
+        except Exception:
+            # A malformed value in stored metadata must not blank the whole
+            # settings view; fall back to the declared default.
+            out[key] = SETTING_SPECS[key].default
+    return out
+
+
+def apply_settings(rule: Any, values: Dict[str, Any], replace_all: bool = False) -> List[str]:
+    """Apply ``values`` to ``rule``; returns the keys that changed.
+
+    Unknown keys and invalid values raise :class:`SettingError` *before* any
+    mutation, so a rejected request never leaves the rule half-updated.
+    """
+    if not isinstance(values, dict):
+        raise SettingError("invalid_type", "settings must be an object")
+
+    if replace_all:
+        unknown = [k for k in values if k not in SETTING_SPECS]
+        if unknown:
+            raise SettingError("unknown_setting",
+                               f"unknown setting {unknown[0]!r}", unknown[0])
+        target: Dict[str, Any] = {}
+        for key, spec in SETTING_SPECS.items():
+            target[key] = values[key] if key in values else spec.default
+    else:
+        target = {}
+        for key, raw in values.items():
+            if key not in SETTING_SPECS:
+                raise SettingError("unknown_setting", f"unknown setting {key!r}", key)
+            target[key] = raw
+
+    # Validate everything first: an invalid entry must not leave a partial write.
+    cleaned = {key: coerce_value(key, raw) for key, raw in target.items()}
+
+    changed: List[str] = []
+    current = read_settings(rule)
+    for key, value in cleaned.items():
+        if current.get(key) != value:
+            changed.append(key)
+        setattr(rule, key, value)
+    return changed
+
+
+def schema() -> Dict[str, Any]:
+    """Machine-readable description of every setting, for building a UI."""
+    ordered = sorted(
+        SETTING_SPECS.items(),
+        key=lambda kv: (_GROUP_ORDER.index(kv[1].group)
+                        if kv[1].group in _GROUP_ORDER else len(_GROUP_ORDER),
+                        kv[0]),
+    )
+    return {
+        "version": SCHEMA_VERSION,
+        "count": len(ordered),
+        "groups": [g for g in _GROUP_ORDER
+                   if any(s.group == g for s in SETTING_SPECS.values())],
+        "settings": [spec.to_dict(key) for key, spec in ordered],
+    }
