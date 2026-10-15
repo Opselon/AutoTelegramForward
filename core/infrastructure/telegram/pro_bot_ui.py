@@ -4350,12 +4350,12 @@ class ProBotUI:
             st.step = "rule_max_edit_input"
             st.buffer = {"rule_id": rule_id}
             await self._persist(uid, st)
-            prompt = (
-                "⏱ **ورود زمان مجاز ادیت (بر حسب ثانیه):**\n\n"
-                "یک عدد به ثانیه ارسال کنید (مثلاً 1800 برای نیم ساعت یا 86400 برای یک روز).\n\n"
-                self._t("ui_cancel_hint")
+            prompt = self._t("ui_rule_max_edit_prompt")
+            await self._safe_edit(
+                cq,
+                prompt,
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rmte:{rule_id}")]]),
             )
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rmte:{rule_id}")]]))
             await cq.answer()
 
         # ---------------- Profile Management Callbacks ----------------
