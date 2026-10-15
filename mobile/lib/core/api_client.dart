@@ -674,6 +674,15 @@ class ApiClient {
     listKey: 'services',
   );
 
+  /// Preflight diagnostics: the server-side "catch problems early" pass,
+  /// returning a graded report of configuration defects with remediation hints.
+  Future<DiagnosticsReport> diagnostics() => _request(
+    method: 'GET',
+    path: '/api/diagnostics',
+    fromJson: DiagnosticsReport.fromJson,
+    retryable: true,
+  );
+
   Future<List<ForwardRule>> listRules() => _requestList(
     method: 'GET',
     path: '/api/rules',

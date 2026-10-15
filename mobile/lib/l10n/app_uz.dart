@@ -69,6 +69,8 @@ class AppMessagesUz {
     'dash_failed': 'Failed',
     'dash_health': 'Service health',
     'dash_recent_errors': 'Recent errors',
+    'diag_title': 'Oldindan tekshirishlar',
+    'diag_all_ok': 'Muammo topilmadi — barcha vazifalar sog‘lom.',
     'sessions_title': 'Telegram sessions',
     'sessions_empty':
         'No Telegram account is linked yet. Add one to start forwarding.',

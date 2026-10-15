@@ -80,6 +80,8 @@ class AppMessagesFa {
     'dash_failed': 'ناموفق',
     'dash_health': 'سلامت سرویس‌ها',
     'dash_recent_errors': 'خطاهای اخیر',
+    'diag_title': 'بررسی‌های پیش‌پرواز',
+    'diag_all_ok': 'هیچ مشکلی پیدا نشد — همه تسک‌ها سالم هستند.',
 
     // sessions
     'sessions_title': 'سشن‌های تلگرام',

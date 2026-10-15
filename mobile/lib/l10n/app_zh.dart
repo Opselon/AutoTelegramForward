@@ -65,6 +65,8 @@ class AppMessagesZh {
     'dash_failed': '失败',
     'dash_health': '服务健康',
     'dash_recent_errors': '近期错误',
+    'diag_title': '预检检查',
+    'diag_all_ok': '未发现问题——所有任务均正常。',
     'sessions_title': 'Telegram 会话',
     'sessions_empty': '尚未绑定 Telegram 账户。绑定一个即可开始转发。',
     'sessions_add': '绑定 Telegram 账户',

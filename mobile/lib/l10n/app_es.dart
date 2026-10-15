@@ -69,6 +69,9 @@ class AppMessagesEs {
     'dash_failed': 'Failed',
     'dash_health': 'Service health',
     'dash_recent_errors': 'Recent errors',
+    'diag_title': 'Comprobaciones previas',
+    'diag_all_ok':
+        'No se encontraron problemas — todas las tareas están sanas.',
     'sessions_title': 'Telegram sessions',
     'sessions_empty':
         'No Telegram account is linked yet. Add one to start forwarding.',
