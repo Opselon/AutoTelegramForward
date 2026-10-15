@@ -12,6 +12,8 @@ import json
 import time
 from typing import Any, Callable, Dict, List, Optional, Protocol
 
+from .coercion import enum_str
+
 from ...application.repositories import (
     ConcurrencyError,
     IDeliveryQueueRepository,
@@ -227,7 +229,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             if isinstance(getattr(rule, "trigger_events", None), list)
             else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]
         )
-        content_val = getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value)
+        content_val = enum_str(getattr(rule, "content_mode", None), ContentMode.AUTO.value)
         meta_json = json.dumps(rule.metadata or {})
         targets_json = json.dumps(rule.target_chat_ids or [])
 
@@ -268,7 +270,7 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             if isinstance(getattr(rule, "trigger_events", None), list)
             else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]
         )
-        content_val = getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value)
+        content_val = enum_str(getattr(rule, "content_mode", None), ContentMode.AUTO.value)
         meta_json = json.dumps(rule.metadata or {})
         targets_json = json.dumps(rule.target_chat_ids or [])
 

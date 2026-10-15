@@ -9,6 +9,8 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
+from .coercion import enum_str
+
 from ...application.repositories import (
     ApiCredential,
     BotToken,
@@ -195,7 +197,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             getattr(rule, "intermediate_channel_name", "") or "",
             getattr(rule, "intermediate_target_chat_id", "") or "",
             int(bool(getattr(rule, "use_intermediate", False))),
-            getattr(getattr(rule, "fallback_mode", None), "value", "COPY_MESSAGE"),
+            enum_str(getattr(rule, "fallback_mode", None), "COPY_MESSAGE"),
             int(bool(getattr(rule, "fallback_enabled", True))),
             json.dumps(getattr(rule, "detection_criteria", {}) or {}),
             int(getattr(rule, "priority", 10) or 10),
@@ -231,7 +233,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
 
     async def add(self, rule: ForwardRule) -> ForwardRule:
         rule_version = int(getattr(rule, "version", 1) or 1)
-        ai_fallback = getattr(getattr(rule, "ai_fallback_policy", AIFallbackPolicy.DROP), "value", AIFallbackPolicy.DROP.value)
+        ai_fallback = enum_str(getattr(rule, "ai_fallback_policy", None), AIFallbackPolicy.DROP.value)
         ai_prompt_ver = int(getattr(rule, "ai_prompt_version", 0) or 0)
         ai_timeout = float(getattr(rule, "ai_timeout_seconds", 15.0) or 15.0)
         ai_sec = getattr(rule, "ai_secondary_config_id", None)
@@ -257,7 +259,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                     json.dumps(getattr(rule, "trigger_events", [TriggerEvent.NEW_MESSAGE.value])
                                if isinstance(getattr(rule, "trigger_events", None), list)
                                else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
-                    getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
+                    enum_str(getattr(rule, "content_mode", None), ContentMode.AUTO.value),
                     json.dumps(rule.metadata or {}), rule_version, rule.created_at, rule.updated_at,
                     ai_prompt_ver, ai_fallback, ai_timeout, ai_sec,
                     int(getattr(rule, "owner_user_id", 0) or 0),
@@ -283,7 +285,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
                         json.dumps(getattr(rule, "trigger_events", [TriggerEvent.NEW_MESSAGE.value])
                                    if isinstance(getattr(rule, "trigger_events", None), list)
                                    else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]),
-                        getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value),
+                        enum_str(getattr(rule, "content_mode", None), ContentMode.AUTO.value),
                         json.dumps(rule.metadata or {}), rule.created_at, rule.updated_at,
                     ),
                 )
@@ -300,10 +302,10 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             if isinstance(getattr(rule, "trigger_events", None), list)
             else [getattr(rule, "trigger_events", TriggerEvent.NEW_MESSAGE.value)]
         )
-        content_val = getattr(getattr(rule, "content_mode", ContentMode.AUTO), "value", ContentMode.AUTO.value)
+        content_val = enum_str(getattr(rule, "content_mode", None), ContentMode.AUTO.value)
         meta_json = json.dumps(rule.metadata or {})
 
-        ai_fallback = getattr(getattr(rule, "ai_fallback_policy", AIFallbackPolicy.DROP), "value", AIFallbackPolicy.DROP.value)
+        ai_fallback = enum_str(getattr(rule, "ai_fallback_policy", None), AIFallbackPolicy.DROP.value)
         ai_prompt_ver = int(getattr(rule, "ai_prompt_version", 0) or 0)
         ai_timeout = float(getattr(rule, "ai_timeout_seconds", 15.0) or 15.0)
         ai_sec = getattr(rule, "ai_secondary_config_id", None)
