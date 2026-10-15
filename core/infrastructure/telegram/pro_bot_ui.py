@@ -2469,190 +2469,58 @@ class ProBotUI:
         ]
         return text, self._kbd(rows)
 
-    def _render_pv_menu(self, uid: int = 0, lang: str = "fa") -> Tuple[str, InlineKeyboardMarkup]:
+    def _render_pv_menu(self, uid: int = 0, lang: Optional[str] = None) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(uid=uid) if (lang is None or lang == "fa") else lang
         resp = getattr(self, "_pv_responder", None)
         if not resp:
-            return "❌ ماژول پاسخگوی هوشمند پی‌وی بارگذاری نشده است.", self._kbd([[("⬅️ بازگشت", CB["ai"])]])
+            return self._t("ui_pv_not_loaded", lang=lang), self._kbd([[("⬅️ " + self._t("ui_back", lang=lang), CB["ai"])]])
 
         cfg = resp.get_config_for_user(uid) if hasattr(resp, "get_config_for_user") else resp.config
         persona_preview = (cfg.persona_prompt[:140] + "...") if len(cfg.persona_prompt) > 140 else cfg.persona_prompt
 
-        if lang == "fa":
-            status_str = "🟢 فعال" if cfg.enabled else "🔴 غیرفعال"
-            tog_btn = "🔴 غیرفعال‌سازی" if cfg.enabled else "🟢 فعال‌سازی"
-            text = (
-                "🤖 **پاسخگوی فوق‌العاده هوشمند پی‌وی (AI PV Assistant)**\n\n"
-                f"📊 **وضعیت فعالیت:** {status_str}\n"
-                f"⏱ **شبیه‌سازی تایپینگ انسانی:** `{cfg.typing_delay_min:.1f}` تا `{cfg.typing_delay_max:.1f}` ثانیه\n"
-                f"⏳ **کول‌داون ضداسپم:** هر `{cfg.cooldown_seconds}` ثانیه\n"
-                f"🤖 **نادیده‌گرفتن ربات‌ها:** {'✅ بله' if cfg.ignore_bots else '❌ خیر'}\n\n"
-                f"🎭 **لحن و شخصیت فعلی:**\n"
-                f"_{persona_preview}_\n\n"
-                "💡 **ویژگی‌ها:** با اتصال این بخش به هوش مصنوعی، هر پیامی به پی‌وی اکانت شما بیاید با "
-                "شبیه‌سازی اکشنِ Typing و لحنی کاملاً انسانی، جذاب و فارسی پاسخ داده می‌شود."
-            )
-            rows = [
-                [(f"🔘 وضعیت: {tog_btn}", "pv:toggle")],
-                [("🎭 تنظیم لحن و پرامپت شخصیت", "pv:persona")],
-                [("⏱ تنظیم زمان تأخیر و تایپینگ", "pv:delays")],
-                [("🧪 تست نمونه پاسخگویی", "pv:test")],
-                [("⬅️ " + self._t("ui_back"), CB["ai"])],
-            ]
-        elif lang == "ru":
-            status_str = "🟢 Активно" if cfg.enabled else "🔴 Неактивно"
-            tog_btn = "🔴 Отключить" if cfg.enabled else "🟢 Включить"
-            text = (
-                "🤖 **Умный автоответчик в ЛС (AI PV Assistant)**\n\n"
-                f"📊 **Статус:** {status_str}\n"
-                f"⏱ **Имитация набора текста:** от `{cfg.typing_delay_min:.1f}` до `{cfg.typing_delay_max:.1f}` сек\n"
-                f"⏳ **Антиспам кулдаун:** каждые `{cfg.cooldown_seconds}` сек\n"
-                f"🤖 **Игнорировать ботов:** {'✅ Да' if cfg.ignore_bots else '❌ Нет'}\n\n"
-                f"🎭 **Текущий стиль общения:**\n"
-                f"_{persona_preview}_\n"
-            )
-            rows = [
-                [(f"🔘 Статус: {tog_btn}", "pv:toggle")],
-                [("🎭 Настройка стиля и промпта", "pv:persona")],
-                [("⏱ Настройка задержек набора", "pv:delays")],
-                [("🧪 Тестировать ответ", "pv:test")],
-                [("⬅️ Назад", CB["ai"])],
-            ]
-        elif lang == "zh":
-            status_str = "🟢 已启用" if cfg.enabled else "🔴 未启用"
-            tog_btn = "🔴 关闭" if cfg.enabled else "🟢 开启"
-            text = (
-                "🤖 **私聊智能自动回复 (AI PV Assistant)**\n\n"
-                f"📊 **运行状态：** {status_str}\n"
-                f"⏱ **拟人输入模拟：** `{cfg.typing_delay_min:.1f}` 至 `{cfg.typing_delay_max:.1f}` 秒\n"
-                f"⏳ **防刷冷却：** 每 `{cfg.cooldown_seconds}` 秒\n"
-                f"🤖 **忽略机器人：** {'✅ 是' if cfg.ignore_bots else '❌ 否'}\n\n"
-                f"🎭 **当前语气与人设：**\n"
-                f"_{persona_preview}_\n"
-            )
-            rows = [
-                [(f"🔘 状态: {tog_btn}", "pv:toggle")],
-                [("🎭 设置回复语气与提示词", "pv:persona")],
-                [("⏱ 设置输入延迟", "pv:delays")],
-                [("🧪 测试回复", "pv:test")],
-                [("⬅️ 返回", CB["ai"])],
-            ]
-        else:
-            status_str = "🟢 Active" if cfg.enabled else "🔴 Inactive"
-            tog_btn = "🔴 Disable" if cfg.enabled else "🟢 Enable"
-            text = (
-                "🤖 **AI Private Chat Assistant (AI PV Assistant)**\n\n"
-                f"📊 **Status:** {status_str}\n"
-                f"⏱ **Typing Simulation:** `{cfg.typing_delay_min:.1f}` to `{cfg.typing_delay_max:.1f}` sec\n"
-                f"⏳ **Anti-spam Cooldown:** `{cfg.cooldown_seconds}` sec\n"
-                f"🤖 **Ignore Bots:** {'✅ Yes' if cfg.ignore_bots else '❌ No'}\n\n"
-                f"🎭 **Current Persona:**\n"
-                f"_{persona_preview}_\n"
-            )
-            rows = [
-                [(f"🔘 Status: {tog_btn}", "pv:toggle")],
-                [("🎭 Configure Persona & Prompt", "pv:persona")],
-                [("⏱ Configure Typing Delays", "pv:delays")],
-                [("🧪 Test Sample Reply", "pv:test")],
-                [("⬅️ " + self._t("ui_back"), CB["ai"])],
-            ]
+        status_str = self._t("ui_ai_enabled", lang=lang) if cfg.enabled else self._t("ui_ai_disabled", lang=lang)
+        tog_btn = self._t("ui_ai_btn_disable", lang=lang) if cfg.enabled else self._t("ui_ai_btn_enable", lang=lang)
+        ignore_str = self._t("ui_yes", lang=lang) if cfg.ignore_bots else self._t("ui_no", lang=lang)
+
+        text = (
+            self._t("ui_pv_title", lang=lang)
+            + self._t("ui_pv_status_line", lang=lang, status=status_str)
+            + self._t("ui_pv_typing_line", lang=lang, min=cfg.typing_delay_min, max=cfg.typing_delay_max)
+            + self._t("ui_pv_cooldown_line", lang=lang, cooldown=cfg.cooldown_seconds)
+            + self._t("ui_pv_bots_line", lang=lang, ignore=ignore_str)
+            + self._t("ui_pv_persona_line", lang=lang, persona=persona_preview)
+            + self._t("ui_pv_features_line", lang=lang)
+        )
+        rows = [
+            [(self._t("ui_pv_btn_status", lang=lang, btn=tog_btn), "pv:toggle")],
+            [(self._t("ui_pv_btn_persona", lang=lang), "pv:persona")],
+            [(self._t("ui_pv_btn_delays", lang=lang), "pv:delays")],
+            [(self._t("ui_pv_btn_test", lang=lang), "pv:test")],
+            [("⬅️ " + self._t("ui_back", lang=lang), CB["ai"])],
+        ]
         return text, self._kbd(rows)
 
-    def _render_pv_persona_menu(self, lang: str = "fa") -> Tuple[str, InlineKeyboardMarkup]:
-        if lang == "fa":
-            text = (
-                "🎭 **تنظیم لحن و شخصیت پاسخگوی پی‌وی:**\n\n"
-                "یکی از سبک‌های آماده زیر را انتخاب کنید یا پرامپت دلخواه بنویسید:"
-            )
-            rows = [
-                [("😃 لحن خودمانی، جذاب و طبیعی (پیش‌فرض)", "pv:set_p:casual")],
-                [("💼 لحن کاری، مؤدبانه و حرفه‌ای", "pv:set_p:business")],
-                [("⚡ پاسخ‌های بسیار کوتاه و دوستانه", "pv:set_p:short")],
-                [("✏️ نوشتن پرامپت اختصاصی و دلخواه", "pv:set_p:custom")],
-                [("⬅️ بازگشت به تنظیمات پی‌وی", "pv:menu")],
-            ]
-        elif lang == "ru":
-            text = (
-                "🎭 **Настройка стиля общения:**\n\n"
-                "Выберите один из готовых стилей или задайте свой промпт:"
-            )
-            rows = [
-                [("😃 Дружелюбный и естественный (по умолчанию)", "pv:set_p:casual")],
-                [("💼 Деловой и вежливый", "pv:set_p:business")],
-                [("⚡ Очень краткий и быстрый", "pv:set_p:short")],
-                [("✏️ Свой персональный промпт", "pv:set_p:custom")],
-                [("⬅️ Назад в меню PV", "pv:menu")],
-            ]
-        elif lang == "zh":
-            text = (
-                "🎭 **设置回复语气与人设：**\n\n"
-                "选择预设模板或自定义提示词："
-            )
-            rows = [
-                [("😃 亲切自然（默认）", "pv:set_p:casual")],
-                [("💼 商务专业礼貌", "pv:set_p:business")],
-                [("⚡ 简短快速回复", "pv:set_p:short")],
-                [("✏️ 自定义专属提示词", "pv:set_p:custom")],
-                [("⬅️ 返回 PV 设置", "pv:menu")],
-            ]
-        else:
-            text = (
-                "🎭 **Configure Persona & Tone:**\n\n"
-                "Choose a ready style or write your custom persona prompt:"
-            )
-            rows = [
-                [("😃 Friendly & Casual (Default)", "pv:set_p:casual")],
-                [("💼 Polite & Professional", "pv:set_p:business")],
-                [("⚡ Short & Fast Replies", "pv:set_p:short")],
-                [("✏️ Custom Prompt", "pv:set_p:custom")],
-                [("⬅️ Back to PV Menu", "pv:menu")],
-            ]
+    def _render_pv_persona_menu(self, lang: Optional[str] = None, uid: int = 0) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(uid=uid) if (lang is None or lang == "fa") else lang
+        text = self._t("ui_pv_p_title", lang=lang)
+        rows = [
+            [(self._t("ui_pv_p_casual", lang=lang), "pv:set_p:casual")],
+            [(self._t("ui_pv_p_business", lang=lang), "pv:set_p:business")],
+            [(self._t("ui_pv_p_short", lang=lang), "pv:set_p:short")],
+            [(self._t("ui_pv_p_custom", lang=lang), "pv:set_p:custom")],
+            [(self._t("ui_pv_p_back", lang=lang), "pv:menu")],
+        ]
         return text, self._kbd(rows)
 
-    def _render_pv_delays_menu(self, lang: str = "fa") -> Tuple[str, InlineKeyboardMarkup]:
-        if lang == "fa":
-            text = (
-                "⏱ **تنظیم زمان تأخیر شبیه‌سازی تایپ انسانی:**\n\n"
-                "سرعت تایپ و ارسال پاسخ در پی‌وی را مشخص کنید:"
-            )
-            rows = [
-                [("⚡ سریع (۱.۵ تا ۳ ثانیه)", "pv:set_d:fast")],
-                [("🧘 طبیعی و انسانی (۲ تا ۴.۵ ثانیه)", "pv:set_d:normal")],
-                [("🐢 با تأمل و طبیعی (۳.۵ تا ۶.۵ ثانیه)", "pv:set_d:slow")],
-                [("⬅️ بازگشت به تنظیمات پی‌وی", "pv:menu")],
-            ]
-        elif lang == "ru":
-            text = (
-                "⏱ **Настройка задержки набора текста:**\n\n"
-                "Укажите скорость имитации набора сообщения:"
-            )
-            rows = [
-                [("⚡ Быстро (1.5 - 3.0 сек)", "pv:set_d:fast")],
-                [("🧘 Естественно (2.0 - 4.5 сек)", "pv:set_d:normal")],
-                [("🐢 Неспешно (3.5 - 6.5 сек)", "pv:set_d:slow")],
-                [("⬅️ Назад в меню PV", "pv:menu")],
-            ]
-        elif lang == "zh":
-            text = (
-                "⏱ **设置拟人输入延迟：**\n\n"
-                "选择模拟打字与发送的间隔时长："
-            )
-            rows = [
-                [("⚡ 快速 (1.5 - 3.0 秒)", "pv:set_d:fast")],
-                [("🧘 自然拟人 (2.0 - 4.5 秒)", "pv:set_d:normal")],
-                [("🐢 沉着从容 (3.5 - 6.5 秒)", "pv:set_d:slow")],
-                [("⬅️ 返回 PV 设置", "pv:menu")],
-            ]
-        else:
-            text = (
-                "⏱ **Configure Typing Delay Simulation:**\n\n"
-                "Select typing and response speed:"
-            )
-            rows = [
-                [("⚡ Fast (1.5 - 3.0s)", "pv:set_d:fast")],
-                [("🧘 Natural (2.0 - 4.5s)", "pv:set_d:normal")],
-                [("🐢 Deliberate (3.5 - 6.5s)", "pv:set_d:slow")],
-                [("⬅️ Back to PV Menu", "pv:menu")],
-            ]
+    def _render_pv_delays_menu(self, lang: Optional[str] = None, uid: int = 0) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(uid=uid) if (lang is None or lang == "fa") else lang
+        text = self._t("ui_pv_d_title", lang=lang)
+        rows = [
+            [(self._t("ui_pv_d_fast", lang=lang), "pv:set_d:fast")],
+            [(self._t("ui_pv_d_normal", lang=lang), "pv:set_d:normal")],
+            [(self._t("ui_pv_d_slow", lang=lang), "pv:set_d:slow")],
+            [(self._t("ui_pv_d_back", lang=lang), "pv:menu")],
+        ]
         return text, self._kbd(rows)
 
     def _logs_menu(self) -> InlineKeyboardMarkup:
