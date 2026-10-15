@@ -7411,7 +7411,7 @@ class ProBotUI:
             try:
                 await self.bot.send_message(
                     admin_uid,
-                    self._t("ui_admin_broadcast_done", lang="en", sent=sent, failed=failed),
+                    self._t("ui_admin_broadcast_done", lang=self._resolve_lang(admin_uid), sent=sent, failed=failed),
                 )
             except Exception:
                 pass
