@@ -2132,9 +2132,14 @@ const (
 )
 
 // parseInt32 parses a non-negative decimal that must fit in [0, max].
+//
+// Parsing at bitSize 32 does the range check: it returns an error for anything
+// outside int32, so the narrowing conversion below cannot wrap. Bounding an
+// int64 value by hand instead leaves that safety invisible to static analysis
+// (and to the next reader), even when it is correct.
 func parseInt32(s string, max int32) (int32, bool) {
-	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || n < 0 || n > int64(max) {
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err != nil || n < 0 || int32(n) > max {
 		return 0, false
 	}
 	return int32(n), true
