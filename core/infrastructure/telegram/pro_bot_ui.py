@@ -2797,7 +2797,7 @@ class ProBotUI:
             except Exception as exc:
                 logger.exception("_cb_sessions failed for uid=%s: %s", uid, exc)
                 try:
-                    await cq.answer(f"⚠️ خطا: {exc}", show_alert=True)
+                    await cq.answer(self._t("ui_internal_error"), show_alert=True)
                 except Exception:
                     pass
 
@@ -3365,7 +3365,7 @@ class ProBotUI:
                     self._admin_service.remove_admin(target, removed_by=uid)
                 await cq.answer(self._t("ui_admin_removed", lang=self._resolve_lang(uid), uid=target), show_alert=True)
             except Exception as exc:
-                await cq.answer(f"❌ خطا: {exc}", show_alert=True)
+                await cq.answer(self._t("ui_internal_error"), show_alert=True)
             cq.data = CB["adm_admins"]
             await _cb_adm_admins(_, cq)
 
@@ -3522,7 +3522,7 @@ class ProBotUI:
             except Exception as exc:
                 logger.exception("_cb_login failed for uid=%s: %s", uid, exc)
                 try:
-                    await cq.answer(f"⚠️ خطا: {exc}", show_alert=True)
+                    await cq.answer(self._t("ui_internal_error"), show_alert=True)
                 except Exception:
                     pass
                     pass
@@ -3963,9 +3963,9 @@ class ProBotUI:
                     rule.metadata = {}
                 rule.metadata["replacements"] = reps
                 await self._rules.update(rule)
-                await cq.answer(f"❌ `{target_key}` حذف شد")
             text, kbd = self._render_replace_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rhf:(.+)$"))
         @self._localized_handler
@@ -4566,7 +4566,7 @@ class ProBotUI:
                 ForwardMode.COPY_MESSAGE: self._t("ui_fmode_copy_msg"),
                 ForwardMode.DIRECT_FORWARD: self._t("ui_fmode_direct_fwd"),
             }
-            await cq.answer(f"حالت ارسال: {mode_names.get(rule.forward_mode, rule.forward_mode.value)}")
+            await cq.answer(mode_names.get(rule.forward_mode, rule.forward_mode.value))
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -4918,7 +4918,7 @@ class ProBotUI:
             prompt = (
                 self._t("ui_delay_menu_title") + "\n\n" + self._t("ui_prompt_enter_delay")
             )
-            kbd = self._kbd([[("❌ انصراف", f"rdly:{rule.id}")]])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rdly:{rule.id}")]])
             await self._safe_edit(cq, prompt, reply_markup=kbd)
             await cq.answer()
 
@@ -4951,7 +4951,7 @@ class ProBotUI:
             prompt = (
                 self._t("ui_prompt_add_blacklist")
             )
-            kbd = self._kbd([[("❌ انصراف", f"rfl_bl:{rule.id}")]])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rfl_bl:{rule.id}")]])
             await self._safe_edit(cq, prompt, reply_markup=kbd)
             await cq.answer()
 
@@ -5023,7 +5023,7 @@ class ProBotUI:
             prompt = (
                 self._t("ui_prompt_add_whitelist")
             )
-            kbd = self._kbd([[("❌ انصراف", f"rfl_wl:{rule.id}")]])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rfl_wl:{rule.id}")]])
             await self._safe_edit(cq, prompt, reply_markup=kbd)
             await cq.answer()
 
@@ -5071,7 +5071,7 @@ class ProBotUI:
             prompt = (
                 self._t("ui_prompt_set_watermark")
             )
-            kbd = self._kbd([[("❌ انصراف", f"rwm:{rule.id}")]])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rwm:{rule.id}")]])
             await self._safe_edit(cq, prompt, reply_markup=kbd)
             await cq.answer()
 
@@ -5233,7 +5233,7 @@ class ProBotUI:
             st.step = f"rename_rule_{rule.id}"
             await self._persist(uid, st)
             text = self._t("ui_prompt_set_task_name", name=rule.name or f'task_{rule.id[:8]}')
-            kbd = self._kbd([[("❌ انصراف", f"rd:{rule.id}")]])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rd:{rule.id}")]])
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
@@ -5318,7 +5318,7 @@ class ProBotUI:
         # ---------------------------------------------------------------
         def _ai_badge(draft: Dict[str, Any]) -> str:
             if not draft.get("ai_config_id"):
-                return "❌ خاموش"
+                return self._t("ui_ai_status_off")
             pol = str(draft.get("ai_fallback_policy") or "DROP")
             return f"🟢 {pol}"
 
@@ -5339,14 +5339,24 @@ class ProBotUI:
             if prompt_id and self._prompts:
                 try:
                     tpl = await self._prompts.get_template(prompt_id)
-                    lines.append(f"📝 {tpl.name} (v{tpl.current_version})" if tpl else f"📝 `{prompt_id[:8]}`")
+                    lines.append(f"📝 {self._t('ui_ai_prompt_label')}: `{tpl.name}` (v{tpl.current_version})" if tpl else f"📝 {self._t('ui_ai_prompt_label')}: `{prompt_id[:8]}`")
                 except Exception:
-                    pass
+                    lines.append(f"📝 {self._t('ui_ai_prompt_label')}: `{prompt_id[:8]}`")
+            else:
+                lines.append(f"📝 {self._t('ui_ai_prompt_label')}: {self._t('ui_ai_prompt_default')}")
+
+            pol_desc = self._t(f"ui_ai_policy_short_{pol.lower()}")
             lines += [
-                f"⚠️ {pol}" + (" (SEND_ORIGINAL)" if pol == "SEND_ORIGINAL" else " (DROP)" if pol == "DROP" else ""),
-                f"⏱ Timeout: {tmo}s",
+                f"⚠️ {self._t('ui_ai_policy_label')}: `{pol}` ({pol_desc})",
+                f"⏱ {self._t('ui_ai_timeout_label')}: {tmo}s",
             ]
+            toggle_btn = (
+                (f"🔴 {self._t('ui_ai_btn_disable')}", f"r_aitoggle:{rule_id}:off")
+                if cfg_id
+                else (f"🟢 {self._t('ui_ai_btn_enable')}", f"r_aitoggle:{rule_id}:on")
+            )
             rows: List[List[Tuple[str, str]]] = [
+                [toggle_btn],
                 [(self._t("ui_ai_btn_pick_config"), f"r_ai_cfg:{rule_id}")],
                 [(self._t("ui_ai_btn_pick_prompt"), f"r_ai_prompt:{rule_id}")],
                 [(self._t("ui_ai_btn_change_policy"), f"r_ai_policy:{rule_id}")],
@@ -5354,6 +5364,64 @@ class ProBotUI:
                 [(self._t("ui_ai_btn_back_to_editor"), f"rd:{rule_id}")],
             ]
             return "\n".join(lines), self._kbd(rows)
+
+        @b.on_callback_query(filters.regex(r"^r_aitoggle:(.+?):(on|off)$"))
+        @self._localized_handler
+        async def _cb_rule_ai_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
+            st = self._state(uid)
+            raw = cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)
+            parts = raw.split(":")
+            rule_id = parts[1]
+            action = parts[2]
+            draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
+            if not isinstance(draft, dict) or st.buffer.get("rule_id") != rule_id:
+                rule = await self._owned_rule(rule_id, uid)
+                if not rule:
+                    return await cq.answer(self._t("ui_rule_not_found_or_not_owner_alert"), show_alert=True)
+                draft = rule.to_draft()
+                st.buffer["rule_id"] = rule_id
+                st.buffer["draft"] = draft
+
+            if action == "on":
+                cfgs = await self._ai.list_by_owner(uid) if (self._ai and uid) else []
+                if not cfgs:
+                    return await cq.answer(self._t("ui_ai_no_configs_alert"), show_alert=True)
+                prev_id = st.buffer.get("prev_ai_cfg_id")
+                target_cfg = None
+                if prev_id:
+                    target_cfg = next((c for c in cfgs if c.id == prev_id), None)
+                if not target_cfg:
+                    target_cfg = next((c for c in cfgs if c.is_enabled), cfgs[0])
+                draft["ai_config_id"] = target_cfg.id
+                draft["smart_ai_rewrite"] = True
+                draft["ai_status_badge"] = _ai_badge(draft)
+                rule = await self._owned_rule(rule_id, uid)
+                if rule:
+                    rule.ai_config_id = target_cfg.id
+                    rule.smart_ai_rewrite = True
+                    await self._save_owned_rule(rule, uid)
+                await self._persist(uid, st)
+                text, kbd = await _render_ai_menu(rule_id, draft)
+                await self._safe_edit(cq, text, reply_markup=kbd)
+                await cq.answer(self._t("ui_ai_enabled_alert"))
+            else:
+                if draft.get("ai_config_id"):
+                    st.buffer["prev_ai_cfg_id"] = draft.get("ai_config_id")
+                draft["ai_config_id"] = ""
+                draft["smart_ai_rewrite"] = False
+                draft["ai_status_badge"] = _ai_badge(draft)
+                rule = await self._owned_rule(rule_id, uid)
+                if rule:
+                    rule.ai_config_id = None
+                    rule.smart_ai_rewrite = False
+                    await self._save_owned_rule(rule, uid)
+                await self._persist(uid, st)
+                text, kbd = await _render_ai_menu(rule_id, draft)
+                await self._safe_edit(cq, text, reply_markup=kbd)
+                await cq.answer(self._t("ui_ai_disabled_alert"))
 
         @b.on_callback_query(filters.regex(r"^r_ai:(.+)$"))
         @self._localized_handler
@@ -5412,7 +5480,13 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_draft_expired"), show_alert=True)
             rule_id = rule_id or draft.get("id") or st.buffer.get("rule_id") or ""
             draft["ai_config_id"] = cfg_id or ""
+            draft["smart_ai_rewrite"] = bool(cfg_id)
             draft["ai_status_badge"] = _ai_badge(draft)
+            rule = await self._owned_rule(rule_id, uid)
+            if rule:
+                rule.ai_config_id = cfg_id or None
+                rule.smart_ai_rewrite = bool(cfg_id)
+                await self._save_owned_rule(rule, uid)
             await self._persist(uid, st)
             text, kbd = await _render_ai_menu(rule_id, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -5431,14 +5505,31 @@ class ProBotUI:
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else {}
             current = str(draft.get("prompt_id") or "")
             rows: List[List[Tuple[str, str]]] = [
+                [(self._t("ui_ai_btn_add_custom_prompt"), f"r_aipnew:{rule_id}")],
                 [(self._t("ui_ai_opt_no_prompt"), "r_aipset:")],
             ]
             if self._prompts:
-                for t in await self._prompts.list_templates():
+                templates = await self._prompts.list_templates_by_owner(uid) if hasattr(self._prompts, "list_templates_by_owner") else await self._prompts.list_templates()
+                for t in templates:
                     mark = "✅" if t.id == current else ("⭐" if t.is_system else "👤")
                     rows.append([(f"{mark} {t.name} (v{t.current_version})", f"r_aipset:{t.id}")])
             rows.append([(self._t("ui_back"), f"r_ai:{rule_id}")])
             await self._safe_edit(cq, self._t("ui_ai_pick_prompt_title"), reply_markup=self._kbd(rows))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^r_aipnew:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_ai_new_prompt(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
+            rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
+            st = self._state(uid)
+            st.step = f"ai_prompt_name_{rule_id}"
+            st.buffer["ai_prompt_rule_id"] = rule_id
+            await self._persist(uid, st)
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"r_ai_prompt:{rule_id}")]])
+            await self._safe_edit(cq, self._t("ui_ai_prompt_enter_name"), reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_aipset:(.*)$"))
@@ -5460,6 +5551,10 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_draft_expired"), show_alert=True)
             rule_id = rule_id or draft.get("id") or st.buffer.get("rule_id") or ""
             draft["prompt_id"] = prompt_id or ""
+            rule = await self._owned_rule(rule_id, uid)
+            if rule:
+                rule.prompt_id = prompt_id or None
+                await self._save_owned_rule(rule, uid)
             await self._persist(uid, st)
             text, kbd = await _render_ai_menu(rule_id, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -5485,9 +5580,9 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^r_aifset:(.+?):(.+)$"))
         @self._localized_handler
         async def _cb_rule_ai_set_policy(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             st = self._state(uid)
             raw = cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)
             _, rule_id, policy = raw.split(":", 2)
@@ -5496,10 +5591,18 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_draft_expired"), show_alert=True)
             draft["ai_fallback_policy"] = policy
             draft["ai_status_badge"] = _ai_badge(draft)
+            rule = await self._owned_rule(rule_id, uid)
+            if rule:
+                try:
+                    from ...domain.entities import AIFallbackPolicy
+                    rule.ai_fallback_policy = AIFallbackPolicy(policy)
+                    await self._save_owned_rule(rule, uid)
+                except Exception:
+                    pass
             await self._persist(uid, st)
             text, kbd = await _render_ai_menu(rule_id, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
-            await cq.answer(f"✅ رفتار خطا: {policy}")
+            await cq.answer(self._t("ui_ai_policy_updated", policy=policy))
 
         @b.on_callback_query(filters.regex(r"^r_ai_test:(.+)$"))
         @self._localized_handler
@@ -5536,7 +5639,7 @@ class ProBotUI:
                     + (f" | 📝 v{result.get('prompt_version_used')}" if result.get("prompt_version_used") else "")
                 )
             else:
-                body = f"❌ **خطا در تست:**\n`{result.get('error_message') or 'unknown'}`"
+                body = f"❌ **Error:**\n`{result.get('error_message') or 'unknown'}`"
             await self._safe_edit(cq, body, reply_markup=self._kbd([
                 [("🔄 " + self._t("ui_retry"), f"r_ai_test:{rule_id}")],
                 [(self._t("ui_back"), f"r_ai:{rule_id}")],
@@ -5782,7 +5885,7 @@ class ProBotUI:
 
             draft["block_voice"] = not bool(draft.get("block_voice", False))
             await self._persist(uid, st)
-            stat = "مسدود 🚫" if draft["block_voice"] else "مجاز 🟢"
+            stat = self._t("ui_clean_removed") if draft["block_voice"] else self._t("ui_clean_kept")
             await cq.answer(self._t("ui_clean_voice_status", stat=stat))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -5807,7 +5910,7 @@ class ProBotUI:
 
             draft["block_stickers"] = not bool(draft.get("block_stickers", False))
             await self._persist(uid, st)
-            stat = "مسدود 🚫" if draft["block_stickers"] else "مجاز 🟢"
+            stat = self._t("ui_clean_removed") if draft["block_stickers"] else self._t("ui_clean_kept")
             await cq.answer(self._t("ui_clean_sticker_status", stat=stat))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -6100,14 +6203,9 @@ class ProBotUI:
             nxt_mode = cycle.get(cur, ForwardMode.COPY_MESSAGE)
             rule.forward_mode = nxt_mode
             await self._rules.update(rule)
-            names = {
-                ForwardMode.COPY_MESSAGE: self._t("ui_fmode_copy_msg"),
-                ForwardMode.DIRECT_FORWARD: self._t("ui_fmode_direct_fwd"),
-                ForwardMode.CUSTOM_HEADER_COPY: self._t("ui_fmode_custom_header"),
-            }
-            await cq.answer(f"حالت: {names.get(nxt_mode, str(nxt_mode))}")
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmpu:(.+)$"))
         @self._localized_handler
@@ -6601,7 +6699,7 @@ class ProBotUI:
             st.step = "pv_test_input"
             await self._persist(uid, st)
             prompt = self._t("ui_pv_simulation_guide")
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", "pv:menu")]]))
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[(self._t("ui_cancel_back"), "pv:menu")]]))
             await cq.answer()
 
         # ---------------- backup ----------------
@@ -7139,6 +7237,97 @@ class ProBotUI:
         card_text, kbd = self._render_watermark_menu(rule)
         await message.reply_text(self._t("ui_step_watermark_saved", watermark=rule.watermark), reply_markup=kbd)
 
+    async def _step_ai_prompt_name(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        name = (text or "").strip()
+        if not name or len(name) > 80:
+            return await message.reply_text(self._t("ui_ai_prompt_name_invalid"))
+        st.buffer["ai_new_prompt_name"] = name
+        st.step = f"ai_prompt_sys_{rule_id}"
+        await self._persist(uid, st)
+        kbd = self._kbd([[(self._t("ui_cancel_back"), f"r_ai_prompt:{rule_id}")]])
+        await message.reply_text(self._t("ui_ai_prompt_enter_system_instruction", name=name), reply_markup=kbd)
+
+    async def _step_ai_prompt_sys(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        sys_text = (text or "").strip()
+        if not sys_text:
+            return await message.reply_text(self._t("ui_ai_prompt_sys_empty_error"))
+        name = st.buffer.get("ai_new_prompt_name") or f"Prompt_{int(time.time())}"
+        st.step = ""
+        st.buffer.pop("ai_new_prompt_name", None)
+        tpl_id = None
+        if self._prompts:
+            try:
+                tpl = await self._prompts.create_template(
+                    name=name,
+                    system_prompt=sys_text,
+                    user_prompt_template="{text}",
+                    target_language=self._resolve_lang(uid),
+                    owner_user_id=uid,
+                )
+                tpl_id = tpl.id
+            except Exception as exc:
+                logger.warning("Failed to create prompt template: %s", exc)
+        draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
+        if not isinstance(draft, dict) or st.buffer.get("rule_id") != rule_id:
+            rule = await self._owned_rule(rule_id, uid)
+            if rule:
+                draft = rule.to_draft()
+                st.buffer["rule_id"] = rule_id
+                st.buffer["draft"] = draft
+        if draft and tpl_id:
+            draft["prompt_id"] = tpl_id
+            rule = await self._owned_rule(rule_id, uid)
+            if rule:
+                rule.prompt_id = tpl_id
+                await self._save_owned_rule(rule, uid)
+        await self._persist(uid, st)
+        if draft:
+            cfg_id = str(draft.get("ai_config_id") or "")
+            prompt_id = str(draft.get("prompt_id") or "")
+            pol = str(draft.get("ai_fallback_policy") or "DROP")
+            tmo = draft.get("ai_timeout_seconds") or 15.0
+            lines = [self._t("ui_ai_menu_title"), ""]
+            if cfg_id:
+                try:
+                    cfg = await self._ai.get(cfg_id)
+                    lines.append(f"🧠 {self._t('ui_ai_title')}: `{cfg.name}` [{self._provider_label(cfg.provider.value)}/{cfg.model}]" if cfg else f"🧠 {self._t('ui_ai_title')}: `{cfg_id[:8]}`")
+                except Exception:
+                    lines.append(f"🧠 {self._t('ui_ai_title')}: `{cfg_id[:8]}`")
+            else:
+                lines.append(self._t("ui_ai_cfg_status_off"))
+            if prompt_id and self._prompts:
+                try:
+                    tpl = await self._prompts.get_template(prompt_id)
+                    lines.append(f"📝 {self._t('ui_ai_prompt_label')}: `{tpl.name}` (v{tpl.current_version})" if tpl else f"📝 {self._t('ui_ai_prompt_label')}: `{prompt_id[:8]}`")
+                except Exception:
+                    lines.append(f"📝 {self._t('ui_ai_prompt_label')}: `{prompt_id[:8]}`")
+            else:
+                lines.append(f"📝 {self._t('ui_ai_prompt_label')}: {self._t('ui_ai_prompt_default')}")
+
+            pol_desc = self._t(f"ui_ai_policy_short_{pol.lower()}")
+            lines += [
+                f"⚠️ {self._t('ui_ai_policy_label')}: `{pol}` ({pol_desc})",
+                f"⏱ {self._t('ui_ai_timeout_label')}: {tmo}s",
+            ]
+            toggle_btn = (
+                (f"🔴 {self._t('ui_ai_btn_disable')}", f"r_aitoggle:{rule_id}:off")
+                if cfg_id
+                else (f"🟢 {self._t('ui_ai_btn_enable')}", f"r_aitoggle:{rule_id}:on")
+            )
+            rows = [
+                [toggle_btn],
+                [(self._t("ui_ai_btn_pick_config"), f"r_ai_cfg:{rule_id}")],
+                [(self._t("ui_ai_btn_pick_prompt"), f"r_ai_prompt:{rule_id}")],
+                [(self._t("ui_ai_btn_change_policy"), f"r_ai_policy:{rule_id}")],
+                [(self._t("ui_ai_btn_test_sample"), f"r_ai_test:{rule_id}")],
+                [(self._t("ui_ai_btn_back_to_editor"), f"rd:{rule_id}")],
+            ]
+            await message.reply_text(f"{self._t('ui_ai_prompt_created_success', name=name)}\n\n" + "\n".join(lines), reply_markup=self._kbd(rows))
+        else:
+            await message.reply_text(self._t("ui_ai_prompt_created_success", name=name), reply_markup=self._main_menu())
+
     async def _step_weburl_input(
         self, message: Message, st: "UiState", text: str
     ) -> None:
@@ -7525,6 +7714,12 @@ class ProBotUI:
         if st.step.startswith("set_wm_"):
             rule_id = st.step.split("set_wm_", 1)[1]
             return await self._step_set_wm(message, st, text, rule_id)
+        if st.step.startswith("ai_prompt_name_"):
+            rule_id = st.step.split("ai_prompt_name_", 1)[1]
+            return await self._step_ai_prompt_name(message, st, text, rule_id)
+        if st.step.startswith("ai_prompt_sys_"):
+            rule_id = st.step.split("ai_prompt_sys_", 1)[1]
+            return await self._step_ai_prompt_sys(message, st, text, rule_id)
 
         handler = getattr(self, f"_step_{st.step}", None)
         if handler is None:
@@ -7615,7 +7810,7 @@ class ProBotUI:
             lines.append(f"• {k}: ✅{v.get('imported', 0)}"
                          + (f" ⏭{v.get('skipped', 0)}" if v.get("skipped") else "")
                          + (f" ❌{v.get('failed', 0)}" if v.get("failed") else ""))
-        lines.append(f"\n**جمع:** ✅ {total_in} · ⏭ {total_sk} · ❌ {total_fl}")
+        lines.append(f"\n**{self._t('ui_stat_total')}:** ✅ {total_in} · ⏭ {total_sk} · ❌ {total_fl}")
         try:
             self._log.info("bot", "backup",
                            f"migration snapshot imported by {uid}: {stats}")
@@ -8330,6 +8525,7 @@ class ProBotUI:
     # ---------------- rule replace & header/footer FSM ----------------
     async def _step_rule_replace_input(self, message: Message, st: UiState, text: str) -> None:
         uid = int(message.from_user.id if message.from_user else 0)
+        lang = self._lang_for(st)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
         rule = await self._owned_rule(rule_id, uid)
         if not rule:
@@ -8388,7 +8584,8 @@ class ProBotUI:
         st.buffer = {}
         await self._persist(message.from_user.id, st)
 
-        added_list = "\n".join([f"• `{k}` ➔ `{v or '(حذف)'}`" for k, v in new_replacements.items()])
+        deleted_label = self._t("ui_rep_word_deleted", lang=lang)
+        added_list = "\n".join([f"• `{k}` ➔ `{v or deleted_label}`" for k, v in new_replacements.items()])
         await message.reply_text(self._t("ui_replace_added", lang=lang, added_list=added_list))
         menu_text, menu_kbd = self._render_replace_menu(rule)
         await message.reply_text(menu_text, reply_markup=menu_kbd)

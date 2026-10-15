@@ -32,6 +32,7 @@ export interface ForwardRule {
   split_long_caption: boolean
   filter_rule_id?: string | null
   ai_config_id?: string | null
+  prompt_id?: string | null
   remove_links?: boolean
   delay_seconds?: number
   rate_limit_per_minute?: number
@@ -119,6 +120,7 @@ export interface SaveRuleRequest {
   split_long_caption?: boolean
   filter_rule_id?: string | null
   ai_config_id?: string | null
+  prompt_id?: string | null
   remove_links?: boolean
   delay_seconds?: number
   rate_limit_per_minute?: number

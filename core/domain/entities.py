@@ -848,6 +848,19 @@ class ForwardRule:
             self.metadata = {}
         self.metadata["news_digest"] = bool(val)
 
+    @property
+    def prompt_id(self) -> Optional[str]:
+        return str(self.metadata["prompt_id"]) if (isinstance(self.metadata, dict) and self.metadata.get("prompt_id")) else None
+
+    @prompt_id.setter
+    def prompt_id(self, val: Optional[str]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        if val:
+            self.metadata["prompt_id"] = str(val)
+        else:
+            self.metadata.pop("prompt_id", None)
+
     # --- Feature Groups & Add-on Extensions (Screen 4) ---
     @property
     def feature_group(self) -> str:

@@ -566,9 +566,17 @@ export function App() {
           return
         }
       }
+      const metaToSave: Record<string, any> = { ...ruleMeta }
+      if (ruleFormData.ai_config_id) {
+        metaToSave.ai_config_id = ruleFormData.ai_config_id
+      }
+      if (ruleMeta.prompt_id) {
+        metaToSave.prompt_id = ruleMeta.prompt_id
+      }
       const saved = await api.saveRule({
         ...ruleFormData,
-        custom_metadata_json: JSON.stringify(ruleMeta),
+        prompt_id: ruleMeta.prompt_id || ruleFormData.prompt_id,
+        custom_metadata_json: JSON.stringify(metaToSave),
       } as SaveRuleRequest)
       setRules((prev) => {
         const idx = prev.findIndex((r) => r.id === saved.id)
@@ -1430,9 +1438,13 @@ export function App() {
                         onClick={() => {
                           setRuleFormData({ ...rule })
                           try {
-                            setRuleMeta(JSON.parse((rule as any).custom_metadata_json || '{}'))
+                            const parsed = JSON.parse((rule as any).custom_metadata_json || '{}')
+                            if ((rule as any).prompt_id && !parsed.prompt_id) {
+                              parsed.prompt_id = (rule as any).prompt_id
+                            }
+                            setRuleMeta(parsed)
                           } catch {
-                            setRuleMeta({})
+                            setRuleMeta((rule as any).prompt_id ? { prompt_id: (rule as any).prompt_id } : {})
                           }
                           setIsRuleModalOpen(true)
                         }}
