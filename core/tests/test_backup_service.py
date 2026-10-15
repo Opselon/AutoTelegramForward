@@ -19,6 +19,8 @@ from core.application.backup_service import (
     decrypt_bundle,
     deserialize_bundle,
     encrypt_bundle,
+    encrypt_session_backup,
+    decrypt_session_backup,
     serialize_bundle,
 )
 from core.application.repositories import (
@@ -635,3 +637,48 @@ def test_full_bundle_roundtrip_through_serialization():
     stats = asyncio.run(dst.restore_snapshot(doc2))
     assert all(v["imported"] >= 1 for v in stats.values())
     assert len(dst_repos["rules"]._store) == 1
+
+
+def test_per_session_backup_is_encrypted_and_roundtrips():
+    from core.infrastructure.security.crypto import CryptoService
+
+    crypto = CryptoService("test-master-key-that-is-not-empty")
+    payload = {
+        "phone": "+15551234567",
+        "session_string": "SENSITIVE-TELEGRAM-SESSION-TOKEN",
+        "user_id": "123456",
+        "username": "private_user",
+        "first_name": "Private",
+    }
+
+    blob = encrypt_session_backup(payload, crypto)
+    assert blob.startswith("atf-session:v1:")
+    assert "+15551234567" not in blob
+    assert "SENSITIVE-TELEGRAM-SESSION-TOKEN" not in blob
+    assert "private_user" not in blob
+    assert decrypt_session_backup(blob, crypto) == payload
+
+
+def test_per_session_backup_rejects_wrong_installation_key():
+    from core.infrastructure.security.crypto import CryptoService
+
+    blob = encrypt_session_backup(
+        {"phone": "+15550001111", "session_string": "secret-session"},
+        CryptoService("source-master-key"),
+    )
+    with pytest.raises(Exception):
+        decrypt_session_backup(blob, CryptoService("different-master-key"))
+
+
+def test_per_session_backup_can_import_legacy_base64_export():
+    import base64
+
+    legacy = base64.urlsafe_b64encode(
+        b'{"phone":"+15550002222","session_string":"legacy-session"}'
+    ).decode("ascii")
+    from core.infrastructure.security.crypto import CryptoService
+
+    assert decrypt_session_backup(legacy, CryptoService("test-master-key")) == {
+        "phone": "+15550002222",
+        "session_string": "legacy-session",
+    }
