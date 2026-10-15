@@ -8569,10 +8569,8 @@ class ProBotUI:
         if (raw_input == str(rule.source_chat_id) or norm_input == str(rule.source_chat_name or "").lstrip("@") or
                 raw_input == str(rule.target_chat_id) or norm_input == str(rule.target_chat_name or "").lstrip("@")):
             await message.reply_text(
-                "⚠️ **خطای ضد لوپ (Loop Prevention):**\n"
-                "کانال واسط نمی‌تواند با کانال مبدأ یا مقصد یکسان باشد!\n"
-                "لطفاً یک کانال یا گروه واسط متفاوت وارد کنید یا دکمه انصراف را لمس نمایید.",
-                reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule.id}")]])
+                self._t("ui_loop_detected_title", lang=lang),
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rsm:{rule.id}")]]),
             )
             return
 
