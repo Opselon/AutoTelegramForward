@@ -1184,6 +1184,18 @@ COMMANDS = {
 
 def main() -> None:
     argv = sys.argv[1:]
+    # If invoked with modern atfcli command group or global flag, dispatch to atfcli.
+    try:
+        from atfcli.cli import COMMAND_MODULES, dispatch
+        if argv:
+            first = argv[0]
+            if first in COMMAND_MODULES or first in ("--json", "--url", "--token", "upgrade"):
+                if first == "upgrade":
+                    argv = ["system", "upgrade"] + argv[1:]
+                sys.exit(dispatch(argv))
+    except Exception:
+        pass
+
     if argv and argv[0] in ("-v", "--version"):
         cmd_version()
         return
