@@ -1,13 +1,20 @@
-"""i18n manager with runtime language switching and {placeholder} formatting."""
+"""i18n manager with locale-tag normalization and safe {placeholder} formatting."""
 
 import json
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 SUPPORTED_LANGUAGES = ["en", "fa", "ru", "zh", "pt", "uz", "id", "es", "fr", "it"]
 DEFAULT_LANGUAGE = "en"
-
 _FALLBACK = DEFAULT_LANGUAGE
+
+
+def normalize_language(lang: Optional[str]) -> Optional[str]:
+    """Normalize Telegram locale tags (for example, pt-BR or fa_IR)."""
+    if not isinstance(lang, str):
+        return None
+    base = lang.strip().replace("_", "-").split("-", 1)[0].lower()
+    return base if base in SUPPORTED_LANGUAGES else None
 
 
 class I18n:
@@ -15,21 +22,28 @@ class I18n:
         if translations_path is None:
             translations_path = str(Path(__file__).parent / "locales" / "translations.json")
         with open(translations_path, encoding="utf-8") as fh:
-            self._catalog: Dict[str, Dict[str, str]] = json.load(fh)
+            catalog = json.load(fh)
+        if not isinstance(catalog, dict) or not isinstance(catalog.get(_FALLBACK), dict):
+            raise ValueError("Translation catalog must contain an English dictionary.")
+        self._catalog: Dict[str, Dict[str, str]] = {
+            lang: table for lang, table in catalog.items() if isinstance(table, dict)
+        }
         self.current = DEFAULT_LANGUAGE
 
     def set_language(self, lang: str) -> bool:
-        lang = lang.lower()
-        if lang in SUPPORTED_LANGUAGES and lang in self._catalog:
-            self.current = lang
+        normalized = normalize_language(lang)
+        if normalized and normalized in self._catalog:
+            self.current = normalized
             return True
         return False
 
     def t(self, key: str, lang: str = None, **kwargs) -> str:
-        lang = (lang or self.current).lower()
-        table = self._catalog.get(lang) or self._catalog.get(_FALLBACK, {})
-        template = table.get(key) or self._catalog.get(_FALLBACK, {}).get(key, key)
+        requested = normalize_language(lang or self.current) or _FALLBACK
+        table = self._catalog.get(requested) or self._catalog.get(_FALLBACK, {})
+        english = self._catalog.get(_FALLBACK, {})
+        template = table.get(key) or english.get(key, key)
         try:
             return template.format(**kwargs) if kwargs else template
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, ValueError):
+            # Preserve a usable message if a caller has incomplete parameters.
             return template
