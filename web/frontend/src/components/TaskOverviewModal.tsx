@@ -18,6 +18,7 @@ import {
   Hash,
 } from 'lucide-react'
 import type { ForwardRule } from '../types'
+import { TaskControlPanel } from './TaskControlPanel'
 
 interface Props {
   rule: ForwardRule | null
@@ -30,6 +31,7 @@ interface Props {
 
 type TabType =
   | 'overview'
+  | 'control'
   | 'advanced'
   | 'all_addons'
   | 'replace'
@@ -590,6 +592,31 @@ export function TaskOverviewModal({
                 >
                   <SlidersHorizontal size={14} />
                   Advanced Settings
+                </button>
+
+                {/* Full per-task control: multi-source + every setting the
+                    server knows about, rendered from its schema. */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('control')}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#1f2937',
+                    color: '#f9fafb',
+                    border: '1px solid #374151',
+                    borderRadius: '12px',
+                    padding: '12px',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <SlidersHorizontal size={14} />
+                  Full Control & Sources
                 </button>
               </div>
 
@@ -2152,6 +2179,14 @@ export function TaskOverviewModal({
           >
             Cancel
           </button>
+          {currentTab === 'control' && (
+            <TaskControlPanel
+              rule={draft}
+              lang={lang}
+              onRulePatch={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
+            />
+          )}
+
           <button
             type="button"
             onClick={handleSaveAndClose}

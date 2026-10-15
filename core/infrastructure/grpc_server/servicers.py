@@ -32,6 +32,352 @@ def _session_info(s) -> pb.SessionInfo:
     )
 
 
+# --------------------------------------------------------------------------- #
+# v17: complete per-task control surface.
+#
+# The tables below are the single definition of which proto fields map to which
+# entity attribute, and how each one is converted. `_rule_pb` (read) and
+# `_apply_masked_update` (write) both walk them, so a field can never be
+# readable but silently unwritable, or cast one way on read and another on write.
+# --------------------------------------------------------------------------- #
+_V17_BOOLS = (
+    ("skip_history", "skip_history"),
+    ("ignore_edits", "ignore_edits"),
+    ("sync_edits", "sync_edits"),
+    ("sync_deletes", "sync_deletes"),
+    ("split_long_caption", "split_long_caption"),
+)
+_V17_INTS = (("since_ts", "since_ts"),)
+_V17_FLOATS = (
+    ("delay_seconds", "delay_seconds"),
+    ("album_aggregation_window_seconds", "album_aggregation_window_seconds"),
+)
+_V17_STRS = (
+    ("topic_id", "topic_id"),
+    ("ai_secondary_config_id", "ai_secondary_config_id"),
+    ("prompt_id", "prompt_id"),
+    ("link_policy", "link_policy"),
+    ("intermediate_target_chat_id", "intermediate_target_chat_id"),
+    ("intermediate_mode", "intermediate_mode"),
+)
+_V17_LISTS = (
+    ("source_chat_ids", "source_chat_ids"),
+    ("source_chat_names", "source_chat_names"),
+    ("trigger_events", "trigger_events"),
+    ("domain_allowlist", "domain_allowlist"),
+    ("domain_blocklist", "domain_blocklist"),
+    ("allowed_media_types", "allowed_media_types"),
+)
+# dict attributes carried over the wire as JSON strings
+_V17_JSONS = (
+    ("retry_policy_json", "retry_policy"),
+    ("proxy_json", "proxy"),
+)
+# Protocol-buffer repeated fields have no presence marker, so a non-empty list is
+# what "provided" means on the legacy path. `content_mode` is excluded from
+# _V17_STRS above because it needs enum coercion on both sides.
+_V17_READ_EXTRA = ("content_mode",)
+
+
+def _attr(r, name, default=None):
+    """getattr that also treats an unset/None attribute as absent."""
+    try:
+        v = getattr(r, name)
+    except Exception:
+        return default
+    return default if v is None else v
+
+
+def _enum_or_str(value, enum_cls):
+    """Coerce to an enum member when the name is known, else keep the string."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return value
+    key = value.strip().upper()
+    if not key:
+        return ""
+    return enum_cls.__members__.get(key, value.strip())
+
+
+def _v17_read_values(r) -> dict:
+    """Current v17 values for ``_rule_pb``."""
+    from ..persistence.coercion import enum_str
+
+    out = {}
+    for pb_name, attr in _V17_BOOLS:
+        out[pb_name] = bool(_attr(r, attr, False))
+    for pb_name, attr in _V17_INTS:
+        out[pb_name] = int(_attr(r, attr, 0) or 0)
+    for pb_name, attr in _V17_FLOATS:
+        out[pb_name] = float(_attr(r, attr, 0.0) or 0.0)
+    for pb_name, attr in _V17_STRS:
+        out[pb_name] = str(_attr(r, attr, "") or "")
+    for pb_name, attr in _V17_LISTS:
+        try:
+            out[pb_name] = [str(x) for x in (_attr(r, attr, []) or [])]
+        except Exception:
+            out[pb_name] = []
+    for pb_name, attr in _V17_JSONS:
+        raw = _attr(r, attr, None)
+        # An empty object/list reads as "" so "not configured" is one rule on the
+        # wire instead of "" here and "{}" there.
+        out[pb_name] = _json_dumps(raw) if raw else ""
+    out["content_mode"] = enum_str(_attr(r, "content_mode", ""), "")
+    return out
+
+
+def _json_dumps(obj) -> str:
+    import json as _j
+    try:
+        return _j.dumps(obj)
+    except Exception:
+        return ""
+
+
+def _json_loads(raw, default=None):
+    import json as _j
+    if raw is None:
+        return default
+    if isinstance(raw, (dict, list)):
+        return raw
+    text = str(raw).strip()
+    if not text:
+        return default
+    try:
+        return _j.loads(text)
+    except Exception:
+        return default
+
+
+# --- write side ------------------------------------------------------------ #
+# Every field UpdateRule can apply, keyed by the name a client puts in
+# update_mask. Values are (entity attribute, coercion).
+def _coerce_bool(r, pb_name):
+    return bool(getattr(r, pb_name))
+
+
+def _coerce_int(r, pb_name):
+    return int(getattr(r, pb_name) or 0)
+
+
+def _coerce_float(r, pb_name):
+    return float(getattr(r, pb_name) or 0.0)
+
+
+def _coerce_str(r, pb_name):
+    return str(getattr(r, pb_name) or "")
+
+
+def _coerce_list(r, pb_name):
+    return [str(x) for x in (getattr(r, pb_name) or [])]
+
+
+def _coerce_json(r, pb_name):
+    return _json_loads(getattr(r, pb_name), None)
+
+
+def _coerce_routing(r, pb_name):
+    from ...domain.value_objects import RoutingType as _RT
+    return _RT[routing_name(getattr(r, pb_name))]
+
+
+def _coerce_forward_mode(r, pb_name):
+    from ...domain.value_objects import ForwardMode as _FM
+    return _FM[mode_name(getattr(r, pb_name))]
+
+
+def _coerce_content_mode(r, pb_name):
+    from ...domain.value_objects import ContentMode as _CM
+    return _enum_or_str(getattr(r, pb_name), _CM)
+
+
+def _coerce_ai_fallback(r, pb_name):
+    from ...domain.entities import AIFallbackPolicy as _AFP
+    raw = str(getattr(r, pb_name) or "").strip().upper()
+    if not raw:
+        return None
+    return _AFP.__members__.get(raw, raw)
+
+
+# name -> (entity attribute, coercion). Names are the ForwardRule proto fields,
+# which is what a caller writes in update_mask.
+_MASKED_FIELDS = {
+    # routing / identity
+    "source_chat_id": ("source_chat_id", _coerce_str),
+    "target_chat_id": ("target_chat_id", _coerce_str),
+    "source_chat_name": ("source_chat_name", _coerce_str),
+    "target_chat_name": ("target_chat_name", _coerce_str),
+    "routing_type": ("routing_type", _coerce_routing),
+    "forward_mode": ("forward_mode", _coerce_forward_mode),
+    "name": ("name", _coerce_str),
+    "description": ("description", _coerce_str),
+    "message_category": ("message_category", _coerce_str),
+    "target_chat_ids": ("target_chat_ids", _coerce_list),
+    "owner_user_id": ("owner_user_id", _coerce_int),
+    # activation
+    "is_active": ("is_active", _coerce_bool),
+    "is_paused": ("is_paused", _coerce_bool),
+    "paused_until": ("paused_until", _coerce_int),
+    "priority": ("priority", _coerce_int),
+    "execution_order": ("execution_order", _coerce_int),
+    "multi_route": ("multi_route", _coerce_bool),
+    "version": ("version", _coerce_int),
+    # retry / rate limits
+    "max_retries": ("max_retries", _coerce_int),
+    "retry_backoff_base": ("retry_backoff_base", _coerce_float),
+    "rate_limit_per_minute": ("rate_limit_per_minute", _coerce_int),
+    "rate_limit_burst": ("rate_limit_burst", _coerce_int),
+    # media / delivery
+    "media_handling": ("media_handling", _coerce_str),
+    "dedupe_policy": ("dedupe_policy", _coerce_str),
+    "remove_links": ("remove_links", _coerce_bool),
+    "preserve_signature": ("preserve_signature", _coerce_bool),
+    "caption_max_length": ("caption_max_length", _coerce_int),
+    "split_long_caption": ("split_long_caption", _coerce_bool),
+    "album_aggregation_window_seconds": ("album_aggregation_window_seconds", _coerce_float),
+    "delay_seconds": ("delay_seconds", _coerce_float),
+    # templates / header & footer
+    "custom_caption_template": ("custom_caption_template", _coerce_str),
+    "custom_header": ("custom_header", _coerce_str),
+    "custom_footer": ("custom_footer", _coerce_str),
+    "header_enabled": ("header_enabled", _coerce_bool),
+    "template_text": ("template_text", _coerce_str),
+    "template_media": ("template_media", _coerce_str),
+    "template_album": ("template_album", _coerce_str),
+    # intermediate routing / fallback
+    "intermediate_channel_id": ("intermediate_channel_id", _coerce_str),
+    "intermediate_channel_name": ("intermediate_channel_name", _coerce_str),
+    "intermediate_target_chat_id": ("intermediate_target_chat_id", _coerce_str),
+    "intermediate_mode": ("intermediate_mode", _coerce_str),
+    "use_intermediate": ("use_intermediate", _coerce_bool),
+    "fallback_mode": ("fallback_mode", _coerce_forward_mode),
+    "fallback_enabled": ("fallback_enabled", _coerce_bool),
+    # detection / triggers
+    "detection_criteria_json": ("detection_criteria", _coerce_json),
+    "trigger_events": ("trigger_events", _coerce_list),
+    "skip_history": ("skip_history", _coerce_bool),
+    "since_ts": ("since_ts", _coerce_int),
+    "ignore_edits": ("ignore_edits", _coerce_bool),
+    "sync_edits": ("sync_edits", _coerce_bool),
+    "sync_deletes": ("sync_deletes", _coerce_bool),
+    "topic_id": ("topic_id", _coerce_str),
+    # content policy
+    "content_mode": ("content_mode", _coerce_content_mode),
+    "link_policy": ("link_policy", _coerce_str),
+    "domain_allowlist": ("domain_allowlist", _coerce_list),
+    "domain_blocklist": ("domain_blocklist", _coerce_list),
+    "allowed_media_types": ("allowed_media_types", _coerce_list),
+    "retry_policy_json": ("retry_policy", _coerce_json),
+    "proxy_json": ("proxy", _coerce_json),
+    # multi-source
+    "source_chat_ids": ("source_chat_ids", _coerce_list),
+    "source_chat_names": ("source_chat_names", _coerce_list),
+    # AI
+    "ai_config_id": ("ai_config_id", _coerce_str),
+    "ai_secondary_config_id": ("ai_secondary_config_id", _coerce_str),
+    "prompt_id": ("prompt_id", _coerce_str),
+    "ai_fallback_policy": ("ai_fallback_policy", _coerce_ai_fallback),
+    "ai_prompt_version": ("ai_prompt_version", _coerce_int),
+    "ai_timeout_seconds": ("ai_timeout_seconds", _coerce_float),
+    # escape hatch
+    "custom_metadata_json": ("metadata", _coerce_json),
+}
+
+
+def _apply_masked_update(existing, r, mask) -> list:
+    """Apply exactly the fields named in ``mask``.
+
+    This is the path that makes a true partial update possible: a name in the
+    mask is applied even when its value is zero/false/empty, which the legacy
+    present-only chain cannot express. Returns the field names actually applied
+    and raises ValueError for an unknown mask entry so a typo cannot silently
+    no-op a request the caller believed had taken effect.
+    """
+    applied = []
+    for name in mask:
+        entry = _MASKED_FIELDS.get(name)
+        if entry is None:
+            raise ValueError(f"unknown update_mask field: {name}")
+        attr, coerce = entry
+        try:
+            value = coerce(r, name)
+        except Exception as exc:
+            raise ValueError(f"invalid value for {name}: {exc}") from exc
+        if attr == "metadata":
+            if isinstance(value, dict):
+                if not isinstance(existing.metadata, dict):
+                    existing.metadata = {}
+                existing.metadata.update({str(k): v for k, v in value.items()})
+                applied.append(name)
+            continue
+        if attr == "ai_config_id":
+            existing.ai_config_id = value or None
+        else:
+            setattr(existing, attr, value)
+        applied.append(name)
+    return applied
+
+
+def _v17_create_apply(entity, r) -> None:
+    """Apply v17 fields whose proto value is present (the no-mask path).
+
+    Repeated fields have no presence marker in proto3, so an empty list means
+    "not provided" here; a caller that needs to clear a list sends update_mask.
+    """
+    for pb_name, attr in _V17_BOOLS:
+        if getattr(r, pb_name, False):
+            setattr(entity, attr, True)
+    for pb_name, attr in _V17_INTS:
+        if getattr(r, pb_name, 0):
+            setattr(entity, attr, int(getattr(r, pb_name)))
+    for pb_name, attr in _V17_FLOATS:
+        if getattr(r, pb_name, 0.0):
+            setattr(entity, attr, float(getattr(r, pb_name)))
+    for pb_name, attr in _V17_STRS:
+        if getattr(r, pb_name, ""):
+            setattr(entity, attr, str(getattr(r, pb_name)))
+    for pb_name, attr in _V17_LISTS:
+        values = list(getattr(r, pb_name, []) or [])
+        if values:
+            setattr(entity, attr, [str(v) for v in values])
+    for pb_name, attr in _V17_JSONS:
+        raw = str(getattr(r, pb_name, "") or "").strip()
+        if raw:
+            setattr(entity, attr, _json_loads(raw, None))
+    if getattr(r, "content_mode", ""):
+        try:
+            from ...domain.value_objects import ContentMode as _CM
+            entity.content_mode = _enum_or_str(r.content_mode, _CM)
+        except Exception:
+            pass
+
+
+def _rule_settings():
+    """Lazy import of the settings registry (kept out of the module header so
+    importing the servicer never drags in domain defaults)."""
+    from ...domain import rule_settings as _RS
+    return _RS
+
+
+def _pb_routing(value) -> int:
+    """Domain RoutingType -> proto enum value.
+
+    The domain enum names its zero member `UNKNOWN` while the proto calls it
+    `ROUTING_UNKNOWN`; without the translation a read of an unset routing type
+    raised ValueError out of _rule_pb.
+    """
+    name = getattr(value, "name", None)
+    if not name:
+        return pb.RoutingType.CHANNEL_TO_CHANNEL
+    if name == "UNKNOWN":
+        name = "ROUTING_UNKNOWN"
+    try:
+        return pb.RoutingType.Value(name)
+    except ValueError:
+        return pb.RoutingType.CHANNEL_TO_CHANNEL
+
+
 def _rule_pb(r) -> pb.ForwardRule:
     import json as _json
     from ...domain.value_objects import ForwardMode as _FM
@@ -65,7 +411,7 @@ def _rule_pb(r) -> pb.ForwardRule:
         id=r.id, session_id=r.session_id,
         source_chat_id=r.source_chat_id, source_chat_name=r.source_chat_name,
         target_chat_id=r.target_chat_id, target_chat_name=r.target_chat_name,
-        routing_type=pb.RoutingType.Value(r.routing_type.name),
+        routing_type=_pb_routing(r.routing_type),
         forward_mode=_mode_val(getattr(r, "forward_mode", None)),
         is_active=r.is_active, filter_rule_id=r.filter_rule_id or "",
         ai_config_id=r.ai_config_id or "", remove_links=r.remove_links,
@@ -107,6 +453,9 @@ def _rule_pb(r) -> pb.ForwardRule:
         ai_fallback_policy=getattr(getattr(r, "ai_fallback_policy", None), "value", str(getattr(r, "ai_fallback_policy", "DROP"))),
         ai_prompt_version=int(getattr(r, "ai_prompt_version", 0) or 0),
         ai_timeout_seconds=float(getattr(r, "ai_timeout_seconds", 15.0) or 15.0),
+        # v17: per-task control surface + full settings snapshot
+        **_v17_read_values(r),
+        settings_json=_json.dumps(_rule_settings().read_settings(r)),
     )
 
 
@@ -364,6 +713,10 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             paused_until=int(r.paused_until or 0),
             owner_user_id=int(r.owner_user_id or 0),
         )
+        # v17: apply the new per-task fields (multi-source, trigger events,
+        # content policy, per-task delay, ...). Setting them through the public
+        # attributes keeps defaults and normalisation in the entity.
+        _v17_create_apply(entity, r)
         if r.custom_metadata_json:
             try:
                 merged = _json.loads(r.custom_metadata_json)
@@ -395,6 +748,24 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         if not existing:
             return pb.ForwardRule()
         r = request.rule
+        mask = [m.strip() for m in (request.update_mask or []) if m.strip()]
+        if mask:
+            # Exact partial update: only the named fields are touched, and a
+            # named field is applied even when its value is zero/false/empty.
+            try:
+                _apply_masked_update(existing, r, mask)
+            except ValueError as exc:
+                await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+                return pb.ForwardRule()
+            existing.mark_updated()
+            try:
+                updated = await self._rules.update(existing)
+            except ValueError as exc:
+                await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+                return pb.ForwardRule()
+            return _rule_pb(updated)
+        # ---- legacy present-only path (no mask): unchanged behaviour ----
+        _v17_create_apply(existing, r)
         if r.source_chat_id:
             existing.source_chat_id = r.source_chat_id
         if r.target_chat_id:
@@ -513,6 +884,86 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
             return pb.ForwardRule()
         return _rule_pb(updated)
+
+    # ------------------------------------------------------------- settings
+    # Schema-driven per-task settings. One registry entry makes a setting
+    # controllable here, so the API reaches every knob the Telegram bot edits
+    # without a new proto field per setting.
+    async def GetRuleSettings(self, request, context):
+        import json as _json
+        from ...domain import rule_settings as RS
+        owner = int(request.owner_user_id or 0)
+        if not owner:
+            # Fail-closed: an unscoped read must never return another tenant's data.
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("owner_user_id is required")
+            return pb.RuleSettingsResponse(success=False, error_code="unauthorized")
+        entity = await self._rules.get_owned(request.rule_id, owner)
+        if entity is None:
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details("rule not found")
+            return pb.RuleSettingsResponse(success=False, error_code="not_found")
+        return pb.RuleSettingsResponse(
+            success=True,
+            settings_json=_json.dumps(RS.read_settings(entity)),
+            schema_json=_json.dumps(RS.schema()),
+        )
+
+    async def UpdateRuleSettings(self, request, context):
+        import json as _json
+        from ...domain import rule_settings as RS
+        owner = int(request.owner_user_id or 0)
+        if not owner:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("owner_user_id is required")
+            return pb.RuleSettingsResponse(success=False, error_code="unauthorized")
+        entity = await self._rules.get_owned(request.rule_id, owner)
+        if entity is None:
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details("rule not found")
+            return pb.RuleSettingsResponse(success=False, error_code="not_found")
+        try:
+            values = _json.loads(request.settings_json or "{}")
+        except Exception:
+            return pb.RuleSettingsResponse(
+                success=False, error_code="invalid_json",
+                message="settings_json is not valid JSON",
+            )
+        if not isinstance(values, dict):
+            return pb.RuleSettingsResponse(
+                success=False, error_code="invalid_type",
+                message="settings_json must be a JSON object",
+            )
+        try:
+            changed = RS.apply_settings(entity, values, replace_all=bool(request.replace_all))
+        except RS.SettingError as exc:
+            # Nothing was written: apply_settings validates before it mutates.
+            return pb.RuleSettingsResponse(
+                success=False, error_code=exc.code, message=str(exc),
+                settings_json=_json.dumps(RS.read_settings(entity)),
+            )
+        if changed:
+            entity.mark_updated()
+            try:
+                await self._rules.update(entity)
+            except ValueError as exc:
+                return pb.RuleSettingsResponse(
+                    success=False, error_code="persist_failed", message=str(exc),
+                    settings_json=_json.dumps(RS.read_settings(entity)),
+                )
+        return pb.RuleSettingsResponse(
+            success=True,
+            message=f"{len(changed)} setting(s) updated",
+            settings_json=_json.dumps(RS.read_settings(entity)),
+            schema_json=_json.dumps(RS.schema()),
+        )
+
+    async def GetRuleSettingsSchema(self, request, context):
+        import json as _json
+        from ...domain import rule_settings as RS
+        return pb.RuleSettingsResponse(
+            success=True, schema_json=_json.dumps(RS.schema()),
+        )
 
     async def DeleteRule(self, request, context):
         owner = int(request.owner_user_id or 0)
@@ -919,17 +1370,30 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
 
 
 def routing_name(value) -> str:
+    """Proto routing enum -> *domain* RoutingType member name.
+
+    The proto spells its zero value `ROUTING_UNKNOWN` while the domain enum calls
+    it `UNKNOWN`, so an unset routing_type (the proto default) used to raise
+    KeyError out of CreateRule instead of creating the rule.
+    """
     try:
-        return pb.RoutingType.Name(value)
+        name = pb.RoutingType.Name(value)
     except ValueError:
         return "CHANNEL_TO_CHANNEL"
+    return "UNKNOWN" if name == "ROUTING_UNKNOWN" else name
 
 
 def mode_name(value) -> str:
+    """Proto forward-mode enum -> *domain* ForwardMode member name.
+
+    Same zero-value mismatch as routing_name: `FORWARD_MODE_UNKNOWN` has no
+    domain member, so it maps to the default COPY_MESSAGE.
+    """
     try:
-        return pb.ForwardMode.Name(value)
+        name = pb.ForwardMode.Name(value)
     except ValueError:
         return "COPY_MESSAGE"
+    return "COPY_MESSAGE" if name == "FORWARD_MODE_UNKNOWN" else name
 
 
 class FilterControlServicer(pb_grpc.FilterControlServiceServicer):

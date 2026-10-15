@@ -34,6 +34,7 @@ import type {
   BackupImportRequest,
   BackupImportResponse,
   DiagnosticsResponse,
+  RuleSettingsResponse,
 } from './types'
 
 const API_BASE = '/api'
@@ -105,6 +106,32 @@ export const api = {
         body: JSON.stringify(req),
       },
     ),
+  // Per-task settings: the full control surface the Telegram bot edits.
+  // The schema endpoint needs no rule, so an editor can be built before the
+  // user owns anything.
+  getRuleSettingsSchema: () =>
+    fetchJson<RuleSettingsResponse>(`${API_BASE}/rules/settings/schema`),
+  getRuleSettings: (id: string) =>
+    fetchJson<RuleSettingsResponse>(`${API_BASE}/rules/${encodeURIComponent(id)}/settings`),
+  updateRuleSettings: (
+    id: string,
+    settings: Record<string, any>,
+    replaceAll = false,
+  ) =>
+    fetchJson<RuleSettingsResponse>(
+      `${API_BASE}/rules/${encodeURIComponent(id)}/settings`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ settings, replace_all: replaceAll }),
+      },
+    ),
+  // Partial update: only the named fields are applied, and a named field is
+  // applied even when its value is zero/false — the only way to clear a value.
+  patchRule: (id: string, patch: Record<string, any>, updateMask: string[]) =>
+    fetchJson<ForwardRule>(`${API_BASE}/rules/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ ...patch, update_mask: updateMask }),
+    }),
   deleteRule: (id: string) =>
     fetchJson<{ success: boolean; id: string }>(`${API_BASE}/rules/${id}`, {
       method: 'DELETE',

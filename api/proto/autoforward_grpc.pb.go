@@ -387,14 +387,17 @@ var SessionControlService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ForwardRuleControlService_ListRules_FullMethodName  = "/autoforward.ForwardRuleControlService/ListRules"
-	ForwardRuleControlService_GetRule_FullMethodName    = "/autoforward.ForwardRuleControlService/GetRule"
-	ForwardRuleControlService_CreateRule_FullMethodName = "/autoforward.ForwardRuleControlService/CreateRule"
-	ForwardRuleControlService_UpdateRule_FullMethodName = "/autoforward.ForwardRuleControlService/UpdateRule"
-	ForwardRuleControlService_DeleteRule_FullMethodName = "/autoforward.ForwardRuleControlService/DeleteRule"
-	ForwardRuleControlService_TestRule_FullMethodName   = "/autoforward.ForwardRuleControlService/TestRule"
-	ForwardRuleControlService_PauseRule_FullMethodName  = "/autoforward.ForwardRuleControlService/PauseRule"
-	ForwardRuleControlService_ResumeRule_FullMethodName = "/autoforward.ForwardRuleControlService/ResumeRule"
+	ForwardRuleControlService_ListRules_FullMethodName             = "/autoforward.ForwardRuleControlService/ListRules"
+	ForwardRuleControlService_GetRule_FullMethodName               = "/autoforward.ForwardRuleControlService/GetRule"
+	ForwardRuleControlService_CreateRule_FullMethodName            = "/autoforward.ForwardRuleControlService/CreateRule"
+	ForwardRuleControlService_UpdateRule_FullMethodName            = "/autoforward.ForwardRuleControlService/UpdateRule"
+	ForwardRuleControlService_DeleteRule_FullMethodName            = "/autoforward.ForwardRuleControlService/DeleteRule"
+	ForwardRuleControlService_TestRule_FullMethodName              = "/autoforward.ForwardRuleControlService/TestRule"
+	ForwardRuleControlService_PauseRule_FullMethodName             = "/autoforward.ForwardRuleControlService/PauseRule"
+	ForwardRuleControlService_ResumeRule_FullMethodName            = "/autoforward.ForwardRuleControlService/ResumeRule"
+	ForwardRuleControlService_GetRuleSettings_FullMethodName       = "/autoforward.ForwardRuleControlService/GetRuleSettings"
+	ForwardRuleControlService_UpdateRuleSettings_FullMethodName    = "/autoforward.ForwardRuleControlService/UpdateRuleSettings"
+	ForwardRuleControlService_GetRuleSettingsSchema_FullMethodName = "/autoforward.ForwardRuleControlService/GetRuleSettingsSchema"
 )
 
 // ForwardRuleControlServiceClient is the client API for ForwardRuleControlService service.
@@ -409,6 +412,11 @@ type ForwardRuleControlServiceClient interface {
 	TestRule(ctx context.Context, in *TestRuleRequest, opts ...grpc.CallOption) (*TestRuleResponse, error)
 	PauseRule(ctx context.Context, in *PauseRuleRequest, opts ...grpc.CallOption) (*RuleActionResponse, error)
 	ResumeRule(ctx context.Context, in *PauseRuleRequest, opts ...grpc.CallOption) (*RuleActionResponse, error)
+	// Schema-driven per-task settings: full read/write control of every setting
+	// the server supports, validated against the registry (not trusted raw).
+	GetRuleSettings(ctx context.Context, in *RuleSettingsRequest, opts ...grpc.CallOption) (*RuleSettingsResponse, error)
+	UpdateRuleSettings(ctx context.Context, in *UpdateRuleSettingsRequest, opts ...grpc.CallOption) (*RuleSettingsResponse, error)
+	GetRuleSettingsSchema(ctx context.Context, in *RuleSettingsSchemaRequest, opts ...grpc.CallOption) (*RuleSettingsResponse, error)
 }
 
 type forwardRuleControlServiceClient struct {
@@ -499,6 +507,36 @@ func (c *forwardRuleControlServiceClient) ResumeRule(ctx context.Context, in *Pa
 	return out, nil
 }
 
+func (c *forwardRuleControlServiceClient) GetRuleSettings(ctx context.Context, in *RuleSettingsRequest, opts ...grpc.CallOption) (*RuleSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RuleSettingsResponse)
+	err := c.cc.Invoke(ctx, ForwardRuleControlService_GetRuleSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardRuleControlServiceClient) UpdateRuleSettings(ctx context.Context, in *UpdateRuleSettingsRequest, opts ...grpc.CallOption) (*RuleSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RuleSettingsResponse)
+	err := c.cc.Invoke(ctx, ForwardRuleControlService_UpdateRuleSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardRuleControlServiceClient) GetRuleSettingsSchema(ctx context.Context, in *RuleSettingsSchemaRequest, opts ...grpc.CallOption) (*RuleSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RuleSettingsResponse)
+	err := c.cc.Invoke(ctx, ForwardRuleControlService_GetRuleSettingsSchema_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ForwardRuleControlServiceServer is the server API for ForwardRuleControlService service.
 // All implementations must embed UnimplementedForwardRuleControlServiceServer
 // for forward compatibility.
@@ -511,6 +549,11 @@ type ForwardRuleControlServiceServer interface {
 	TestRule(context.Context, *TestRuleRequest) (*TestRuleResponse, error)
 	PauseRule(context.Context, *PauseRuleRequest) (*RuleActionResponse, error)
 	ResumeRule(context.Context, *PauseRuleRequest) (*RuleActionResponse, error)
+	// Schema-driven per-task settings: full read/write control of every setting
+	// the server supports, validated against the registry (not trusted raw).
+	GetRuleSettings(context.Context, *RuleSettingsRequest) (*RuleSettingsResponse, error)
+	UpdateRuleSettings(context.Context, *UpdateRuleSettingsRequest) (*RuleSettingsResponse, error)
+	GetRuleSettingsSchema(context.Context, *RuleSettingsSchemaRequest) (*RuleSettingsResponse, error)
 	mustEmbedUnimplementedForwardRuleControlServiceServer()
 }
 
@@ -544,6 +587,15 @@ func (UnimplementedForwardRuleControlServiceServer) PauseRule(context.Context, *
 }
 func (UnimplementedForwardRuleControlServiceServer) ResumeRule(context.Context, *PauseRuleRequest) (*RuleActionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResumeRule not implemented")
+}
+func (UnimplementedForwardRuleControlServiceServer) GetRuleSettings(context.Context, *RuleSettingsRequest) (*RuleSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuleSettings not implemented")
+}
+func (UnimplementedForwardRuleControlServiceServer) UpdateRuleSettings(context.Context, *UpdateRuleSettingsRequest) (*RuleSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateRuleSettings not implemented")
+}
+func (UnimplementedForwardRuleControlServiceServer) GetRuleSettingsSchema(context.Context, *RuleSettingsSchemaRequest) (*RuleSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuleSettingsSchema not implemented")
 }
 func (UnimplementedForwardRuleControlServiceServer) mustEmbedUnimplementedForwardRuleControlServiceServer() {
 }
@@ -711,6 +763,60 @@ func _ForwardRuleControlService_ResumeRule_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ForwardRuleControlService_GetRuleSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RuleSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardRuleControlServiceServer).GetRuleSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardRuleControlService_GetRuleSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardRuleControlServiceServer).GetRuleSettings(ctx, req.(*RuleSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardRuleControlService_UpdateRuleSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateRuleSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardRuleControlServiceServer).UpdateRuleSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardRuleControlService_UpdateRuleSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardRuleControlServiceServer).UpdateRuleSettings(ctx, req.(*UpdateRuleSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardRuleControlService_GetRuleSettingsSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RuleSettingsSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardRuleControlServiceServer).GetRuleSettingsSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardRuleControlService_GetRuleSettingsSchema_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardRuleControlServiceServer).GetRuleSettingsSchema(ctx, req.(*RuleSettingsSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ForwardRuleControlService_ServiceDesc is the grpc.ServiceDesc for ForwardRuleControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -749,6 +855,18 @@ var ForwardRuleControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResumeRule",
 			Handler:    _ForwardRuleControlService_ResumeRule_Handler,
+		},
+		{
+			MethodName: "GetRuleSettings",
+			Handler:    _ForwardRuleControlService_GetRuleSettings_Handler,
+		},
+		{
+			MethodName: "UpdateRuleSettings",
+			Handler:    _ForwardRuleControlService_UpdateRuleSettings_Handler,
+		},
+		{
+			MethodName: "GetRuleSettingsSchema",
+			Handler:    _ForwardRuleControlService_GetRuleSettingsSchema_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
