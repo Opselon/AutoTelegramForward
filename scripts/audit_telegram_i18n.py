@@ -92,9 +92,11 @@ def scan_source(path: str, source: str, changed_lines: set[int] | None = None) -
             # first. Inspect the documented positional slot for each API.
             visible_position = {
                 "send_message": 1,
-                "edit_message_text": 2,
-                "edit_message_caption": 2,
             }.get(name, 0)
+            # Client-level edit APIs use (chat_id, message_id, text/caption),
+            # while Message/CallbackQuery edit methods take visible text first.
+            if name in {"edit_message_text", "edit_message_caption"} and len(node.args) >= 3:
+                visible_position = 2
             if name in {"InlineKeyboardButton", "KeyboardButton"}:
                 visible_position = 0
             if visible_position < len(node.args):
