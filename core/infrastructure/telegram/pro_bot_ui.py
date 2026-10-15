@@ -6009,15 +6009,12 @@ class ProBotUI:
             st.step = "smart_set_keywords"
             st.buffer = {"rule_id": rule_id}
             await self._persist(cq.from_user.id, st)
-            prompt = (
-                "🔎 **تنظیم کلیدواژه‌های متنی (VIP Text Keywords):**\n\n"
-                "کلمات یا عبارات مورد نظر را با کاما (virgool) جدا کرده و ارسال کنید.\n"
-                "نمونه:\n"
-                "`VIP, SIGNAL, GOLD, تحلیل اختصاصی`\n\n"
-                "برای حذف تمام کلیدواژه‌ها عبارت `حذف` را ارسال کنید.\n" +
-                self._t("ui_cancel_hint")
+            prompt = self._t("ui_smart_btn_keywords") + "\n\n" + self._t("ui_cancel_hint")
+            await self._safe_edit(
+                cq,
+                prompt,
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rsm:{rule_id}")]]),
             )
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmrx:(.+)$"))
@@ -6031,16 +6028,12 @@ class ProBotUI:
             st.step = "smart_set_regex"
             st.buffer = {"rule_id": rule_id}
             await self._persist(cq.from_user.id, st)
-            prompt = (
-                "🔣 **تنظیم الگوی رجکس (Regex Pattern):**\n\n"
-                "الگوی Regex مورد نظر برای تطبیق متن پیام‌های VIP را ارسال کنید.\n"
-                "نمونه‌ها:\n"
-                "• `(?i)TP\\d+\\s+HIT`\n"
-                "• `(?i)(gold|xauusd)\\s+(buy|sell)`\n\n"
-                "برای حذف Regex عبارت `حذف` را ارسال کنید.\n" +
-                self._t("ui_cancel_hint")
+            prompt = self._t("ui_smart_btn_regex") + "\n\n" + self._t("ui_cancel_hint")
+            await self._safe_edit(
+                cq,
+                prompt,
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rsm:{rule_id}")]]),
             )
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmc:(.+)$"))
@@ -6185,17 +6178,12 @@ class ProBotUI:
             st.step = "smart_set_intermediate"
             st.buffer = {"rule_id": rule_id}
             await self._persist(cq.from_user.id, st)
-            prompt = (
-                "🔄 **تنظیم کانال واسط VIP (Intermediate Channel):**\n\n"
-                "لطفاً شناسه عددی، یوزرنیم، یا لینک دعوت کانال واسط را ارسال کنید:\n"
-                "نمونه‌ها:\n"
-                "• `-1001234567890`\n"
-                "• `@my_intermediate_channel`\n"
-                "• `https://t.me/+uVg1efOFMEc2NTNk`\n\n"
-                "⚠️ *نکته ضد لوپ: کانال واسط نباید با کانال مبدأ یا مقصد یکسان باشد.*\n\n" +
-                self._t("ui_cancel_hint")
+            prompt = self._t("ui_smart_btn_mid") + "\n\n" + self._t("ui_cancel_hint")
+            await self._safe_edit(
+                cq,
+                prompt,
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rsm:{rule_id}")]]),
             )
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmh:(.+)$"))
@@ -6209,14 +6197,12 @@ class ProBotUI:
             st.step = "smart_set_header"
             st.buffer = {"rule_id": rule_id}
             await self._persist(cq.from_user.id, st)
-            prompt = (
-                "🏷 **تنظیم هدر اختصاصی کپی (Custom Header):**\n\n"
-                "متنی که می‌خواهید به عنوان هدر ویژه در ابتدای پیام‌های کپی‌شده قرار گیرد را ارسال کنید.\n"
-                "نمونه:\n"
-                "💎 `VIP Alert | تحلیل طلایی اختصاصی`\n\n" +
-                self._t("ui_cancel_hint")
+            prompt = self._t("ui_smart_btn_header") + "\n\n" + self._t("ui_cancel_hint")
+            await self._safe_edit(
+                cq,
+                prompt,
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rsm:{rule_id}")]]),
             )
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmtst:(.+)$"))
@@ -6230,16 +6216,12 @@ class ProBotUI:
             st.step = "smart_test_rule"
             st.buffer = {"rule_id": rule_id}
             await self._persist(cq.from_user.id, st)
-            prompt = (
-                "🧪 **شبیه‌ساز و تست زنده قانون (Dry Run / Test):**\n\n"
-                "یک متن یا پیام تستی ارسال کنید تا موتور هوشمند بدون ایجاد تغییر یا ارسال واقعی، ارزیابی کند:\n"
-                "1. تشخیص نوع پیام (VIP یا کاربر عادی)\n"
-                "2. تطبیق با قانون و اولویت مسیر\n"
-                "3. مسیر انتقال (مستقیم یا کانال واسط)\n"
-                "4. متن پیش‌نمایش به همراه هدرها و فیلترها\n\n" +
-                self._t("ui_cancel_hint")
+            prompt = self._t("ui_smart_btn_dryrun") + "\n\n" + self._t("ui_cancel_hint")
+            await self._safe_edit(
+                cq,
+                prompt,
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rsm:{rule_id}")]]),
             )
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         # ---------------- filter add flow ----------------
