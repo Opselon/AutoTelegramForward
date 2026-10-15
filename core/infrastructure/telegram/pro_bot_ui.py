@@ -7411,10 +7411,7 @@ class ProBotUI:
             try:
                 await self.bot.send_message(
                     admin_uid,
-                    f"📢 **ارسال پیام همگانی به پایان رسید:**\n\n"
-                    f"✅ ارسال موفق: `{sent}`\n"
-                    f"❌ ناموفق: `{failed}`\n"
-                    f"👥 کل دریافت‌کنندگان: `{len(recipients)}`",
+                    self._t("ui_admin_broadcast_done", lang="en", sent=sent, failed=failed),
                 )
             except Exception:
                 pass
@@ -7793,7 +7790,7 @@ class ProBotUI:
             except Exception:
                 pass
             await message.reply_text(
-                f"❌ خطای غیرمنتظره در ارسال کد:\n`{type(exc).__name__}: {exc}`",
+                self._t("ui_login_code_error", lang=lang, error=f"{type(exc).__name__}: {exc}"),
                 reply_markup=self._cancel_kbd(),
             )
             return
@@ -7968,8 +7965,7 @@ class ProBotUI:
                 st.buffer["code_digits"] = ""
             await self._persist(uid, st)
             await message.reply_text(
-                "❌ کد وارد شده نادرست است.\n\n"
-                "لطفاً مجدداً با الگوی چسبیده (مانند: `mycode73737`) یا با **کیپد عددی زیر** وارد کنید:",
+                self._t("ui_login_code_invalid", lang=lang),
                 reply_markup=self._code_keypad(st),
             )
             return
@@ -8197,8 +8193,7 @@ class ProBotUI:
         if str(raw).strip() == str(target_id).strip():
             cancel_cb = f"re:{rule.id}" if in_draft else f"rd:{rule.id}"
             await message.reply_text(
-                "❌ مبدأ نمی‌تواند با مقصد یکسان باشد (جلوگیری از ایجاد حلقه)!\n"
-                "لطفاً شناسه یا یوزرنیم دیگری ارسال کنید:",
+                self._t("ui_loop_prevention_src", lang=lang),
                 reply_markup=self._kbd([[(self._t("ui_cancel_back", lang=lang), cancel_cb)]]),
             )
             return
@@ -8289,8 +8284,7 @@ class ProBotUI:
         if str(raw).strip() == str(source_id).strip():
             cancel_cb = f"re:{rule.id}" if in_draft else f"rd:{rule.id}"
             await message.reply_text(
-                "❌ مقصد نمی‌تواند با مبدأ یکسان باشد (جلوگیری از ایجاد حلقه)!\n"
-                "لطفاً شناسه یا یوزرنیم دیگری ارسال کنید:",
+                self._t("ui_loop_prevention_tgt", lang=lang),
                 reply_markup=self._kbd([[(self._t("ui_cancel_back", lang=lang), cancel_cb)]]),
             )
             return
@@ -8345,11 +8339,7 @@ class ProBotUI:
             st.buffer["draft"] = draft
 
         text_out, kbd = self._render_draft_editor(rule, draft)
-        await message.reply_text(
-            "💡 شما در حال ویرایش پیش‌نویس قانون هستید.\n"
-            "لطفاً از دکمه‌های شیشه‌ای زیر برای تغییر تنظیمات، ذخیره یا لغو استفاده کنید:",
-            reply_markup=kbd,
-        )
+        await message.reply_text(self._t("ui_draft_hint", lang=lang), reply_markup=kbd)
 
     # ---------------- rule replace & header/footer FSM ----------------
     async def _step_rule_replace_input(self, message: Message, st: UiState, text: str) -> None:
@@ -8396,12 +8386,8 @@ class ProBotUI:
 
         if not new_replacements:
             await message.reply_text(
-                "⚠️ فرمت ورودی نامعتبر است.\n\n"
-                "لطفاً به صورت زیر ارسال کنید:\n"
-                "`کلمه قدیمی -> کلمه جدید`\n\n"
-                "جهت حذف کلمه:\n"
-                "`کلمه حذفی ->`",
-                reply_markup=self._kbd([[("❌ انصراف", f"rtx:{rule_id}")]]),
+                self._t("ui_replace_format_invalid", lang=lang),
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rtx:{rule_id}")]]),
             )
             return
 
@@ -8417,9 +8403,7 @@ class ProBotUI:
         await self._persist(message.from_user.id, st)
 
         added_list = "\n".join([f"• `{k}` ➔ `{v or '(حذف)'}`" for k, v in new_replacements.items()])
-        await message.reply_text(
-            f"✅ **موارد زیر به جایگزینی متن اضافه شدند:**\n\n{added_list}",
-        )
+        await message.reply_text(self._t("ui_replace_added", lang=lang, added_list=added_list))
         menu_text, menu_kbd = self._render_replace_menu(rule)
         await message.reply_text(menu_text, reply_markup=menu_kbd)
 
@@ -8628,11 +8612,7 @@ class ProBotUI:
         st.buffer = {}
         await self._persist(message.from_user.id, st)
 
-        await message.reply_text(
-            f"✅ **کانال واسط VIP تنظیم و فعال شد:**\n"
-            f"📡 نام/شناسه: `{resolved_name}`\n"
-            f"🆔 آیدی مسیر: `{raw_input}`"
-        )
+        await message.reply_text(self._t("ui_smart_mid_channel", lang=lang, mid=resolved_name))
         m_text, m_kbd = self._render_smart_menu(rule)
         await message.reply_text(m_text, reply_markup=m_kbd)
 
@@ -8747,7 +8727,7 @@ class ProBotUI:
             try:
                 re.compile(raw)
             except re.error as exc:
-                await message.reply_text(f"❌ الگوی Regex نامعتبر است:\n`{exc}`\n\nلطفاً یک الگوی معتبر بفرستید یا /cancel را ارسال کنید.")
+                await message.reply_text(self._t("ui_smart_regex_invalid", lang=lang, error=str(exc)))
                 return
             rule.detection_criteria["regex_pattern"] = raw
             rule.detection_criteria["text_regex"] = raw
