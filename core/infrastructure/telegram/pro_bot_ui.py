@@ -538,46 +538,9 @@ class ProBotUI:
 
         lang = self._resolve_lang(uid, user)
 
-        if lang == "fa":
-            text = (
-                f"سلام **{display_name}**! 👋\n\n"
-                "ربات **Auto Forward** به شما کمک می‌کند پیام‌ها و آپدیت‌ها را بین کانال‌ها، گروه‌ها، ربات‌ها و چت‌های خصوصی به صورت خودکار و بدون نیاز به کپی دستی منتقل کنید.\n"
-                "قوانین فوروارد، فیلترها و مسیرهای اختصاصی خود را در یک محیط امن ایجاد و مدیریت کنید.\n\n"
-                "⚡️ برای بهترین تجربه، از وب اپلیکیشن یا نسخه موبایل ما استفاده کنید!\n\n"
-                "برای اتصال حساب کاربری تلگرام، دستور /connect را بفرستید یا دکمه زیر را لمس نمایید:"
-            )
-            connect_btn = "🚀 اتصال حساب (Connect Now)"
-            support_btn = "🆘 پشتیبانی"
-        elif lang == "ru":
-            text = (
-                f"Привет, **{display_name}**! 👋\n\n"
-                "**Auto Forward** помогает автоматически пересылать сообщения между каналами, группами, ботами и личными чатами без ручного копирования.\n"
-                "Настраивайте правила пересылки, фильтры и сценарии доставки в одном безопасном месте.\n\n"
-                "⚡️ Для лучшего опыта используйте мобильное или веб-приложение!\n\n"
-                "Используйте команду /connect для привязки аккаунта Telegram."
-            )
-            connect_btn = "🚀 Подключить (Connect Now)"
-            support_btn = "🆘 Поддержка"
-        elif lang == "zh":
-            text = (
-                f"你好，**{display_name}**！👋\n\n"
-                "**Auto Forward** 帮助您在频道、群组、机器人和私聊之间自动转发消息，无需手动复制。\n"
-                "在统一安全的界面中创建转发规则、过滤器与自动化投递流程。\n\n"
-                "⚡️ 为获得最佳体验，请使用我们的移动端或 Web 应用！\n\n"
-                "请发送 /connect 绑定您的 Telegram 账号。"
-            )
-            connect_btn = "🚀 立即连接 (Connect Now)"
-            support_btn = "🆘 技术支持"
-        else:
-            text = (
-                f"Hello **{display_name}**! 👋\n\n"
-                "Auto Forward helps you route updates between channels, groups, bots, and private chats without manual copying.\n"
-                "Build reliable forwarding flows, filters, and delivery rules in one place.\n\n"
-                "⚡️ For the best experience, use our mobile or web app!\n\n"
-                "Use /connect to link your Telegram account."
-            )
-            connect_btn = "🚀 Connect Now"
-            support_btn = "🆘 Support"
+        text = self._t("ui_onboard_greeting", lang=lang, display_name=display_name) + self._t("ui_onboard_body", lang=lang)
+        connect_btn = self._t("ui_onboard_connect_btn", lang=lang)
+        support_btn = self._t("ui_onboard_support_btn", lang=lang)
 
         rows = [
             [(connect_btn, CB["login"])],
@@ -588,50 +551,16 @@ class ProBotUI:
     async def _connect_prompt_text(self, uid: int) -> str:
         """Detailed connect guide text."""
         lang = await self._get_user_lang(uid)
-        if lang == "fa":
-            return (
-                "📱 **اتصال حساب تلگرام**\n\n"
-                "این دستور را در یک پیام ارسال کنید:\n"
-                "`/connect 989123456789`\n\n"
-                "شماره مثال بالا را با شماره تلفن خودتان (همراه با پیش‌شماره کشور) جایگزین کنید.\n"
-                "• بین `/connect` و شماره دقیقاً یک فاصله بگذارید.\n"
-                "• فعلاً توکن، رمز عبور یا کد تایید نفرستید.\n"
-                "• همچنین می‌توانید ابتدا دستور `/connect` را بفرستید و سپس در پیام بعدی فقط شماره خود را ارسال کنید.\n\n"
-                "مثال برای ایران: `/connect 989123456789`"
-            )
-        elif lang == "ru":
-            return (
-                "📱 **Подключите аккаунт Telegram**\n\n"
-                "Отправьте одной командой:\n"
-                "`/connect 79991234567`\n\n"
-                "Замените цифры примера на ваш собственный номер телефона с кодом страны.\n"
-                "• Оставьте один пробел после `/connect`.\n"
-                "• Пока не вводите токен, пароль или код подтверждения.\n"
-                "• Вы также можете отправить `/connect` сначала, а затем отправить только номер в следующем сообщении.\n\n"
-                "Пример для России: `/connect 79991234567`"
-            )
-        elif lang == "zh":
-            return (
-                "📱 **绑定您的 Telegram 账号**\n\n"
-                "请发送完整指令：\n"
-                "`/connect 8613512778569`\n\n"
-                "将示例数字替换为您自己的手机号（包含国家代码）。\n"
-                "• `/connect` 后保留一个空格。\n"
-                "• 暂不要输入 Token、密码或验证码。\n"
-                "• 您也可以先发送 `/connect`，然后在下一条消息中单独发送手机号。\n\n"
-                "中国示例：`/connect 8613512778569`"
-            )
-        else:
-            return (
-                "📱 **Connect your Telegram account**\n\n"
-                "Send this as one message:\n"
-                "`/connect 14155552671`\n\n"
-                "Replace the example digits with your own phone number, including country code.\n"
-                "• Keep one space after `/connect`.\n"
-                "• Do not add a token, password, or verification code yet.\n"
-                "• You can also send `/connect` first, then send only your phone number in the next message.\n\n"
-                "Example for China: `/connect 8613512778569`"
-            )
+        return (
+            self._t("ui_connect_title", lang=lang) + "\n\n"
+            + self._t("ui_connect_send_as_one", lang=lang) + "\n"
+            + self._t("ui_connect_example_cmd", lang=lang) + "\n\n"
+            + self._t("ui_connect_replace_note", lang=lang) + "\n"
+            + self._t("ui_connect_bullet_space", lang=lang) + "\n"
+            + self._t("ui_connect_bullet_no_token", lang=lang) + "\n"
+            + self._t("ui_connect_bullet_two_step", lang=lang) + "\n\n"
+            + self._t("ui_connect_country_example", lang=lang)
+        )
 
     # ------------------------------------------------------------------ #
     # Menus

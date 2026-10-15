@@ -523,7 +523,19 @@
     "ui_rule_addon_webhook": "🔒 Outbound Webhooks",
     "ui_rule_addon_all": "⭐ View all (18) ➔",
     "ui_rule_grp_crypto_mode": "₿ Crypto Mode: {state}",
-    "ui_rule_sender_personal": "Personal Telegram Account"
+    "ui_rule_sender_personal": "Personal Telegram Account",
+    "ui_onboard_greeting": "Hello **{display_name}**! 👋\n\n",
+    "ui_onboard_body": "Auto Forward helps you route updates between channels, groups, bots, and private chats without manual copying.\nBuild reliable forwarding flows, filters, and delivery rules in one place.\n\n⚡️ For the best experience, use our mobile or web app!\n\nUse /connect to link your Telegram account.",
+    "ui_onboard_connect_btn": "🚀 Connect Now",
+    "ui_onboard_support_btn": "🆘 Support",
+    "ui_connect_title": "📱 **Connect your Telegram account**",
+    "ui_connect_send_as_one": "Send this as one message:",
+    "ui_connect_example_cmd": "`/connect 14155552671`",
+    "ui_connect_replace_note": "Replace the example digits with your own phone number, including country code.",
+    "ui_connect_bullet_space": "• Keep one space after `/connect`.",
+    "ui_connect_bullet_no_token": "• Do not add a token, password, or verification code yet.",
+    "ui_connect_bullet_two_step": "• You can also send `/connect` first, then send only your phone number in the next message.",
+    "ui_connect_country_example": "Example for China: `/connect 8613512778569`"
   },
   "fa": {
     "ai_add_hint": "پیکربندی را بفرستید:\n`provider model api_key`\nمثلاً `openai gpt-4o-mini sk-...`\nتأمین‌کنندگان: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -1049,7 +1061,19 @@
     "ui_rule_addon_webhook": "🔒 وب‌هوک‌های خروجی",
     "ui_rule_addon_all": "⭐ مشاهده همه (۱۸) ➔",
     "ui_rule_grp_crypto_mode": "₿ حالت رمزارز: {state}",
-    "ui_rule_sender_personal": "حساب شخصی تلگرام"
+    "ui_rule_sender_personal": "حساب شخصی تلگرام",
+    "ui_onboard_greeting": "سلام **{display_name}**! 👋\n\n",
+    "ui_onboard_body": "ربات **Auto Forward** به شما کمک می‌کند پیام‌ها و آپدیت‌ها را بین کانال‌ها، گروه‌ها، ربات‌ها و چت‌های خصوصی به صورت خودکار و بدون نیاز به کپی دستی منتقل کنید.\nقوانین فوروارد، فیلترها و مسیرهای اختصاصی خود را در یک محیط امن ایجاد و مدیریت کنید.\n\n⚡️ برای بهترین تجربه، از وب اپلیکیشن یا نسخه موبایل ما استفاده کنید!\n\nبرای اتصال حساب کاربری تلگرام، دستور /connect را بفرستید یا دکمه زیر را لمس نمایید:",
+    "ui_onboard_connect_btn": "🚀 اتصال حساب (Connect Now)",
+    "ui_onboard_support_btn": "🆘 پشتیبانی",
+    "ui_connect_title": "📱 **اتصال حساب تلگرام**",
+    "ui_connect_send_as_one": "این دستور را در یک پیام ارسال کنید:",
+    "ui_connect_example_cmd": "`/connect 989123456789`",
+    "ui_connect_replace_note": "شماره مثال بالا را با شماره تلفن خودتان (همراه با پیش‌شماره کشور) جایگزین کنید.",
+    "ui_connect_bullet_space": "• بین `/connect` و شماره دقیقاً یک فاصله بگذارید.",
+    "ui_connect_bullet_no_token": "• فعلاً توکن، رمز عبور یا کد تایید نفرستید.",
+    "ui_connect_bullet_two_step": "• همچنین می‌توانید ابتدا دستور `/connect` را بفرستید و سپس در پیام بعدی فقط شماره خود را ارسال کنید.",
+    "ui_connect_country_example": "مثال برای ایران: `/connect 989123456789`"
   },
   "ru": {
     "ai_add_hint": "Отправьте конфигурацию:\n`провайдер модель api_key`\nнапример `openai gpt-4o-mini sk-...`\nПровайдеры: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -1575,7 +1599,19 @@
     "ui_rule_addon_webhook": "🔒 Исходящие вебхуки",
     "ui_rule_addon_all": "⭐ Показать все (18) ➔",
     "ui_rule_grp_crypto_mode": "₿ Крипто-режим: {state}",
-    "ui_rule_sender_personal": "Личный аккаунт Telegram"
+    "ui_rule_sender_personal": "Личный аккаунт Telegram",
+    "ui_onboard_greeting": "Привет, **{display_name}**! 👋\n\n",
+    "ui_onboard_body": "**Auto Forward** помогает автоматически пересылать сообщения между каналами, группами, ботами и личными чатами без ручного копирования.\nНастраивайте правила пересылки, фильтры и сценарии доставки в одном безопасном месте.\n\n⚡️ Для лучшего опыта используйте мобильное или веб-приложение!\n\nИспользуйте команду /connect для привязки аккаунта Telegram.",
+    "ui_onboard_connect_btn": "🚀 Подключить (Connect Now)",
+    "ui_onboard_support_btn": "🆘 Поддержка",
+    "ui_connect_title": "📱 **Подключите аккаунт Telegram**",
+    "ui_connect_send_as_one": "Отправьте одной командой:",
+    "ui_connect_example_cmd": "`/connect 79991234567`",
+    "ui_connect_replace_note": "Замените цифры примера на ваш собственный номер телефона с кодом страны.",
+    "ui_connect_bullet_space": "• Оставьте один пробел после `/connect`.",
+    "ui_connect_bullet_no_token": "• Пока не вводите токен, пароль или код подтверждения.",
+    "ui_connect_bullet_two_step": "• Вы также можете отправить `/connect` сначала, а затем отправить только номер в следующем сообщении.",
+    "ui_connect_country_example": "Пример для России: `/connect 79991234567`"
   },
   "zh": {
     "ai_add_hint": "发送 AI 配置：\n`provider model api_key`\n例如 `openai gpt-4o-mini sk-...`\n供应商：openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -2101,7 +2137,19 @@
     "ui_rule_addon_webhook": "🔒 出站 Webhook",
     "ui_rule_addon_all": "⭐ 查看全部 (18) ➔",
     "ui_rule_grp_crypto_mode": "₿ 加密模式：{state}",
-    "ui_rule_sender_personal": "个人 Telegram 账户"
+    "ui_rule_sender_personal": "个人 Telegram 账户",
+    "ui_onboard_greeting": "你好，**{display_name}**！👋\n\n",
+    "ui_onboard_body": "**Auto Forward** 帮助您在频道、群组、机器人和私聊之间自动转发消息，无需手动复制。\n在统一安全的界面中创建转发规则、过滤器与自动化投递流程。\n\n⚡️ 为获得最佳体验，请使用我们的移动端或 Web 应用！\n\n请发送 /connect 绑定您的 Telegram 账号。",
+    "ui_onboard_connect_btn": "🚀 立即连接 (Connect Now)",
+    "ui_onboard_support_btn": "🆘 技术支持",
+    "ui_connect_title": "📱 **绑定您的 Telegram 账号**",
+    "ui_connect_send_as_one": "请发送完整指令：",
+    "ui_connect_example_cmd": "`/connect 8613512778569`",
+    "ui_connect_replace_note": "将示例数字替换为您自己的手机号（包含国家代码）。",
+    "ui_connect_bullet_space": "• `/connect` 后保留一个空格。",
+    "ui_connect_bullet_no_token": "• 暂不要输入 Token、密码或验证码。",
+    "ui_connect_bullet_two_step": "• 您也可以先发送 `/connect`，然后在下一条消息中单独发送手机号。",
+    "ui_connect_country_example": "中国示例：`/connect 8613512778569`"
   },
   "pt": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -2627,7 +2675,19 @@
     "ui_rule_addon_webhook": "🔒 Webhooks de Saída",
     "ui_rule_addon_all": "⭐ Ver todos (18) ➔",
     "ui_rule_grp_crypto_mode": "₿ Modo Cripto: {state}",
-    "ui_rule_sender_personal": "Conta Pessoal do Telegram"
+    "ui_rule_sender_personal": "Conta Pessoal do Telegram",
+    "ui_onboard_greeting": "Olá, **{display_name}**! 👋\n\n",
+    "ui_onboard_body": "O **Auto Forward** ajuda a encaminhar mensagens entre canais, grupos, bots e chats privados automaticamente, sem cópia manual.\nCrie regras de encaminhamento, filtros e fluxos de entrega num só lugar seguro.\n\n⚡️ Para a melhor experiência, use a nossa aplicação móvel ou web!\n\nUse /connect para vincular a sua conta Telegram.",
+    "ui_onboard_connect_btn": "🚀 Conectar Agora",
+    "ui_onboard_support_btn": "🆘 Apoio",
+    "ui_connect_title": "📱 **Vincule a sua conta Telegram**",
+    "ui_connect_send_as_one": "Envie tudo numa só mensagem:",
+    "ui_connect_example_cmd": "`/connect 14155552671`",
+    "ui_connect_replace_note": "Substitua os dígitos de exemplo pelo seu próprio número de telefone, incluindo o código do país.",
+    "ui_connect_bullet_space": "• Deixe um espaço após `/connect`.",
+    "ui_connect_bullet_no_token": "• Não adicione ainda token, palavra-passe ou código de verificação.",
+    "ui_connect_bullet_two_step": "• Também pode enviar `/connect` primeiro e depois enviar apenas o número na mensagem seguinte.",
+    "ui_connect_country_example": "Exemplo para o Brasil: `/connect 5511999998888`"
   },
   "uz": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -3153,7 +3213,19 @@
     "ui_rule_addon_webhook": "🔒 Chiquvchi webhooklar",
     "ui_rule_addon_all": "⭐ Barchasini ko'rish (18) ➔",
     "ui_rule_grp_crypto_mode": "₿ Kripto rejimi: {state}",
-    "ui_rule_sender_personal": "Shaxsiy Telegram hisobi"
+    "ui_rule_sender_personal": "Shaxsiy Telegram hisobi",
+    "ui_onboard_greeting": "Salom, **{display_name}**! 👋\n\n",
+    "ui_onboard_body": "**Auto Forward** xabarlarni kanallar, guruhlar, botlar va shaxsiy chatlar orasida qo'lda ko'chirmasdan avtomatik yo'naltirishga yordam beradi.\nYo'naltirish qoidalarini, filtrlarni va yetkazib berish ssenariylarini bitta xavfsiz joyda boshqaring.\n\n⚡️ Eng yaxshi tajriba uchun mobil yoki veb ilovamizdan foydalaning!\n\nTelegram hisobingizni bog'lash uchun /connect buyrug'ini yuboring.",
+    "ui_onboard_connect_btn": "🚀 Hisobni ulash",
+    "ui_onboard_support_btn": "🆘 Yordam",
+    "ui_connect_title": "📱 **Telegram hisobingizni ulang**",
+    "ui_connect_send_as_one": "Buni bitta xabar sifatida yuboring:",
+    "ui_connect_example_cmd": "`/connect 998901234567`",
+    "ui_connect_replace_note": "Namunadagi raqamlarni o'z telefon raqamingizga almashtiring, mamlakat kodi bilan birga.",
+    "ui_connect_bullet_space": "• `/connect` dan keyin bitta bo'sh joy qoldiring.",
+    "ui_connect_bullet_no_token": "• Hozircha token, parol yoki tasdiqlash kodini yubormang.",
+    "ui_connect_bullet_two_step": "• Avval `/connect` yuborishingiz, so'ng keyingi xabarda faqat raqamni yuborishingiz ham mumkin.",
+    "ui_connect_country_example": "O'zbekiston uchun misol: `/connect 998901234567`"
   },
   "id": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -3679,7 +3751,19 @@
     "ui_rule_addon_webhook": "🔒 Webhook Keluar",
     "ui_rule_addon_all": "⭐ Lihat semua (18) ➔",
     "ui_rule_grp_crypto_mode": "₿ Mode Kripto: {state}",
-    "ui_rule_sender_personal": "Akun Telegram Pribadi"
+    "ui_rule_sender_personal": "Akun Telegram Pribadi",
+    "ui_onboard_greeting": "Halo **{display_name}**! 👋\n\n",
+    "ui_onboard_body": "**Auto Forward** membantu Anda meneruskan pesan antar saluran, grup, bot, dan chat pribadi secara otomatis tanpa menyalin manual.\nBuat aturan penerusan, filter, dan alur pengiriman di satu tempat yang aman.\n\n⚡️ Untuk pengalaman terbaik, gunakan aplikasi mobile atau web kami!\n\nGunakan /connect untuk menautkan akun Telegram Anda.",
+    "ui_onboard_connect_btn": "🚀 Hubungkan Sekarang",
+    "ui_onboard_support_btn": "🆘 Dukungan",
+    "ui_connect_title": "📱 **Hubungkan akun Telegram Anda**",
+    "ui_connect_send_as_one": "Kirim sebagai satu pesan:",
+    "ui_connect_example_cmd": "`/connect 628123456789`",
+    "ui_connect_replace_note": "Ganti digit contoh dengan nomor telepon Anda sendiri, termasuk kode negara.",
+    "ui_connect_bullet_space": "• Beri satu spasi setelah `/connect`.",
+    "ui_connect_bullet_no_token": "• Jangan tambahkan token, kata sandi, atau kode verifikasi dulu.",
+    "ui_connect_bullet_two_step": "• Anda juga bisa mengirim `/connect` dulu, lalu mengirim hanya nomor di pesan berikutnya.",
+    "ui_connect_country_example": "Contoh untuk Indonesia: `/connect 628123456789`"
   },
   "es": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -4205,7 +4289,19 @@
     "ui_rule_addon_webhook": "🔒 Webhooks Salientes",
     "ui_rule_addon_all": "⭐ Ver todos (18) ➔",
     "ui_rule_grp_crypto_mode": "₿ Modo Cripto: {state}",
-    "ui_rule_sender_personal": "Cuenta Personal de Telegram"
+    "ui_rule_sender_personal": "Cuenta Personal de Telegram",
+    "ui_onboard_greeting": "¡Hola, **{display_name}**! 👋\n\n",
+    "ui_onboard_body": "**Auto Forward** le ayuda a reenviar mensajes entre canales, grupos, bots y chats privados automáticamente, sin copia manual.\nCree reglas de reenvío, filtros y flujos de entrega en un solo lugar seguro.\n\n⚡️ ¡Para una mejor experiencia, use nuestra aplicación móvil o web!\n\nUse /connect para vincular su cuenta de Telegram.",
+    "ui_onboard_connect_btn": "🚀 Conectar Ahora",
+    "ui_onboard_support_btn": "🆘 Soporte",
+    "ui_connect_title": "📱 **Vincule su cuenta de Telegram**",
+    "ui_connect_send_as_one": "Envíe esto en un solo mensaje:",
+    "ui_connect_example_cmd": "`/connect 14155552671`",
+    "ui_connect_replace_note": "Sustituya los dígitos de ejemplo por su propio número de teléfono, incluido el código de país.",
+    "ui_connect_bullet_space": "• Deje un espacio después de `/connect`.",
+    "ui_connect_bullet_no_token": "• No añada todavía un token, contraseña ni código de verificación.",
+    "ui_connect_bullet_two_step": "• También puede enviar `/connect` primero y luego enviar solo el número en el siguiente mensaje.",
+    "ui_connect_country_example": "Ejemplo para México: `/connect 5215555555555`"
   },
   "fr": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -4731,7 +4827,19 @@
     "ui_rule_addon_webhook": "🔒 Webhooks Sortants",
     "ui_rule_addon_all": "⭐ Voir tout (18) ➔",
     "ui_rule_grp_crypto_mode": "₿ Mode Crypto : {state}",
-    "ui_rule_sender_personal": "Compte Telegram Personnel"
+    "ui_rule_sender_personal": "Compte Telegram Personnel",
+    "ui_onboard_greeting": "Bonjour **{display_name}** ! 👋\n\n",
+    "ui_onboard_body": "**Auto Forward** vous aide à transférer automatiquement les messages entre canaux, groupes, bots et chats privés, sans copie manuelle.\nCréez des règles de transfert, des filtres et des flux de livraison en un seul endroit sécurisé.\n\n⚡️ Pour une meilleure expérience, utilisez notre application mobile ou web !\n\nUtilisez /connect pour lier votre compte Telegram.",
+    "ui_onboard_connect_btn": "🚀 Se connecter",
+    "ui_onboard_support_btn": "🆘 Assistance",
+    "ui_connect_title": "📱 **Connectez votre compte Telegram**",
+    "ui_connect_send_as_one": "Envoyez ceci en un seul message :",
+    "ui_connect_example_cmd": "`/connect 14155552671`",
+    "ui_connect_replace_note": "Remplacez les chiffres de l'exemple par votre propre numéro de téléphone, code pays inclus.",
+    "ui_connect_bullet_space": "• Laissez un espace après `/connect`.",
+    "ui_connect_bullet_no_token": "• N'ajoutez pas encore de token, de mot de passe ni de code de vérification.",
+    "ui_connect_bullet_two_step": "• Vous pouvez aussi envoyer `/connect` d'abord, puis envoyer uniquement le numéro dans le message suivant.",
+    "ui_connect_country_example": "Exemple pour la France : `/connect 33612345678`"
   },
   "it": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -5257,6 +5365,18 @@
     "ui_rule_addon_webhook": "🔒 Webhook in Uscita",
     "ui_rule_addon_all": "⭐ Vedi tutto (18) ➔",
     "ui_rule_grp_crypto_mode": "₿ Modalità Cripto: {state}",
-    "ui_rule_sender_personal": "Account Telegram Personale"
+    "ui_rule_sender_personal": "Account Telegram Personale",
+    "ui_onboard_greeting": "Ciao **{display_name}**! 👋\n\n",
+    "ui_onboard_body": "**Auto Forward** ti aiuta a inoltrare automaticamente i messaggi tra canali, gruppi, bot e chat private, senza copia manuale.\nCrea regole di inoltro, filtri e flussi di consegna in un unico luogo sicuro.\n\n⚡️ Per la migliore esperienza, usa la nostra app mobile o web!\n\nUsa /connect per collegare il tuo account Telegram.",
+    "ui_onboard_connect_btn": "🚀 Connetti Ora",
+    "ui_onboard_support_btn": "🆘 Supporto",
+    "ui_connect_title": "📱 **Collega il tuo account Telegram**",
+    "ui_connect_send_as_one": "Invia questo in un unico messaggio:",
+    "ui_connect_example_cmd": "`/connect 14155552671`",
+    "ui_connect_replace_note": "Sostituisci le cifre di esempio con il tuo numero di telefono, incluso il prefisso internazionale.",
+    "ui_connect_bullet_space": "• Lascia uno spazio dopo `/connect`.",
+    "ui_connect_bullet_no_token": "• Non aggiungere ancora token, password né codice di verifica.",
+    "ui_connect_bullet_two_step": "• Puoi anche inviare prima `/connect` e poi inviare solo il numero nel messaggio successivo.",
+    "ui_connect_country_example": "Esempio per l'Italia: `/connect 393123456789`"
   }
 }
