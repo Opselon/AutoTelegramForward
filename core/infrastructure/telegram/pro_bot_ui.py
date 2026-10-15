@@ -14,6 +14,7 @@ the debug panel can show it.
 import asyncio
 import base64
 import copy
+from contextvars import ContextVar
 import json
 import logging
 import os
@@ -21,6 +22,7 @@ import re
 import tempfile
 import time
 import uuid
+from functools import wraps
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -56,6 +58,9 @@ from .i18n import I18n, SUPPORTED_LANGUAGES
 from .login_flow import LoginFlowManager
 
 logger = logging.getLogger("atf.botui")
+
+# Request-scoped locale; safe for concurrent Telegram updates.
+_BOT_RENDER_LANGUAGE: ContextVar[Optional[str]] = ContextVar("atf_bot_render_language", default=None)
 
 LANG_FLAG = {
     "en": "English 🇬🇧",
@@ -310,6 +315,24 @@ class ProBotUI:
     # ------------------------------------------------------------------ #
     # helpers
     # ------------------------------------------------------------------ #
+    def _localized_handler(self, handler):
+        """Bind the resolved user language for the lifetime of one async update."""
+        @wraps(handler)
+        async def wrapped(client, event, *args, **kwargs):
+            user = getattr(event, "from_user", None)
+            raw_user_id = getattr(user, "id", None) if user is not None else None
+            try:
+                user_id = int(raw_user_id) if raw_user_id is not None else 0
+            except (TypeError, ValueError):
+                user_id = 0
+            language = self._resolve_lang(user_id, user) if user_id else "en"
+            token = _BOT_RENDER_LANGUAGE.set(language)
+            try:
+                return await handler(client, event, *args, **kwargs)
+            finally:
+                _BOT_RENDER_LANGUAGE.reset(token)
+
+        return wrapped
     def _is_admin(self, user_id: int) -> bool:
         if getattr(self, "_admin_service", None) is not None:
             return self._admin_service.is_admin(user_id)
@@ -456,11 +479,8 @@ class ProBotUI:
             logger.debug("ui state persist failed", exc_info=True)
 
     def _t(self, key: str, lang: Optional[str] = None, **kw) -> str:
-        # Never read the process-wide i18n.current singleton here: one user's
-        # language choice must not leak into another user's render. An
-        # explicit lang always wins; without one, English is the only safe
-        # default because self._lang would be shared across all users.
-        cur_lang = lang or "en"
+        # Explicit locale wins; otherwise use the current update's isolated locale.
+        cur_lang = lang or _BOT_RENDER_LANGUAGE.get() or "en"
         return self.i18n.t(key, lang=cur_lang, **kw)
 
     @staticmethod
@@ -826,85 +846,27 @@ class ProBotUI:
         return InlineKeyboardMarkup(rows)
 
     def _upgrade_text(self, uid: int = 0) -> str:
-        if self._resolve_lang(uid) == "fa":
-            return (
-                "💎 **ارتقای سرویس و خرید اشتراک ویژه (VIP Upgrade)**\n\n"
-                "با ارتقا به نسخه ویژه، به پیشرفته‌ترین امکانات سیستم بدون هیچ محدودیتی دسترسی خواهید داشت:\n\n"
-                "✨ **امکانات نسخه Pro / VIP:**\n"
-                "• ⚡ فوروارد آنی پیام‌ها با حداکثر سرعت و بدون تاخیر\n"
-                "• 🔓 بای‌پس و کپی کامل کانال‌های محافظت‌شده و قفل‌دار (Restricted Bypass)\n"
-                "• 🤖 بازنویسی هوشمند متون، ترجمه و تغییر لحن با AI (ChatGPT / DeepSeek)\n"
-                "• 🧹 فیلترهای پیشرفته بلک‌لیست، وایت‌لیست، رگکس و حذف لینک‌ها\n"
-                "• 🌐 دسترسی کامل به پنل تحت وب حرفه‌ای و مدیریت چند کاربره\n"
-                "• 📈 بدون محدودیت در تعداد تسک‌ها، کانال‌ها و پیام‌ها\n"
-                "• 🛡 پشتیبانی ۲۴ ساعته اختصاصی\n\n"
-                "💳 **پلن‌های فعال:**\n"
-                "• پلن ۱ ماهه حرفه‌ای (Pro)\n"
-                "• پلن ۳ ماهه تجاری (Business)\n"
-                "• پلن دائمی نامحدود (Lifetime VIP)\n\n"
-                "جهت خرید، استعلام تعرفه‌ها (ریالی یا تتر/رمزارز) و فعال‌سازی فوری با پشتیبانی در ارتباط باشید:\n"
-                "📩 ارتباط مستقیم: @Capxi"
-            )
-        return (
-            "💎 **Service Upgrade & VIP Plans**\n\n"
-            "Upgrade your subscription to unlock all professional automation features with zero restrictions:\n\n"
-            "✨ **VIP Features:**\n"
-            "• ⚡ Real-time multi-channel message forwarding with ultra-low latency\n"
-            "• 🔓 Complete bypass and copy from protected/restricted channels\n"
-            "• 🤖 Smart AI rewrites, translation, and tone matching (ChatGPT / DeepSeek)\n"
-            "• 🧹 Advanced keyword blacklists, whitelists, regex & link cleaning\n"
-            "• 🌐 Full access to the Web Control Dashboard\n"
-            "• 📈 Unlimited active forward rules, channels & volume\n"
-            "• 🛡 24/7 dedicated priority support\n\n"
-            "💳 **Available Plans:**\n"
-            "• 1-Month Pro Plan\n"
-            "• 3-Month Business Plan\n"
-            "• Lifetime VIP Unlimited\n\n"
-            "To purchase via Crypto (USDT/TON) or local payment and receive instant activation, contact support:\n"
-            "📩 Direct Contact: @Capxi"
-        )
+        """Render upgrade information in the account's selected language."""
+        return self._t("ui_upgrade_body", lang=self._resolve_lang(uid))
 
     def _client_settings_menu(self, uid: int = 0) -> InlineKeyboardMarkup:
-        is_fa = self._resolve_lang(uid) == "fa"
-        is_adm = self._is_admin(uid) if uid else False
+        lang = self._resolve_lang(uid)
+        is_admin = self._is_admin(uid) if uid else False
         rows = [
+            [InlineKeyboardButton(self._t("ui_settings_creds", lang=lang), callback_data=CB["client_creds"])],
             [
-                InlineKeyboardButton(
-                    "📱 کلیدهای اختصاصی تلگرام (API ID & Hash)" if is_fa else "📱 My Telegram API Credentials",
-                    callback_data=CB["client_creds"],
-                )
+                InlineKeyboardButton(self._t("ui_settings_lang", lang=lang), callback_data=CB["lang"]),
+                InlineKeyboardButton(self._t("ui_settings_plan", lang=lang), callback_data=CB["upgrade"]),
             ],
-            [
-                InlineKeyboardButton(
-                    "🌐 تغییر زبان (Language)" if is_fa else "🌐 Language",
-                    callback_data=CB["lang"],
-                ),
-                InlineKeyboardButton(
-                    "💎 اشتراک و سهمیه (Plan & Quota)" if is_fa else "💎 Plan & Quota",
-                    callback_data=CB["upgrade"],
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "🔑 ورود مستقیم به پنل وب (Web Token)" if is_fa else "🔑 Web Access Token",
-                    callback_data=CB["webpass"],
-                )
-            ],
+            [InlineKeyboardButton(self._t("ui_settings_webtoken", lang=lang), callback_data=CB["webpass"])],
         ]
-        if is_adm:
-            rows.append([
-                InlineKeyboardButton(
-                    "👑 ورود به پنل مدیریت کل (Admin Panel)" if is_fa else "👑 Administrator Control Plane",
-                    callback_data=CB["admin"],
-                )
-            ])
-        rows.append([
-                InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["main"]),
-        ])
+        if is_admin:
+            rows.append([InlineKeyboardButton(self._t("ui_settings_admin", lang=lang), callback_data=CB["admin"])])
+        rows.append([InlineKeyboardButton(self._t("ui_back_main_menu", lang=lang), callback_data=CB["main"])])
         return InlineKeyboardMarkup(rows)
 
     async def _render_admin_panel(self, uid: int) -> tuple[str, InlineKeyboardMarkup]:
-        is_fa = self._resolve_lang(uid) == "fa"
+        lang = self._resolve_lang(uid)
         total_users = 0
         active_rules = 0
         dlq_errors = await self._dlq_count()
@@ -915,92 +877,57 @@ class ProBotUI:
             try:
                 total_users = await self._users.count_all()
             except Exception:
-                pass
+                logger.exception("Could not count registered users for admin panel")
         if self._rules:
             try:
-                all_r = await self._rules.list_all()
-                active_rules = sum(1 for r in all_r if getattr(r, "enabled", True))
+                all_rules = await self._rules.list_all()
+                active_rules = sum(1 for rule in all_rules if getattr(rule, "enabled", True))
             except Exception:
-                pass
-
+                logger.exception("Could not count active rules for admin panel")
         if self._db:
             try:
-                r1 = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_enabled'")
-                if r1 and r1["value"] == "1":
-                    fs_enabled = True
-                r2 = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_channel'")
-                if r2 and r2["value"]:
-                    fs_channel = str(r2["value"])
+                enabled_row = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_enabled'")
+                fs_enabled = bool(enabled_row and enabled_row["value"] == "1")
+                channel_row = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_channel'")
+                if channel_row and channel_row["value"]:
+                    fs_channel = str(channel_row["value"])
             except Exception:
-                pass
+                logger.exception("Could not read forced-subscription settings")
 
-        fs_status_str = f"🟢 فعال ({fs_channel})" if fs_enabled and fs_channel else "⚪ غیرفعال"
-
-        if is_fa:
-            lines = [
-                "👑 **پنل مدیریت کل سامانه (Administrator Control Plane)**\n",
-                "📊 **وضعیت لحظه‌ای و مانیتورینگ سیستم:**",
-                f"• 👥 کل کاربران / مستاجران ثبت‌شده: `{total_users}`",
-                f"• ⚡ قوانین فعال فوروارد: `{active_rules}`",
-                f"• ❌ خطاهای صف / DLQ: `{dlq_errors}`",
-                f"• 🔒 قفل عضویت اجباری: {fs_status_str}",
-                "• 🖥 وضعیت سرویس‌ها: Core 🟢 | Logger 🟢 | Web 🟢\n",
-                "👇 جهت مدیریت بخش‌های مختلف سامانه، گزینه مورد نظر را انتخاب کنید:",
-            ]
-            rows = [
-                [
-                    InlineKeyboardButton("📊 آمار و مانیتورینگ جامع", callback_data=CB["adm_stats"]),
-                    InlineKeyboardButton("👥 مدیریت کاربران و مستاجران", callback_data=CB["adm_users"]),
-                ],
-                [
-                    InlineKeyboardButton("📢 ارسال پیام همگانی (Broadcast)", callback_data=CB["adm_bcast"]),
-                    InlineKeyboardButton("🔒 قفل عضویت اجباری (Force-Sub)", callback_data=CB["adm_forcesub"]),
-                ],
-                [
-                    InlineKeyboardButton("👮‍♂️ مدیریت مدیران سامانه", callback_data=CB["adm_admins"]),
-                    InlineKeyboardButton("🔐 کلیدهای API سراسری (Vault)", callback_data=CB["creds"]),
-                ],
-                [
-                    InlineKeyboardButton("⚙️ تنظیمات عمومی و دامنه وب", callback_data=CB["adm_config"]),
-                    InlineKeyboardButton("📦 پشتیبان‌گیری و مهاجرت سرور", callback_data=CB["migrate"]),
-                ],
-                [
-                    InlineKeyboardButton(f"🔙 {self._t('ui_back_main_menu')}", callback_data=CB["main"]),
-                ],
-            ]
-        else:
-            lines = [
-                "👑 **Administrator Control Plane**\n",
-                "📊 **System Status & Live Metrics:**",
-                f"• 👥 Registered Users / Tenants: `{total_users}`",
-                f"• ⚡ Active Forward Rules: `{active_rules}`",
-                f"• ❌ DLQ / System Errors: `{dlq_errors}`",
-                f"• 🔒 Force-Subscription: {fs_status_str}",
-                "• 🖥 Services Health: Core 🟢 | Logger 🟢 | Web 🟢\n",
-                "Select an administrative module below:",
-            ]
-            rows = [
-                [
-                    InlineKeyboardButton("📊 System Overview & Metrics", callback_data=CB["adm_stats"]),
-                    InlineKeyboardButton("👥 Tenant & User Management", callback_data=CB["adm_users"]),
-                ],
-                [
-                    InlineKeyboardButton("📢 Broadcast Center", callback_data=CB["adm_bcast"]),
-                    InlineKeyboardButton("🔒 Force-Subscription Channel", callback_data=CB["adm_forcesub"]),
-                ],
-                [
-                    InlineKeyboardButton("👮‍♂️ Administrator Access Control", callback_data=CB["adm_admins"]),
-                    InlineKeyboardButton("🔐 Global API Credentials Vault", callback_data=CB["creds"]),
-                ],
-                [
-                    InlineKeyboardButton("⚙️ Global Config & Domain", callback_data=CB["adm_config"]),
-                    InlineKeyboardButton("📦 Server Migration & Backup", callback_data=CB["migrate"]),
-                ],
-                [
-                    InlineKeyboardButton("🔙 Back to Main Menu", callback_data=CB["main"]),
-                ],
-            ]
-        return "\n".join(lines), InlineKeyboardMarkup(rows)
+        fs_status = self._t(
+            "ui_admin_force_active" if fs_enabled and fs_channel else "ui_admin_force_inactive",
+            lang=lang,
+        )
+        if fs_enabled and fs_channel:
+            fs_status = f"{fs_status} ({fs_channel})"
+        body = self._t(
+            "ui_admin_panel_body",
+            lang=lang,
+            total_users=total_users,
+            active_rules=active_rules,
+            dlq_errors=dlq_errors,
+            fs_status=fs_status,
+        )
+        rows = [
+            [
+                InlineKeyboardButton(self._t("ui_admin_btn_metrics", lang=lang), callback_data=CB["adm_stats"]),
+                InlineKeyboardButton(self._t("ui_admin_btn_users", lang=lang), callback_data=CB["adm_users"]),
+            ],
+            [
+                InlineKeyboardButton(self._t("ui_admin_btn_broadcast", lang=lang), callback_data=CB["adm_bcast"]),
+                InlineKeyboardButton(self._t("ui_admin_btn_force_sub", lang=lang), callback_data=CB["adm_forcesub"]),
+            ],
+            [
+                InlineKeyboardButton(self._t("ui_admin_btn_admins", lang=lang), callback_data=CB["adm_admins"]),
+                InlineKeyboardButton(self._t("ui_admin_btn_credentials", lang=lang), callback_data=CB["creds"]),
+            ],
+            [
+                InlineKeyboardButton(self._t("ui_admin_btn_config", lang=lang), callback_data=CB["adm_config"]),
+                InlineKeyboardButton(self._t("ui_admin_btn_migrate", lang=lang), callback_data=CB["migrate"]),
+            ],
+            [InlineKeyboardButton(self._t("ui_back_main_menu", lang=lang), callback_data=CB["main"])],
+        ]
+        return body, InlineKeyboardMarkup(rows)
 
     def _migrate_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
@@ -1275,161 +1202,177 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_advanced_settings(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render advanced rule controls using the rule owner's selected locale."""
         lang = self._lang_for(rule)
-        """Render the complete Advanced Settings dashboard (Screens 2 & 3)."""
         task_name = rule.name or f"task_{rule.id[:8]}"
         src_label = rule.source_chat_name or rule.source_chat_id or "AF Route Lab Source"
-        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id or "AF Route Lab Target")
-
-        dup_status = "on 🟢" if rule.duplicate_filters else "off ⚪"
-        crypto_status = "on 🟢" if rule.crypto_mode else "off ⚪"
-        bl_count = len(rule.blacklist)
-        wl_count = len(rule.whitelist)
-        bu_count = len(rule.blacklist_users)
-        wu_count = len(rule.whitelist_users)
-        cl_count = len(rule.clean_custom_words) + (1 if rule.remove_links else 0) + (1 if rule.remove_emojis else 0)
-        fl_count = 1 if rule.filter_rule_id else 0
-
-        sched_on = bool(rule.auto_post_scheduler.get("enabled", False))
-        sched_status = "On 🟢" if sched_on else "Off ⚪"
-        pwr_on = bool(rule.power_schedule.get("enabled", False))
-        pwr_status = "On 🟢" if pwr_on else "Off ⚪"
-
+        dst_label = getattr(rule, "target_label", None) or (
+            rule.target_chat_name or rule.target_chat_id or "AF Route Lab Target"
+        )
+        status_on = lambda enabled: self._t(
+            "ui_status_on" if enabled else "ui_status_off", lang=lang
+        )
+        dup_status = status_on(bool(rule.duplicate_filters))
+        crypto_status = status_on(bool(rule.crypto_mode))
+        bl_count, wl_count = len(rule.blacklist), len(rule.whitelist)
+        bu_count, wu_count = len(rule.blacklist_users), len(rule.whitelist_users)
+        cl_count = len(rule.clean_custom_words) + int(bool(rule.remove_links)) + int(bool(rule.remove_emojis))
+        fl_count = int(bool(rule.filter_rule_id))
+        sched_status = status_on(bool(rule.auto_post_scheduler.get("enabled", False)))
+        pwr_status = status_on(bool(rule.power_schedule.get("enabled", False)))
         delay_val = f"{rule.delay_seconds:.0f} s" if rule.delay_seconds > 0 else "0 s"
         mte_val = f"{rule.max_time_edit} s" if rule.max_time_edit > 0 else "0 s"
+        raw_status = status_on(bool(rule.process_raw_text))
+        btn2txt_status = status_on(bool(rule.button_to_text))
 
-        raw_status = "on 🟢" if rule.process_raw_text else "off ⚪"
-        btn2txt_status = "on 🟢" if rule.button_to_text else "off ⚪"
-
-        lk_badge = "🚫 حذف" if (rule.remove_links or (isinstance(rule.metadata, dict) and bool(rule.metadata.get("remove_links")))) else "🟢 مجاز"
-        vc_badge = "🚫 مسدود" if rule.block_voice else "🟢 مجاز"
-        st_badge = "🚫 مسدود" if rule.block_stickers else "🟢 مجاز"
-        em_badge = "🧹 پاکسازی" if rule.remove_emojis else "🟢 حفظ"
-        alb_badge = "1️⃣ فقط اولین مدیا" if rule.album_mode == "first" else ("🔀 تفکیک پیام‌ها" if rule.album_mode == "split" else "🖼 آلبوم کامل")
-        reps_badge = f"{len(rule.replacements)} مورد فعال" if len(rule.replacements) else "غیرفعال"
-        hdr_badge = "تنظیم شده" if rule.header else "خالی"
-        ftr_badge = "تنظیم شده" if rule.footer else "خالی"
-        ed_badge = "⏹ نادیده" if rule.ignore_edits else "🔄 سینک"
-        dl_badge = "🗑 سینک" if rule.sync_deletes else "⏹ نادیده"
-
-        rep_count = len(rule.replacements)
-        tr_status = rule.translate_lang.upper() if rule.translate_lang else "Off"
-        wm_status = "Configured" if rule.watermark else "Empty"
-        btn_count = len(rule.link_buttons)
-        ak_on = rule.affiliate_kit.get("enabled", False)
-        ak_status = "Active" if ak_on else "Off"
-
-        ocr_status = "Active 🟢" if rule.ocr_image_ai else "Inactive ⚪"
-        ai_rw_status = "Active 🟢" if rule.smart_ai_rewrite else "Inactive ⚪"
-        digest_status = "Active 🟢" if rule.news_digest else "Inactive ⚪"
-
-        text = (
-            f"🎚 **تنظیمات پیشرفته قانون (Advanced Settings)**\n"
-            f"📋 **Route:** `{task_name}`\n"
-            f"📡 **مبدأ:** `{src_label}` (`{rule.source_chat_id}`)\n"
-            f"🎯 **مقصد:** `{dst_label}` (`{rule.target_chat_id}`)\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🛡 **Filters (?):**\n"
-            f"• Duplicate: `{dup_status}` | Crypto: `{crypto_status}`\n"
-            f"• Blacklist: `Activated: {bl_count}` | Whitelist: `Activated: {wl_count}`\n"
-            f"• Block Users: `Activated: {bu_count}` | Allow Users: `Activated: {wu_count}`\n"
-            f"• Cleaner: `Activated: {cl_count}` | Filter Rules: `Activated: {fl_count}`\n"
-            f"• لینک: {lk_badge} | ویس: {vc_badge} | استیکر: {st_badge} | ایموجی: {em_badge}\n\n"
-            f"⏰ **Schedules (?):**\n"
-            f"• Auto Post Scheduler: `{sched_status}`\n"
-            f"• Power On/Off Schedule: `{pwr_status}`\n\n"
-            f"⏱ **Time Forward (?):**\n"
-            f"• Delay: `{delay_val}` | Max Edit Time: `{mte_val}`\n\n"
-            f"⚙️ **Processing Messages (?):**\n"
-            f"• Process Raw Text: `{raw_status}` | Button To Text: `{btn2txt_status}`\n\n"
-            f"✍️ **Modify Content (?):**\n"
-            f"• Header: `{hdr_badge}` | Footer: `{ftr_badge}`\n"
-            f"• Replace: `Activated: {reps_badge}` | Translate: `{tr_status}`\n"
-            f"• Watermark: `{wm_status}` | Link Buttons: `{btn_count} btns`\n"
-            f"• Affiliate Kit: `{ak_status}` | Album Mode: `{alb_badge}`\n\n"
-            f"🤖 **AI Features (Creativity {rule.ai_creativity} · Max Tokens {rule.ai_max_tokens}):**\n"
-            f"• OCR Image AI: `{ocr_status}`\n"
-            f"• Smart AI Rewrite: `{ai_rw_status}`\n"
-            f"• News Digest: `{digest_status}`\n"
+        links_removed = rule.remove_links or (
+            isinstance(rule.metadata, dict) and bool(rule.metadata.get("remove_links"))
         )
+        lk_badge = self._t(
+            "ui_status_remove" if links_removed else "ui_status_allowed", lang=lang
+        )
+        vc_badge = self._t(
+            "ui_status_blocked" if rule.block_voice else "ui_status_allowed", lang=lang
+        )
+        st_badge = self._t(
+            "ui_status_blocked" if rule.block_stickers else "ui_status_allowed", lang=lang
+        )
+        em_badge = self._t(
+            "ui_status_clean" if rule.remove_emojis else "ui_status_keep", lang=lang
+        )
+        album_key = {"first": "ui_album_first", "split": "ui_album_split"}.get(
+            rule.album_mode, "ui_album_full"
+        )
+        alb_badge = self._t(album_key, lang=lang)
+        rep_count = len(rule.replacements)
+        reps_badge = (
+            self._t("ui_adv_replacements_count", lang=lang, count=rep_count)
+            if rep_count else self._t("ui_status_off", lang=lang)
+        )
+        configured = self._t("ui_adv_status_configured", lang=lang)
+        empty = self._t("ui_adv_status_empty", lang=lang)
+        hdr_badge = configured if rule.header else empty
+        ftr_badge = configured if rule.footer else empty
+        ed_badge = status_on(not rule.ignore_edits)
+        dl_badge = status_on(bool(rule.sync_deletes))
+        tr_status = rule.translate_lang.upper() if rule.translate_lang else self._t("ui_status_off", lang=lang)
+        wm_status = configured if rule.watermark else empty
+        btn_count = len(rule.link_buttons)
+        ak_status = self._t(
+            "ui_ai_enabled" if rule.affiliate_kit.get("enabled", False) else "ui_ai_disabled",
+            lang=lang,
+        )
+        ocr_status = self._t("ui_ai_enabled" if rule.ocr_image_ai else "ui_ai_disabled", lang=lang)
+        ai_rw_status = self._t("ui_ai_enabled" if rule.smart_ai_rewrite else "ui_ai_disabled", lang=lang)
+        digest_status = self._t("ui_ai_enabled" if rule.news_digest else "ui_ai_disabled", lang=lang)
 
+        text = self._t(
+            "ui_adv_summary",
+            lang=lang,
+            task_name=task_name,
+            src_label=src_label,
+            source_chat_id=rule.source_chat_id,
+            dst_label=dst_label,
+            target_chat_id=rule.target_chat_id,
+            dup_status=dup_status,
+            crypto_status=crypto_status,
+            bl_count=bl_count,
+            wl_count=wl_count,
+            bu_count=bu_count,
+            wu_count=wu_count,
+            cl_count=cl_count,
+            fl_count=fl_count,
+            lk_badge=lk_badge,
+            vc_badge=vc_badge,
+            st_badge=st_badge,
+            em_badge=em_badge,
+            sched_status=sched_status,
+            pwr_status=pwr_status,
+            delay_val=delay_val,
+            mte_val=mte_val,
+            raw_status=raw_status,
+            btn2txt_status=btn2txt_status,
+            hdr_badge=hdr_badge,
+            ftr_badge=ftr_badge,
+            reps_badge=reps_badge,
+            tr_status=tr_status,
+            wm_status=wm_status,
+            btn_count=btn_count,
+            ak_status=ak_status,
+            alb_badge=alb_badge,
+            ai_creativity=rule.ai_creativity,
+            ai_max_tokens=rule.ai_max_tokens,
+            ocr_status=ocr_status,
+            ai_rw_status=ai_rw_status,
+            digest_status=digest_status,
+        )
         rows: List[List[Tuple[str, str]]] = [
-            # Filters Section Grid
             [
-                (f"🔀 Duplicate Filters: {dup_status}", f"rtg_dup:{rule.id}"),
-                (f"🪙 Crypto Mode: {crypto_status}", f"rtg_crypto:{rule.id}"),
+                (self._t("ui_rule_btn_dup", lang=lang, dup_status=dup_status), f"rtg_dup:{rule.id}"),
+                (self._t("ui_adv_btn_crypto", lang=lang, status=crypto_status), f"rtg_crypto:{rule.id}"),
             ],
             [
-                (f"🚫 Blacklist ({bl_count})", f"rfl_bl:{rule.id}"),
-                (f"✅ Whitelist ({wl_count})", f"rfl_wl:{rule.id}"),
+                (self._t("ui_rule_btn_blacklist", lang=lang, bl_count=bl_count), f"rfl_bl:{rule.id}"),
+                (self._t("ui_rule_btn_whitelist", lang=lang, wl_count=wl_count), f"rfl_wl:{rule.id}"),
             ],
             [
-                (f"🚷 Blacklist Users ({bu_count})", f"rfl_bu:{rule.id}"),
-                (f"👥 Whitelist Users ({wu_count})", f"rfl_wu:{rule.id}"),
+                (self._t("ui_adv_btn_block_users", lang=lang, count=bu_count), f"rfl_bu:{rule.id}"),
+                (self._t("ui_adv_btn_allow_users", lang=lang, count=wu_count), f"rfl_wu:{rule.id}"),
             ],
             [
-                (f"🧹 Cleaner ({cl_count})", f"rcl:{rule.id}"),
-                (f"🛡 Filters ({fl_count})", f"rfl:{rule.id}"),
+                (self._t("ui_rule_btn_cleaner", lang=lang, cl_count=cl_count), f"rcl:{rule.id}"),
+                (self._t("ui_rule_btn_filters", lang=lang, fl_count=fl_count), f"rfl:{rule.id}"),
             ],
             [
-                (f"🔗 لینک: {lk_badge}", f"rlk:{rule.id}"),
-                (f"🎙 ویس: {vc_badge}", f"rvc:{rule.id}"),
+                (self._t("ui_fl_btn_link", lang=lang, status=lk_badge), f"rlk:{rule.id}"),
+                (self._t("ui_fl_btn_voice", lang=lang, status=vc_badge), f"rvc:{rule.id}"),
             ],
             [
-                (f"🎭 استیکر: {st_badge}", f"rst:{rule.id}"),
-                (f"😀 ایموجی: {em_badge}", f"rem:{rule.id}"),
-            ],
-            # Schedules Section
-            [
-                (f"⏰ Auto Post Scheduler: {sched_status}", f"rsch_auto:{rule.id}"),
-                (f"⏻ Power On/Off Sch: {pwr_status}", f"rsch_pwr:{rule.id}"),
-            ],
-            # Time Forward Section
-            [
-                (f"⏱ Set Delay ({delay_val})", f"rdly:{rule.id}"),
-                (f"⏳ Max Edit Time ({mte_val})", f"rmte:{rule.id}"),
-            ],
-            # Processing Messages Section
-            [
-                (f"📄 Process Raw Text: {raw_status}", f"rtg_raw:{rule.id}"),
-                (f"🔘 Button To Text: {btn2txt_status}", f"rtg_btn2txt:{rule.id}"),
-            ],
-            # Modify Content Section
-            [
-                (f"📝 هدر و فوتر", f"rhf:{rule.id}"),
-                (f"🔤 Replace ({rep_count})", f"rtx:{rule.id}"),
+                (self._t("ui_fl_btn_sticker", lang=lang, status=st_badge), f"rst:{rule.id}"),
+                (self._t("ui_clean_btn_emojis", lang=lang, status=em_badge), f"rem:{rule.id}"),
             ],
             [
-                (f"🌐 Translate Language ({tr_status})", f"rtr:{rule.id}"),
-                (f"🖼 Watermark ({wm_status})", f"rwm:{rule.id}"),
+                (self._t("ui_adv_btn_auto_schedule", lang=lang, status=sched_status), f"rsch_auto:{rule.id}"),
+                (self._t("ui_adv_btn_power_schedule", lang=lang, status=pwr_status), f"rsch_pwr:{rule.id}"),
             ],
             [
-                (f"🔗 Link Buttons ({btn_count})", f"rbtn:{rule.id}"),
-                (f"💲 Affiliate Kit ({ak_status})", f"rafl:{rule.id}"),
+                (self._t("ui_rule_btn_delay", lang=lang, delay_val=delay_val), f"rdly:{rule.id}"),
+                (self._t("ui_adv_btn_max_edit", lang=lang, value=mte_val), f"rmte:{rule.id}"),
             ],
             [
-                (f"✏️ ادیت: {ed_badge}", f"red:{rule.id}"),
-                (f"🗑 حذف: {dl_badge}", f"rdl:{rule.id}"),
+                (self._t("ui_adv_btn_raw_text", lang=lang, status=raw_status), f"rtg_raw:{rule.id}"),
+                (self._t("ui_adv_btn_button_to_text", lang=lang, status=btn2txt_status), f"rtg_btn2txt:{rule.id}"),
             ],
             [
-                (f"🖼 آلبوم: {alb_badge}", f"rmg:{rule.id}"),
-                (f"🗑 حذف قانون", f"rrm:{rule.id}"),
-            ],
-            # AI Features Section
-            [
-                (f"👁 OCR Image AI: {ocr_status}", f"rtg_ocr:{rule.id}"),
-                (f"✨ Smart AI Rewrite: {ai_rw_status}", f"rtg_ai:{rule.id}"),
+                (self._t("ui_adv_btn_header_footer", lang=lang), f"rhf:{rule.id}"),
+                (self._t("ui_rule_btn_replace", lang=lang, rep_count=rep_count), f"rtx:{rule.id}"),
             ],
             [
-                (f"📰 News Digest: {digest_status}", f"rtg_digest:{rule.id}"),
-                (f"⚙️ AI Config ({rule.ai_creativity}/{rule.ai_max_tokens})", f"rai_cfg:{rule.id}"),
+                (self._t("ui_adv_btn_translate", lang=lang, language=tr_status), f"rtr:{rule.id}"),
+                (self._t("ui_wm_btn_set", lang=lang), f"rwm:{rule.id}"),
             ],
-            # Return button
             [
-                (f"🔙 {self._t('ui_rule_back_task')}", f"rd:{rule.id}"),
+                (self._t("ui_adv_btn_link_buttons", lang=lang, count=btn_count), f"rbtn:{rule.id}"),
+                (self._t("ui_adv_btn_affiliate", lang=lang, status=ak_status), f"rafl:{rule.id}"),
             ],
+            [
+                (self._t("ui_rule_btn_edit", lang=lang, edit_sync_status=ed_badge), f"red:{rule.id}"),
+                (self._t("ui_rule_btn_delete", lang=lang, del_sync_status=dl_badge), f"rdl:{rule.id}"),
+            ],
+            [
+                (self._t("ui_adv_btn_album", lang=lang, mode=alb_badge), f"rmg:{rule.id}"),
+                (self._t("ui_rule_btn_delete_task", lang=lang), f"rrm:{rule.id}"),
+            ],
+            [
+                (self._t("ui_adv_btn_ocr", lang=lang, status=ocr_status), f"rtg_ocr:{rule.id}"),
+                (self._t("ui_adv_btn_ai_rewrite", lang=lang, status=ai_rw_status), f"rtg_ai:{rule.id}"),
+            ],
+            [
+                (self._t("ui_adv_btn_news_digest", lang=lang, status=digest_status), f"rtg_digest:{rule.id}"),
+                (self._t("ui_adv_btn_ai_config", lang=lang, creativity=rule.ai_creativity, max_tokens=rule.ai_max_tokens), f"rai_cfg:{rule.id}"),
+            ],
+            [(self._t("ui_rule_back_task", lang=lang), f"rd:{rule.id}")],
         ]
-
         return text, self._kbd(rows)
 
     def _render_all_addons(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
@@ -1959,29 +1902,33 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     async def _render_profile_menu(self, uid: int, user: Any = None) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render user profile dashboard with reset options."""
+        """Render a fully localized account overview and its actions."""
+        lang = self._resolve_lang(uid, user)
         name = getattr(user, "first_name", "") or getattr(user, "username", "") or str(uid)
-        username = f"@{user.username}" if getattr(user, "username", None) else "—"
         sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
         rules = await self._rules.list_by_owner(uid) if (self._rules and uid) else []
-        active_rules = [r for r in rules if r.is_active]
-
-        text = (
-            "👤 **پروفایل کاربری و وضعیت حساب**\n\n"
-            f"🆔 **شناسه عددی (User ID):** `{uid}`\n"
-            f"👤 **نام کاربری:** {username} ({name})\n"
-            f"📱 **سشن‌های متصل:** `{len(sessions)}` سشن فعال\n"
-            f"⚙️ **تسک‌های فوروارد:** `{len(rules)}` کل (`{len(active_rules)}` فعال)\n"
-            "────────────────────\n"
-            "👇 گزینه‌های مدیریت و بازنشانی حساب:"
+        active_rules = [rule for rule in rules if rule.is_active]
+        connected_sessions = sum(
+            1 for session in sessions if bool(getattr(session, "is_active", False))
         )
-
-        kbd = self._kbd([
-            [("🔄 بازنشانی ستاپ (Restart Setup)", "pr_restart")],
-            [("⚠️ ریست تنظیمات تسک‌ها (Reset Config)", "pr_reset_cfg")],
-            [(f"⬅️ {self._t('ui_back_main_menu')}", CB["main"])],
+        body = "\n".join((
+            self._t("ui_main_account_header", lang=lang),
+            self._t("ui_main_user_id", lang=lang, id=uid),
+            self._t("ui_main_display_name", lang=lang, n=name),
+            self._t("ui_main_sessions_header", lang=lang),
+            self._t("ui_main_connected_sessions", lang=lang, a=connected_sessions, b=len(sessions)),
+            self._t("ui_main_tasks_header", lang=lang),
+            self._t("ui_main_active_tasks2", lang=lang, n=len(active_rules)),
+            self._t("ui_main_total_tasks", lang=lang, n=len(rules)),
+            "────────────────────",
+            self._t("ui_profile_actions", lang=lang),
+        ))
+        keyboard = self._kbd([
+            [(self._t("ui_profile_restart_setup", lang=lang), "pr_restart")],
+            [(self._t("ui_profile_reset_config", lang=lang), "pr_reset_cfg")],
+            [(self._t("ui_back_main_menu", lang=lang), CB["main"])],
         ])
-        return text, kbd
+        return body, keyboard
 
     def _render_smart_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
         lang = self._lang_for(rule)
@@ -2602,6 +2549,7 @@ class ProBotUI:
 
         # Trace all callback queries across the UI
         @b.on_callback_query(group=-1)
+        @self._localized_handler
         async def _trace_all_callbacks(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             data = cq.data or ""
@@ -2620,6 +2568,7 @@ class ProBotUI:
                 await cq.continue_propagation()
 
         @b.on_message(filters.command("start") & filters.private)
+        @self._localized_handler
         async def _start(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /start from uid=%s", uid)
@@ -2650,6 +2599,7 @@ class ProBotUI:
                 logger.exception("/start failed for uid=%s: %s", uid, exc)
 
         @b.on_message(filters.command("connect") & filters.private)
+        @self._localized_handler
         async def _connect_cmd(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /connect from uid=%s", uid)
@@ -2667,6 +2617,7 @@ class ProBotUI:
                 await message.reply_text(prompt, reply_markup=self._cancel_kbd())
 
         @b.on_message(filters.command("cancel") & filters.private)
+        @self._localized_handler
         async def _cancel_cmd(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /cancel from uid=%s", uid)
@@ -2687,9 +2638,9 @@ class ProBotUI:
             if not sessions:
                 lang = await self._get_user_lang(uid)
                 if lang == "fa":
-                    c_text = "❌ عملیات لغو شد."
+                    c_text = self._t("ui_cancelled")
                     btn_connect = "🚀 تلاش مجدد برای اتصال"
-                    btn_menu = "🏚️ منوی اصلی"
+                    btn_menu = self._t("ui_back_main_menu")
                 elif lang == "ru":
                     c_text = "❌ Операция отменена."
                     btn_connect = "🚀 Подключить снова"
@@ -2711,6 +2662,7 @@ class ProBotUI:
                 await message.reply_text(self._t("ui_cancelled"), reply_markup=self._main_menu())
 
         @b.on_message(filters.command(["menu", "panel"]) & filters.private)
+        @self._localized_handler
         async def _menu(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /menu from uid=%s", uid)
@@ -2726,31 +2678,28 @@ class ProBotUI:
                 logger.exception("/menu failed for uid=%s: %s", uid, exc)
 
         @b.on_message(filters.command("settings") & filters.private)
+        @self._localized_handler
         async def _settings_cmd(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /settings from uid=%s", uid)
-            lines = [
-                "⚙️ **تنظیمات و سفارشی‌سازی (Settings)**\n",
-                "از این بخش می‌توانید تنظیمات اختصاصی حساب کاربری و کلیدهای شخصی خود را مدیریت کنید.\n",
-                f"👤 شناسه عددی شما (User ID): `{uid}`",
-            ]
-            if self._is_admin(uid):
-                lines.append("👑 وضعیت دسترسی: **مدیر سیستم (Administrator)**")
-            else:
-                lines.append("👤 وضعیت دسترسی: **کاربر عادی (Client)**")
+            lang = self._resolve_lang(uid)
+            role_key = "ui_settings_role_admin" if self._is_admin(uid) else "ui_settings_role_user"
+            text = self._t("ui_settings_body", lang=lang, uid=uid, role=self._t(role_key, lang=lang))
             kbd = self._client_settings_menu(uid)
             await message.reply_text("\n".join(lines), reply_markup=kbd)
 
         @b.on_message(filters.command("admin") & filters.private)
+        @self._localized_handler
         async def _admin_cmd(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /admin from uid=%s", uid)
             if not self._is_admin(uid):
-                return await message.reply_text("⛔ دسترسی غیرمجاز. این بخش مخصوص مدیران سامانه است.")
+                return await message.reply_text(self._t("ui_need_admin", lang=self._resolve_lang(uid)))
             text, kbd = await self._render_admin_panel(uid)
             await message.reply_text(text, reply_markup=kbd)
 
         @b.on_message(filters.command("profile") & filters.private)
+        @self._localized_handler
         async def _profile_cmd(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /profile from uid=%s", uid)
@@ -2761,6 +2710,7 @@ class ProBotUI:
                 logger.exception("/profile failed for uid=%s: %s", uid, exc)
 
         @b.on_message(filters.command("forward") & filters.private)
+        @self._localized_handler
         async def _forward_cmd(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /forward from uid=%s", uid)
@@ -2793,6 +2743,7 @@ class ProBotUI:
                 logger.exception("/forward failed for uid=%s: %s", uid, exc)
 
         @b.on_message(filters.command("rules") & filters.private)
+        @self._localized_handler
         async def _rules_cmd(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /rules from uid=%s", uid)
@@ -2804,6 +2755,7 @@ class ProBotUI:
                 logger.exception("/rules failed for uid=%s: %s", uid, exc)
 
         @b.on_callback_query(filters.regex("^" + CB["main"] + "$"))
+        @self._localized_handler
         async def _cb_main(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
@@ -2819,6 +2771,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["sessions"] + "$"))
+        @self._localized_handler
         async def _cb_sessions(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             logger.info("Executing _cb_sessions for uid=%s", uid)
@@ -2844,6 +2797,7 @@ class ProBotUI:
                     pass
 
         @b.on_callback_query(filters.regex("^" + CB["rules"] + "$"))
+        @self._localized_handler
         async def _cb_rules(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             rules = await self._rules.list_by_owner(uid) if uid else []
@@ -2852,6 +2806,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_pg:(\d+)$"))
+        @self._localized_handler
         async def _cb_rules_page(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
@@ -2865,6 +2820,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["filters"] + "$"))
+        @self._localized_handler
         async def _cb_filters(_, cq: CallbackQuery):
             uid_f = cq.from_user.id if cq.from_user else 0
             filters_ = await self._filters.list_by_owner(uid_f) if uid_f else []
@@ -2877,6 +2833,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["ai"] + "$"))
+        @self._localized_handler
         async def _cb_ai(_, cq: CallbackQuery):
             uid_a = cq.from_user.id if cq.from_user else 0
             cfgs = await self._ai.list_by_owner(uid_a) if uid_a else []
@@ -2894,6 +2851,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["stats"] + "$"))
+        @self._localized_handler
         async def _cb_stats(_, cq: CallbackQuery):
             kbd = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 " + self._t("ui_refresh"), callback_data=CB["refresh"])],
@@ -2904,11 +2862,13 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["perf"] + "$"))
+        @self._localized_handler
         async def _cb_perf(_, cq: CallbackQuery):
             await self._safe_edit(cq, await self._perf_body(), reply_markup=self._debug_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["refresh"] + "$"))
+        @self._localized_handler
         async def _cb_refresh(_, cq: CallbackQuery):
             kbd = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 " + self._t("ui_refresh"), callback_data=CB["refresh"])],
@@ -2919,11 +2879,13 @@ class ProBotUI:
             await cq.answer(self._t("ui_done"), show_alert=False)
 
         @b.on_callback_query(filters.regex("^" + CB["lang"] + "$"))
+        @self._localized_handler
         async def _cb_lang(_, cq: CallbackQuery):
             await self._safe_edit(cq, self._t("ui_lang_choose"), reply_markup=self._lang_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["lang_set"] + ":"))
+        @self._localized_handler
         async def _cb_lang_set(_, cq: CallbackQuery):
             code = cq.data.split(":", 1)[1]
             uid = cq.from_user.id if cq.from_user else 0
@@ -2953,6 +2915,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["help"] + "$"))
+        @self._localized_handler
         async def _cb_help(_, cq: CallbackQuery):
             btn_back = "⬅️ " + self._t("ui_back")
             btn_sup = "🆘 " + ("پشتیبانی (@Capxi)" if self._resolve_lang(uid) == "fa" else "Support (@Capxi)")
@@ -2965,19 +2928,23 @@ class ProBotUI:
 
         # ---------------------------------------------------------- web dashboard
         @b.on_callback_query(filters.regex("^" + CB["dashboard"] + "$"))
+        @self._localized_handler
         async def _cb_dashboard(_, cq: CallbackQuery):
             await self._show_dashboard(cq, force_reset=False)
 
         @b.on_callback_query(filters.regex("^" + CB["webpass"] + "$"))
+        @self._localized_handler
         async def _cb_webpass(_, cq: CallbackQuery):
             await self._show_dashboard(cq, force_reset=False)
 
         @b.on_callback_query(filters.regex("^" + CB["webpass_reset"] + "$"))
+        @self._localized_handler
         async def _cb_webpass_reset(_, cq: CallbackQuery):
             await self._show_dashboard(cq, force_reset=True)
 
         # ---------------------------------------------------------- upgrade / VIP
         @b.on_callback_query(filters.regex("^" + CB["upgrade"] + "$"))
+        @self._localized_handler
         async def _cb_upgrade(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             text = self._upgrade_text(uid)
@@ -2992,6 +2959,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["back"] + "$"))
+        @self._localized_handler
         async def _cb_back(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
@@ -3008,22 +2976,18 @@ class ProBotUI:
 
         # ---------------- client settings & personal credentials ----------------
         @b.on_callback_query(filters.regex("^" + CB["settings"] + "$"))
+        @self._localized_handler
         async def _cb_settings(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
-            lines = [
-                "⚙️ **تنظیمات و سفارشی‌سازی (Settings)**\n",
-                "از این بخش می‌توانید تنظیمات اختصاصی حساب کاربری و کلیدهای شخصی خود را مدیریت کنید.\n",
-                f"👤 شناسه عددی شما (User ID): `{uid}`",
-            ]
-            if self._is_admin(uid):
-                lines.append("👑 وضعیت دسترسی: **مدیر سیستم (Administrator)**")
-            else:
-                lines.append("👤 وضعیت دسترسی: **کاربر عادی (Client)**")
+            lang = self._resolve_lang(uid)
+            role_key = "ui_settings_role_admin" if self._is_admin(uid) else "ui_settings_role_user"
+            text = self._t("ui_settings_body", lang=lang, uid=uid, role=self._t(role_key, lang=lang))
             kbd = self._client_settings_menu(uid)
-            await self._safe_edit(cq, "\n".join(lines), reply_markup=kbd)
+            await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["client_creds"] + "$"))
+        @self._localized_handler
         async def _cb_client_creds(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             has_custom = False
@@ -3040,75 +3004,41 @@ class ProBotUI:
                 except Exception:
                     pass
 
-            is_fa = self._resolve_lang(uid) == "fa"
-            if is_fa:
-                lines = [
-                    "📱 **کلیدهای اختصاصی تلگرام کاربر (Telegram API Credentials)**\n",
-                    "شما می‌توانید از کلیدهای اختصاصی (API ID و API Hash) خود برای اتصال نشست‌ها استفاده کنید.\n",
-                ]
-                if has_custom:
-                    lines.extend([
-                        "✅ **کلیدهای اختصاصی فعال شما:**",
-                        f"• API ID: `{api_id}`",
-                        f"• API Hash: `{masked_hash}` (رمزنگاری شده)\n",
-                    ])
-                else:
-                    lines.append("ℹ️ در حال حاضر از **کلیدهای پیش‌فرض و اشتراکی سامانه** استفاده می‌کنید.\n")
-
-                rows = [
-                    [
-                        InlineKeyboardButton("✏️ تنظیم یا تغییر کلیدهای شخصی", callback_data="clc_edit"),
-                    ],
-                ]
-                if has_custom:
-                    rows.append([
-                        InlineKeyboardButton("🗑 بازنشانی به پیش‌فرض سامانه", callback_data=CB["client_cred_reset"]),
-                    ])
-                rows.append([
-                    InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["settings"]),
-                ])
+            lang = self._resolve_lang(uid)
+            lines = [self._t("ui_client_credentials_intro", lang=lang)]
+            if has_custom:
+                lines.extend((
+                    self._t("ui_client_credentials_active", lang=lang),
+                    self._t("ui_client_credentials_api_id", lang=lang, api_id=api_id),
+                    self._t("ui_client_credentials_api_hash", lang=lang, masked_hash=masked_hash),
+                ))
             else:
-                lines = [
-                    "📱 **Personal Telegram API Credentials**\n",
-                    "You can configure your own Telegram API ID and API Hash for connecting your accounts.\n",
-                ]
-                if has_custom:
-                    lines.extend([
-                        "✅ **Active Custom Credentials:**",
-                        f"• API ID: `{api_id}`",
-                        f"• API Hash: `{masked_hash}` (encrypted)\n",
-                    ])
-                else:
-                    lines.append("ℹ️ Currently using the **system default credentials**.\n")
+                lines.append(self._t("ui_client_credentials_default", lang=lang))
 
-                rows = [
-                    [
-                        InlineKeyboardButton("✏️ Configure Custom Credentials", callback_data="clc_edit"),
-                    ],
-                ]
-                if has_custom:
-                    rows.append([
-                        InlineKeyboardButton("🗑 Reset to System Default", callback_data=CB["client_cred_reset"]),
-                    ])
-                rows.append([
-                    InlineKeyboardButton("🔙 Back to Settings", callback_data=CB["settings"]),
-                ])
-
+            rows = [[InlineKeyboardButton(
+                self._t("ui_client_credentials_edit", lang=lang),
+                callback_data="clc_edit",
+            )]]
+            if has_custom:
+                rows.append([InlineKeyboardButton(
+                    self._t("ui_client_credentials_reset", lang=lang),
+                    callback_data=CB["client_cred_reset"],
+                )])
+            rows.append([InlineKeyboardButton(
+                self._t("ui_back_main_menu", lang=lang),
+                callback_data=CB["settings"],
+            )])
             await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^clc_edit$"))
+        @self._localized_handler
         async def _cb_client_creds_edit(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
             st.step = "client_api_id"
             await self._persist(uid, st)
-            msg = (
-                "📱 لطفاً **API ID عددی** خود را ارسال نمایید:\n"
-                "(می‌توانید آن را از my.telegram.org دریافت کنید)"
-                if self._resolve_lang(uid) == "fa"
-                else "📱 Please send your numeric **Telegram API ID** (from my.telegram.org):"
-            )
+            msg = self._t("ui_client_credentials_api_id_prompt", lang=self._resolve_lang(uid))
             await self._safe_edit(
                 cq, msg,
                 reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]])
@@ -3116,6 +3046,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["client_cred_reset"] + "$"))
+        @self._localized_handler
         async def _cb_client_cred_reset(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if self._credentials:
@@ -3125,12 +3056,13 @@ class ProBotUI:
                         await self._credentials.delete(c.id)
                 except Exception:
                     pass
-            await cq.answer("✅ کلیدهای شخصی حذف شد و تنظیمات به پیش‌فرض بازگشت.", show_alert=True)
+            await cq.answer(self._t("ui_client_credentials_reset_done", lang=self._resolve_lang(uid)), show_alert=True)
             cq.data = CB["client_creds"]
             await _cb_client_creds(_, cq)
 
         # ---------------- administrator control plane ----------------
         @b.on_callback_query(filters.regex("^" + CB["admin"] + "$"))
+        @self._localized_handler
         async def _cb_admin_panel(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
@@ -3140,38 +3072,38 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["adm_stats"] + "$"))
+        @self._localized_handler
         async def _cb_adm_stats(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_need_admin", lang=self._resolve_lang(uid)), show_alert=True)
             total_users = await self._users.count_all() if self._users else 0
             active_rules = 0
             if self._rules:
                 all_r = await self._rules.list_all()
                 active_rules = sum(1 for r in all_r if getattr(r, "enabled", True))
             dlq_count = await self._dlq_count()
-
-            lines = [
-                "📊 **آمار و گزارش تفصیلی سامانه (System Diagnostics)**\n",
-                f"• 👥 کل کاربران ثبت‌شده: `{total_users}`",
-                f"• ⚡ قوانین فعال: `{active_rules}`",
-                f"• ⚠️ پیام‌های ناموفق / صف خطا (DLQ): `{dlq_count}`",
-                f"• 🌐 دامنه پنل وب: `{self._web_url or 'تنظیم نشده'}`",
-                "• 🟢 هسته پردازشی (Core): برخط",
-                "• 🟢 سرویس لاگر (Logger): برخط",
-                "• 🟢 درگاه وب (Web Gateway): برخط",
-            ]
+            lang = self._resolve_lang(uid)
+            body = self._t(
+                "ui_admin_stats_body",
+                lang=lang,
+                total_users=total_users,
+                active_rules=active_rules,
+                dlq_count=dlq_count,
+                web_url=self._web_url or self._t("ui_not_configured", lang=lang),
+                service_status=self._t("ui_status_on", lang=lang),
+            )
             kbd = InlineKeyboardMarkup([
-                [InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["admin"])],
+                [InlineKeyboardButton(self._t("ui_back_main_menu", lang=lang), callback_data=CB["admin"])],
             ])
-            await self._safe_edit(cq, "\n".join(lines), reply_markup=kbd)
+            await self._safe_edit(cq, body, reply_markup=kbd)
             await cq.answer()
-
         @b.on_callback_query(filters.regex(r"^" + CB["adm_users"] + r"(?:_pg_(\d+))?$"))
+        @self._localized_handler
         async def _cb_adm_users(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_need_admin", lang=self._resolve_lang(uid)), show_alert=True)
 
             page = 0
             m = re.match(r"^" + CB["adm_users"] + r"_pg_(\d+)$", cq.data or "")
@@ -3184,7 +3116,7 @@ class ProBotUI:
             total = await self._users.count_all() if self._users else 0
 
             lines = [
-                f"👥 **مدیریت کاربران و مستاجران (صفحه {page + 1} از {max(1, (total + limit - 1) // limit)}):**\n",
+                self._t("ui_admin_users_heading", lang=self._resolve_lang(uid), page=page + 1, pages=max(1, (total + limit - 1) // limit)),
             ]
             rows = []
             for u in users:
@@ -3193,13 +3125,13 @@ class ProBotUI:
                 is_adm = self._is_admin(user_uid)
                 status_icon = "👑" if is_adm else ("🟢" if status == "active" else "🔴")
                 plan = u.get("plan", "free")
-                lines.append(f"{status_icon} `{user_uid}` | پلن: **{plan}** | وضعیت: {status}")
+                lines.append(self._t("ui_admin_user_row", lang=self._resolve_lang(uid), status_icon=status_icon, uid=user_uid, plan=plan, status=status))
 
                 btn_toggle = (
-                    InlineKeyboardButton(f"⛔ تعلیق {user_uid}", callback_data=f"{CB['adm_user_suspend']}_{user_uid}")
+                    InlineKeyboardButton(self._t("ui_admin_suspend_user", lang=self._resolve_lang(uid), uid=user_uid), callback_data=f"{CB['adm_user_suspend']}_{user_uid}")
                     if status == "active" and not is_adm
                     else (
-                        InlineKeyboardButton(f"✅ فعال‌سازی {user_uid}", callback_data=f"{CB['adm_user_activate']}_{user_uid}")
+                        InlineKeyboardButton(self._t("ui_admin_activate_user", lang=self._resolve_lang(uid), uid=user_uid), callback_data=f"{CB['adm_user_activate']}_{user_uid}")
                         if status == "suspended" and not is_adm
                         else None
                     )
@@ -3209,9 +3141,9 @@ class ProBotUI:
 
             nav = []
             if page > 0:
-                nav.append(InlineKeyboardButton("⬅️ قبلی", callback_data=f"{CB['adm_users']}_pg_{page - 1}"))
+                nav.append(InlineKeyboardButton(self._t("ui_admin_prev", lang=self._resolve_lang(uid)), callback_data=f"{CB['adm_users']}_pg_{page - 1}"))
             if offset + limit < total:
-                nav.append(InlineKeyboardButton("بعدی ➡️", callback_data=f"{CB['adm_users']}_pg_{page + 1}"))
+                nav.append(InlineKeyboardButton(self._t("ui_admin_next", lang=self._resolve_lang(uid)), callback_data=f"{CB['adm_users']}_pg_{page + 1}"))
             if nav:
                 rows.append(nav)
 
@@ -3220,58 +3152,59 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^" + CB["adm_user_suspend"] + r"_(\d+)$"))
+        @self._localized_handler
         async def _cb_adm_user_suspend(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             target = int(cq.matches[0].group(1))
             if self._is_admin(target):
-                return await cq.answer("❌ مدیران سامانه قابل تعلیق نیستند.", show_alert=True)
+                return await cq.answer(self._t("ui_admin_suspend_forbidden", lang=self._resolve_lang(uid)), show_alert=True)
             if self._users:
                 await self._users.set_status(target, "suspended")
-            await cq.answer(f"⛔ کاربر {target} تعلیق شد.", show_alert=True)
+            await cq.answer(self._t("ui_admin_user_suspended", lang=self._resolve_lang(uid), uid=target), show_alert=True)
             cq.data = CB["adm_users"]
             await _cb_adm_users(_, cq)
 
         @b.on_callback_query(filters.regex(r"^" + CB["adm_user_activate"] + r"_(\d+)$"))
+        @self._localized_handler
         async def _cb_adm_user_activate(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             target = int(cq.matches[0].group(1))
             if self._users:
                 await self._users.set_status(target, "active")
-            await cq.answer(f"✅ حساب کاربر {target} فعال شد.", show_alert=True)
+            await cq.answer(self._t("ui_admin_user_activated", lang=self._resolve_lang(uid), uid=target), show_alert=True)
             cq.data = CB["adm_users"]
             await _cb_adm_users(_, cq)
 
         @b.on_callback_query(filters.regex("^" + CB["adm_bcast"] + "$"))
+        @self._localized_handler
         async def _cb_adm_bcast(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(uid)
             st.step = "admin_broadcast_text"
             await self._persist(uid, st)
-            msg = (
-                "📢 **ارسال پیام همگانی به تمام کاربران**\n\n"
-                "لطفاً متن پیام خود را ارسال نمایید (امکان استفاده از شکلک‌ها و فرمت متن وجود دارد):"
-            )
+            msg = self._t("ui_admin_broadcast_prompt", lang=self._resolve_lang(uid))
             await self._safe_edit(cq, msg, reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["adm_bcast_confirm"] + "$"))
+        @self._localized_handler
         async def _cb_adm_bcast_confirm(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(uid)
             text = st.buffer.get("bcast_text", "")
             st.buffer.clear()
             await self._persist(uid, st)
 
             if not text:
-                return await cq.answer("❌ متنی برای ارسال یافت نشد.", show_alert=True)
+                return await cq.answer(self._t("ui_admin_broadcast_empty", lang=self._resolve_lang(uid)), show_alert=True)
 
             bcast_id = str(uuid.uuid4())
             now = int(time.time())
@@ -3287,25 +3220,27 @@ class ProBotUI:
                     pass
 
             asyncio.create_task(self._run_broadcast_job(bcast_id, uid, text))
-            await cq.answer("🚀 ارسال همگانی در پس‌زمینه آغاز گردید.", show_alert=True)
+            await cq.answer(self._t("ui_admin_broadcast_started", lang=self._resolve_lang(uid)), show_alert=True)
             text_panel, kbd_panel = await self._render_admin_panel(uid)
             await self._safe_edit(cq, text_panel, reply_markup=kbd_panel)
 
         @b.on_callback_query(filters.regex("^" + CB["adm_bcast_cancel"] + "$"))
+        @self._localized_handler
         async def _cb_adm_bcast_cancel(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
             st.buffer.clear()
             await self._persist(uid, st)
-            await cq.answer("❌ ارسال همگانی لغو شد.")
+            await cq.answer(self._t("ui_admin_broadcast_cancelled", lang=self._resolve_lang(uid)))
             text_panel, kbd_panel = await self._render_admin_panel(uid)
             await self._safe_edit(cq, text_panel, reply_markup=kbd_panel)
 
         @b.on_callback_query(filters.regex("^" + CB["adm_forcesub"] + "$"))
+        @self._localized_handler
         async def _cb_adm_forcesub(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
 
             fs_enabled = False
             fs_channel = ""
@@ -3317,31 +3252,37 @@ class ProBotUI:
                 if r2 and r2["value"]:
                     fs_channel = str(r2["value"])
 
-            status_str = "🟢 فعال" if fs_enabled else "⚪ غیرفعال"
-            lines = [
-                "🔒 **تنظیمات قفل عضویت اجباری (Force-Subscription)**\n",
-                f"• وضعیت کنونی: {status_str}",
-                f"• کانال تنظیم شده: `{fs_channel or 'تنظیم نشده'}`\n",
-                "در صورت فعال بودن، کاربران عادی قبل از استفاده از ربات ملزم به عضویت در کانال خواهند بود.",
-            ]
+            status_str = self._t("ui_admin_force_active" if fs_enabled else "ui_admin_force_inactive", lang=self._resolve_lang(uid))
+            lang = self._resolve_lang(uid)
+            status_str = self._t("ui_admin_force_active" if fs_enabled else "ui_admin_force_inactive", lang=lang)
+            body = self._t(
+                "ui_admin_force_sub_body",
+                lang=lang,
+                status=status_str,
+                channel=fs_channel or self._t("ui_not_configured", lang=lang),
+            )
             rows = [
                 [
                     InlineKeyboardButton(
-                        "🔴 غیرفعال‌سازی" if fs_enabled else "🟢 فعال‌سازی",
+                        self._t("ui_admin_force_disable" if fs_enabled else "ui_admin_force_enable", lang=lang),
                         callback_data=CB["adm_forcesub_toggle"],
                     ),
-                    InlineKeyboardButton("✏️ تغییر کانال الزامی", callback_data=CB["adm_forcesub_set"]),
+                    InlineKeyboardButton(
+                        self._t("ui_admin_force_set_channel", lang=lang),
+                        callback_data=CB["adm_forcesub_set"],
+                    ),
                 ],
-                [InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["admin"])],
+                [InlineKeyboardButton(self._t("ui_back_main_menu", lang=lang), callback_data=CB["admin"])],
             ]
-            await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
+            await self._safe_edit(cq, body, reply_markup=InlineKeyboardMarkup(rows))
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["adm_forcesub_toggle"] + "$"))
+        @self._localized_handler
         async def _cb_adm_forcesub_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             if self._db:
                 r = self._db.query_one("SELECT value FROM app_settings WHERE key='force_sub_enabled'")
                 new_val = "0" if (r and r["value"] == "1") else "1"
@@ -3351,96 +3292,102 @@ class ProBotUI:
                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
                     (new_val, now),
                 )
-            await cq.answer("✅ وضعیت قفل عضویت اجباری تغییر یافت.")
+            await cq.answer(self._t("ui_admin_force_updated", lang=self._resolve_lang(uid)))
             cq.data = CB["adm_forcesub"]
             await _cb_adm_forcesub(_, cq)
 
         @b.on_callback_query(filters.regex("^" + CB["adm_forcesub_set"] + "$"))
+        @self._localized_handler
         async def _cb_adm_forcesub_set(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(uid)
             st.step = "admin_forcesub_channel"
             await self._persist(uid, st)
-            msg = "🔒 لطفاً آیدی کانال الزامی (مثلاً `@ChannelID`) یا شناسه عددی آن را ارسال نمایید:"
+            msg = self._t("ui_admin_force_prompt", lang=self._resolve_lang(uid))
             await self._safe_edit(cq, msg, reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["adm_admins"] + "$"))
+        @self._localized_handler
         async def _cb_adm_admins(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
 
             admins = self._admin_service.list_admins() if self._admin_service else []
-            lines = [
-                "👮‍♂️ **مدیریت مدیران و دسترسی‌های سامانه (Admin Access Control)**\n",
-            ]
+            lang = self._resolve_lang(uid)
+            lines = [self._t("ui_admin_admins_heading", lang=lang)]
             rows = []
-            for a in admins:
-                aid = a["user_id"]
-                role = a.get("role", "admin")
-                role_label = "👑 مالک کل (Owner)" if role == "owner" else "🛡 مدیر (Admin)"
-                lines.append(f"• `{aid}` — {role_label}")
+            for admin in admins:
+                admin_uid = admin["user_id"]
+                role = admin.get("role", "admin")
+                role_key = "ui_admin_role_owner" if role == "owner" else "ui_admin_role_admin"
+                lines.append(f"• {admin_uid} — {self._t(role_key, lang=lang)}")
                 if role != "owner":
-                    rows.append([
-                        InlineKeyboardButton(f"❌ حذف دسترسی {aid}", callback_data=f"{CB['adm_admin_del']}_{aid}")
-                    ])
-
-            rows.append([InlineKeyboardButton("➕ افزودن مدیر جدید", callback_data=CB["adm_admin_add"])])
-            rows.append([InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["admin"])])
+                    rows.append([InlineKeyboardButton(
+                        self._t("ui_admin_remove_admin", lang=lang, uid=admin_uid),
+                        callback_data=f"{CB['adm_admin_del']}_{admin_uid}",
+                    )])
+            rows.append([InlineKeyboardButton(self._t("ui_admin_add_admin", lang=lang), callback_data=CB["adm_admin_add"])])
+            rows.append([InlineKeyboardButton(self._t("ui_back_main_menu", lang=lang), callback_data=CB["admin"])])
             await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["adm_admin_add"] + "$"))
+        @self._localized_handler
         async def _cb_adm_admin_add(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(uid)
             st.step = "admin_add_id"
             await self._persist(uid, st)
-            msg = "👮‍♂️ لطفاً شناسه عددی (Telegram User ID) کاربری که می‌خواهید مدیر شود را ارسال نمایید:"
+            msg = self._t("ui_admin_add_prompt", lang=self._resolve_lang(uid))
             await self._safe_edit(cq, msg, reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^" + CB["adm_admin_del"] + r"_(\d+)$"))
+        @self._localized_handler
         async def _cb_adm_admin_del(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             target = int(cq.matches[0].group(1))
             try:
                 if self._admin_service:
                     self._admin_service.remove_admin(target, removed_by=uid)
-                await cq.answer(f"✅ دسترسی مدیریت کاربر {target} لغو شد.", show_alert=True)
+                await cq.answer(self._t("ui_admin_removed", lang=self._resolve_lang(uid), uid=target), show_alert=True)
             except Exception as exc:
                 await cq.answer(f"❌ خطا: {exc}", show_alert=True)
             cq.data = CB["adm_admins"]
             await _cb_adm_admins(_, cq)
 
         @b.on_callback_query(filters.regex("^" + CB["adm_config"] + "$"))
+        @self._localized_handler
         async def _cb_adm_config(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not self._is_admin(uid):
-                return await cq.answer("⛔ دسترسی غیرمجاز.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
 
-            lines = [
-                "⚙️ **تنظیمات عمومی سامانه و دامنه وب**\n",
-                f"• آدرس عمومی پنل وب: `{self._web_url or 'تنظیم نشده'}`",
-                "• کلید رمزنگاری محلی (Master Key): بارگذاری‌شده 🔒\n",
-                "جهت تنظیم آدرس دامنه عمومی یا مدیریت کلیدهای API سراسری از گزینه‌های زیر استفاده نمایید:",
-            ]
+            lang = self._resolve_lang(uid)
+            lines = [self._t(
+                "ui_admin_config_body",
+                lang=lang,
+                web_url=self._web_url or self._t("ui_not_configured", lang=lang),
+                master_key_status=self._t("ui_adv_status_configured", lang=lang),
+            )]
             rows = [
-                [InlineKeyboardButton("🌐 تنظیم دامنه پنل وب", callback_data=CB["weburl_set"])],
-                [InlineKeyboardButton("🔐 کلیدهای API سراسری (Vault)", callback_data=CB["creds"])],
-                [InlineKeyboardButton(self._t("ui_back_main_menu"), callback_data=CB["admin"])],
+                [InlineKeyboardButton(self._t("ui_admin_config_web", lang=lang), callback_data=CB["weburl_set"])],
+                [InlineKeyboardButton(self._t("ui_admin_config_vault", lang=lang), callback_data=CB["creds"])],
+                [InlineKeyboardButton(self._t("ui_back_main_menu", lang=lang), callback_data=CB["admin"])],
             ]
             await self._safe_edit(cq, "\n".join(lines), reply_markup=InlineKeyboardMarkup(rows))
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["check_sub"] + "$"))
+        @self._localized_handler
         async def _cb_check_sub(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             fs_channel = ""
@@ -3473,6 +3420,7 @@ class ProBotUI:
 
         # ---------------- cancel any active flow ----------------
         @b.on_callback_query(filters.regex("^" + CB["cancel"] + "$"))
+        @self._localized_handler
         async def _cb_cancel(_, cq: CallbackQuery):
             uid = cq.from_user.id
             st = self._state(uid)
@@ -3494,9 +3442,9 @@ class ProBotUI:
                 if not sessions:
                     lang = await self._get_user_lang(uid)
                     if lang == "fa":
-                        c_text = "❌ عملیات لغو شد."
+                        c_text = self._t("ui_cancelled")
                         btn_connect = "🚀 تلاش مجدد برای اتصال"
-                        btn_menu = "🏚️ منوی اصلی"
+                        btn_menu = self._t("ui_back_main_menu")
                     elif lang == "ru":
                         c_text = "❌ Операция отменена."
                         btn_connect = "🚀 Подключить снова"
@@ -3520,6 +3468,7 @@ class ProBotUI:
 
         # ---------------- login flow ----------------
         @b.on_callback_query(filters.regex("^" + CB["login_retry"] + "$"))
+        @self._localized_handler
         async def _cb_login_retry(_, cq: CallbackQuery):
             # One-tap restart of a login that expired in a restart.
             # Reuses the persisted phone, so the user never retypes it.
@@ -3548,10 +3497,12 @@ class ProBotUI:
                 self._login_code_text(st), reply_markup=self._code_keypad(st))
 
         @b.on_callback_query(filters.regex(r"^k:"))
+        @self._localized_handler
         async def _cb_keypad_wrap(_, cq: CallbackQuery):
             await self._cb_keypad(cq)
 
         @b.on_callback_query(filters.regex("^" + CB["login"] + "$"))
+        @self._localized_handler
         async def _cb_login(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             logger.info("Executing _cb_login for uid=%s", uid)
@@ -3573,9 +3524,10 @@ class ProBotUI:
 
         # ---------------- api credentials vault ----------------
         @b.on_callback_query(filters.regex("^" + CB["creds"] + "$"))
+        @self._localized_handler
         async def _cb_creds(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             lines = [self._t("ui_creds_title"), ""]
             if self._credentials is not None:
                 try:
@@ -3594,9 +3546,10 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["cred_add"] + "$"))
+        @self._localized_handler
         async def _cb_cred_add(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "cred_label"
             await self._persist(cq.from_user.id, st)
@@ -3605,6 +3558,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["cred_default"] + ":"))
+        @self._localized_handler
         async def _cb_cred_default(_, cq: CallbackQuery):
             cid = cq.data.split(":", 1)[1]
             if self._credentials is not None:
@@ -3618,13 +3572,14 @@ class ProBotUI:
                     except Exception:
                         pass
                 except PermissionError:
-                    return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                    return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
                 except Exception as exc:
                     await self._record_error("bot", exc, user_id=cq.from_user.id)
             await cq.answer(self._t("ui_cred_set_default", id=cid[:8]), show_alert=True)
 
         # ---------------- rule add flow ----------------
         @b.on_callback_query(filters.regex("^" + CB["rule_add"] + "$"))
+        @self._localized_handler
         async def _cb_rule_add(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             cur_lang = self._resolve_lang(uid)
@@ -3657,6 +3612,7 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=markup)
 
         @b.on_callback_query(filters.regex(r"^ch:(s|t):(\d+)$"))
+        @self._localized_handler
         async def _cb_pick_chat(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             cur_lang = self._resolve_lang(uid)
@@ -3764,6 +3720,7 @@ class ProBotUI:
                 await self._finish_rule_creation(cq, st, source_title, target_title)
 
         @b.on_callback_query(filters.regex(r"^pg:(s|t):(\d+)$"))
+        @self._localized_handler
         async def _cb_page_chat(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
@@ -3784,6 +3741,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rfc:(s|t)$"))
+        @self._localized_handler
         async def _cb_refresh_chats(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             cur_lang = self._resolve_lang(uid)
@@ -3807,6 +3765,7 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=markup)
 
         @b.on_callback_query(filters.regex(r"^r_cancel$"))
+        @self._localized_handler
         async def _cb_rule_cancel(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             cur_lang = self._resolve_lang(uid)
@@ -3823,6 +3782,7 @@ class ProBotUI:
             await cq.answer(self._t("ui_op_cancelled", lang=cur_lang))
 
         @b.on_callback_query(filters.regex(r"^r_back_source$"))
+        @self._localized_handler
         async def _cb_rule_back_source(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             cur_lang = self._resolve_lang(uid)
@@ -3837,13 +3797,15 @@ class ProBotUI:
             await cq.answer(self._t("ui_back_to_source", lang=cur_lang))
 
         @b.on_callback_query(filters.regex(r"^noop$"))
+        @self._localized_handler
         async def _cb_noop(_, cq: CallbackQuery):
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rdel:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_del(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rid = raw.split(":", 1)[1]
             rule = await self._rules.get(rid)
@@ -3860,6 +3822,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rdelyes:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_del_confirm(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
@@ -3867,7 +3830,7 @@ class ProBotUI:
             try:
                 ok = await self._rules.delete_owned(rid, self._scope_uid(uid))
             except PermissionError:
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             if not ok:
                 return await cq.answer(self._t("ui_none"), show_alert=True)
             try:
@@ -3880,6 +3843,7 @@ class ProBotUI:
             await cq.answer(self._t("ui_rule_deleted"), show_alert=True)
 
         @b.on_callback_query(filters.regex("^" + CB["rule_toggle"] + ":"))
+        @self._localized_handler
         async def _cb_rule_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
@@ -3909,6 +3873,7 @@ class ProBotUI:
 
         # ---------------- rule detailed settings & controls ----------------
         @b.on_callback_query(filters.regex(r"^rd:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_detail(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
@@ -3919,28 +3884,30 @@ class ProBotUI:
             if not rule:
                 return await cq.answer(self._t("ui_none"), show_alert=True)
             if not (self._is_admin(uid) or rule.owner_user_id == uid):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rtx:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_replace_menu(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             text, kbd = self._render_replace_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rtxa:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_replace_add(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -3961,14 +3928,15 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rtxc:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_replace_clear(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             if not isinstance(rule.metadata, dict):
                 rule.metadata = {}
             rule.metadata["replacements"] = {}
@@ -3978,9 +3946,10 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtxd:(.+):(\d+)$"))
+        @self._localized_handler
         async def _cb_rule_replace_del(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             parts = raw.split(":")
             rule_id, idx_str = parts[1], parts[2]
@@ -4002,106 +3971,107 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rhf:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_header_footer_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد یا دسترسی ندارید", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             text, kbd = self._render_header_footer_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rh_s:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_header_set(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ دسترسی ندارید", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(uid)
             st.step = "rule_header_input"
             st.buffer = {"rule_id": rule_id}
             await self._persist(uid, st)
-            prompt = (
-                "📝 **تنظیم متن هدر (پیشوند پیام):**\n\n"
-                "متنی که می‌خواهید در ابتدای تمام پیام‌های ارسالی قرار گیرد را ارسال کنید.\n\n"
-                "برای انصراف دکمه زیر را لمس کنید:"
-            )
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rhf:{rule_id}")]]))
+            lang = self._resolve_lang(uid)
+            prompt = self._t("ui_header_prompt", lang=lang)
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[(self._t("ui_cancel", lang=lang), f"rhf:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rh_d:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_header_del(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.header = ""
             await self._save_owned_rule(rule, uid)
-            await cq.answer("🗑 هدر با موفقیت حذف شد")
+            await cq.answer(self._t("ui_header_removed", lang=self._resolve_lang(uid)))
             text, kbd = self._render_header_footer_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rf_s:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_footer_set(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ دسترسی ندارید", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(uid)
             st.step = "rule_footer_input"
             st.buffer = {"rule_id": rule_id}
             await self._persist(uid, st)
-            prompt = (
-                "📝 **تنظیم متن فوتر (پسوند پیام):**\n\n"
-                "متنی که می‌خواهید در انتهای تمام پیام‌های ارسالی قرار گیرد را ارسال کنید (مثلاً آیدی کانال، لینک، متن دلخواه).\n\n"
-                "برای انصراف دکمه زیر را لمس کنید:"
-            )
-            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rhf:{rule_id}")]]))
+            lang = self._resolve_lang(uid)
+            prompt = self._t("ui_footer_prompt", lang=lang)
+            await self._safe_edit(cq, prompt, reply_markup=self._kbd([[(self._t("ui_cancel", lang=lang), f"rhf:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rf_d:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_footer_del(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.footer = ""
             await self._save_owned_rule(rule, uid)
-            await cq.answer("🗑 فوتر با موفقیت حذف شد")
+            await cq.answer(self._t("ui_footer_removed", lang=self._resolve_lang(uid)))
             text, kbd = self._render_header_footer_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         # ---------------- Cleaner Callbacks ----------------
         @b.on_callback_query(filters.regex(r"^rcl:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_cleaner_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد یا دسترسی ندارید", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             text, kbd = self._render_cleaner_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rcl_url:(.+)$"))
+        @self._localized_handler
         async def _cb_clean_url_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.remove_links = not bool(rule.remove_links)
             await self._save_owned_rule(rule, uid)
             status = "حذف لینک‌ها فعال شد 🚫" if rule.remove_links else "حفظ لینک‌ها مجاز شد 🟢"
@@ -4110,13 +4080,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rcl_usr:(.+)$"))
+        @self._localized_handler
         async def _cb_clean_usr_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.clean_usernames = not bool(rule.clean_usernames)
             await self._save_owned_rule(rule, uid)
             status = "حذف منشن‌ها فعال شد 🚫" if rule.clean_usernames else "حفظ منشن‌ها مجاز شد 🟢"
@@ -4125,13 +4096,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rcl_tag:(.+)$"))
+        @self._localized_handler
         async def _cb_clean_tag_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.clean_hashtags = not bool(rule.clean_hashtags)
             await self._save_owned_rule(rule, uid)
             status = "حذف هشتگ‌ها فعال شد 🚫" if rule.clean_hashtags else "حفظ هشتگ‌ها مجاز شد 🟢"
@@ -4140,13 +4112,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rcl_emo:(.+)$"))
+        @self._localized_handler
         async def _cb_clean_emo_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.remove_emojis = not bool(rule.remove_emojis)
             await self._save_owned_rule(rule, uid)
             status = "پاکسازی ایموجی فعال شد 🧹" if rule.remove_emojis else "حفظ ایموجی مجاز شد 🟢"
@@ -4155,13 +4128,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rcl_phn:(.+)$"))
+        @self._localized_handler
         async def _cb_clean_phn_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.clean_phones = not bool(rule.clean_phones)
             await self._save_owned_rule(rule, uid)
             status = "حذف شماره تماس فعال شد 🚫" if rule.clean_phones else "حفظ شماره تماس مجاز شد 🟢"
@@ -4170,13 +4144,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rcl_btn:(.+)$"))
+        @self._localized_handler
         async def _cb_clean_btn_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.clean_buttons = not bool(rule.clean_buttons)
             await self._save_owned_rule(rule, uid)
             status = "حذف دکمه‌های شیشه‌ای فعال شد 🚫" if rule.clean_buttons else "حفظ دکمه‌ها مجاز شد 🟢"
@@ -4185,13 +4160,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rcl_spc:(.+)$"))
+        @self._localized_handler
         async def _cb_clean_spc_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.clean_empty_lines = not bool(rule.clean_empty_lines)
             await self._save_owned_rule(rule, uid)
             status = "پاکسازی خطوط خالی فعال شد ✂️" if rule.clean_empty_lines else "حفظ خطوط خالی مجاز شد 🟢"
@@ -4200,13 +4176,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rcl_wrd:(.+)$"))
+        @self._localized_handler
         async def _cb_clean_wrd_prompt(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             st.step = "rule_clean_words_input"
             st.buffer = {"rule_id": rule_id}
@@ -4216,32 +4193,34 @@ class ProBotUI:
                 "کلماتی که می‌خواهید به طور خودکار از پیام‌ها پاک شوند را ارسال کنید.\n"
                 "(می‌توانید کلمات را با کاما (,) یا در خطوط جداگانه ارسال کنید).\n\n"
                 "برای پاکسازی همه کلمات عبارت `clear` را بفرستید.\n"
-                "برای انصراف دکمه زیر را لمس کنید:"
+                self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rcl:{rule_id}")]]))
             await cq.answer()
 
         # ---------------- Filters Callbacks ----------------
         @b.on_callback_query(filters.regex(r"^rfl:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_filters_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد یا دسترسی ندارید", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             text, kbd = self._render_filters_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rfl_lnk:(.+)$"))
+        @self._localized_handler
         async def _cb_filter_link_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_links = not bool(rule.block_links)
             await self._save_owned_rule(rule, uid)
             status = "فیلتر لینک فعال شد (پیام‌های دارای لینک مسدود می‌شوند) 🚫" if rule.block_links else "فیلتر لینک غیرفعال شد 🟢"
@@ -4250,13 +4229,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rfl_vid:(.+)$"))
+        @self._localized_handler
         async def _cb_filter_video_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_video = not bool(rule.block_video)
             await self._save_owned_rule(rule, uid)
             status = "مسدودسازی ویدیو فعال شد 🚫" if rule.block_video else "ارسال ویدیو مجاز شد 🟢"
@@ -4265,13 +4245,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rfl_aud:(.+)$"))
+        @self._localized_handler
         async def _cb_filter_audio_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_audio = not bool(rule.block_audio)
             await self._save_owned_rule(rule, uid)
             status = "مسدودسازی فایل صوتی فعال شد 🚫" if rule.block_audio else "ارسال فایل صوتی مجاز شد 🟢"
@@ -4280,13 +4261,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rfl_stk:(.+)$"))
+        @self._localized_handler
         async def _cb_filter_sticker_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_stickers = not bool(rule.block_stickers)
             await self._save_owned_rule(rule, uid)
             status = "مسدودسازی استیکر فعال شد 🚫" if rule.block_stickers else "ارسال استیکر مجاز شد 🟢"
@@ -4295,13 +4277,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rfl_txt:(.+)$"))
+        @self._localized_handler
         async def _cb_filter_text_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_text = not bool(rule.block_text)
             await self._save_owned_rule(rule, uid)
             status = "مسدودسازی پیام متنی فعال شد 🚫" if rule.block_text else "ارسال پیام متنی مجاز شد 🟢"
@@ -4310,13 +4293,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rfl_voc:(.+)$"))
+        @self._localized_handler
         async def _cb_filter_voice_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.block_voice = not bool(rule.block_voice)
             await self._save_owned_rule(rule, uid)
             status = "مسدودسازی وویس فعال شد 🚫" if rule.block_voice else "ارسال وویس مجاز شد 🟢"
@@ -4326,18 +4310,20 @@ class ProBotUI:
 
         # ---------------- Max Time Edit Callbacks ----------------
         @b.on_callback_query(filters.regex(r"^rmte:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_max_time_edit_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد یا دسترسی ندارید", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             text, kbd = self._render_max_time_edit_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rmte_s:(.+?):(\d+)$"))
+        @self._localized_handler
         async def _cb_rule_max_time_edit_set(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
@@ -4345,7 +4331,7 @@ class ProBotUI:
             rule_id, secs = parts[1], int(parts[2])
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.max_time_edit = secs
             await self._save_owned_rule(rule, uid)
             msg = f"سقف زمان ادیت به {secs} ثانیه تغییر کرد ✅" if secs > 0 else "محدودیت زمان ادیت برداشته شد (نامحدود) ✅"
@@ -4354,13 +4340,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rmte_c:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_max_time_edit_custom(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             st.step = "rule_max_edit_input"
             st.buffer = {"rule_id": rule_id}
@@ -4368,13 +4355,14 @@ class ProBotUI:
             prompt = (
                 "⏱ **ورود زمان مجاز ادیت (بر حسب ثانیه):**\n\n"
                 "یک عدد به ثانیه ارسال کنید (مثلاً 1800 برای نیم ساعت یا 86400 برای یک روز).\n\n"
-                "برای انصراف دکمه زیر را لمس کنید:"
+                self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rmte:{rule_id}")]]))
             await cq.answer()
 
         # ---------------- Profile Management Callbacks ----------------
         @b.on_callback_query(filters.regex(r"^pr_restart$"))
+        @self._localized_handler
         async def _cb_profile_restart_setup(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             st = UiState()
@@ -4389,6 +4377,7 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pr_reset_cfg$"))
+        @self._localized_handler
         async def _cb_profile_reset_cfg_prompt(_, cq: CallbackQuery):
             text = (
                 "⚠️ **هشدار بازنشانی تنظیمات (Reset Config)**\n\n"
@@ -4404,6 +4393,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^pr_reset_cfg_yes$"))
+        @self._localized_handler
         async def _cb_profile_reset_cfg_confirm(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             rules = await self._rules.list_by_owner(uid) if uid else []
@@ -4421,6 +4411,7 @@ class ProBotUI:
             await self._safe_edit(cq, body, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pr_view$"))
+        @self._localized_handler
         async def _cb_profile_view(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             body, kbd = await self._render_profile_menu(uid, cq.from_user)
@@ -4428,14 +4419,15 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rlk:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_link(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.remove_links = not rule.remove_links
             if not isinstance(rule.metadata, dict):
                 rule.metadata = {}
@@ -4447,14 +4439,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rvc:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_voice(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             if not isinstance(rule.metadata, dict):
                 rule.metadata = {}
             new_val = not rule.block_voice
@@ -4466,14 +4459,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rst:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_sticker(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             if not isinstance(rule.metadata, dict):
                 rule.metadata = {}
             new_val = not rule.block_stickers
@@ -4485,14 +4479,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rem:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_emoji(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             if not isinstance(rule.metadata, dict):
                 rule.metadata = {}
             new_val = not rule.remove_emojis
@@ -4504,13 +4499,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^red:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_edit(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.ignore_edits = not rule.ignore_edits
             await self._save_owned_rule(rule, uid)
             status = "نادیده گرفتن ادیت فعال شد ⏹" if rule.ignore_edits else "سینک ادیت مقصد فعال شد 🔄"
@@ -4519,13 +4515,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rdl:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_delete(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             new_val = not rule.sync_deletes
             rule.sync_deletes = new_val
             await self._save_owned_rule(rule, uid)
@@ -4535,14 +4532,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rmg:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_media_group(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             if not isinstance(rule.metadata, dict):
                 rule.metadata = {}
             cur = rule.album_mode
@@ -4556,14 +4554,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rmd:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_mode(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             cur = rule.forward_mode
             rule.forward_mode = (
                 ForwardMode.DIRECT_FORWARD
@@ -4580,6 +4579,7 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_active(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
@@ -4595,13 +4595,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rrm:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_remove_ask(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ این قانون یافت نشد یا متعلق به شما نیست.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             text = (
                 f"⚠️ **آیا از حذف این قانون اطمینان دارید؟**\n\n"
                 f"📡 مبدأ: `{rule.source_chat_name or rule.source_chat_id}`\n"
@@ -4616,13 +4617,14 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rrm_confirm:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_remove_confirm(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ این قانون یافت نشد یا متعلق به شما نیست.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             await self._rules.delete(rule_id)
             await cq.answer("🗑 قانون با موفقیت حذف شد", show_alert=True)
             rules = await self._rules.list_by_owner(uid) if uid else []
@@ -4630,13 +4632,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rdup:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_duplicate(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ این قانون یافت نشد یا متعلق به شما نیست.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             draft = rule.to_draft()
             new_rule = ForwardRule(
                 session_id=rule.session_id,
@@ -4657,30 +4660,33 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^radv:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_advanced_settings(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ این قانون یافت نشد یا متعلق به شما نیست.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^radon_all:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_all_addons(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ این قانون یافت نشد یا متعلق به شما نیست.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             text, kbd = self._render_all_addons(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rgrp:(.+?):(.+)$"))
+        @self._localized_handler
         async def _cb_rule_group_switch(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
@@ -4688,7 +4694,7 @@ class ProBotUI:
             rule_id, grp = parts[1], parts[2]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.feature_group = grp
             await self._save_owned_rule(rule, uid)
             text, kbd = self._render_rule_detail(rule)
@@ -4696,6 +4702,7 @@ class ProBotUI:
             await cq.answer(f"دسته: {grp}")
 
         @b.on_callback_query(filters.regex(r"^(?:radon|radon_tg):(.+?):(.+)$"))
+        @self._localized_handler
         async def _cb_rule_addon_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
@@ -4704,7 +4711,7 @@ class ProBotUI:
             rule_id, addon_key = parts[1], parts[2]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             addons = rule.paid_addons
             curr = bool(addons.get(addon_key, False))
             addons[addon_key] = not curr
@@ -4719,13 +4726,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtgbg:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_debug(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.debug_mode = not rule.debug_mode
             await self._save_owned_rule(rule, uid)
             st = "فعال شد 🟢" if rule.debug_mode else "غیرفعال شد ⚪"
@@ -4734,13 +4742,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg_fwdhdr:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_fwd_header(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.show_forward_header = not rule.show_forward_header
             await self._save_owned_rule(rule, uid)
             st = "فعال شد 🟢" if rule.show_forward_header else "غیرفعال شد ⚪"
@@ -4749,13 +4758,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg_repsync:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_reply_sync(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.sync_replies = not rule.sync_replies
             await self._save_owned_rule(rule, uid)
             st = "فعال شد 🟢" if rule.sync_replies else "غیرفعال شد ⚪"
@@ -4764,13 +4774,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg_dup:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_duplicate(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.duplicate_filters = not rule.duplicate_filters
             await self._save_owned_rule(rule, uid)
             await cq.answer(f"Duplicate Filters: {'ON' if rule.duplicate_filters else 'OFF'}")
@@ -4778,13 +4789,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg_crypto:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_crypto(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.crypto_mode = not rule.crypto_mode
             await self._save_owned_rule(rule, uid)
             await cq.answer(f"Crypto Mode: {'ON' if rule.crypto_mode else 'OFF'}")
@@ -4792,13 +4804,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg_raw:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_raw_text(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.process_raw_text = not rule.process_raw_text
             await self._save_owned_rule(rule, uid)
             await cq.answer(f"Process Raw Text: {'ON' if rule.process_raw_text else 'OFF'}")
@@ -4806,13 +4819,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg_btn2txt:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_btn2txt(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.button_to_text = not rule.button_to_text
             await self._save_owned_rule(rule, uid)
             await cq.answer(f"Button To Text: {'ON' if rule.button_to_text else 'OFF'}")
@@ -4820,13 +4834,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg_ocr:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_ocr(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.ocr_image_ai = not rule.ocr_image_ai
             await self._save_owned_rule(rule, uid)
             await cq.answer(f"OCR Image AI: {'ON' if rule.ocr_image_ai else 'OFF'}")
@@ -4834,13 +4849,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg_ai:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_ai_rewrite(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.smart_ai_rewrite = not rule.smart_ai_rewrite
             await self._save_owned_rule(rule, uid)
             await cq.answer(f"Smart AI Rewrite: {'ON' if rule.smart_ai_rewrite else 'OFF'}")
@@ -4848,13 +4864,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtg_digest:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_news_digest(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.news_digest = not rule.news_digest
             await self._save_owned_rule(rule, uid)
             await cq.answer(f"News Digest: {'ON' if rule.news_digest else 'OFF'}")
@@ -4863,18 +4880,20 @@ class ProBotUI:
 
         # --- Delay Forward Handlers ---
         @b.on_callback_query(filters.regex(r"^rdly:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_delay_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             text, kbd = self._render_delay_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rdly_s:(.+?):(.+)$"))
+        @self._localized_handler
         async def _cb_rule_delay_set(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
@@ -4882,7 +4901,7 @@ class ProBotUI:
             rule_id, sec_str = parts[1], parts[2]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             try:
                 rule.delay_seconds = float(sec_str)
             except ValueError:
@@ -4893,13 +4912,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rdly_c:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_delay_custom(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             st.step = f"set_delay_{rule.id}"
             await self._persist(uid, st)
@@ -4913,25 +4933,27 @@ class ProBotUI:
 
         # --- Blacklist Handlers ---
         @b.on_callback_query(filters.regex(r"^rfl_bl:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_blacklist_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             text, kbd = self._render_blacklist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rfl_bl_add:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_blacklist_add(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             st.step = f"add_bl_{rule.id}"
             await self._persist(uid, st)
@@ -4944,13 +4966,14 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rfl_bl_clr:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_blacklist_clear(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.blacklist = []
             await self._save_owned_rule(rule, uid)
             await cq.answer("🗑 کل لیست سیاه پاکسازی شد")
@@ -4958,48 +4981,52 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rfl_bu:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_blacklist_users(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             cnt = len(rule.blacklist_users)
             await cq.answer(f"Blacklist Users: {cnt} blocked", show_alert=True)
 
         @b.on_callback_query(filters.regex(r"^rfl_wu:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_whitelist_users(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             cnt = len(rule.whitelist_users)
             await cq.answer(f"Whitelist Users: {cnt} allowed", show_alert=True)
 
         # --- Whitelist Handlers ---
         @b.on_callback_query(filters.regex(r"^rfl_wl:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_whitelist_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             text, kbd = self._render_whitelist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rfl_wl_add:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_whitelist_add(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             st.step = f"add_wl_{rule.id}"
             await self._persist(uid, st)
@@ -5012,13 +5039,14 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rfl_wl_clr:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_whitelist_clear(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.whitelist = []
             await self._save_owned_rule(rule, uid)
             await cq.answer("🗑 کل لیست سفید پاکسازی شد")
@@ -5027,25 +5055,27 @@ class ProBotUI:
 
         # --- Watermark Handlers ---
         @b.on_callback_query(filters.regex(r"^rwm:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_watermark_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             text, kbd = self._render_watermark_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rwm_set:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_watermark_set_prompt(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             st.step = f"set_wm_{rule.id}"
             await self._persist(uid, st)
@@ -5058,13 +5088,14 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rwm_del:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_watermark_del(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.watermark = ""
             await self._save_owned_rule(rule, uid)
             await cq.answer("🗑 واتر‌مارک حذف شد")
@@ -5073,18 +5104,20 @@ class ProBotUI:
 
         # --- Translation Handlers ---
         @b.on_callback_query(filters.regex(r"^rtr:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_translate_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             text, kbd = self._render_translate_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rtr_set:(.+?):(.+)$"))
+        @self._localized_handler
         async def _cb_rule_translate_set(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
@@ -5092,7 +5125,7 @@ class ProBotUI:
             rule_id, lang_code = parts[1], parts[2]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.translate_lang = "" if lang_code == "none" else lang_code
             await self._save_owned_rule(rule, uid)
             status_msg = f"زبان ترجمه: {lang_code.upper()}" if rule.translate_lang else "ترجمه غیرفعال شد"
@@ -5102,13 +5135,14 @@ class ProBotUI:
 
         # --- Scheduler, Power, Affiliate, Link Buttons & AI Callbacks ---
         @b.on_callback_query(filters.regex(r"^rsch_auto:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_auto_sched(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             curr = bool(rule.auto_post_scheduler.get("enabled", False))
             rule.auto_post_scheduler["enabled"] = not curr
             await self._save_owned_rule(rule, uid)
@@ -5117,13 +5151,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsch_pwr:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_power_sched(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             curr = bool(rule.power_schedule.get("enabled", False))
             rule.power_schedule["enabled"] = not curr
             await self._save_owned_rule(rule, uid)
@@ -5132,13 +5167,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rafl:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_toggle_affiliate(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             curr = bool(rule.affiliate_kit.get("enabled", False))
             rule.affiliate_kit["enabled"] = not curr
             await self._save_owned_rule(rule, uid)
@@ -5147,24 +5183,26 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rbtn:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_link_buttons_info(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             btn_cnt = len(rule.link_buttons)
             await cq.answer(f"Link Buttons: {btn_cnt} active", show_alert=True)
 
         @b.on_callback_query(filters.regex(r"^rai_cfg:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_ai_cfg_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             # Cycle creativity presets: 0.2 -> 0.7 -> 1.0
             curr_c = rule.ai_creativity
             next_c = 0.7 if curr_c == 0.2 else (1.0 if curr_c == 0.7 else 0.2)
@@ -5175,13 +5213,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rtpc:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_set_topic(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             st.step = f"set_topic_{rule.id}"
             await self._persist(uid, st)
@@ -5196,13 +5235,14 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rrn:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_rename(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             st.step = f"rename_rule_{rule.id}"
             await self._persist(uid, st)
@@ -5217,6 +5257,7 @@ class ProBotUI:
 
         # ---------------- rule edit (draft & direct) handlers ----------------
         @b.on_callback_query(filters.regex(r"^re:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_edit_draft(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
@@ -5234,7 +5275,7 @@ class ProBotUI:
                     await self._safe_edit(cq, text, reply_markup=kbd)
                 except Exception:
                     pass
-                return await cq.answer("❌ این قانون یافت نشد یا ممکن است حذف شده باشد.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             st = self._state(uid)
             st.step = "rule_editing_draft"
@@ -5251,16 +5292,17 @@ class ProBotUI:
             await cq.answer("✏️ حالت پیش‌نویس ویرایش فعال شد")
 
         @b.on_callback_query(filters.regex(r"^ed_save:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_save(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             uid = cq.from_user.id
             st = self._state(uid)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ این قانون یافت نشد یا ممکن است حذف شده باشد.", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
             if not isinstance(draft, dict):
@@ -5334,6 +5376,7 @@ class ProBotUI:
             return "\n".join(lines), self._kbd(rows)
 
         @b.on_callback_query(filters.regex(r"^r_ai:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_ai_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
@@ -5350,6 +5393,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_ai_cfg:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_ai_pick_cfg(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
@@ -5363,21 +5407,22 @@ class ProBotUI:
             for c in cfgs:
                 mark = "✅" if c.id == current else ("🟢" if c.is_enabled else "🔴")
                 rows.append([(f"{mark} {c.name} [{self._provider_label(c.provider.value)}/{c.model}]", f"r_aicset:{rule_id}:{c.id}")])
-            rows.append([("⬅️ بازگشت", f"r_ai:{rule_id}")])
+            rows.append([(self._t("ui_back"), f"r_ai:{rule_id}")])
             await self._safe_edit(cq, "🧠 انتخاب پیکربندی AI برای بازنویسی:", reply_markup=self._kbd(rows))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_aicset:(.+?):(.*)$"))
+        @self._localized_handler
         async def _cb_rule_ai_set_cfg(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             uid = cq.from_user.id
             st = self._state(uid)
             raw = cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)
             _, rule_id, cfg_id = raw.split(":", 2)
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
             if not isinstance(draft, dict):
-                return await cq.answer("⚠️ پیش‌نویس منقضی شده", show_alert=True)
+                return await cq.answer(self._t("ui_draft_expired"), show_alert=True)
             draft["ai_config_id"] = cfg_id or ""
             draft["ai_status_badge"] = _ai_badge(draft)
             await self._persist(uid, st)
@@ -5386,9 +5431,10 @@ class ProBotUI:
             await cq.answer("✅ پیکربندی AI ثبت شد (در Save نهایی می‌آید)")
 
         @b.on_callback_query(filters.regex(r"^r_ai_prompt:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_ai_pick_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             uid = cq.from_user.id
             st = self._state(uid)
             rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
@@ -5401,21 +5447,22 @@ class ProBotUI:
                 for t in await self._prompts.list_templates():
                     mark = "✅" if t.id == current else ("⭐" if t.is_system else "👤")
                     rows.append([(f"{mark} {t.name} (v{t.current_version})", f"r_aipset:{rule_id}:{t.id}")])
-            rows.append([("⬅️ بازگشت", f"r_ai:{rule_id}")])
+            rows.append([(self._t("ui_back"), f"r_ai:{rule_id}")])
             await self._safe_edit(cq, "📝 انتخاب پرامپت بازنویسی (هر دو رابط بات و داشبورد همین‌ها را می‌بینند):", reply_markup=self._kbd(rows))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_aipset:(.+?):(.*)$"))
+        @self._localized_handler
         async def _cb_rule_ai_set_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             uid = cq.from_user.id
             st = self._state(uid)
             raw = cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)
             _, rule_id, prompt_id = raw.split(":", 2)
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
             if not isinstance(draft, dict):
-                return await cq.answer("⚠️ پیش‌نویس منقضی شده", show_alert=True)
+                return await cq.answer(self._t("ui_draft_expired"), show_alert=True)
             draft["prompt_id"] = prompt_id or ""
             await self._persist(uid, st)
             text, kbd = await _render_ai_menu(rule_id, draft)
@@ -5423,31 +5470,33 @@ class ProBotUI:
             await cq.answer("✅ پرامپت ثبت شد (در Save نهایی می‌آید)")
 
         @b.on_callback_query(filters.regex(r"^r_ai_policy:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_ai_pick_policy(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
             rows: List[List[Tuple[str, str]]] = [
                 [("🟢 SEND_ORIGINAL — ارسال متن اصلی", f"r_aifset:{rule_id}:SEND_ORIGINAL")],
                 [("🔴 DROP — عدم ارسال (Fail Closed)", f"r_aifset:{rule_id}:DROP")],
                 [("🔁 RETRY — تلاش مجدد", f"r_aifset:{rule_id}:RETRY")],
                 [("🔒 QUARANTINE — قرنطینه", f"r_aifset:{rule_id}:QUARANTINE")],
-                [("⬅️ بازگشت", f"r_ai:{rule_id}")],
+                [(self._t("ui_back"), f"r_ai:{rule_id}")],
             ]
             await self._safe_edit(cq, "⚠️ اگر AI در دسترس نباشد یا خروجی نامعتبر باشد چه اتفاقی بیفتد؟", reply_markup=self._kbd(rows))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^r_aifset:(.+?):(.+)$"))
+        @self._localized_handler
         async def _cb_rule_ai_set_policy(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             uid = cq.from_user.id
             st = self._state(uid)
             raw = cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)
             _, rule_id, policy = raw.split(":", 2)
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
             if not isinstance(draft, dict):
-                return await cq.answer("⚠️ پیش‌نویس منقضی شده", show_alert=True)
+                return await cq.answer(self._t("ui_draft_expired"), show_alert=True)
             draft["ai_fallback_policy"] = policy
             draft["ai_status_badge"] = _ai_badge(draft)
             await self._persist(uid, st)
@@ -5456,10 +5505,11 @@ class ProBotUI:
             await cq.answer(f"✅ رفتار خطا: {policy}")
 
         @b.on_callback_query(filters.regex(r"^r_ai_test:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_ai_test(_, cq: CallbackQuery):
             """Dry-run: uses the real prompt+config pipeline, sends nothing."""
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             uid = cq.from_user.id
             st = self._state(uid)
             rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
@@ -5468,7 +5518,7 @@ class ProBotUI:
             if not cfg_id:
                 return await cq.answer("⚠️ اول یک پیکربندی AI انتخاب کنید", show_alert=True)
             sample = str(draft.get("ai_test_text") or "💎 XAUUSD SIGNAL: BUY NOW @ 2655 | TP 2680 | SL 2640 https://t.me/signal #gold")
-            await self._safe_edit(cq, f"⏳ در حال تست بازنویسی…\n\nمتن نمونه:\n{sample[:200]}", reply_markup=self._kbd([[("⬅️ بازگشت", f"r_ai:{rule_id}")]]))
+            await self._safe_edit(cq, f"⏳ در حال تست بازنویسی…\n\nمتن نمونه:\n{sample[:200]}", reply_markup=self._kbd([[(self._t("ui_back"), f"r_ai:{rule_id}")]]))
             try:
                 prompt_id = str(draft.get("prompt_id") or "")
                 if prompt_id and self._prompts and self._ai_transformer:
@@ -5492,14 +5542,15 @@ class ProBotUI:
                 body = f"❌ **خطا در تست:**\n`{result.get('error_message') or 'unknown'}`"
             await self._safe_edit(cq, body, reply_markup=self._kbd([
                 [("🔄 تست مجدد", f"r_ai_test:{rule_id}")],
-                [("⬅️ بازگشت", f"r_ai:{rule_id}")],
+                [(self._t("ui_back"), f"r_ai:{rule_id}")],
             ]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ed_can:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_cancel(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             uid = cq.from_user.id
             st = self._state(uid)
             st.step = ""
@@ -5519,6 +5570,7 @@ class ProBotUI:
                 await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_s:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_source(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
@@ -5548,14 +5600,15 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ed_t:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_target(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5578,14 +5631,15 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^res:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_edit_source(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5606,14 +5660,15 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ret:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_edit_target(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5634,14 +5689,15 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ed_m:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_mode(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5660,14 +5716,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_a:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_active(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5684,14 +5741,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_lk:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_link(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5708,14 +5766,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_vc:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_voice(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5732,14 +5791,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_st:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_sticker(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5756,14 +5816,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_em:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_emoji(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5780,14 +5841,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_ed:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_edit(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5804,14 +5866,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_dl:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_delete(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5828,14 +5891,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ed_mg:(.+)$"))
+        @self._localized_handler
         async def _cb_rule_draft_media_group(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             uid = cq.from_user.id
             st = self._state(uid)
@@ -5856,27 +5920,29 @@ class ProBotUI:
 
         # ---------------- smart routing & VIP controls ----------------
         @b.on_callback_query(filters.regex(r"^rsm:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_rule_menu(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmpth:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_toggle_route_path(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             use_mid = bool(getattr(rule, "use_intermediate", False))
             cat = getattr(rule, "message_category", "ALL")
@@ -5911,14 +5977,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmmod:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_toggle_match_mode(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
 
             if not isinstance(rule.detection_criteria, dict):
                 rule.detection_criteria = {}
@@ -5934,9 +6001,10 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmtx:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_set_text_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -5949,15 +6017,16 @@ class ProBotUI:
                 "نمونه:\n"
                 "`VIP, SIGNAL, GOLD, تحلیل اختصاصی`\n\n"
                 "برای حذف تمام کلیدواژه‌ها عبارت `حذف` را ارسال کنید.\n"
-                "برای انصراف دکمه زیر را لمس نمایید:"
+                self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmrx:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_set_regex_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -5971,20 +6040,21 @@ class ProBotUI:
                 "• `(?i)TP\\d+\\s+HIT`\n"
                 "• `(?i)(gold|xauusd)\\s+(buy|sell)`\n\n"
                 "برای حذف Regex عبارت `حذف` را ارسال کنید.\n"
-                "برای انصراف دکمه زیر را لمس نمایید:"
+                self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmc:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_toggle_category(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             cur = getattr(rule, "message_category", "ALL")
             cycle = {"ALL": "VIP_ONLY", "VIP_ONLY": "NORMAL_ONLY", "NORMAL_ONLY": "ALL"}
             nxt = cycle.get(cur, "ALL")
@@ -5999,14 +6069,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmt:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_toggle_intermediate(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             cur = bool(getattr(rule, "use_intermediate", False))
             rule.use_intermediate = not cur
             if not isinstance(rule.metadata, dict):
@@ -6019,14 +6090,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmm:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_toggle_mode(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             cur = getattr(rule.forward_mode, "value", str(rule.forward_mode))
             cycle = {
                 "COPY_MESSAGE": ForwardMode.DIRECT_FORWARD,
@@ -6047,14 +6119,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmpu:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_priority_up(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.priority = int(getattr(rule, "priority", 10) or 10) + 10
             if not isinstance(rule.metadata, dict):
                 rule.metadata = {}
@@ -6065,14 +6138,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmpd:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_priority_down(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             cur = int(getattr(rule, "priority", 10) or 10)
             rule.priority = max(0, cur - 10)
             if not isinstance(rule.metadata, dict):
@@ -6084,14 +6158,15 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmhd:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_clear_header(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
             if not rule:
-                return await cq.answer("❌ قانون یافت نشد", show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.custom_header = ""
             if not isinstance(rule.metadata, dict):
                 rule.metadata = {}
@@ -6102,9 +6177,10 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rsmw:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_set_intermediate_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -6119,15 +6195,16 @@ class ProBotUI:
                 "• `@my_intermediate_channel`\n"
                 "• `https://t.me/+uVg1efOFMEc2NTNk`\n\n"
                 "⚠️ *نکته ضد لوپ: کانال واسط نباید با کانال مبدأ یا مقصد یکسان باشد.*\n\n"
-                "برای انصراف دکمه زیر را لمس کنید:"
+                self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmh:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_set_header_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -6139,15 +6216,16 @@ class ProBotUI:
                 "متنی که می‌خواهید به عنوان هدر ویژه در ابتدای پیام‌های کپی‌شده قرار گیرد را ارسال کنید.\n"
                 "نمونه:\n"
                 "💎 `VIP Alert | تحلیل طلایی اختصاصی`\n\n"
-                "برای انصراف دکمه زیر را لمس کنید:"
+                self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmtst:(.+)$"))
+        @self._localized_handler
         async def _cb_smart_test_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -6161,16 +6239,17 @@ class ProBotUI:
                 "2. تطبیق با قانون و اولویت مسیر\n"
                 "3. مسیر انتقال (مستقیم یا کانال واسط)\n"
                 "4. متن پیش‌نمایش به همراه هدرها و فیلترها\n\n"
-                "برای انصراف دکمه زیر را لمس کنید:"
+                self._t("ui_cancel_hint")
             )
             await self._safe_edit(cq, prompt, reply_markup=self._kbd([[("❌ انصراف", f"rsm:{rule_id}")]]))
             await cq.answer()
 
         # ---------------- filter add flow ----------------
         @b.on_callback_query(filters.regex("^" + CB["filter_add"] + "$"))
+        @self._localized_handler
         async def _cb_filter_add(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "filter_name"
             await self._persist(cq.from_user.id, st)
@@ -6179,6 +6258,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["filter_del"] + ":"))
+        @self._localized_handler
         async def _cb_filter_del(_, cq: CallbackQuery):
             fid = cq.data.split(":", 1)[1]
             # v12.1: IDOR guard — a non-admin can only delete their own filter.
@@ -6186,15 +6266,16 @@ class ProBotUI:
             try:
                 await self._filters.delete_owned(fid, None if self._is_admin(fuid) else fuid)
             except PermissionError:
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             await self._safe_edit(cq, self._t("ui_done"), reply_markup=self._filters_menu())
             await cq.answer()
 
         # ---------------- ai add flow ----------------
         @b.on_callback_query(filters.regex("^" + CB["ai_add"] + "$"))
+        @self._localized_handler
         async def _cb_ai_add(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "ai_name"
             await self._persist(cq.from_user.id, st)
@@ -6202,6 +6283,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["ai_provider_pick"] + ":"))
+        @self._localized_handler
         async def _cb_ai_provider_pick(_, cq: CallbackQuery):
             st = self._state(cq.from_user.id)
             if st.step != "ai_provider":
@@ -6230,6 +6312,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^ai_url_default$"))
+        @self._localized_handler
         async def _cb_ai_url_default(_, cq: CallbackQuery):
             st = self._state(cq.from_user.id)
             if st.step != "ai_base_url":
@@ -6249,6 +6332,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["ai_model_pick"] + ":"))
+        @self._localized_handler
         async def _cb_ai_model_pick(_, cq: CallbackQuery):
             st = self._state(cq.from_user.id)
             if st.step != "ai_model":
@@ -6265,6 +6349,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^aid:(.+)"))
+        @self._localized_handler
         async def _cb_ai_detail(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
@@ -6278,11 +6363,12 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ai_hc:(.+)"))
+        @self._localized_handler
         async def _cb_ai_hc(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
-                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+                return await cq.answer(self._t("ui_ai_config_not_found"), show_alert=True)
             await cq.answer("⏳ در حال بررسی سلامت اتصال و سنجش پینگ...", show_alert=False)
             ok, reply_or_err, latency = await self._ai.health_check_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             health_info = {
@@ -6298,11 +6384,12 @@ class ProBotUI:
                 pass
 
         @b.on_callback_query(filters.regex(r"^(?:ai_sample|" + CB["ai_test"] + r"):(.+)"))
+        @self._localized_handler
         async def _cb_ai_sample(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
-                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+                return await cq.answer(self._t("ui_ai_config_not_found"), show_alert=True)
             await cq.answer("⏳ در حال ارسال متن نمونه جهت بازنویسی...", show_alert=False)
             sample_text = "سلام! این یک پیام آزمایشی جهت سنجش کارکرد هوش مصنوعی در فوروارد تلگرام است."
             ok, reply = await self._ai.test_rewrite_owned(aid, sample_text, self._scope_uid(cq.from_user.id if cq.from_user else 0))
@@ -6314,27 +6401,29 @@ class ProBotUI:
             await self._safe_edit(cq, body, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ai_tog:(.+)"))
+        @self._localized_handler
         async def _cb_ai_toggle(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
-                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+                return await cq.answer(self._t("ui_ai_config_not_found"), show_alert=True)
             cfg.is_enabled = not cfg.is_enabled
             try:
                 await self._ai.update_owned(cfg, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             except PermissionError:
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             status_text = "فعال شد 🟢" if cfg.is_enabled else "غیرفعال شد 🔴"
             await cq.answer(f"وضعیت با موفقیت {status_text}", show_alert=False)
             text, kbd = self._render_ai_detail(cfg)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^ai_del_ask:(.+)"))
+        @self._localized_handler
         async def _cb_ai_del_ask(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
-                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+                return await cq.answer(self._t("ui_ai_config_not_found"), show_alert=True)
             text = (
                 f"⚠️ **آیا از حذف این پیکربندی هوش مصنوعی اطمینان دارید؟**\n\n"
                 f"🏷 نام: `{cfg.name}`\n"
@@ -6348,6 +6437,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^(?:ai_del_confirm|" + CB["ai_del"] + r"):(.+)"))
+        @self._localized_handler
         async def _cb_ai_del_confirm(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
             # v12.1: IDOR guard — a non-admin can only delete their own config.
@@ -6355,18 +6445,19 @@ class ProBotUI:
             try:
                 await self._ai.delete_owned(aid, None if self._is_admin(auid) else auid)
             except PermissionError:
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             await cq.answer("✅ پیکربندی حذف شد.", show_alert=True)
             cfgs = await (self._ai.list_all() if self._is_admin(auid) else self._ai.list_by_owner(auid))
             lines = [self._t("ui_ai_title"), "", "✅ پیکربندی با موفقیت حذف گردید."]
             await self._safe_edit(cq, "\n".join(lines), reply_markup=self._ai_menu(cfgs))
 
         @b.on_callback_query(filters.regex(r"^ai_eh:(.+)"))
+        @self._localized_handler
         async def _cb_ai_edit_host(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
-                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+                return await cq.answer(self._t("ui_ai_config_not_found"), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "ai_edit_host"
             st.buffer["ai_edit_id"] = aid
@@ -6386,11 +6477,12 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ai_em:(.+)"))
+        @self._localized_handler
         async def _cb_ai_edit_model(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
-                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+                return await cq.answer(self._t("ui_ai_config_not_found"), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "ai_edit_model"
             st.buffer["ai_edit_id"] = aid
@@ -6408,11 +6500,12 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^ai_ek:(.+)"))
+        @self._localized_handler
         async def _cb_ai_edit_key(_, cq: CallbackQuery):
             aid = str(cq.data or "").split(":", 1)[1]
             cfg = await self._ai.get_owned(aid, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             if not cfg:
-                return await cq.answer("❌ پیکربندی یافت نشد.", show_alert=True)
+                return await cq.answer(self._t("ui_ai_config_not_found"), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "ai_edit_key"
             st.buffer["ai_edit_id"] = aid
@@ -6430,6 +6523,7 @@ class ProBotUI:
 
         # ---------------- PV Responder (AI PV Assistant) ----------------
         @b.on_callback_query(filters.regex(r"^pv:menu$"))
+        @self._localized_handler
         async def _cb_pv_menu(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             await cq.answer()
@@ -6438,13 +6532,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:toggle$"))
+        @self._localized_handler
         async def _cb_pv_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not uid:
-                return await cq.answer("❌ شناسه کاربر نامعتبر است.", show_alert=True)
+                return await cq.answer(self._t("ui_invalid_user_id"), show_alert=True)
             resp = getattr(self, "_pv_responder", None)
             if not resp:
-                return await cq.answer("❌ ماژول در دسترس نیست.", show_alert=True)
+                return await cq.answer(self._t("ui_ai_module_unavailable"), show_alert=True)
             cfg = resp.get_config_for_user(uid)
             cfg.enabled = not cfg.enabled
             resp.save_config_for_user(uid, cfg)
@@ -6455,6 +6550,7 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:persona$"))
+        @self._localized_handler
         async def _cb_pv_persona(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             await cq.answer()
@@ -6463,13 +6559,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:set_p:(.+)$"))
+        @self._localized_handler
         async def _cb_pv_set_persona(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not uid:
-                return await cq.answer("❌ شناسه کاربر نامعتبر است.", show_alert=True)
+                return await cq.answer(self._t("ui_invalid_user_id"), show_alert=True)
             resp = getattr(self, "_pv_responder", None)
             if not resp:
-                return await cq.answer("❌ ماژول در دسترس نیست.", show_alert=True)
+                return await cq.answer(self._t("ui_ai_module_unavailable"), show_alert=True)
             cfg = resp.get_config_for_user(uid)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             p_type = raw.split(":", 2)[2]
@@ -6516,6 +6613,7 @@ class ProBotUI:
                 await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^pv:delays$"))
+        @self._localized_handler
         async def _cb_pv_delays(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             await cq.answer()
@@ -6524,13 +6622,14 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:set_d:(.+)$"))
+        @self._localized_handler
         async def _cb_pv_set_delay(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not uid:
-                return await cq.answer("❌ شناسه کاربر نامعتبر است.", show_alert=True)
+                return await cq.answer(self._t("ui_invalid_user_id"), show_alert=True)
             resp = getattr(self, "_pv_responder", None)
             if not resp:
-                return await cq.answer("❌ ماژول در دسترس نیست.", show_alert=True)
+                return await cq.answer(self._t("ui_ai_module_unavailable"), show_alert=True)
             cfg = resp.get_config_for_user(uid)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             d_type = raw.split(":", 2)[2]
@@ -6550,10 +6649,11 @@ class ProBotUI:
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^pv:test$"))
+        @self._localized_handler
         async def _cb_pv_test(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             if not uid:
-                return await cq.answer("❌ شناسه کاربر نامعتبر است.", show_alert=True)
+                return await cq.answer(self._t("ui_invalid_user_id"), show_alert=True)
             st = self._state(uid)
             st.step = "pv_test_input"
             await self._persist(uid, st)
@@ -6568,6 +6668,7 @@ class ProBotUI:
 
         # ---------------- backup ----------------
         @b.on_callback_query(filters.regex("^" + CB["backup"] + "$"))
+        @self._localized_handler
         async def _cb_backup(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
@@ -6655,24 +6756,27 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["migrate"] + "$"))
+        @self._localized_handler
         async def _cb_migrate(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             await self._safe_edit(cq, self._t("ui_migrate_title"),
                                   reply_markup=self._migrate_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["migrate_export"] + "$"))
+        @self._localized_handler
         async def _cb_migrate_export(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             await cq.answer()
             await _do_migration_export(cq, "")
 
         @b.on_callback_query(filters.regex("^" + CB["migrate_export_enc"] + "$"))
+        @self._localized_handler
         async def _cb_migrate_export_enc(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             await cq.answer()
             st = self._state(cq.from_user.id)
             st.step = "migrate_passphrase"
@@ -6683,9 +6787,10 @@ class ProBotUI:
                                       [[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
 
         @b.on_callback_query(filters.regex("^" + CB["migrate_import"] + "$"))
+        @self._localized_handler
         async def _cb_migrate_import(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             await cq.answer()
             st = self._state(cq.from_user.id)
             st.step = "migrate_await_file"
@@ -6697,9 +6802,10 @@ class ProBotUI:
                                        [("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
 
         @b.on_callback_query(filters.regex("^" + CB["migrate_overwrite"] + "$"))
+        @self._localized_handler
         async def _cb_migrate_overwrite(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             await cq.answer()
             st = self._state(cq.from_user.id)
             if st.step == "migrate_await_file":
@@ -6715,6 +6821,7 @@ class ProBotUI:
                          [("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
 
         @b.on_callback_query(filters.regex("^" + CB["migrate_help"] + "$"))
+        @self._localized_handler
         async def _cb_migrate_help(_, cq: CallbackQuery):
             await self._safe_edit(cq, self._t("ui_migrate_help_text"),
                                   reply_markup=self._migrate_menu())
@@ -6722,11 +6829,13 @@ class ProBotUI:
 
         # ---------------- logs panel ----------------
         @b.on_callback_query(filters.regex("^" + CB["logs"] + "$"))
+        @self._localized_handler
         async def _cb_logs(_, cq: CallbackQuery):
             await self._safe_edit(cq, self._t("ui_logs_title"), reply_markup=self._logs_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["logs_recent"] + "$"))
+        @self._localized_handler
         async def _cb_logs_recent(_, cq: CallbackQuery):
             lines = [self._t("ui_logs_recent"), ""]
             if self._error_log is not None:
@@ -6749,6 +6858,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["logs_errors"] + "$"))
+        @self._localized_handler
         async def _cb_logs_errors(_, cq: CallbackQuery):
             lines = [self._t("ui_logs_errors"), ""]
             if self._error_log is not None:
@@ -6773,6 +6883,7 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["logs_stats"] + "$"))
+        @self._localized_handler
         async def _cb_logs_stats(_, cq: CallbackQuery):
             lines = [self._t("ui_logs_stats"), ""]
             if self._error_log is not None:
@@ -6792,6 +6903,7 @@ class ProBotUI:
 
         # ---------------- debug ----------------
         @b.on_callback_query(filters.regex("^" + CB["debug"] + "$"))
+        @self._localized_handler
         async def _cb_debug(_, cq: CallbackQuery):
             await self._safe_edit(cq, 
                 await self._debug_body(), reply_markup=self._debug_menu())
@@ -6799,15 +6911,17 @@ class ProBotUI:
 
         # ---------------- web dashboard URL configuration ----------------
         @b.on_callback_query(filters.regex("^" + CB["weburl"] + "$"))
+        @self._localized_handler
         async def _cb_weburl(_, cq: CallbackQuery):
             await self._safe_edit(
                 cq, self._weburl_body(), reply_markup=self._weburl_menu())
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["weburl_set"] + "$"))
+        @self._localized_handler
         async def _cb_weburl_set(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "weburl_input"
             await self._persist(cq.from_user.id, st)
@@ -6816,9 +6930,10 @@ class ProBotUI:
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^weburl_clear$"))
+        @self._localized_handler
         async def _cb_weburl_clear(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_need_admin"), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             if self._settings is not None:
                 try:
                     await self._settings.set("web_url", "")
@@ -6831,6 +6946,7 @@ class ProBotUI:
 
         # ---------------- free-text FSM router ----------------
         @b.on_message(filters.private & filters.text & ~filters.command(["start", "menu", "cancel", "connect", "rules", "panel", "settings", "profile", "forward"]), group=-1)
+        @self._localized_handler
         async def _text(_, message: Message):
             # Every step of every flow is traced: if the bot ever goes quiet
             # again, the log shows exactly which step died and why.
@@ -6882,6 +6998,7 @@ class ProBotUI:
                     pass
 
         @b.on_message(filters.private & filters.document, group=-2)
+        @self._localized_handler
         async def _document(_, message: Message):
             """Receive a migration bundle file and restore it."""
             uid = message.from_user.id if message.from_user else 0
@@ -7005,7 +7122,7 @@ class ProBotUI:
         if not rule:
             st.step = ""
             await self._persist(uid, st)
-            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
         rule.name = text.strip()
         await self._save_owned_rule(rule, uid)
         st.step = ""
@@ -7019,7 +7136,7 @@ class ProBotUI:
         if not rule:
             st.step = ""
             await self._persist(uid, st)
-            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
         clean_txt = text.strip().lstrip("#")
         try:
             tid = int(clean_txt)
@@ -7038,7 +7155,7 @@ class ProBotUI:
         if not rule:
             st.step = ""
             await self._persist(uid, st)
-            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
         try:
             sec = max(0.0, float(text.strip()))
             rule.delay_seconds = sec
@@ -7056,7 +7173,7 @@ class ProBotUI:
         if not rule:
             st.step = ""
             await self._persist(uid, st)
-            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
         new_words = [w.strip() for w in text.replace("\n", ",").split(",") if w.strip()]
         bl = list(rule.blacklist or [])
         for w in new_words:
@@ -7075,7 +7192,7 @@ class ProBotUI:
         if not rule:
             st.step = ""
             await self._persist(uid, st)
-            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
         new_words = [w.strip() for w in text.replace("\n", ",").split(",") if w.strip()]
         wl = list(rule.whitelist or [])
         for w in new_words:
@@ -7094,7 +7211,7 @@ class ProBotUI:
         if not rule:
             st.step = ""
             await self._persist(uid, st)
-            return await message.reply_text("❌ قانون یافت نشد.", reply_markup=self._main_menu())
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
         rule.watermark = text.strip()
         await self._save_owned_rule(rule, uid)
         st.step = ""
@@ -7193,7 +7310,7 @@ class ProBotUI:
         if not self._is_admin(uid):
             st.step = ""
             await self._persist(uid, st)
-            return await message.reply_text("⛔ دسترسی غیرمجاز.")
+            return await message.reply_text(self._t("ui_need_admin"))
 
         bcast_text = (message.text or "").strip()
         if not bcast_text:
@@ -7227,7 +7344,7 @@ class ProBotUI:
         if not self._is_admin(uid):
             st.step = ""
             await self._persist(uid, st)
-            return await message.reply_text("⛔ دسترسی غیرمجاز.")
+            return await message.reply_text(self._t("ui_need_admin"))
 
         channel = (text or "").strip()
         if not channel.startswith("@") and not channel.startswith("-100"):
@@ -7259,7 +7376,7 @@ class ProBotUI:
         if not self._is_admin(uid):
             st.step = ""
             await self._persist(uid, st)
-            return await message.reply_text("⛔ دسترسی غیرمجاز.")
+            return await message.reply_text(self._t("ui_need_admin"))
 
         clean = (text or "").strip()
         if not clean.isdigit() or int(clean) <= 0:
@@ -8049,7 +8166,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(uid, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         in_draft = bool(st.buffer.get("in_draft")) if isinstance(st.buffer, dict) else False
@@ -8141,7 +8258,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(uid, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         in_draft = bool(st.buffer.get("in_draft")) if isinstance(st.buffer, dict) else False
@@ -8231,7 +8348,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(uid, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         if raw.lower() in ("/cancel", "انصراف", "لغو", "خروج"):
@@ -8263,7 +8380,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
@@ -8334,7 +8451,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
@@ -8366,7 +8483,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
@@ -8398,7 +8515,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
-            await message.reply_text("❌ تسک یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
@@ -8406,7 +8523,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(message.from_user.id, st)
             menu_text, menu_kbd = self._render_cleaner_menu(rule)
-            await message.reply_text("❌ عملیات لغو شد.", reply_markup=menu_kbd)
+            await message.reply_text(self._t("ui_cancelled"), reply_markup=menu_kbd)
             return
 
         words = [w.strip() for w in text.replace("\n", ",").split(",") if w.strip()]
@@ -8431,7 +8548,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
-            await message.reply_text("❌ تسک یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         clean = text.strip()
@@ -8440,7 +8557,7 @@ class ProBotUI:
             st.buffer = {}
             await self._persist(message.from_user.id, st)
             menu_text, menu_kbd = self._render_max_time_edit_menu(rule)
-            await message.reply_text("❌ عملیات لغو شد.", reply_markup=menu_kbd)
+            await message.reply_text(self._t("ui_cancelled"), reply_markup=menu_kbd)
             return
 
         if not clean.isdigit():
@@ -8471,7 +8588,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         raw_input = text.strip()
@@ -8547,7 +8664,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
@@ -8580,7 +8697,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
@@ -8626,7 +8743,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
@@ -8677,7 +8794,7 @@ class ProBotUI:
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
-            await message.reply_text("❌ قانون یافت نشد یا منقضی شده است.", reply_markup=self._main_menu())
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
         if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
@@ -8925,7 +9042,7 @@ class ProBotUI:
         _step_uid = message.from_user.id if message.from_user else 0
         if not cfg:
             cfgs = await (self._ai.list_all() if self._is_admin(_step_uid) else self._ai.list_by_owner(_step_uid))
-            await message.reply_text("❌ پیکربندی یافت نشد.", reply_markup=self._ai_menu(cfgs))
+            await message.reply_text(self._t("ui_ai_config_not_found"), reply_markup=self._ai_menu(cfgs))
             return
         new_url = text.strip()
         if new_url.lower() in ("default", "none", "-", "پیش‌فرض", "پیش فرض"):
@@ -8957,7 +9074,7 @@ class ProBotUI:
         _step_uid = message.from_user.id if message.from_user else 0
         if not cfg:
             cfgs = await (self._ai.list_all() if self._is_admin(_step_uid) else self._ai.list_by_owner(_step_uid))
-            await message.reply_text("❌ پیکربندی یافت نشد.", reply_markup=self._ai_menu(cfgs))
+            await message.reply_text(self._t("ui_ai_config_not_found"), reply_markup=self._ai_menu(cfgs))
             return
         cfg.model = text.strip()
         try:
@@ -8988,7 +9105,7 @@ class ProBotUI:
         _step_uid = message.from_user.id if message.from_user else 0
         if not cfg:
             cfgs = await (self._ai.list_all() if self._is_admin(_step_uid) else self._ai.list_by_owner(_step_uid))
-            await message.reply_text("❌ پیکربندی یافت نشد.", reply_markup=self._ai_menu(cfgs))
+            await message.reply_text(self._t("ui_ai_config_not_found"), reply_markup=self._ai_menu(cfgs))
             return
         cfg.api_key = text.strip()
         try:
