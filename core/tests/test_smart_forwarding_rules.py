@@ -230,12 +230,20 @@ def test_smart_bot_ui_menu_rendering():
     """Verify smart routing dashboard renders in bot UI with all interactive buttons."""
     from core.infrastructure.telegram.pro_bot_ui import ProBotUI
 
+    from core.infrastructure.telegram.i18n import I18n
+    from core.infrastructure.telegram.pro_bot_ui import UiState
+    _i18n = I18n()
     ui = ProBotUI.__new__(ProBotUI)
-    ui._t = lambda key, **kw: key
+    # Real per-user resolution path: the rule owner picked fa.
+    ui._states = {5094837833: UiState(lang="fa")}
+    ui._users = None
+    ui.i18n = _i18n
+    ui._t = ProBotUI._t.__get__(ui, ProBotUI)
     ui._kbd = lambda rows: ProBotUI._kbd(ui, rows)
 
     rule = ForwardRule(
         id="rule_test_12345678",
+        owner_user_id=5094837833,
         source_chat_id="-1001111111111",
         source_chat_name="Main Channel",
         target_chat_id="-1003333333333",

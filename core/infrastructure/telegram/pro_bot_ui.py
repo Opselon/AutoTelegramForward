@@ -1990,71 +1990,74 @@ class ProBotUI:
         use_mid = bool(getattr(rule, "use_intermediate", False))
         mid_id = getattr(rule, "intermediate_channel_id", "") or ""
         mid_name = getattr(rule, "intermediate_channel_name", "") or ""
-        mid_display = f"`{mid_name or mid_id}`" if mid_id else "❌ تنظیم نشده"
+        mid_display = f"`{mid_name or mid_id}`" if mid_id else self._t("ui_smart_not_set", lang=lang)
 
         cat = getattr(rule, "message_category", "ALL")
         crit = getattr(rule, "detection_criteria", {}) or {}
         match_mode = (crit.get("match_mode") or "ANY").upper()
         keywords = crit.get("text_contains") or crit.get("keywords") or []
-        kw_display = ", ".join(f"`{k}`" for k in keywords) if keywords else "❌ تعیین نشده"
+        kw_display = ", ".join(f"`{k}`" for k in keywords) if keywords else self._t("ui_smart_not_set", lang=lang)
         regex_p = crit.get("regex_pattern") or crit.get("text_regex") or ""
-        regex_display = f"`{regex_p}`" if regex_p else "❌ تعیین نشده"
+        regex_display = f"`{regex_p}`" if regex_p else self._t("ui_smart_not_set", lang=lang)
 
         f_mode = getattr(rule, "forward_mode", ForwardMode.COPY_MESSAGE)
         mode_val = getattr(f_mode, "value", str(f_mode))
 
+        _ns = self._t("ui_smart_not_set", lang=lang)
         # Determine active routing path
         if use_mid and mid_id and cat in ("VIP", "VIP_ONLY"):
-            path_desc = "💎 **مسیر ۲: برندینگ واسط (A ➔ C ➔ B)**\n*(فقط پیام‌های منتخب VIP ابتدا در C ایجاد و با هدر C به B فوروارد می‌شوند)*"
-            path_tag = "مسیر ۲ (A ➔ C ➔ B)"
+            path_desc = self._t("ui_smart_path2_desc", lang=lang)
+            path_tag = self._t("ui_smart_path2_tag", lang=lang)
         elif mode_val == "DIRECT_FORWARD":
-            path_desc = "↗️ **مسیر ۳: فوروارد رسمی مستقیم (A ➔ B)**\n*(پیام‌ها با تگ فوروارد کانال مبدأ A به B ارسال می‌شوند)*"
-            path_tag = "مسیر ۳ (Native A ➔ B)"
+            path_desc = self._t("ui_smart_path3_desc", lang=lang)
+            path_tag = self._t("ui_smart_path3_tag", lang=lang)
         else:
-            path_desc = "📋 **مسیر ۱: مستقیم و تمیز (A ➔ B)**\n*(پیام‌های عادی، نظرات و چت بدون دخالت C مستقیم به B کپی می‌شوند)*"
-            path_tag = "مسیر ۱ (مستقیم A ➔ B)"
+            path_desc = self._t("ui_smart_path1_desc", lang=lang)
+            path_tag = self._t("ui_smart_path1_tag", lang=lang)
 
         chdr = getattr(rule, "custom_header", "") or ""
-        hdr_display = f"`{chdr[:25]}…`" if len(chdr) > 25 else (f"`{chdr}`" if chdr else "❌ تنظیم نشده")
+        hdr_display = f"`{chdr[:25]}…`" if len(chdr) > 25 else (f"`{chdr}`" if chdr else _ns)
         prio = int(getattr(rule, "priority", 10) or 10)
+        mode_desc = (self._t("ui_smart_match_all", lang=lang) if match_mode == "ALL"
+                     else self._t("ui_smart_match_any", lang=lang))
 
         lines = [
-            "💎 **کنترل پنل مسیریابی هوشمند و VIP (Smart Routing Engine)**\n",
-            f"قانون: **{src_label} ➔ {dst_label}**\n",
+            self._t("ui_smart_title", lang=lang),
+            self._t("ui_smart_rule_line", lang=lang, src=src_label, dst=dst_label),
             "────────────────────",
-            f"🛣 **مسیر فعال جریان پیام:**\n{path_desc}\n",
-            f"📡 **کانال واسط C:** {mid_display}",
-            f"🧩 **منطق ترکیب شروط VIP:** `{match_mode}` ({'الزام همزمان همه شروط' if match_mode == 'ALL' else 'تحقق حداقل یک شرط'})",
-            f"🔎 **کلیدواژه‌های متنی:** {kw_display}",
-            f"🔣 **الگوی Regex:** {regex_display}",
-            f"🏷 **هدر اختصاصی کپی:** {hdr_display}",
-            f"🎯 **اولویت اجرای قانون:** `{prio}` (قوانین با اولویت بالاتر اول اجرا می‌شوند)",
-            "🛡 **سیاست محتوای قفل/حفاظت‌شده:** فعال (Clean Copy & Re-upload در صورت محدودیت تلگرام)",
-            "🔒 **ضد لوپ و ضد دابل‌سند:** فعال با بررسی Idempotency Key و منشأ پیام\n",
-            "👇 جهت تغییر تنظیمات، گزینه‌های زیر را لمس کنید:"
+            self._t("ui_smart_active_path", lang=lang, path_desc=path_desc),
+            self._t("ui_smart_mid_channel", lang=lang, mid=mid_display),
+            self._t("ui_smart_match_logic", lang=lang, match_mode=match_mode, mode_desc=mode_desc),
+            self._t("ui_smart_keywords", lang=lang, keywords=kw_display),
+            self._t("ui_smart_regex", lang=lang, regex=regex_display),
+            self._t("ui_smart_custom_header", lang=lang, header=hdr_display),
+            self._t("ui_smart_priority", lang=lang, prio=prio),
+            self._t("ui_smart_lock_policy", lang=lang),
+            self._t("ui_smart_antiloop", lang=lang),
+            self._t("ui_smart_hint", lang=lang),
         ]
 
         # Buttons
         rows: List[List[Tuple[str, str]]] = [
-            [("🛣 تغییر مسیر: " + path_tag[:20], f"rsmpth:{rule.id}")],
+            [(self._t("ui_smart_btn_change_path", lang=lang, path_tag=path_tag[:20]), f"rsmpth:{rule.id}")],
             [
-                ("🧩 منطق: " + match_mode, f"rsmmod:{rule.id}"),
-                ("📡 کانال واسط C", f"rsmw:{rule.id}"),
+                (self._t("ui_smart_btn_logic", lang=lang, match_mode=match_mode), f"rsmmod:{rule.id}"),
+                (self._t("ui_smart_btn_mid", lang=lang), f"rsmw:{rule.id}"),
             ],
             [
-                ("🔎 تنظیم کلیدواژه", f"rsmtx:{rule.id}"),
-                ("🔣 تنظیم Regex", f"rsmrx:{rule.id}"),
+                (self._t("ui_smart_btn_keywords", lang=lang), f"rsmtx:{rule.id}"),
+                (self._t("ui_smart_btn_regex", lang=lang), f"rsmrx:{rule.id}"),
             ],
             [
-                ("🏷 هدر اختصاصی", f"rsmh:{rule.id}"),
-                ("🗑 حذف هدر", f"rsmhd:{rule.id}"),
+                (self._t("ui_smart_btn_header", lang=lang), f"rsmh:{rule.id}"),
+                (self._t("ui_smart_btn_del_header", lang=lang), f"rsmhd:{rule.id}"),
             ],
             [
-                ("➕ اولویت (+10)", f"rsmpu:{rule.id}"),
-                ("➖ اولویت (-10)", f"rsmpd:{rule.id}"),
+                (self._t("ui_smart_btn_prio_up", lang=lang), f"rsmpu:{rule.id}"),
+                (self._t("ui_smart_btn_prio_down", lang=lang), f"rsmpd:{rule.id}"),
             ],
-            [("🧪 تست و شبیه‌سازی زنده قانون (Dry Run)", f"rsmtst:{rule.id}")],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+            [(self._t("ui_smart_btn_dryrun", lang=lang), f"rsmtst:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
         ]
         return "\n".join(lines), self._kbd(rows)
 
