@@ -1,6 +1,5 @@
 """Telegram Bot Manager: command + callback surface over the use cases."""
 
-import base64
 import json
 import logging
 import time
@@ -22,6 +21,7 @@ from ...domain.value_objects import (
     ForwardMode,
     RoutingType,
 )
+from ...application.backup_service import decrypt_session_backup, encrypt_session_backup
 from .auth_state import AuthStateMachine
 from .client_pool import ClientPool
 from .i18n import I18n, SUPPORTED_LANGUAGES
@@ -319,9 +319,7 @@ class BotManager:
                     "username": target.username,
                     "first_name": target.first_name,
                 }
-                blob = base64.urlsafe_b64encode(
-                    json.dumps(bundle).encode("utf-8")
-                ).decode("ascii")
+                blob = encrypt_session_backup(bundle, self._crypto)
                 path = f"backup_{target.id[:8]}.atf"
                 with open(path, "w", encoding="utf-8") as fh:
                     fh.write(blob)
@@ -347,8 +345,9 @@ class BotManager:
                 return await message.reply_text(self.i18n.t("restore_failed", lang=lang, error="attach .atf file"))
             path = await message.download()
             try:
-                blob = open(path, encoding="utf-8").read().strip()
-                bundle = json.loads(base64.urlsafe_b64decode(blob.encode("ascii")))
+                with open(path, encoding="utf-8") as fh:
+                    blob = fh.read().strip()
+                bundle = decrypt_session_backup(blob, self._crypto)
                 session = await self._sessions.create(
                     phone_number=bundle["phone"],
                     session_string_encrypted=bundle["session_string"],
@@ -363,6 +362,12 @@ class BotManager:
                 await message.reply_text(self.i18n.t("restore_done", lang=lang, phone=session.phone_number))
             except Exception as exc:
                 await message.reply_text(self.i18n.t("restore_failed", lang=lang, error=str(exc)))
+            finally:
+                import os
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
 
         # Plain text router: FSM (login steps / lang pick / rule add / ai add)
         @b.on_message(filters.private & ~filters.command([
