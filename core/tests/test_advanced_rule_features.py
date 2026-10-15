@@ -227,19 +227,24 @@ async def test_bot_ui_rule_card_rendering():
     _i18n = I18n()
     _i18n.set_language("fa")
 
+    from core.infrastructure.telegram.pro_bot_ui import UiState
     ui = object.__new__(ProBotUI)
     ui._render_rule_detail = ProBotUI._render_rule_detail.__get__(ui, ProBotUI)
     ui._render_advanced_settings = ProBotUI._render_advanced_settings.__get__(ui, ProBotUI)
     ui._render_replace_menu = ProBotUI._render_replace_menu.__get__(ui, ProBotUI)
     ui._render_header_footer_menu = ProBotUI._render_header_footer_menu.__get__(ui, ProBotUI)
     ui._kbd = ProBotUI._kbd.__get__(ui, ProBotUI)
-    ui._lang = "fa"
     ui.i18n = _i18n
-    ui._t = lambda key, lang=None, **kw: _i18n.t(key, lang=lang or "fa", **kw)
+    # Real resolution path: this tenant picked fa, held in per-user UiState.
+    # Renderers must resolve the rule OWNER's language from the rule itself.
+    ui._states = {5094837833: UiState(lang="fa")}
+    ui._users = None
+    ui._t = ProBotUI._t.__get__(ui, ProBotUI)
 
     rule = ForwardRule(
         id="test-rule-id-12345",
         session_id="s1",
+        owner_user_id=5094837833,
         source_chat_id="-1001",
         target_chat_id="-1002",
         source_chat_name="Channel Source",

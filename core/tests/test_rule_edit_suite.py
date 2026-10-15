@@ -407,6 +407,7 @@ async def test_bot_ui_rendering_and_pagination(db, crypto):
         await repo.add(
             ForwardRule(
                 session_id=session.id,
+                owner_user_id=5094837834,
                 source_chat_id=f"-100{i}",
                 source_chat_name=f"Src {i}",
                 target_chat_id=f"-200{i}",
@@ -418,11 +419,14 @@ async def test_bot_ui_rendering_and_pagination(db, crypto):
     assert len(all_rules) == 7
 
     from core.infrastructure.telegram.i18n import I18n
-    _i18n = I18n(); _i18n.set_language("fa")
+    from core.infrastructure.telegram.pro_bot_ui import UiState
+    _i18n = I18n()
     ui = object.__new__(ProBotUI)
     ui.i18n = _i18n
-    ui._lang = "fa"
-    ui._t = lambda key, lang=None, **kw: _i18n.t(key, lang=lang or "fa", **kw)
+    # Real resolution path: this tenant picked fa, in per-user UiState.
+    ui._states = {5094837834: UiState(lang="fa")}
+    ui._users = None
+    ui._t = ProBotUI._t.__get__(ui, ProBotUI)
     ui._rules_menu = ProBotUI._rules_menu.__get__(ui, ProBotUI)
     ui._render_rules_list = ProBotUI._render_rules_list.__get__(ui, ProBotUI)
     ui._render_rule_detail = ProBotUI._render_rule_detail.__get__(ui, ProBotUI)

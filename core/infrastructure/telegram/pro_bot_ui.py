@@ -272,11 +272,11 @@ class ProBotUI:
     ) -> None:
         self.bot = bot
         self.i18n = i18n
-        # Default render language for the (rare) render paths that have no
-        # per-user context available. Per-user handlers resolve the user's
-        # own language via _resolve_lang(uid, user) and pass it to _t();
-        # this default must never be read for a specific user's render.
-        self._lang: str = "en"
+        # NOTE: intentionally NO shared default language. _t() with no
+        # explicit lang renders English — the only safe cross-user default.
+        # Per-user renderers resolve via _lang_for(rule|st|uid) and pass
+        # lang= explicitly, so one user's choice can never leak into
+        # another user's render.
         self._sessions = sessions
         self._rules = rules
         self._filters = filter_rules
@@ -372,6 +372,46 @@ class ProBotUI:
 
         return "en"
 
+    def _lang_for(self, *sources: Any, uid: Optional[int] = None) -> str:
+        """Resolve the render language from whatever identity is at hand.
+
+        Renderers that cannot take an explicit ``lang`` argument (rule
+        menus, keypads, step handlers) call this with whatever identity
+        they hold — ``rule.owner_user_id``, ``st`` (UiState) or a
+        message's ``from_user`` — so they never fall back to a shared
+        process-wide language.
+
+        Resolution: UiState → persisted preference → the user's own
+        Telegram client language_code → ``en``. Never reads
+        ``i18n.current`` (process-global; would leak between users).
+        """
+        user_obj = None
+        resolved_uid = uid
+        for src in sources:
+            if src is None:
+                continue
+            if isinstance(src, int):
+                resolved_uid = resolved_uid or src
+            elif isinstance(src, str) and src.isdigit():
+                resolved_uid = resolved_uid or int(src)
+            elif hasattr(src, "language_code"):
+                user_obj = user_obj or src
+            else:
+                # Rule-like object exposing owner_user_id (ForwardRule,
+                # drafts) or UiState exposing user_id.
+                owner = getattr(src, "owner_user_id", None)
+                if owner is None:
+                    owner = getattr(src, "user_id", None)
+                if isinstance(owner, int) and owner > 0:
+                    resolved_uid = resolved_uid or owner
+                elif isinstance(owner, str) and owner.isdigit():
+                    resolved_uid = resolved_uid or int(owner)
+                if hasattr(src, "lang") and not user_obj:
+                    # UiState.lang is the in-memory per-user preference;
+                    # _resolve_lang reads it from self._states directly.
+                    pass
+        return self._resolve_lang(resolved_uid, user_obj)
+
     def _state(self, uid: int, user: Any = None) -> UiState:
         st = self._states.get(uid)
         if st is None:
@@ -417,9 +457,10 @@ class ProBotUI:
 
     def _t(self, key: str, lang: Optional[str] = None, **kw) -> str:
         # Never read the process-wide i18n.current singleton here: one user's
-        # language choice must not leak into another user's render. Prefer the
-        # explicitly passed lang, then the per-UI default, then English.
-        cur_lang = lang or getattr(self, "_lang", None) or "en"
+        # language choice must not leak into another user's render. An
+        # explicit lang always wins; without one, English is the only safe
+        # default because self._lang would be shared across all users.
+        cur_lang = lang or "en"
         return self.i18n.t(key, lang=cur_lang, **kw)
 
     @staticmethod
@@ -458,14 +499,16 @@ class ProBotUI:
         return self._kbd([[("❌ " + self._t("ui_cancel"), CB["cancel"])]])
 
     def _code_keypad(self, st: UiState) -> InlineKeyboardMarkup:
+        lang = self._lang_for(st)
         return self._kbd([
             [("1", "k:1"), ("2", "k:2"), ("3", "k:3")],
             [("4", "k:4"), ("5", "k:5"), ("6", "k:6")],
             [("7", "k:7"), ("8", "k:8"), ("9", "k:9")],
-            [("⌫", "k:del"), ("0", "k:0"), ("❌ " + self._t("ui_cancel"), CB["cancel"])],
+            [("⌫", "k:del"), ("0", "k:0"), ("❌ " + self._t("ui_cancel", lang=lang), CB["cancel"])],
         ])
 
     def _login_code_text(self, st: UiState) -> str:
+        lang = self._lang_for(st)
         digits = ""
         if isinstance(st.buffer, dict):
             digits = str(st.buffer.get("code_digits", "") or "")
@@ -1084,9 +1127,12 @@ class ProBotUI:
         self, rules: Optional[list] = None, page: int = 0, page_size: int = 5
     ) -> Tuple[str, InlineKeyboardMarkup]:
         rules_list = rules if rules is not None else []
-        lines = [self._t("ui_rules_title"), ""]
+        # Resolve the language from the first rule's owner — all rules in
+        # this list belong to the same tenant (owner-scoped queries).
+        lang = self._lang_for(rules_list[0]) if rules_list else None
+        lines = [self._t("ui_rules_title", lang=lang), ""]
         if not rules_list:
-            lines.append(self._t("ui_none"))
+            lines.append(self._t("ui_none", lang=lang))
             return "\n".join(lines), self._rules_menu([], page=0, page_size=page_size)
 
         total_items = len(rules_list)
@@ -1108,29 +1154,30 @@ class ProBotUI:
 
         if total_pages > 1:
             lines.append("")
-            lines.append(self._t("ui_rules_page_info", page=page + 1, total=total_pages, count=total_items))
+            lines.append(self._t("ui_rules_page_info", lang=lang, page=page + 1, total=total_pages, count=total_items))
 
         return "\n".join(lines), self._rules_menu(rules_list, page=page, page_size=page_size)
 
     def _render_rule_detail(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render the complete Task Management & Routing Overview (Screens 1, 4, 5)."""
         task_name = rule.name or f"task_{rule.id[:8]}"
         src_label = rule.source_chat_name or rule.source_chat_id or "AF Route Lab Source"
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id or "AF Route Lab Target")
 
-        status_text = "RUNNING 🟢" if rule.is_active else "PAUSED ⚪"
-        debug_text = "ON 🟢" if rule.debug_mode else "OFF"
-        sender_type = rule.sender_type or "Personal Telegram Account"
-        topic_str = f"#{rule.topic_id}" if rule.topic_id else "None"
-        fwd_hdr_status = "Yes 🟢" if rule.show_forward_header else "No ⚪"
-        dup_status = "ON 🟢" if rule.duplicate_filters else "OFF ⚪"
-        rep_sync_status = "ON 🟢" if rule.sync_replies else "OFF ⚪"
-        edit_sync_status = "OFF ⚪" if rule.ignore_edits else "ON 🟢"
-        del_sync_status = "ON 🟢" if rule.sync_deletes else "OFF ⚪"
-        cleaner_status = "ON 🟢" if rule.cleaner_enabled else "OFF ⚪"
+        status_text = self._t("ui_rule_status_running", lang=lang) if rule.is_active else self._t("ui_rule_status_paused", lang=lang)
+        debug_text = self._t("ui_rule_on", lang=lang) if rule.debug_mode else self._t("ui_rule_off", lang=lang)
+        sender_type = rule.sender_type or self._t("ui_rule_sender_personal", lang=lang)
+        topic_str = f"#{rule.topic_id}" if rule.topic_id else self._t("ui_none_label", lang=lang)
+        fwd_hdr_status = self._t("ui_rule_yes", lang=lang) if rule.show_forward_header else self._t("ui_rule_no", lang=lang)
+        dup_status = self._t("ui_rule_on", lang=lang) if rule.duplicate_filters else self._t("ui_rule_off", lang=lang)
+        rep_sync_status = self._t("ui_rule_on", lang=lang) if rule.sync_replies else self._t("ui_rule_off", lang=lang)
+        edit_sync_status = self._t("ui_rule_off", lang=lang) if rule.ignore_edits else self._t("ui_rule_on", lang=lang)
+        del_sync_status = self._t("ui_rule_on", lang=lang) if rule.sync_deletes else self._t("ui_rule_off", lang=lang)
+        cleaner_status = self._t("ui_rule_on", lang=lang) if rule.cleaner_enabled else self._t("ui_rule_off", lang=lang)
 
         warning_line = (
-            "\n⚠️ *Reply, Edit, Replace, Translate will not work when show header*\n"
+            self._t("ui_rule_detail_header_warning", lang=lang)
             if rule.show_forward_header
             else ""
         )
@@ -1144,74 +1191,74 @@ class ProBotUI:
 
         grp = rule.feature_group or "all"
         chips = {
-            "all": "All",
-            "crypto": "₿ Crypto",
-            "mmo": "MMO / Affiliate",
-            "content": "Content",
+            "all": self._t("ui_rule_chip_all", lang=lang),
+            "crypto": self._t("ui_rule_chip_crypto", lang=lang),
+            "mmo": self._t("ui_rule_chip_mmo", lang=lang),
+            "content": self._t("ui_rule_chip_content", lang=lang),
         }
 
         # Header and Task Overview text matching the Telegram Mini App & Mobile screen
         text = (
-            f"⚡ **Auto Forward Messages — Task Management**\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"📋 **Task Name:** `{task_name}`\n\n"
-            f"📊 **Task Overview:**\n"
-            f"• ⏻ **Forwarding Status:** `{status_text}`\n"
-            f"• ↪ **Source:** `{src_label}` (`{rule.source_chat_id}`)\n"
-            f"• ➤ **Target:** `{dst_label}` (`{rule.target_chat_id}`)\n"
-            f"• 🏷 **Show Forward Header:** `{fwd_hdr_status}`{warning_line}\n"
-            f"• 🐞 **Debug Mode:** `{debug_text}` | #️⃣ **Topic:** `{topic_str}`\n\n"
-            f"🎯 **Features (v2.0 Parity):**\n"
-            f"• Edit: `{edit_sync_status}` | Delete: `{del_sync_status}` | Reply: `{rep_sync_status}`\n"
-            f"• Show Header: `{fwd_hdr_status}` | Duplicate Filters: `{dup_status}`\n"
-            f"• Cleaner: `{cleaner_status}` | Delay: `{delay_val}`\n\n"
-            f"👤 **Sender Type:** `{sender_type}`\n"
-            f"👑 **PAID ADDON:** Unlock premium features with credits\n"
+            self._t("ui_rule_detail_title", lang=lang) + "\n"
+            + self._t("ui_rule_detail_sep", lang=lang) + "\n"
+            + self._t("ui_rule_detail_task_name", lang=lang, task_name=task_name) + "\n\n"
+            + self._t("ui_rule_detail_overview", lang=lang) + "\n"
+            + self._t("ui_rule_detail_fwd_status", lang=lang, status_text=status_text) + "\n"
+            + self._t("ui_rule_detail_source", lang=lang, src_label=src_label, source_chat_id=rule.source_chat_id) + "\n"
+            + self._t("ui_rule_detail_target", lang=lang, dst_label=dst_label, target_chat_id=rule.target_chat_id) + "\n"
+            + self._t("ui_rule_detail_show_header", lang=lang, fwd_hdr_status=fwd_hdr_status) + warning_line + "\n"
+            + self._t("ui_rule_detail_debug_topic", lang=lang, debug_text=debug_text, topic_str=topic_str) + "\n\n"
+            + self._t("ui_rule_detail_features", lang=lang) + "\n"
+            + self._t("ui_rule_detail_sync_row1", lang=lang, edit_sync_status=edit_sync_status, del_sync_status=del_sync_status, rep_sync_status=rep_sync_status) + "\n"
+            + self._t("ui_rule_detail_sync_row2", lang=lang, fwd_hdr_status=fwd_hdr_status, dup_status=dup_status) + "\n"
+            + self._t("ui_rule_detail_sync_row3", lang=lang, cleaner_status=cleaner_status, delay_val=delay_val) + "\n\n"
+            + self._t("ui_rule_detail_sender", lang=lang, sender_type=sender_type) + "\n"
+            + self._t("ui_rule_detail_paid_addon", lang=lang) + "\n"
         )
 
         rows: List[List[Tuple[str, str]]] = [
             # Top routing controls
             [
-                ("🟢 Edit Source", f"res:{rule.id}"),
-                ("🔴 Edit Target", f"ret:{rule.id}"),
+                (self._t("ui_rule_edit_source", lang=lang), f"res:{rule.id}"),
+                (self._t("ui_rule_edit_target", lang=lang), f"ret:{rule.id}"),
             ],
             [
-                (f"🏷 Header: {fwd_hdr_status}", f"rtg_fwdhdr:{rule.id}"),
-                (f"#️⃣ Topic: {topic_str}", f"rtpc:{rule.id}"),
+                (self._t("ui_rule_btn_header", lang=lang, fwd_hdr_status=fwd_hdr_status), f"rtg_fwdhdr:{rule.id}"),
+                (self._t("ui_rule_btn_topic", lang=lang, topic_str=topic_str), f"rtpc:{rule.id}"),
             ],
             # Features: 5 Toggle Pills (matching mobile screen)
             [
-                (f"✔ Edit: {edit_sync_status}", f"red:{rule.id}"),
-                (f"✔ Delete: {del_sync_status}", f"rdl:{rule.id}"),
-                (f"✔ Reply: {rep_sync_status}", f"rtg_repsync:{rule.id}"),
+                (self._t("ui_rule_btn_edit", lang=lang, edit_sync_status=edit_sync_status), f"red:{rule.id}"),
+                (self._t("ui_rule_btn_delete", lang=lang, del_sync_status=del_sync_status), f"rdl:{rule.id}"),
+                (self._t("ui_rule_btn_reply", lang=lang, rep_sync_status=rep_sync_status), f"rtg_repsync:{rule.id}"),
             ],
             [
-                (f"✔ Header: {fwd_hdr_status}", f"rtg_fwdhdr:{rule.id}"),
-                (f"✔ Dup Filters: {dup_status}", f"rtg_dup:{rule.id}"),
+                (self._t("ui_rule_btn_header", lang=lang, fwd_hdr_status=fwd_hdr_status), f"rtg_fwdhdr:{rule.id}"),
+                (self._t("ui_rule_btn_dup", lang=lang, dup_status=dup_status), f"rtg_dup:{rule.id}"),
             ],
             # 6 Modular Option Cards (matching mobile screen)
             [
-                (f"🔤 Replace ({rep_count})", f"rtx:{rule.id}"),
-                (f"≡ₓ Blacklist ({bl_count})", f"rfl_bl:{rule.id}"),
+                (self._t("ui_rule_btn_replace", lang=lang, rep_count=rep_count), f"rtx:{rule.id}"),
+                (self._t("ui_rule_btn_blacklist", lang=lang, bl_count=bl_count), f"rfl_bl:{rule.id}"),
             ],
             [
-                (f"≡✓ Whitelist ({wl_count})", f"rfl_wl:{rule.id}"),
-                (f"∷ Cleaner ({cl_count})", f"rcl:{rule.id}"),
+                (self._t("ui_rule_btn_whitelist", lang=lang, wl_count=wl_count), f"rfl_wl:{rule.id}"),
+                (self._t("ui_rule_btn_cleaner", lang=lang, cl_count=cl_count), f"rcl:{rule.id}"),
             ],
             [
-                (f"⊶ Filters ({fl_count})", f"rfl:{rule.id}"),
-                (f"⏱ Set Delay ({delay_val})", f"rdly:{rule.id}"),
+                (self._t("ui_rule_btn_filters", lang=lang, fl_count=fl_count), f"rfl:{rule.id}"),
+                (self._t("ui_rule_btn_delay", lang=lang, delay_val=delay_val), f"rdly:{rule.id}"),
             ],
             # Task operations
             [
-                (f"⏻ Status: {status_text}", f"rtg:{rule.id}"),
-                ("📋 Duplicate", f"rdup:{rule.id}"),
-                ("✏️ Rename", f"rrn:{rule.id}"),
-                ("✏️ Draft", f"re:{rule.id}"),
+                (self._t("ui_rule_btn_status", lang=lang, status_text=status_text), f"rtg:{rule.id}"),
+                (self._t("ui_rule_btn_duplicate", lang=lang), f"rdup:{rule.id}"),
+                (self._t("ui_rule_btn_rename", lang=lang), f"rrn:{rule.id}"),
+                (self._t("ui_rule_btn_draft", lang=lang), f"re:{rule.id}"),
             ],
             [
-                ("🎚 Advanced Settings", f"radv:{rule.id}"),
-                ("🗑 Delete Task", f"rrm:{rule.id}"),
+                (self._t("ui_rule_btn_advanced", lang=lang), f"radv:{rule.id}"),
+                (self._t("ui_rule_btn_delete_task", lang=lang), f"rrm:{rule.id}"),
             ],
             # Feature groups tabs / chips
             [
@@ -1230,12 +1277,12 @@ class ProBotUI:
         if grp == "crypto":
             rows.extend([
                 [
-                    ("₿ Crypto Mode: " + ("ON" if rule.crypto_mode else "OFF"), f"rtg_crypto:{rule.id}"),
-                    ("🔒 Signal Formatter", f"radon:{rule.id}:sig_format"),
+                    (self._t("ui_rule_grp_crypto_mode", lang=lang, state=self._t("ui_rule_on", lang=lang) if rule.crypto_mode else self._t("ui_rule_off", lang=lang)), f"rtg_crypto:{rule.id}"),
+                    (self._t("ui_rule_addon_sig_format", lang=lang), f"radon:{rule.id}:sig_format"),
                 ],
                 [
-                    ("🔒 Wallet Cleaner", f"radon:{rule.id}:wallet_clean"),
-                    ("🔒 Outbound Webhooks", f"radon:{rule.id}:webhook"),
+                    (self._t("ui_rule_addon_wallet_clean", lang=lang), f"radon:{rule.id}:wallet_clean"),
+                    (self._t("ui_rule_addon_webhook", lang=lang), f"radon:{rule.id}:webhook"),
                 ],
             ])
         elif grp == "mmo":
@@ -1290,7 +1337,7 @@ class ProBotUI:
             ])
 
         rows.append([
-            ("⭐ View all (18) ➔", f"radon_all:{rule.id}"),
+            (self._t("ui_rule_addon_all", lang=lang), f"radon_all:{rule.id}"),
         ])
         rows.append([
             (f"⬅️ {self._t('ui_rule_back_rules')}", CB["rules"]),
@@ -1299,6 +1346,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_advanced_settings(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render the complete Advanced Settings dashboard (Screens 2 & 3)."""
         task_name = rule.name or f"task_{rule.id[:8]}"
         src_label = rule.source_chat_name or rule.source_chat_id or "AF Route Lab Source"
@@ -1456,319 +1504,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_all_addons(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render all 18 Add-ons catalogue with toggle controls."""
-        task_name = rule.name or f"task_{rule.id[:8]}"
-        addons = rule.paid_addons
-        
-        all_18 = [
-            ("comments", "★ Channel Comments"),
-            ("every_n", "🔒 Forward Every N Messages"),
-            ("kw_confirm", "🔒 Keyword Confirmation"),
-            ("kw_reply", "🔒 Keyword Reply Thread"),
-            ("auto_del", "🔒 Auto Delete Messages"),
-            ("webhook", "🔒 Outbound Webhooks"),
-            ("crypto", "🪙 Crypto Mode"),
-            ("affiliate", "💲 Affiliate Kit"),
-            ("link_buttons", "🔗 Link Buttons"),
-            ("watermark", "🖼 Watermark Protection"),
-            ("duplicate", "🔀 Duplicate Filters"),
-            ("cleaner", "🧹 Cleaner Protocol"),
-            ("scheduler", "⏰ Auto Post Scheduler"),
-            ("power_schedule", "⏻ Power On/Off Schedule"),
-            ("raw_text", "📄 Process Raw Text"),
-            ("button_to_text", "🔘 Button To Text"),
-            ("ocr_ai", "👁 OCR Image AI"),
-            ("ai_rewrite", "✨ Smart AI Rewrite"),
-        ]
-
-        text = (
-            f"👑 **PAID ADDON Catalogue — 18 Modular Extensions**\n"
-            f"📋 **Task:** `{task_name}`\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"از این بخش می‌توانید افزونه‌های ماژولار و پیشرفته را برای این تسک فعال یا غیرفعال نمایید:\n"
-        )
-
-        rows: List[List[Tuple[str, str]]] = []
-        for i in range(0, len(all_18), 2):
-            pair = []
-            k1, lbl1 = all_18[i]
-            on1 = "🟢" if addons.get(k1) else "⚪"
-            pair.append((f"{lbl1} {on1}", f"radon_tg:{rule.id}:{k1}"))
-            if i + 1 < len(all_18):
-                k2, lbl2 = all_18[i + 1]
-                on2 = "🟢" if addons.get(k2) else "⚪"
-                pair.append((f"{lbl2} {on2}", f"radon_tg:{rule.id}:{k2}"))
-            rows.append(pair)
-
-        rows.append([(f"🔙 {self._t('ui_rule_back_task')}", f"rd:{rule.id}")])
-        return text, self._kbd(rows)
-
-    def _render_header_footer_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render header and footer configuration menu."""
-        src_label = rule.source_chat_name or rule.source_chat_id
-        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
-        hdr = rule.header
-        ftr = rule.footer
-
-        lines = [
-            "📝 **تنظیمات هدر و فوتر (پیشوند و پسوند پیام)**\n",
-            f"قانون: **{src_label} ➔ {dst_label}**\n",
-            "────────────────────",
-            "📌 **هدر فعلی (ابتدای پیام):**",
-            f"`{hdr}`\n" if hdr else "❌ تنظیم نشده است.\n",
-            "📌 **فوتر فعلی (انتهای پیام):**",
-            f"`{ftr}`\n" if ftr else "❌ تنظیم نشده است.\n",
-            "💡 هدر و فوتر به صورت خودکار به متن تمام پیام‌های ارسالی این قانون اضافه خواهند شد.",
-        ]
-
-        rows: List[List[Tuple[str, str]]] = [
-            [
-                ("✏️ تنظیم هدر", f"rh_s:{rule.id}"),
-                ("🗑 حذف هدر", f"rh_d:{rule.id}"),
-            ],
-            [
-                ("✏️ تنظیم فوتر", f"rf_s:{rule.id}"),
-                ("🗑 حذف فوتر", f"rf_d:{rule.id}"),
-            ],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
-        ]
-        return "\n".join(lines), self._kbd(rows)
-
-    def _render_cleaner_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render cleaner settings menu for this task."""
-        uid = getattr(rule, "owner_user_id", 0)
-        cur_lang = self._resolve_lang(uid)
-        src_label = rule.source_chat_name or rule.source_chat_id
-        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
-
-        url_b = self._t("ui_status_remove", lang=cur_lang) if rule.remove_links else self._t("ui_status_allowed", lang=cur_lang)
-        usr_b = self._t("ui_status_remove", lang=cur_lang) if rule.clean_usernames else self._t("ui_status_allowed", lang=cur_lang)
-        tag_b = self._t("ui_status_remove", lang=cur_lang) if rule.clean_hashtags else self._t("ui_status_allowed", lang=cur_lang)
-        emo_b = self._t("ui_status_clean", lang=cur_lang) if rule.remove_emojis else self._t("ui_status_keep", lang=cur_lang)
-        phn_b = self._t("ui_status_remove", lang=cur_lang) if rule.clean_phones else self._t("ui_status_allowed", lang=cur_lang)
-        btn_b = self._t("ui_status_remove", lang=cur_lang) if rule.clean_buttons else self._t("ui_status_allowed", lang=cur_lang)
-        spc_b = self._t("ui_status_clean", lang=cur_lang) if rule.clean_empty_lines else self._t("ui_status_keep", lang=cur_lang)
-        wrd_cnt = len(rule.clean_custom_words)
-        wrd_b = self._t("ui_words_count", lang=cur_lang, count=wrd_cnt) if wrd_cnt else self._t("ui_not_configured", lang=cur_lang)
-
-        text = (
-            f"{self._t('ui_cleaner_menu_title', lang=cur_lang)}\n\n"
-            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
-            "────────────────────\n"
-            f"{self._t('ui_cleaner_menu_desc', lang=cur_lang)}\n\n"
-            f"• 🔗 **{self._t('ui_rule_cleaner', lang=cur_lang)} (URLs):** {url_b}\n"
-            f"• 👤 **@Usernames:** {usr_b}\n"
-            f"• #️⃣ **#Hashtags:** {tag_b}\n"
-            f"• 😀 **Emojis:** {emo_b}\n"
-            f"• 📞 **Phone:** {phn_b}\n"
-            f"• 🔘 **Buttons:** {btn_b}\n"
-            f"• ✂️ **Empty Lines:** {spc_b}\n"
-            f"• 📝 **Custom Words:** {wrd_b}\n\n"
-            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
-        )
-
-        rows: List[List[Tuple[str, str]]] = [
-            [
-                (f"🔗 Links: {url_b}", f"rcl_url:{rule.id}"),
-                (f"👤 Mentions: {usr_b}", f"rcl_usr:{rule.id}"),
-            ],
-            [
-                (f"#️⃣ Tags: {tag_b}", f"rcl_tag:{rule.id}"),
-                (f"😀 Emojis: {emo_b}", f"rcl_emo:{rule.id}"),
-            ],
-            [
-                (f"📞 Phones: {phn_b}", f"rcl_phn:{rule.id}"),
-                (f"🔘 Buttons: {btn_b}", f"rcl_btn:{rule.id}"),
-            ],
-            [
-                (f"✂️ Empty Lines: {spc_b}", f"rcl_spc:{rule.id}"),
-                (f"📝 Words: {wrd_b}", f"rcl_wrd:{rule.id}"),
-            ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
-        ]
-        return text, self._kbd(rows)
-
-    def _render_filters_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render content filter settings menu for this task."""
-        uid = getattr(rule, "owner_user_id", 0)
-        cur_lang = self._resolve_lang(uid)
-        src_label = rule.source_chat_name or rule.source_chat_id
-        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
-
-        lnk_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_links else self._t("ui_status_allowed", lang=cur_lang)
-        vid_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_video else self._t("ui_status_allowed", lang=cur_lang)
-        aud_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_audio else self._t("ui_status_allowed", lang=cur_lang)
-        stk_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_stickers else self._t("ui_status_allowed", lang=cur_lang)
-        txt_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_text else self._t("ui_status_allowed", lang=cur_lang)
-        voc_b = self._t("ui_status_blocked", lang=cur_lang) if rule.block_voice else self._t("ui_status_allowed", lang=cur_lang)
-
-        text = (
-            f"{self._t('ui_filters_menu_title', lang=cur_lang)}\n\n"
-            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
-            "────────────────────\n"
-            f"{self._t('ui_filters_menu_desc', lang=cur_lang)}\n\n"
-            f"• 🔗 **Link Filter:** {lnk_b}\n"
-            f"• 🎬 **Video Filter:** {vid_b}\n"
-            f"• 🎵 **Audio Filter:** {aud_b}\n"
-            f"• 🎭 **Sticker Filter:** {stk_b}\n"
-            f"• 📝 **Text Filter:** {txt_b}\n"
-            f"• 🎙 **Voice Filter:** {voc_b}\n\n"
-            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
-        )
-
-        rows: List[List[Tuple[str, str]]] = [
-            [
-                (f"🔗 Links: {lnk_b}", f"rfl_lnk:{rule.id}"),
-                (f"🎬 Video: {vid_b}", f"rfl_vid:{rule.id}"),
-            ],
-            [
-                (f"🎵 Audio: {aud_b}", f"rfl_aud:{rule.id}"),
-                (f"🎭 Stickers: {stk_b}", f"rfl_stk:{rule.id}"),
-            ],
-            [
-                (f"📝 Text: {txt_b}", f"rfl_txt:{rule.id}"),
-                (f"🎙 Voice: {voc_b}", f"rfl_voc:{rule.id}"),
-            ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
-        ]
-        return text, self._kbd(rows)
-
-    def _render_max_time_edit_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render max edit time configuration menu."""
-        uid = getattr(rule, "owner_user_id", 0)
-        cur_lang = self._resolve_lang(uid)
-        src_label = rule.source_chat_name or rule.source_chat_id
-        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
-        current = rule.max_time_edit
-        curr_str = f"{current}s" if current > 0 else "0 (unlimited)"
-
-        text = (
-            f"⏱ **Max Edit Time**\n\n"
-            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
-            f"Limit: **{curr_str}**\n"
-            "────────────────────\n"
-            "Messages edited in source chat will only be updated in destination if within this age limit.\n\n"
-            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
-        )
-
-        rows: List[List[Tuple[str, str]]] = [
-            [
-                ("10m (600s)", f"rmte_s:{rule.id}:600"),
-                ("1h (3600s)", f"rmte_s:{rule.id}:3600"),
-            ],
-            [
-                ("24h (86400s)", f"rmte_s:{rule.id}:86400"),
-                ("48h (172800s)", f"rmte_s:{rule.id}:172800"),
-            ],
-            [
-                ("♾ 0 (unlimited)", f"rmte_s:{rule.id}:0"),
-                (self._t("ui_delay_custom", lang=cur_lang), f"rmte_c:{rule.id}"),
-            ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
-        ]
-        return text, self._kbd(rows)
-
-    def _render_delay_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render forward delay configuration menu with quick presets."""
-        uid = getattr(rule, "owner_user_id", 0)
-        cur_lang = self._resolve_lang(uid)
-        src_label = rule.source_chat_name or rule.source_chat_id
-        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
-        current = rule.delay_seconds
-        curr_str = f"{current:.0f}s" if current > 0 else self._t("ui_delay_none", lang=cur_lang)
-
-        text = (
-            f"{self._t('ui_delay_title', lang=cur_lang)}\n\n"
-            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
-            f"{self._t('ui_delay_current', lang=cur_lang, val=curr_str)}\n"
-            "────────────────────\n"
-            f"{self._t('ui_delay_desc', lang=cur_lang)}\n\n"
-            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
-        )
-
-        rows: List[List[Tuple[str, str]]] = [
-            [
-                (self._t("ui_delay_none", lang=cur_lang), f"rdly_s:{rule.id}:0"),
-                ("⏱ 3s", f"rdly_s:{rule.id}:3"),
-            ],
-            [
-                ("⏱ 5s", f"rdly_s:{rule.id}:5"),
-                ("⏱ 10s", f"rdly_s:{rule.id}:10"),
-            ],
-            [
-                ("⏱ 30s", f"rdly_s:{rule.id}:30"),
-                ("⏱ 60s", f"rdly_s:{rule.id}:60"),
-            ],
-            [
-                (self._t("ui_delay_custom", lang=cur_lang), f"rdly_c:{rule.id}"),
-            ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
-        ]
-        return text, self._kbd(rows)
-
-    def _render_blacklist_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render blacklist keyword configuration menu."""
-        uid = getattr(rule, "owner_user_id", 0)
-        cur_lang = self._resolve_lang(uid)
-        src_label = rule.source_chat_name or rule.source_chat_id
-        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
-        bl = list(rule.blacklist or [])
-
-        items_str = "\n".join([f"• `{w}`" for w in bl[:20]]) if bl else self._t("ui_bl_empty", lang=cur_lang)
-        if len(bl) > 20:
-            items_str += f"\n... +{len(bl) - 20}"
-
-        text = (
-            f"{self._t('ui_bl_title', lang=cur_lang)}\n\n"
-            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
-            f"{self._t('ui_rule_blacklist', lang=cur_lang)}: **{len(bl)}**\n"
-            "────────────────────\n"
-            f"{self._t('ui_bl_desc', lang=cur_lang)}\n\n"
-            f"{items_str}\n\n"
-            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
-        )
-
-        rows: List[List[Tuple[str, str]]] = [
-            [
-                (self._t("ui_kw_add_btn", lang=cur_lang), f"rfl_bl_add:{rule.id}"),
-                (self._t("ui_kw_clear_btn", lang=cur_lang), f"rfl_bl_clr:{rule.id}"),
-            ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
-        ]
-        return text, self._kbd(rows)
-
-    def _render_whitelist_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
-        """Render whitelist keyword configuration menu."""
-        uid = getattr(rule, "owner_user_id", 0)
-        cur_lang = self._resolve_lang(uid)
-        src_label = rule.source_chat_name or rule.source_chat_id
-        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
-        wl = list(rule.whitelist or [])
-
-        items_str = "\n".join([f"• `{w}`" for w in wl[:20]]) if wl else self._t("ui_wl_empty", lang=cur_lang)
-        if len(wl) > 20:
-            items_str += f"\n... +{len(wl) - 20}"
-
-        text = (
-            f"{self._t('ui_wl_title', lang=cur_lang)}\n\n"
-            f"{self._t('ui_rule_header', lang=cur_lang)}: **{src_label} ➔ {dst_label}**\n"
-            f"{self._t('ui_rule_whitelist', lang=cur_lang)}: **{len(wl)}**\n"
-            "────────────────────\n"
-            f"{self._t('ui_wl_desc', lang=cur_lang)}\n\n"
-            f"{items_str}\n\n"
-            f"{self._t('ui_click_toggle_hint', lang=cur_lang)}"
-        )
-
-        rows: List[List[Tuple[str, str]]] = [
-            [
-                (self._t("ui_kw_add_btn", lang=cur_lang), f"rfl_wl_add:{rule.id}"),
-                (self._t("ui_kw_clear_btn", lang=cur_lang), f"rfl_wl_clr:{rule.id}"),
-            ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=cur_lang)}", f"rd:{rule.id}")],
-        ]
-        return text, self._kbd(rows)
-
-    def _render_all_addons(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render all 18 Add-ons catalogue with toggle controls."""
         task_name = rule.name or f"task_{rule.id[:8]}"
         addons = rule.paid_addons
@@ -1817,96 +1553,97 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_draft_editor(self, rule: ForwardRule, draft: Dict[str, Any]) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render comprehensive draft editor screen where settings are staged safely."""
         src_label = draft.get("source_name") or draft.get("source_chat_id", "")
         dst_label = draft.get("target_name") or draft.get("target_chat_id", "")
-        status_str = self._t("ui_draft_status_on") if draft.get("is_active", True) else self._t("ui_draft_status_off")
+        status_str = self._t("ui_draft_status_on", lang=lang) if draft.get("is_active", True) else self._t("ui_draft_status_off", lang=lang)
 
         f_mode = draft.get("forward_mode", ForwardMode.COPY_MESSAGE.value)
         mode_val = getattr(f_mode, "value", str(f_mode))
         mode_names = {
-            "COPY_MESSAGE": self._t("ui_draft_mode_copy"),
-            "DIRECT_FORWARD": self._t("ui_draft_mode_forward"),
-            "REWRITE_AI": self._t("ui_draft_mode_ai"),
+            "COPY_MESSAGE": self._t("ui_draft_mode_copy", lang=lang),
+            "DIRECT_FORWARD": self._t("ui_draft_mode_forward", lang=lang),
+            "REWRITE_AI": self._t("ui_draft_mode_ai", lang=lang),
         }
         mode_title = mode_names.get(mode_val, mode_val)
 
         reps = draft.get("replacements") or {}
         reps_count = len(reps) if isinstance(reps, dict) else 0
-        reps_badge = self._t("ui_draft_count_n", n=reps_count) if reps_count else self._t("ui_draft_empty")
+        reps_badge = self._t("ui_draft_count_n", lang=lang, n=reps_count) if reps_count else self._t("ui_draft_empty", lang=lang)
 
         hdr = str(draft.get("header") or "")
         ftr = str(draft.get("footer") or "")
-        hdr_badge = f"`{hdr[:14]}…`" if len(hdr) > 14 else (f"`{hdr}`" if hdr else self._t("ui_draft_empty"))
-        ftr_badge = f"`{ftr[:14]}…`" if len(ftr) > 14 else (f"`{ftr}`" if ftr else self._t("ui_draft_empty"))
+        hdr_badge = f"`{hdr[:14]}…`" if len(hdr) > 14 else (f"`{hdr}`" if hdr else self._t("ui_draft_empty", lang=lang))
+        ftr_badge = f"`{ftr[:14]}…`" if len(ftr) > 14 else (f"`{ftr}`" if ftr else self._t("ui_draft_empty", lang=lang))
 
-        lk_badge = self._t("ui_draft_remove") if draft.get("remove_links") else self._t("ui_draft_allowed")
-        vc_badge = self._t("ui_draft_blocked") if draft.get("block_voice") else self._t("ui_draft_allowed")
-        st_badge = self._t("ui_draft_blocked") if draft.get("block_stickers") else self._t("ui_draft_allowed")
-        em_badge = self._t("ui_draft_clean") if draft.get("remove_emojis") else self._t("ui_draft_keep")
-        ed_badge = self._t("ui_draft_ignore") if draft.get("ignore_edits") else self._t("ui_draft_sync")
-        dl_badge = self._t("ui_draft_delete_sync") if draft.get("sync_deletes") else self._t("ui_draft_ignore")
+        lk_badge = self._t("ui_draft_remove", lang=lang) if draft.get("remove_links") else self._t("ui_draft_allowed", lang=lang)
+        vc_badge = self._t("ui_draft_blocked", lang=lang) if draft.get("block_voice") else self._t("ui_draft_allowed", lang=lang)
+        st_badge = self._t("ui_draft_blocked", lang=lang) if draft.get("block_stickers") else self._t("ui_draft_allowed", lang=lang)
+        em_badge = self._t("ui_draft_clean", lang=lang) if draft.get("remove_emojis") else self._t("ui_draft_keep", lang=lang)
+        ed_badge = self._t("ui_draft_ignore", lang=lang) if draft.get("ignore_edits") else self._t("ui_draft_sync", lang=lang)
+        dl_badge = self._t("ui_draft_delete_sync", lang=lang) if draft.get("sync_deletes") else self._t("ui_draft_ignore", lang=lang)
 
         album_names = {
-            "album": self._t("ui_album_full"),
-            "first": self._t("ui_album_first"),
-            "split": self._t("ui_album_split"),
+            "album": self._t("ui_album_full", lang=lang),
+            "first": self._t("ui_album_first", lang=lang),
+            "split": self._t("ui_album_split", lang=lang),
         }
         alb_mode = str(draft.get("album_mode") or "album")
-        alb_badge = album_names.get(alb_mode, self._t("ui_album_full"))
+        alb_badge = album_names.get(alb_mode, self._t("ui_album_full", lang=lang))
 
         text = (
-            self._t("ui_draft_title") + "\n\n"
-            + self._t("ui_draft_rule_id", rid=rule.id[:8], v=rule.version) + "\n"
-            + self._t("ui_sep") + "\n"
-            + self._t("ui_draft_source", src=src_label, sid=draft.get('source_chat_id')) + "\n"
-            + self._t("ui_draft_target", dst=dst_label, tid=draft.get('target_chat_id')) + "\n"
-            + self._t("ui_draft_status", s=status_str) + "\n"
-            + self._t("ui_draft_fmode", m=mode_title) + "\n"
-            + self._t("ui_sep") + "\n"
-            + self._t("ui_draft_replace", n=reps_badge) + "\n"
-            + self._t("ui_draft_hf", h=hdr_badge, f=ftr_badge) + "\n"
-            + self._t("ui_draft_pair_links_voice", lk=lk_badge, vc=vc_badge) + "\n"
-            + self._t("ui_draft_pair_st_emoji", st=st_badge, em=em_badge) + "\n"
-            + self._t("ui_draft_pair_ed_del", ed=ed_badge, dl=dl_badge) + "\n"
-            + self._t("ui_draft_media", a=alb_badge) + "\n\n"
-            + self._t("ui_draft_hint")
+            self._t("ui_draft_title", lang=lang) + "\n\n"
+            + self._t("ui_draft_rule_id", lang=lang, rid=rule.id[:8], v=rule.version) + "\n"
+            + self._t("ui_sep", lang=lang) + "\n"
+            + self._t("ui_draft_source", lang=lang, src=src_label, sid=draft.get('source_chat_id')) + "\n"
+            + self._t("ui_draft_target", lang=lang, dst=dst_label, tid=draft.get('target_chat_id')) + "\n"
+            + self._t("ui_draft_status", lang=lang, s=status_str) + "\n"
+            + self._t("ui_draft_fmode", lang=lang, m=mode_title) + "\n"
+            + self._t("ui_sep", lang=lang) + "\n"
+            + self._t("ui_draft_replace", lang=lang, n=reps_badge) + "\n"
+            + self._t("ui_draft_hf", lang=lang, h=hdr_badge, f=ftr_badge) + "\n"
+            + self._t("ui_draft_pair_links_voice", lang=lang, lk=lk_badge, vc=vc_badge) + "\n"
+            + self._t("ui_draft_pair_st_emoji", lang=lang, st=st_badge, em=em_badge) + "\n"
+            + self._t("ui_draft_pair_ed_del", lang=lang, ed=ed_badge, dl=dl_badge) + "\n"
+            + self._t("ui_draft_media", lang=lang, a=alb_badge) + "\n\n"
+            + self._t("ui_draft_hint", lang=lang)
         )
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                (self._t("ui_draft_btn_src"), f"ed_s:{rule.id}"),
-                (self._t("ui_draft_btn_dst"), f"ed_t:{rule.id}"),
+                (self._t("ui_draft_btn_src", lang=lang), f"ed_s:{rule.id}"),
+                (self._t("ui_draft_btn_dst", lang=lang), f"ed_t:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_mode", m=mode_val), f"ed_m:{rule.id}"),
-                (self._t("ui_draft_btn_status", s=status_str), f"ed_a:{rule.id}"),
+                (self._t("ui_draft_btn_mode", lang=lang, m=mode_val), f"ed_m:{rule.id}"),
+                (self._t("ui_draft_btn_status", lang=lang, s=status_str), f"ed_a:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_links", b=lk_badge), f"ed_lk:{rule.id}"),
-                (self._t("ui_draft_btn_voice", b=vc_badge), f"ed_vc:{rule.id}"),
+                (self._t("ui_draft_btn_links", lang=lang, b=lk_badge), f"ed_lk:{rule.id}"),
+                (self._t("ui_draft_btn_voice", lang=lang, b=vc_badge), f"ed_vc:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_stickers", b=st_badge), f"ed_st:{rule.id}"),
-                (self._t("ui_draft_btn_emoji", b=em_badge), f"ed_em:{rule.id}"),
+                (self._t("ui_draft_btn_stickers", lang=lang, b=st_badge), f"ed_st:{rule.id}"),
+                (self._t("ui_draft_btn_emoji", lang=lang, b=em_badge), f"ed_em:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_edit", b=ed_badge), f"ed_ed:{rule.id}"),
-                (self._t("ui_draft_btn_del", b=dl_badge), f"ed_dl:{rule.id}"),
+                (self._t("ui_draft_btn_edit", lang=lang, b=ed_badge), f"ed_ed:{rule.id}"),
+                (self._t("ui_draft_btn_del", lang=lang, b=dl_badge), f"ed_dl:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_album", b=alb_badge), f"ed_mg:{rule.id}"),
-                (self._t("ui_draft_btn_replace", n=reps_count), f"rtx:{rule.id}"),
+                (self._t("ui_draft_btn_album", lang=lang, b=alb_badge), f"ed_mg:{rule.id}"),
+                (self._t("ui_draft_btn_replace", lang=lang, n=reps_count), f"rtx:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_ai", b=draft.get("ai_status_badge") or self._t("ui_draft_ai_off")), f"r_ai:{rule.id}"),
+                (self._t("ui_draft_btn_ai", lang=lang, b=draft.get("ai_status_badge") or self._t("ui_draft_ai_off", lang=lang)), f"r_ai:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_hf"), f"rhf:{rule.id}"),
+                (self._t("ui_draft_btn_hf", lang=lang), f"rhf:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_save"), f"ed_save:{rule.id}"),
-                (self._t("ui_draft_btn_cancel"), f"ed_can:{rule.id}"),
+                (self._t("ui_draft_btn_save", lang=lang), f"ed_save:{rule.id}"),
+                (self._t("ui_draft_btn_cancel", lang=lang), f"ed_can:{rule.id}"),
             ],
             [
                 (f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}"),
@@ -1915,34 +1652,35 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_replace_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render text replacement configuration menu."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         reps = rule.replacements
 
         lines = [
-            self._t("ui_rep_title") + "\n",
-            self._t("ui_rep_rule", s=src_label, d=dst_label) + "\n",
-            self._t("ui_sep"),
-            self._t("ui_rep_active_list"),
+            self._t("ui_rep_title", lang=lang) + "\n",
+            self._t("ui_rep_rule", lang=lang, s=src_label, d=dst_label) + "\n",
+            self._t("ui_sep", lang=lang),
+            self._t("ui_rep_active_list", lang=lang),
         ]
         if not reps:
-            lines.append(self._t("ui_rep_none") + "\n")
+            lines.append(self._t("ui_rep_none", lang=lang) + "\n")
         else:
             for idx, (old, new) in enumerate(reps.items(), start=1):
-                rep_display = f"`{new}`" if new else self._t("ui_rep_word_deleted")
+                rep_display = f"`{new}`" if new else self._t("ui_rep_word_deleted", lang=lang)
                 lines.append(f"{idx}. `{old}` ➔ {rep_display}")
             lines.append("")
 
         lines.extend([
-            self._t("ui_rep_help_title"),
-            self._t("ui_rep_help_add"),
-            self._t("ui_rep_help_fmt"),
-            self._t("ui_rep_help_del"),
+            self._t("ui_rep_help_title", lang=lang),
+            self._t("ui_rep_help_add", lang=lang),
+            self._t("ui_rep_help_fmt", lang=lang),
+            self._t("ui_rep_help_del", lang=lang),
         ])
 
         rows: List[List[Tuple[str, str]]] = [
-            [(self._t("ui_rep_btn_add"), f"rtxa:{rule.id}")],
+            [(self._t("ui_rep_btn_add", lang=lang), f"rtxa:{rule.id}")],
         ]
         if reps:
             del_row: List[Tuple[str, str]] = []
@@ -1954,12 +1692,13 @@ class ProBotUI:
                     del_row = []
             if del_row:
                 rows.append(del_row)
-            rows.append([(self._t("ui_rep_btn_clear"), f"rtxc:{rule.id}")])
+            rows.append([(self._t("ui_rep_btn_clear", lang=lang), f"rtxc:{rule.id}")])
 
         rows.append([(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")])
         return "\n".join(lines), self._kbd(rows)
 
     def _render_header_footer_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render header and footer configuration menu."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -1991,6 +1730,7 @@ class ProBotUI:
         return "\n".join(lines), self._kbd(rows)
 
     def _render_cleaner_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render cleaner settings menu for this task."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -2043,6 +1783,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_filters_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render content filter settings menu for this task."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -2086,6 +1827,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_max_time_edit_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render max edit time configuration menu."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -2120,6 +1862,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_delay_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render forward delay configuration menu with quick presets."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -2156,6 +1899,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_blacklist_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render blacklist keyword configuration menu."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -2185,6 +1929,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_whitelist_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render whitelist keyword configuration menu."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -2214,6 +1959,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_watermark_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render watermark configuration menu."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -2238,6 +1984,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_translate_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render target translation language picker."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -2306,6 +2053,7 @@ class ProBotUI:
         return text, kbd
 
     def _render_smart_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(rule)
         """Render dedicated smart routing, VIP channel, and deduplication menu."""
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
@@ -2382,6 +2130,7 @@ class ProBotUI:
         return "\n".join(lines), self._kbd(rows)
 
     def _render_chat_picker(self, st: UiState, role: str, page: int = 0, uid: Optional[int] = None) -> Tuple[str, InlineKeyboardMarkup]:
+        lang = self._lang_for(st)
         """Render a rich, paginated dialog selection screen with inline buttons and fail-closed i18n."""
         rc = "s" if role == "source" else "t"
         page_size = 5
@@ -2590,6 +2339,7 @@ class ProBotUI:
         return chats
 
     async def _finish_rule_creation(self, event: Any, st: UiState, source_title: str, target_title: str) -> None:
+        lang = self._lang_for(st)
         """Persist ForwardRule and present the completion card."""
         uid: int = int(event.from_user.id if getattr(event, "from_user", None) else (event.chat.id if getattr(event, "chat", None) else 0))
         cur_lang = self._resolve_lang(uid)
@@ -2688,7 +2438,7 @@ class ProBotUI:
 
         except Exception as exc:
             await self._record_error("bot", exc, user_id=uid)
-            err_text = self._t("ui_rule_fail", error=tg_detail(exc))
+            err_text = self._t("ui_rule_fail", lang=lang, error=tg_detail(exc))
             if hasattr(event, "edit_message_text"):
                 await self._safe_edit(event, err_text, reply_markup=self._rules_menu())
             else:
@@ -3027,6 +2777,7 @@ class ProBotUI:
         return self._kbd(rows)
 
     def _model_picker(self, st: UiState, provider: str) -> InlineKeyboardMarkup | None:
+        lang = self._lang_for(st)
         models = self._ai.models_for(provider) if hasattr(self._ai, "models_for") else []
         models = list(models or [])[:10]
         if not models:
@@ -3036,7 +2787,7 @@ class ProBotUI:
         rows: list = []
         for i, model in enumerate(models):
             rows.append([(model, f'{CB["ai_model_pick"]}:{i}')])
-        rows.append([("❌ " + self._t("ui_cancel"), CB["cancel"])])
+        rows.append([("❌ " + self._t("ui_cancel", lang=lang), CB["cancel"])])
         return self._kbd(rows)
 
     # ------------------------------------------------------------------ #
@@ -7550,12 +7301,13 @@ class ProBotUI:
     async def _step_weburl_input(
         self, message: Message, st: "UiState", text: str
     ) -> None:
+        lang = self._lang_for(st)
         url = (text or "").strip()
         st.step = ""
         await self._persist(message.from_user.id, st)
         if not (url.startswith("http://") or url.startswith("https://")) or " " in url:
             return await message.reply_text(
-                self._t("ui_weburl_invalid"), reply_markup=self._cancel_kbd())
+                self._t("ui_weburl_invalid", lang=lang), reply_markup=self._cancel_kbd())
         url = url.rstrip("/")
         if self._settings is not None:
             try:
@@ -7563,10 +7315,10 @@ class ProBotUI:
             except Exception as exc:
                 logger.warning("save web_url failed: %s", exc)
                 return await message.reply_text(
-                    self._t("ui_internal_error"), reply_markup=self._main_menu())
+                    self._t("ui_internal_error", lang=lang), reply_markup=self._main_menu())
         self._web_url = url
         await message.reply_text(
-            self._t("ui_weburl_saved").replace("{url}", url),
+            self._t("ui_weburl_saved", lang=lang).replace("{url}", url),
             reply_markup=self._main_menu())
 
     async def _step_client_api_id(self, message: Message, st: "UiState", text: str) -> None:
@@ -8005,6 +7757,7 @@ class ProBotUI:
     async def _finish_migration_import(
         self, message: Message, st: UiState, blob: str, passphrase: str,
     ) -> None:
+        lang = self._lang_for(st)
         uid = message.from_user.id
         overwrite = bool(st.buffer.get("migrate_overwrite", False))
         try:
@@ -8024,12 +7777,12 @@ class ProBotUI:
             st.step = ""
             await self._persist(uid, st)
             return await message.reply_text(
-                self._t("ui_migrate_fail", error=tg_detail(exc)))
+                self._t("ui_migrate_fail", lang=lang, error=tg_detail(exc)))
 
         st.step = ""
         st.buffer.pop("migrate_blob", None)
         await self._persist(uid, st)
-        lines = [self._t("ui_migrate_imported"), "─────────────────────"]
+        lines = [self._t("ui_migrate_imported", lang=lang), "─────────────────────"]
         total_in = total_sk = total_fl = 0
         for k, v in stats.items():
             total_in += v.get("imported", 0)
@@ -8050,16 +7803,18 @@ class ProBotUI:
     # Step handlers (FSM)
     # ------------------------------------------------------------------ #
     async def _step_migrate_passphrase(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         """Passphrase for the snapshot being EXPORTED right now."""
         uid = message.from_user.id
         passphrase = (text or "").strip()
         if not passphrase:
-            return await message.reply_text(self._t("ui_migrate_passphrase_required"))
+            return await message.reply_text(self._t("ui_migrate_passphrase_required", lang=lang))
         st.step = ""
         await self._persist(uid, st)
         await self._do_migration_export_from_message(message, passphrase)
 
     async def _step_migrate_import_passphrase(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         """Passphrase for an ENCRYPTED bundle that was just uploaded."""
         uid = message.from_user.id
         passphrase = (text or "").strip()
@@ -8068,9 +7823,9 @@ class ProBotUI:
             st.step = ""
             await self._persist(uid, st)
             return await message.reply_text(
-                self._t("ui_migrate_need_file"), reply_markup=self._migrate_menu())
+                self._t("ui_migrate_need_file", lang=lang), reply_markup=self._migrate_menu())
         if not passphrase:
-            return await message.reply_text(self._t("ui_migrate_passphrase_required"))
+            return await message.reply_text(self._t("ui_migrate_passphrase_required", lang=lang))
         await self._finish_migration_import(message, st, blob, passphrase)
 
     async def _do_migration_export_from_message(self, message: Message, passphrase: str) -> None:
@@ -8109,6 +7864,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_migrate_fail", error=tg_detail(exc)))
 
     async def _step_login_phone(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         uid = message.from_user.id
         raw_text = (text or "").strip()
         masked_input = (raw_text[:4] + "****" + raw_text[-4:]) if len(raw_text) > 8 else "***"
@@ -8121,7 +7877,7 @@ class ProBotUI:
         if not self._login.valid_phone(raw_text):
             logger.warning("Invalid phone format from uid=%s: %s", uid, masked_input)
             await message.reply_text(
-                self._t("ui_login_phone_bad"), reply_markup=self._cancel_kbd())
+                self._t("ui_login_phone_bad", lang=lang), reply_markup=self._cancel_kbd())
             return
 
         phone = self._login.normalize_phone(raw_text)
@@ -8230,6 +7986,7 @@ class ProBotUI:
                 await self._submit_code_flow(cq.message, st, digits, uid=uid)
 
     async def _step_login_code(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         uid = message.from_user.id if message.from_user else (message.chat.id if message.chat else 0)
         norm_text = (text or "").translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"))
         clean = re.sub(r"\D", "", norm_text)
@@ -8247,6 +8004,7 @@ class ProBotUI:
     async def _submit_code_flow(
         self, message: Message, st: UiState, clean_code: str, uid: Optional[int] = None
     ) -> None:
+        lang = self._lang_for(st)
         if uid is None:
             uid = message.from_user.id if message.from_user else (message.chat.id if message.chat else 0)
         logger.info("Submitting login code for uid=%s (len=%d)", uid, len(clean_code))
@@ -8264,7 +8022,7 @@ class ProBotUI:
                 st.buffer.pop("code_digits", None)
             await self._persist(uid, st)
             await message.reply_text(
-                self._t("ui_login_password"), reply_markup=self._cancel_kbd())
+                self._t("ui_login_password", lang=lang), reply_markup=self._cancel_kbd())
             return
         await self._finish_login(message, st, result, uid=uid)
 
@@ -8282,6 +8040,7 @@ class ProBotUI:
     async def _finish_login(
         self, message: Message, st: UiState, result: str, uid: Optional[int] = None
     ) -> None:
+        lang = self._lang_for(st)
         if uid is None:
             uid = message.from_user.id if message.from_user else (message.chat.id if message.chat else 0)
         phone = getattr(st, "login_phone", "") or ""
@@ -8291,7 +8050,7 @@ class ProBotUI:
             if isinstance(st.buffer, dict):
                 st.buffer.pop("code_digits", None)
             await self._persist(uid, st)
-            retry_btn = self._kbd([[("🔄 " + self._t("ui_login_retry"), CB["login_retry"])]]) if phone else self._cancel_kbd()
+            retry_btn = self._kbd([[("🔄 " + self._t("ui_login_retry", lang=lang), CB["login_retry"])]]) if phone else self._cancel_kbd()
             if result == "code_expired":
                 text = (
                     "⌛ این کد منقضی شده یا توسط تلگرام مسدود شده است.\n\n"
@@ -8300,7 +8059,7 @@ class ProBotUI:
                 )
                 await message.reply_text(text, reply_markup=retry_btn)
             else:
-                await message.reply_text(self._t("ui_login_expired", phone=phone), reply_markup=retry_btn)
+                await message.reply_text(self._t("ui_login_expired", lang=lang, phone=phone), reply_markup=retry_btn)
             return
 
         if result == "invalid_code":
@@ -8324,42 +8083,45 @@ class ProBotUI:
             except Exception:
                 pass
             await message.reply_text(
-                self._t("ui_login_done", phone=phone),
+                self._t("ui_login_done", lang=lang, phone=phone),
                 reply_markup=self._main_menu(),
             )
         else:
             key, _, detail = result.partition(":")
             await message.reply_text(
-                self._t("ui_login_fail", error=detail or key),
+                self._t("ui_login_fail", lang=lang, error=detail or key),
                 reply_markup=self._main_menu(),
             )
 
     # ---------------- credential FSM ----------------
     async def _step_cred_label(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         st.cred_label = text[:64]
         st.step = "cred_api_id"
         await self._persist(message.from_user.id, st)
         await message.reply_text(
-            self._t("ui_cred_api_id"), reply_markup=self._cancel_kbd())
+            self._t("ui_cred_api_id", lang=lang), reply_markup=self._cancel_kbd())
 
     async def _step_cred_api_id(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         raw = text.strip()
         if not raw.isdigit():
             return await message.reply_text(
-                self._t("ui_cred_api_id_bad"), reply_markup=self._cancel_kbd())
+                self._t("ui_cred_api_id_bad", lang=lang), reply_markup=self._cancel_kbd())
         st.cred_api_id = raw
         st.step = "cred_api_hash"
         await self._persist(message.from_user.id, st)
         await message.reply_text(
-            self._t("ui_cred_api_hash"), reply_markup=self._cancel_kbd())
+            self._t("ui_cred_api_hash", lang=lang), reply_markup=self._cancel_kbd())
 
     async def _step_cred_api_hash(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         st.cred_api_hash = text.strip()
         st.step = ""
         if self._credentials is None:
             await self._persist(message.from_user.id, st)
             return await message.reply_text(
-                self._t("ui_cred_fail", error="vault unavailable"),
+                self._t("ui_cred_fail", lang=lang, error="vault unavailable"),
                 reply_markup=self._creds_menu(),
             )
         try:
@@ -8383,13 +8145,13 @@ class ProBotUI:
                 pass
             await self._persist(message.from_user.id, st)
             await message.reply_text(
-                self._t("ui_cred_done", id=cred.id[:8]),
+                self._t("ui_cred_done", lang=lang, id=cred.id[:8]),
                 reply_markup=self._creds_menu(),
             )
         except Exception as exc:
             await self._record_error("bot", exc, user_id=message.from_user.id)
             await message.reply_text(
-                self._t("ui_cred_fail", error=tg_detail(exc)),
+                self._t("ui_cred_fail", lang=lang, error=tg_detail(exc)),
                 reply_markup=self._creds_menu(),
             )
         finally:
@@ -8473,6 +8235,7 @@ class ProBotUI:
         await self._finish_rule_creation(message, st, source_title, matched_title)
 
     async def _step_rule_edit_source(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         raw = text.strip()
         uid = int(message.from_user.id if message.from_user else (message.chat.id if message.chat else 0))
 
@@ -8535,7 +8298,7 @@ class ProBotUI:
             await message.reply_text(
                 "❌ مبدأ نمی‌تواند با مقصد یکسان باشد (جلوگیری از ایجاد حلقه)!\n"
                 "لطفاً شناسه یا یوزرنیم دیگری ارسال کنید:",
-                reply_markup=self._kbd([[(self._t("ui_cancel_back"), cancel_cb)]]),
+                reply_markup=self._kbd([[(self._t("ui_cancel_back", lang=lang), cancel_cb)]]),
             )
             return
 
@@ -8564,6 +8327,7 @@ class ProBotUI:
             await message.reply_text(text_out, reply_markup=markup)
 
     async def _step_rule_edit_target(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         raw = text.strip()
         uid = int(message.from_user.id if message.from_user else (message.chat.id if message.chat else 0))
 
@@ -8626,7 +8390,7 @@ class ProBotUI:
             await message.reply_text(
                 "❌ مقصد نمی‌تواند با مبدأ یکسان باشد (جلوگیری از ایجاد حلقه)!\n"
                 "لطفاً شناسه یا یوزرنیم دیگری ارسال کنید:",
-                reply_markup=self._kbd([[(self._t("ui_cancel_back"), cancel_cb)]]),
+                reply_markup=self._kbd([[(self._t("ui_cancel_back", lang=lang), cancel_cb)]]),
             )
             return
 
@@ -9208,13 +8972,15 @@ class ProBotUI:
 
     # ---------------- filter FSM ----------------
     async def _step_filter_name(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         st.step = "filter_blacklist"
         st.buffer["name"] = text.strip()
         await self._persist(message.from_user.id, st)
         await message.reply_text(
-            self._t("ui_filter_blacklist"), reply_markup=self._cancel_kbd())
+            self._t("ui_filter_blacklist", lang=lang), reply_markup=self._cancel_kbd())
 
     async def _step_filter_blacklist(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         st.step = ""
         blacklist = [w.strip() for w in text.replace("،", ",").split(",") if w.strip()]
         try:
@@ -9231,27 +8997,29 @@ class ProBotUI:
                 pass
             await self._persist(message.from_user.id, st)
             await message.reply_text(
-                self._t("ui_filter_done", name=fr.name), reply_markup=self._filters_menu())
+                self._t("ui_filter_done", lang=lang, name=fr.name), reply_markup=self._filters_menu())
         except Exception as exc:
             await self._record_error("bot", exc, user_id=message.from_user.id)
             await message.reply_text(
-                self._t("ui_filter_fail", error=tg_detail(exc)),
+                self._t("ui_filter_fail", lang=lang, error=tg_detail(exc)),
                 reply_markup=self._filters_menu(),
             )
 
     # ---------------- AI config FSM ----------------
     async def _step_ai_name(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         st.step = "ai_provider"
         st.ai_name = text.strip()
         await self._persist(message.from_user.id, st)
         await message.reply_text(
-            self._t("ui_ai_provider"), reply_markup=self._provider_picker())
+            self._t("ui_ai_provider", lang=lang), reply_markup=self._provider_picker())
 
     async def _step_ai_provider(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         provider = text.strip().lower()
         if provider not in {p.value for p in AIProviderType}:
             return await message.reply_text(
-                self._t("ui_ai_provider_bad"), reply_markup=self._cancel_kbd())
+                self._t("ui_ai_provider_bad", lang=lang), reply_markup=self._cancel_kbd())
         st.ai_provider = provider
         st.step = "ai_base_url"
         from core.infrastructure.ai.providers import OpenAICompatibleProvider
@@ -9265,12 +9033,13 @@ class ProBotUI:
         )
         kbd = self._kbd([
             [("✅ استفاده از پیش‌فرض (یا بعدی)", "ai_url_default")],
-            [("❌ " + self._t("ui_cancel"), CB["cancel"])],
+            [("❌ " + self._t("ui_cancel", lang=lang), CB["cancel"])],
         ])
         await self._persist(message.from_user.id, st)
         await message.reply_text(prompt_text, reply_markup=kbd)
 
     async def _step_ai_base_url(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         url = text.strip()
         if url.lower() in ("default", "none", "-", "پیش‌فرض", "پیش فرض"):
             url = str(st.buffer.get("default_base_url", ""))
@@ -9282,7 +9051,7 @@ class ProBotUI:
         await self._persist(message.from_user.id, st)
         msg_text = (
             f"✅ آدرس ذخیره شد: `{url or 'پیش‌فرض'}`\n\n"
-            + self._t("ui_ai_model")
+            + self._t("ui_ai_model", lang=lang)
             + "\n(از لیست زیر انتخاب کنید یا نام مدل دلخواه مانند `coding` را تایپ کنید):"
         )
         if kb is not None:
@@ -9291,12 +9060,14 @@ class ProBotUI:
             await message.reply_text(msg_text, reply_markup=self._cancel_kbd())
 
     async def _step_ai_model(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         st.ai_model = text.strip()
         st.step = "ai_api_key"
         await self._persist(message.from_user.id, st)
-        await message.reply_text(self._t("ui_ai_key"), reply_markup=self._cancel_kbd())
+        await message.reply_text(self._t("ui_ai_key", lang=lang), reply_markup=self._cancel_kbd())
 
     async def _step_ai_api_key(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         st.step = ""
         user_id = message.from_user.id
         try:
@@ -9332,7 +9103,7 @@ class ProBotUI:
             await self._record_error("ai", exc, user_id=user_id)
             cfgs = await (self._ai.list_all() if self._is_admin(user_id) else self._ai.list_by_owner(user_id))
             await message.reply_text(
-                self._t("ui_ai_fail", error=tg_detail(exc)),
+                self._t("ui_ai_fail", lang=lang, error=tg_detail(exc)),
                 reply_markup=self._ai_menu(cfgs))
         finally:
             try:
@@ -9341,6 +9112,7 @@ class ProBotUI:
                 pass  # api key is sensitive — best-effort cleanup
 
     async def _step_ai_edit_host(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         aid = str(st.buffer.get("ai_edit_id", ""))
         st.step = ""
         st.buffer = {}
@@ -9360,7 +9132,7 @@ class ProBotUI:
         try:
             await self._ai.update_owned(cfg, self._scope_uid(message.from_user.id if message.from_user else 0))
         except PermissionError:
-            return await message.reply_text(self._t("ui_need_admin"))
+            return await message.reply_text(self._t("ui_need_admin", lang=lang))
         ok, reply_or_err, latency = await self._ai.health_check_owned(cfg.id, self._scope_uid(message.from_user.id if message.from_user else 0))
         health_info = {
             "ok": ok,
@@ -9372,6 +9144,7 @@ class ProBotUI:
         await message.reply_text("✅ آدرس هاست به‌روزرسانی شد:\n\n" + detail_text, reply_markup=detail_kbd)
 
     async def _step_ai_edit_model(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         aid = str(st.buffer.get("ai_edit_id", ""))
         st.step = ""
         st.buffer = {}
@@ -9386,7 +9159,7 @@ class ProBotUI:
         try:
             await self._ai.update_owned(cfg, self._scope_uid(message.from_user.id if message.from_user else 0))
         except PermissionError:
-            return await message.reply_text(self._t("ui_need_admin"))
+            return await message.reply_text(self._t("ui_need_admin", lang=lang))
         ok, reply_or_err, latency = await self._ai.health_check_owned(cfg.id, self._scope_uid(message.from_user.id if message.from_user else 0))
         health_info = {
             "ok": ok,
@@ -9398,6 +9171,7 @@ class ProBotUI:
         await message.reply_text("✅ مدل با موفقیت تغییر کرد:\n\n" + detail_text, reply_markup=detail_kbd)
 
     async def _step_ai_edit_key(self, message: Message, st: UiState, text: str) -> None:
+        lang = self._lang_for(st)
         aid = str(st.buffer.get("ai_edit_id", ""))
         st.step = ""
         st.buffer = {}
@@ -9416,7 +9190,7 @@ class ProBotUI:
         try:
             await self._ai.update_owned(cfg, self._scope_uid(message.from_user.id if message.from_user else 0))
         except PermissionError:
-            return await message.reply_text(self._t("ui_need_admin"))
+            return await message.reply_text(self._t("ui_need_admin", lang=lang))
         ok, reply_or_err, latency = await self._ai.health_check_owned(cfg.id, self._scope_uid(message.from_user.id if message.from_user else 0))
         health_info = {
             "ok": ok,

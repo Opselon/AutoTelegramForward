@@ -66,15 +66,24 @@ def test_forward_rule_parity_properties():
 
 @pytest.mark.asyncio
 async def test_bot_ui_task_overview_rendering():
+    from core.infrastructure.telegram.i18n import I18n
+    from core.infrastructure.telegram.pro_bot_ui import UiState
+    _i18n = I18n()
     ui = object.__new__(ProBotUI)
     ui._render_rule_detail = ProBotUI._render_rule_detail.__get__(ui, ProBotUI)
     ui._kbd = ProBotUI._kbd.__get__(ui, ProBotUI)
-    ui._t = lambda key, **kw: key
+    # Real catalog render path: the rule owner picked fa, held in per-user
+    # UiState. Renderers must resolve the owner's language from the rule.
+    ui._states = {5094837833: UiState(lang="fa")}
+    ui._users = None
+    ui.i18n = _i18n
+    ui._t = ProBotUI._t.__get__(ui, ProBotUI)
 
     rule = ForwardRule(
         id="af_route_lab_b_12345",
         name="af_route_lab_b",
         session_id="session-1",
+        owner_user_id=5094837833,
         source_chat_id="-1001",
         target_chat_id="-1002",
         source_chat_name="AF Route Lab Source",
@@ -88,14 +97,21 @@ async def test_bot_ui_task_overview_rendering():
 
     text, kbd = ui._render_rule_detail(rule)
 
-    # Verify Task Overview Content
+    # Verify Task Overview Content. The owner picked fa, so the screen
+    # must render Persian (this is the regression guard for the i18n
+    # completeness work: English strings here would mean the renderer
+    # bypassed the catalog).
     assert "af_route_lab_b" in text
-    assert "Task Overview" in text
-    assert "RUNNING 🟢" in text
+    assert "نمای کلی وظیفه" in text
+    assert "در حال اجرا" in text
     assert "AF Route Lab Source" in text
     assert "AF Route Lab Target" in text
     assert "Personal Telegram Account" in text
-    assert "PAID ADDON" in text
+    assert "افزونه پولی" in text
+
+    # And no untranslated English UI prose may leak into the fa render.
+    assert "Task Overview" not in text
+    assert "PAID ADDON" not in text
 
     # Verify 4 Colored Action Buttons
     cbs = [btn.callback_data for row in kbd.inline_keyboard for btn in row]
