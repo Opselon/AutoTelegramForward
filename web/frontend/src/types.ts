@@ -641,3 +641,27 @@ export interface BackupImportResponse {
   stats: Record<string, EntityImportStats>
   error?: string
 }
+
+// --------------------------------------------------------------- Diagnostics
+// Mirrors GET /api/diagnostics — the preflight "catch problems early" report.
+export type DiagnosticSeverity = 'error' | 'warning' | 'info'
+
+export interface DiagnosticFinding {
+  id: string
+  severity: DiagnosticSeverity
+  scope: 'service' | 'session' | 'ai' | 'rule'
+  scope_id?: string
+  title: string
+  detail: string
+  remediation: string
+}
+
+export interface DiagnosticsResponse {
+  status: 'healthy' | 'warning' | 'critical'
+  score: number
+  generated_at: string
+  counts: Record<DiagnosticSeverity, number>
+  services: Array<{ name: string; online: boolean; detail?: string }>
+  scanned: { rules: number; sessions: number; ai_configs: number }
+  findings: DiagnosticFinding[]
+}

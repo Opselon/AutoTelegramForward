@@ -33,6 +33,7 @@ import type {
   BackupExportResponse,
   BackupImportRequest,
   BackupImportResponse,
+  DiagnosticsResponse,
 } from './types'
 
 const API_BASE = '/api'
@@ -462,6 +463,9 @@ export const api = {
       method: 'DELETE',
     }),
   adminListExtensions: () => fetchJson<{ extensions: any[] }>(`${API_BASE}/admin/extensions`),
+
+  // ------------------------------------------------------------ Diagnostics
+  diagnostics: () => fetchJson<DiagnosticsResponse>(`${API_BASE}/diagnostics`),
 
   // ------------------------------------------------- Client Self-Management
   clientGetSettings: () => fetchJson<any>(`${API_BASE}/client/settings`),

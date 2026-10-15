@@ -98,6 +98,9 @@ func main() {
 	dashMux.HandleFunc("PUT /prompts/{id}", h.UpdatePromptTemplate)
 	dashMux.HandleFunc("DELETE /prompts/{id}", h.DeletePromptTemplate)
 	dashMux.HandleFunc("POST /prompts/test", h.TestPrompt)
+	// Preflight diagnostics — the problem-catching algorithm. Authenticated so
+	// findings are scoped to the caller's own rules/sessions/AI configs.
+	dashMux.HandleFunc("GET /diagnostics", h.Diagnostics)
 	// Backup & Restore — whole-installation migration between servers.
 	dashMux.HandleFunc("POST /backup/export", h.BackupExport)
 	dashMux.HandleFunc("POST /backup/import", h.BackupImport)

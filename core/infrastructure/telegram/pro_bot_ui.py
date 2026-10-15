@@ -5399,11 +5399,37 @@ class ProBotUI:
                 draft["smart_ai_rewrite"] = True
                 draft["ai_status_badge"] = _ai_badge(draft)
                 rule = await self._owned_rule(rule_id, uid)
+                saved_ok = False
                 if rule:
+                    before = rule.ai_config_id
                     rule.ai_config_id = target_cfg.id
                     rule.smart_ai_rewrite = True
-                    await self._save_owned_rule(rule, uid)
+                    try:
+                        await self._save_owned_rule(rule, uid)
+                        saved_ok = True
+                        logger.info(
+                            "[AI_TOGGLE] user=%s rule=%s ENABLE cfg=%s (%s) persisted %s->%s",
+                            uid, rule_id[:8], target_cfg.id[:8], target_cfg.name, before, target_cfg.id,
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            "[AI_TOGGLE] user=%s rule=%s ENABLE cfg=%s FAILED to persist: %s",
+                            uid, rule_id[:8], target_cfg.id[:8], exc, exc_info=True,
+                        )
+                else:
+                    logger.warning(
+                        "[AI_TOGGLE] user=%s rule=%s ENABLE: rule not found for owner — nothing saved",
+                        uid, rule_id[:8],
+                    )
                 await self._persist(uid, st)
+                if not saved_ok:
+                    # The UI must not show ON when the write did not land.
+                    draft["ai_config_id"] = ""
+                    draft["smart_ai_rewrite"] = False
+                    draft["ai_status_badge"] = _ai_badge(draft)
+                    text, kbd = await _render_ai_menu(rule_id, draft)
+                    await self._safe_edit(cq, text, reply_markup=kbd)
+                    return await cq.answer(self._t("ui_internal_error"), show_alert=True)
                 text, kbd = await _render_ai_menu(rule_id, draft)
                 await self._safe_edit(cq, text, reply_markup=kbd)
                 await cq.answer(self._t("ui_ai_enabled_alert"))
@@ -5415,9 +5441,25 @@ class ProBotUI:
                 draft["ai_status_badge"] = _ai_badge(draft)
                 rule = await self._owned_rule(rule_id, uid)
                 if rule:
+                    before = rule.ai_config_id
                     rule.ai_config_id = None
                     rule.smart_ai_rewrite = False
-                    await self._save_owned_rule(rule, uid)
+                    try:
+                        await self._save_owned_rule(rule, uid)
+                        logger.info(
+                            "[AI_TOGGLE] user=%s rule=%s DISABLE persisted %s->None",
+                            uid, rule_id[:8], before,
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            "[AI_TOGGLE] user=%s rule=%s DISABLE FAILED to persist: %s",
+                            uid, rule_id[:8], exc, exc_info=True,
+                        )
+                else:
+                    logger.warning(
+                        "[AI_TOGGLE] user=%s rule=%s DISABLE: rule not found for owner",
+                        uid, rule_id[:8],
+                    )
                 await self._persist(uid, st)
                 text, kbd = await _render_ai_menu(rule_id, draft)
                 await self._safe_edit(cq, text, reply_markup=kbd)

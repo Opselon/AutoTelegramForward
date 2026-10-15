@@ -44,6 +44,7 @@ import { AdminPanel } from './components/AdminPanel'
 import { AuditEventsPanel } from './components/AuditEventsPanel'
 import { ClientSettings } from './components/ClientSettings'
 import { TaskOverviewModal } from './components/TaskOverviewModal'
+import { DiagnosticsPanel } from './components/DiagnosticsPanel'
 import type {
   ForwardRule,
   SaveRuleRequest,
@@ -66,6 +67,7 @@ import type {
   LogStats,
   ServicesHealthResponse,
   PVResponderConfig,
+  DiagnosticsResponse,
 } from './types'
 
 export function App() {
@@ -96,6 +98,19 @@ export function App() {
   const [deliveryStats, setDeliveryStats] = useState<DeliveryStats | null>(null)
   const [ruleLiveStats, setRuleLiveStats] = useState<RuleLiveStat[]>([])
   const [recentErrors, setRecentErrors] = useState<RecentError[]>([])
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsResponse | null>(null)
+  const [diagLoading, setDiagLoading] = useState(false)
+
+  const refreshDiagnostics = async () => {
+    setDiagLoading(true)
+    try {
+      setDiagnostics(await api.diagnostics())
+    } catch {
+      setDiagnostics(null)
+    } finally {
+      setDiagLoading(false)
+    }
+  }
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
   const [dismissedErrors, setDismissedErrors] = useState<Set<string>>(() => {
     try {
@@ -390,6 +405,7 @@ export function App() {
     }
 
     loadData()
+    refreshDiagnostics()
     api.me().then(setCurrentUser).catch(() => {})
     const timer = setInterval(() => {
       api.getStats().then(setStats).catch(() => {})
@@ -1264,6 +1280,12 @@ export function App() {
       {/* TAB 1: RULES & ROUTES */}
       {activeTab === 'rules' && (
         <div>
+          <DiagnosticsPanel
+            report={diagnostics}
+            loading={diagLoading}
+            onRefresh={refreshDiagnostics}
+            isRtl={isRtl}
+          />
           <div className="hero-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
