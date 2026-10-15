@@ -1664,50 +1664,54 @@ class ProBotUI:
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
 
-        url_b = "🚫 حذف" if rule.remove_links else "🟢 مجاز"
-        usr_b = "🚫 حذف" if rule.clean_usernames else "🟢 مجاز"
-        tag_b = "🚫 حذف" if rule.clean_hashtags else "🟢 مجاز"
-        emo_b = "🧹 پاکسازی" if rule.remove_emojis else "🟢 حفظ"
-        phn_b = "🚫 حذف" if rule.clean_phones else "🟢 مجاز"
-        btn_b = "🚫 حذف" if rule.clean_buttons else "🟢 مجاز"
-        spc_b = "🧹 پاکسازی" if rule.clean_empty_lines else "🟢 حفظ"
+        rm = self._t("ui_clean_removed", lang=lang)
+        alw = self._t("ui_clean_allowed", lang=lang)
+        cln = self._t("ui_clean_cleaned", lang=lang)
+        kep = self._t("ui_clean_kept", lang=lang)
+        url_b = rm if rule.remove_links else alw
+        usr_b = rm if rule.clean_usernames else alw
+        tag_b = rm if rule.clean_hashtags else alw
+        emo_b = cln if rule.remove_emojis else kep
+        phn_b = rm if rule.clean_phones else alw
+        btn_b = rm if rule.clean_buttons else alw
+        spc_b = cln if rule.clean_empty_lines else kep
         wrd_cnt = len(rule.clean_custom_words)
-        wrd_b = f"{wrd_cnt} کلمه" if wrd_cnt else "تنظیم نشده"
+        wrd_b = self._t("ui_clean_words_count", lang=lang, count=wrd_cnt) if wrd_cnt else self._t("ui_clean_not_set", lang=lang)
 
         text = (
-            "🧹 **تنظیمات پاک‌کننده پیام (Cleaner Settings)**\n\n"
-            f"قانون: **{src_label} ➔ {dst_label}**\n"
-            "────────────────────\n"
-            "اینجا می‌توانید مواردی که نمی‌خواهید در پیام ظاهر شوند را مشخص کنید:\n\n"
-            f"• 🔗 **لینک‌ها (URLs):** {url_b}\n"
-            f"• 👤 **منشن‌ها (@Usernames):** {usr_b}\n"
-            f"• #️⃣ **هشتگ‌ها (#Hashtags):** {tag_b}\n"
-            f"• 😀 **ایموجی‌ها (Emojis):** {emo_b}\n"
-            f"• 📞 **شماره‌های تماس (Phone):** {phn_b}\n"
-            f"• 🔘 **دکمه‌های شیشه‌ای (Buttons):** {btn_b}\n"
-            f"• ✂️ **خطوط خالی اضافه (Empty Lines):** {spc_b}\n"
-            f"• 📝 **کلمات سفارشی:** {wrd_b}\n\n"
-            "👇 جهت فعال یا غیرفعال‌سازی هر گزینه کلیک کنید:"
+            self._t("ui_clean_title", lang=lang)
+            + self._t("ui_clean_rule_line", lang=lang, src=src_label, dst=dst_label)
+            + "────────────────────\n"
+            + self._t("ui_clean_intro", lang=lang)
+            + self._t("ui_clean_urls", lang=lang, status=url_b)
+            + self._t("ui_clean_usernames", lang=lang, status=usr_b)
+            + self._t("ui_clean_hashtags", lang=lang, status=tag_b)
+            + self._t("ui_clean_emojis", lang=lang, status=emo_b)
+            + self._t("ui_clean_phones", lang=lang, status=phn_b)
+            + self._t("ui_clean_buttons", lang=lang, status=btn_b)
+            + self._t("ui_clean_empty_lines", lang=lang, status=spc_b)
+            + self._t("ui_clean_custom_words", lang=lang, status=wrd_b)
+            + self._t("ui_clean_hint", lang=lang)
         )
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                (f"🔗 لینک: {url_b}", f"rcl_url:{rule.id}"),
-                (f"👤 منشن: {usr_b}", f"rcl_usr:{rule.id}"),
+                (self._t("ui_clean_btn_urls", lang=lang, status=url_b), f"rcl_url:{rule.id}"),
+                (self._t("ui_clean_btn_usernames", lang=lang, status=usr_b), f"rcl_usr:{rule.id}"),
             ],
             [
-                (f"#️⃣ هشتگ: {tag_b}", f"rcl_tag:{rule.id}"),
-                (f"😀 ایموجی: {emo_b}", f"rcl_emo:{rule.id}"),
+                (self._t("ui_clean_btn_hashtags", lang=lang, status=tag_b), f"rcl_tag:{rule.id}"),
+                (self._t("ui_clean_btn_emojis", lang=lang, status=emo_b), f"rcl_emo:{rule.id}"),
             ],
             [
-                (f"📞 شماره تماس: {phn_b}", f"rcl_phn:{rule.id}"),
-                (f"🔘 دکمه شیشه‌ای: {btn_b}", f"rcl_btn:{rule.id}"),
+                (self._t("ui_clean_btn_phones", lang=lang, status=phn_b), f"rcl_phn:{rule.id}"),
+                (self._t("ui_clean_btn_buttons", lang=lang, status=btn_b), f"rcl_btn:{rule.id}"),
             ],
             [
-                (f"✂️ خطوط خالی: {spc_b}", f"rcl_spc:{rule.id}"),
-                (f"📝 کلمات سفارشی: {wrd_b}", f"rcl_wrd:{rule.id}"),
+                (self._t("ui_clean_btn_empty_lines", lang=lang, status=spc_b), f"rcl_spc:{rule.id}"),
+                (self._t("ui_clean_btn_custom_words", lang=lang, status=wrd_b), f"rcl_wrd:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -2397,7 +2401,8 @@ class ProBotUI:
         return self._kbd(rows)
 
     def _render_ai_detail(self, cfg: AIConfig, health_info: Optional[dict] = None) -> Tuple[str, InlineKeyboardMarkup]:
-        status_emoji = "🟢 فعال" if cfg.is_enabled else "🔴 غیرفعال"
+        lang = self._lang_for(cfg)
+        status_emoji = self._t("ui_ai_enabled", lang=lang) if cfg.is_enabled else self._t("ui_ai_disabled", lang=lang)
         prov_key = cfg.provider.value if hasattr(cfg.provider, "value") else str(cfg.provider)
         prov_name = self._provider_label(prov_key)
 
@@ -2407,58 +2412,59 @@ class ProBotUI:
         elif key:
             masked_key = "********"
         else:
-            masked_key = "(تنظیم نشده)"
+            masked_key = self._t("ui_ai_not_set_paren", lang=lang)
 
         from core.infrastructure.ai.providers import OpenAICompatibleProvider
-        base_url = cfg.base_url or OpenAICompatibleProvider.default_base_urls.get(prov_key, "") or "(پیش‌فرض)"
+        base_url = cfg.base_url or OpenAICompatibleProvider.default_base_urls.get(prov_key, "") or self._t("ui_ai_default_paren", lang=lang)
 
+        _t = lambda k, **kw: self._t(k, lang=lang, **kw)
         lines = [
-            "🤖 **جزئیات و وضعیت پیکربندی هوش مصنوعی**",
+            _t("ui_ai_detail_title"),
             "────────────────────",
-            f"🏷 **نام:** {cfg.name or '—'}",
-            f"🆔 **شناسه:** `{cfg.id}`",
-            f"🔌 **سرویس‌دهنده:** `{prov_name}` (`{prov_key}`)",
-            f"🧠 **مدل فعال:** `{cfg.model}`",
-            f"🌐 **هاست / Base URL:** `{base_url}`",
-            f"🔑 **کلید احراز هویت (API Key):** `{masked_key}`",
-            f"🌡 **دما (Temperature):** `{cfg.temperature}`",
-            f"🔘 **وضعیت سیستم:** {status_emoji}",
+            _t("ui_ai_detail_name", name=cfg.name or '—'),
+            _t("ui_ai_detail_id", id=cfg.id),
+            _t("ui_ai_detail_provider", prov_name=prov_name, prov_key=prov_key),
+            _t("ui_ai_detail_model", model=cfg.model),
+            _t("ui_ai_detail_baseurl", base_url=base_url),
+            _t("ui_ai_detail_key", masked_key=masked_key),
+            _t("ui_ai_detail_temp", temp=cfg.temperature),
+            _t("ui_ai_detail_status", status_emoji=status_emoji),
         ]
 
         if health_info:
             lines.append("────────────────────")
             if health_info.get("ok"):
-                lines.append("🩺 **تست سلامت (Health Check):** 🟢 **سالم و متصل**")
-                lines.append(f"⚡ **زمان پاسخ (Latency):** `{health_info.get('latency_ms', 0):.0f}ms`")
+                lines.append(_t("ui_ai_health_ok"))
+                lines.append(_t("ui_ai_health_latency", latency=f"{health_info.get('latency_ms', 0):.0f}ms"))
                 if health_info.get("reply"):
                     reply_preview = str(health_info["reply"])[:120].replace("\n", " ")
-                    lines.append(f"💬 **پاسخ نمونه:** `{reply_preview}`")
+                    lines.append(_t("ui_ai_health_reply", reply=reply_preview))
             else:
-                lines.append("🩺 **تست سلامت (Health Check):** 🔴 **خطا در برقراری ارتباط**")
+                lines.append(_t("ui_ai_health_fail"))
                 err_msg = str(health_info.get("error", "unknown"))[:200]
-                lines.append(f"⚠️ **پیام خطا:** `{err_msg}`")
+                lines.append(_t("ui_ai_health_error", error=err_msg))
 
         lines.append("────────────────────")
-        lines.append("👇 یکی از عملیات زیر را انتخاب کنید:")
+        lines.append(_t("ui_ai_detail_hint"))
         text = "\n".join(lines)
 
-        tog_text = "🔴 غیرفعال‌سازی" if cfg.is_enabled else "🟢 فعال‌سازی"
+        tog_text = _t("ui_ai_btn_disable") if cfg.is_enabled else _t("ui_ai_btn_enable")
         rows = [
             [
-                ("🩺 تست سلامت (Ping)", f"ai_hc:{cfg.id}"),
-                ("🧪 تست بازنویسی متن", f"ai_sample:{cfg.id}"),
+                (_t("ui_ai_btn_health"), f"ai_hc:{cfg.id}"),
+                (_t("ui_ai_btn_sample"), f"ai_sample:{cfg.id}"),
             ],
             [
-                ("✏️ تغییر هاست (Base URL)", f"ai_eh:{cfg.id}"),
-                ("🧠 تغییر مدل", f"ai_em:{cfg.id}"),
+                (_t("ui_ai_btn_baseurl"), f"ai_eh:{cfg.id}"),
+                (_t("ui_ai_btn_model"), f"ai_em:{cfg.id}"),
             ],
             [
-                ("🔑 تغییر کلید (API Key)", f"ai_ek:{cfg.id}"),
+                (_t("ui_ai_btn_key"), f"ai_ek:{cfg.id}"),
                 (tog_text, f"ai_tog:{cfg.id}"),
             ],
             [
-                ("🗑 حذف پیکربندی", f"ai_del_ask:{cfg.id}"),
-                ("⬅️ بازگشت به لیست AI", CB["ai"]),
+                (_t("ui_ai_btn_delete"), f"ai_del_ask:{cfg.id}"),
+                (_t("ui_ai_btn_back"), CB["ai"]),
             ],
         ]
         return text, self._kbd(rows)
