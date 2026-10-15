@@ -88,7 +88,7 @@ def test_callback_payload_is_not_treated_as_visible_copy() -> None:
 
 def test_added_line_filter_ignores_legacy_literals_but_catches_new_ones() -> None:
     source = (
-        'await bot.send_message(chat_id, "Legacy text")\\n'
+        'await bot.send_message(chat_id, "Legacy text")\n'
         'await bot.send_message(chat_id, "New untranslated text")'
     )
     findings = AUDIT.scan_source("ui.py", source, {2})
