@@ -535,7 +535,8 @@
     "ui_connect_bullet_space": "• Keep one space after `/connect`.",
     "ui_connect_bullet_no_token": "• Do not add a token, password, or verification code yet.",
     "ui_connect_bullet_two_step": "• You can also send `/connect` first, then send only your phone number in the next message.",
-    "ui_connect_country_example": "Example for China: `/connect 8613512778569`"
+    "ui_connect_country_example": "Example for China: `/connect 8613512778569`",
+    "ui_main_hint": "💡 To manage forwarding and access the bot's features, use the buttons below:"
   },
   "fa": {
     "ai_add_hint": "پیکربندی را بفرستید:\n`provider model api_key`\nمثلاً `openai gpt-4o-mini sk-...`\nتأمین‌کنندگان: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -1073,7 +1074,8 @@
     "ui_connect_bullet_space": "• بین `/connect` و شماره دقیقاً یک فاصله بگذارید.",
     "ui_connect_bullet_no_token": "• فعلاً توکن، رمز عبور یا کد تایید نفرستید.",
     "ui_connect_bullet_two_step": "• همچنین می‌توانید ابتدا دستور `/connect` را بفرستید و سپس در پیام بعدی فقط شماره خود را ارسال کنید.",
-    "ui_connect_country_example": "مثال برای ایران: `/connect 989123456789`"
+    "ui_connect_country_example": "مثال برای ایران: `/connect 989123456789`",
+    "ui_main_hint": "💡 برای مدیریت فوروارد و دسترسی به امکانات ربات، از دکمه‌های زیر استفاده کنید:"
   },
   "ru": {
     "ai_add_hint": "Отправьте конфигурацию:\n`провайдер модель api_key`\nнапример `openai gpt-4o-mini sk-...`\nПровайдеры: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -1611,7 +1613,8 @@
     "ui_connect_bullet_space": "• Оставьте один пробел после `/connect`.",
     "ui_connect_bullet_no_token": "• Пока не вводите токен, пароль или код подтверждения.",
     "ui_connect_bullet_two_step": "• Вы также можете отправить `/connect` сначала, а затем отправить только номер в следующем сообщении.",
-    "ui_connect_country_example": "Пример для России: `/connect 79991234567`"
+    "ui_connect_country_example": "Пример для России: `/connect 79991234567`",
+    "ui_main_hint": "💡 Для управления пересылкой и доступа к функциям бота используйте кнопки ниже:"
   },
   "zh": {
     "ai_add_hint": "发送 AI 配置：\n`provider model api_key`\n例如 `openai gpt-4o-mini sk-...`\n供应商：openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -2149,7 +2152,8 @@
     "ui_connect_bullet_space": "• `/connect` 后保留一个空格。",
     "ui_connect_bullet_no_token": "• 暂不要输入 Token、密码或验证码。",
     "ui_connect_bullet_two_step": "• 您也可以先发送 `/connect`，然后在下一条消息中单独发送手机号。",
-    "ui_connect_country_example": "中国示例：`/connect 8613512778569`"
+    "ui_connect_country_example": "中国示例：`/connect 8613512778569`",
+    "ui_main_hint": "💡 要管理转发并使用机器人的功能，请使用下方按钮："
   },
   "pt": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -2687,7 +2691,8 @@
     "ui_connect_bullet_space": "• Deixe um espaço após `/connect`.",
     "ui_connect_bullet_no_token": "• Não adicione ainda token, palavra-passe ou código de verificação.",
     "ui_connect_bullet_two_step": "• Também pode enviar `/connect` primeiro e depois enviar apenas o número na mensagem seguinte.",
-    "ui_connect_country_example": "Exemplo para o Brasil: `/connect 5511999998888`"
+    "ui_connect_country_example": "Exemplo para o Brasil: `/connect 5511999998888`",
+    "ui_main_hint": "💡 Para gerenciar o encaminhamento e acessar os recursos do bot, use os botões abaixo:"
   },
   "uz": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -3225,7 +3230,8 @@
     "ui_connect_bullet_space": "• `/connect` dan keyin bitta bo'sh joy qoldiring.",
     "ui_connect_bullet_no_token": "• Hozircha token, parol yoki tasdiqlash kodini yubormang.",
     "ui_connect_bullet_two_step": "• Avval `/connect` yuborishingiz, so'ng keyingi xabarda faqat raqamni yuborishingiz ham mumkin.",
-    "ui_connect_country_example": "O'zbekiston uchun misol: `/connect 998901234567`"
+    "ui_connect_country_example": "O'zbekiston uchun misol: `/connect 998901234567`",
+    "ui_main_hint": "💡 Yo'naltirishni boshqarish va bot imkoniyatlariga kirish uchun quyidagi tugmalardan foydalaning:"
   },
   "id": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -3763,7 +3769,8 @@
     "ui_connect_bullet_space": "• Beri satu spasi setelah `/connect`.",
     "ui_connect_bullet_no_token": "• Jangan tambahkan token, kata sandi, atau kode verifikasi dulu.",
     "ui_connect_bullet_two_step": "• Anda juga bisa mengirim `/connect` dulu, lalu mengirim hanya nomor di pesan berikutnya.",
-    "ui_connect_country_example": "Contoh untuk Indonesia: `/connect 628123456789`"
+    "ui_connect_country_example": "Contoh untuk Indonesia: `/connect 628123456789`",
+    "ui_main_hint": "💡 Untuk mengelola penerusan dan mengakses fitur bot, gunakan tombol di bawah ini:"
   },
   "es": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -4301,7 +4308,8 @@
     "ui_connect_bullet_space": "• Deje un espacio después de `/connect`.",
     "ui_connect_bullet_no_token": "• No añada todavía un token, contraseña ni código de verificación.",
     "ui_connect_bullet_two_step": "• También puede enviar `/connect` primero y luego enviar solo el número en el siguiente mensaje.",
-    "ui_connect_country_example": "Ejemplo para México: `/connect 5215555555555`"
+    "ui_connect_country_example": "Ejemplo para México: `/connect 5215555555555`",
+    "ui_main_hint": "💡 Para gestionar el reenvío y acceder a las funciones del bot, use los botones de abajo:"
   },
   "fr": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -4839,7 +4847,8 @@
     "ui_connect_bullet_space": "• Laissez un espace après `/connect`.",
     "ui_connect_bullet_no_token": "• N'ajoutez pas encore de token, de mot de passe ni de code de vérification.",
     "ui_connect_bullet_two_step": "• Vous pouvez aussi envoyer `/connect` d'abord, puis envoyer uniquement le numéro dans le message suivant.",
-    "ui_connect_country_example": "Exemple pour la France : `/connect 33612345678`"
+    "ui_connect_country_example": "Exemple pour la France : `/connect 33612345678`",
+    "ui_main_hint": "💡 Pour gérer le transfert et accéder aux fonctionnalités du bot, utilisez les boutons ci-dessous :"
   },
   "it": {
     "ai_add_hint": "Send AI config as:\n`provider model api_key`\ne.g. `openai gpt-4o-mini sk-...`\nProviders: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -5377,6 +5386,7 @@
     "ui_connect_bullet_space": "• Lascia uno spazio dopo `/connect`.",
     "ui_connect_bullet_no_token": "• Non aggiungere ancora token, password né codice di verifica.",
     "ui_connect_bullet_two_step": "• Puoi anche inviare prima `/connect` e poi inviare solo il numero nel messaggio successivo.",
-    "ui_connect_country_example": "Esempio per l'Italia: `/connect 393123456789`"
+    "ui_connect_country_example": "Esempio per l'Italia: `/connect 393123456789`",
+    "ui_main_hint": "💡 Per gestire l'inoltro e accedere alle funzioni del bot, usa i pulsanti qui sotto:"
   }
 }

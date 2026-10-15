@@ -1,6 +1,3 @@
-core/infrastructure/grpc_server/admin_servicer.py:238
-core/infrastructure/telegram/bot_manager.py:32
-core/infrastructure/telegram/bot_manager.py:445
 core/infrastructure/telegram/pro_bot_ui.py:62
 core/infrastructure/telegram/pro_bot_ui.py:525
 core/infrastructure/telegram/pro_bot_ui.py:831
