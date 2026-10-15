@@ -6653,39 +6653,21 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
             if not sessions:
-                await self._safe_edit(cq, 
-                    self._t("ui_no_sessions"), reply_markup=self._sessions_menu())
-                return await cq.answer()
-            target = sessions[0]
-            try:
-                bundle = {
-                    "phone": target.phone_number,
-                    "session_string": target.session_string_encrypted,
-                    "user_id": target.user_id,
-                    "username": target.username,
-                    "first_name": target.first_name,
-                }
-                blob = base64.urlsafe_b64encode(
-                    json.dumps(bundle).encode("utf-8")
-                ).decode("ascii")
-                path = f"backup_{target.id[:8]}.atf"
-                with open(path, "w", encoding="utf-8") as fh:
-                    fh.write(blob)
-                await self.bot.send_document(
-                    chat_id=cq.message.chat.id, document=path,
-                    caption=self._t("ui_backup_done", phone=target.phone_number),
+                await self._safe_edit(
+                    cq, self._t("ui_no_sessions"), reply_markup=self._sessions_menu()
                 )
-                os.remove(path)
-                try:
-                    self._log.info(
-                        "bot", "session", f"backup exported for {target.phone_number}")
-                except Exception:
-                    pass
-            except Exception as exc:
-                logger.exception("backup failed")
-                await self._record_error("bot", exc, user_id=cq.from_user.id)
-                await cq.message.reply_text(
-                    self._t("ui_backup_fail", error=tg_detail(exc)))
+                return await cq.answer()
+            st = self._state(uid)
+            st.step = "session_backup_passphrase"
+            st.buffer["backup_session_id"] = sessions[0].id
+            await self._persist(uid, st)
+            await self._safe_edit(
+                cq,
+                self._t("ui_migrate_ask_passphrase"),
+                reply_markup=self._kbd(
+                    [[("✖ " + self._t("ui_cancel"), CB["cancel"])]]
+                ),
+            )
             await cq.answer()
 
         # ---------------- migration backup/restore -----------------------------
@@ -7710,6 +7692,70 @@ class ProBotUI:
         st.step = ""
         await self._persist(uid, st)
         await self._do_migration_export_from_message(message, passphrase)
+
+    async def _step_session_backup_passphrase(
+        self, message: Message, st: UiState, text: str
+    ) -> None:
+        """Export one owned Telegram session as an authenticated encrypted bundle."""
+        uid = message.from_user.id
+        lang = self._lang_for(st)
+        passphrase = (text or "").strip()
+        session_id = str(st.buffer.get("backup_session_id") or "")
+        if len(passphrase) < 12:
+            return await message.reply_text(
+                self._t("ui_migrate_passphrase_required", lang=lang)
+            )
+        st.step = ""
+        st.buffer.pop("backup_session_id", None)
+        await self._persist(uid, st)
+        path = None
+        try:
+            sessions = await self._sessions.list_by_owner(uid) if self._sessions else []
+            target = next((item for item in sessions if str(item.id) == session_id), None)
+            if target is None:
+                return await message.reply_text(
+                    self._t("ui_rule_not_found_or_not_owner", lang=lang)
+                )
+            bundle = {
+                "format": 1,
+                "phone": target.phone_number,
+                "session_string": target.session_string_encrypted,
+                "user_id": target.user_id,
+                "username": target.username,
+                "first_name": target.first_name,
+            }
+            encrypted = encrypt_bundle(
+                json.dumps(bundle, ensure_ascii=False, separators=(",", ":")),
+                passphrase,
+            )
+            fd, path = tempfile.mkstemp(
+                prefix=f"atf_session_{uid}_", suffix=".atf",
+                dir=tempfile.gettempdir(),
+            )
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(encrypted)
+            await self.bot.send_document(
+                chat_id=message.chat.id,
+                document=path,
+                caption=self._t("ui_backup_done", phone=target.phone_number, lang=lang)
+                + "\\n🔒 AES-GCM",
+            )
+            try:
+                self._log.info("bot", "session", "encrypted session backup exported")
+            except Exception:
+                pass
+        except Exception as exc:
+            logger.exception("encrypted session backup failed")
+            await self._record_error("bot", exc, user_id=uid)
+            await message.reply_text(
+                self._t("ui_backup_fail", error=tg_detail(exc), lang=lang)
+            )
+        finally:
+            if path:
+                try:
+                    os.remove(path)
+                except OSError:
+                    logger.warning("unable to remove temporary session backup file")
 
     async def _step_migrate_import_passphrase(self, message: Message, st: UiState, text: str) -> None:
         lang = self._lang_for(st)
