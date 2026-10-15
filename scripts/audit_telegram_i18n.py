@@ -160,12 +160,23 @@ def literal_signatures(source: str) -> set[str]:
     return signatures
 
 
+def _default_base() -> str:
+    for ref in ("origin/master", "origin/main", "master", "main"):
+        res = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", ref],
+            cwd=ROOT, check=False, capture_output=True,
+        )
+        if res.returncode == 0:
+            return ref
+    return "origin/master"
+
+
 def changed_python_files() -> tuple[list[str], str]:
-    base = os.getenv("I18N_AUDIT_BASE", "origin/main")
-    # GitHub pull_request supplies the target branch; local runs can set base.
-    event_base = os.getenv("GITHUB_BASE_REF")
-    if event_base:
-        base = f"origin/{event_base}"
+    base = os.getenv("I18N_AUDIT_BASE") or (
+        f"origin/{os.getenv('GITHUB_BASE_REF')}"
+        if os.getenv("GITHUB_BASE_REF")
+        else _default_base()
+    )
     # Prefer the ref already supplied by checkout. Fetch only when absent,
     # and bound network operations so a transient GitHub hiccup cannot hang CI.
     present = subprocess.run(
