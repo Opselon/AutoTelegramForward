@@ -41,6 +41,11 @@ services:
       - atf-data:/app/data
     networks:
       - atf-net
+      # The AI rewrite provider (9router) runs as a sibling stack, published on
+      # its own bridge network. Without this the core cannot resolve/connect to
+      # `9router` and every AI rewrite fails with PROVIDER_ERROR (seen as
+      # "AI rewrite does nothing"), so the AI base_url is http://9router:20128/v1.
+      - ai-net
 
   api:
     build:
@@ -119,3 +124,8 @@ volumes:
 networks:
   atf-net:
     driver: bridge
+  # Pre-existing network of the self-hosted 9router AI gateway. Marked external
+  # because it is owned by that stack, not by this compose project.
+  ai-net:
+    external: true
+    name: 9router_default

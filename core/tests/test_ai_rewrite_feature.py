@@ -10,9 +10,22 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from core.application.pipeline import DurableMessagePipeline, PipelineContext
 from core.application.prompt_service import PromptService
-from core.domain.entities import AIConfig, ForwardRule
-from core.domain.value_objects import AIFallbackPolicy, AIProviderType
+from core.domain.entities import (
+    AIConfig,
+    EvaluationResult,
+    ForwardRule,
+    MessagePayload,
+)
+from core.domain.value_objects import (
+    AIFallbackPolicy,
+    AIProviderType,
+    FilterAction,
+    ForwardMode,
+    RoutingType,
+)
+from core.infrastructure.ai.transformer import AIResponse
 from core.infrastructure.persistence.database import SqliteDatabase
 from core.infrastructure.persistence.sqlite_repositories import SqlitePromptRepository
 
@@ -234,3 +247,97 @@ async def test_prompt_rpc_contract_roundtrip(tmp_path):
 
     ok = await svc.DeletePromptTemplate(pb.DeletePromptTemplateRequest(id=created.id), MagicMock())
     assert ok.success
+
+
+# ---------------------------------------------------------------------------
+# Per-task (per-rule) isolation: two rules from the SAME source channel must be
+# able to disagree about AI rewrite. One rule opts in, the other stays off.
+# ---------------------------------------------------------------------------
+
+def _pipeline_with_transformer(mock_transformer):
+    rule_repo = AsyncMock()
+    filter_repo = AsyncMock()
+    filter_repo.get_by_id.return_value = None
+    return DurableMessagePipeline(
+        rule_repo=rule_repo,
+        filter_repo=filter_repo,
+        ai_transformer=mock_transformer,
+    )
+
+
+@pytest.mark.asyncio
+async def test_ai_rewrite_is_per_rule_not_per_source():
+    """Rule A (AI on) is rewritten; rule B (same source, AI off) passes through
+    untouched and never touches the AI provider."""
+    ai_rule = ForwardRule(
+        id="rule-ai-on",
+        session_id="sess-1",
+        source_chat_id="-1001",
+        target_chat_id="-2001",
+        routing_type=RoutingType.CHANNEL_TO_CHANNEL,
+        forward_mode=ForwardMode.COPY_MESSAGE,
+        ai_config_id="ai-cfg-1",
+    )
+    plain_rule = ForwardRule(
+        id="rule-ai-off",
+        session_id="sess-1",
+        source_chat_id="-1001",  # same source channel
+        target_chat_id="-2002",
+        routing_type=RoutingType.CHANNEL_TO_CHANNEL,
+        forward_mode=ForwardMode.COPY_MESSAGE,
+        # no ai_config_id -> AI rewrite disabled for THIS task only
+    )
+
+    mock_transformer = AsyncMock()
+    mock_transformer.transform.return_value = AIResponse(
+        success=True,
+        transformed_text="[AI] rewritten body",
+        execution_duration_ms=12.0,
+        model_used="test-model",
+    )
+
+    pipeline = _pipeline_with_transformer(mock_transformer)
+    payload = MessagePayload(message_id=55, chat_id="-1001", text="raw body")
+
+    on_eval = EvaluationResult(action=FilterAction.ALLOW)
+    on_ctx = PipelineContext(payload=payload, correlation_id="per-rule-on")
+    out_on = await pipeline._apply_transforms(on_ctx, payload, ai_rule, on_eval)
+    assert out_on == "[AI] rewritten body"
+    assert mock_transformer.transform.await_count == 1
+
+    off_eval = EvaluationResult(action=FilterAction.ALLOW)
+    off_ctx = PipelineContext(payload=payload, correlation_id="per-rule-off")
+    out_off = await pipeline._apply_transforms(off_ctx, payload, plain_rule, off_eval)
+    assert out_off == "raw body"                      # untouched
+    assert off_eval.rewritten_text is None
+    assert mock_transformer.transform.await_count == 1  # still one: B never called AI
+
+    # Each task carries its own AI settings; they do not leak into each other.
+    assert ai_rule.ai_config_id == "ai-cfg-1"
+    assert plain_rule.ai_config_id is None
+
+
+@pytest.mark.asyncio
+async def test_ai_rewrite_toggle_per_task_is_independent():
+    """Enabling AI on task A must leave task B disabled, and vice versa."""
+    task_a = ForwardRule(id="a", source_chat_id="-1001", target_chat_id="-2001")
+    task_b = ForwardRule(id="b", source_chat_id="-1001", target_chat_id="-2002")
+
+    # Bot/dashboard toggle on task A only
+    task_a.ai_config_id = "ai-cfg-1"
+    task_a.smart_ai_rewrite = True
+
+    assert task_a.ai_config_id == "ai-cfg-1"
+    assert task_b.ai_config_id is None
+    assert task_b.smart_ai_rewrite is False
+
+    # Toggling A off must not disturb A's sibling task
+    task_a.ai_config_id = None
+    task_a.smart_ai_rewrite = False
+    assert task_a.ai_config_id is None
+    assert task_b.ai_config_id is None
+
+    # Now enable B; A stays off
+    task_b.ai_config_id = "ai-cfg-2"
+    assert task_b.ai_config_id == "ai-cfg-2"
+    assert task_a.ai_config_id is None
