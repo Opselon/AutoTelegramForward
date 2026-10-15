@@ -166,6 +166,9 @@ class ApiClient:
         self.verify_tls = verify_tls
         self.store = TokenStore()
         self._minted: Credential | None = None
+        # The credential resolved for this client, so `load_credential` is
+        # idempotent and the reported source stays truthful.
+        self._credential: Credential | None = None
 
     # -------------------------------------------------------------- discovery
     def resolve_url(self, *, probe: bool = True) -> str:
@@ -193,6 +196,15 @@ class ApiClient:
 
     # ------------------------------------------------------------ credentials
     def load_credential(self, *, allow_mint: bool = True) -> Credential:
+        """Resolve the bearer token once per client, cheapest tier first.
+
+        The result is cached: without this, a second call would see the token
+        this method just installed on `self.token` and re-classify a locally
+        minted credential as an explicitly passed one — which is how a
+        "minted" token ends up labelled `--token/env` in `atf auth token`.
+        """
+        if self._credential is not None and not self._credential.expired:
+            return self._credential
         explicit = self.token or os.environ.get("ATF_TOKEN", "")
         url = self.resolve_url()
         if explicit:
@@ -208,12 +220,14 @@ class ApiClient:
                 admin=bool(payload.get("admin", False)),
             )
             self.token = cred.token
+            self._credential = cred
             return cred
 
         stored = self.store.get(url)
         if stored and not stored.expired:
             self.out.register_secret(stored.token)
             self.token = stored.token
+            self._credential = stored
             return stored
 
         if stored and stored.expired:
@@ -222,6 +236,7 @@ class ApiClient:
         if allow_mint:
             cred = self.mint_local_admin(url)
             self.token = cred.token
+            self._credential = cred
             return cred
 
         raise AuthError(

@@ -30,7 +30,9 @@ from .errors import AtfError, EXIT_FAILURE, EXIT_OK
 # Order matters only for the help listing: most-used groups first.
 COMMAND_MODULES: tuple[str, ...] = (
     "auth",
+    "setup",
     "doctor",
+    "validate",
     "status",
     "rules",
     "sessions",
@@ -51,6 +53,41 @@ COMMAND_MODULES: tuple[str, ...] = (
     "system",
     "config",
 )
+
+#: One-verb shortcuts for the whole stack, so `atf up` == `atf system start`.
+#: A shortcut never shadows a real group (see `_expand_aliases`).
+ALIASES: dict[str, list[str]] = {
+    "up": ["system", "start"],
+    "down": ["system", "stop"],
+    "restart": ["system", "restart"],
+}
+
+
+#: Global flags that consume the following token, so the alias scanner must not
+#: mistake that value for the command position.
+_VALUE_FLAGS = frozenset({"--url", "--token", "--timeout", "--root"})
+
+
+def _expand_aliases(argv: list[str]) -> list[str]:
+    """Rewrite a shortcut verb into the command path it stands for.
+
+    The shortcut may sit after global flags (`atf --json up`), so the first
+    non-flag token is located rather than assuming position 0.
+    """
+    expect_value = False
+    for index, token in enumerate(argv):
+        if expect_value:
+            expect_value = False
+            continue
+        if token in _VALUE_FLAGS:
+            expect_value = True
+            continue
+        if token.startswith("-"):
+            continue
+        if token in ALIASES and token not in COMMAND_MODULES:
+            return [*argv[:index], *ALIASES[token], *argv[index + 1 :]]
+        return argv  # the first real command token is not a shortcut
+    return argv
 
 
 @dataclass
@@ -91,11 +128,60 @@ class CliContext:
         return bool(getattr(self.args, "json", False))
 
 
+#: What a global flag means when nobody passed it. Kept beside `_global_flags`
+#: so the two cannot drift.
+_GLOBAL_DEFAULTS: dict[str, Any] = {
+    "json": False,
+    "url": "",
+    "token": "",
+    "timeout": 20.0,
+    "insecure": False,
+    "no_mint": False,
+    "no_color": False,
+    "quiet": False,
+    "verbose": False,
+    "yes": False,
+    "dry_run": False,
+    "root": "",
+}
+
+
+def _global_flags(*, defaults: bool) -> argparse.ArgumentParser:
+    """The global flag set, in two flavours.
+
+    A flag given *before* the group name (`atf --json rules list`) is parsed by
+    the top-level parser, and argparse copies every subparser attribute over the
+    parent namespace afterwards — so the subparser copies must default to
+    SUPPRESS, or they would overwrite it with their own (empty) default and the
+    flag would silently do nothing.
+    """
+    parser = argparse.ArgumentParser(add_help=False)
+    default = (lambda value: value) if defaults else (lambda value: argparse.SUPPRESS)
+
+    parser.add_argument("--json", action="store_true", default=default(False), help="emit one JSON document on stdout")
+    parser.add_argument("--url", default=default(os.environ.get("ATF_CLI_URL", "")), help="dashboard API base URL")
+    parser.add_argument("--token", default=default(os.environ.get("ATF_TOKEN", "")), help="bearer token (prefer ATF_TOKEN)")
+    parser.add_argument("--timeout", type=float, default=default(20.0), help="HTTP timeout in seconds")
+    parser.add_argument("--insecure", action="store_true", default=default(False), help="skip TLS verification")
+    parser.add_argument("--no-mint", action="store_true", default=default(False), help="never derive a local admin token")
+    parser.add_argument("--no-color", action="store_true", default=default(False), help="disable ANSI colour")
+    parser.add_argument("-q", "--quiet", action="store_true", default=default(False), help="suppress human output")
+    parser.add_argument("-v", "--verbose", action="store_true", default=default(False), help="show every command executed")
+    parser.add_argument("-y", "--yes", action="store_true", default=default(False), help="assume yes for confirmations")
+    parser.add_argument("--dry-run", action="store_true", default=default(False), help="describe changes without applying them")
+    parser.add_argument("--root", default=default(""), help="repository root (default: auto-detected)")
+    return parser
+
+
 def build_parser() -> tuple[argparse.ArgumentParser, dict[str, Any]]:
+    global_flags = _global_flags(defaults=True)
+    sub_flags = _global_flags(defaults=False)
+
     parser = argparse.ArgumentParser(
         prog="atf",
         description="AutoTelegramForward control CLI — run, inspect and repair the whole stack.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[global_flags],
         epilog=(
             "Examples:\n"
             "  atf doctor                          full system health check\n"
@@ -109,24 +195,6 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict[str, Any]]:
     )
     parser.add_argument("--version", action="version", version=f"atf {__version__}")
 
-    global_flags = argparse.ArgumentParser(add_help=False)
-    global_flags.add_argument("--json", action="store_true", help="emit one JSON document on stdout")
-    global_flags.add_argument("--url", default=os.environ.get("ATF_CLI_URL", ""), help="dashboard API base URL")
-    global_flags.add_argument("--token", default=os.environ.get("ATF_TOKEN", ""), help="bearer token (prefer ATF_TOKEN)")
-    global_flags.add_argument("--timeout", type=float, default=20.0, help="HTTP timeout in seconds")
-    global_flags.add_argument("--insecure", action="store_true", help="skip TLS verification")
-    global_flags.add_argument("--no-mint", action="store_true", help="never derive a local admin token")
-    global_flags.add_argument("--no-color", action="store_true", help="disable ANSI colour")
-    global_flags.add_argument("-q", "--quiet", action="store_true", help="suppress human output")
-    global_flags.add_argument("-v", "--verbose", action="store_true", help="show every command executed")
-    global_flags.add_argument("-y", "--yes", action="store_true", help="assume yes for confirmations")
-    global_flags.add_argument("--dry-run", action="store_true", help="describe changes without applying them")
-    global_flags.add_argument("--root", default="", help="repository root (default: auto-detected)")
-
-    for flag in ("--json", "--url", "--token", "--timeout", "--insecure", "--no-mint",
-                 "--no-color", "--quiet", "--verbose", "--yes", "--dry-run", "--root"):
-        parser.add_argument(flag, help=argparse.SUPPRESS, default=argparse.SUPPRESS)
-
     sub = parser.add_subparsers(dest="group", metavar="<group>")
     registry: dict[str, Any] = {}
     missing: list[str] = []
@@ -136,7 +204,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict[str, Any]]:
         except ImportError as exc:  # a broken module must not hide the rest
             missing.append(f"{name} ({exc})")
             continue
-        module.add_parser(sub, parents=[global_flags])
+        module.add_parser(sub, parents=[sub_flags])
         registry[getattr(module, "NAME", name)] = module
     # A missing group is worth knowing about, but not worth polluting every
     # invocation of `atf --help` with it.
@@ -157,10 +225,22 @@ def make_console(args: argparse.Namespace) -> Console:
     )
 
 
+def _fill_global_defaults(args: argparse.Namespace) -> None:
+    """Guarantee every global flag exists on the namespace.
+
+    Subparser copies default to SUPPRESS (see `_global_flags`), so a command
+    handler can otherwise hit an AttributeError on a flag it never received.
+    """
+    for key, value in _GLOBAL_DEFAULTS.items():
+        if not hasattr(args, key):
+            setattr(args, key, value)
+
+
 def dispatch(argv: list[str] | None = None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
+    argv = _expand_aliases(list(sys.argv[1:] if argv is None else argv))
     parser, registry = build_parser()
     args = parser.parse_args(argv)
+    _fill_global_defaults(args)
     console = make_console(args)
 
     if not getattr(args, "group", None):

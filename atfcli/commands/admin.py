@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..context import is_secret_name
 from ..errors import UsageError
 from . import _shared as sh
 
@@ -66,7 +67,13 @@ def _settings_get(ctx, args) -> None:
         return
     ctx.out.title("Global Administrator Settings")
     if isinstance(data, dict):
-        ctx.out.kv([(k, v) for k, v in data.items()])
+        # Values are masked by name: this surface can carry bot tokens and API
+        # keys, and the console's own filter only catches values it has already
+        # been told about.
+        pairs = [
+            (k, "[REDACTED]" if is_secret_name(k) else v) for k, v in data.items()
+        ]
+        ctx.out.kv(pairs)
 
 
 def _settings_save(ctx, args) -> None:

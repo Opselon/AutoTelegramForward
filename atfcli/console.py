@@ -48,6 +48,14 @@ def _supports_color(stream) -> bool:
 class Console:
     """Redaction-safe writer with human and JSON modes."""
 
+    #: Emitted instead of a line that carried a credential. The whole line is
+    #: dropped rather than the token being swapped out in place: a partially
+    #: masked line still leaks the surrounding structure, and — the reason this
+    #: is a constant and not a rebuilt string — a line rebuilt *from* the secret
+    #: keeps the credential in the same data flow that ends at `print`, which is
+    #: exactly what static analysis (and a careless future edit) gets wrong.
+    REDACTION_NOTICE = "[REDACTED: this line contained a credential]"
+
     def __init__(
         self,
         *,
@@ -83,11 +91,16 @@ class Console:
             self._secrets.add(text)
 
     def redact(self, text: str) -> str:
+        """Return `text`, or [REDACTION_NOTICE] when it carries a credential.
+
+        The return value never contains — or derives from — a registered secret,
+        so the single write path cannot emit one even by accident.
+        """
         if not text or not self._secrets:
             return text
-        for secret in sorted(self._secrets, key=len, reverse=True):
+        for secret in self._secrets:
             if secret in text:
-                text = text.replace(secret, "[REDACTED]")
+                return self.REDACTION_NOTICE
         return text
 
     # ------------------------------------------------------------------ style

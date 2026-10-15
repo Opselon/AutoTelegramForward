@@ -55,7 +55,7 @@ def _token(ctx, args) -> None:
             ("User ID", cred.user_id),
             ("Username", cred.username),
             ("Admin", "yes" if cred.admin else "no"),
-            ("Expires in", f"{cred.seconds_left()}s"),
+            ("Expires in", f"{cred.seconds_left}s"),
         ]
     )
     if not args.save:

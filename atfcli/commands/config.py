@@ -28,10 +28,17 @@ def _list(ctx, args) -> None:
 def _get(ctx, args) -> None:
     key = args.key
     val = ctx.repo.env(key)
-    if is_secret_name(key):
-        ctx.out.warn("Key is sensitive; value is redacted by default")
-        if not args.reveal:
-            val = "[REDACTED]"
+    sensitive = is_secret_name(key)
+    if sensitive and args.reveal:
+        # An explicit, deliberate escape hatch: the console is the redaction
+        # barrier, so a deliberate reveal has to bypass it rather than pretend
+        # to be possible through it.
+        ctx.out.warn(f"{key} is a credential — revealing on stdout")
+        sh.write_stdout(val)
+        return
+    if sensitive:
+        ctx.out.emit({"key": key, "value": "[REDACTED]"}, f"{key}=[REDACTED]  (pass --reveal to print it)")
+        return
     ctx.out.emit({"key": key, "value": val}, f"{key}={val}")
 
 

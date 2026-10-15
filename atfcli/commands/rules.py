@@ -220,7 +220,7 @@ def _settings_schema(ctx, args) -> None:
         ctx.out.json(payload)
         return
     settings = payload.get("settings", []) if isinstance(payload, dict) else []
-    group = args.group
+    group = getattr(args, "settings_group", "")
     rows = []
     for spec in settings:
         if group and spec.get("group") != group:
@@ -472,7 +472,16 @@ def add_parser(subparsers, parents) -> None:
     settings_sub = sh.add_group(p)
 
     sp = settings_sub.add_parser("schema", help="the full settings registry", parents=parents)
-    sp.add_argument("--group", default="", help="only this group (e.g. content_cleanup)")
+    # NOTE: `--group` must NOT use the default dest ("group") — that dest belongs
+    # to the top-level subparsers action, and argparse copies a subparser's
+    # namespace over the parent's, silently blanking `args.group` and sending
+    # dispatch down the wrong branch.
+    sp.add_argument(
+        "--group",
+        dest="settings_group",
+        default="",
+        help="only this group (e.g. content_cleanup)",
+    )
     sp.set_defaults(func=_settings_schema)
 
     sp = settings_sub.add_parser("get", help="show a task's settings", parents=parents)
