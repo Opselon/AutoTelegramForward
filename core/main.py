@@ -288,6 +288,7 @@ def build_container(cfg: Config) -> dict:
         queue_manager=queue_manager,
         bot=None,
         web_url=cfg.web_url,
+        i18n=i18n,
     )
 
     return {
@@ -541,6 +542,7 @@ async def main() -> None:
         dispatcher=container.get("dispatcher"),
         ui_state_repo=container.get("ui_state_repo"),
         auth_machine=auth_machine,
+        users=container.get("users"),
     )
     await bot.start()
     if "admin_servicer" in container:

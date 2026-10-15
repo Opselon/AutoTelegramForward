@@ -116,12 +116,17 @@ async def test_bot_manager_no_spurious_unknown_command():
     mock_msg.chat.type.value = "private"
     mock_msg.from_user.id = 12345
     mock_msg.text = "یک متن رندوم خارج از دستور"
+    # The user's Telegram client reports fa, so the fallback reply must
+    # render Persian (regression guard: this used to be a hardcoded
+    # Persian string even in English sessions).
+    mock_msg.from_user.language_code = "fa"
 
     # Route text
     await bm._route_text(mock_msg)
-    
-    # Verify main menu was replied and no error was sent
-    mock_msg.reply_text.assert_awaited_once_with(
-        "💡 برای مدیریت فوروارد و دسترسی به امکانات ربات، از دکمه‌های زیر استفاده کنید:",
-        reply_markup="main_keyboard",
-    )
+
+    # Verify main menu was replied and no error was sent. The reply comes
+    # from the shared ProBotUI catalog, resolved per-user.
+    mock_msg.reply_text.assert_awaited_once()
+    args, kwargs = mock_msg.reply_text.await_args
+    assert kwargs.get("reply_markup") == "main_keyboard"
+    assert args[0] == bm.bot_ui._t("ui_main_hint", lang="fa")

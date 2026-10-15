@@ -26,10 +26,14 @@ from .auth_state import AuthStateMachine
 from .client_pool import ClientPool
 from .i18n import I18n, SUPPORTED_LANGUAGES
 from .login_flow import LoginFlowManager
+from .pro_bot_ui import LANG_FLAG
 
 logger = logging.getLogger(__name__)
 
-LANG_FLAG = {"en": "English 🇬🇧", "fa": "فارسی 🇮🇷", "ru": "Русский 🇷🇺", "zh": "中文 🇨🇳"}
+# Single source of truth for the language picker: all ten supported locales,
+# imported from pro_bot_ui so the fallback command path and the Pro UI can
+# never drift apart (previously this was a conflicting 4-language list while
+# the Pro UI exposed all ten).
 
 
 class BotManager:
@@ -52,6 +56,7 @@ class BotManager:
         dispatcher=None,
         ui_state_repo=None,
         auth_machine=None,
+        users=None,
     ) -> None:
         self.bot = Client(
             "atf_bot", api_id=pool.api_id, api_hash=pool.api_hash,
@@ -69,6 +74,7 @@ class BotManager:
         self._credentials = credentials
         self._bot_tokens = bot_tokens
         self._ui_state_repo = ui_state_repo
+        self._users = users
         self._dispatcher = dispatcher
         self._login = LoginFlowManager(pool, sessions, auth_machine)
         self._register_handlers()
@@ -90,7 +96,33 @@ class BotManager:
         return message.from_user.id in self._admin_ids
 
     def _t(self, uid: int, key: str, **kw) -> str:
-        return self.i18n.t(key, **kw)
+        return self.i18n.t(key, lang=self._resolve_lang(uid), **kw)
+
+    def _resolve_lang(self, uid: Optional[int], user_obj: Any = None) -> str:
+        """Resolve this user's render language (mirrors ProBotUI._resolve_lang).
+
+        Never reads or mutates the process-wide i18n.current — that is shared
+        by every concurrent user, so it must not decide one user's render.
+        Order: persisted DB preference → the user's own Telegram client
+        language_code → 'en'.
+        """
+        if uid:
+            users = getattr(self, "_users", None)
+            if users is not None and getattr(users, "_db", None) is not None:
+                try:
+                    row = users._db.query_one(
+                        "SELECT language FROM users WHERE user_id=?", (int(uid),))
+                    if row and row.get("language") and row["language"].lower() in SUPPORTED_LANGUAGES:
+                        return row["language"].lower()
+                except Exception:
+                    pass
+        if user_obj and getattr(user_obj, "language_code", None):
+            code = str(user_obj.language_code).lower().split("-")[0].split("_")[0]
+            if code in SUPPORTED_LANGUAGES:
+                return code
+        if uid and str(uid) in getattr(self, "_awaiting_lang", {}):
+            pass  # a picker is open; the persisted preference still decides
+        return "en"
 
     def _ui_owns(self, uid: int) -> bool:
         """True while the button dashboard is driving this user's flow.
@@ -149,33 +181,39 @@ class BotManager:
 
         @b.on_message(filters.command("help") & filters.private)
         async def _help(client, message: Message):
+            lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
             if self._ui_owns(message.from_user.id):
                 return
-            await message.reply_text(self.i18n.t("help"))
+            await message.reply_text(self.i18n.t("help", lang=lang))
 
         @b.on_message(filters.command("lang") & filters.private)
         async def _lang(client, message: Message):
+            lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
             if self._ui_owns(message.from_user.id):
                 return
+            uid = message.from_user.id
+            lang = self._resolve_lang(uid, message.from_user)
             lines = [f"{code} — {name}" for code, name in LANG_FLAG.items()]
             await message.reply_text(
-                self.i18n.t("choose_lang") + "\n" + "\n".join(lines))
+                self.i18n.t("choose_lang", lang=lang) + "\n" + "\n".join(lines))
             self._awaiting_lang[message.chat.id] = True
 
         self._awaiting_lang = {}
 
         @b.on_message(filters.command("login") & filters.private)
         async def _login(client, message: Message):
+            lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
             # The dashboard's login flow is the primary path; this keeps the
             # command working if the dashboard failed to mount.
             if self._ui_owns(message.from_user.id):
                 return
             if not self._is_admin(message):
-                return await message.reply_text(self.i18n.t("need_admin"))
-            await message.reply_text(self.i18n.t("send_phone"))
+                return await message.reply_text(self.i18n.t("need_admin", lang=lang))
+            await message.reply_text(self.i18n.t("send_phone", lang=lang))
 
         @b.on_message(filters.command("sessions") & filters.private)
         async def _sessions_cmd(client, message: Message):
+            lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
             if self._ui_owns(message.from_user.id):
                 return
             uid = message.from_user.id if message.from_user else 0
@@ -183,7 +221,7 @@ class BotManager:
                 return
             sessions = await self._sessions.list_by_owner(uid)
             if not sessions:
-                return await message.reply_text(self.i18n.t("no_sessions"))
+                return await message.reply_text(self.i18n.t("no_sessions", lang=lang))
             items = "\n".join(
                 self.i18n.t(
                     "session_item",
@@ -192,10 +230,11 @@ class BotManager:
                 )
                 for s in sessions
             )
-            await message.reply_text(self.i18n.t("sessions_list", list=items))
+            await message.reply_text(self.i18n.t("sessions_list", lang=lang, list=items))
 
         @b.on_message(filters.command("rules") & filters.private)
         async def _rules_cmd(client, message: Message):
+            lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
             if self._ui_owns(message.from_user.id):
                 return
             uid = message.from_user.id if message.from_user else 0
@@ -203,7 +242,7 @@ class BotManager:
                 return
             rules = await self._rules.list_by_owner(uid)
             if not rules:
-                await message.reply_text(self.i18n.t("no_rules"))
+                await message.reply_text(self.i18n.t("no_rules", lang=lang))
                 return await self._prompt_rule_add(message)
             items = "\n".join(
                 self.i18n.t(
@@ -215,11 +254,12 @@ class BotManager:
                 )
                 for r in rules
             )
-            await message.reply_text(self.i18n.t("rules_list", list=items))
+            await message.reply_text(self.i18n.t("rules_list", lang=lang, list=items))
             await self._prompt_rule_add(message)
 
         @b.on_message(filters.command("ai") & filters.private)
         async def _ai_cmd(client, message: Message):
+            lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
             if self._ui_owns(message.from_user.id):
                 return
             uid = message.from_user.id if message.from_user else 0
@@ -227,7 +267,7 @@ class BotManager:
                 return
             cfgs = await self._ai.list_by_owner(uid)
             if not cfgs:
-                await message.reply_text(self.i18n.t("ai_no_configs"))
+                await message.reply_text(self.i18n.t("ai_no_configs", lang=lang))
                 return await self._prompt_ai_add(message)
             items = "\n".join(
                 self.i18n.t(
@@ -237,7 +277,7 @@ class BotManager:
                 )
                 for c in cfgs
             )
-            await message.reply_text(self.i18n.t("ai_list", list=items))
+            await message.reply_text(self.i18n.t("ai_list", lang=lang, list=items))
             await self._prompt_ai_add(message)
 
         @b.on_message(filters.command("stats") & filters.private)
@@ -255,6 +295,7 @@ class BotManager:
 
         @b.on_message(filters.command("backup") & filters.private)
         async def _backup(client, message: Message):
+            lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
             if self._ui_owns(message.from_user.id):
                 return
             uid = message.from_user.id if message.from_user else 0
@@ -264,12 +305,12 @@ class BotManager:
             if len(parts) < 2:
                 sessions = await self._sessions.list_by_owner(uid)
                 if not sessions:
-                    return await message.reply_text(self.i18n.t("no_sessions"))
+                    return await message.reply_text(self.i18n.t("no_sessions", lang=lang))
                 target = sessions[0]
             else:
                 target = await self._sessions.get_owned(parts[1], uid)
                 if not target:
-                    return await message.reply_text(self.i18n.t("rule_not_found"))
+                    return await message.reply_text(self.i18n.t("rule_not_found", lang=lang))
             try:
                 bundle = {
                     "phone": target.phone_number,
@@ -287,22 +328,23 @@ class BotManager:
                 await message.reply_document(
                     document=path,
                     file_name=path,
-                    caption=self.i18n.t("backup_ready", phone=target.phone_number),
+                    caption=self.i18n.t("backup_ready", lang=lang, phone=target.phone_number),
                 )
                 import os
                 os.remove(path)
             except Exception as exc:
-                await message.reply_text(self.i18n.t("backup_failed", error=str(exc)))
+                await message.reply_text(self.i18n.t("backup_failed", lang=lang, error=str(exc)))
 
         @b.on_message(filters.command("restore") & filters.private)
         async def _restore(client, message: Message):
+            lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
             if self._ui_owns(message.from_user.id):
                 return
             uid = message.from_user.id if message.from_user else 0
             if not uid:
                 return
             if not message.document:
-                return await message.reply_text(self.i18n.t("restore_failed", error="attach .atf file"))
+                return await message.reply_text(self.i18n.t("restore_failed", lang=lang, error="attach .atf file"))
             path = await message.download()
             try:
                 blob = open(path, encoding="utf-8").read().strip()
@@ -318,9 +360,9 @@ class BotManager:
                 session.activate()
                 await self._sessions._repo.update(session)
                 await self._pool.start_with_session_string(session.id, bundle["session_string"])
-                await message.reply_text(self.i18n.t("restore_done", phone=session.phone_number))
+                await message.reply_text(self.i18n.t("restore_done", lang=lang, phone=session.phone_number))
             except Exception as exc:
-                await message.reply_text(self.i18n.t("restore_failed", error=str(exc)))
+                await message.reply_text(self.i18n.t("restore_failed", lang=lang, error=str(exc)))
 
         # Plain text router: FSM (login steps / lang pick / rule add / ai add)
         @b.on_message(filters.private & ~filters.command([
@@ -332,22 +374,26 @@ class BotManager:
 
         @b.on_message(filters.command(["menu", "panel", "settings"]))
         async def _cmd_menu(client, message: Message):
+            lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
             bot_ui = getattr(self, "bot_ui", None)
             if bot_ui is not None:
                 await bot_ui._start(client, message)
             else:
-                await message.reply_text(self.i18n.t("ui_welcome", version="v2.1"))
+                await message.reply_text(self.i18n.t("ui_welcome", lang=lang, version="v2.1"))
 
     # ------------------------------------------------------------------ #
     async def _prompt_rule_add(self, message: Message):
-        await message.reply_text(self.i18n.t("rule_add_hint"))
+        lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
+        await message.reply_text(self.i18n.t("rule_add_hint", lang=lang))
         self._awaiting_rule = message.chat.id
 
     async def _prompt_ai_add(self, message: Message):
-        await message.reply_text(self.i18n.t("ai_add_hint"))
+        lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
+        await message.reply_text(self.i18n.t("ai_add_hint", lang=lang))
         self._awaiting_ai = message.chat.id
 
     async def _route_text(self, message: Message):
+        lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
         uid = message.from_user.id if message.from_user else 0
         text = (message.text or "").strip()
         preview = (text[:30] + "...") if len(text) > 30 else text
@@ -376,8 +422,18 @@ class BotManager:
         # Language picker
         if self._awaiting_lang.pop(message.chat.id, None):
             if text.lower() in SUPPORTED_LANGUAGES:
-                self.i18n.set_language(text.lower())
-                await message.reply_text(self.i18n.t("lang_changed"))
+                # PERSISTENCE ONLY — never call i18n.set_language here: it
+                # mutates the process-wide I18n.current singleton, and one
+                # user's /lang choice would leak into every other user's
+                # renders. Persist per-user and render via _resolve_lang.
+                users = getattr(self, "_users", None)
+                if users is not None:
+                    try:
+                        await users.set_language(int(uid), text.lower())
+                    except Exception:
+                        logger.debug("persist language failed", exc_info=True)
+                await message.reply_text(
+                    self.i18n.t("lang_changed", lang=text.lower()))
             return
 
         # Login FSM
@@ -407,7 +463,7 @@ class BotManager:
                 sessions = await self._sessions.list_by_owner(uid)
                 session = sessions[0] if sessions else None
                 if not session:
-                    return await message.reply_text(self.i18n.t("no_sessions"))
+                    return await message.reply_text(self.i18n.t("no_sessions", lang=lang))
                 rule = ForwardRule(
                     session_id=session.id,
                     source_chat_id=parts[0], source_chat_name=parts[0],
@@ -418,7 +474,7 @@ class BotManager:
                 )
                 await self._rules.create(rule)
                 await message.reply_text(
-                    self.i18n.t("rule_created", source=rule.source_chat_id, target=rule.target_chat_id)
+                    self.i18n.t("rule_created", lang=lang, source=rule.source_chat_id, target=rule.target_chat_id)
                 )
             return
 
@@ -434,7 +490,7 @@ class BotManager:
                     owner_user_id=uid,
                 )
                 await self._ai.create(cfg)
-                await message.reply_text(self.i18n.t("ai_created", name=cfg.name))
+                await message.reply_text(self.i18n.t("ai_created", lang=lang, name=cfg.name))
             return
 
         bot_ui = getattr(self, "bot_ui", None)
@@ -442,16 +498,17 @@ class BotManager:
             try:
                 kbd = bot_ui._main_menu()
                 await message.reply_text(
-                    "💡 برای مدیریت فوروارد و دسترسی به امکانات ربات، از دکمه‌های زیر استفاده کنید:",
+                    bot_ui._t("ui_main_hint", lang=lang),
                     reply_markup=kbd,
                 )
                 return
             except Exception:
                 pass
 
-        await message.reply_text(self.i18n.t("help_text"))
+        await message.reply_text(self.i18n.t("help_text", lang=lang))
 
     async def _login_reply(self, message: Message, result: str):
+        lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
         if result.startswith("login_success:"):
             session_id = result.split(":", 1)[1]
             try:
@@ -459,7 +516,7 @@ class BotManager:
                 phone = session.phone_number if session else ""
             except Exception:
                 phone = ""
-            await message.reply_text(self.i18n.t("login_success", phone=phone))
+            await message.reply_text(self.i18n.t("login_success", lang=lang, phone=phone))
         elif ":" in result:
             key, _, detail = result.partition(":")
             await message.reply_text(self.i18n.t(key, error=detail))

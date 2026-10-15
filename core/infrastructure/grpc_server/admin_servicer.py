@@ -29,6 +29,7 @@ class AdminControlServicer(pb_grpc.AdminControlServiceServicer):
         queue_manager=None,
         bot=None,
         web_url: str = "",
+        i18n=None,
     ) -> None:
         self._db = db
         self._users = users
@@ -40,7 +41,42 @@ class AdminControlServicer(pb_grpc.AdminControlServiceServicer):
         self._queue_manager = queue_manager
         self._bot = bot
         self._web_url = web_url
+        # Localization catalog: background notifications to a user must
+        # render in THAT user's language, never the process-wide default.
+        self._i18n = i18n
         self._start_time = int(time.time())
+
+    def _localized(self, key: str, uid: int, **kw) -> str:
+        """Render a background notification in the recipient's own language.
+
+        Falls back to English when no catalog is wired or the recipient has
+        no stored preference. Never reads a process-wide language singleton:
+        a background job must not inherit whichever language the last
+        interactive user happened to pick.
+        """
+        if self._i18n is None:
+            return key
+        try:
+            table = getattr(self._i18n, "_catalog", {}).get(self._i18n_lang(uid)) or {}
+            template = table.get(key)
+            if template is None:
+                return key
+            return template.format(**kw) if kw else template
+        except Exception:
+            return key
+
+    def _i18n_lang(self, uid: int) -> str:
+        """The recipient's persisted language preference, or English."""
+        try:
+            row = self._db.query_one(
+                "SELECT language FROM users WHERE user_id=?", (int(uid),))
+            if row and row.get("language"):
+                code = str(row["language"]).lower()
+                if code in ("en", "fa", "ru", "zh", "pt", "uz", "id", "es", "fr", "it"):
+                    return code
+        except Exception:
+            pass
+        return "en"
 
     async def GetOverview(self, request, context):
         now = int(time.time())
@@ -233,11 +269,9 @@ class AdminControlServicer(pb_grpc.AdminControlServiceServicer):
 
         if self._bot and initiator_id > 0:
             try:
-                await self._bot.send_message(
-                    initiator_id,
-                    f"📢 **ارسال پیام همگانی به پایان رسید:**\n\n"
-                    f"✅ موفق: {sent}\n❌ ناموفق: {failed}\n👥 مجموع: {len(recipients)}",
-                )
+                msg = self._localized("ui_broadcast_done", initiator_id,
+                                      sent=sent, failed=failed, total=len(recipients))
+                await self._bot.send_message(initiator_id, msg)
             except Exception:
                 pass
 

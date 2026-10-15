@@ -103,8 +103,15 @@ async def test_ai_use_cases_health_check():
 
 
 def test_pro_bot_ui_menu_and_detail_rendering():
+    from core.infrastructure.telegram.i18n import I18n
+    from core.infrastructure.telegram.pro_bot_ui import UiState
+    _i18n = I18n()
     ui = ProBotUI.__new__(ProBotUI)
-    setattr(ui, "_t", lambda key, **kwargs: key)
+    # Real per-user resolution path: the config owner picked fa.
+    ui._states = {5094837833: UiState(lang="fa")}
+    ui._users = None
+    ui.i18n = _i18n
+    setattr(ui, "_t", ProBotUI._t.__get__(ui, ProBotUI))
     setattr(ui, "_kbd", lambda rows: rows)
     setattr(ui, "_provider_label", lambda key: key.upper())
 
@@ -116,6 +123,7 @@ def test_pro_bot_ui_menu_and_detail_rendering():
         api_key="1234567890abcdef1234567890",
         base_url="http://sub.legoten.com:4455/v1",
         is_enabled=True,
+        owner_user_id=5094837833,
     )
 
     # 1. Menu with buttons for each config

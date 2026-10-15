@@ -106,6 +106,9 @@ def test_render_rule_detail_features(mock_pro_bot, sample_rule):
 
 def test_render_delay_menu(mock_pro_bot, sample_rule):
     ui = mock_pro_bot
+    # Owner picked fa: the delay menu must render in Persian, per-user.
+    sample_rule.owner_user_id = 123456
+    ui._states = {123456: UiState(lang="fa")}
     text, markup = ui._render_delay_menu(sample_rule)
     assert "15 ثانیه" in text
     assert "Set Delay" in text or "تأخیر" in text
