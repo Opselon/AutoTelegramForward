@@ -87,11 +87,18 @@ def scan_source(path: str, source: str, changed_lines: set[int] | None = None) -
             continue
         candidates: list[ast.AST] = []
         if node.args:
-            # Telegram send/reply/edit APIs put their visible body first.
-            if name not in {"InlineKeyboardButton", "KeyboardButton"}:
-                candidates.append(node.args[0])
-        if name in {"InlineKeyboardButton", "KeyboardButton"} and node.args:
-            candidates.append(node.args[0])
+            # Pyrogram methods differ: Client.send_message(chat_id, text), while
+            # Message.reply_text(text) and CallbackQuery.answer(text) put copy
+            # first. Inspect the documented positional slot for each API.
+            visible_position = {
+                "send_message": 1,
+                "edit_message_text": 2,
+                "edit_message_caption": 2,
+            }.get(name, 0)
+            if name in {"InlineKeyboardButton", "KeyboardButton"}:
+                visible_position = 0
+            if visible_position < len(node.args):
+                candidates.append(node.args[visible_position])
         for kw in node.keywords:
             if kw.arg in VISIBLE_KEYWORDS:
                 candidates.append(kw.value)
