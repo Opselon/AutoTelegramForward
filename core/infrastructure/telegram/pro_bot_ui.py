@@ -1635,26 +1635,26 @@ class ProBotUI:
         ftr = rule.footer
 
         lines = [
-            "📝 **تنظیمات هدر و فوتر (پیشوند و پسوند پیام)**\n",
-            f"قانون: **{src_label} ➔ {dst_label}**\n",
+            self._t("ui_hf_title", lang=lang),
+            self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label),
             "────────────────────",
-            "📌 **هدر فعلی (ابتدای پیام):**",
-            f"`{hdr}`\n" if hdr else "❌ تنظیم نشده است.\n",
-            "📌 **فوتر فعلی (انتهای پیام):**",
-            f"`{ftr}`\n" if ftr else "❌ تنظیم نشده است.\n",
-            "💡 هدر و فوتر به صورت خودکار به متن تمام پیام‌های ارسالی این قانون اضافه خواهند شد.",
+            self._t("ui_hf_hdr_title", lang=lang),
+            f"`{hdr}`\n" if hdr else self._t("ui_hf_not_set", lang=lang),
+            self._t("ui_hf_ftr_title", lang=lang),
+            f"`{ftr}`\n" if ftr else self._t("ui_hf_not_set", lang=lang),
+            self._t("ui_hf_hint", lang=lang),
         ]
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                ("✏️ تنظیم هدر", f"rh_s:{rule.id}"),
-                ("🗑 حذف هدر", f"rh_d:{rule.id}"),
+                (self._t("ui_hf_btn_set_hdr", lang=lang), f"rh_s:{rule.id}"),
+                (self._t("ui_hf_btn_del_hdr", lang=lang), f"rh_d:{rule.id}"),
             ],
             [
-                ("✏️ تنظیم فوتر", f"rf_s:{rule.id}"),
-                ("🗑 حذف فوتر", f"rf_d:{rule.id}"),
+                (self._t("ui_hf_btn_set_ftr", lang=lang), f"rf_s:{rule.id}"),
+                (self._t("ui_hf_btn_del_ftr", lang=lang), f"rf_d:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
         ]
         return "\n".join(lines), self._kbd(rows)
 
@@ -1721,41 +1721,43 @@ class ProBotUI:
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
 
-        lnk_b = "🚫 مسدود" if rule.block_links else "🟢 مجاز"
-        vid_b = "🚫 مسدود" if rule.block_video else "🟢 مجاز"
-        aud_b = "🚫 مسدود" if rule.block_audio else "🟢 مجاز"
-        stk_b = "🚫 مسدود" if rule.block_stickers else "🟢 مجاز"
-        txt_b = "🚫 مسدود" if rule.block_text else "🟢 مجاز"
-        voc_b = "🚫 مسدود" if rule.block_voice else "🟢 مجاز"
+        blk = self._t("ui_fl_blocked", lang=lang)
+        alw = self._t("ui_clean_allowed", lang=lang)
+        lnk_b = blk if rule.block_links else alw
+        vid_b = blk if rule.block_video else alw
+        aud_b = blk if rule.block_audio else alw
+        stk_b = blk if rule.block_stickers else alw
+        txt_b = blk if rule.block_text else alw
+        voc_b = blk if rule.block_voice else alw
 
         text = (
-            "🛡 **فیلترهای محتوا (Content Filters)**\n\n"
-            f"قانون: **{src_label} ➔ {dst_label}**\n"
-            "────────────────────\n"
-            "مشخص کنید کدام نوع محتواها فیلتر (مسدود) یا مجاز باشند:\n\n"
-            f"• 🔗 **فیلتر لینک (Link Filter):** {lnk_b}\n"
-            f"• 🎬 **ویدیو (Video Filter):** {vid_b}\n"
-            f"• 🎵 **فایل صوتی (Audio Filter):** {aud_b}\n"
-            f"• 🎭 **استیکر (Sticker Filter):** {stk_b}\n"
-            f"• 📝 **پیام متنی (Text Filter):** {txt_b}\n"
-            f"• 🎙 **وویس (Voice Filter):** {voc_b}\n\n"
-            "👇 جهت تغییر وضعیت هر فیلتر کلیک کنید:"
+            self._t("ui_fl_title", lang=lang)
+            + self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label)
+            + "────────────────────\n"
+            + self._t("ui_fl_intro", lang=lang)
+            + self._t("ui_fl_link", lang=lang, status=lnk_b)
+            + self._t("ui_fl_video", lang=lang, status=vid_b)
+            + self._t("ui_fl_audio", lang=lang, status=aud_b)
+            + self._t("ui_fl_sticker", lang=lang, status=stk_b)
+            + self._t("ui_fl_text", lang=lang, status=txt_b)
+            + self._t("ui_fl_voice", lang=lang, status=voc_b)
+            + self._t("ui_fl_hint", lang=lang)
         )
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                (f"🔗 لینک: {lnk_b}", f"rfl_lnk:{rule.id}"),
-                (f"🎬 ویدیو: {vid_b}", f"rfl_vid:{rule.id}"),
+                (self._t("ui_fl_btn_link", lang=lang, status=lnk_b), f"rfl_lnk:{rule.id}"),
+                (self._t("ui_fl_btn_video", lang=lang, status=vid_b), f"rfl_vid:{rule.id}"),
             ],
             [
-                (f"🎵 فایل صوتی: {aud_b}", f"rfl_aud:{rule.id}"),
-                (f"🎭 استیکر: {stk_b}", f"rfl_stk:{rule.id}"),
+                (self._t("ui_fl_btn_audio", lang=lang, status=aud_b), f"rfl_aud:{rule.id}"),
+                (self._t("ui_fl_btn_sticker", lang=lang, status=stk_b), f"rfl_stk:{rule.id}"),
             ],
             [
-                (f"📝 متن: {txt_b}", f"rfl_txt:{rule.id}"),
-                (f"🎙 وویس: {voc_b}", f"rfl_voc:{rule.id}"),
+                (self._t("ui_fl_btn_text", lang=lang, status=txt_b), f"rfl_txt:{rule.id}"),
+                (self._t("ui_fl_btn_voice", lang=lang, status=voc_b), f"rfl_voc:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -1765,32 +1767,30 @@ class ProBotUI:
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         current = rule.max_time_edit
-        curr_str = f"{current} ثانیه" if current > 0 else "نامحدود (0)"
+        curr_str = self._t("ui_mte_seconds", lang=lang, sec=current) if current > 0 else self._t("ui_mte_unlimited", lang=lang)
 
         text = (
-            "⏱ **محدودیت زمانی ویرایش (Max Edit Time)**\n\n"
-            f"قانون: **{src_label} ➔ {dst_label}**\n"
-            f"سقف مجاز فعلی: **{curr_str}**\n"
-            "────────────────────\n"
-            "اگر در کانال مبدأ پیامی ویرایش شود، تنها در صورتی در مقصد نیز ویرایش اعمال خواهد شد "
-            "که سن پیام از زمان انتشار کمتر از این مقدار باشد.\n\n"
-            "👇 یکی از مقادیر پیش‌فرض را انتخاب کنید یا عدد دلخواه وارد کنید:"
+            self._t("ui_mte_title", lang=lang)
+            + self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label)
+            + self._t("ui_mte_current", lang=lang, val=curr_str)
+            + "────────────────────\n"
+            + self._t("ui_mte_hint", lang=lang)
         )
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                ("10 دقیقه (600s)", f"rmte_s:{rule.id}:600"),
-                ("1 ساعت (3600s)", f"rmte_s:{rule.id}:3600"),
+                (self._t("ui_mte_btn_10m", lang=lang), f"rmte_s:{rule.id}:600"),
+                (self._t("ui_mte_btn_1h", lang=lang), f"rmte_s:{rule.id}:3600"),
             ],
             [
-                ("24 ساعت (86400s)", f"rmte_s:{rule.id}:86400"),
-                ("48 ساعت (172800s)", f"rmte_s:{rule.id}:172800"),
+                (self._t("ui_mte_btn_24h", lang=lang), f"rmte_s:{rule.id}:86400"),
+                (self._t("ui_mte_btn_48h", lang=lang), f"rmte_s:{rule.id}:172800"),
             ],
             [
-                ("♾ بدون محدودیت (0)", f"rmte_s:{rule.id}:0"),
-                ("✏️ ورود ثانیه دلخواه", f"rmte_c:{rule.id}"),
+                (self._t("ui_mte_btn_unlimited", lang=lang), f"rmte_s:{rule.id}:0"),
+                (self._t("ui_mte_btn_custom", lang=lang), f"rmte_c:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -1800,34 +1800,33 @@ class ProBotUI:
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         current = rule.delay_seconds
-        curr_str = f"{current:.0f} ثانیه" if current > 0 else "بدون تأخیر (فوری 0s)"
+        curr_str = self._t("ui_dly_seconds", lang=lang, sec=current) if current > 0 else self._t("ui_dly_none", lang=lang)
 
         text = (
-            "⏱ **تنظیم تأخیر در ارسال (Set Delay Forward)**\n\n"
-            f"قانون: **{src_label} ➔ {dst_label}**\n"
-            f"تأخیر فعلی: **{curr_str}**\n"
-            "────────────────────\n"
-            "با فعال‌سازی تأخیر، پیام‌ها پیش از فوروارد در صف به این میزان صبر می‌کنند تا ارسال طبیعی‌تر به نظر برسد و از لیمیت تلگرام جلوگیری شود.\n\n"
-            "👇 یکی از مقادیر پیش‌فرض را انتخاب کنید یا عدد دلخواه وارد کنید:"
+            self._t("ui_dly_title", lang=lang)
+            + self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label)
+            + self._t("ui_dly_current", lang=lang, val=curr_str)
+            + "────────────────────\n"
+            + self._t("ui_dly_hint", lang=lang)
         )
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                ("⚡ بدون تأخیر (0s)", f"rdly_s:{rule.id}:0"),
-                ("⏱ 3 ثانیه", f"rdly_s:{rule.id}:3"),
+                (self._t("ui_dly_btn_0", lang=lang), f"rdly_s:{rule.id}:0"),
+                (self._t("ui_dly_btn_3", lang=lang), f"rdly_s:{rule.id}:3"),
             ],
             [
-                ("⏱ 5 ثانیه", f"rdly_s:{rule.id}:5"),
-                ("⏱ 10 ثانیه", f"rdly_s:{rule.id}:10"),
+                (self._t("ui_dly_btn_5", lang=lang), f"rdly_s:{rule.id}:5"),
+                (self._t("ui_dly_btn_10", lang=lang), f"rdly_s:{rule.id}:10"),
             ],
             [
-                ("⏱ 30 ثانیه", f"rdly_s:{rule.id}:30"),
-                ("⏱ 60 ثانیه", f"rdly_s:{rule.id}:60"),
+                (self._t("ui_dly_btn_30", lang=lang), f"rdly_s:{rule.id}:30"),
+                (self._t("ui_dly_btn_60", lang=lang), f"rdly_s:{rule.id}:60"),
             ],
             [
-                ("✏️ ورود ثانیه دلخواه", f"rdly_c:{rule.id}"),
+                (self._t("ui_dly_btn_custom", lang=lang), f"rdly_c:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -1838,26 +1837,26 @@ class ProBotUI:
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         bl = list(rule.blacklist or [])
 
-        items_str = "\n".join([f"• `{w}`" for w in bl[:20]]) if bl else "❌ هیچ کلمه‌ای در لیست سیاه نیست."
+        items_str = "\n".join([f"• `{w}`" for w in bl[:20]]) if bl else self._t("ui_bl_empty", lang=lang)
         if len(bl) > 20:
-            items_str += f"\n... و {len(bl) - 20} کلمه دیگر"
+            items_str += self._t("ui_bl_more", lang=lang, more=len(bl) - 20)
 
         text = (
-            "🚫 **لیست سیاه کلمات (Blacklist Keywords)**\n\n"
-            f"قانون: **{src_label} ➔ {dst_label}**\n"
-            f"تعداد کلمات مسدود: **{len(bl)}**\n"
-            "────────────────────\n"
-            "پیام‌هایی که شامل هریک از این کلمات باشند، فوروارد **نمی‌شوند**:\n\n"
-            f"{items_str}\n\n"
-            "👇 جهت مدیریت لیست سیاه انتخاب کنید:"
+            self._t("ui_bl_title", lang=lang)
+            + self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label)
+            + self._t("ui_bl_count", lang=lang, count=len(bl))
+            + "────────────────────\n"
+            + self._t("ui_bl_desc", lang=lang)
+            + f"{items_str}\n\n"
+            + self._t("ui_bl_hint", lang=lang)
         )
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                ("➕ افزودن کلمه جدید", f"rfl_bl_add:{rule.id}"),
-                ("🗑 پاکسازی کل لیست", f"rfl_bl_clr:{rule.id}"),
+                (self._t("ui_bl_btn_add", lang=lang), f"rfl_bl_add:{rule.id}"),
+                (self._t("ui_bl_btn_clear", lang=lang), f"rfl_bl_clr:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -1868,26 +1867,26 @@ class ProBotUI:
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         wl = list(rule.whitelist or [])
 
-        items_str = "\n".join([f"• `{w}`" for w in wl[:20]]) if wl else "❌ هیچ کلمه‌ای در لیست سفید نیست (تمام پیام‌ها مجازند)."
+        items_str = "\n".join([f"• `{w}`" for w in wl[:20]]) if wl else self._t("ui_wl_empty", lang=lang)
         if len(wl) > 20:
-            items_str += f"\n... و {len(wl) - 20} کلمه دیگر"
+            items_str += self._t("ui_wl_more", lang=lang, more=len(wl) - 20)
 
         text = (
-            "✅ **لیست سفید کلمات (Whitelist Keywords)**\n\n"
-            f"قانون: **{src_label} ➔ {dst_label}**\n"
-            f"تعداد کلمات مجاز: **{len(wl)}**\n"
-            "────────────────────\n"
-            "تنها پیام‌هایی فوروارد می‌شوند که حداقل شامل یکی از این کلمات باشند:\n\n"
-            f"{items_str}\n\n"
-            "👇 جهت مدیریت لیست سفید انتخاب کنید:"
+            self._t("ui_wl_title", lang=lang)
+            + self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label)
+            + self._t("ui_wl_count", lang=lang, count=len(wl))
+            + "────────────────────\n"
+            + self._t("ui_wl_desc", lang=lang)
+            + f"{items_str}\n\n"
+            + self._t("ui_wl_hint", lang=lang)
         )
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                ("➕ افزودن کلمه جدید", f"rfl_wl_add:{rule.id}"),
-                ("🗑 پاکسازی کل لیست", f"rfl_wl_clr:{rule.id}"),
+                (self._t("ui_wl_btn_add", lang=lang), f"rfl_wl_add:{rule.id}"),
+                (self._t("ui_wl_btn_clear", lang=lang), f"rfl_wl_clr:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -1898,21 +1897,21 @@ class ProBotUI:
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         wm = rule.watermark
 
+        cur = wm if wm else self._t("ui_wm_not_set", lang=lang)
         text = (
-            "🖼 **تنظیم واتر‌مارک (Watermark Text)**\n\n"
-            f"قانون: **{src_label} ➔ {dst_label}**\n"
-            f"متن فعلی: **{wm or 'تنظیم نشده (خالی)'}**\n"
-            "────────────────────\n"
-            "این متن به انتهای کپشن تصاویر و ویدیوها یا به صورت واتر‌مارک الصاق خواهد شد.\n\n"
-            "👇 جهت تغییر یا حذف انتخاب کنید:"
+            self._t("ui_wm_title", lang=lang)
+            + self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label)
+            + self._t("ui_wm_current", lang=lang, val=cur)
+            + "────────────────────\n"
+            + self._t("ui_wm_hint", lang=lang)
         )
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                ("✏️ تنظیم متن واتر‌مارک", f"rwm_set:{rule.id}"),
-                ("🗑 حذف واتر‌مارک", f"rwm_del:{rule.id}"),
+                (self._t("ui_wm_btn_set", lang=lang), f"rwm_set:{rule.id}"),
+                (self._t("ui_wm_btn_del", lang=lang), f"rwm_del:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -1922,20 +1921,19 @@ class ProBotUI:
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         current = (rule.translate_lang or "").lower()
-        curr_label = current.upper() if current else "غیرفعال (Off)"
+        curr_label = current.upper() if current else self._t("ui_tr_off", lang=lang)
 
         text = (
-            "🌐 **ترجمه خودکار پیام‌ها (Auto Translate)**\n\n"
-            f"قانون: **{src_label} ➔ {dst_label}**\n"
-            f"زبان مقصد فعلی: **{curr_label}**\n"
-            "────────────────────\n"
-            "پیام‌ها پیش از فوروارد به صورت خودکار به زبان انتخابی ترجمه خواهند شد.\n\n"
-            "👇 زبان مقصد موردنظر را انتخاب کنید:"
+            self._t("ui_tr_title", lang=lang)
+            + self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label)
+            + self._t("ui_tr_current", lang=lang, val=curr_label)
+            + "────────────────────\n"
+            + self._t("ui_tr_hint", lang=lang)
         )
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                ("❌ غیرفعال‌سازی (Off)", f"rtr_set:{rule.id}:none"),
+                (self._t("ui_tr_btn_off", lang=lang), f"rtr_set:{rule.id}:none"),
             ],
             [
                 ("🇬🇧 English (EN)", f"rtr_set:{rule.id}:en"),
@@ -1956,7 +1954,7 @@ class ProBotUI:
             [
                 ("🇮🇹 Italiano (IT)", f"rtr_set:{rule.id}:it"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")],
+            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
