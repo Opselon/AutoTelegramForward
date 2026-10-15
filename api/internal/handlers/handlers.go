@@ -2069,19 +2069,26 @@ func parseLogFilters(r *http.Request) logFilters {
 		}
 	}
 	if v := q.Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 500 {
-			f.Limit = int32(n)
+		if n, ok := parseInt32(v, maxLogPageSize); ok && n > 0 {
+			f.Limit = n
 		}
 	}
 	if v := q.Get("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			f.Offset = int32(n)
+		if n, ok := parseInt32(v, maxLogOffset); ok {
+			f.Offset = n
 		}
 	}
 	// page is the friendly 1-based form of offset (page=3&limit=50 -> offset=100).
+	// `page` is bounded before the multiplication: (page-1)*limit wraps inside
+	// int64 for a page large enough, which would land on a negative offset and
+	// silently serve the wrong end of the archive.
 	if v := q.Get("page"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 1 {
-			f.Offset = int32((n - 1) * int(f.Limit))
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 1 && n <= int64(maxLogOffset) {
+			off := (n - 1) * int64(f.Limit)
+			if off > int64(maxLogOffset) {
+				off = int64(maxLogOffset)
+			}
+			f.Offset = int32(off)
 		}
 	}
 	if v := q.Get("since"); v != "" {
@@ -2098,7 +2105,7 @@ func parseLogFilters(r *http.Request) logFilters {
 	// operator actually reaches for. `since` wins when both are given.
 	if f.Since == 0 {
 		if v := q.Get("hours"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			if n, ok := parseInt32(v, 24*366); ok && n > 0 {
 				f.Since = time.Now().Add(-time.Duration(n) * time.Hour).Unix()
 			}
 		}
@@ -2113,6 +2120,24 @@ func parseLogFilters(r *http.Request) logFilters {
 		f.UserID = identity(r).UserID
 	}
 	return f
+}
+
+// Bounds for the paging window. A caller-supplied offset or page is narrowed to
+// int32, so the bound has to be explicit: strconv.Atoi returns an int whose width
+// follows the architecture, and an unbounded cast to int32 wraps negative — which
+// would turn "the oldest events" into "the newest ones".
+const (
+	maxLogPageSize int32 = 500
+	maxLogOffset   int32 = 1 << 20
+)
+
+// parseInt32 parses a non-negative decimal that must fit in [0, max].
+func parseInt32(s string, max int32) (int32, bool) {
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n < 0 || n > int64(max) {
+		return 0, false
+	}
+	return int32(n), true
 }
 
 func (f logFilters) toRequest() *pb.QueryLogsRequest {

@@ -60,6 +60,58 @@ func TestParseLogFilters_PagingForms(t *testing.T) {
 	}
 }
 
+func TestParseLogFilters_RejectsOutOfRangePaging(t *testing.T) {
+	// An offset wider than int32 must not wrap negative: a negative offset in
+	// the request would silently flip "the oldest events" into the newest page.
+	for _, raw := range []string{"2147483648", "9223372036854775807", "-5"} {
+		req := httptest.NewRequest("GET", "/api/logs?offset="+raw, nil)
+		if got := parseLogFilters(req).Offset; got != 0 {
+			t.Fatalf("offset=%s must be rejected, got %d", raw, got)
+		}
+	}
+	// A huge offset that still fits must be clamped, never wrapped.
+	req := httptest.NewRequest("GET", "/api/logs?offset=1048575", nil)
+	if got := parseLogFilters(req).Offset; got != 1048575 {
+		t.Fatalf("in-range offset lost, got %d", got)
+	}
+
+	// A page whose window would overflow is rejected outright, so the caller
+	// gets the first page rather than a silent wrap to a negative offset. It is
+	// never clamped: inventing a window the caller did not ask for would show
+	// them rows they cannot place, and the answer is the same either way.
+	req = httptest.NewRequest("GET", "/api/logs?page=9223372036854775807&limit=500", nil)
+	if got := parseLogFilters(req).Offset; got != 0 {
+		t.Fatalf("overflowing page must be rejected, got offset %d", got)
+	}
+	// The last in-range page is honoured exactly...
+	req = httptest.NewRequest("GET", "/api/logs?page=2098&limit=500", nil)
+	if got := parseLogFilters(req).Offset; got != 1048500 {
+		t.Fatalf("in-range page must be exact, got %d", got)
+	}
+	// ...and one page further is capped at the maximum window, not wrapped.
+	req = httptest.NewRequest("GET", "/api/logs?page=2099&limit=500", nil)
+	if got := parseLogFilters(req).Offset; got != maxLogOffset {
+		t.Fatalf("page past the window must cap at %d, got %d", maxLogOffset, got)
+	}
+
+	// limit above the cap falls back to the default rather than being honoured.
+	req = httptest.NewRequest("GET", "/api/logs?limit=100000", nil)
+	if got := parseLogFilters(req).Limit; got != 100 {
+		t.Fatalf("over-cap limit must fall back to the default, got %d", got)
+	}
+	req = httptest.NewRequest("GET", "/api/logs?limit=500", nil)
+	if got := parseLogFilters(req).Limit; got != 500 {
+		t.Fatalf("limit at the cap must be honoured, got %d", got)
+	}
+
+	// An absurd ?hours= would overflow time.Duration and produce a future
+	// `since`, which would hide every event.
+	req = httptest.NewRequest("GET", "/api/logs?hours=999999999999", nil)
+	if got := parseLogFilters(req).Since; got != 0 {
+		t.Fatalf("absurd hours must be rejected, got since=%d", got)
+	}
+}
+
 func TestParseLogFilters_AttributionAndSeverities(t *testing.T) {
 	req := httptest.NewRequest("GET",
 		"/api/logs?rule_id=rule-77&correlation_id=corr-9&levels=ERROR,WARN&levels=DEBUG&until=1700000000", nil)
