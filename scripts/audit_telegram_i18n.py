@@ -208,10 +208,26 @@ def main() -> int:
                 FAILURES.extend(scan_source(relative, source))
             else:
                 changed = added_line_numbers(relative, base)
-                if changed is None:
-                    FAILURES.extend(scan_source(relative, source))
-                else:
-                    FAILURES.extend(scan_source(relative, source, changed))
+                current_findings = scan_source(relative, source, changed) if changed else scan_source(relative, source)
+                # Existing direct literals in the base revision are legacy debt,
+                # not regressions. Compare stable call+literal signatures rather
+                # than fragile line numbers so moving code does not make CI red.
+                baseline_result = subprocess.run(
+                    ["git", "show", f"{base}:{relative}"],
+                    cwd=ROOT, check=False, capture_output=True, text=True,
+                )
+                baseline_signatures = set()
+                if baseline_result.returncode == 0:
+                    baseline_signatures = {
+                        item.split(": untranslated UI literal in ", 1)[1]
+                        for item in scan_source(relative, baseline_result.stdout)
+                        if ": untranslated UI literal in " in item
+                    }
+                FAILURES.extend(
+                    item for item in current_findings
+                    if ": untranslated UI literal in " not in item
+                    or item.split(": untranslated UI literal in ", 1)[1] not in baseline_signatures
+                )
     if FAILURES:
         print(f"Telegram i18n literal guard: FAIL ({len(FAILURES)} finding(s))")
         print("\n".join(f"  ✗ {item}" for item in FAILURES))
