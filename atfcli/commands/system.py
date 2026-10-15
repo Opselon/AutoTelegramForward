@@ -7,6 +7,7 @@ import time
 from ..context import AI_NETWORK, COMPOSE_NETWORK, CONTAINERS, NETWORK_ALIASES, SERVICES
 from ..errors import AtfError
 from . import _shared as sh
+from . import deploy, validate
 from .doctor import Report, check_aliases, check_api, check_containers, check_database
 
 NAME = "system"
@@ -83,6 +84,67 @@ def _upgrade(ctx, args) -> int:
     return 0
 
 
+def _gate(ctx, args) -> bool:
+    """Static validator as the start gate: fail closed unless --force."""
+    if getattr(args, "no_preflight", False):
+        return True
+    ctx.out.step("Preflight: validating config and secrets before starting...")
+    report = validate.run_checks(ctx, runtime=False)
+    if not report.failures:
+        return True
+    ctx.out.fail(f"{len(report.failures)} blocking problem(s) — run `atf validate` for details:")
+    for finding in report.failures:
+        ctx.out.line(f"  \u2022 {finding.check}: {finding.detail}")
+    if getattr(args, "force", False):
+        ctx.out.warn("Continuing anyway (--force)")
+        return True
+    ctx.out.hint("  fix the items above, or re-run with --force")
+    return False
+
+
+def _summarise(ctx, report: Report, verb: str) -> int:
+    if report.failures:
+        ctx.out.fail(f"Stack {verb} with {len(report.failures)} unhealthy component(s):")
+        for finding in report.failures:
+            ctx.out.line(f"  \u2022 {finding.check}: {finding.detail}")
+        return 1
+    ctx.out.ok(f"ATF v{ctx.repo.version} is up and healthy")
+    return 0
+
+
+def _start(ctx, args) -> int:
+    """Build + start the whole stack, gated on the static validator."""
+    if not _gate(ctx, args):
+        return 1
+    ctx.out.title("Starting ATF stack")
+    services = list(args.services or [])
+    deploy.bring_up(ctx, services=services or None, build=not args.no_build)
+    deploy.repair_networks(ctx, services=services or None)
+    time.sleep(3.0)  # brief warm-up before the health gate
+    return _summarise(ctx, deploy.verify_health(ctx), "started")
+
+
+def _stop(ctx, args) -> int:
+    """Stop the stack containers (images and volumes are left in place)."""
+    containers = [CONTAINERS.get(s, s) for s in (args.services or SERVICES)]
+    ctx.out.title("Stopping ATF stack")
+    for name in containers:
+        ctx.repo.run(["docker", "stop", name], check=False, quiet=True)
+        ctx.out.ok(f"stopped {name}")
+    return 0
+
+
+def _restart(ctx, args) -> int:
+    """Restart the stack containers, then re-verify health."""
+    containers = [CONTAINERS.get(s, s) for s in (args.services or SERVICES)]
+    ctx.out.title("Restarting ATF stack")
+    for name in containers:
+        ctx.repo.run(["docker", "restart", name], check=True, quiet=True)
+    ctx.out.ok(f"restarted {len(containers)} container(s)")
+    time.sleep(3.0)
+    return _summarise(ctx, deploy.verify_health(ctx), "restarted")
+
+
 def add_parser(subparsers, parents) -> None:
     parser = subparsers.add_parser(NAME, help=HELP, description=HELP, parents=parents)
     parser.set_defaults(func=sh.help_handler(parser))
@@ -94,3 +156,18 @@ def add_parser(subparsers, parents) -> None:
     p = sub.add_parser("upgrade", help="run full zero-downtime stack upgrade", parents=parents)
     p.add_argument("--no-pull", action="store_true", help="do not run git pull")
     p.set_defaults(func=_upgrade)
+
+    p = sub.add_parser("start", help="build and start the whole stack (validator-gated)", parents=parents)
+    p.add_argument("services", nargs="*", help="subset of services (default: all)")
+    p.add_argument("--no-build", action="store_true", help="skip the docker image build")
+    p.add_argument("--no-preflight", action="store_true", help="skip the static validator gate")
+    p.add_argument("--force", action="store_true", help="start even if the validator found problems")
+    p.set_defaults(func=_start)
+
+    p = sub.add_parser("stop", help="stop the stack containers", parents=parents)
+    p.add_argument("services", nargs="*", help="subset of services (default: all)")
+    p.set_defaults(func=_stop)
+
+    p = sub.add_parser("restart", help="restart the stack containers and re-verify health", parents=parents)
+    p.add_argument("services", nargs="*", help="subset of services (default: all)")
+    p.set_defaults(func=_restart)

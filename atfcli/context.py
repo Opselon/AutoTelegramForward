@@ -249,11 +249,16 @@ class RepoContext:
         *,
         check: bool = True,
         cwd: Path | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> int:
         """Run a command with the terminal attached (builds, deploys, tests)."""
         argv = [str(a) for a in argv]
         self.out.debug(f"$ {' '.join(argv)}")
-        proc = subprocess.run(argv, cwd=str(cwd or self.root))
+        proc = subprocess.run(
+            argv,
+            cwd=str(cwd or self.root),
+            env={**os.environ, **dict(env or {})} if env else None,
+        )
         if check and proc.returncode != 0:
             raise CommandFailed(f"command failed ({proc.returncode}): {' '.join(argv)}")
         return proc.returncode

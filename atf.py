@@ -1186,10 +1186,12 @@ def main() -> None:
     argv = sys.argv[1:]
     # If invoked with modern atfcli command group or global flag, dispatch to atfcli.
     try:
-        from atfcli.cli import COMMAND_MODULES, dispatch
-        if argv:
+        from atfcli.cli import ALIASES, COMMAND_MODULES, dispatch
+        # ATF_LEGACY=1 means "we are already inside the pro CLI, run the legacy
+        # command this time" (used by `atf setup --source-wizard`).
+        if argv and not os.environ.get("ATF_LEGACY"):
             first = argv[0]
-            if first in COMMAND_MODULES or first in ("--json", "--url", "--token", "upgrade"):
+            if first in COMMAND_MODULES or first in ALIASES or first in ("--json", "--url", "--token", "upgrade"):
                 if first == "upgrade":
                     argv = ["system", "upgrade"] + argv[1:]
                 sys.exit(dispatch(argv))

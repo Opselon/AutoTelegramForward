@@ -295,3 +295,62 @@ Autonomous AI agents and developers working on this codebase must follow the man
 ## 📄 License
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+## One-command setup, startup, and validation
+
+The `atf` CLI manages the whole stack (rules, sessions, logs, data, admin, config)
+**and** the deployment (docker, build, deploy, restart, health, logs, net, certs, db)
+with an automated full-system upgrade path.
+
+```bash
+./scripts/setup.sh          # fresh checkout: venv + CLI + preflight + build + start + health
+atf setup                   # the same sequence, guided, with a per-step summary table
+atf setup --check           # read-only readiness report — changes nothing
+atf setup --source-wizard   # legacy bare-metal wizard (config.yaml + supervised processes)
+```
+
+### Everyday lifecycle
+
+```bash
+atf up                      # build + start the whole stack (shortcut for `system start`)
+atf down                    # stop the containers (`system stop`)
+atf restart                 # restart and re-verify health (`system restart`)
+atf status                  # live board: services, ports, rules
+atf doctor --fix            # repair whatever the checks flag
+atf system upgrade          # git pull → build → recreate → alias repair → health gate
+```
+
+`atf up` is **validator-gated**: it runs the static validation below first and
+refuses to start on a blocking failure (override with `--force`).
+
+### `atf validate` — the CI-safe validator
+
+Read-only: no builds, no container churn, no repairs. Exit code is `0` only when
+every check passes, so it works as a pre-deploy gate (`--strict` promotes
+warnings to failures; `--runtime` adds the live stack checks; `--deep` runs the
+repo's own i18n audits).
+
+| Check | What it proves |
+| --- | --- |
+| `layout` | complete checkout (compose, Dockerfiles, CLI, services) |
+| `version` | `VERSION` is a sane semver |
+| `env-file`, `env-keys`, `env-optional` | `.env` exists; required keys populated; optional keys not left at their example value |
+| `env-secrets`, `env-perms` | secret length floor met; `.env` is not group/world readable |
+| `env-typos` | no stray keys that the example file does not document |
+| `env-ignored` | `.env` is git-ignored |
+| `compose` | `docker-compose.yml` parses cleanly |
+| `catalog`, `catalog-placeholders`, `catalog-rtl` | 1:1 key parity + placeholder parity across all 10 locales; English values carry no RTL script |
+| `secrets-scan` | no credential-shaped literal in any tracked file |
+| `database` | SQLite `integrity_check` passes (read-only) |
+| `proto` | generated stubs are not older than the `.proto` sources |
+| `ports` | the ATF ports are not held by a foreign process |
+
+```bash
+atf validate                 # human report with per-check fixes
+atf validate --json          # exactly one JSON object on stdout (scripts, cron, CI)
+atf validate --strict        # non-zero exit on warnings too
+```
+
+Every command supports `--json` (one JSON document on stdout, placed before or
+after the group name), and every line the CLI writes goes through a single
+redaction filter, so a leaked bot token or API key cannot appear in a transcript.
