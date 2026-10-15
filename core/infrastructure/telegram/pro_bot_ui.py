@@ -3963,9 +3963,9 @@ class ProBotUI:
                     rule.metadata = {}
                 rule.metadata["replacements"] = reps
                 await self._rules.update(rule)
-                await cq.answer(f"🗑 `{target_key}`")
             text, kbd = self._render_replace_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rhf:(.+)$"))
         @self._localized_handler
@@ -6203,14 +6203,9 @@ class ProBotUI:
             nxt_mode = cycle.get(cur, ForwardMode.COPY_MESSAGE)
             rule.forward_mode = nxt_mode
             await self._rules.update(rule)
-            names = {
-                ForwardMode.COPY_MESSAGE: self._t("ui_fmode_copy_msg"),
-                ForwardMode.DIRECT_FORWARD: self._t("ui_fmode_direct_fwd"),
-                ForwardMode.CUSTOM_HEADER_COPY: self._t("ui_fmode_custom_header"),
-            }
-            await cq.answer(f"{names.get(nxt_mode, str(nxt_mode))}")
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^rsmpu:(.+)$"))
         @self._localized_handler
