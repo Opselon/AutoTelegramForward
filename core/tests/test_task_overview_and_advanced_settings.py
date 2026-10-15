@@ -1,6 +1,7 @@
 import pytest
 from core.domain.entities import ForwardRule
 from core.infrastructure.telegram.pro_bot_ui import ProBotUI
+from core.infrastructure.telegram.i18n import I18n
 
 
 def test_forward_rule_parity_properties():
@@ -132,7 +133,9 @@ async def test_bot_ui_advanced_settings_and_all_addons():
     ui._render_advanced_settings = ProBotUI._render_advanced_settings.__get__(ui, ProBotUI)
     ui._render_all_addons = ProBotUI._render_all_addons.__get__(ui, ProBotUI)
     ui._kbd = ProBotUI._kbd.__get__(ui, ProBotUI)
-    ui._t = lambda key, **kw: key
+    i18n = I18n()
+    ui._lang_for = lambda *args, **kwargs: "en"
+    ui._t = lambda key, lang=None, **kw: i18n.t(key, lang=lang or "en", **kw)
 
     rule = ForwardRule(
         id="rule_adv_123",
@@ -148,13 +151,14 @@ async def test_bot_ui_advanced_settings_and_all_addons():
 
     # 1. Advanced Settings View
     adv_text, adv_kbd = ui._render_advanced_settings(rule)
-    assert "Filters (?)" in adv_text
-    assert "Schedules (?)" in adv_text
-    assert "Time Forward (?)" in adv_text
-    assert "Processing Messages (?)" in adv_text
-    assert "Modify Content (?)" in adv_text
-    assert "AI Features" in adv_text
-    assert "Creativity 0.7 · Max Tokens 600" in adv_text
+    assert "Advanced rule settings" in adv_text
+    assert "Filters" in adv_text
+    assert "Schedules" in adv_text
+    assert "Timing" in adv_text
+    assert "Message processing" in adv_text
+    assert "Content modifications" in adv_text
+    assert "AI features" in adv_text
+    assert "creativity 0.7 · max tokens 600" in adv_text
 
     adv_cbs = [btn.callback_data for row in adv_kbd.inline_keyboard for btn in row]
     assert f"rtg_dup:{rule.id}" in adv_cbs

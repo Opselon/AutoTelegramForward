@@ -21,7 +21,9 @@ switch it to `_resolve_lang(uid, user)` or this file's audit will fail.
 """
 
 import asyncio
+import re
 from unittest.mock import AsyncMock, MagicMock
+from pathlib import Path
 
 import pytest
 
@@ -188,3 +190,50 @@ def test_state_cache_cannot_override_the_users_client_language() -> None:
     assert st.lang == "ru", "UiState seed ignored the user's client language"
     # and the same user resolving again keeps their language
     assert ui._resolve_lang(111, _user("ru")) == "ru"
+
+
+
+def test_locale_tags_normalize_region_variants() -> None:
+    """Regional Telegram language tags resolve to a supported base locale."""
+    i18n = I18n()
+    assert i18n.set_language("pt-BR")
+    assert i18n.current == "pt"
+    assert i18n.t("ui_lang_choose", lang="fa_IR") == i18n.t("ui_lang_choose", lang="fa")
+    assert not i18n.set_language("not-a-supported-language")
+
+
+@pytest.mark.asyncio
+async def test_handler_language_context_isolated_between_concurrent_users() -> None:
+    """Concurrent events must not share a process-wide render language."""
+    ui = _build_ui()
+
+    async def render(_client, event):
+        await asyncio.sleep(0)
+        return ui._t("ui_lang_choose")
+
+    wrapped = ui._localized_handler(render)
+    english_event = MagicMock()
+    english_event.from_user.id = 101
+    english_event.from_user.language_code = "en"
+    persian_event = MagicMock()
+    persian_event.from_user.id = 202
+    persian_event.from_user.language_code = "fa"
+
+    english, persian = await asyncio.gather(
+        wrapped(None, english_event),
+        wrapped(None, persian_event),
+    )
+    assert english == ui.i18n.t("ui_lang_choose", lang="en")
+    assert persian == ui.i18n.t("ui_lang_choose", lang="fa")
+    assert english != persian
+    assert ui.i18n.current == "en"
+
+
+def test_every_static_bot_translation_reference_exists_in_catalog() -> None:
+    """All literal _t() keys used by the production Telegram UI must resolve."""
+    source_path = Path(__file__).resolve().parents[1] / "infrastructure" / "telegram" / "pro_bot_ui.py"
+    source = source_path.read_text(encoding="utf-8")
+    i18n = I18n()
+    used = set(re.findall(r"""(?:self\._t|self\.i18n\.t)\(\s*["']([^"']+)["']""", source))
+    missing = used - set(i18n._catalog["en"])
+    assert not missing, f"Bot references missing translation keys: {sorted(missing)}"

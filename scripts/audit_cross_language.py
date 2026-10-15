@@ -162,8 +162,61 @@ def report() -> int:
     return 0
 
 
+
+def audit_bot_event_language_scope() -> None:
+    """Ensure every registered Telegram event runs within its user's locale."""
+    path = REPO / "core/infrastructure/telegram/pro_bot_ui.py"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    checked = 0
+    missing = []
+    for i, line in enumerate(lines):
+        if not re.match(r"^\s*@b\.on_", line):
+            continue
+        indent = len(line) - len(line.lstrip())
+        for j in range(i + 1, min(len(lines), i + 30)):
+            candidate = lines[j]
+            candidate_indent = len(candidate) - len(candidate.lstrip())
+            if candidate_indent == indent and re.match(r"^\s*async def\s+", candidate):
+                checked += 1
+                if not any("@self._localized_handler" in item for item in lines[i:j]):
+                    missing.append(f"{path.relative_to(REPO)}:{i + 1}")
+                break
+            if candidate.strip() and candidate_indent < indent:
+                break
+    if checked == 0:
+        failures.append("bot: no registered Telegram event handlers were audited")
+    elif missing:
+        failures.append(
+            f"bot: {len(missing)} Telegram event handlers lack locale isolation "
+            f"(e.g. {missing[:5]})"
+        )
+    else:
+        print(f"PASS bot event locale scope: {checked} registered handlers")
+
+
+def audit_bot_translation_references() -> None:
+    """Catch _t() references whose keys are absent from the English catalog."""
+    catalog_path = REPO / "core/infrastructure/telegram/locales/translations.json"
+    source_path = REPO / "core/infrastructure/telegram/pro_bot_ui.py"
+    if not catalog_path.exists() or not source_path.exists():
+        failures.append("bot: translation catalog or production Telegram UI is missing")
+        return
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    english = set(catalog.get("en", {}))
+    source = source_path.read_text(encoding="utf-8")
+    used = set(re.findall(r"""(?:self\._t|self\.i18n\.t)\(\s*["']([^"']+)["']""", source))
+    missing = sorted(used - english)
+    if missing:
+        failures.append(
+            f"bot: {len(missing)} static translation keys are undefined (e.g. {missing[:8]})"
+        )
+    else:
+        print(f"PASS bot translation references: {len(used)} static keys resolve")
+
 if __name__ == "__main__":
     audit_bot()
     audit_mobile()
     audit_source_hardcoded()
+    audit_bot_event_language_scope()
+    audit_bot_translation_references()
     sys.exit(report())
