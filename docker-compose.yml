@@ -69,6 +69,11 @@ services:
       - "8080:8080"
     networks:
       - atf-net
+      # Same reason as `core`: the preflight diagnostics probe runs inside THIS
+      # container, so if the api cannot resolve `9router` the AI endpoint check
+      # fails with `lookup 9router on 127.0.0.11:53: server misbehaving` and
+      # reports every AI config as unreachable even though rewrites succeed.
+      - ai-net
 
   web:
     build:

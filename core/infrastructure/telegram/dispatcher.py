@@ -28,6 +28,7 @@ from ...domain.value_objects import ContentMode, ForwardMode
 from .album_aggregator import AlbumAggregator
 from .client_pool import ClientPool, payload_from_pyrogram
 from .errors import tg_detail, tg_error, wait_seconds
+from ..persistence.coercion import enum_str
 
 logger = logging.getLogger(__name__)
 
@@ -477,7 +478,7 @@ class MessageDispatcher:
         try:
             res = await self._deliver_copy(
                 client, payload, rule, text, inter_id,
-                getattr(getattr(rule, "content_mode", None), "value", "AUTO"),
+                enum_str(getattr(rule, "content_mode", None), "AUTO"),
                 rule.custom_caption_template or None,
             )
             logger.debug("intermediate hop → %s ok: %s", inter_id, bool(res))

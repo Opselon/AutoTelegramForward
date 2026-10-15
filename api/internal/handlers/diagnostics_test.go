@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,5 +89,47 @@ func TestProbeAIEndpoint(t *testing.T) {
 	// A malformed URL is reported, not swallowed.
 	if err := probeAIEndpoint("not a url", time.Second); err == nil {
 		t.Fatal("expected error for malformed base_url")
+	}
+}
+
+// A hostname the container cannot resolve must produce docker-network advice,
+// not the generic "fix the address" hint — that misdiagnosis is what made a
+// sibling-stack gateway look like a broken provider address.
+func TestIsNameResolutionFailure(t *testing.T) {
+	resolution := []string{
+		"dial tcp: lookup 9router on 127.0.0.11:53: server misbehaving",
+		`dial tcp: lookup nope: no such host`,
+		"dial tcp: Temporary failure in name resolution",
+	}
+	for _, msg := range resolution {
+		if !isNameResolutionFailure(errors.New(msg)) {
+			t.Errorf("should be a resolution failure: %q", msg)
+		}
+	}
+	refused := []string{
+		"dial tcp 127.0.0.1:4455: connect: connection refused",
+		"dial tcp 10.0.0.5:20128: i/o timeout",
+	}
+	for _, msg := range refused {
+		if isNameResolutionFailure(errors.New(msg)) {
+			t.Errorf("should NOT be a resolution failure: %q", msg)
+		}
+	}
+	if isNameResolutionFailure(nil) {
+		t.Error("nil error is not a resolution failure")
+	}
+}
+
+func TestAIRemediationSplitsAdvice(t *testing.T) {
+	dns := aiReachabilityRemediation(errors.New("dial tcp: lookup 9router on 127.0.0.11:53: server misbehaving"))
+	if !strings.Contains(dns, "network") || !strings.Contains(dns, "external") {
+		t.Fatalf("DNS failure should advise a network attachment, got %q", dns)
+	}
+	refused := aiReachabilityRemediation(errors.New("dial tcp 127.0.0.1:4455: connect: connection refused"))
+	if strings.Contains(refused, "external") {
+		t.Fatalf("a refusing endpoint should get the address hint, got %q", refused)
+	}
+	if !strings.Contains(refused, "address/port") {
+		t.Fatalf("expected the generic address hint, got %q", refused)
 	}
 }

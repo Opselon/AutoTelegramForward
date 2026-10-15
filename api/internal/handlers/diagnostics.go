@@ -215,6 +215,41 @@ func probeAIEndpoint(baseURL string, timeout time.Duration) error {
 	return nil
 }
 
+// isNameResolutionFailure reports whether a dial error is the container failing
+// to resolve the hostname rather than the target refusing the connection. The
+// two need different advice: a sibling docker stack's hostname only resolves for
+// containers actually attached to its network.
+func isNameResolutionFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"no such host",
+		"server misbehaving",
+		"temporary failure in name resolution",
+		"name resolution",
+		"nodename nor servname provided",
+		"lookup ",
+	} {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// aiReachabilityRemediation turns a probe failure into advice a human can act
+// on. A hostname that does not resolve from the probing container is almost
+// always a missing docker network attachment, which the generic "fix the
+// address" hint would send the operator chasing the wrong thing.
+func aiReachabilityRemediation(err error) string {
+	if isNameResolutionFailure(err) {
+		return "The provider hostname does not resolve from the api container. If the gateway runs as a sibling docker stack, attach this compose service to that stack's network (declare it `external: true` and add it under the service's `networks:`); otherwise use a hostname or address this container can reach."
+	}
+	return "Fix the provider address/port, or point the AI config at a reachable gateway."
+}
+
 // grade collapses findings into a single headline status + 0-100 score.
 func grade(findings []Finding) (string, int) {
 	score := 100
@@ -314,7 +349,7 @@ func (h *Handlers) Diagnostics(w http.ResponseWriter, r *http.Request) {
 				ScopeID:     c.Id,
 				Title:       fmt.Sprintf("AI config %q cannot reach its provider", c.Name),
 				Detail:      "base_url " + c.BaseUrl + " — " + err.Error() + "; every rewrite on tasks using this config will fail.",
-				Remediation: "Fix the provider address/port, or point the AI config at a reachable gateway.",
+				Remediation: aiReachabilityRemediation(err),
 			})
 		}
 	}
