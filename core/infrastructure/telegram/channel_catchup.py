@@ -152,11 +152,15 @@ class ChannelCatchUpService:
             # Nothing unread: the channel is already aligned.
             return 0
 
+        target_peer = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
         try:
-            peer = await client.resolve_peer(chat_id)
-        except Exception as exc:
-            logger.debug("catch-up: cannot resolve %s: %s", chat_id, exc)
-            return 0
+            peer = await client.resolve_peer(target_peer)
+        except Exception:
+            try:
+                peer = await client.resolve_peer(chat_id)
+            except Exception as exc:
+                logger.debug("catch-up: cannot resolve %s: %s", chat_id, exc)
+                return 0
 
         try:
             full = await client.invoke(GetFullChannel(channel=peer))

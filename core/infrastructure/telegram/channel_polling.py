@@ -165,11 +165,15 @@ class ChannelPollingService:
         from pyrogram.raw.functions.updates import GetChannelDifference
         from pyrogram.raw.types import ChannelMessagesFilter, MessageRange
 
+        target_peer = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
         try:
-            peer = await client.resolve_peer(chat_id)
-        except Exception as exc:
-            logger.warning("poll: cannot resolve peer for %s (%s): %s", chat_name or chat_id, chat_id, exc)
-            return 0
+            peer = await client.resolve_peer(target_peer)
+        except Exception:
+            try:
+                peer = await client.resolve_peer(chat_id)
+            except Exception as exc:
+                logger.warning("poll: cannot resolve peer for %s (%s): %s", chat_name or chat_id, chat_id, exc)
+                return 0
 
         # The channel pts is required by getChannelDifference.
         try:
@@ -249,11 +253,16 @@ class ChannelPollingService:
         the dialog list is exactly what Telegram uses to decide whether to
         push, so it is not a reliable indicator of what exists.
         """
+        target = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
         try:
-            async for m in client.get_chat_history(chat_id, limit=1):
+            async for m in client.get_chat_history(target, limit=1):
                 return int(getattr(m, "id", 0) or 0)
-        except Exception as exc:
-            logger.warning("poll: history read of %s failed: %s", chat_id, exc)
+        except Exception:
+            try:
+                async for m in client.get_chat_history(chat_id, limit=1):
+                    return int(getattr(m, "id", 0) or 0)
+            except Exception as exc:
+                logger.warning("poll: history read of %s failed: %s", chat_id, exc)
         return None
 
     # ------------------------------------------------------------------ #

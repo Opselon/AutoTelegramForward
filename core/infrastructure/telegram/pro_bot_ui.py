@@ -5378,31 +5378,39 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             st = self._state(uid)
             rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
+            st.buffer["ai_pick_rule_id"] = rule_id
+            await self._persist(uid, st)
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else {}
             cfgs = await self._ai.list_by_owner(uid) if (self._ai and uid) else []
             current = str(draft.get("ai_config_id") or "")
             rows: List[List[Tuple[str, str]]] = [
-                [(self._t("ui_ai_opt_off"), f"r_aicset:{rule_id}:")],
+                [(self._t("ui_ai_opt_off"), "r_aicset:")],
             ]
             for c in cfgs:
                 mark = "✅" if c.id == current else ("🟢" if c.is_enabled else "🔴")
-                rows.append([(f"{mark} {c.name} [{self._provider_label(c.provider.value)}/{c.model}]", f"r_aicset:{rule_id}:{c.id}")])
+                rows.append([(f"{mark} {c.name} [{self._provider_label(c.provider.value)}/{c.model}]", f"r_aicset:{c.id}")])
             rows.append([(self._t("ui_back"), f"r_ai:{rule_id}")])
             await self._safe_edit(cq, self._t("ui_ai_pick_cfg_title"), reply_markup=self._kbd(rows))
             await cq.answer()
 
-        @b.on_callback_query(filters.regex(r"^r_aicset:(.+?):(.*)$"))
+        @b.on_callback_query(filters.regex(r"^r_aicset:(.*)$"))
         @self._localized_handler
         async def _cb_rule_ai_set_cfg(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             st = self._state(uid)
             raw = cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)
-            _, rule_id, cfg_id = raw.split(":", 2)
+            parts = raw.split(":")
+            if len(parts) >= 3:
+                _, rule_id, cfg_id = parts[0], parts[1], parts[2]
+            else:
+                cfg_id = parts[1] if len(parts) > 1 else ""
+                rule_id = st.buffer.get("ai_pick_rule_id") or ""
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
             if not isinstance(draft, dict):
                 return await cq.answer(self._t("ui_draft_expired"), show_alert=True)
+            rule_id = rule_id or draft.get("id") or st.buffer.get("rule_id") or ""
             draft["ai_config_id"] = cfg_id or ""
             draft["ai_status_badge"] = _ai_badge(draft)
             await self._persist(uid, st)
@@ -5413,36 +5421,44 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^r_ai_prompt:(.+)$"))
         @self._localized_handler
         async def _cb_rule_ai_pick_prompt(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             st = self._state(uid)
             rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
+            st.buffer["ai_pick_rule_id"] = rule_id
+            await self._persist(uid, st)
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else {}
             current = str(draft.get("prompt_id") or "")
             rows: List[List[Tuple[str, str]]] = [
-                [(self._t("ui_ai_opt_no_prompt"), f"r_aipset:{rule_id}:")],
+                [(self._t("ui_ai_opt_no_prompt"), "r_aipset:")],
             ]
             if self._prompts:
                 for t in await self._prompts.list_templates():
                     mark = "✅" if t.id == current else ("⭐" if t.is_system else "👤")
-                    rows.append([(f"{mark} {t.name} (v{t.current_version})", f"r_aipset:{rule_id}:{t.id}")])
+                    rows.append([(f"{mark} {t.name} (v{t.current_version})", f"r_aipset:{t.id}")])
             rows.append([(self._t("ui_back"), f"r_ai:{rule_id}")])
             await self._safe_edit(cq, self._t("ui_ai_pick_prompt_title"), reply_markup=self._kbd(rows))
             await cq.answer()
 
-        @b.on_callback_query(filters.regex(r"^r_aipset:(.+?):(.*)$"))
+        @b.on_callback_query(filters.regex(r"^r_aipset:(.*)$"))
         @self._localized_handler
         async def _cb_rule_ai_set_prompt(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
-            uid = cq.from_user.id
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             st = self._state(uid)
             raw = cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)
-            _, rule_id, prompt_id = raw.split(":", 2)
+            parts = raw.split(":")
+            if len(parts) >= 3:
+                _, rule_id, prompt_id = parts[0], parts[1], parts[2]
+            else:
+                prompt_id = parts[1] if len(parts) > 1 else ""
+                rule_id = st.buffer.get("ai_pick_rule_id") or ""
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
             if not isinstance(draft, dict):
                 return await cq.answer(self._t("ui_draft_expired"), show_alert=True)
+            rule_id = rule_id or draft.get("id") or st.buffer.get("rule_id") or ""
             draft["prompt_id"] = prompt_id or ""
             await self._persist(uid, st)
             text, kbd = await _render_ai_menu(rule_id, draft)
@@ -5452,13 +5468,14 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^r_ai_policy:(.+)$"))
         @self._localized_handler
         async def _cb_rule_ai_pick_policy(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner"), show_alert=True)
             rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
             rows: List[List[Tuple[str, str]]] = [
                 [(self._t("ui_ai_policy_send_orig"), f"r_aifset:{rule_id}:SEND_ORIGINAL")],
-                [("🔴 DROP — عدم ارسال (Fail Closed)", f"r_aifset:{rule_id}:DROP")],
-                [("🔁 RETRY — تلاش مجدد", f"r_aifset:{rule_id}:RETRY")],
+                [(self._t("ui_ai_policy_drop"), f"r_aifset:{rule_id}:DROP")],
+                [("🔁 " + self._t("ui_retry"), f"r_aifset:{rule_id}:RETRY")],
                 [(self._t("ui_ai_policy_quarantine"), f"r_aifset:{rule_id}:QUARANTINE")],
                 [(self._t("ui_back"), f"r_ai:{rule_id}")],
             ]
