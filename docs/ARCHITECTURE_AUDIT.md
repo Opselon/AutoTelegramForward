@@ -8,7 +8,7 @@
 ## 1. Executive Summary & Architecture Reality
 
 AutoTelegramForward is composed of four distinct languages:
-- **Python:** Telegram MTProto Engine (`core/`) — forwarding/domain logic; produces logs through the `logger/log_client.py` adapter
+- **Python:** Telegram MTProto Engine (`core/`) — forwarding/domain logic; produces logs through the `core/observability/log_client.py` adapter
 - **Go:** Control Plane & REST API (`api/`)
 - **Rust:** Web Gateway & BFF (`web/backend/`, Axum) + Observability Logger engine (`rust/logger/`, tonic gRPC)
 - **React (TypeScript):** Modern Management Dashboard (`web/frontend/`)

@@ -46,7 +46,7 @@ python scripts/audit_cross_language.py
 python scripts/audit_telegram_i18n.py
 
 # 3. Python unit test suites
-pytest -q core/tests logger/tests scripts/tests
+pytest -q core/tests scripts/tests
 
 # 4. Go API test suite
 cd api && go test ./...

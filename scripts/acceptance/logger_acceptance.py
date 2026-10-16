@@ -13,7 +13,7 @@ the engine stops honouring any contract the producers depend on:
   5. error reporting: a malformed request is rejected, never silently accepted
   6. the Core producer's queue/retry counters report no loss on a clean drain
 
-Run it inside the core container (it needs `core.proto`, `logger.log_client` and
+Run it inside the core container (it needs `core.proto`, `core.observability.log_client` and
 the compose network):
 
     docker exec -i atf-core python - < scripts/acceptance/logger_acceptance.py
@@ -39,7 +39,7 @@ sys.path.insert(0, "/app")
 import grpc  # noqa: E402
 
 from core.proto import pb, pb_grpc  # noqa: E402
-from logger.log_client import LogClient  # noqa: E402
+from core.observability.log_client import LogClient  # noqa: E402
 
 ADDRESS = os.environ.get("ATF_LOGGER_ADDR", "logger:50052")
 SECRET = "acceptance-secret-value-do-not-persist-42"

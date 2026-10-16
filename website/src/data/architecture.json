@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-16T16:41:49.385Z",
-  "commit": "b6ab6fd",
-  "gitDate": "2026-10-16T16:33:22Z",
+  "generatedAt": "2026-10-16T17:58:30.913Z",
+  "commit": "9a26ace",
+  "gitDate": "2026-10-16T17:52:14Z",
   "granularity": {
     "python": "module (file)",
     "go": "package (directory)",
@@ -21,9 +21,9 @@
       "role": "Forwarding engine",
       "tech": "Python 3 · Pyrogram · gRPC",
       "blurb": "Domain model, rule engine and the durable delivery pipeline. Owns the Telegram sessions and the database.",
-      "files": 116,
-      "sourceFiles": 115,
-      "loc": 43749,
+      "files": 120,
+      "sourceFiles": 119,
+      "loc": 44397,
       "langs": [
         "python"
       ],
@@ -38,8 +38,8 @@
         },
         {
           "id": "tests",
-          "files": 56,
-          "loc": 12124,
+          "files": 58,
+          "loc": 12457,
           "langs": [
             "python"
           ]
@@ -72,6 +72,14 @@
           "id": "(root)",
           "files": 4,
           "loc": 697,
+          "langs": [
+            "python"
+          ]
+        },
+        {
+          "id": "observability",
+          "files": 2,
+          "loc": 315,
           "langs": [
             "python"
           ]
@@ -115,39 +123,6 @@
           "loc": 144,
           "langs": [
             "go"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "logger",
-      "label": "Logger service",
-      "root": "logger",
-      "color": "#f472b6",
-      "role": "Observability",
-      "tech": "Rust engine · gRPC · SQLite",
-      "blurb": "Central log store — the Rust engine in `rust/logger` — with field-aware secret redaction, correlation-id propagation and a bounded diagnostic window. `logger/` keeps the Python producer adapter the core uses.",
-      "files": 4,
-      "sourceFiles": 4,
-      "loc": 533,
-      "langs": [
-        "python"
-      ],
-      "areas": [
-        {
-          "id": "(root)",
-          "files": 2,
-          "loc": 315,
-          "langs": [
-            "python"
-          ]
-        },
-        {
-          "id": "tests",
-          "files": 2,
-          "loc": 218,
-          "langs": [
-            "python"
           ]
         }
       ]
@@ -396,19 +371,19 @@
   "totals": {
     "files": 330,
     "sourceFiles": 310,
-    "loc": 111749,
+    "loc": 111870,
     "nodes": 281,
-    "edges": 873,
+    "edges": 874,
     "generatedFiles": 2,
     "testFiles": 76,
-    "subsystems": 9
+    "subsystems": 8
   },
   "languages": [
     {
       "lang": "python",
       "files": 156,
-      "loc": 51121,
-      "bytes": 2699995
+      "loc": 51242,
+      "bytes": 2707040
     },
     {
       "lang": "go",
@@ -432,7 +407,7 @@
       "lang": "astro",
       "files": 53,
       "loc": 8082,
-      "bytes": 383797
+      "bytes": 383800
     },
     {
       "lang": "proto",
@@ -1549,6 +1524,46 @@
       "isEntry": true
     },
     {
+      "id": "core/observability/__init__.py",
+      "label": "__init__",
+      "path": "core/observability/__init__.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 0,
+      "generated": false,
+      "areas": [
+        "observability"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/observability/log_client.py",
+      "label": "log_client",
+      "path": "core/observability/log_client.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 315,
+      "generated": false,
+      "areas": [
+        "observability"
+      ],
+      "isTest": false,
+      "fanIn": 5,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
       "id": "core/proto/__init__.py",
       "label": "__init__",
       "path": "core/proto/__init__.py",
@@ -1758,7 +1773,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 258,
+      "loc": 279,
       "generated": false,
       "areas": [
         "tests"
@@ -2129,6 +2144,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_log_client.py",
+      "label": "test_log_client",
+      "path": "core/tests/test_log_client.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 218,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_log_policy.py",
       "label": "test_log_policy",
       "path": "core/tests/test_log_policy.py",
@@ -2159,6 +2194,26 @@
       "files": 1,
       "testFiles": 1,
       "loc": 80,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_logger_engine_packaging.py",
+      "label": "test_logger_engine_packaging",
+      "path": "core/tests/test_logger_engine_packaging.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 94,
       "generated": false,
       "areas": [
         "tests"
@@ -2866,86 +2921,6 @@
       "isTest": false,
       "fanIn": 3,
       "fanOut": 0,
-      "isEntry": false
-    },
-    {
-      "id": "logger/__init__.py",
-      "label": "__init__",
-      "path": "logger/__init__.py",
-      "subsystem": "logger",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 0,
-      "loc": 0,
-      "generated": false,
-      "areas": [
-        "(root)"
-      ],
-      "isTest": false,
-      "fanIn": 0,
-      "fanOut": 0,
-      "isEntry": false
-    },
-    {
-      "id": "logger/log_client.py",
-      "label": "log_client",
-      "path": "logger/log_client.py",
-      "subsystem": "logger",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 0,
-      "loc": 315,
-      "generated": false,
-      "areas": [
-        "(root)"
-      ],
-      "isTest": false,
-      "fanIn": 5,
-      "fanOut": 1,
-      "isEntry": false
-    },
-    {
-      "id": "logger/tests/__init__.py",
-      "label": "__init__",
-      "path": "logger/tests/__init__.py",
-      "subsystem": "logger",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 1,
-      "loc": 0,
-      "generated": false,
-      "areas": [
-        "tests"
-      ],
-      "isTest": true,
-      "fanIn": 0,
-      "fanOut": 0,
-      "isEntry": false
-    },
-    {
-      "id": "logger/tests/test_log_client.py",
-      "label": "test_log_client",
-      "path": "logger/tests/test_log_client.py",
-      "subsystem": "logger",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 1,
-      "loc": 218,
-      "generated": false,
-      "areas": [
-        "tests"
-      ],
-      "isTest": true,
-      "fanIn": 0,
-      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -6058,13 +6033,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1051,
+      "loc": 1057,
       "generated": false,
       "areas": [
         "(root)"
       ],
       "isTest": false,
-      "fanIn": 0,
+      "fanIn": 1,
       "fanOut": 2,
       "isEntry": true
     }
@@ -6767,7 +6742,7 @@
     },
     {
       "source": "core/main.py",
-      "target": "logger/log_client.py",
+      "target": "core/observability/log_client.py",
       "kind": "import"
     },
     {
@@ -6783,6 +6758,11 @@
     {
       "source": "core/main.py",
       "target": "core/infrastructure/telegram/channel_polling.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/observability/log_client.py",
+      "target": "core/proto/__init__.py",
       "kind": "import"
     },
     {
@@ -7197,7 +7177,7 @@
     },
     {
       "source": "core/tests/test_bot_routing_guards.py",
-      "target": "logger/log_client.py",
+      "target": "core/observability/log_client.py",
       "kind": "import"
     },
     {
@@ -7376,6 +7356,16 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_log_client.py",
+      "target": "core/observability/log_client.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_log_client.py",
+      "target": "core/application/log_policy.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_log_policy.py",
       "target": "core/application/log_policy.py",
       "kind": "import"
@@ -7387,12 +7377,17 @@
     },
     {
       "source": "core/tests/test_log_policy.py",
-      "target": "logger/log_client.py",
+      "target": "core/observability/log_client.py",
       "kind": "import"
     },
     {
       "source": "core/tests/test_log_policy_fixtures.py",
       "target": "core/application/log_policy.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_logger_engine_packaging.py",
+      "target": "atf.py",
       "kind": "import"
     },
     {
@@ -8007,7 +8002,7 @@
     },
     {
       "source": "core/tests/test_v14_queue_scalability.py",
-      "target": "logger/log_client.py",
+      "target": "core/observability/log_client.py",
       "kind": "import"
     },
     {
@@ -8173,21 +8168,6 @@
     {
       "source": "api",
       "target": "api/internal/middleware",
-      "kind": "import"
-    },
-    {
-      "source": "logger/log_client.py",
-      "target": "core/proto/__init__.py",
-      "kind": "import"
-    },
-    {
-      "source": "logger/tests/test_log_client.py",
-      "target": "logger/log_client.py",
-      "kind": "import"
-    },
-    {
-      "source": "logger/tests/test_log_client.py",
-      "target": "core/application/log_policy.py",
       "kind": "import"
     },
     {
@@ -10815,8 +10795,8 @@
       "subsystem": "root",
       "lang": "python",
       "files": 1,
-      "loc": 1051,
-      "fanIn": 0,
+      "loc": 1057,
+      "fanIn": 1,
       "fanOut": 2
     },
     {
@@ -10884,13 +10864,8 @@
     },
     {
       "from": "core",
-      "to": "logger",
-      "count": 4
-    },
-    {
-      "from": "logger",
-      "to": "core",
-      "count": 2
+      "to": "atf.py",
+      "count": 1
     },
     {
       "from": "atf.py",
@@ -10942,8 +10917,7 @@
       "evidence": [
         "core/application/pipeline.py",
         "core/config.py",
-        "core/main.py",
-        "logger/log_client.py"
+        "core/main.py"
       ]
     },
     {
@@ -11243,16 +11217,13 @@
       "tech": "Rust gRPC :50052",
       "role": "Central log intake, redaction, query and stats",
       "color": "#f472b6",
-      "files": 4,
-      "loc": 533,
-      "langs": [
-        "python"
-      ],
+      "files": 0,
+      "loc": 0,
+      "langs": [],
       "evidence": [
         "rust/logger/src/config/mod.rs",
         "rust/logger/src/lib.rs",
-        "rust/logger/src/main.rs",
-        "logger/log_client.py"
+        "rust/logger/src/main.rs"
       ],
       "external": false
     },
@@ -11386,7 +11357,7 @@
       "role": "Install, validate, diagnose, upgrade",
       "color": "#22d3ee",
       "files": 37,
-      "loc": 6839,
+      "loc": 6845,
       "langs": [
         "python"
       ],

@@ -310,4 +310,4 @@ Stated plainly, because a missing number is more useful than a guessed one:
   retired Python engine, from its rollback image or a historical checkout).
 * **Unit tests:** `scripts/tests/test_logger_rust_bench.py` (10 tests, no Docker
   required). Full suite after the change:
-  `python -m pytest -q core/tests logger/tests scripts/tests` → `821 passed, 9 skipped`.
+  `python -m pytest -q core/tests scripts/tests` → `821 passed, 9 skipped`.

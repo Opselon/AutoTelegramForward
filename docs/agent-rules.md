@@ -104,7 +104,7 @@ Before pushing changes or submitting PRs, agents must run and pass the following
 
 3. **Core & Logger Pytest Suites:**
    ```bash
-   pytest -q core/tests logger/tests scripts/tests
+   pytest -q core/tests scripts/tests
    ```
 
 4. **Go API Test Suite:**

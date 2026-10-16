@@ -265,7 +265,7 @@ def test_a_real_client_with_the_default_policy_drops_info_but_keeps_the_audit_re
     while the durable audit evidence is still written."""
 
     async def go():
-        from logger.log_client import LogClient
+        from core.observability.log_client import LogClient
 
         repo = RecordingAuditRepo()
         client = LogClient("127.0.0.1:1", policy=LogPolicy())
@@ -283,7 +283,7 @@ def test_a_real_client_with_the_default_policy_drops_info_but_keeps_the_audit_re
 
 def test_a_real_client_still_sends_a_warn_event_and_a_security_event():
     async def go():
-        from logger.log_client import LogClient
+        from core.observability.log_client import LogClient
 
         client = LogClient("127.0.0.1:1", policy=LogPolicy())
         pipeline = _pipeline(client, RecordingAuditRepo(), client._policy)

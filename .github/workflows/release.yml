@@ -209,7 +209,6 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --name "atf" \
             --add-data "VERSION:." \
             --add-data "core/proto:core/proto" \
-            --add-data "logger:logger" \
             --add-data "proto:proto" \
             --add-data "config.example.yaml:." \
             --add-binary "bin/atf-api:." \
@@ -263,7 +262,6 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --name "atf" \
             --add-data "VERSION;." \
             --add-data "core/proto;core/proto" \
-            --add-data "logger;logger" \
             --add-data "proto;proto" \
             --add-data "config.example.yaml;." \
             --add-binary "bin/atf-api.exe;." \
@@ -289,7 +287,6 @@ jobs:
           pyinstaller --noconfirm --onedir --name "atf" \
             --add-data "VERSION:." \
             --add-data "core/proto:core/proto" \
-            --add-data "logger:logger" \
             --add-data "proto:proto" \
             --add-data "config.example.yaml:." \
             --add-binary "bin/atf-logger:." \
@@ -312,7 +309,6 @@ jobs:
           pyinstaller --noconfirm --onedir --name "atf" `
             --add-data "VERSION;." `
             --add-data "core/proto;core/proto" `
-            --add-data "logger;logger" `
             --add-data "proto;proto" `
             --add-data "config.example.yaml;." `
             --add-binary "bin/atf-logger.exe;." `
@@ -472,7 +468,7 @@ jobs:
               --exclude='*.log' --exclude='dist' --exclude='build' \
               --exclude='web/frontend/node_modules' --exclude='web/backend/target' \
               --exclude='rust/logger/target' \
-              -cf - atf.py core logger proto api web k8s scripts rust \
+              -cf - atf.py core proto api web k8s scripts rust \
                      install.sh install.ps1 requirements.txt VERSION \
                      config.example.yaml docker-compose.yml \
                      Dockerfile.core Dockerfile.logger-rust Dockerfile.api Dockerfile.web \
