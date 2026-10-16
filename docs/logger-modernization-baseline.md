@@ -1,0 +1,81 @@
+# Logger modernization — baseline record
+
+A factual snapshot taken before the Go producer-policy work on this branch. Every
+line here is an observed command result, not an inference. Later phases append to
+this file; nothing is edited to make history look tidier than it was.
+
+## Repository state at the start of this branch
+
+| Fact | How it was observed |
+| --- | --- |
+| Branch `master`, HEAD `608f605` (PR #90, "enforce the collection policy at the client door") | `git log --oneline -6`, `git rev-parse --abbrev-ref HEAD` |
+| No open pull requests | `gh pr list --state open` → empty |
+| Working tree clean except untracked `rust/` and other agents' trees | `git status --porcelain` |
+| CI green on HEAD | `gh run list -L 6` |
+
+## Rust Logger: the four states, kept separate
+
+| State | Observed value | Command |
+| --- | --- | --- |
+| Source exists | Partially — 17 `.rs` files on disk | `find rust -name '*.rs' \| wc -l` |
+| Source is tracked in git | **No** — 0 files | `git ls-files rust \| wc -l` |
+| Compiles | **Unverified** — no host toolchain, no completed build output | `which cargo rustc` → nothing |
+| Tests pass | **Unverified** — never observed | — |
+| Binary runs | **No binary exists** | `ls rust/logger/target/release/atf-logger` → not found |
+
+`rust/logger/Cargo.lock` exists, which proves a dependency resolution ran at some
+point, and nothing more. A background build agent is still running as this record
+is written; its result is not assumed here. **A source tree that is absent from
+git, has never been observed compiling, and ships no binary is not an
+implementation**, and this record does not treat it as one.
+
+## Where `api/http` INFO rows actually come from
+
+Not from a text match — from the two call sites that build a `LogEntry`:
+
+| Emission path | File:line | When it fires | Level |
+| --- | --- | --- | --- |
+| `AccessLogger` | `api/internal/middleware/middleware.go:130` | **every** non-probe request | INFO (2xx/3xx), WARN (4xx), ERROR (5xx) |
+| `ErrorLogger` | `api/internal/middleware/middleware.go:187` | responses ≥ 400 only | WARN/ERROR |
+
+`grep -rn "\.Log(ctx" --include="*.go" api` returns exactly these two sites.
+`main.go:158` constructs the sink with `Client: clients.Logs` and **no policy**,
+which is why every successful request was persisted: the Logger stores whatever it
+is handed, so "INFO is not collected by default" was not true of this service.
+
+## The #88 / #90 guarantees, re-verified against the files
+
+`core/application/log_policy.py` was read in full and the guarantees hold in the
+code, not only in the PR description: `WARN,ERROR,CRITICAL` are the defaults;
+`WARNING→WARN`, `ERR→ERROR`, `FATAL→CRITICAL`, `NOTICE→INFO`; an unknown level
+becomes `INFO` and is never upgraded; `transform`-free `is_security_relevant`
+keeps `auth.`/`security.`/`tenant.`/`admin.`/`permission.` prefixes and the eight
+reason codes exempt from threshold and rate limit; the diagnostic window clamps to
+at least one second and expires from the injected clock; `suppressed_level` and
+`suppressed_rate` are separate from any delivery counter; the durable audit write
+in `pipeline.py` shares no gate with the log emission.
+
+## Defects and gaps open at the start of this branch
+
+1. **No Go producer policy** (fixed on this branch) — the residual `api/http`
+   INFO stream, measured live as 28 rows in 4 minutes.
+2. **`LogPolicy.snapshot()` is not reachable** by any operator: no API route, no
+   dashboard view, no bot control. A diagnostic window can only be opened by
+   setting an environment variable and restarting.
+3. **No Rust Logger.** See the table above.
+4. **No PostgreSQL backend.** SQLite only (`logger/main.py`), so "both backends
+   first-class" is unmet.
+5. **No forwarding lifecycle events** for FloodWait, retry attempts, album
+   aggregation, media download/upload, dead-letter transitions or end-to-end
+   latency: Core has one `.log()` call site, and `_audit()` names only
+   `forward.dropped/filtered/enqueued/enqueue_failed`.
+6. **Configuration has no owner.** Each producer reads its own environment, so
+   there is no persisted effective policy, no version, no propagation and no
+   staleness detection. Documented as a limitation, not presented as a feature.
+
+## Measured baseline (historical, not re-run here)
+
+`scripts/bench/logger_baseline.py` reported ≈1,150 events/s saturation at p50
+≈215 ms against the Python Logger with commit-per-insert and no admission control.
+These numbers are from an earlier session and are **not** re-confirmed on this
+branch; the benchmark that produced them is in the tree and re-runnable.

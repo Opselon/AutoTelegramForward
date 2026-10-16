@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"autoforward/internal/logpolicy"
+
 	pb "autoforward/proto"
 )
 
@@ -109,6 +111,12 @@ func AccessLogger(sink *ErrorLogSink, next http.Handler) http.Handler {
 		case rec.status >= 400:
 			level = "WARN"
 		}
+		// The gate sits here, before the transport: a refused event must not cost
+		// a goroutine, a deadline, or a retry, and must never look like a loss.
+		eventType, reasonCode := classifyOutcome(r, rec.status)
+		if !sink.allow(level, eventType, reasonCode) {
+			return
+		}
 		detail, _ := json.Marshal(map[string]any{
 			"method":         r.Method,
 			"path":           r.URL.Path,
@@ -147,8 +155,74 @@ func AccessLogger(sink *ErrorLogSink, next http.Handler) http.Handler {
 
 // ErrorLogSink forwards API outcomes into the central logger store. It is the
 // transport used by AccessLogger.
+//
+// Policy is the producer-side collection policy. It is applied BEFORE anything
+// is sent, because the Logger service persists whatever it receives: without a
+// producer filter, the documented default ("INFO is not collected") is not true
+// of this service at all — every successful request would write an INFO row.
+// A nil Policy means "no filtering", which keeps this middleware usable on its
+// own and in tests that do not care about the policy; main.go always sets it.
 type ErrorLogSink struct {
 	Client pb.LogControlServiceClient
+	Policy *logpolicy.Policy
+}
+
+// allow applies the collection policy to one already-classified event.
+//
+// A refusal is a policy decision, not a delivery failure: no RPC is attempted, no
+// timeout is spent, and no transport/queue counter moves. The refusal is counted
+// by the policy itself (suppressed_level / suppressed_rate), which is what lets an
+// operator tell "we chose not to collect this" apart from "we lost it".
+func (s *ErrorLogSink) allow(level, eventType, reasonCode string) bool {
+	if s == nil || s.Policy == nil {
+		return true
+	}
+	return s.Policy.Allow(level, eventType, reasonCode)
+}
+
+// classifyOutcome derives an event's *structured* identity from the request and
+// its outcome.
+//
+// This is what makes the security exemption precise, and it is deliberately not
+// a match against the rendered log text: a message reworded later would silently
+// change what gets audited. Route namespace and method decide what kind of event
+// this is; the status code decides whether it went wrong. An ordinary successful
+// read is not evidence of anything; a failed authentication, a denied
+// authorization and an administrative change are.
+func classifyOutcome(r *http.Request, status int) (eventType, reasonCode string) {
+	switch status {
+	case http.StatusUnauthorized:
+		reasonCode = "UNAUTHORIZED"
+	case http.StatusForbidden:
+		reasonCode = "FORBIDDEN"
+	}
+	mutation := r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
+
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/api/admin"):
+		// An administrative change is audit evidence whether or not it succeeded;
+		// an administrative *read* is ordinary traffic.
+		if mutation || reasonCode != "" {
+			eventType = "admin.change"
+		} else {
+			eventType = "http.request"
+		}
+	case strings.HasPrefix(r.URL.Path, "/api/auth"):
+		if reasonCode != "" {
+			eventType = "auth.failure"
+		} else {
+			eventType = "http.request"
+		}
+	case strings.HasPrefix(r.URL.Path, "/api/tenants"):
+		if reasonCode != "" {
+			eventType = "tenant.access"
+		} else {
+			eventType = "http.request"
+		}
+	default:
+		eventType = "http.request"
+	}
+	return eventType, reasonCode
 }
 
 // ErrorLogger is the failure-only logger, kept for callers that want the narrow
@@ -164,6 +238,10 @@ func ErrorLogger(sink *ErrorLogSink, next http.Handler) http.Handler {
 		level := "ERROR"
 		if rec.status < 500 {
 			level = "WARN" // 4xx: caller-side problems
+		}
+		eventType, reasonCode := classifyOutcome(r, rec.status)
+		if !sink.allow(level, eventType, reasonCode) {
+			return
 		}
 		meta := Meta(r.Context())
 		ruleID, corrID := "", ""

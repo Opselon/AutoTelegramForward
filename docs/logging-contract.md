@@ -85,11 +85,13 @@ hot path expensive.
 ### Where the default policy is enforced today
 
 The table above is a *policy*, and a policy only exists if something enforces it.
-The Python Logger stores whatever it receives (it has no server-side severity
-filter), so the defaults are enforced **at the producer** in
-`core/application/log_policy.py`, and attached to the **`LogClient`** — the door
-every event in a process leaves through, since the audit choke point, the
-`info/warn/error` helpers and the stdlib logging bridge all funnel into it. One
+The Logger stores whatever it receives (it has no server-side severity filter), so
+the defaults are enforced **at each producer**. Two services produce events, and
+both apply the same policy:
+
+**Python Core** — `core/application/log_policy.py`, attached to the **`LogClient`**
+— the door every event in a process leaves through, since the audit choke point,
+the `info/warn/error` helpers and the stdlib logging bridge all funnel into it. One
 decision at that door therefore covers every emission path; the pipeline's
 `_audit()` helper gates nothing itself, it *names* its events so a
 security-relevant one can be exempted:
@@ -98,6 +100,39 @@ security-relevant one can be exempted:
 * `ATF_LOG_DIAGNOSTIC_SECONDS` — start a bounded diagnostic window at launch.
 * `ATF_LOG_VERBOSE_RATE` — a per-second cap on verbose events (0 = uncapped), so
   turning diagnostics on under load cannot itself become the incident.
+
+**Go API** — `api/internal/logpolicy`, applied in `middleware.go` before the
+transport, on both emission paths (`AccessLogger` records every request;
+`ErrorLogger` the failures only). Both are covered because an exemption applied to
+one of them is not an exemption: the other one keeps writing the rows the contract
+says must not be collected. The middleware classifies each request from its
+**method, route namespace and status code** — never from the rendered log text,
+which would silently change what is audited the next time a message is reworded —
+and `main.go` attaches the policy with the same environment contract as Core.
+
+The two implementations are held to **one** set of expectations:
+`contracts/log_policy_decisions.json` is evaluated by
+`core/tests/test_log_policy_fixtures.py` *and*
+`api/internal/logpolicy/policy_test.go`. Two hand-written implementations of one
+rule drift apart precisely when nobody is looking; the fixture is what notices. It
+earned its keep immediately: the first run caught the Go level-list parser
+downgrading an unknown name to `INFO` while Python dropped it — a typo in
+`ATF_LOG_LEVELS` would have quietly re-enabled a verbose level in one service and
+not the other.
+
+### Who owns the effective policy (and what is still missing)
+
+Today **no process owns it**: each producer reads its own environment at
+construction, so there is no persisted policy, no version, no propagation to a
+running process and no staleness detection. A change means an environment update
+and a restart of the affected service. That is a limitation of the current state,
+not a design — the intended owner is the Rust Logger (persisted, versioned,
+published), with producers caching the last validated version and reporting its age
+so a stale cache is visible rather than silently effective. Until that exists,
+nothing may describe the policy as centrally managed.
+
+`LogPolicy.snapshot()` consequently exposes only **process-local** counters: a
+number it reports is what *that* process decided, never a system total.
 
 Two rules the producer must not get wrong, and both are tested:
 

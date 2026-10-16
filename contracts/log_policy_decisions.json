@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "description": "Shared behavioural contract for the producer-side log collection policy. Both the Python producer (core/application/log_policy.py) and the Go producer (api/internal/logpolicy) evaluate THESE cases in their test suites, so the two implementations cannot quietly drift apart. Nothing here is hand-maintained per language: a change is made once, here, and both sides must satisfy it.",
+  "collected_by_default": ["WARN", "ERROR", "CRITICAL"],
+  "verbose_levels": ["TRACE", "DEBUG", "INFO", "SUCCESS"],
+  "all_levels": ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARN", "ERROR", "CRITICAL"],
+  "level_normalization": [
+    {"input": "WARNING", "expected": "WARN", "why": "legacy alias promised by the contract"},
+    {"input": "warning", "expected": "WARN", "why": "case-insensitive"},
+    {"input": "  Warn  ", "expected": "WARN", "why": "whitespace tolerated"},
+    {"input": "ERR", "expected": "ERROR"},
+    {"input": "FATAL", "expected": "CRITICAL"},
+    {"input": "NOTICE", "expected": "INFO"},
+    {"input": "banana", "expected": "INFO", "why": "unknown is never upgraded to a security level"},
+    {"input": "", "expected": "INFO"},
+    {"input": "critical", "expected": "CRITICAL"}
+  ],
+  "level_list_parsing": [
+    {"input": "warn, ERROR ,bogus;CRITICAL", "expected": ["WARN", "ERROR", "CRITICAL"], "why": "an unrecognised name in a list is dropped, never downgraded to INFO"},
+    {"input": "WARNING", "expected": ["WARN"], "why": "legacy alias in a list"},
+    {"input": "info,info,INFO", "expected": ["INFO"], "why": "duplicates collapse, order preserved"},
+    {"input": "", "expected": [], "why": "an empty list is empty, not a default"},
+    {"input": "!!!,??", "expected": [], "why": "garbage does not become a level"}
+  ],
+  "scenarios": [
+    {
+      "name": "documented defaults",
+      "levels": ["WARN", "ERROR", "CRITICAL"],
+      "diagnostic_seconds": 0,
+      "verbose_rate_per_second": 0,
+      "events": [
+        {"level": "INFO", "event_type": "forward.enqueued", "reason_code": "ACCEPTED", "expected": false, "why": "high-volume happy path is not collected by default"},
+        {"level": "SUCCESS", "event_type": "forward.enqueued", "reason_code": "OK", "expected": false},
+        {"level": "DEBUG", "event_type": "forward.ingest", "reason_code": "", "expected": false},
+        {"level": "TRACE", "event_type": "forward.ingest", "reason_code": "", "expected": false},
+        {"level": "WARN", "event_type": "forward.filtered", "reason_code": "WORD_BLOCKED", "expected": true},
+        {"level": "ERROR", "event_type": "forward.dropped", "reason_code": "SEND_FAILED", "expected": true},
+        {"level": "CRITICAL", "event_type": "system.fatal", "reason_code": "", "expected": true},
+        {"level": "INFO", "event_type": "auth.failed", "reason_code": "UNAUTHORIZED", "expected": true, "why": "security evidence is exempt from the threshold"},
+        {"level": "INFO", "event_type": "forward.filtered", "reason_code": "CROSS_TENANT", "expected": true, "why": "exempt by reason code, not by event type"},
+        {"level": "INFO", "event_type": "admin.change", "reason_code": "", "expected": true, "why": "administrative change is auditable evidence"},
+        {"level": "INFO", "event_type": "tenant.probe", "reason_code": "", "expected": true},
+        {"level": "INFO", "event_type": "http.request", "reason_code": "", "expected": false, "why": "ordinary API traffic is not security evidence"},
+        {"level": "WAT", "event_type": "http.request", "reason_code": "", "expected": false, "why": "malformed level is treated as INFO, never as a security level"},
+        {"level": "warning", "event_type": "http.request", "reason_code": "", "expected": true, "why": "legacy alias still collected"}
+      ]
+    },
+    {
+      "name": "raised threshold",
+      "levels": ["CRITICAL"],
+      "diagnostic_seconds": 0,
+      "verbose_rate_per_second": 0,
+      "events": [
+        {"level": "WARN", "event_type": "http.request", "reason_code": "", "expected": false},
+        {"level": "ERROR", "event_type": "http.request", "reason_code": "", "expected": false},
+        {"level": "CRITICAL", "event_type": "system.fatal", "reason_code": "", "expected": true},
+        {"level": "ERROR", "event_type": "auth.failed", "reason_code": "FORBIDDEN", "expected": true, "why": "raising the threshold must not disarm auditing"},
+        {"level": "WARN", "event_type": "http.request", "reason_code": "PERMISSION_DENIED", "expected": true}
+      ]
+    },
+    {
+      "name": "time-limited diagnostic mode is active",
+      "levels": ["WARN", "ERROR", "CRITICAL"],
+      "diagnostic_seconds": 60,
+      "verbose_rate_per_second": 0,
+      "events": [
+        {"level": "INFO", "event_type": "forward.enqueued", "reason_code": "ACCEPTED", "expected": true},
+        {"level": "DEBUG", "event_type": "forward.ingest", "reason_code": "", "expected": true},
+        {"level": "TRACE", "event_type": "forward.ingest", "reason_code": "", "expected": true},
+        {"level": "SUCCESS", "event_type": "forward.enqueued", "reason_code": "OK", "expected": true}
+      ]
+    },
+    {
+      "name": "diagnostic window has expired",
+      "levels": ["WARN", "ERROR", "CRITICAL"],
+      "diagnostic_seconds": 60,
+      "expire_diagnostic": true,
+      "verbose_rate_per_second": 0,
+      "events": [
+        {"level": "INFO", "event_type": "forward.enqueued", "reason_code": "ACCEPTED", "expected": false, "why": "an expired window closes itself"},
+        {"level": "DEBUG", "event_type": "forward.ingest", "reason_code": "", "expected": false},
+        {"level": "ERROR", "event_type": "forward.dropped", "reason_code": "SEND_FAILED", "expected": true}
+      ]
+    },
+    {
+      "name": "verbose rate limit within a single window",
+      "levels": ["WARN", "ERROR", "CRITICAL", "INFO", "SUCCESS", "DEBUG"],
+      "diagnostic_seconds": 0,
+      "verbose_rate_per_second": 2,
+      "events": [
+        {"level": "INFO", "event_type": "http.request", "reason_code": "", "expected": true},
+        {"level": "INFO", "event_type": "http.request", "reason_code": "", "expected": true},
+        {"level": "INFO", "event_type": "http.request", "reason_code": "", "expected": false, "why": "third verbose event in the window is capped"},
+        {"level": "INFO", "event_type": "auth.failed", "reason_code": "UNAUTHORIZED", "expected": true, "why": "security events are exempt from the rate limit too"},
+        {"level": "ERROR", "event_type": "http.request", "reason_code": "", "expected": true, "why": "WARN and above are never rate limited"},
+        {"level": "ERROR", "event_type": "http.request", "reason_code": "", "expected": true},
+        {"level": "ERROR", "event_type": "http.request", "reason_code": "", "expected": true}
+      ]
+    },
+    {
+      "name": "verbose rate limit resets in the next window",
+      "levels": ["WARN", "ERROR", "CRITICAL", "INFO"],
+      "diagnostic_seconds": 0,
+      "verbose_rate_per_second": 1,
+      "advance_seconds_before": 1.5,
+      "events": [
+        {"level": "INFO", "event_type": "http.request", "reason_code": "", "expected": true, "why": "the window opened before the events, so this is the first in it"}
+      ]
+    }
+  ]
+}
