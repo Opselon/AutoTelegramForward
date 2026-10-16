@@ -91,7 +91,15 @@ CREATE TABLE IF NOT EXISTS logs (
 pub fn is_retryable_sqlstate(code: &str) -> bool {
     matches!(
         code,
-        "40001" | "40P01" | "55P03" | "53300" | "57P01" | "57P02" | "57P03" | "08000" | "08003"
+        "40001"
+            | "40P01"
+            | "55P03"
+            | "53300"
+            | "57P01"
+            | "57P02"
+            | "57P03"
+            | "08000"
+            | "08003"
             | "08006"
     )
 }
@@ -153,7 +161,9 @@ impl ClientPool {
         // Fail loudly now, not on the first write: a Logger that cannot reach its
         // database must not start pretending it can.
         let probe = pool.connect()?;
-        probe.close().map_err(|err| map_pg_error(err, "close probe"))?;
+        probe
+            .close()
+            .map_err(|err| map_pg_error(err, "close probe"))?;
         Ok(pool)
     }
 
@@ -169,7 +179,10 @@ impl ClientPool {
         // SET.
         let mut statements = String::new();
         if self.statement_timeout_ms > 0 {
-            statements.push_str(&format!("SET statement_timeout = {};\n", self.statement_timeout_ms));
+            statements.push_str(&format!(
+                "SET statement_timeout = {};\n",
+                self.statement_timeout_ms
+            ));
         }
         if self.transaction_timeout_ms > 0 {
             statements.push_str(&format!(
@@ -513,7 +526,6 @@ impl Storage for PgStorage {
             return Ok(0);
         }
         let started = Instant::now();
-        let started = Instant::now();
         let chunk_rows = self.max_rows_per_statement;
         let mut written = 0usize;
         // Chunked so the parameter count stays far below PostgreSQL's 65535 limit
@@ -550,7 +562,6 @@ impl Storage for PgStorage {
             .observe_seconds(started.elapsed().as_secs_f64());
         Ok(written)
     }
-
 
     fn query(&self, filter: &QueryFilter, page: &Page) -> Result<(Vec<Record>, i64), StorageError> {
         let select = query::select_page(filter, page, SqlDialect::Postgres);
@@ -642,7 +653,12 @@ impl Storage for PgStorage {
         by: GroupBy,
         limit: usize,
     ) -> Result<Vec<(String, i64)>, StorageError> {
-        let plan = query::group_by(filter, by, limit.min(query::MAX_GROUPS), SqlDialect::Postgres);
+        let plan = query::group_by(
+            filter,
+            by,
+            limit.min(query::MAX_GROUPS),
+            SqlDialect::Postgres,
+        );
         self.timed(&self.metrics.storage_read_seconds, || {
             self.read_pairs(&plan)
         })
@@ -731,7 +747,6 @@ impl Storage for PgStorage {
             }
             Ok(())
         })?;
-
 
         let mut protected_skipped = 0i64;
         if !protected.is_empty() {
@@ -870,12 +885,282 @@ mod tests {
     }
 
     #[test]
+    fn every_read_plan_binds_exactly_the_parameters_it_names() {
+        // The adapter is `client.query(&plan.sql, &bind(&plan.params))`. Once the
+        // numbering and the vector drift apart PostgreSQL answers
+        // `Wrong number of parameters passed to query` at runtime, which is the
+        // failure this crate shipped with: the plan named a parameter it never
+        // bound. Numbering must start at `$1`, be contiguous, and follow the order
+        // the values are pushed.
+        let filter = QueryFilter {
+            levels: vec!["error".to_string(), "warn".to_string()],
+            service: "core".to_string(),
+            category: "system".to_string(),
+            rule_id: "rule-1".to_string(),
+            correlation_id: "corr-1".to_string(),
+            user_id: 42,
+            since: 1_700_000_000,
+            until: 1_700_000_999,
+            search: "needle".to_string(),
+            level: String::new(),
+        };
+        let scope = StatsScope {
+            rule_id: "rule-1".to_string(),
+            user_id: 42,
+        };
+        let sweep = RetentionSweep {
+            filter: filter.clone(),
+            cutoff: Some(1_700_000_000),
+            protected: vec!["audit".to_string()],
+            exclusions: query::OverrideSet {
+                levels: vec!["debug".to_string()],
+                categories: vec!["security".to_string()],
+                services: vec!["api".to_string()],
+            },
+        };
+        let plans = [
+            (
+                "select_page",
+                query::select_page(&filter, &Page::clamped(25, 50, false), SqlDialect::Postgres),
+            ),
+            (
+                "select_page/keyset",
+                query::select_page(
+                    &filter,
+                    &Page::keyset_page(25, false, Some(query::Keyset::new(1_000, 7))),
+                    SqlDialect::Postgres,
+                ),
+            ),
+            (
+                "count",
+                query::count(&filter, Some(500), SqlDialect::Postgres),
+            ),
+            ("stats", query::stats(&scope, SqlDialect::Postgres)),
+            (
+                "group_by",
+                query::group_by(&filter, GroupBy::Rule, 10, SqlDialect::Postgres),
+            ),
+            (
+                "by_rule",
+                query::by_rule(query::MAX_RULE_GROUPS, SqlDialect::Postgres),
+            ),
+            (
+                "time_buckets",
+                query::time_buckets(&filter, 3_600, 24, SqlDialect::Postgres),
+            ),
+            (
+                "error_aggregates",
+                query::error_aggregates(&filter, 20, SqlDialect::Postgres),
+            ),
+            (
+                "delete_chunk",
+                query::delete_chunk(
+                    &filter,
+                    Some(1_000),
+                    &["audit".to_string()],
+                    500,
+                    SqlDialect::Postgres,
+                ),
+            ),
+            (
+                "retention_delete_chunk",
+                query::retention_delete_chunk(&sweep, 500, SqlDialect::Postgres),
+            ),
+        ];
+        for (what, plan) in plans {
+            assert_eq!(
+                PgStorage::bind(&plan.params).len(),
+                plan.params.len(),
+                "{what}: bind() must return one value per parameter"
+            );
+            assert_eq!(
+                placeholder_order(&plan.sql),
+                (1..=plan.params.len()).collect::<Vec<_>>(),
+                "{what}: $n is not contiguous in binding order: {}",
+                plan.sql
+            );
+        }
+
+        // The insert statement is built with its own counter and has to line up too.
+        for rows in [1usize, 2, 9, 17] {
+            let sql = insert_sql(rows, 1);
+            assert_eq!(
+                placeholder_order(&sql),
+                (1..=rows * 9).collect::<Vec<_>>(),
+                "insert of {rows} rows: {sql}"
+            );
+        }
+    }
+
+    /// Every `$n` the statement uses, in the order the text first uses it. A
+    /// repeated `$n` counts once — that is the whole point of a named parameter.
+    fn placeholder_order(sql: &str) -> Vec<usize> {
+        let chars: Vec<char> = sql.chars().collect();
+        let mut numbers: Vec<usize> = Vec::new();
+        let mut index = 0;
+        while index < chars.len() {
+            if chars[index] == '$' {
+                let mut end = index + 1;
+                while end < chars.len() && chars[end].is_ascii_digit() {
+                    end += 1;
+                }
+                if end > index + 1 {
+                    let digits: String = chars[index + 1..end].iter().collect();
+                    let number: usize = digits.parse().expect("placeholder number");
+                    if !numbers.contains(&number) {
+                        numbers.push(number);
+                    }
+                    index = end;
+                    continue;
+                }
+            }
+            index += 1;
+        }
+        numbers
+    }
+
+    /// Live round trip against a real server, for every read path this adapter
+    /// builds. Skipped — loudly — when no DSN is configured, so the suite stays
+    /// green on a machine without PostgreSQL; an explicit skip, never a silent
+    /// pass. Set `ATF_LOGGER_TEST_PG_DSN` to a throwaway server to run it.
+    #[test]
+    fn live_round_trip_when_a_server_is_reachable() {
+        let Some(dsn) = std::env::var("ATF_LOGGER_TEST_PG_DSN")
+            .ok()
+            .filter(|dsn| !dsn.is_empty())
+        else {
+            eprintln!("SKIPPED (no ATF_LOGGER_TEST_PG_DSN): PostgreSQL round trip not run");
+            return;
+        };
+        let mut config = Config::default();
+        config.db_path = dsn;
+        let backend = BackendConfig::from_config(&config, &|_: &str| None)
+            .expect("a postgres:// DSN selects the PostgreSQL backend");
+        let storage = crate::storage::open(&config, &backend, Arc::new(Metrics::new()))
+            .expect("open + migrate");
+        assert_eq!(storage.backend(), Backend::Postgres);
+        storage.probe().expect("probe");
+        storage
+            .purge(&PurgeFilter::default(), 1_000, u64::MAX)
+            .expect("clear leftovers");
+        assert_eq!(storage.table_rows().unwrap(), 0);
+
+        let tag = format!("live-{}", std::process::id());
+        let rows: Vec<Record> = (0..12)
+            .map(|i: i64| Record {
+                id: 0,
+                ts: 1_700_000_100 + i * 60,
+                level: if i % 3 == 0 { "ERROR" } else { "INFO" }.to_string(),
+                service: if i % 2 == 0 { "core" } else { "api" }.to_string(),
+                category: "system".to_string(),
+                message: format!("{tag} m"),
+                detail: "{}".to_string(),
+                rule_id: if i < 6 { "rule-a" } else { "" }.to_string(),
+                user_id: if i < 4 { 1 } else { 2 },
+                correlation_id: format!("{tag}-{i}"),
+            })
+            .collect();
+        assert_eq!(storage.insert_batch(&rows).expect("batched insert"), 12);
+
+        let searched = QueryFilter {
+            search: tag.clone(),
+            ..QueryFilter::default()
+        };
+        let (page, total) = storage
+            .query(&searched, &Page::clamped(25, 0, false))
+            .expect("query with limit and offset");
+        assert_eq!(total, 12);
+        assert_eq!(
+            page.len(),
+            12,
+            "a bounded page still returns every match here"
+        );
+        assert!(page.windows(2).all(|pair| pair[0].ts >= pair[1].ts));
+        assert_eq!(
+            storage
+                .query(
+                    &searched,
+                    &Page::keyset_page(5, false, Some(query::Keyset::new(1_700_000_700, 0)))
+                )
+                .expect("keyset page")
+                .0
+                .len(),
+            5
+        );
+        assert_eq!(storage.count(&searched, None).unwrap(), 12);
+        assert_eq!(storage.count(&searched, Some(3)).unwrap(), 3);
+
+        let stats = storage.stats(&StatsScope::default()).expect("stats");
+        assert_eq!(stats.total, 12);
+        assert_eq!(stats.by_level.get("ERROR"), Some(&4));
+        assert_eq!(stats.by_service.get("core"), Some(&6));
+        assert_eq!(stats.by_rule.get("rule-a"), Some(&6));
+        assert_eq!(stats.oldest_ts, 1_700_000_100);
+        assert_eq!(stats.newest_ts, 1_700_000_760);
+
+        // The bucket width is named once and used twice in the SELECT list, i.e.
+        // *before* the filter's placeholders in the text — the live check that the
+        // numbering matches the binding order.
+        let buckets = storage
+            .time_buckets(&searched, 60, 64)
+            .expect("time buckets");
+        let bucketed: i64 = buckets.iter().map(|bucket| bucket.count).sum();
+        assert_eq!(bucketed, 12, "{buckets:?}");
+        assert_eq!(
+            buckets.first().map(|b| b.start_ts),
+            Some(1_700_000_100 / 60 * 60)
+        );
+
+        let groups = storage
+            .top_groups(&QueryFilter::default(), GroupBy::Service, 10)
+            .expect("top groups");
+        assert_eq!(
+            groups,
+            vec![("core".to_string(), 6), ("api".to_string(), 6)],
+            "the tie is broken by the group's first row, on this backend too"
+        );
+        let failures = storage
+            .error_aggregates(&QueryFilter::default(), 10)
+            .expect("error aggregates");
+        assert_eq!(failures.len(), 1, "{failures:?}");
+        assert_eq!(failures[0].count, 4);
+        assert_eq!(
+            storage
+                .export_chunk(&searched, &Page::keyset_page(4, false, None))
+                .expect("export chunk")
+                .len(),
+            4
+        );
+
+        // A sweep that matches nothing must not touch the archive.
+        let sweep = RetentionSweep {
+            filter: QueryFilter {
+                levels: vec!["TRACE".to_string()],
+                ..QueryFilter::default()
+            },
+            cutoff: Some(i64::MAX),
+            protected: vec!["audit".to_string()],
+            exclusions: query::OverrideSet::default(),
+        };
+        let report = storage.retention_purge(&sweep, 500, 1_000).expect("sweep");
+        assert_eq!(report.purged, 0);
+        assert_eq!(report.remaining, 12);
+        assert_eq!(storage.table_rows().unwrap(), 12);
+
+        storage
+            .purge(&PurgeFilter::default(), 1_000, u64::MAX)
+            .expect("cleanup");
+        assert_eq!(storage.table_rows().unwrap(), 0);
+        eprintln!("PostgreSQL live round trip passed");
+    }
+
+    #[test]
     fn retryable_sqlstates_are_the_no_commit_ones() {
         assert!(is_retryable_sqlstate("40001")); // serialization_failure
         assert!(is_retryable_sqlstate("40P01")); // deadlock_detected
         assert!(is_retryable_sqlstate("57P03")); // cannot_connect_now
         assert!(is_retryable_sqlstate("08006")); // connection_failure
-        // A constraint or syntax error must never be retried: retrying cannot fix it.
+                                                 // A constraint or syntax error must never be retried: retrying cannot fix it.
         assert!(!is_retryable_sqlstate("23505")); // unique_violation
         assert!(!is_retryable_sqlstate("42601")); // syntax_error
         assert!(!is_retryable_sqlstate("42P01")); // undefined_table

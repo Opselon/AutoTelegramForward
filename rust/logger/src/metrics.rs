@@ -31,6 +31,37 @@ use std::time::{Duration, Instant};
 /// Hard cap on the number of series any one labelled family may hold.
 pub const MAX_SERIES: usize = 64;
 
+/// The series excess label values are folded into. It is a real series, not a gap:
+/// the folded counts are still exported, so nothing disappears from the registry.
+pub const OVERFLOW_LABEL: &str = "other";
+
+/// Insert-or-get one series under a hard bound.
+///
+/// The overflow series occupies one of the [`MAX_SERIES`] slots, so the family can
+/// never hold — or render — more series than the cap. The previous shape of this
+/// guard checked the cap *before* creating the overflow series, so a family at the
+/// cap produced `MAX_SERIES + 1` series and the bound it advertised was off by one.
+fn bounded_series<T: Clone>(
+    series: &mut BTreeMap<String, T>,
+    value: &str,
+    create: impl FnOnce() -> T,
+) -> T {
+    if let Some(existing) = series.get(value) {
+        return existing.clone();
+    }
+    // Reserve the last slot for the overflow series: `len + 1` is what the family
+    // would hold after adding one more named value.
+    if series.len() + 1 >= MAX_SERIES || value == OVERFLOW_LABEL {
+        return series
+            .entry(OVERFLOW_LABEL.to_string())
+            .or_insert_with(create)
+            .clone();
+    }
+    let item = create();
+    series.insert(value.to_string(), item.clone());
+    item
+}
+
 /// Latency buckets in seconds; the same set Prometheus' own client libraries
 /// default to, which keeps dashboards portable.
 pub const LATENCY_BUCKETS: &[f64] = &[
@@ -38,7 +69,9 @@ pub const LATENCY_BUCKETS: &[f64] = &[
 ];
 
 /// Batch-size buckets (rows per flush).
-pub const BATCH_BUCKETS: &[f64] = &[1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0, 4096.0];
+pub const BATCH_BUCKETS: &[f64] = &[
+    1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0, 4096.0,
+];
 
 /// A monotonically increasing counter.
 #[derive(Debug, Default)]
@@ -156,12 +189,7 @@ impl Histogram {
     /// Prometheus text for this histogram. `extra_label` is applied to every
     /// series line (used by the labelled family); `emit_header` is false after the
     /// first series of a family, so HELP/TYPE appear exactly once.
-    fn render_with(
-        &self,
-        out: &mut String,
-        extra_label: Option<(&str, &str)>,
-        emit_header: bool,
-    ) {
+    fn render_with(&self, out: &mut String, extra_label: Option<(&str, &str)>, emit_header: bool) {
         if emit_header {
             let _ = writeln!(out, "# HELP {} {}", self.name, self.help);
             let _ = writeln!(out, "# TYPE {} histogram", self.name);
@@ -173,11 +201,12 @@ impl Histogram {
         let mut cumulative: u64 = 0;
         for (i, upper) in self.buckets.iter().enumerate() {
             cumulative = cumulative.saturating_add(self.counts[i].load(Ordering::Relaxed));
-            let labels = join_labels(&format!("le=\"{}\"", format_bound(*upper)), &tail);
+            let labels = join_labels(&tail, &format!("le=\"{}\"", format_bound(*upper)));
             let _ = writeln!(out, "{}_bucket{{{labels}}} {cumulative}", self.name);
         }
-        cumulative = cumulative.saturating_add(self.counts[self.buckets.len()].load(Ordering::Relaxed));
-        let labels = join_labels("le=\"+Inf\"", &tail);
+        cumulative =
+            cumulative.saturating_add(self.counts[self.buckets.len()].load(Ordering::Relaxed));
+        let labels = join_labels(&tail, "le=\"+Inf\"");
         let _ = writeln!(out, "{}_bucket{{{labels}}} {cumulative}", self.name);
         let sum = self.sum_micros.load(Ordering::Relaxed) as f64 / 1e6;
         let count = self.count.load(Ordering::Relaxed);
@@ -218,20 +247,7 @@ impl LabeledCounter {
     /// Fetch (or create) one series. Label values must come from a bounded set.
     pub fn with(&self, value: &str) -> Arc<Counter> {
         let mut series = self.series.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(existing) = series.get(value) {
-            return Arc::clone(existing);
-        }
-        if series.len() >= MAX_SERIES {
-            // Cardinality guard: fold into a fixed overflow series instead of
-            // growing without bound. This is a bug-catcher, not a normal path.
-            let overflow = series
-                .entry("other".to_string())
-                .or_insert_with(|| Arc::new(Counter::default()));
-            return Arc::clone(overflow);
-        }
-        let counter = Arc::new(Counter::default());
-        series.insert(value.to_string(), Arc::clone(&counter));
-        counter
+        bounded_series(&mut series, value, || Arc::new(Counter::default()))
     }
 
     /// Increment one series (the common case).
@@ -245,10 +261,7 @@ impl LabeledCounter {
     }
 
     pub fn series_count(&self) -> usize {
-        self.series
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .len()
+        self.series.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     fn render(&self, out: &mut String) {
@@ -299,18 +312,9 @@ impl LabeledHistogram {
 
     pub fn with(&self, value: &str) -> Arc<Histogram> {
         let mut series = self.series.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(existing) = series.get(value) {
-            return Arc::clone(existing);
-        }
-        if series.len() >= MAX_SERIES {
-            let overflow = series.entry("other".to_string()).or_insert_with(|| {
-                Arc::new(Histogram::new(self.name, self.help, self.buckets))
-            });
-            return Arc::clone(overflow);
-        }
-        let histogram = Arc::new(Histogram::new(self.name, self.help, self.buckets));
-        series.insert(value.to_string(), Arc::clone(&histogram));
-        histogram
+        bounded_series(&mut series, value, || {
+            Arc::new(Histogram::new(self.name, self.help, self.buckets))
+        })
     }
 
     fn render(&self, out: &mut String) {
@@ -385,11 +389,14 @@ pub fn status_label(code: i32) -> &'static str {
     }
 }
 
-/// `a` is one label, `b` is zero or more labels: join with a comma only when
-/// `b` is non-empty, so `{le="1"}` never renders as `{le="1",}`.
+/// `a` is the label prefix owned by the caller (the labelled family's label) and
+/// may be empty; `b` is the label that always follows it. They are joined with a
+/// comma only when `a` is non-empty, so an unlabelled histogram renders `{le="1"}`
+/// and never `{,le="1"}`, and a labelled one renders
+/// `{method="Log",le="1"}` with the series' own label first.
 fn join_labels(a: &str, b: &str) -> String {
-    if b.is_empty() {
-        a.to_string()
+    if a.is_empty() {
+        b.to_string()
     } else {
         format!("{a},{b}")
     }
@@ -698,18 +705,30 @@ impl Metrics {
     }
 
     /// Render the full Prometheus text exposition.
-    pub fn render(&self, health: &HealthState, config_version: &str, backend: &str, ack_mode: &str) -> String {
+    pub fn render(
+        &self,
+        health: &HealthState,
+        config_version: &str,
+        backend: &str,
+        ack_mode: &str,
+    ) -> String {
         let mut out = String::with_capacity(16 * 1024);
 
         // --- ingestion ---------------------------------------------------
-        let _ = writeln!(out, "# HELP atf_logger_events_received_total Events offered by producers");
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_events_received_total Events offered by producers"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_events_received_total counter");
         let _ = writeln!(
             out,
             "atf_logger_events_received_total {}",
             self.events_received.get()
         );
-        let _ = writeln!(out, "# HELP atf_logger_events_persisted_total Records committed to storage");
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_events_persisted_total Records committed to storage"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_events_persisted_total counter");
         let _ = writeln!(
             out,
@@ -727,11 +746,25 @@ impl Metrics {
         }
         let _ = writeln!(out, "# HELP atf_logger_events_retried_total Write attempts retried after a retryable failure");
         let _ = writeln!(out, "# TYPE atf_logger_events_retried_total counter");
-        let _ = writeln!(out, "atf_logger_events_retried_total {}", self.events_retried.get());
-        let _ = writeln!(out, "# HELP atf_logger_events_duplicate_total Records suppressed by the dedupe window");
+        let _ = writeln!(
+            out,
+            "atf_logger_events_retried_total {}",
+            self.events_retried.get()
+        );
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_events_duplicate_total Records suppressed by the dedupe window"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_events_duplicate_total counter");
-        let _ = writeln!(out, "atf_logger_events_duplicate_total {}", self.events_duplicate.get());
-        let _ = writeln!(out, "# HELP atf_logger_events_unknown_level_total Level strings outside the canonical set");
+        let _ = writeln!(
+            out,
+            "atf_logger_events_duplicate_total {}",
+            self.events_duplicate.get()
+        );
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_events_unknown_level_total Level strings outside the canonical set"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_events_unknown_level_total counter");
         let _ = writeln!(
             out,
@@ -744,28 +777,65 @@ impl Metrics {
         self.queue_capacity.render(&mut out);
         self.queue_rejected_full.render(&mut out);
         for (name, help, gauge) in [
-            ("atf_logger_queue_depth", "Records waiting in the bounded queue", &self.queue_depth_current),
-            ("atf_logger_queue_capacity", "Configured total queue slots", &self.queue_capacity_current),
-            ("atf_logger_pending_writes", "Records admitted but not yet committed", &self.pending_writes),
-            ("atf_logger_batches_in_flight", "Batches currently inside a storage call", &self.batches_in_flight),
-            ("atf_logger_in_flight_acks", "Producer RPCs waiting for an acknowledgement", &self.in_flight_acks),
+            (
+                "atf_logger_queue_depth",
+                "Records waiting in the bounded queue",
+                &self.queue_depth_current,
+            ),
+            (
+                "atf_logger_queue_capacity",
+                "Configured total queue slots",
+                &self.queue_capacity_current,
+            ),
+            (
+                "atf_logger_pending_writes",
+                "Records admitted but not yet committed",
+                &self.pending_writes,
+            ),
+            (
+                "atf_logger_batches_in_flight",
+                "Batches currently inside a storage call",
+                &self.batches_in_flight,
+            ),
+            (
+                "atf_logger_in_flight_acks",
+                "Producer RPCs waiting for an acknowledgement",
+                &self.in_flight_acks,
+            ),
         ] {
             let _ = writeln!(out, "# HELP {name} {help}");
             let _ = writeln!(out, "# TYPE {name} gauge");
             let _ = writeln!(out, "{name} {}", gauge.get());
         }
-        let _ = writeln!(out, "# HELP atf_logger_queue_utilization Queue depth as a fraction of capacity");
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_queue_utilization Queue depth as a fraction of capacity"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_queue_utilization gauge");
         let capacity = self.queue_capacity_current.get().max(0) as f64;
         let depth = self.queue_depth_current.get().max(0) as f64;
-        let utilization = if capacity > 0.0 { depth / capacity } else { 0.0 };
+        let utilization = if capacity > 0.0 {
+            depth / capacity
+        } else {
+            0.0
+        };
         let _ = writeln!(out, "atf_logger_queue_utilization {:.6}", utilization);
-        let _ = writeln!(out, "# HELP atf_logger_drain_state Drain state (0=running, 1=draining, 2=drained)");
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_drain_state Drain state (0=running, 1=draining, 2=drained)"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_drain_state gauge");
         let _ = writeln!(out, "atf_logger_drain_state {}", self.drain_state.get());
-        let _ = writeln!(out, "# HELP atf_logger_drained_records_total Records flushed by the graceful drain");
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_drained_records_total Records flushed by the graceful drain"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_drained_records_total counter");
-        let _ = writeln!(out, "atf_logger_drained_records_total {}", self.drained_records.get());
+        let _ = writeln!(
+            out,
+            "atf_logger_drained_records_total {}",
+            self.drained_records.get()
+        );
         for histogram in [
             &self.queue_wait_seconds,
             &self.batch_size,
@@ -774,8 +844,16 @@ impl Metrics {
             histogram.render(&mut out);
         }
         for (name, help, counter) in [
-            ("atf_logger_batch_flushes_total", "Batches committed", &self.batch_flushes),
-            ("atf_logger_batches_failed_total", "Batches that failed after every retry", &self.batches_failed),
+            (
+                "atf_logger_batch_flushes_total",
+                "Batches committed",
+                &self.batch_flushes,
+            ),
+            (
+                "atf_logger_batches_failed_total",
+                "Batches that failed after every retry",
+                &self.batches_failed,
+            ),
         ] {
             let _ = writeln!(out, "# HELP {name} {help}");
             let _ = writeln!(out, "# TYPE {name} counter");
@@ -783,23 +861,55 @@ impl Metrics {
         }
 
         // --- storage ------------------------------------------------------
-        for histogram in [&self.storage_write_seconds, &self.storage_read_seconds, &self.storage_pool_wait_seconds] {
+        for histogram in [
+            &self.storage_write_seconds,
+            &self.storage_read_seconds,
+            &self.storage_pool_wait_seconds,
+        ] {
             histogram.render(&mut out);
         }
         for (name, help, counter) in [
-            ("atf_logger_storage_transaction_failures_total", "Storage transactions that failed", &self.storage_transaction_failures),
-            ("atf_logger_storage_busy_errors_total", "Storage busy/lock errors", &self.storage_busy_errors),
-            ("atf_logger_storage_pool_timeouts_total", "Pool acquisitions that timed out", &self.storage_pool_timeouts),
-            ("atf_logger_storage_probe_failures_total", "Readiness probes that failed", &self.storage_probe_failures),
+            (
+                "atf_logger_storage_transaction_failures_total",
+                "Storage transactions that failed",
+                &self.storage_transaction_failures,
+            ),
+            (
+                "atf_logger_storage_busy_errors_total",
+                "Storage busy/lock errors",
+                &self.storage_busy_errors,
+            ),
+            (
+                "atf_logger_storage_pool_timeouts_total",
+                "Pool acquisitions that timed out",
+                &self.storage_pool_timeouts,
+            ),
+            (
+                "atf_logger_storage_probe_failures_total",
+                "Readiness probes that failed",
+                &self.storage_probe_failures,
+            ),
         ] {
             let _ = writeln!(out, "# HELP {name} {help}");
             let _ = writeln!(out, "# TYPE {name} counter");
             let _ = writeln!(out, "{name} {}", counter.get());
         }
         for (name, help, gauge) in [
-            ("atf_logger_storage_pool_in_use", "Connections currently leased from the pool", &self.storage_pool_in_use),
-            ("atf_logger_storage_pool_capacity", "Maximum pooled connections", &self.storage_pool_capacity),
-            ("atf_logger_storage_rows", "Rows currently in the archive (last observed)", &self.storage_rows),
+            (
+                "atf_logger_storage_pool_in_use",
+                "Connections currently leased from the pool",
+                &self.storage_pool_in_use,
+            ),
+            (
+                "atf_logger_storage_pool_capacity",
+                "Maximum pooled connections",
+                &self.storage_pool_capacity,
+            ),
+            (
+                "atf_logger_storage_rows",
+                "Rows currently in the archive (last observed)",
+                &self.storage_rows,
+            ),
         ] {
             let _ = writeln!(out, "# HELP {name} {help}");
             let _ = writeln!(out, "# TYPE {name} gauge");
@@ -809,18 +919,41 @@ impl Metrics {
         // --- retention ----------------------------------------------------
         self.retention_duration_seconds.render(&mut out);
         for (name, help, counter) in [
-            ("atf_logger_retention_cycles_total", "Retention cycles completed", &self.retention_cycles),
-            ("atf_logger_retention_failures_total", "Retention cycles that failed", &self.retention_failures),
-            ("atf_logger_retention_purged_total", "Rows removed by retention", &self.retention_purged),
-            ("atf_logger_retention_protected_rows_total", "Purge candidates spared because their category is protected", &self.retention_protected_rows_skipped),
-            ("atf_logger_retention_budget_exhausted_total", "Cycles that stopped early because the work budget ran out", &self.retention_budget_exhausted),
+            (
+                "atf_logger_retention_cycles_total",
+                "Retention cycles completed",
+                &self.retention_cycles,
+            ),
+            (
+                "atf_logger_retention_failures_total",
+                "Retention cycles that failed",
+                &self.retention_failures,
+            ),
+            (
+                "atf_logger_retention_purged_total",
+                "Rows removed by retention",
+                &self.retention_purged,
+            ),
+            (
+                "atf_logger_retention_protected_rows_total",
+                "Purge candidates spared because their category is protected",
+                &self.retention_protected_rows_skipped,
+            ),
+            (
+                "atf_logger_retention_budget_exhausted_total",
+                "Cycles that stopped early because the work budget ran out",
+                &self.retention_budget_exhausted,
+            ),
         ] {
             let _ = writeln!(out, "# HELP {name} {help}");
             let _ = writeln!(out, "# TYPE {name} counter");
             let _ = writeln!(out, "{name} {}", counter.get());
         }
         let _ = writeln!(out, "# HELP atf_logger_retention_last_success_timestamp_seconds Unix time of the last successful retention cycle");
-        let _ = writeln!(out, "# TYPE atf_logger_retention_last_success_timestamp_seconds gauge");
+        let _ = writeln!(
+            out,
+            "# TYPE atf_logger_retention_last_success_timestamp_seconds gauge"
+        );
         let _ = writeln!(
             out,
             "atf_logger_retention_last_success_timestamp_seconds {}",
@@ -830,38 +963,98 @@ impl Metrics {
         // --- service ------------------------------------------------------
         self.rpc_total.render(&mut out);
         self.rpc_errors.render(&mut out);
+        // RPC by method (`rpc_total`) and by bounded status (`rpc_status_total`) are
+        // separate families; the status one is what makes an INTERNAL/UNAVAILABLE
+        // ratio visible without a per-method label explosion.
+        self.rpc_by_status.render(&mut out);
         self.rpc_duration_seconds.render(&mut out);
         self.redaction_seconds.render(&mut out);
         for (name, help, value) in [
-            ("atf_logger_rpc_in_flight", "gRPC handlers currently running", self.rpc_in_flight.get()),
-            ("atf_logger_liveness", "1 when the process is alive", self.liveness.get()),
-            ("atf_logger_readiness", "1 when the service can fulfil its role", self.readiness.get()),
-            ("atf_logger_ready", "1 when ready, 0 when not", self.ready.get()),
-            ("atf_logger_storage_up", "1 when the configured backend is reachable", self.storage_up.get()),
-            ("atf_logger_pipeline_running", "1 when the writer pipeline is running", self.pipeline_running.get()),
-            ("atf_logger_startup_ok", "1 when startup completed", self.startup_ok.get()),
+            (
+                "atf_logger_rpc_in_flight",
+                "gRPC handlers currently running",
+                self.rpc_in_flight.get(),
+            ),
+            (
+                "atf_logger_liveness",
+                "1 when the process is alive",
+                self.liveness.get(),
+            ),
+            (
+                "atf_logger_readiness",
+                "1 when the service can fulfil its role",
+                self.readiness.get(),
+            ),
+            (
+                "atf_logger_ready",
+                "1 when ready, 0 when not",
+                self.ready.get(),
+            ),
+            (
+                "atf_logger_storage_up",
+                "1 when the configured backend is reachable",
+                self.storage_up.get(),
+            ),
+            (
+                "atf_logger_pipeline_running",
+                "1 when the writer pipeline is running",
+                self.pipeline_running.get(),
+            ),
+            (
+                "atf_logger_startup_ok",
+                "1 when startup completed",
+                self.startup_ok.get(),
+            ),
         ] {
             let _ = writeln!(out, "# HELP {name} {help}");
             let _ = writeln!(out, "# TYPE {name} gauge");
             let _ = writeln!(out, "{name} {value}");
         }
-        let _ = writeln!(out, "# HELP atf_logger_rpc_timeouts_total Producer RPCs that exceeded the ack deadline");
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_rpc_timeouts_total Producer RPCs that exceeded the ack deadline"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_rpc_timeouts_total counter");
-        let _ = writeln!(out, "atf_logger_rpc_timeouts_total {}", self.rpc_timeouts.get());
-        let _ = writeln!(out, "# HELP atf_logger_rpc_cancelled_total Producer RPCs cancelled by the client");
+        let _ = writeln!(
+            out,
+            "atf_logger_rpc_timeouts_total {}",
+            self.rpc_timeouts.get()
+        );
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_rpc_cancelled_total Producer RPCs cancelled by the client"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_rpc_cancelled_total counter");
-        let _ = writeln!(out, "atf_logger_rpc_cancelled_total {}", self.rpc_cancelled.get());
-        let _ = writeln!(out, "# HELP atf_logger_redaction_hits_total Records in which redaction changed something");
+        let _ = writeln!(
+            out,
+            "atf_logger_rpc_cancelled_total {}",
+            self.rpc_cancelled.get()
+        );
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_redaction_hits_total Records in which redaction changed something"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_redaction_hits_total counter");
-        let _ = writeln!(out, "atf_logger_redaction_hits_total {}", self.redaction_hits.get());
+        let _ = writeln!(
+            out,
+            "atf_logger_redaction_hits_total {}",
+            self.redaction_hits.get()
+        );
         let _ = writeln!(out, "# HELP atf_logger_uptime_seconds Process uptime");
         let _ = writeln!(out, "# TYPE atf_logger_uptime_seconds gauge");
-        let _ = writeln!(out, "atf_logger_uptime_seconds {:.3}", self.uptime_seconds());
+        let _ = writeln!(
+            out,
+            "atf_logger_uptime_seconds {:.3}",
+            self.uptime_seconds()
+        );
 
         // --- info / health -------------------------------------------------
         // Bounded labels only: version, backend, ack mode, config fingerprint and
         // a coarse health state. Never a tenant or message identifier.
-        let _ = writeln!(out, "# HELP atf_logger_info Build and configuration identity");
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_info Build and configuration identity"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_info gauge");
         let _ = writeln!(
             out,
@@ -870,7 +1063,10 @@ impl Metrics {
             escape_label(backend),
             escape_label(ack_mode)
         );
-        let _ = writeln!(out, "# HELP atf_logger_config_info Effective configuration fingerprint (bounded label set)");
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_config_info Effective configuration fingerprint (bounded label set)"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_config_info gauge");
         let _ = writeln!(
             out,
@@ -879,7 +1075,10 @@ impl Metrics {
             escape_label(backend),
             escape_label(ack_mode)
         );
-        let _ = writeln!(out, "# HELP atf_logger_health Health state as a bounded label plus reason code");
+        let _ = writeln!(
+            out,
+            "# HELP atf_logger_health Health state as a bounded label plus reason code"
+        );
         let _ = writeln!(out, "# TYPE atf_logger_health gauge");
         let _ = writeln!(
             out,
@@ -950,7 +1149,9 @@ pub async fn serve(
         tokio::spawn(async move {
             use tokio::io::{AsyncReadExt, AsyncWriteExt};
             let mut buffer = [0u8; 1024];
-            let read = match tokio::time::timeout(Duration::from_secs(5), socket.read(&mut buffer)).await {
+            let read = match tokio::time::timeout(Duration::from_secs(5), socket.read(&mut buffer))
+                .await
+            {
                 Ok(Ok(n)) => n,
                 _ => return, // no request (or a slow one): drop the connection
             };
@@ -968,7 +1169,11 @@ pub async fn serve(
                 ),
                 "/healthz" => ("200 OK", "application/json", Metrics::health_json(&health)),
                 "/readyz" => {
-                    let code = if health.is_ready() { "200 OK" } else { "503 Service Unavailable" };
+                    let code = if health.is_ready() {
+                        "200 OK"
+                    } else {
+                        "503 Service Unavailable"
+                    };
                     (code, "application/json", Metrics::health_json(&health))
                 }
                 _ => ("404 Not Found", "text/plain", "not found\n".to_string()),
@@ -1132,12 +1337,126 @@ mod tests {
         };
 
         let metrics_body = fetch("/metrics").await;
-        assert!(metrics_body.starts_with("HTTP/1.1 200 OK"), "{metrics_body}");
+        assert!(
+            metrics_body.starts_with("HTTP/1.1 200 OK"),
+            "{metrics_body}"
+        );
         assert!(metrics_body.contains("atf_logger_events_received_total"));
         let ready_body = fetch("/readyz").await;
         assert!(ready_body.contains("\"ready\":true"), "{ready_body}");
         let missing = fetch("/nope").await;
         assert!(missing.starts_with("HTTP/1.1 404"), "{missing}");
         server.abort();
+    }
+
+    #[test]
+    fn cardinality_guard_stays_at_the_cap_and_never_loses_a_count() {
+        // The cap has to include the overflow series itself: the family may hold at
+        // most MAX_SERIES series, and every folded increment must still be visible.
+        let family = LabeledCounter::new("f", "help", "level");
+        family.inc("ERROR");
+        family.inc("ERROR");
+        family.inc("WARN");
+        let hostile = MAX_SERIES * 4;
+        for i in 0..hostile {
+            family.inc(&format!("hostile-{i}"));
+        }
+        assert!(
+            family.series_count() <= MAX_SERIES,
+            "{} series for a cap of {MAX_SERIES}",
+            family.series_count()
+        );
+        assert_eq!(family.with("ERROR").get(), 2);
+        assert_eq!(family.total(), 3 + hostile as u64, "folding lost counts");
+        let mut out = String::new();
+        family.render(&mut out);
+        let rendered = out
+            .lines()
+            .filter(|line| line.starts_with("f{level="))
+            .count();
+        assert!(rendered <= MAX_SERIES, "{rendered} series rendered:\n{out}");
+        assert!(out.contains("level=\"other\""), "{out}");
+
+        // The same bound applies to a labelled histogram family.
+        let histograms = LabeledHistogram::new("h", "help", "method", LATENCY_BUCKETS);
+        for i in 0..hostile {
+            histograms
+                .with(&format!("method-{i}"))
+                .observe_seconds(0.001);
+        }
+        let mut out = String::new();
+        histograms.render(&mut out);
+        let rendered = out.matches("h_count{method=").count();
+        assert!(rendered <= MAX_SERIES, "{rendered} series rendered:\n{out}");
+        let named = (MAX_SERIES - 1) as u64;
+        assert!(
+            out.contains(&format!(
+                "h_count{{method=\"{OVERFLOW_LABEL}\"}} {}",
+                hostile as u64 - named
+            )),
+            "the overflow series must carry every folded observation:\n{out}"
+        );
+    }
+
+    #[test]
+    fn rpc_status_family_is_exported_and_bounded() {
+        let metrics = Metrics::new();
+        metrics.record_rpc("Log", 0, Duration::from_millis(1));
+        metrics.record_rpc("QueryLogs", 13, Duration::from_millis(2));
+        metrics.record_rpc("PurgeLogs", 7, Duration::from_millis(3));
+        for code in 0..(MAX_SERIES * 2) {
+            metrics.record_rpc("Log", 100 + code as i32, Duration::from_millis(1));
+        }
+        let health = HealthState::new();
+        health.mark_ready("probe ok");
+        let text = metrics.render(&health, "deadbeef", "sqlite", "durable");
+        for expected in [
+            "atf_logger_rpc_status_total{status=\"OK\"} 1",
+            "atf_logger_rpc_status_total{status=\"INTERNAL\"} 1",
+            "atf_logger_rpc_status_total{status=\"PERMISSION_DENIED\"} 1",
+            &format!(
+                "atf_logger_rpc_status_total{{status=\"{OVERFLOW_LABEL}\"}} {}",
+                MAX_SERIES * 2
+            ),
+        ] {
+            assert!(text.contains(expected), "missing {expected} in\n{text}");
+        }
+        let status_series = text
+            .lines()
+            .filter(|line| line.starts_with("atf_logger_rpc_status_total{"))
+            .count();
+        assert!(
+            status_series <= MAX_SERIES,
+            "{status_series} status series for a cap of {MAX_SERIES}"
+        );
+        assert!(
+            text.contains("# TYPE atf_logger_rpc_status_total counter"),
+            "{text}"
+        );
+        assert!(
+            text.contains("# HELP atf_logger_rpc_status_total gRPC calls by status code"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn labelled_histogram_puts_the_series_label_before_le() {
+        let histograms = LabeledHistogram::new("h", "help", "method", &[1.0]);
+        histograms.with("Log").observe_seconds(0.5);
+        let mut out = String::new();
+        histograms.render(&mut out);
+        assert!(out.contains("h_bucket{method=\"Log\",le=\"1\"} 1"), "{out}");
+        assert!(
+            out.contains("h_bucket{method=\"Log\",le=\"+Inf\"} 1"),
+            "{out}"
+        );
+        assert!(out.contains("h_count{method=\"Log\"} 1"), "{out}");
+        // An unlabelled histogram must not grow an empty label.
+        let plain = Histogram::new("p", "help", &[1.0]);
+        plain.observe_seconds(0.5);
+        let mut out = String::new();
+        plain.render(&mut out);
+        assert!(out.contains("p_bucket{le=\"1\"} 1"), "{out}");
+        assert!(!out.contains("{,"), "{out}");
     }
 }
