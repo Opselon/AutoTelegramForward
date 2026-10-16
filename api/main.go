@@ -32,6 +32,14 @@ func main() {
 		log.Printf("warning: logger service (%s) unreachable — log endpoints return 502", loggerAddr)
 	}
 	h := handlers.New(clients)
+	// One policy instance per process. The access trail, the administrative audit
+	// trail and the control-plane routes must all observe the same effective
+	// configuration, or an operator could "turn collection off" and still have it
+	// collected (or read a policy the process is not applying).
+	logPolicy := logpolicy.FromEnv()
+	logSink := &middleware.ErrorLogSink{Client: clients.Logs, Policy: logPolicy}
+	h.Policy = logPolicy
+	h.LogAudit = middleware.AuditEmitter(logSink)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.Health)
@@ -104,6 +112,12 @@ func main() {
 	dashMux.HandleFunc("POST /rules/{id}/resume", h.ResumeRule)
 	dashMux.HandleFunc("GET /logs", h.QueryLogs)
 	dashMux.HandleFunc("GET /logs/stats", h.LogStats)
+	// Control plane for the collection policy. Reads are authenticated; mutations
+	// are admin-only and bounded (see logging_policy.go).
+	dashMux.HandleFunc("GET /logs/policy", h.LogPolicy)
+	dashMux.HandleFunc("GET /logs/health", h.LoggingHealth)
+	dashMux.Handle("POST /logs/diagnostics/start", h.RequireAdmin(http.HandlerFunc(h.LogDiagnosticsStart)))
+	dashMux.Handle("POST /logs/diagnostics/stop", h.RequireAdmin(http.HandlerFunc(h.LogDiagnosticsStop)))
 	dashMux.HandleFunc("POST /logs/purge", h.PurgeLogs)
 	// v18: a downloadable copy of the filtered history (json|csv), so evidence
 	// can leave the box without an operator screen-scraping the console.
@@ -159,10 +173,7 @@ func main() {
 	// The collection policy is enforced at the producer boundary: the Logger
 	// stores whatever it is handed, so "INFO is not collected by default" is only
 	// true if this side refuses it. Same env contract as the Python producer.
-	handler = middleware.AccessLogger(&middleware.ErrorLogSink{
-		Client: clients.Logs,
-		Policy: logpolicy.FromEnv(),
-	}, handler)
+	handler = middleware.AccessLogger(logSink, handler)
 	if apiKey != "" {
 		handler = middleware.APIKeyAuth(apiKey, handler)
 	}

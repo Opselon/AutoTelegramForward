@@ -134,6 +134,39 @@ nothing may describe the policy as centrally managed.
 `LogPolicy.snapshot()` consequently exposes only **process-local** counters: a
 number it reports is what *that* process decided, never a system total.
 
+### Control plane (Go API)
+
+| Route | Auth | Behaviour |
+| --- | --- | --- |
+| `GET /api/logs/policy` | any authenticated caller | Effective policy per producer, each scope labelled `api` / `core`, with the scope's counters and an explicit `counter_scope` string |
+| `GET /api/logs/health` | any authenticated caller | Per-service logging reachability plus record age, so "quiet" can be told apart from "not being fed" |
+| `POST /api/logs/diagnostics/start` | **admin only** | Opens one bounded window (default 600 s, hard maximum 3600 s) on this API's producer policy |
+| `POST /api/logs/diagnostics/stop` | **admin only** | Closes it early |
+
+Four properties the routes are built around, each with a test:
+
+1. **A scope that cannot be read is reported unavailable, not zero.** `atf-core`
+   enforces the same policy in its own process and exposes no RPC for it yet, so
+   it is returned with `available: false` and a reason. Reporting `0 suppressed`
+   there would read as "nothing was suppressed" — the opposite of the truth, and
+   the kind of number an operator would act on.
+2. **A start always yields exactly one window.** It replaces an active one and
+   says so (`replaced_active`), and a second start within 5 s is refused with
+   `409` + `Retry-After`, so a double-clicked button cannot hold collection open
+   indefinitely. A refused press is not counted as an activation.
+3. **Invalid input is refused, never silently coerced.** A duration outside
+   `1..3600` returns `400` with the accepted range.
+4. **A policy change cannot suppress the evidence of itself.** Mutations write a
+   durable `admin.change` record through the *same* policy they change;
+   `admin.change` is security-relevant, so a window narrowed to `CRITICAL` still
+   records who narrowed it. Removing that exemption fails
+   `TestAdminAuditSurvivesAMaximallyRestrictivePolicy`.
+
+Reads are authenticated but not admin-only: the answer describes *this* API
+process's own configuration, not another tenant's data. Mutations are admin-only
+via the existing server-verified `RequireAdmin`, which reads the identity Core
+validated — never a client-supplied `is_admin`.
+
 Two rules the producer must not get wrong, and both are tested:
 
 1. **The gate governs the log emission only.** The durable audit write shares no
