@@ -76,6 +76,14 @@ docker compose up -d
 docker compose ps             # atf-core, atf-logger, atf-api, atf-web
 ```
 
+Optional AI-gateway overlay: if you also self-host the 9router AI provider as a
+sibling stack and want Core/API to reach it by its internal hostname,
+```bash
+docker compose -f docker-compose.yml -f docker-compose.9router.yml up -d
+```
+(the overlay attaches both services to `9router_default`; the base stack without
+the overlay is fully functional, it just cannot resolve `9router`).
+
 | You have | Use | Result |
 | --- | --- | --- |
 | docker + python 3.11+ | `./scripts/setup.sh` | docker mode: full stack, verified, boot service optional |
