@@ -77,11 +77,24 @@ const isActive = (href: string) => {
           type="button"
           id="search-open"
           class="flex items-center gap-2 px-2.5 sm:px-3 py-2 min-h-[40px] rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 border border-transparent hover:border-slate-700 transition-colors"
-          aria-label="Search documentation"
+          aria-label="Search documentation (press Control or Command and K)"
+          aria-keyshortcuts="Control+K Meta+K /"
         >
           <Icon name="search" class="w-4 h-4" />
           <span class="hidden md:inline text-slate-400">Search</span>
-          <kbd class="hidden md:inline text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-700 bg-slate-900 text-slate-400">/</kbd>
+          <kbd class="hidden md:inline text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-700 bg-slate-900 text-slate-400">⌘K</kbd>
+        </button>
+
+        <button
+          type="button"
+          id="theme-toggle"
+          class="theme-toggle"
+          aria-label="Switch between light, dark and system theme"
+          title="Theme: light / dark / system"
+        >
+          <Icon name="moon" class="theme-icon theme-icon-dark w-4 h-4" strokeWidth={2} />
+          <Icon name="sun" class="theme-icon theme-icon-light w-4 h-4" strokeWidth={2} />
+          <span class="hidden xl:inline" id="theme-label">Theme</span>
         </button>
 
         <a
@@ -150,6 +163,11 @@ const isActive = (href: string) => {
       }
 
       <div class="pt-3 mt-3 border-t border-slate-800 flex flex-col gap-2.5">
+        <button type="button" id="theme-toggle-mobile" class="theme-toggle w-full justify-center py-3 text-sm">
+          <Icon name="moon" class="theme-icon theme-icon-dark w-4 h-4" strokeWidth={2} />
+          <Icon name="sun" class="theme-icon theme-icon-light w-4 h-4" strokeWidth={2} />
+          <span id="theme-label-mobile">Appearance: dark</span>
+        </button>
         <a
           href={url('/getting-started/')}
           class="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold bg-tg-blue hover:bg-sky-500 text-white shadow-md shadow-sky-500/20"
@@ -183,7 +201,11 @@ const isActive = (href: string) => {
         placeholder="Search features, guides and reference…"
         class="flex-1 bg-transparent text-[15px] text-slate-100 placeholder-slate-500 focus:outline-none"
         aria-label="Search query"
+        role="combobox"
+        aria-expanded="true"
         aria-controls="search-results"
+        aria-autocomplete="list"
+        aria-activedescendant=""
       />
       <button
         type="button"
@@ -195,8 +217,9 @@ const isActive = (href: string) => {
       </button>
     </div>
     <ul id="search-results" class="search-results" role="listbox" aria-label="Search results"></ul>
-    <div class="px-4 py-3 border-t border-slate-800 text-[11px] text-slate-500">
-      Search every feature, guide and reference page. <kbd class="font-mono">/</kbd> opens, <kbd class="font-mono">Esc</kbd> closes.
+    <div class="px-4 py-3 border-t border-slate-800 text-[11px] text-slate-500 search-hint">
+      Search every feature, guide and reference page. Open with <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> or <kbd>/</kbd>,
+      close with <kbd>Esc</kbd>, move with <kbd>↑</kbd> <kbd>↓</kbd> and open with <kbd>↵</kbd>.
     </div>
   </div>
 </div>
@@ -217,6 +240,11 @@ const isActive = (href: string) => {
   };
 
   btn?.addEventListener('click', () => setMenu(btn.getAttribute('aria-expanded') !== 'true'));
+
+  // Navigating from the drawer should not leave it open behind the new page.
+  menu?.querySelectorAll('a[href]').forEach((link) =>
+    link.addEventListener('click', () => setMenu(false)),
+  );
 
   // ------------------------------------------------------------ scroll progress
   const bar = document.getElementById('scroll-progress');
@@ -254,6 +282,7 @@ const isActive = (href: string) => {
   type IndexEntry = { title: string; url: string; desc: string; section: string; keywords?: string };
   let index: IndexEntry[] = [];
   let loadFailed = false;
+  let activeIndex = -1;
 
   async function loadIndex() {
     if (index.length > 0 || loadFailed) return;
@@ -285,6 +314,7 @@ const isActive = (href: string) => {
 
   function render(query: string) {
     if (!results) return;
+    activeIndex = -1;
     const q = query.trim().toLowerCase();
     if (!q) {
       results.innerHTML = '<li class="search-empty">Type to search across the documentation.</li>';
@@ -302,8 +332,8 @@ const isActive = (href: string) => {
     }
     results.innerHTML = hits
       .map(
-        ({ entry }) => `<li role="option" aria-selected="false">
-        <a href="${escapeHtml(entry.url)}" class="search-result">
+        ({ entry }, i) => `<li id="search-option-${i}" role="option" aria-selected="false">
+        <a href="${escapeHtml(entry.url)}" class="search-result" data-index="${i}">
           <span class="search-result-head">
             <span class="search-result-title">${escapeHtml(entry.title)}</span>
             <span class="search-result-section">${escapeHtml(entry.section)}</span>
@@ -313,6 +343,27 @@ const isActive = (href: string) => {
       </li>`
       )
       .join('');
+    if (q && hits.length > 0) activate(0);
+  }
+
+  /** Move the keyboard cursor over the rendered result list. */
+  function activate(next: number) {
+    if (!results) return;
+    const options = Array.from(results.querySelectorAll<HTMLAnchorElement>('a.search-result'));
+    if (!options.length) {
+      activeIndex = -1;
+      input?.setAttribute('aria-activedescendant', '');
+      return;
+    }
+    activeIndex = (next + options.length) % options.length;
+    options.forEach((option, i) => {
+      const on = i === activeIndex;
+      option.classList.toggle('is-active', on);
+      option.parentElement?.setAttribute('aria-selected', String(on));
+    });
+    const active = options[activeIndex];
+    input?.setAttribute('aria-activedescendant', `search-option-${activeIndex}`);
+    active.scrollIntoView({ block: 'nearest' });
   }
 
   const isOpen = () => !!overlay && !overlay.classList.contains('hidden');
@@ -323,6 +374,7 @@ const isActive = (href: string) => {
     document.body.style.overflow = 'hidden';
     await loadIndex();
     input?.focus();
+    input?.select();
     render(input?.value || '');
   }
 
@@ -339,10 +391,76 @@ const isActive = (href: string) => {
   document.addEventListener('keydown', (event) => {
     const tag = (event.target as HTMLElement)?.tagName || '';
     const typing = tag === 'INPUT' || tag === 'TEXTAREA' || (event.target as HTMLElement)?.isContentEditable;
+
+    // Command palette: ⌘K / Ctrl+K from anywhere, / when not typing.
+    if ((event.key === 'k' || event.key === 'K') && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      if (isOpen()) closeSearch();
+      else void openSearch();
+      return;
+    }
     if (event.key === '/' && !typing && !isOpen()) {
       event.preventDefault();
       void openSearch();
+      return;
     }
-    if (event.key === 'Escape' && isOpen()) closeSearch();
+    if (isOpen()) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeSearch();
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        activate(activeIndex + 1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        activate(activeIndex - 1);
+      } else if (event.key === 'Enter') {
+        const active = results?.querySelector<HTMLAnchorElement>('a.search-result.is-active');
+        if (active) {
+          event.preventDefault();
+          window.location.href = active.href;
+        }
+      }
+    }
   });
+
+  // -------------------------------------------------------------------- theme
+  // Three states: system → light → dark. `system` follows the OS live.
+  const root = document.documentElement;
+  const media = window.matchMedia('(prefers-color-scheme: light)');
+  const themeLabels: Record<string, string> = { system: 'Appearance: system', light: 'Appearance: light', dark: 'Appearance: dark' };
+
+  const applyTheme = (mode: string, persist: boolean) => {
+    const resolved = mode === 'system' ? (media.matches ? 'light' : 'dark') : mode;
+    root.setAttribute('data-theme', resolved);
+    root.setAttribute('data-theme-mode', mode);
+    root.classList.toggle('dark', resolved === 'dark');
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.setAttribute('content', resolved === 'light' ? '#f6f8fc' : '#0b1120');
+    });
+    document.querySelectorAll('#theme-label, #theme-label-mobile').forEach((el) => {
+      el.textContent = themeLabels[mode] ?? themeLabels.system;
+    });
+    if (persist) {
+      try {
+        if (mode === 'system') localStorage.removeItem('atf-theme');
+        else localStorage.setItem('atf-theme', mode);
+      } catch {
+        /* private mode: the choice simply does not survive the session */
+      }
+    }
+  };
+
+  const cycleTheme = () => {
+    const order = ['system', 'light', 'dark'];
+    const current = root.getAttribute('data-theme-mode') || 'system';
+    applyTheme(order[(order.indexOf(current) + 1) % order.length], true);
+  };
+
+  document.getElementById('theme-toggle')?.addEventListener('click', cycleTheme);
+  document.getElementById('theme-toggle-mobile')?.addEventListener('click', cycleTheme);
+  media.addEventListener('change', () => {
+    if ((root.getAttribute('data-theme-mode') || 'system') === 'system') applyTheme('system', false);
+  });
+  applyTheme(root.getAttribute('data-theme-mode') || 'system', false);
 </script>

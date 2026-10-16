@@ -1,9 +1,26 @@
 User-agent: *
 Allow: /
+Disallow: /404.html
 
 # Generated assets and the search index are crawlable.
 Allow: /assets/
 Allow: /search.json
+Allow: /rss.xml
+Allow: /llms.txt
+
+# Answer engines and assistants are welcome: the docs are MIT-licensed and the
+# whole point is that operators can find the reference that matches the code.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
 
 Sitemap: https://opselon.github.io/AutoTelegramForward/sitemap-index.xml
 Host: https://opselon.github.io/AutoTelegramForward/

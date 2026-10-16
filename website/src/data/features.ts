@@ -9,6 +9,8 @@
  *  - REST surface                   → api/internal/handlers/*
  */
 
+import repoInfo from './repo-info.json';
+
 export interface FeatureTable {
   headers: string[];
   rows: string[][];
@@ -60,9 +62,9 @@ export const featurePages: FeaturePage[] = [
     slug: 'multi-source-routing',
     cardTitle: 'Multi-source → multi-target routing',
     title: 'One task, M sources to N targets',
-    seoTitle: 'Multi-Source to Multi-Target Telegram Routing',
+    seoTitle: 'Multi-Source to Multi-Target Routing',
     description:
-      'A single task can watch any number of source chats and deliver to any number of targets, with the primary source and target always mirrored correctly and forum topics addressable per target.',
+      'A single task can watch any number of source chats and deliver to any number of targets, with the primary pair mirrored and forum topics addressable per target.',
     category: 'Routing',
     icon: 'route',
     highlight: 'Lists instead of single values, with a sanctioned write path that keeps the legacy mirror in step.',
@@ -163,7 +165,7 @@ atf rules path <task-id>`,
     title: 'Decide and rewrite before delivery',
     seoTitle: 'Per-Task Telegram Content Rules and Filters',
     description:
-      'Blacklists, whitelists, link handling, regex gates, length limits and ordered replacements — evaluated cheapest-first, Unicode-folded and word-aware, with per-source and per-target overrides.',
+      'Blacklists, whitelists, link handling, regex gates, length limits and ordered replacements — evaluated cheapest-first, with per-source and per-target overrides.',
     category: 'Filtering',
     icon: 'filter',
     highlight: 'Word-boundary, Unicode-folded matching that behaves the same in Persian, Arabic and English.',
@@ -361,9 +363,9 @@ atf config list`,
     slug: 'observability-and-logs',
     cardTitle: 'Observability & log history',
     title: 'Attributable history, not a wall of text',
-    seoTitle: 'Telegram Forwarder Observability and Log History',
+    seoTitle: 'Forwarder Observability & Log History',
     description:
-      'Every delivery is attributable: a central logger stores queryable history with service, owner and correlation id, a log explorer streams and filters it, and dead letters can be replayed.',
+      'Every delivery is attributable: the central logger stores queryable history with service, owner and correlation id, and dead letters can be replayed.',
     category: 'Operations',
     icon: 'activity',
     highlight: 'Outcome is never guessed: UNKNOWN/OUTCOME_UNCONFIRMED is a first-class state between success and failure.',
@@ -543,9 +545,9 @@ atf watch                 # continuous supervision`,
     slug: 'deduplication-and-replies',
     cardTitle: 'Dedup, replies & edits',
     title: 'No repeat posts, no orphaned replies',
-    seoTitle: 'Telegram Deduplication, Reply and Edit Synchronization',
+    seoTitle: 'Telegram Dedup, Reply & Edit Sync',
     description:
-      'SHA-256 content and album fingerprinting kills duplicate forwards, reply chains stay linked across channels, and edits and deletions propagate with a bounded window.',
+      'SHA-256 content and album fingerprinting kills duplicate forwards, reply chains stay linked, and edits and deletions propagate within a bounded window.',
     category: 'Reliability',
     icon: 'copy',
     highlight: 'Fingerprints cover albums too, so a re-posted media group is caught as one repeat, not five.',
@@ -631,7 +633,7 @@ atf rules settings get <task-id>`,
     title: 'Four clients, one contract',
     seoTitle: 'Telegram Bot, Web Dashboard and Mobile App',
     description:
-      'Telegram bot UI, React dashboard behind a Rust Axum gateway, Flutter Android/iOS app and a REST/gRPC control plane — all enforced against the same contract fixtures.',
+      'Telegram bot UI, React dashboard behind a Rust Axum gateway, Flutter client and a REST/gRPC control plane — all enforced against the same contract fixtures.',
     category: 'Interfaces',
     icon: 'devices',
     highlight: 'A contract gate compares the shared fixtures, so web and mobile cannot quietly drift apart.',
@@ -716,9 +718,9 @@ atf system services --json | jq '{healthy, total, failing}'`,
     slug: 'multilingual-ui',
     cardTitle: 'Multilingual UI',
     title: 'Ten languages, one catalog, zero drift',
-    seoTitle: 'Ten-Language Multilingual UI with 1:1 Catalog Parity',
+    seoTitle: 'Ten-Language Telegram UI, 1:1 Parity',
     description:
-      'English, Persian, Russian, Chinese, Portuguese, Uzbek, Indonesian, Spanish, French and Italian share a single catalog with enforced 1:1 key parity, RTL layout and strict English fallback.',
+      'English, Persian, Russian, Chinese, Portuguese, Uzbek, Indonesian, Spanish, French and Italian share one catalog with enforced 1:1 parity.',
     category: 'Localization',
     icon: 'globe',
     highlight: 'Parity is enforced by audit, not by intention: a missing key fails the gate before it can ship.',
@@ -803,9 +805,9 @@ atf validate --deep       # adds the repository's own cross-language audits`,
     slug: 'devops-cli',
     cardTitle: 'DevOps CLI & upgrades',
     title: 'Operate the stack from one command',
-    seoTitle: 'DevOps CLI, Validation and Self-Upgrade Engine',
+    seoTitle: 'DevOps CLI, Validate & Self-Upgrade',
     description:
-      'Twenty-four command groups cover setup, tasks, logs, backups, docker, k8s and TLS — with a read-only validator for CI, a doctor that repairs, and an upgrade engine with a health gate.',
+      `${repoInfo.stats.cliGroups} command groups cover setup, tasks, logs, backups, docker, k8s and TLS, with a read-only validator for CI and an upgrade engine behind a health gate.`,
     category: 'Operations',
     icon: 'terminal',
     highlight: 'atf validate is read-only and exits non-zero on failure, so it works as a pre-deploy gate in any pipeline.',

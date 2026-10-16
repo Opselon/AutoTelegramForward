@@ -3,6 +3,10 @@ import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import BottomNav from '../components/BottomNav.astro';
 import SEO from '../components/SEO.astro';
+import Icon from '../components/Icon.astro';
+import interLatin from '../assets/fonts/inter-var-latin.woff2?url';
+import monoLatin from '../assets/fonts/jetbrains-mono-var-latin.woff2?url';
+import '../styles/fonts.css';
 import '../styles/global.css';
 
 interface HowToStep {
@@ -40,16 +44,52 @@ const {
   noindex,
 } = Astro.props;
 
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const favicon =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230b1120'/%3E%3Cpath d='M13 3.5 5.5 14H11l-1 6.5L18.5 10H13l1-6.5z' fill='%2338bdf8'/%3E%3C/svg%3E";
 ---
 
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href={favicon} />
-    <link rel="apple-touch-icon" href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/assets/og-image.png`} />
+    <link rel="apple-touch-icon" href={`${base}/assets/og-image.png`} />
+
+    <!--
+      Theme boot. Runs before first paint so the stored choice is applied
+      without a flash of the wrong palette, and before the stylesheets land so
+      the browser never renders a frame in the fallback theme.
+    -->
+    <script is:inline>
+      (function () {
+        try {
+          var stored = localStorage.getItem('atf-theme');
+          var mode = stored === 'light' || stored === 'dark' ? stored : 'system';
+          var resolved =
+            mode === 'system'
+              ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+              : mode;
+          var root = document.documentElement;
+          root.setAttribute('data-theme', resolved);
+          root.setAttribute('data-theme-mode', mode);
+          root.classList.toggle('dark', resolved === 'dark');
+          document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+            m.setAttribute('content', resolved === 'light' ? '#f6f8fc' : '#0b1120');
+          });
+        } catch (e) {}
+      })();
+    </script>
+
+    <link rel="preload" as="font" type="font/woff2" href={interLatin} crossorigin="anonymous" />
+    <link rel="preload" as="font" type="font/woff2" href={monoLatin} crossorigin="anonymous" />
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title="AutoTelegramForward — releases and feature deep dives"
+      href={`${base}/rss.xml`}
+    />
+    <link rel="llms" type="text/plain" href={`${base}/llms.txt`} />
     <SEO
       title={title}
       description={description}
@@ -72,5 +112,55 @@ const favicon =
     </main>
     <Footer />
     <BottomNav />
+
+    <button type="button" class="to-top" id="to-top" aria-label="Back to top" hidden>
+      <Icon name="arrow-up" class="w-4 h-4" strokeWidth={2.2} />
+    </button>
   </body>
 </html>
+
+<script>
+  // ---------------------------------------------------------------- back to top
+  // Shown once a page is meaningfully scrolled; hidden by default so it never
+  // competes with the mobile bottom bar on short pages.
+  const toTop = document.getElementById('to-top') as HTMLButtonElement | null;
+  if (toTop) {
+    const sync = () => {
+      const past = window.scrollY > 600;
+      toTop.hidden = false;
+      toTop.classList.toggle('is-visible', past);
+    };
+    window.addEventListener('scroll', sync, { passive: true });
+    toTop.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.getElementById('main')?.focus?.();
+    });
+    sync();
+  }
+
+  // ------------------------------------------------- speculative link warming
+  // Prefetch internal destinations on intent (hover / touch / focus) so the
+  // next page is usually already in the HTTP cache. Same-origin only.
+  const warmed = new Set<string>();
+  const warm = (href: string) => {
+    if (!href || warmed.has(href) || warmed.size > 24) return;
+    warmed.add(href);
+    const link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.href = href;
+    link.as = 'document';
+    document.head.appendChild(link);
+  };
+
+  document.addEventListener(
+    'pointerover',
+    (event) => {
+      const anchor = (event.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const url = new URL(anchor.href, location.href);
+      if (url.origin !== location.origin || url.pathname === location.pathname) return;
+      warm(url.href);
+    },
+    { passive: true },
+  );
+</script>

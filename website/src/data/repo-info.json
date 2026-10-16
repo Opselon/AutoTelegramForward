@@ -7,9 +7,9 @@
   "version": "2.0.0",
   "releaseTag": "v2.0.0",
   "releaseDate": "2026-10-16",
-  "gitCommit": "67473ee",
-  "gitDate": "2026-10-16T11:55:15Z",
-  "syncTimestamp": "2026-10-16T11:56:00.216Z",
+  "gitCommit": "b0892bc",
+  "gitDate": "2026-10-16T13:13:38Z",
+  "syncTimestamp": "2026-10-16T13:18:02.331Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -30,8 +30,8 @@
   ],
   "i18nKeyCount": 1168,
   "stats": {
-    "pythonTests": 51,
-    "goTests": 13,
+    "pythonTests": 53,
+    "goTests": 17,
     "grpcRpcCount": 61,
     "cliGroups": 24,
     "featureCatalogEntries": 17,
@@ -815,6 +815,20 @@
       "method": "GET",
       "path": "/api/logs/export",
       "handler": "h.ExportLogs",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/logs/health",
+      "handler": "h.LoggingHealth",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/logs/policy",
+      "handler": "h.LogPolicy",
       "auth": "bearer"
     },
     {
