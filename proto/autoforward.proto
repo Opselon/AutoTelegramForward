@@ -525,8 +525,14 @@ message SetLogPolicyRequest {
   // The levels to collect. Empty is a validation error, never "keep the current
   // set", because the two are not the same intent.
   repeated string levels = 1;
-  // 0 means no rate limit for verbose levels.
-  double verbose_rate_per_second = 2;
+  // The ceiling for verbose levels; 0 explicitly means no ceiling at all.
+  //
+  // This field is `optional` because the two intents are different and the
+  // operator is entitled to both: an omitted field leaves whatever ceiling is
+  // in force, while an explicit 0 removes it. Without presence the wire cannot
+  // tell "no ceiling, please" from "I did not mention the ceiling", and the
+  // first is exactly what an operator typing 0 into the dashboard asked for.
+  optional double verbose_rate_per_second = 2;
   // > 0 opens a bounded diagnostic window of that length; 0 leaves any active
   // window alone, so a levels-only change cannot silently cancel one.
   int32 diagnostic_seconds = 3;

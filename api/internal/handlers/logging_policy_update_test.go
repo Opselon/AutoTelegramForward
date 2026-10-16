@@ -87,7 +87,7 @@ func TestLogPolicyUpdate_AppliesTheChangeAndReportsWhatTheCoreEnforces(t *testin
 	// The core applies it and reports the new policy; the read-back afterwards
 	// must be the source of the answer, not the request that was sent.
 	core.onSet = func(in *pb.SetLogPolicyRequest) {
-		core.current = corePolicy(in.Levels, in.VerboseRatePerSecond)
+		core.current = corePolicy(in.Levels, in.GetVerboseRatePerSecond())
 	}
 
 	rec := httptest.NewRecorder()
@@ -113,8 +113,8 @@ func TestLogPolicyUpdate_AppliesTheChangeAndReportsWhatTheCoreEnforces(t *testin
 	if strings.Join(sent.Levels, ",") != "WARN,INFO" {
 		t.Fatalf("the requested levels must reach the core, got %v", sent.Levels)
 	}
-	if sent.VerboseRatePerSecond != 5 {
-		t.Fatalf("the requested rate must reach the core, got %v", sent.VerboseRatePerSecond)
+	if sent.VerboseRatePerSecond == nil || *sent.VerboseRatePerSecond != 5 {
+		t.Fatalf("the requested rate must reach the core as an explicit value, got %v", sent.VerboseRatePerSecond)
 	}
 	if sent.Actor != "5094837833" {
 		t.Fatalf("the change must name the actor for the core's audit record, got %q", sent.Actor)
@@ -166,8 +166,51 @@ func TestLogPolicyUpdate_MergesOntoThePolicyTheCoreReports(t *testing.T) {
 	if strings.Join(sent.Levels, ",") != "WARN,ERROR" {
 		t.Fatalf("a rate-only change must keep the collected levels, got %v", sent.Levels)
 	}
-	if sent.VerboseRatePerSecond != 30 {
-		t.Fatalf("the new rate must be sent, got %v", sent.VerboseRatePerSecond)
+	if sent.VerboseRatePerSecond == nil || *sent.VerboseRatePerSecond != 30 {
+		t.Fatalf("the new rate must be sent as an explicit value, got %v", sent.VerboseRatePerSecond)
+	}
+}
+
+func TestLogPolicyUpdate_AnExplicitZeroRateAsksForNoCeiling(t *testing.T) {
+	// 0 is the value that means "no ceiling" — the dashboard says so on the
+	// field itself. It must reach the core as a *stated* value: a truthiness
+	// check anywhere on this path turns "remove the ceiling" into "leave it
+	// alone", which is a silently ignored request.
+	h, core, _ := policyHandlers(t, corePolicy([]string{"WARN", "ERROR"}, 5000))
+
+	rec := httptest.NewRecorder()
+	h.LogPolicyUpdate(rec, adminRequest("PUT", "/logs/policy", `{"verbose_rate_per_second":0}`))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("removing the ceiling must succeed, got %d: %s", rec.Code, rec.Body)
+	}
+	if len(core.sets) != 1 {
+		t.Fatalf("exactly one change must reach the core, got %d", len(core.sets))
+	}
+	sent := core.sets[0]
+	if sent.VerboseRatePerSecond == nil {
+		t.Fatalf("the rate must be stated, not omitted: a nil field reads as \"unchanged\"")
+	}
+	if *sent.VerboseRatePerSecond != 0 {
+		t.Fatalf("an explicit 0 must reach the core as 0, got %v", *sent.VerboseRatePerSecond)
+	}
+}
+
+func TestLogPolicyUpdate_AnOmittedRateIsNotZeroedByAccident(t *testing.T) {
+	// The mirror image: a levels-only change must carry the enforced ceiling
+	// forward rather than clearing it, so the merge is not the place where a
+	// ceiling disappears without anyone asking.
+	h, core, _ := policyHandlers(t, corePolicy([]string{"WARN", "ERROR"}, 77))
+
+	rec := httptest.NewRecorder()
+	h.LogPolicyUpdate(rec, adminRequest("PUT", "/logs/policy", `{"levels":["ERROR"]}`))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("a levels-only change must succeed, got %d: %s", rec.Code, rec.Body)
+	}
+	sent := core.sets[0]
+	if sent.VerboseRatePerSecond == nil || *sent.VerboseRatePerSecond != 77 {
+		t.Fatalf("the enforced ceiling must be carried forward, got %v", sent.VerboseRatePerSecond)
 	}
 }
 

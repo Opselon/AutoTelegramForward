@@ -177,6 +177,17 @@ The mutation route carries five rules, each pinned by a test:
    `admin.*` is security-relevant and exempt from the threshold, so "who turned
    collection off" stays visible when collection is off.
 
+Because `0` is a *legal setting* for the rate ceiling ("no ceiling"), the field
+travels with **explicit presence** end to end: `optional double` on the wire, a
+pointer on the Go body and an `HasField` check in the core's merge, so **a stated
+0 reaches the core as a ceiling removal** and **an omitted field leaves whatever
+ceiling is in force** — never read as "acted but did nothing". A negative value is
+still refused before anything is mutated. Pinned by
+`TestLogPolicyUpdate_AnExplicitZeroRateAsksForNoCeiling`,
+`TestLogPolicyUpdate_AnOmittedRateIsNotZeroedByAccident`,
+`test_an_explicit_zero_rate_removes_the_ceiling` and
+`test_an_omitted_rate_leaves_the_ceiling_untouched`.
+
 Reads are authenticated but not admin-only: the answer describes *this* API
 process's own configuration, not another tenant's data. Mutations are admin-only
 via the existing server-verified `RequireAdmin`, which reads the identity Core

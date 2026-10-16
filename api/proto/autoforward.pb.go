@@ -4163,8 +4163,14 @@ type SetLogPolicyRequest struct {
 	// The levels to collect. Empty is a validation error, never "keep the current
 	// set", because the two are not the same intent.
 	Levels []string `protobuf:"bytes,1,rep,name=levels,proto3" json:"levels,omitempty"`
-	// 0 means no rate limit for verbose levels.
-	VerboseRatePerSecond float64 `protobuf:"fixed64,2,opt,name=verbose_rate_per_second,json=verboseRatePerSecond,proto3" json:"verbose_rate_per_second,omitempty"`
+	// The ceiling for verbose levels; 0 explicitly means no ceiling at all.
+	//
+	// This field is `optional` because the two intents are different and the
+	// operator is entitled to both: an omitted field leaves whatever ceiling is
+	// in force, while an explicit 0 removes it. Without presence the wire cannot
+	// tell "no ceiling, please" from "I did not mention the ceiling", and the
+	// first is exactly what an operator typing 0 into the dashboard asked for.
+	VerboseRatePerSecond *float64 `protobuf:"fixed64,2,opt,name=verbose_rate_per_second,json=verboseRatePerSecond,proto3,oneof" json:"verbose_rate_per_second,omitempty"`
 	// > 0 opens a bounded diagnostic window of that length; 0 leaves any active
 	// window alone, so a levels-only change cannot silently cancel one.
 	DiagnosticSeconds int32 `protobuf:"varint,3,opt,name=diagnostic_seconds,json=diagnosticSeconds,proto3" json:"diagnostic_seconds,omitempty"`
@@ -4219,8 +4225,8 @@ func (x *SetLogPolicyRequest) GetLevels() []string {
 }
 
 func (x *SetLogPolicyRequest) GetVerboseRatePerSecond() float64 {
-	if x != nil {
-		return x.VerboseRatePerSecond
+	if x != nil && x.VerboseRatePerSecond != nil {
+		return *x.VerboseRatePerSecond
 	}
 	return 0
 }
@@ -9014,14 +9020,15 @@ const file_autoforward_proto_rawDesc = "" +
 	"\fbot_username\x18\t \x01(\tR\vbotUsername\x12\x18\n" +
 	"\aversion\x18\n" +
 	" \x01(\tR\aversion\"\x12\n" +
-	"\x10LogPolicyRequest\"\x81\x02\n" +
+	"\x10LogPolicyRequest\"\xa2\x02\n" +
 	"\x13SetLogPolicyRequest\x12\x16\n" +
-	"\x06levels\x18\x01 \x03(\tR\x06levels\x125\n" +
-	"\x17verbose_rate_per_second\x18\x02 \x01(\x01R\x14verboseRatePerSecond\x12-\n" +
+	"\x06levels\x18\x01 \x03(\tR\x06levels\x12:\n" +
+	"\x17verbose_rate_per_second\x18\x02 \x01(\x01H\x00R\x14verboseRatePerSecond\x88\x01\x01\x12-\n" +
 	"\x12diagnostic_seconds\x18\x03 \x01(\x05R\x11diagnosticSeconds\x12/\n" +
 	"\x13disable_diagnostics\x18\x04 \x01(\bR\x12disableDiagnostics\x12\x14\n" +
 	"\x05actor\x18\x05 \x01(\tR\x05actor\x12%\n" +
-	"\x0ecorrelation_id\x18\x06 \x01(\tR\rcorrelationId\"\xb8\x04\n" +
+	"\x0ecorrelation_id\x18\x06 \x01(\tR\rcorrelationIdB\x1a\n" +
+	"\x18_verbose_rate_per_second\"\xb8\x04\n" +
 	"\x11LogPolicyResponse\x12\x1c\n" +
 	"\tavailable\x18\x01 \x01(\bR\tavailable\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12+\n" +
@@ -9837,6 +9844,7 @@ func file_autoforward_proto_init() {
 	if File_autoforward_proto != nil {
 		return
 	}
+	file_autoforward_proto_msgTypes[55].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
