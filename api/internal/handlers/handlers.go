@@ -8,10 +8,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -42,107 +40,10 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 // view so outages are visible at a glance instead of being discovered when a
 // forward silently fails.
 func (h *Handlers) ServicesHealth(w http.ResponseWriter, r *http.Request) {
-	type svc struct {
-		Name      string `json:"name"`
-		Online    bool   `json:"online"`
-		Detail    string `json:"detail"`
-		LatencyMs int64  `json:"latency_ms"`
-	}
-	results := make([]svc, 0, 4)
-	var mu sync.Mutex
-	check := func(name string, fn func() (bool, string)) {
-		start := time.Now()
-		ok, detail := false, ""
-		done := make(chan struct{})
-		go func() { ok, detail = fn(); close(done) }()
-		select {
-		case <-done:
-		case <-time.After(4 * time.Second):
-			ok, detail = false, "probe timeout (4s)"
-		}
-		mu.Lock()
-		results = append(results, svc{
-			Name:      name,
-			Online:    ok,
-			Detail:    detail,
-			LatencyMs: time.Since(start).Milliseconds(),
-		})
-		mu.Unlock()
-	}
+	// The probing itself lives in system.go (ProbeServices) so the same live
+	// check can back both this topology endpoint and the setup report.
+	results, allOK := h.ProbeServices()
 
-	// Core (Python gRPC) — GetSystemStats proves the gRPC channel AND the
-	// pipeline loop are alive.
-	go check("core", func() (bool, string) {
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-		defer cancel()
-		resp, err := h.c.System.GetSystemStats(ctx, &pb.SystemStatsRequest{})
-		if err != nil {
-			return false, "gRPC: " + err.Error()
-		}
-		return resp.CoreRunning, fmt.Sprintf("uptime=%ds sessions=%d", resp.UptimeSeconds, resp.ActiveSessionsCount)
-	})
-
-	// Logger microservice — LogStats round-trip proves the log store answers.
-	go check("logger", func() (bool, string) {
-		if h.c.Logs == nil {
-			return false, "logger stub not wired (dial failed at startup)"
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-		defer cancel()
-		resp, err := h.c.Logs.LogStats(ctx, &pb.LogStatsRequest{})
-		if err != nil {
-			return false, "gRPC: " + err.Error()
-		}
-		return true, fmt.Sprintf("events=%d", resp.Total)
-	})
-
-	// API (this process) — trivially online if the request is being served.
-	go check("api", func() (bool, string) {
-		return true, "this process"
-	})
-
-	// Web gateway — reachable proxy probe of its /healthz.
-	go check("web", func() (bool, string) {
-		webURL := os.Getenv("ATF_WEB_HEALTH_URL")
-		if webURL == "" {
-			webURL = "http://127.0.0.1:8088/healthz"
-		}
-		client := &http.Client{Timeout: 4 * time.Second}
-		resp, err := client.Get(webURL)
-		if err != nil {
-			return false, err.Error()
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return false, "HTTP " + resp.Status
-		}
-		return true, webURL
-	})
-
-	// Give the parallel probes a moment to settle (they race the 4s timeout).
-	deadline := time.After(4500 * time.Millisecond)
-	for len(results) < 4 {
-		select {
-		case <-deadline:
-			mu.Lock()
-			if len(results) < 4 {
-				results = append(results, svc{Name: "?", Online: false, Detail: "probe pending"})
-			}
-			mu.Unlock()
-			deadline = time.After(0)
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
-	// Deterministic order for the UI: core → logger → api → web.
-	order := map[string]int{"core": 0, "logger": 1, "api": 2, "web": 3}
-	sort.Slice(results, func(i, j int) bool { return order[results[i].Name] < order[results[j].Name] })
-
-	allOK := true
-	for _, s := range results {
-		if !s.Online {
-			allOK = false
-		}
-	}
 	status := "degraded"
 	if allOK {
 		status = "healthy"
