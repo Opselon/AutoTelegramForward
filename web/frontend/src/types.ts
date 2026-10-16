@@ -41,8 +41,6 @@ export interface ForwardRule {
   skip_history?: boolean
   since_ts?: number
   ignore_edits?: boolean
-  sync_edits?: boolean
-  sync_deletes?: boolean
   trigger_events?: string[]
   topic_id?: string
   ai_secondary_config_id?: string | null
@@ -86,7 +84,6 @@ export interface ForwardRule {
   updated_at: number
   custom_metadata_json?: string
   name?: string
-  topic_id?: number
   debug_mode?: boolean
   account_type?: string
   sender_type?: string
@@ -190,7 +187,9 @@ export interface SaveRuleRequest {
   ai_prompt_version?: number
   ai_timeout_seconds?: number
   name?: string
-  topic_id?: number
+  // Canonical type is string: proto/autoforward.proto declares `string topic_id = 61`,
+  // and the core stores/reads it as a string (see _V17_STRS in servicers.py).
+  topic_id?: string
   debug_mode?: boolean
   account_type?: string
   sender_type?: string

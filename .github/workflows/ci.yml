@@ -110,8 +110,15 @@ jobs:
       - name: Typecheck
         # The build alone is not enough: vite transpiles without checking, so a
         # field renamed in types.ts would ship and only fail at runtime.
+        #
+        # Run the projects explicitly: the root tsconfig.json is a solution-style
+        # config (`"files": []` + only `references`), so a bare `npx tsc
+        # --noEmit` resolves nothing and type-checks zero files — it exits 0 no
+        # matter what the sources say.
         working-directory: web/frontend
-        run: npx tsc --noEmit
+        run: |
+          npx tsc -p tsconfig.app.json --noEmit
+          npx tsc -p tsconfig.node.json --noEmit
 
       - name: Build
         working-directory: web/frontend

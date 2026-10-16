@@ -22,6 +22,7 @@ from core.infrastructure.grpc_server.servicers import (
     ForwardRuleControlServicer,
     _apply_masked_update,
     _rule_pb,
+    _sync_mirrored_endpoints,
     _v17_read_values,
 )
 from core.application.use_cases import ForwardRuleUseCases
@@ -502,3 +503,128 @@ def test_created_rule_exposes_the_settings_snapshot(env):
         assert set(json.loads(out.settings_json)) == set(RS.SETTING_SPECS)
 
     asyncio.run(go())
+
+
+# --------------------------------------------------------------------------- #
+# One route, two spellings: a scalar named alone must re-mirror its list
+# --------------------------------------------------------------------------- #
+def test_scalar_only_update_re_mirrors_the_list(env):
+    """The web 'Edit Target' prompt names only the scalar; the route must agree.
+
+    Before the repair the stored rule kept ``-2001`` first in the list while the
+    scalar said ``-9001``, so ``all_targets`` still fanned out to the superseded
+    entry and the dispatcher's primary disagreed with the list.
+    """
+    repo, uc, svc = env
+
+    async def go():
+        r = await uc.create(_rule(target_chat_id="-2001",
+                                  target_chat_ids=["-2001", "-2002"]))
+        proto = pb.ForwardRule(id=r.id, owner_user_id=OWNER,
+                               target_chat_id="-9001")
+        out = await svc.UpdateRule(
+            pb.UpdateRuleRequest(rule=proto, update_mask=["target_chat_id"]),
+            _Ctx())
+        assert out.target_chat_id == "-9001"
+        assert list(out.target_chat_ids) == ["-9001", "-2002"]
+        back = await repo.get_by_id(r.id)
+        assert back.target_chat_id == "-9001"
+        assert back.target_chat_ids == ["-9001", "-2002"]
+        assert back.all_targets == ["-9001", "-2002"]
+
+    asyncio.run(go())
+
+
+def test_the_dry_run_agrees_with_delivery_about_a_looping_target(env):
+    """The test panel must not promise a drop the dispatcher would not make.
+
+    A task fans out to every target, so one looping target is skipped rather
+    than rejecting the message (see SmartRoutingEngine.evaluate_rule). The
+    dry-run used to ask only about the primary, so it reported ``loop_detected``
+    — and the operator read it as "this message will be dropped" — on precisely
+    the multi-target tasks this feature added.
+    """
+    repo, uc, svc = env
+
+    async def go():
+        # A message from the task's source that was itself forwarded out of the
+        # primary target: that target loops, the second one does not.
+        r = await uc.create(_rule(source_chat_id="-1000", target_chat_id="-2000",
+                                  target_chat_ids=["-2000", "-3000"]))
+        req = dict(rule_id=r.id, owner_user_id=OWNER, sample_chat_id="-1000",
+                   forward_origin_chat_id="-2000")
+        out = await svc.TestRule(pb.TestRuleRequest(**req), _Ctx())
+        assert out.matched is True
+        assert out.loop_detected is False
+
+        # The same origin, but a task whose only target is that chat: now
+        # delivery really would refuse it, and the dry-run has to say so.
+        single = await uc.create(_rule(source_chat_id="-1000", target_chat_id="-2000",
+                                       target_chat_ids=["-2000"]))
+        out2 = await svc.TestRule(
+            pb.TestRuleRequest(**{**req, "rule_id": single.id}), _Ctx())
+        assert out2.matched is False
+        assert out2.loop_detected is True
+
+        # No target would loop: nothing is reported.
+        out3 = await svc.TestRule(
+            pb.TestRuleRequest(**{**req, "forward_origin_chat_id": "-9000"}), _Ctx())
+        assert out3.matched is True
+        assert out3.loop_detected is False
+
+    asyncio.run(go())
+
+
+def test_source_scalar_named_alone_re_mirrors_its_list(env):
+    repo, uc, svc = env
+
+    async def go():
+        r = await uc.create(_rule())
+        r.source_chat_ids = ["-100", "-200"]
+        await uc.update(r)
+        proto = pb.ForwardRule(id=r.id, owner_user_id=OWNER,
+                               source_chat_id="-777")
+        out = await svc.UpdateRule(
+            pb.UpdateRuleRequest(rule=proto, update_mask=["source_chat_id"]),
+            _Ctx())
+        assert out.source_chat_id == "-777"
+        assert list(out.source_chat_ids) == ["-777", "-200"]
+        back = await repo.get_by_id(r.id)
+        assert back.source_chat_ids == ["-777", "-200"]
+        assert back.source_chat_id == "-777"
+
+    asyncio.run(go())
+
+
+def test_the_repair_is_a_no_op_when_the_list_was_named():
+    """A client that names the list is authoritative and is never rewritten."""
+    r = _rule(target_chat_id="-2001", target_chat_ids=["-2001", "-2002"])
+    assert _sync_mirrored_endpoints(r, ["target_chat_ids"]) == []
+    assert r.target_chat_ids == ["-2001", "-2002"]
+    assert r.target_chat_id == "-2001"
+
+    # both spellings named: the list the client sent wins, untouched
+    both = _rule(target_chat_id="-1", target_chat_ids=["-1", "-2"])
+    assert _sync_mirrored_endpoints(both, ["target_chat_id", "target_chat_ids"]) == []
+    assert both.target_chat_ids == ["-1", "-2"]
+
+
+def test_the_repair_drops_a_duplicate_and_keeps_the_rest_in_order():
+    r = _rule(target_chat_id="-3", target_chat_ids=["-1", "-2", "-3"])
+    assert _sync_mirrored_endpoints(r, ["target_chat_id"]) == ["target_chat_ids"]
+    assert r.target_chat_ids == ["-3", "-2"]
+    assert r.target_chat_id == "-3"
+
+    # idempotent: a second pass finds nothing to do
+    assert _sync_mirrored_endpoints(r, ["target_chat_id"]) == []
+
+
+def test_the_repair_skips_empty_scalars_and_empty_lists():
+    empty_scalar = _rule(target_chat_id="", target_chat_ids=["-1", "-2"])
+    assert _sync_mirrored_endpoints(empty_scalar, ["target_chat_id"]) == []
+    assert empty_scalar.target_chat_ids == ["-1", "-2"]
+
+    empty_list = _rule(target_chat_id="-1")
+    empty_list.target_chat_ids = []
+    assert _sync_mirrored_endpoints(empty_list, ["target_chat_id"]) == []
+

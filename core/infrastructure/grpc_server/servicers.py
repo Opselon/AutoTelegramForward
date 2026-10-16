@@ -319,6 +319,48 @@ def _apply_masked_update(existing, r, mask) -> list:
     return applied
 
 
+# The two spellings of one route: (legacy scalar, authoritative list). The
+# scalar is a mirror of the list's *first* entry.
+_MIRRORED_ENDPOINT_PAIRS = (
+    ("source_chat_id", "source_chat_ids"),
+    ("target_chat_id", "target_chat_ids"),
+)
+
+
+def _sync_mirrored_endpoints(existing, applied) -> list[str]:
+    """Re-mirror a list whose legacy scalar was updated without its list.
+
+    ``target_chat_id`` is the mirror of ``target_chat_ids[0]`` (and likewise for
+    sources). A client that names only the scalar in its update mask — the web
+    'Edit Target' quick-prompt, and older bot/mobile builds — would otherwise
+    leave the superseded entry sitting first in the list, so ``all_targets``
+    fans the message out to it as well while the dispatcher reads a different
+    destination. A client that names the list is authoritative and needs no
+    repair. Returns the names of the lists that were repaired.
+    """
+    applied = set(applied or [])
+    repaired: list[str] = []
+    for scalar_attr, list_attr in _MIRRORED_ENDPOINT_PAIRS:
+        if scalar_attr not in applied or list_attr in applied:
+            continue
+        primary = str(getattr(existing, scalar_attr, "") or "").strip()
+        if not primary:
+            continue
+        current = list(getattr(existing, list_attr, []) or [])
+        if not current:
+            continue
+        if str(current[0]).strip() == primary:
+            continue
+        # Put the new primary first, keep the rest in order, and drop a
+        # duplicate of it (assigning the list back is idempotent: the source
+        # setter mirrors the scalar it now starts with).
+        rest = [str(x).strip() for x in current[1:]
+                if str(x).strip() and str(x).strip() != primary]
+        setattr(existing, list_attr, [primary, *rest])
+        repaired.append(list_attr)
+    return repaired
+
+
 def _v17_create_apply(entity, r) -> None:
     """Apply v17 fields whose proto value is present (the no-mask path).
 
@@ -753,10 +795,14 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             # Exact partial update: only the named fields are touched, and a
             # named field is applied even when its value is zero/false/empty.
             try:
-                _apply_masked_update(existing, r, mask)
+                applied = _apply_masked_update(existing, r, mask)
             except ValueError as exc:
                 await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
                 return pb.ForwardRule()
+            # A scalar named alone leaves the authoritative list pointing at a
+            # superseded entry; re-mirror it here so the two spellings cannot
+            # disagree about where the message goes.
+            _sync_mirrored_endpoints(existing, applied)
             existing.mark_updated()
             try:
                 updated = await self._rules.update(existing)
@@ -1025,7 +1071,19 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         engine = SmartRoutingEngine()
         matched, reason = engine.evaluate_rule(payload, rule)
         is_vip, vip_reason = engine.is_vip_origin(payload, rule)
-        looped, loop_reason = engine.check_loop(payload, rule, rule.target_chat_id)
+        # Report the same verdict delivery reaches. A task fans out to every
+        # target, so a loop only rejects the message when *every* target would
+        # loop — one looping target is skipped at fan-out (see
+        # SmartRoutingEngine.evaluate_rule). Checking the primary alone made the
+        # dry-run contradict the dispatcher on exactly those tasks, telling the
+        # operator a message would be dropped that would in fact be delivered.
+        _dests = [t for t in (getattr(rule, "all_targets", None) or [rule.target_chat_id])
+                  if str(t).strip()]
+        _hits = [engine.check_loop(payload, rule, t) for t in _dests]
+        if _dests and all(hit[0] for hit in _hits):
+            looped, loop_reason = _hits[0]
+        else:
+            looped, loop_reason = False, ""
 
         rendered = ""
         header_rendered = ""

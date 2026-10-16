@@ -17,6 +17,7 @@ import type {
   LogPage,
   LogQuery,
   LogStats,
+  LoginAccountResponse,
   PVResponderConfig,
   PromptTemplate,
   PurgeLogsRequest,
@@ -24,6 +25,7 @@ import type {
   QueryAuditEventsParams,
   QueryAuditEventsResponse,
   RecentError,
+  RegisterAccountResponse,
   RoutePathQuickSetRequest,
   RuleLiveStat,
   RuleSettingsResponse,
@@ -492,12 +494,12 @@ export const api = {
 
   // ------------------------------------------------- Authentication & Identity
   register: (req: { username: string; password: string; display_name?: string }) =>
-    fetchJson<AuthResponse>(`${API_BASE}/auth/register`, {
+    fetchJson<RegisterAccountResponse>(`${API_BASE}/auth/register`, {
       method: 'POST',
       body: JSON.stringify(req),
     }),
   login: (req: { username: string; password: string }) =>
-    fetchJson<AuthResponse>(`${API_BASE}/auth/login`, {
+    fetchJson<LoginAccountResponse>(`${API_BASE}/auth/login`, {
       method: 'POST',
       body: JSON.stringify(req),
     }),

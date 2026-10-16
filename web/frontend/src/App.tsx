@@ -186,9 +186,6 @@ export function App() {
   const [pvConfig, setPvConfig] = useState<PVResponderConfig | null>(null)
   const [pvSaving, setPvSaving] = useState(false)
   const [pvPreset, setPvPreset] = useState<'casual' | 'business' | 'short' | 'custom'>('casual')
-  const [pvTestText, setPvTestText] = useState('سلام داداش، اشتراک کانال سیگنال فارکس چطوریه؟')
-  const [pvTestReply, setPvTestReply] = useState<string | null>(null)
-  const [pvTesting, setPvTesting] = useState(false)
 
   const isRtl = lang === 'fa'
 
@@ -586,30 +583,6 @@ export function App() {
       showToast(e.message || 'Error saving PV Assistant config')
     } finally {
       setPvSaving(false)
-    }
-  }
-
-  const handleTestPVSimulate = async () => {
-    if (!pvTestText.trim()) return
-    setPvTesting(true)
-    setPvTestReply(null)
-    try {
-      const delay = Math.min(Math.max((pvConfig?.typing_delay_min || 2.0) * 1000, 1500), 4000)
-      await new Promise((res) => setTimeout(res, delay))
-      const resp = await api.simulateAIRewrite({
-        text: pvTestText,
-        system_prompt: pvConfig?.persona_prompt || PV_PRESETS.casual.prompt,
-        config_id: pvConfig?.ai_config_id || undefined,
-      }).catch(() => null)
-      if (resp?.rewritten_text) {
-        setPvTestReply(resp.rewritten_text)
-      } else {
-        setPvTestReply('سلام داداش، در خدمتم! شرایط همکاری رو برات می‌فرستم، هر سوالی بود بگو تا با هم چکش کنیم 🙏')
-      }
-    } catch {
-      setPvTestReply('سلام، ممنون از پیامت! در اولین فرصت پاسخ می‌دم 🙏')
-    } finally {
-      setPvTesting(false)
     }
   }
 
@@ -2174,6 +2147,7 @@ export function App() {
           prompts={Array.isArray(promptTemplates) ? promptTemplates : []}
           aiConfigs={Array.isArray(aiConfigs) ? aiConfigs : []}
           onSaved={async () => setPromptTemplates(await api.getPromptTemplates().catch(() => []))}
+          onToast={showToast}
           isRtl={isRtl}
         />
       )}
@@ -2323,7 +2297,7 @@ export function App() {
                 <option value="">{isRtl ? '🤖 مدل پیش‌فرض سیستم (Default)' : '🤖 System Default'}</option>
                 {aiConfigs.map((ai) => (
                   <option key={ai.id} value={ai.id}>
-                    {ai.name} ({ai.provider} - {ai.model_name})
+                    {ai.name} ({ai.provider} - {ai.model})
                   </option>
                 ))}
               </select>
@@ -2415,127 +2389,6 @@ export function App() {
             </div>
           </div>
 
-          {/* Interactive Simulation / Testing Playground */}
-          <div className="glass-panel" style={{ padding: 24, display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Sparkles size={18} color="#f472b6" />
-              <span>{isRtl ? 'تست زنده شبیه‌ساز چت پی‌وی' : 'Live PV Chat Simulator'}</span>
-            </h3>
-            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 16 }}>
-              {isRtl
-                ? 'پیام تستی وارد کنید تا واکنش دستیار با شبیه‌سازی تاخیر تایپینگ انسانی نمایش داده شود.'
-                : 'Enter a test message to see how the assistant replies with realistic typing delay.'}
-            </p>
-
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 4 }}>
-                {isRtl ? 'پیام تستی مخاطب:' : 'Incoming Test Message:'}
-              </label>
-              <input
-                type="text"
-                value={pvTestText}
-                onChange={(e) => setPvTestText(e.target.value)}
-                className="input-field"
-                style={{ width: '100%' }}
-                placeholder={isRtl ? 'پیام خود را بنویسید...' : 'Type message...'}
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleTestPVSimulate}
-              disabled={pvTesting || !pvTestText.trim()}
-              className="btn btn-secondary"
-              style={{
-                alignSelf: 'flex-start',
-                marginBottom: 18,
-                color: '#f472b6',
-                border: '1px solid rgba(236, 72, 153, 0.4)',
-              }}
-            >
-              <Send size={14} />
-              <span>{pvTesting ? (isRtl ? '✍️ در حال تایپینگ...' : '✍️ Typing...') : (isRtl ? 'ارسال پیام تستی' : 'Send Test')}</span>
-            </button>
-
-            {/* Chat Simulation Bubble Box */}
-            <div
-              style={{
-                flex: 1,
-                minHeight: 180,
-                background: 'rgba(15, 23, 42, 0.6)',
-                borderRadius: 12,
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                padding: 16,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-                justifyContent: 'flex-end',
-              }}
-            >
-              {/* User bubble */}
-              <div style={{ alignSelf: isRtl ? 'flex-start' : 'flex-end', maxWidth: '80%' }}>
-                <div
-                  style={{
-                    background: 'rgba(99, 102, 241, 0.25)',
-                    border: '1px solid rgba(99, 102, 241, 0.4)',
-                    color: '#e2e8f0',
-                    padding: '8px 14px',
-                    borderRadius: 12,
-                    fontSize: '0.85rem',
-                  }}
-                >
-                  {pvTestText}
-                </div>
-                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 2, textAlign: isRtl ? 'left' : 'right' }}>
-                  {isRtl ? 'مخاطب' : 'Incoming'}
-                </div>
-              </div>
-
-              {/* Typing indicator */}
-              {pvTesting && (
-                <div style={{ alignSelf: isRtl ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
-                  <div
-                    style={{
-                      background: 'rgba(236, 72, 153, 0.15)',
-                      border: '1px solid rgba(236, 72, 153, 0.3)',
-                      color: '#f472b6',
-                      padding: '8px 14px',
-                      borderRadius: 12,
-                      fontSize: '0.825rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
-                    <span>✍️</span>
-                    <span>{isRtl ? 'در حال تایپ پاسخ انسانی...' : 'Typing human-like reply...'}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Assistant reply bubble */}
-              {pvTestReply && !pvTesting && (
-                <div style={{ alignSelf: isRtl ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
-                  <div
-                    style={{
-                      background: 'rgba(236, 72, 153, 0.2)',
-                      border: '1px solid rgba(236, 72, 153, 0.45)',
-                      color: '#fdf2f8',
-                      padding: '10px 14px',
-                      borderRadius: 12,
-                      fontSize: '0.85rem',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {pvTestReply}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: '#f472b6', marginTop: 2, textAlign: isRtl ? 'right' : 'left' }}>
-                    {isRtl ? 'دستیار پی‌وی (طبیعی و انسان‌نما)' : 'PV Assistant (Human Persona)'}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       )}
 
@@ -2728,6 +2581,32 @@ export function App() {
               </button>
             )}
           </div>
+
+          {/* Delivery totals — the same snapshot the overview cards read, shown
+              here so the queue tab answers "how much moved?" at a glance. */}
+          {deliveryStats && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                gap: 12,
+                marginBottom: 20,
+              }}
+            >
+              {[
+                { label: isRtl ? 'پردازش‌شده' : 'Processed', value: deliveryStats.processed_total ?? 0, color: '#818cf8' },
+                { label: isRtl ? 'فوروارد‌شده' : 'Forwarded', value: deliveryStats.forwarded_total ?? 0, color: '#34d399' },
+                { label: isRtl ? 'ناموفق' : 'Failed', value: deliveryStats.failed_total ?? 0, color: '#f87171' },
+                { label: isRtl ? 'فیلترشده' : 'Filtered', value: deliveryStats.filtered_total ?? 0, color: '#fbbf24' },
+                { label: isRtl ? 'در صف' : 'In Queue', value: deliveryStats.in_queue ?? 0, color: '#38bdf8' },
+              ].map((m) => (
+                <div key={m.label} className="glass-panel" style={{ padding: '10px 14px' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{m.label}</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 800, color: m.color }}>{m.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
             {/* Active Delivery Queue */}
@@ -4371,10 +4250,11 @@ export default App
 // ===========================================================================
 // AI Rewrite Prompt Editor & Tester (shared bot + dashboard logic via API)
 // ===========================================================================
-function PromptEditorPanel({ prompts, aiConfigs, onSaved, isRtl }: {
+function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
   prompts: PromptTemplate[]
   aiConfigs: AIConfig[]
   onSaved: () => Promise<void>
+  onToast: (msg: string) => void
   isRtl: boolean
 }) {
   const [selected, setSelected] = useState<PromptTemplate | null>(null)
@@ -4400,11 +4280,11 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, isRtl }: {
     setSaving(true)
     try {
       await api.savePromptTemplate({ ...form, id: selected?.id, current_version: selected?.current_version } as any)
-      showToast(isRtl ? 'پرامپت ذخیره شد' : 'Prompt saved')
+      onToast(isRtl ? 'پرامپت ذخیره شد' : 'Prompt saved')
       await onSaved()
       openEditor(null)
     } catch (e: any) {
-      showToast(e.message || 'Error saving prompt')
+      onToast(e.message || 'Error saving prompt')
     } finally {
       setSaving(false)
     }
@@ -4413,11 +4293,11 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, isRtl }: {
   const handleDelete = async (id: string) => {
     try {
       await api.deletePromptTemplate(id)
-      showToast(isRtl ? 'پرامپت حذف شد' : 'Prompt deleted')
+      onToast(isRtl ? 'پرامپت حذف شد' : 'Prompt deleted')
       await onSaved()
       if (selected?.id === id) openEditor(null)
     } catch (e: any) {
-      showToast(e.message || 'Cannot delete system prompt')
+      onToast(e.message || 'Cannot delete system prompt')
     }
   }
 
@@ -4434,7 +4314,7 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, isRtl }: {
       })
       setTestResult(r)
     } catch (e: any) {
-      showToast(e.message || 'Test failed')
+      onToast(e.message || 'Test failed')
     } finally {
       setTesting(false)
     }
