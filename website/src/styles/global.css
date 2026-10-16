@@ -2040,3 +2040,407 @@ html[data-theme='light'] .docs-nav-badge {
   border-radius: 4px;
   padding: 0 0.2rem;
 }
+
+
+/* ==========================================================================
+   System atlas — the explorer surfaces (/system/*)
+   --------------------------------------------------------------------------
+   Everything here is written against the semantic tokens so the light palette
+   is correct by construction; the two canvas surfaces own their own palette
+   via --atlas-*, because a <canvas> cannot inherit a Tailwind utility.
+   The saturated fill tokens are the AA-safe blues: white 12-14px text on
+   #24a1de measures 3.0:1, which is why the atlas never uses the raw accent as
+   a text background.
+   ========================================================================== */
+:root {
+  --atlas-canvas: #060b16;
+  --atlas-grid: rgba(148, 163, 184, 0.09);
+  --atlas-edge: rgba(148, 163, 184, 0.28);
+  --atlas-fill: #0a72b0;
+  --atlas-fill-hover: #0b76b5;
+  --atlas-label: #dbe6f4;
+  --atlas-label-dim: #93a4bd;
+}
+html[data-theme='light'] {
+  --atlas-canvas: #ffffff;
+  --atlas-grid: rgba(15, 23, 42, 0.07);
+  --atlas-edge: rgba(51, 65, 85, 0.3);
+  --atlas-fill: #0369a1;
+  --atlas-fill-hover: #075985;
+  --atlas-label: #0b1220;
+  --atlas-label-dim: #475569;
+}
+
+.atlas-shell {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.atlas-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.atlas-bar-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-right: 0.15rem;
+}
+
+.atlas-btn {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-weight: 600;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.atlas-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.atlas-btn[aria-pressed='true'] {
+  background: var(--atlas-fill);
+  border-color: var(--atlas-fill);
+  color: #fff;
+}
+.atlas-btn[aria-pressed='true']:hover {
+  background: var(--atlas-fill-hover);
+  border-color: var(--atlas-fill-hover);
+  color: #fff;
+}
+.atlas-btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.atlas-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.atlas-check input {
+  accent-color: var(--atlas-fill);
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.atlas-select,
+.atlas-search {
+  font-size: 12px;
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
+.atlas-search {
+  min-width: 8.5rem;
+  font-family: var(--font-mono);
+}
+.atlas-select:focus-visible,
+.atlas-search:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 1px;
+}
+
+.atlas-canvas-wrap {
+  position: relative;
+}
+.atlas-canvas {
+  display: block;
+  width: 100%;
+  height: clamp(330px, 58vh, 640px);
+  background: var(--atlas-canvas);
+  touch-action: none;
+  cursor: grab;
+}
+.atlas-canvas:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+}
+.atlas-canvas.is-dragging {
+  cursor: grabbing;
+}
+
+.atlas-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  padding: 0.55rem 0.9rem;
+  border-top: 1px solid var(--border-color);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.atlas-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.atlas-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  display: inline-block;
+  flex: none;
+}
+
+.atlas-detail {
+  border-top: 1px solid var(--border-color);
+  padding: 0.85rem 0.95rem;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  min-height: 5.5rem;
+}
+.atlas-detail h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.2rem;
+}
+.atlas-detail p {
+  margin: 0;
+}
+.atlas-detail code,
+.atlas-mono {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.atlas-kv {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.4rem 0.75rem;
+  margin-top: 0.6rem;
+}
+.atlas-kv div {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+}
+.atlas-kv dt {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.atlas-kv dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.atlas-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.6rem;
+  margin-top: 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.atlas-links a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--border-strong);
+}
+.atlas-links a:hover {
+  color: var(--text-primary);
+  border-bottom-style: solid;
+}
+
+.atlas-steps {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.atlas-step {
+  display: flex;
+  gap: 0.7rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-page);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.atlas-step[data-active='true'] {
+  border-color: var(--atlas-fill);
+  box-shadow: inset 0 0 0 1px var(--atlas-fill);
+}
+.atlas-step-index {
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.atlas-step-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.atlas-step-detail {
+  margin: 0.1rem 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.atlas-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.atlas-log {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-page);
+  padding: 0.6rem 0.7rem;
+  max-height: 13rem;
+  overflow-y: auto;
+  margin: 0;
+  list-style: none;
+}
+.atlas-log li {
+  display: flex;
+  gap: 0.5rem;
+}
+.atlas-log li::before {
+  content: '›';
+  color: var(--atlas-fill);
+  flex: none;
+}
+.atlas-log-empty {
+  color: var(--text-muted);
+}
+
+.atlas-stat {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.8rem;
+  background: var(--bg-page);
+}
+.atlas-stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.15;
+}
+.atlas-stat-label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.atlas-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  background: var(--bg-elevated);
+}
+.atlas-card h3 {
+  margin: 0 0 0.3rem;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.atlas-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.atlas-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.15rem;
+}
+
+.atlas-bar-track {
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+  min-width: 4rem;
+}
+.atlas-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--atlas-fill);
+}
+
+.atlas-node-table td,
+.atlas-node-table th {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atlas-step {
+    transition: none;
+  }
+}
+
+/* Status pills inside the verification panel. Both palettes are explicit here
+   because a success/warning tint that is readable on a dark card is invisible
+   on a white one. */
+.atlas-ok {
+  color: #4ade80;
+  border-color: #15803d;
+}
+.atlas-open {
+  color: #fbbf24;
+  border-color: #b45309;
+}
+html[data-theme='light'] .atlas-ok {
+  color: #14532d;
+  border-color: #16a34a;
+}
+html[data-theme='light'] .atlas-open {
+  color: #7c2d12;
+  border-color: #d97706;
+}
+
+/* A count inside a toggle: muted while the toggle is off, but it must flip to
+   white the moment the fill turns solid, or grey-on-blue measures 1.15:1. */
+.atlas-count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.atlas-btn[aria-pressed='true'] .atlas-count {
+  color: #ffffff;
+}

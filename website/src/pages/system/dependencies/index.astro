@@ -1,0 +1,278 @@
+---
+/**
+ * Dependency & structure atlas.
+ *
+ * The graph below is the honest import graph of the repository, resolved per
+ * language against the real file index — Go edges go to packages, everything
+ * else to files — so the fan-in numbers describe something that can actually
+ * be checked with grep.
+ */
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import DependencyAtlas from '../../../components/atlas/DependencyAtlas.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Icon from '../../../components/Icon.astro';
+import Callout from '../../../components/Callout.astro';
+import { atlas, number, sourceUrl, url, componentById } from '../../../data/system';
+
+const pageTitle = 'Dependency & structure atlas';
+const pageDesc =
+  "Dependency graph of AutoTelegramForward: every module, resolved import, keystone ranking, cross-subsystem traffic and cycle, derived from the checkout.";
+
+const toc = [
+  { id: 'reading', title: 'How to read the map' },
+  { id: 'graph', title: 'The graph' },
+  { id: 'keystones', title: 'Keystone modules' },
+  { id: 'matrix', title: 'Cross-subsystem traffic' },
+  { id: 'cycles', title: 'Cycles' },
+  { id: 'largest', title: 'Largest modules' },
+  { id: 'languages', title: 'Language mix' },
+  { id: 'loose', title: 'Loosely coupled ends' },
+];
+
+const nodeTest = new Map(atlas.nodes.map((n) => [n.id, n.isTest]));
+// Cross-subsystem links split by intent: a test importing another subsystem is
+// not the same signal as production code doing it, and conflating them would
+// make the coupling numbers mean nothing.
+const crossDetail = new Map<string, { runtime: number; test: number }>();
+for (const edge of atlas.edges) {
+  const fromSub = edge.source.split('/')[0];
+  const toSub = edge.target.split('/')[0];
+  if (fromSub === toSub) continue;
+  const key = `${fromSub}->${toSub}`;
+  const entry = crossDetail.get(key) || { runtime: 0, test: 0 };
+  if (nodeTest.get(edge.source)) entry.test++;
+  else entry.runtime++;
+  crossDetail.set(key, entry);
+}
+const cycleModules = new Set(atlas.cycles.flat());
+const peakFanIn = Math.max(...atlas.keystones.map((k) => k.fanIn));
+const crossPeak = Math.max(...atlas.crossSubsystem.map((c) => c.count));
+const largestRow = atlas.largest[0];
+const langPeak = Math.max(...atlas.languages.map((l) => l.loc));
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/system/dependencies/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'System atlas', href: url('/system/') },
+    { name: 'Dependencies', href: url('/system/dependencies/') },
+  ]}
+  toc={toc}
+  keywords={[
+    'AutoTelegramForward dependency graph',
+    'python module dependency map',
+    'go package coupling',
+    'codebase structure visualisation',
+  ]}
+>
+  <p>
+    {number(atlas.totals.nodes)} modules, {number(atlas.totals.edges)} resolved imports, {atlas.subsystems.length}{' '}
+    subsystems and {atlas.cycles.length} import cycles — counted from this checkout, not from memory. Every node on the
+    map links back to its file on GitHub, so a claim about coupling here can be checked in one click.
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="reading">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">How to read the map</h2>
+    <div class="grid gap-3.5 lg:grid-cols-3">
+      <div class="atlas-card">
+        <h3>One node = one unit of dependency</h3>
+        <p>
+          Python, Dart, Rust and TypeScript nodes are <strong>files</strong>; Go nodes are{' '}
+          <strong>packages</strong> (a Go file is never a unit of dependency on its own). The legend on the canvas says
+          which is which, per language.
+        </p>
+      </div>
+      <div class="atlas-card">
+        <h3>One edge = one resolved import</h3>
+        <p>
+          Edges come from parsing <code>import</code>/<code>from … import</code>, Go import blocks, <code>use</code>/<code>mod</code>{' '}
+          statements and relative ES imports, then resolving each specifier against the file index. Anything that
+          resolves outside the repository (a third-party package) is intentionally not drawn.
+        </p>
+      </div>
+      <div class="atlas-card">
+        <h3>Size = lines, colour = subsystem</h3>
+        <p>
+          A node grows with the square root of its line count, so a 3,000-line service does not swallow the canvas. Node
+          size is a scale, not a score: coupling is what fan-in and fan-out measure.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="graph">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">The graph</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      {number(atlas.totals.nodes)} modules, laid out by subsystem, relaxed so that linked modules sit near each other —
+      which is why the visual clusters below line up with the architecture rather than with the directory listing.
+      Hover to trace a module's neighbourhood, click to inspect its imports and its dependents.
+    </p>
+    <DependencyAtlas />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="keystones">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Keystone modules</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Ranked by coupling — two points per dependent, one per import — with generated stubs and tests excluded, because a
+      file that 40 other files import is a file nobody can change casually. The top entry alone carries{' '}
+      {atlas.keystones[0]?.fanIn} dependents.
+    </p>
+
+    <div class="grid gap-2">
+      {
+        atlas.keystones.slice(0, 12).map((node) => (
+          <div class="atlas-card" style="padding:0.7rem 0.9rem">
+            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <a class="atlas-mono text-[12.5px]" href={sourceUrl(node.id)} rel="noopener">{node.id}</a>
+              <span class="atlas-tag">{node.subsystem}</span>
+              <span class="atlas-tag">{node.lang}</span>
+              <span class="text-slate-400 atlas-mono text-[11.5px]">
+                {number(node.loc)} lines · {node.fanIn} in · {node.fanOut} out
+              </span>
+            </div>
+            <span class="atlas-bar-track mt-2 block" style="max-width:100%">
+              <span class="atlas-bar-fill" style={`width:${Math.max(2, Math.round((node.fanIn / peakFanIn) * 100))}%`} />
+            </span>
+          </div>
+        ))
+      }
+    </div>
+
+    <Callout type="info" class="mt-4">
+      <p>
+        What the ranking actually shows: <a href={sourceUrl('core/domain/entities.py')} rel="noopener">
+        <code>core/domain/entities.py</code></a> leads with {atlas.keystones[0]?.fanIn} dependents and{' '}
+        <code>core/domain/value_objects.py</code> follows with {atlas.keystones[2]?.fanIn}, which is what a layered core
+        is supposed to look like — the domain model is the thing everything else may depend on. Persistence appears high
+        as well ({atlas.keystones.find((k) => k.id.includes('persistence'))?.fanIn} dependents on the repository layer):
+        that coupling is deliberate here, because reaching storage any other way would bypass the sanctioned write path.
+        The site's own <code>utils/paths.ts</code> ranks second — every page depends on the base-path helper, so it is
+        this website's domain module.
+      </p>
+    </Callout>
+
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="matrix">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Cross-subsystem traffic</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Every import that crosses a subsystem boundary. Inside one subsystem the count is deliberately omitted: the
+      interesting question is never "how coupled is the core to itself", it is "which subsystems know about each other".
+    </p>
+    <SpecTable
+      headers={['From', 'To', 'Import links', 'Signal']}
+      rows={atlas.crossSubsystem.map((row) => [
+        `<code>${row.from}</code>`,
+        `<code>${row.to}</code>`,
+        `${row.count} <span class="atlas-bar-track inline-block align-middle ml-2" style="width:5rem"><span class="atlas-bar-fill" style="width:${Math.max(4, Math.round((row.count / crossPeak) * 100))}%"></span></span>`,
+        (() => {
+          const detail = crossDetail.get(`${row.from}->${row.to}`) || { runtime: 0, test: 0 };
+          if (detail.runtime === 0) return 'Test suite only — no production import exists';
+          if (detail.test === 0) return `${detail.runtime} runtime import${detail.runtime === 1 ? '' : 's'} — shared contract`;
+          return `${detail.runtime} runtime + ${detail.test} from tests`;
+        })(),
+      ])}
+      caption={`${atlas.crossSubsystem.length} cross-subsystem import directions`}
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="cycles">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Cycles</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Import cycles are found with Tarjan's strongly-connected-components pass over the resolved graph, so this list is
+      exhaustive for the edges the sweep could resolve — not a sample. {atlas.cycles.length === 0
+        ? 'There are none in this build.'
+        : `${atlas.cycles.length} group${atlas.cycles.length === 1 ? '' : 's'} of modules import each other.`}
+    </p>
+    {
+      atlas.cycles.length > 0 && (
+        <div class="grid gap-2">
+          {atlas.cycles.map((cycle) => (
+            <div class="atlas-card">
+              <h3>{cycle.length} modules</h3>
+              <p class="atlas-mono text-[12px]">
+                {cycle.map((id, index) => (
+                  <>
+                    <a href={sourceUrl(id)} rel="noopener">{id}</a>
+                    {index < cycle.length - 1 ? ' → ' : ''}
+                  </>
+                ))}
+              </p>
+            </div>
+          ))}
+        </div>
+      )
+    }
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="largest">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Largest modules</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Size is not a defect, but it is where a defect hides best. The largest authored module is{' '}
+      <a class="atlas-mono" href={sourceUrl(largestRow.id)} rel="noopener">{largestRow.id}</a> at{' '}
+      {number(largestRow.loc)} lines with {largestRow.fanIn} dependents.
+    </p>
+    <SpecTable
+      headers={['Module', 'Subsystem', 'Lines', 'In / out']}
+      rows={atlas.largest.slice(0, 12).map((node) => [
+        `<a href="${sourceUrl(node.id)}" rel="noopener"><code>${node.id}</code></a>`,
+        node.subsystem,
+        number(node.loc),
+        `${node.fanIn} / ${node.fanOut}`,
+      ])}
+      caption="Largest authored modules"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="languages">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Language mix</h2>
+    <SpecTable
+      headers={['Language', 'Nodes', 'Source files', 'Lines', 'Share']}
+      rows={atlas.languages.map((language) => {
+        const nodes = atlas.nodes.filter((n) => n.lang === language.lang);
+        return [
+          `<code>${language.lang}</code>`,
+          number(nodes.length),
+          number(language.files),
+          number(language.loc),
+          `<span class="atlas-bar-track inline-block align-middle" style="width:6rem"><span class="atlas-bar-fill" style="width:${Math.max(2, Math.round((language.loc / langPeak) * 100))}%"></span></span>`,
+        ];
+      })}
+      caption="Per-language totals, counted as non-blank non-comment lines"
+    />
+    <p class="mt-3 text-[12.5px] text-slate-400">
+      Python carries {number(atlas.languages.find((l) => l.lang === 'python')?.loc || 0)} of those lines across{' '}
+      {atlas.languages.find((l) => l.lang === 'python')?.files} files, which is what "the engine is the product" looks
+      like in numbers.
+    </p>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="loose">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Loosely coupled ends</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Modules with no resolved import in either direction, with package markers (<code>__init__.py</code>), tests and
+      entrypoints already excluded. {atlas.orphans.length} remain{atlas.orphans.length === 1 ? 's' : ''} — a module
+      nobody imports and that imports nobody is either an entrypoint or dead weight, and this is the list where that
+      question gets asked.
+    </p>
+    <div class="grid gap-2 sm:grid-cols-2">
+      {
+        atlas.orphans.map((node) => (
+          <div class="atlas-card" style="padding:0.6rem 0.8rem">
+            <a class="atlas-mono text-[12px]" href={sourceUrl(node.id)} rel="noopener">{node.id}</a>
+            <p class="mt-1 text-[12px] text-slate-400">{node.subsystem} · {number(node.loc)} lines</p>
+          </div>
+        ))
+      }
+    </div>
+    <p class="mt-4 text-[13px] text-slate-400">
+      Next: the same components, but as live connections — <a href={url('/system/connections/')}>the 3D connection map</a>{' '}
+      draws the {atlas.componentEdges.length} links that cross process boundaries, which imports cannot describe.
+      {' '}<a href={url('/system/')}>Back to the atlas overview<Icon name="arrow-right" class="w-3.5 h-3.5 inline-block" /></a>
+    </p>
+  </section>
+</DocsLayout>

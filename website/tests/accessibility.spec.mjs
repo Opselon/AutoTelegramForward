@@ -10,7 +10,18 @@ import { CONTRAST_AUDIT } from './contrast-audit.mjs';
  * themes — including the gradient-painted surfaces, which are the ones that hide.
  */
 
-const PAGES = ['/', '/features/', '/features/multi-source-routing/', '/api/', '/getting-started/docker/'];
+const PAGES = [
+  '/',
+  '/features/',
+  '/features/multi-source-routing/',
+  '/api/',
+  '/getting-started/docker/',
+  // The atlas pages add new surfaces (canvas HUD, step cards, verification
+  // pills) whose contrast is exactly the kind of thing a build cannot check.
+  '/system/',
+  '/system/dependencies/',
+  '/system/connections/',
+];
 
 const setTheme = async (page, theme) => {
   await page.addInitScript((value) => {

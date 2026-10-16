@@ -1,0 +1,614 @@
+---
+/**
+ * Dependency atlas — the module graph, drawn from the derived index.
+ *
+ * Granularity is per language and stated on the canvas legend: Python, Dart,
+ * Rust and TypeScript nodes are files, Go nodes are packages (a Go file is
+ * never a unit of dependency by itself). Test modules and generated stubs are
+ * in the data and off by default, so the structural graph is what you see
+ * first.
+ */
+import { atlas, graphUrl, subsystemColor, sourceUrl, number, repoInfo } from '../../data/system';
+
+const top = atlas.keystones[0];
+const defaultNode = atlas.nodes.find((n) => n.id === top?.id) || atlas.nodes[0];
+const langs = [...new Set(atlas.nodes.map((n) => n.lang))].sort();
+const pos = (id: string) => `${atlas.nodes.filter((n) => n.subsystem === id).length}`;
+---
+
+<div class="not-prose atlas-shell" data-depmap data-graph-url={graphUrl} data-repo-url={repoInfo.repoUrl}>
+  <div class="atlas-bar">
+    <span class="atlas-bar-label">Subsystems</span>
+    {
+      atlas.subsystems.map((subsystem) => (
+        <button type="button" class="atlas-btn" data-dep-subsystem={subsystem.id} aria-pressed="true">
+          <span class="atlas-dot" style={`background:${subsystem.color}`} />
+          {subsystem.label}
+          <span class="atlas-count">{pos(subsystem.id)}</span>
+        </button>
+      ))
+    }
+  </div>
+
+  <div class="atlas-bar">
+    <span class="atlas-bar-label">Filter</span>
+    <label class="atlas-check">
+      <input type="checkbox" data-dep-hide-tests checked />
+      Hide tests
+    </label>
+    <label class="atlas-check">
+      <input type="checkbox" data-dep-hide-generated />
+      Hide generated
+    </label>
+    <label class="atlas-check">
+      <input type="checkbox" data-dep-labels />
+      Labels
+    </label>
+    <select class="atlas-select" data-dep-lang aria-label="Filter by language">
+      <option value="">All languages</option>
+      {langs.map((lang) => <option value={lang}>{lang}</option>)}
+    </select>
+    <input class="atlas-search" type="search" data-dep-search placeholder="find a module…" aria-label="Find a module by path" />
+    <button type="button" class="atlas-btn" data-dep-fit>Fit</button>
+    <span class="ml-auto atlas-tag" data-dep-count>
+      {number(atlas.totals.nodes)} modules · {number(atlas.totals.edges)} import edges
+    </span>
+  </div>
+
+  <div class="atlas-canvas-wrap">
+    <canvas
+      class="atlas-canvas"
+      data-dep-canvas
+      tabindex="0"
+      role="img"
+      aria-label={`Module dependency map: ${atlas.totals.nodes} modules and ${atlas.totals.edges} import edges, grouped by subsystem. The largest modules are listed as text below the canvas.`}
+    ></canvas>
+    <div class="atlas-hud" data-dep-hud>
+      <span data-dep-hud-count>loading graph…</span>
+      <span data-dep-hud-hint>drag to pan · scroll to zoom · click a module</span>
+    </div>
+  </div>
+
+  <div class="atlas-detail" data-dep-detail aria-live="polite">
+    <h3>
+      <span class="atlas-dot" style={`background:${subsystemColor(defaultNode.subsystem)}`} />
+      {defaultNode.path}
+    </h3>
+    <p class="atlas-mono">
+      <a href={sourceUrl(defaultNode.path)} rel="noopener">view on GitHub</a> ·
+      {defaultNode.granularityLabel} · {defaultNode.lang} · {number(defaultNode.loc)} lines ·
+      {defaultNode.fanIn} dependents · {defaultNode.fanOut} imports
+    </p>
+    <p class="mt-1">
+      Subsystem <strong>{defaultNode.subsystem}</strong>. Click any node in the map to inspect its imports and its
+      dependents, and to follow the module back to its source file.
+    </p>
+  </div>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-depmap]');
+  if (root) {
+    const canvas = root.querySelector<HTMLCanvasElement>('[data-dep-canvas]')!;
+    const ctx = canvas.getContext('2d')!;
+    const detail = root.querySelector<HTMLElement>('[data-dep-detail]')!;
+    const hudCount = root.querySelector<HTMLElement>('[data-dep-hud-count]')!;
+    const countTag = root.querySelector<HTMLElement>('[data-dep-count]')!;
+    const searchInput = root.querySelector<HTMLInputElement>('[data-dep-search]')!;
+
+    const repoUrl = root.dataset.repoUrl || '';
+  const sourceOf = (relPath: string) => `${repoUrl}/blob/master/${relPath}`;
+
+  const readVar = (name: string, fallback: string) =>
+      getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+    let palette = {
+      canvas: readVar('--atlas-canvas', '#060b16'),
+      grid: readVar('--atlas-grid', 'rgba(148,163,184,0.09)'),
+      edge: readVar('--atlas-edge', 'rgba(148,163,184,0.28)'),
+      label: readVar('--atlas-label', '#dbe6f4'),
+      labelDim: readVar('--atlas-label-dim', '#93a4bd'),
+    };
+
+    interface RawGraph {
+      subsystems: Array<{ id: string; label: string; color: string; loc: number; files: number }>;
+      nodes: Array<[string, string, string, number, number, number, number, string, number, number]>;
+      edges: Array<[number, number, number]>;
+      kinds: string[];
+    }
+
+    interface GNode {
+      index: number;
+      label: string;
+      subsystem: string;
+      lang: string;
+      loc: number;
+      files: number;
+      fanIn: number;
+      fanOut: number;
+      id: string;
+      generated: boolean;
+      isTest: boolean;
+      granularity: string;
+      sourceUrl: string;
+      x: number;
+      y: number;
+    }
+
+    let nodes: GNode[] = [];
+    let edges: Array<[number, number]> = [];
+    let subscribers: number[][] = [];
+    let dependencies: number[][] = [];
+    const subsystemOrder: string[] = [];
+    const subsystemMeta = new Map<string, { label: string; color: string }>();
+
+    let visible: boolean[] = [];
+    let matched: boolean[] = [];
+    let selected: number | null = null;
+    let hovered: number | null = null;
+    let showLabels = false;
+    let scale = 1;
+    let tx = 0;
+    let ty = 0;
+    let width = 0;
+    let height = 0;
+
+    const esc = (value: string) =>
+      value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const computeLayout = () => {
+      const bandX = new Map<string, number>();
+      subsystemOrder.forEach((id, index) => bandX.set(id, index * 460));
+      const perBand = new Map<string, GNode[]>();
+      for (const node of nodes) {
+        if (!perBand.has(node.subsystem)) perBand.set(node.subsystem, []);
+        perBand.get(node.subsystem)!.push(node);
+      }
+      for (const [id, list] of perBand) {
+        list.sort((a, b) => b.fanIn + b.fanOut - (a.fanIn + a.fanOut) || b.loc - a.loc);
+        list.forEach((node, index) => {
+          node.x = (bandX.get(id) || 0) + (index % 2 === 0 ? -70 : 70);
+          node.y = index * 44;
+        });
+      }
+      const rest = 120;
+      for (let iteration = 0; iteration < 200; iteration++) {
+        const fx = new Float64Array(nodes.length);
+        const fy = new Float64Array(nodes.length);
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const a = nodes[i];
+            const b = nodes[j];
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            const dist = Math.hypot(dx, dy) || 0.01;
+            if (dist > 320) continue;
+            const push = (rest * rest) / (dist * dist) / Math.max(1, dist / 90);
+            dx /= dist;
+            dy /= dist;
+            fx[i] -= dx * push;
+            fy[i] -= dy * push;
+            fx[j] += dx * push;
+            fy[j] += dy * push;
+          }
+        }
+        for (const [from, to] of edges) {
+          const a = nodes[from];
+          const b = nodes[to];
+          if (!a || !b) continue;
+          let dx = b.x - a.x;
+          let dy = b.y - a.y;
+          const dist = Math.hypot(dx, dy) || 0.01;
+          const pull = (dist - rest) * 0.012;
+          dx /= dist;
+          dy /= dist;
+          fx[from] += dx * pull;
+          fy[from] += dy * pull;
+          fx[to] -= dx * pull;
+          fy[to] -= dy * pull;
+        }
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          fx[i] += ((bandX.get(node.subsystem) || 0) - node.x) * 0.06;
+          node.x += Math.max(-6, Math.min(6, fx[i]));
+          node.y += Math.max(-6, Math.min(6, fy[i]));
+        }
+      }
+    };
+
+    const fit = () => {
+      const shown = nodes.filter((node) => visible[node.index]);
+      if (!shown.length) return;
+      const minX = Math.min(...shown.map((n) => n.x));
+      const maxX = Math.max(...shown.map((n) => n.x));
+      const minY = Math.min(...shown.map((n) => n.y));
+      const maxY = Math.max(...shown.map((n) => n.y));
+      const pad = 60;
+      scale = Math.min((width - pad * 2) / Math.max(1, maxX - minX), (height - pad * 2) / Math.max(1, maxY - minY));
+      scale = Math.max(0.12, Math.min(1.6, scale));
+      tx = width / 2 - ((minX + maxX) / 2) * scale;
+      ty = height / 2 - ((minY + maxY) / 2) * scale;
+    };
+
+    const toScreen = (node: GNode) => ({ x: node.x * scale + tx, y: node.y * scale + ty });
+    const radiusOf = (node: GNode) => (3 + Math.min(9, Math.sqrt(Math.max(1, node.loc)) / 8)) * Math.max(0.5, Math.min(1.6, scale));
+
+    const draw = () => {
+      ctx.save();
+      ctx.fillStyle = palette.canvas;
+      ctx.fillRect(0, 0, width, height);
+      ctx.strokeStyle = palette.grid;
+      ctx.lineWidth = 1;
+      const grid = 120 * scale;
+      if (grid > 28) {
+        for (let x = tx % grid; x < width; x += grid) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let y = ty % grid; y < height; y += grid) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+      }
+
+      const focusSet = new Set<number>();
+      if (selected !== null) {
+        focusSet.add(selected);
+        for (const n of (dependencies[selected] || []).concat(subscribers[selected] || [])) focusSet.add(n);
+      }
+
+      for (const [from, to] of edges) {
+        if (!visible[from] || !visible[to]) continue;
+        const a = toScreen(nodes[from]);
+        const b = toScreen(nodes[to]);
+        const lit = selected !== null && (focusSet.has(from) && focusSet.has(to));
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = lit ? subsystemMeta.get(nodes[to].subsystem)?.color || palette.label : palette.edge;
+        ctx.globalAlpha = selected !== null ? (lit ? 0.9 : 0.05) : 0.16;
+        ctx.lineWidth = lit ? 1.6 : 0.8;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      for (const node of nodes) {
+        if (!visible[node.index]) continue;
+        const p = toScreen(node);
+        if (p.x < -40 || p.y < -40 || p.x > width + 40 || p.y > height + 40) continue;
+        const radius = radiusOf(node);
+        const color = subsystemMeta.get(node.subsystem)?.color || '#94a3b8';
+        const isSelected = selected === node.index;
+        const isHover = hovered === node.index;
+        const dim = selected !== null && !focusSet.has(node.index);
+        ctx.globalAlpha = dim ? 0.22 : 1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius + (isSelected || isHover ? 2 : 0), 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.lineWidth = isSelected ? 2 : isHover ? 1.5 : 0.7;
+        ctx.strokeStyle = isSelected || isHover ? '#ffffff' : 'rgba(8,12,20,0.5)';
+        ctx.stroke();
+        if (matched[node.index]) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 6, 0, Math.PI * 2);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+        }
+        const labelVisible =
+          isSelected || isHover || (showLabels && scale > 0.42) || (matched[node.index] && scale > 0.2);
+        if (labelVisible) {
+          ctx.font = `${isSelected || isHover ? '600 ' : ''}10.5px 'JetBrains Mono', monospace`;
+          ctx.fillStyle = isSelected || isHover ? palette.label : palette.labelDim;
+          ctx.textAlign = 'left';
+          ctx.fillText(node.label, p.x + radius + 4, p.y + 3.5);
+        }
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+    };
+
+    const relatedList = (indices: number[], direction: string) => {
+      if (!indices.length) return `<li class="atlas-log-empty">No ${direction} links resolved inside this repository.</li>`;
+      return indices
+        .slice(0, 10)
+        .map((index) => {
+          const node = nodes[index];
+          const color = subsystemMeta.get(node.subsystem)?.color || '#94a3b8';
+          return `<li><span class="atlas-dot" style="background:${color}"></span> <a href="${node.sourceUrl}" rel="noopener">${esc(node.id)}</a> <span class="text-slate-400">${node.fanIn} in / ${node.fanOut} out</span></li>`;
+        })
+        .join('');
+    };
+
+    const renderDetail = (index: number) => {
+      const node = nodes[index];
+      const color = subsystemMeta.get(node.subsystem)?.color || '#94a3b8';
+      const language = node.generated ? `${node.lang} (generated)` : node.lang;
+      detail.innerHTML = `
+        <h3><span class="atlas-dot" style="background:${color}"></span> ${esc(node.id)}</h3>
+        <p class="atlas-mono">${esc(node.subsystem)} · ${esc(language)} · ${node.loc.toLocaleString('en-US')} lines${
+          node.files > 1 ? ` · ${node.files} files` : ''
+        } · <a href="${node.sourceUrl}" rel="noopener">view on GitHub</a></p>
+        <div class="atlas-kv">
+          <div><dt>Dependents (fan-in)</dt><dd>${node.fanIn}</dd></div>
+          <div><dt>Imports (fan-out)</dt><dd>${node.fanOut}</dd></div>
+          <div><dt>Subsystem</dt><dd>${esc(node.subsystem)}</dd></div>
+          <div><dt>Granularity</dt><dd>${esc(node.granularity || 'module')}</dd></div>
+        </div>
+        <div class="grid gap-2 mt-3 lg:grid-cols-2">
+          <div>
+            <p class="m-0 mb-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">Imports</p>
+            <ul class="atlas-log">${relatedList(dependencies[index] || [], 'outgoing')}</ul>
+          </div>
+          <div>
+            <p class="m-0 mb-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">Dependents</p>
+            <ul class="atlas-log">${relatedList(subscribers[index] || [], 'incoming')}</ul>
+          </div>
+        </div>`;
+    };
+
+    const applyFilters = () => {
+      const enabledSubsystems = new Set(
+        [...root.querySelectorAll<HTMLButtonElement>('[data-dep-subsystem]')]
+          .filter((b) => b.getAttribute('aria-pressed') === 'true')
+          .map((b) => b.dataset.depSubsystem!),
+      );
+      const hideTests = root.querySelector<HTMLInputElement>('[data-dep-hide-tests]')!.checked;
+      const hideGenerated = root.querySelector<HTMLInputElement>('[data-dep-hide-generated]')!.checked;
+      const lang = root.querySelector<HTMLSelectElement>('[data-dep-lang]')!.value;
+      const query = searchInput.value.trim().toLowerCase();
+
+      let shown = 0;
+      matched = new Array(nodes.length).fill(false);
+      nodes.forEach((node) => {
+        const ok =
+          enabledSubsystems.has(node.subsystem) &&
+          !(hideTests && node.isTest) &&
+          !(hideGenerated && node.generated) &&
+          (!lang || node.lang === lang);
+        visible[node.index] = ok;
+        if (ok) shown++;
+        if (query && ok && (node.id.toLowerCase().includes(query) || node.label.toLowerCase().includes(query))) {
+          matched[node.index] = true;
+        }
+      });
+      const matchCount = matched.filter(Boolean).length;
+      hudCount.textContent = `${shown} of ${nodes.length} modules shown${
+        query ? ` · ${matchCount} match “${searchInput.value.trim()}”` : ''
+      }`;
+      countTag.textContent = `${nodes.length} modules · ${edges.length} edges`;
+      if (query && matchCount > 0 && selected === null) {
+        const first = matched.findIndex(Boolean);
+        if (first >= 0) {
+          selected = first;
+          renderDetail(first);
+        }
+      }
+    };
+
+    const pick = (mx: number, my: number) => {
+      let best = -1;
+      let bestDist = 16;
+      for (const node of nodes) {
+        if (!visible[node.index]) continue;
+        const p = toScreen(node);
+        const dist = Math.hypot(p.x - mx, p.y - my);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = node.index;
+        }
+      }
+      return best;
+    };
+
+    let dragging = false;
+    let moved = 0;
+    let lastX = 0;
+    let lastY = 0;
+
+    canvas.addEventListener('pointerdown', (event) => {
+      dragging = true;
+      moved = 0;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      canvas.classList.add('is-dragging');
+      canvas.setPointerCapture(event.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = event.clientX - rect.left;
+      const my = event.clientY - rect.top;
+      if (dragging) {
+        tx += event.clientX - lastX;
+        ty += event.clientY - lastY;
+        moved += Math.abs(event.clientX - lastX) + Math.abs(event.clientY - lastY);
+        lastX = event.clientX;
+        lastY = event.clientY;
+      } else {
+        hovered = pick(mx, my);
+        canvas.style.cursor = hovered >= 0 ? 'pointer' : 'grab';
+      }
+    });
+
+    canvas.addEventListener('pointerup', (event) => {
+      if (moved < 5) {
+        const rect = canvas.getBoundingClientRect();
+        const hit = pick(event.clientX - rect.left, event.clientY - rect.top);
+        selected = hit >= 0 ? hit : null;
+        if (selected !== null) renderDetail(selected);
+      }
+      dragging = false;
+      canvas.classList.remove('is-dragging');
+    });
+
+    canvas.addEventListener(
+      'wheel',
+      (event) => {
+        event.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const mx = event.clientX - rect.left;
+        const my = event.clientY - rect.top;
+        const factor = event.deltaY > 0 ? 0.9 : 1.1;
+        const next = Math.max(0.12, Math.min(3, scale * factor));
+        tx = mx - (mx - tx) * (next / scale);
+        ty = my - (my - ty) * (next / scale);
+        scale = next;
+      },
+      { passive: false },
+    );
+
+    canvas.addEventListener('keydown', (event) => {
+      const step = 40;
+      if (event.key === 'ArrowLeft') tx += step;
+      else if (event.key === 'ArrowRight') tx -= step;
+      else if (event.key === 'ArrowUp') ty += step;
+      else if (event.key === 'ArrowDown') ty -= step;
+      else if (event.key === '+' || event.key === '=') scale = Math.min(3, scale * 1.1);
+      else if (event.key === '-') scale = Math.max(0.12, scale * 0.9);
+      else if (event.key === 'Escape') {
+        selected = null;
+      } else return;
+      event.preventDefault();
+    });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-dep-subsystem]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const pressed = button.getAttribute('aria-pressed') === 'true';
+        button.setAttribute('aria-pressed', String(!pressed));
+        applyFilters();
+        fit();
+      });
+    });
+    root.querySelector('[data-dep-fit]')!.addEventListener('click', () => {
+      selected = null;
+      fit();
+    });
+    searchInput.addEventListener('input', applyFilters);
+    searchInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        const first = matched.findIndex(Boolean);
+        if (first >= 0) {
+          selected = first;
+          renderDetail(first);
+          const p = toScreen(nodes[first]);
+          tx += width / 2 - p.x;
+          ty += height / 2 - p.y;
+        }
+      }
+    });
+    root.querySelector('[data-dep-hide-tests]')!.addEventListener('change', applyFilters);
+    root.querySelector('[data-dep-hide-generated]')!.addEventListener('change', applyFilters);
+    root.querySelector('[data-dep-lang]')!.addEventListener('change', applyFilters);
+    root.querySelector('[data-dep-labels]')!.addEventListener('change', (event) => {
+      showLabels = (event.target as HTMLInputElement).checked;
+    });
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      width = rect.width;
+      height = rect.height;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    const loop = () => {
+      draw();
+      requestAnimationFrame(loop);
+    };
+
+    const start = async () => {
+      const response = await fetch(root.dataset.graphUrl!, { credentials: 'same-origin' });
+      const graph = (await response.json()) as RawGraph;
+      graph.subsystems.forEach((subsystem) => {
+        subsystemOrder.push(subsystem.id);
+        subsystemMeta.set(subsystem.id, { label: subsystem.label, color: subsystem.color });
+      });
+      nodes = graph.nodes.map((row, index) => ({
+        index,
+        label: row[0],
+        subsystem: row[1],
+        lang: row[2],
+        loc: row[3],
+        files: row[4],
+        fanIn: row[5],
+        fanOut: row[6],
+        id: row[7],
+        generated: row[8] === 1,
+        isTest: row[9] === 1,
+        granularity: row[2] === 'go' ? 'package' : 'module',
+        sourceUrl: sourceOf(row[7]),
+        x: 0,
+        y: 0,
+      }));
+      const seen = new Set<string>();
+      edges = graph.edges
+        .filter(([from, to]) => {
+          const key = `${from}:${to}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map(([from, to]) => [from, to] as [number, number]);
+      dependencies = nodes.map(() => []);
+      subscribers = nodes.map(() => []);
+      for (const [from, to] of edges) {
+        dependencies[from].push(to);
+        subscribers[to].push(from);
+      }
+      visible = new Array(nodes.length).fill(true);
+      matched = new Array(nodes.length).fill(false);
+      computeLayout();
+      resize();
+      fit();
+      applyFilters();
+      (window as unknown as Record<string, unknown>).__atlas2d = {
+        nodes: nodes.length,
+        edges: edges.length,
+        visibleCount: () => visible.filter(Boolean).length,
+        select: (id: string) => {
+          const found = nodes.find((n) => n.id === id);
+          if (found) {
+            selected = found.index;
+            renderDetail(found.index);
+          }
+        },
+        selectedId: () => (selected === null ? null : nodes[selected].id),
+      };
+      root.dataset.depReady = 'true';
+      new ResizeObserver(() => {
+        resize();
+        fit();
+      }).observe(canvas);
+      loop();
+    };
+    void start();
+  }
+</script>
+
+<style>
+  .atlas-hud {
+    position: absolute;
+    inset: auto auto 0.5rem 0.6rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--bg-page) 78%, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    pointer-events: none;
+    max-width: calc(100% - 1.2rem);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+</style>

@@ -1,0 +1,210 @@
+---
+/**
+ * Connection map — the 3D simulation plus the protocol-level facts behind it.
+ *
+ * The simulation is driven by the same derived data as the tables on this page,
+ * so an animation can never show a link the repository does not have.
+ */
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import ConnectionSim3D from '../../../components/atlas/ConnectionSim3D.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Icon from '../../../components/Icon.astro';
+import Callout from '../../../components/Callout.astro';
+import { atlas, componentById, edgeKindColor, number, sourceUrl, url } from '../../../data/system';
+
+const pageTitle = 'Connection map (3D)';
+const pageDesc =
+  'Simulate AutoTelegramForward in 3D: verified component links, protocol boundaries and the request paths you can replay packet by packet.';
+
+const toc = [
+  { id: 'sim', title: '3D simulation' },
+  { id: 'protocols', title: 'Protocol boundaries' },
+  { id: 'compose', title: 'Container topology' },
+  { id: 'grpc', title: 'gRPC surface' },
+  { id: 'vocabulary', title: 'Log vocabulary' },
+  { id: 'absences', title: 'Links that do not exist' },
+];
+
+const componentLabel = (id: string) => componentById.get(id)?.label || id;
+const services = atlas.services;
+const rpcPeak = Math.max(...atlas.proto.services.map((s) => s.count));
+const tagPeak = atlas.pipeline.tags[0]?.count || 1;
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/system/connections/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'System atlas', href: url('/system/') },
+    { name: 'Connections', href: url('/system/connections/') },
+  ]}
+  toc={toc}
+  keywords={[
+    'AutoTelegramForward topology 3D',
+    'microservice connection simulation',
+    'gRPC flow visualisation',
+    'Telegram forwarding data flow',
+  ]}
+>
+  <p>
+    Imports tell you how one language is arranged. Connections tell you how the system behaves: {atlas.componentEdges.length}{' '}
+    links across {atlas.components.length} components, every one of them derived from a real call site in the checkout.
+    Orbit the map, then replay one of the {atlas.flows.length} traced paths and watch a packet cross the same boundaries a
+    live message crosses.
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="sim">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">3D connection simulation</h2>
+    <ConnectionSim3D />
+    <div class="grid gap-3.5 sm:grid-cols-3 mt-3">
+      {
+        atlas.flows.map((flow) => (
+          <div class="atlas-card">
+            <h3>{flow.title}</h3>
+            <p>{flow.summary}</p>
+            <p class="atlas-mono text-slate-400 mt-2">
+              {flow.steps.length} steps ·{' '}
+              {[...new Set(flow.steps.map((s) => s.at))].length} components touched
+            </p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="protocols">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Protocol boundaries</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      {atlas.contracts.length} boundaries, and the file that proves each one. A boundary is where a version mismatch,
+      a timeout or a serialization change becomes visible — which is exactly why they are worth listing instead of
+      hiding behind "microservices".
+    </p>
+
+    <div class="grid gap-3 md:grid-cols-2">
+      {
+        atlas.contracts.map((contract) => (
+          <div class="atlas-card" style={`border-left:3px solid ${edgeKindColor[contract.kind] || '#64748b'}`}>
+            <div class="atlas-card-head">
+              <span class="atlas-dot" style={`background:${edgeKindColor[contract.kind] || '#64748b'}`} />
+              <h3 class="m-0 text-[13.5px]">
+                {componentLabel(contract.from)} <span class="text-slate-400">→</span> {componentLabel(contract.to)}
+              </h3>
+            </div>
+            <p class="text-[12px] uppercase tracking-widest text-slate-400">{contract.protocol}</p>
+            <p class="text-[13px] mt-1">{contract.detail}</p>
+            <p class="atlas-mono text-[11px] mt-2 text-slate-400">
+              verified in:{' '}
+              {contract.evidence.slice(0, 3).map((file, index) => (
+                <>
+                  {index > 0 ? ', ' : ''}
+                  <a href={sourceUrl(file)} rel="noopener">{file}</a>
+                </>
+              ))}
+            </p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="compose">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Container topology</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The compose file is the deployment truth, and it is where the dependency order actually lives: the engine waits for
+      the logger, the API waits for the engine, the gateway waits for the API. The TLS edge is an optional profile, so a
+      minimal install runs four containers instead of five.
+    </p>
+    <SpecTable
+      headers={['Service', 'Container', 'Build', 'Ports', 'Waits for', 'Network']}
+      rows={services.map((service) => [
+        `<code>${service.name}</code>`,
+        `<code>${service.container}</code>`,
+        service.dockerfile ? `<code>${service.dockerfile}</code>` : service.image ? `<code>${service.image}</code>` : '—',
+        service.ports.length ? service.ports.map((p) => `<code>${p}</code>`).join(' ') : '<span class="text-slate-500">internal only</span>',
+        service.dependsOn.length ? service.dependsOn.map((d) => `<code>${d}</code>`).join(', ') : '—',
+        service.networks.join(', ') || '—',
+      ])}
+      caption={`${services.length} declared services (${services.filter((s) => s.profile).length} behind a profile)`}
+    />
+    <p class="mt-3 text-[12.5px] text-slate-400">
+      {services.reduce((a, s) => a + s.envKeys.length, 0)} environment keys are declared across the stack, and{' '}
+      {atlas.services.filter((s) => s.healthcheck).length} service defines a healthcheck. The compose gate on this site
+      also verifies that no credential is committed as a literal default —{' '}
+      {atlas.openChecks.length === 0
+        ? 'and none is.'
+        : `the one place it found fallback values is listed under open items on the atlas overview.`}
+    </p>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="grpc">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">gRPC surface</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      One <code>.proto</code> file, {atlas.proto.services.length} services, {atlas.proto.rpcCount} methods and{' '}
+      {atlas.proto.messageCount} message types — generated into Go stubs for the control plane and Python servicers for
+      the engine. A mismatch cannot reach production silently: the call simply does not exist.
+    </p>
+    <SpecTable
+      headers={['Service', 'Methods', 'Domain', 'Sample methods']}
+      rows={atlas.proto.services.map((service) => [
+        `<code>${service.name}</code>`,
+        `${service.count} <span class="atlas-bar-track inline-block align-middle ml-2" style="width:5rem"><span class="atlas-bar-fill" style="width:${Math.max(4, Math.round((service.count / rpcPeak) * 100))}%"></span></span>`,
+        service.domain,
+        service.rpcs.slice(0, 4).map((rpc) => `<code>${rpc}</code>`).join(' '),
+      ])}
+      caption={`${atlas.proto.rpcCount} RPCs defined in ${atlas.proto.path}`}
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="vocabulary">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Log vocabulary</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      {atlas.pipeline.tags.length} distinct stage tags, {number(atlas.pipeline.total)} occurrences, parsed out of the
+      engine's source. This is the vocabulary an operator greps for when something did not arrive — which is why the
+      flows above quote these tags instead of inventing their own names.
+    </p>
+    <div class="flex flex-wrap gap-1.5">
+      {
+        atlas.pipeline.tags.slice(0, 30).map((tag) => (
+          <span class="atlas-tag" style={{ opacity: Math.max(0.55, Math.min(1, 0.55 + (tag.count / tagPeak) * 0.45)) }}>
+            PIPELINE:{tag.tag} <span class="text-slate-400">×{tag.count}</span>
+          </span>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="absences">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Links that do not exist</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The topology is defined as much by what is missing. Each of the following is a search over the checkout that came
+      back empty on this build — a negative claim the site re-checks rather than asserts once.
+    </p>
+    <div class="grid gap-2 md:grid-cols-2">
+      {
+        atlas.verifiedAbsences.map((absence) => (
+          <div class="atlas-card" style="padding:0.7rem 0.9rem">
+            <h3 class="text-[13px]">{absence.label}</h3>
+            <p class="text-[12.5px]">{absence.claim}</p>
+            <p class="atlas-mono text-[11px] mt-1 text-slate-400">searched: {absence.scope}</p>
+          </div>
+        ))
+      }
+    </div>
+
+    <Callout type="info" class="mt-4">
+      <p>
+        These absences are what makes the isolation boundary believable: if nothing in the mobile client can reach the
+        engine directly, then every access it makes has passed the REST control plane's tenant check.
+      </p>
+    </Callout>
+
+    <p class="mt-4 text-[13px] text-slate-400">
+      The links here are the runtime view. For the code-level view — which module imports which, and where the coupling
+      is concentrated — open <a href={url('/system/dependencies/')}>the dependency atlas</a>, or go back to the{' '}
+      <a href={url('/system/')}>atlas overview<Icon name="arrow-right" class="w-3.5 h-3.5 inline-block" /></a>.
+    </p>
+  </section>
+</DocsLayout>
