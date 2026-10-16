@@ -1,0 +1,222 @@
+{
+  "tool": "scripts/bench/logger_rust_bench.py",
+  "generated_at": "2026-10-16T16:28:24Z",
+  "host": {
+    "sysname": "Linux",
+    "machine": "x86_64",
+    "cpus": 2,
+    "python": "3.14.7"
+  },
+  "engine_image": {
+    "name": "autotelegramforward-logger-rust:latest",
+    "id": "sha256:81368e34f6aeac7b9e32ec09c7952d9d53934d0c711a5861915c870c6cef837e"
+  },
+  "client_image": {
+    "name": "autotelegramforward-core:latest",
+    "id": "sha256:827301cc3b996b797e1c9a0cc0fce42ddebbabcd0a848d48b3a7203aa1448715"
+  },
+  "config": {
+    "seconds": 5.0,
+    "producers": 4,
+    "profile": "small",
+    "query_iterations": 10,
+    "max_inflight": 64,
+    "client_processes": 1,
+    "ts_unit": "s",
+    "engine_args": [
+      "--batch-size",
+      "512",
+      "--batch-delay-ms",
+      "2",
+      "--ack-mode",
+      "durable"
+    ],
+    "graceful_stop": true,
+    "rates": [
+      1000
+    ]
+  },
+  "runs": [
+    {
+      "target_rate": 1000,
+      "attempt": 1,
+      "engine_command": [
+        "docker",
+        "run",
+        "-d",
+        "--rm",
+        "--name",
+        "atf-bench-engine-446724-1792168104-1000-1",
+        "--network",
+        "atf-bench-net-446724-1792168104",
+        "--network-alias",
+        "atf-bench-engine-446724-1792168104-1000-1",
+        "-v",
+        "/root/.hermes/cache/scratch/run-1000-1-446724-1792168104-1000-1/data:/app/data",
+        "autotelegramforward-logger-rust:latest",
+        "--db",
+        "/app/data/bench.db",
+        "--listen",
+        "0.0.0.0:50052",
+        "--metrics-listen",
+        "0.0.0.0:9109",
+        "--retention-ts-unit",
+        "s",
+        "--print-addr",
+        "--batch-size",
+        "512",
+        "--batch-delay-ms",
+        "2",
+        "--ack-mode",
+        "durable"
+      ],
+      "client_command": [
+        "docker",
+        "run",
+        "--rm",
+        "--name",
+        "atf-bench-client-446724-1792168104-1000-1",
+        "--network",
+        "atf-bench-net-446724-1792168104",
+        "-v",
+        "/root/atf-master-deploy/scripts/bench/logger_rust_bench.py:/bench/logger_rust_bench.py:ro",
+        "autotelegramforward-core:latest",
+        "python3",
+        "/bench/logger_rust_bench.py",
+        "--client",
+        "--target-addr",
+        "atf-bench-engine-446724-1792168104-1000-1:50052",
+        "--rate",
+        "1000",
+        "--seconds",
+        "5.0",
+        "--producers",
+        "4",
+        "--profile",
+        "small",
+        "--query-iterations",
+        "10",
+        "--seed",
+        "20261016",
+        "--max-inflight",
+        "64",
+        "--ts-unit",
+        "s",
+        "--client-processes",
+        "1"
+      ],
+      "listening_addr": "0.0.0.0:50052",
+      "engine_container": "b1544932c0cdbc5430892dec7089ea0d3e77d846761a9db7b42241fe5c34b904",
+      "metrics_excerpt": [
+        "atf_logger_events_persisted_total 1704",
+        "atf_logger_events_accepted_total{level=\"CRITICAL\"} 52",
+        "atf_logger_events_accepted_total{level=\"ERROR\"} 692",
+        "atf_logger_events_accepted_total{level=\"WARN\"} 960",
+        "atf_logger_events_rejected_total{reason=\"filtered\"} 3296",
+        "atf_logger_queue_depth_total{lane=\"normal\"} 960",
+        "atf_logger_queue_depth_total{lane=\"priority\"} 744",
+        "atf_logger_queue_capacity{lane=\"normal\"} 6144",
+        "atf_logger_queue_capacity{lane=\"priority\"} 2048",
+        "atf_logger_queue_depth 0",
+        "atf_logger_queue_capacity 8192",
+        "atf_logger_batches_in_flight 0",
+        "atf_logger_queue_utilization 0.000000",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.0001\"} 0",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.0005\"} 0",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.001\"} 0",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.0025\"} 966",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.005\"} 1001",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.01\"} 1002",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.025\"} 1002",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.05\"} 1003",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.1\"} 1003",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.25\"} 1003",
+        "atf_logger_queue_wait_seconds_bucket{le=\"0.5\"} 1003",
+        "atf_logger_queue_wait_seconds_bucket{le=\"1\"} 1003",
+        "atf_logger_queue_wait_seconds_bucket{le=\"2.5\"} 1003",
+        "atf_logger_queue_wait_seconds_bucket{le=\"5\"} 1003",
+        "atf_logger_queue_wait_seconds_bucket{le=\"10\"} 1003",
+        "atf_logger_queue_wait_seconds_bucket{le=\"+Inf\"} 1003",
+        "atf_logger_queue_wait_seconds_sum 2.178354",
+        "atf_logger_queue_wait_seconds_count 1003",
+        "atf_logger_batch_size_bucket{le=\"1\"} 473",
+        "atf_logger_batch_size_bucket{le=\"2\"} 859",
+        "atf_logger_batch_size_bucket{le=\"4\"} 1001",
+        "atf_logger_batch_size_bucket{le=\"8\"} 1002",
+        "atf_logger_batch_size_bucket{le=\"16\"} 1003",
+        "atf_logger_batch_size_bucket{le=\"32\"} 1003",
+        "atf_logger_batch_size_bucket{le=\"64\"} 1003",
+        "atf_logger_batch_size_bucket{le=\"128\"} 1003",
+        "atf_logger_batch_size_bucket{le=\"256\"} 1003"
+      ],
+      "engine_logs_tail": [],
+      "ingest": {
+        "offered": 5000,
+        "accepted": 1704,
+        "rejected": 3296,
+        "pending_at_stop": 3,
+        "errors": {
+          "rejected:FILTERED": 3296
+        },
+        "blocked_ms": 4.2,
+        "offered_per_sec": 999.8,
+        "accepted_per_sec": 340.7,
+        "latency_ms": {
+          "p50": 3.838,
+          "p95": 5.081,
+          "p99": 8.587,
+          "max": 41.03,
+          "mean": 3.116
+        },
+        "duration_s": 5.0,
+        "persisted": 1704,
+        "persisted_per_sec": 340.8,
+        "db_bytes": 483328
+      },
+      "query": {
+        "recent_50": {
+          "p50": 0.364,
+          "p95": 1.849,
+          "p99": 1.849,
+          "max": 1.849,
+          "mean": 0.522
+        },
+        "errors_only": {
+          "p50": 0.577,
+          "p95": 1.205,
+          "p99": 1.205,
+          "max": 1.205,
+          "mean": 0.716
+        },
+        "search_corr": {
+          "p50": 0.449,
+          "p95": 0.712,
+          "p99": 0.712,
+          "max": 0.712,
+          "mean": 0.475
+        },
+        "rule_history": {
+          "p50": 40.99,
+          "p95": 41.581,
+          "p99": 41.581,
+          "max": 41.581,
+          "mean": 33.423
+        },
+        "deep_page": {
+          "p50": 0.309,
+          "p95": 0.657,
+          "p99": 0.657,
+          "max": 0.657,
+          "mean": 0.346
+        },
+        "stats": {
+          "p50": 0.638,
+          "p95": 1.952,
+          "p99": 1.952,
+          "max": 1.952,
+          "mean": 0.924
+        }
+      }
+    }
+  ]
+}
