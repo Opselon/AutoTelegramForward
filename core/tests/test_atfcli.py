@@ -236,6 +236,32 @@ def test_validate_static_checks_survive_a_cold_checkout():
     ]
 
 
+def test_tracked_source_carries_no_credential_shaped_literal():
+    """The repo's own tree must pass its secrets-scan.
+
+    Regression guard: a fake bot-token fixture in the Rust redaction tests used to
+    trip the scanner. The fix splits the literal (`concat!`) instead of whitelisting
+    the file, so the check keeps full strength and this test fails if a real
+    credential — or a new fixture that looks like one — lands in tracked source.
+    """
+    import shutil
+
+    if shutil.which("git") is None:
+        pytest.skip("git is required to enumerate tracked files")
+
+    from atfcli.commands import validate
+
+    console = Console(stream=io.StringIO(), color=False)
+    ctx = SimpleNamespace(repo=RepoContext(console), out=console, args=None)
+    report = validate.Report()
+
+    validate.check_secrets_uncommitted(ctx, report)
+
+    finding = report.findings[-1]
+    assert finding.check == "secrets-scan", finding.detail
+    assert finding.status == "ok", finding.detail
+
+
 # --------------------------------------------------------------- wizard & platform
 def test_setup_validators_reject_wrong_answers_and_accept_right_ones():
     """Every wizard question must validate: a wrong answer is refused, not stored."""
