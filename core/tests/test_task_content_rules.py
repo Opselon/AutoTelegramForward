@@ -451,3 +451,10 @@ def test_a_target_list_always_mirrors_its_first_entry():
     kept.apply_draft({"target_chat_id": "-6000", "target_chat_ids": ["-6000", "-6001"]})
     assert kept.target_chat_id == "-6000"
     assert kept.all_targets == ["-6000", "-6001"]
+
+    # A bare assignment of the list cannot be intercepted on a plain field, so
+    # the destination read falls back to the list rather than going empty.
+    bare = ForwardRule(id="t6", name="n", source_chat_id="-1001")
+    bare.target_chat_ids = ["-7001", "-7002"]
+    assert bare.destination_chat_id == "-7001"
+    assert bare.all_targets == ["-7001", "-7002"]

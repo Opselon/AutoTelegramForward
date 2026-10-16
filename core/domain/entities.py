@@ -1316,7 +1316,16 @@ class ForwardRule:
 
     @property
     def destination_chat_id(self) -> str:
-        return self.target_chat_id
+        """The effective destination: the primary, or the list's first entry.
+
+        The list and its mirror are two spellings of one fact, and every write
+        path here keeps them in step (set_targets, apply_draft, __post_init__).
+        This still falls back to the list, because a caller that assigns
+        `target_chat_ids` directly — a bare Python assignment cannot be
+        intercepted on a plain dataclass field — must not end up with a
+        destination-less task that the dispatcher happily reads the list for.
+        """
+        return self.target_chat_id or (self.target_chat_ids[0] if self.target_chat_ids else "")
 
     @property
     def intermediate_chat_id(self) -> str:
