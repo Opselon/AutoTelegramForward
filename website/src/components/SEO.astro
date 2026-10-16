@@ -1,6 +1,7 @@
 ---
 import repoInfo from '../data/repo-info.json';
 import { seoKeywords } from '../data/site';
+import { absolute } from '../utils/paths';
 
 interface FaqEntry {
   q: string;
@@ -55,20 +56,16 @@ const {
 const siteUrl = Astro.site ? Astro.site.toString().replace(/\/$/, '') : 'https://opselon.github.io';
 // The site ships under a base path (GitHub Pages project site), so any URL that
 // is not already base-prefixed has to be joined with siteUrl + BASE_URL.
+// `absolute()` (utils/paths) owns that maths so the SEO graph, the feed and
+// llms.txt cannot drift apart.
 const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 const baseUrl = `${siteUrl}${basePath}`;
-const absolute = (value: string) => {
-  if (value.startsWith('http')) return value;
-  const path = value.startsWith('/') ? value : `/${value}`;
-  // Already base-prefixed paths (produced by utils/paths url()) must not be
-  // prefixed twice.
-  return path.startsWith(`${basePath}/`) || path === basePath ? `${siteUrl}${path}` : `${baseUrl}${path}`;
-};
 const currentPath = Astro.url.pathname;
 const canonicalUrl = canonical ? absolute(canonical) : `${siteUrl}${currentPath}`;
 const fullImageUrl = absolute(image);
 const fullTitle = title.includes('AutoTelegramForward') ? title : `${title} | AutoTelegramForward`;
 const repoUrl = repoInfo.repoUrl;
+const modified = articleModified || repoInfo.gitDate || new Date().toISOString();
 
 const breadcrumbSchema =
   breadcrumbs && breadcrumbs.length > 0
@@ -125,9 +122,35 @@ const graph: Record<string, unknown>[] = [
     url: 'https://github.com/Opselon',
     sameAs: [repoUrl],
   },
+  {
+    // One WebPage per route: it is what joins the article, the breadcrumb
+    // trail and the site node into a single connected graph.
+    '@type': type === 'article' ? 'TechArticle' : 'WebPage',
+    '@id': `${canonicalUrl}#page`,
+    url: canonicalUrl,
+    name: fullTitle,
+    description,
+    inLanguage: 'en',
+    isPartOf: { '@id': `${baseUrl}/#website` },
+    about: { '@id': `${baseUrl}/#software` },
+    primaryImageOfPage: { '@type': 'ImageObject', url: fullImageUrl },
+    datePublished: articleDate || repoInfo.releaseDate,
+    dateModified: modified,
+    ...(breadcrumbSchema ? { breadcrumb: { '@id': `${canonicalUrl}#breadcrumbs` } } : {}),
+    ...(type === 'article'
+      ? {
+          headline: title,
+          author: { '@id': `${repoUrl}#organization` },
+          publisher: { '@id': `${repoUrl}#organization` },
+          proficiencyLevel: 'Expert',
+        }
+      : {}),
+  },
 ];
 
-if (breadcrumbSchema) graph.push(breadcrumbSchema);
+if (breadcrumbSchema) {
+  graph.push({ ...breadcrumbSchema, '@id': `${canonicalUrl}#breadcrumbs` });
+}
 
 if (faq && faq.length > 0) {
   graph.push({
@@ -178,10 +201,11 @@ const schema = { '@context': 'https://schema.org', '@graph': graph };
 <meta name="keywords" content={keywords.join(', ')} />
 <meta name="author" content="Opselon" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="color-scheme" content="dark" />
-<meta name="theme-color" content="#0b1120" />
+<meta name="color-scheme" content="dark light" />
+<meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#f6f8fc" media="(prefers-color-scheme: light)" />
 <meta name="generator" content="Astro" />
-<meta name="robots" content={noindex ? 'noindex, nofollow' : 'index, follow, max-image-preview:large, max-snippet:-1'} />
+<meta name="robots" content={noindex ? 'noindex, nofollow' : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'} />
 <meta name="application-name" content="AutoTelegramForward" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

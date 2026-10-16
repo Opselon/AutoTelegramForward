@@ -252,4 +252,34 @@ const nextLink = next ?? autoNext;
       }
     </div>
   </div>
+
+  <script>
+    // Scroll-spy: keep the active heading marked in both TOC copies so a reader
+    // always knows where they are in a long reference page.
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a.toc-link[href^="#"]'));
+    const targets = links
+      .map((link) => ({ link, section: document.getElementById(decodeURIComponent(link.hash.slice(1))) }))
+      .filter((entry): entry is { link: HTMLAnchorElement; section: HTMLElement } => !!entry.section);
+
+    if (targets.length) {
+      let current: HTMLAnchorElement | null = null;
+      const mark = () => {
+        // The last heading whose top has passed the header is the active one.
+        const offset = 120;
+        let active = targets[0];
+        for (const entry of targets) {
+          if (entry.section.getBoundingClientRect().top - offset <= 0) active = entry;
+        }
+        if (active.link === current) return;
+        current = active.link;
+        links.forEach((link) => link.classList.toggle('is-active', link === active.link));
+        document
+          .querySelectorAll('a.toc-link.is-active')
+          .forEach((link) => link.setAttribute('aria-current', 'true'));
+      };
+      window.addEventListener('scroll', mark, { passive: true });
+      window.addEventListener('resize', mark, { passive: true });
+      mark();
+    }
+  </script>
 </BaseLayout>

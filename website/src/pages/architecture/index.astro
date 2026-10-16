@@ -8,7 +8,7 @@ import repoInfo from '../../data/repo-info.json';
 import { url } from '../../utils/paths';
 
 const pageTitle = 'Architecture';
-const pageDesc = `How AutoTelegramForward is put together: four services, a ${repoInfo.stats.grpcRpcCount}-method gRPC contract, the message pipeline from ingest to delivery, ordered lanes and the durable queue.`;
+const pageDesc = `How AutoTelegramForward is put together: ${repoInfo.stats.services} services, a ${repoInfo.stats.grpcRpcCount}-method gRPC contract, the ingest-to-delivery pipeline, ordered lanes and the durable queue.`;
 
 const toc = [
   { id: 'services', title: 'Services' },

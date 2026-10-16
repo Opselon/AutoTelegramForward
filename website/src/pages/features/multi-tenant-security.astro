@@ -2,8 +2,8 @@
 import DocsLayout from '../../layouts/DocsLayout.astro';
 import { url } from '../../utils/paths';
 
-const pageTitle = "Fail-Closed Multi-Tenant Security & Tenant Isolation";
-const pageDesc = "Architectural principles behind AutoTelegramForward's multi-tenant isolation, fail-closed access controls, and zero cross-tenant visibility.";
+const pageTitle = "Fail-Closed Multi-Tenant Security";
+const pageDesc = "The isolation model behind AutoTelegramForward: fail-closed access control and zero cross-tenant visibility across bot, web, mobile, REST and gRPC.";
 ---
 
 <DocsLayout
@@ -42,21 +42,21 @@ const pageDesc = "Architectural principles behind AutoTelegramForward's multi-te
     <h2 id="isolation-boundaries">Three-Tier Isolation Boundaries</h2>
     <div class="space-y-4 not-prose my-6 text-xs">
       <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
-        <h4 class="font-bold text-white text-sm mb-1">1. Telegram Bot Tier (pro_bot_ui.py)</h4>
+        <h3 class="font-bold text-white text-sm mb-1">1. Telegram Bot Tier (pro_bot_ui.py)</h3>
         <p class="text-slate-400">
           The Telegram Bot UI extracts <code>event.sender_id</code> and validates tenant identity before rendering any menu. Unlinked users cannot access administrative dashboards or see tasks belonging to other users.
         </p>
       </div>
 
       <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
-        <h4 class="font-bold text-white text-sm mb-1">2. REST & gRPC API Tier (atf-api & atf-core)</h4>
+        <h3 class="font-bold text-white text-sm mb-1">2. REST & gRPC API Tier (atf-api & atf-core)</h3>
         <p class="text-slate-400">
           Every internal gRPC call between the Go API Gateway (8080) and Python Core (50051) carries cryptographically signed metadata containing <code>owner_user_id</code>. Servicers reject requests lacking identity headers.
         </p>
       </div>
 
       <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
-        <h4 class="font-bold text-white text-sm mb-1">3. Database Repository Tier</h4>
+        <h3 class="font-bold text-white text-sm mb-1">3. Database Repository Tier</h3>
         <p class="text-slate-400">
           SQL queries strictly append <code>WHERE user_id = :owner_user_id</code>. There are no global unscoped listing endpoints accessible to standard tenants.
         </p>

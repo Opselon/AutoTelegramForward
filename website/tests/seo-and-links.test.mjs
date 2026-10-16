@@ -162,6 +162,179 @@ for (const file of htmlFiles) {
 
 console.log(`🔗 Checked ${linkCount} internal links and asset references`);
 
+// 6. Search-snippet budgets, heading structure and canonical base sanity.
+//    Google truncates a title near 60 characters and a description near 160, and
+//    two pages sharing a snippet means one of them is competing with itself.
+const seenTitles = new Map();
+const seenDescriptions = new Map();
+const headingCounts = new Map();
+
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };
+
+/**
+ * HTML entities inflate raw markup: `&amp;` is five characters for one. Decode
+ * in a single pass — chaining replaces would turn `&amp;lt;` into `<`, which
+ * would then be measured as a one-character description.
+ */
+const decodeEntities = (value) =>
+  value.replace(/&(#39|amp|lt|gt|quot|nbsp);/g, (_, name) => ENTITIES[name]);
+
+/**
+ * Whether this dist was built with the deploy base path. `npm run build` locally
+ * can be run root-relative, in which case the canonical shape is checked but the
+ * base-path assertion is reported as skipped rather than failed — the base-path
+ * build is the one that deploys.
+ */
+const distCarriesBase = basePrefix
+  ? htmlFiles.some((file) =>
+      new RegExp(`rel=["']canonical["']\\s+href=["'][^"']*${basePrefix}`).test(
+        fs.readFileSync(file, 'utf8'),
+      ),
+    )
+  : false;
+if (basePrefix && !distCarriesBase) {
+  console.warn(
+    `⚠️  dist/ was built without the ${basePrefix} base path; canonical base-prefix assertion skipped (rebuild with BASE_PATH=${basePrefix}).`,
+  );
+}
+
+for (const file of htmlFiles) {
+  const relPath = path.relative(distDir, file);
+  const content = fs.readFileSync(file, 'utf8');
+  const title = decodeEntities((content.match(/<title>([^<]*)<\/title>/i) || [, ''])[1]).trim();
+  const description = decodeEntities(
+    (content.match(/<meta\s+name=["']description["']\s+content=["']([^"']*)["']/i) || [, ''])[1],
+  ).trim();
+
+  if (title.length > 65) {
+    console.error(`❌ [${relPath}] Title is ${title.length} chars (max 65): ${title}`);
+    errors++;
+  } else if (title.length < 15) {
+    console.error(`❌ [${relPath}] Title is only ${title.length} chars: ${title}`);
+    errors++;
+  }
+  if (description.length > 160) {
+    console.error(`❌ [${relPath}] Description is ${description.length} chars (max 160)`);
+    errors++;
+  } else if (description.length < 80) {
+    console.error(`❌ [${relPath}] Description is only ${description.length} chars`);
+    errors++;
+  }
+  for (const [value, map] of [
+    [title, seenTitles],
+    [description, seenDescriptions],
+  ]) {
+    if (map.has(value)) {
+      console.error(`❌ [${relPath}] Duplicate snippet text shared with ${map.get(value)}`);
+      errors++;
+    } else {
+      map.set(value, relPath);
+    }
+  }
+
+  // Canonical must carry the deploy base exactly once (checked on the build that
+  // is actually deployed; a root-relative local build is reported, not failed).
+  const canonical = (content.match(/<link\s+rel=["']canonical["']\s+href=["']([^"']+)["']/i) || [, ''])[1];
+  const occurrences = basePrefix && canonical ? canonical.split(basePrefix).length - 1 : 0;
+  if (distCarriesBase && occurrences !== 1) {
+    console.error(
+      `❌ [${relPath}] Canonical must carry ${basePrefix} exactly once, found ${occurrences}: ${canonical}`,
+    );
+    errors++;
+  }
+  if (canonical && /\/\/[^/]*\/\/|https?:\/\/[^/]*AutoTelegramForward.*AutoTelegramForward/.test(canonical)) {
+    console.error(`❌ [${relPath}] Canonical looks double-prefixed: ${canonical}`);
+    errors++;
+  }
+
+  // Exactly one h1, and no skipped heading levels.
+  const headings = [...content.matchAll(/<h([1-6])\b[^>]*>/gi)].map((m) => Number(m[1]));
+  headingCounts.set(relPath, headings.length);
+  const h1s = headings.filter((level) => level === 1).length;
+  if (h1s !== 1) {
+    console.error(`❌ [${relPath}] Expected exactly one <h1>, found ${h1s}`);
+    errors++;
+  }
+  let previous = 0;
+  for (const level of headings) {
+    if (previous && level > previous + 1) {
+      console.error(`❌ [${relPath}] Heading level jumps from h${previous} to h${level}`);
+      errors++;
+    }
+    previous = level;
+  }
+
+  // The 404 must not be indexable.
+  if (/404\.html$/.test(relPath) && !/name=["']robots["']\s+content=["']noindex/i.test(content)) {
+    console.error(`❌ [${relPath}] 404 page is missing a noindex directive`);
+    errors++;
+  }
+
+  // Structured data must be one connected @graph per page.
+  const ld = content.match(/<script\s+type=["']application\/ld\+json["']>([\s\S]*?)<\/script>/i);
+  if (ld) {
+    try {
+      const parsed = JSON.parse(ld[1]);
+      const types = JSON.stringify(parsed['@graph'] || parsed);
+      for (const required of ['WebSite', 'SoftwareApplication', 'Organization', 'WebPage']) {
+        if (!types.includes(`"${required}"`) && !(required === 'WebPage' && types.includes('TechArticle'))) {
+          console.error(`❌ [${relPath}] JSON-LD graph is missing the ${required} node`);
+          errors++;
+        }
+      }
+    } catch {
+      /* already reported above */
+    }
+  }
+}
+
+// 7. Machine-readable surfaces: feed, llms.txt, sitemap metadata, webfonts.
+const requiredArtifacts = [
+  ['rss.xml', 'RSS feed'],
+  ['llms.txt', 'llms.txt'],
+  ['sitemap-index.xml', 'sitemap index'],
+  ['search.json', 'search index'],
+  ['.nojekyll', '.nojekyll'],
+];
+for (const [rel, label] of requiredArtifacts) {
+  if (!fs.existsSync(path.join(distDir, rel))) {
+    console.error(`❌ ${label} missing from dist/ (${rel})`);
+    errors++;
+  }
+}
+
+const sitemapBody = fs.existsSync(path.join(distDir, 'sitemap-0.xml'))
+  ? fs.readFileSync(path.join(distDir, 'sitemap-0.xml'), 'utf8')
+  : '';
+if (sitemapBody) {
+  const urls = sitemapBody.match(/<url>/g)?.length || 0;
+  const lastmods = sitemapBody.match(/<lastmod>/g)?.length || 0;
+  const priorities = sitemapBody.match(/<priority>/g)?.length || 0;
+  if (urls !== lastmods || urls !== priorities) {
+    console.error(`❌ sitemap metadata incomplete: ${urls} urls, ${lastmods} lastmod, ${priorities} priority`);
+    errors++;
+  } else {
+    console.log(`🗺️  Sitemap carries ${urls} urls, each with lastmod, changefreq and priority.`);
+  }
+  if (/404/.test(sitemapBody)) {
+    console.error('❌ The 404 route must not appear in the sitemap');
+    errors++;
+  }
+}
+
+const fontCount = fs.existsSync(path.join(distDir, '_astro'))
+  ? fs.readdirSync(path.join(distDir, '_astro')).filter((name) => name.endsWith('.woff2')).length
+  : 0;
+if (fontCount < 2) {
+  console.error(`❌ Expected self-hosted webfonts in _astro/, found ${fontCount}`);
+  errors++;
+} else {
+  console.log(`🔤 ${fontCount} self-hosted webfont files emitted.`);
+}
+
+const totalWords = [...headingCounts.values()].reduce((sum, n) => sum + n, 0);
+console.log(`🧭 ${headingCounts.size} pages, ${totalWords} headings, snippet budgets enforced.`);
+
 if (errors > 0) {
   console.error(`\n❌ SEO Audit Failed with ${errors} errors!`);
   process.exit(1);

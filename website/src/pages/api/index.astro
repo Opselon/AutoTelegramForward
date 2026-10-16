@@ -8,7 +8,7 @@ import repoInfo from '../../data/repo-info.json';
 import { url } from '../../utils/paths';
 
 const pageTitle = 'REST API reference';
-const pageDesc = `Every route the AutoTelegramForward control plane registers — ${repoInfo.apiRoutes.length} endpoints across system health, authentication, the authenticated control plane and administration — with auth rules and cURL examples.`;
+const pageDesc = `All ${repoInfo.apiRoutes.length} routes the AutoTelegramForward control plane registers, grouped by subsystem, each with its verb, auth rule and a cURL example.`;
 
 const toc = [
   { id: 'auth', title: 'Authentication' },
