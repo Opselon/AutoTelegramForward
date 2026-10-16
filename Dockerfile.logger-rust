@@ -1,0 +1,55 @@
+# ATF Logger (Rust engine) — opt-in image.
+# Build:  docker build -f Dockerfile.logger-rust -t atf-logger-rust:latest .
+# Run:    docker compose --profile rust-logger up -d
+# The Rust engine is NOT the default logging service. Until it is explicitly
+# promoted, the Python logger (Dockerfile.logger -> service `logger`) stays the
+# active store and the default `docker compose up` never starts this one.
+FROM rust:1.90-slim-bookworm AS build
+
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        protobuf-compiler pkg-config libssl-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Dependency layer: manifest + proto + build script first so the expensive
+# dependency compile is cached independently of the engine sources.
+COPY rust/logger/Cargo.toml rust/logger/Cargo.lock ./
+COPY rust/logger/build.rs ./
+COPY rust/logger/proto/ ./proto/
+RUN mkdir -p src \
+    && printf 'pub fn warmup() {}\n' > src/lib.rs \
+    && printf 'fn main() {}\n' > src/main.rs \
+    && (cargo build --release --bin atf-logger || cargo fetch) \
+    && rm -rf src target/release/atf-logger*
+
+# Engine layer.
+COPY rust/logger/src/ ./src/
+RUN touch src/main.rs src/lib.rs \
+    && cargo build --release --bin atf-logger \
+    && cp target/release/atf-logger /out-atf-logger
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r logger && useradd -r -g logger logger
+
+COPY --from=build /out-atf-logger /usr/local/bin/atf-logger
+RUN mkdir -p /app/data && chown logger:logger /app/data
+
+USER logger
+WORKDIR /app/data
+
+EXPOSE 50052 9109
+# Health surface: /healthz is the liveness probe the crate itself documents
+# (--metrics-listen must therefore be reachable inside the container; the compose
+# service sets 0.0.0.0:9109 for that reason).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:9109/healthz || exit 1
+
+ENTRYPOINT ["/usr/local/bin/atf-logger"]
+# Defaults chosen for an isolated container: its own archive and an
+# externally-visible metrics bind. gRPC keeps its documented default 50052,
+# which does NOT collide with the Python logger because each is inside its own
+# container and only core reaches them, by DNS name, over the atf-net network.
+CMD ["--db", "/app/data/atf_logs_rust.db", "--metrics-listen", "0.0.0.0:9109"]
