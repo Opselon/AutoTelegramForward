@@ -80,6 +80,16 @@ class _RulesScreenState extends State<RulesScreen> {
     }
   }
 
+  /// Primary endpoint keeps its channel title; the remaining entries of a
+  /// multi-endpoint route are appended as ids, so the card never hides the fact
+  /// that a message fans out to more than one chat.
+  String _routeLabel(List<String> ids, String primaryTitle, String fallback) {
+    if (ids.isEmpty) return fallback;
+    final primary = primaryTitle.isNotEmpty ? primaryTitle : ids.first;
+    if (ids.length == 1) return primary;
+    return <String>[primary, ...ids.skip(1)].join(', ');
+  }
+
   Future<void> _toggle(ForwardRule rule) async {
     final client = context.read<AppState>().buildApiClient();
     try {
@@ -250,6 +260,19 @@ class _RulesScreenState extends State<RulesScreen> {
                                   : (r.targetChatId.isNotEmpty
                                       ? r.targetChatId
                                       : 'AF Route Lab Target');
+                          // A task can hold several sources and several targets;
+                          // the card shows the whole fan-out so a multi-entry
+                          // route is visible without opening the task.
+                          final srcDisplay = _routeLabel(
+                            r.sourceIds,
+                            r.sourceChatTitle,
+                            srcTitle,
+                          );
+                          final dstDisplay = _routeLabel(
+                            r.allTargets,
+                            r.targetChatTitle,
+                            dstTitle,
+                          );
 
                           return Card(
                             margin: const EdgeInsets.only(bottom: 16),
@@ -429,12 +452,12 @@ class _RulesScreenState extends State<RulesScreen> {
                                                 ),
                                               ),
                                               Text(
-                                                srcTitle,
+                                                srcDisplay,
                                                 style: const TextStyle(
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w600,
                                                 ),
-                                                maxLines: 1,
+                                                maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                               const Text(
@@ -470,17 +493,25 @@ class _RulesScreenState extends State<RulesScreen> {
                                                 ),
                                               ),
                                               Text(
-                                                dstTitle,
+                                                dstDisplay,
                                                 style: const TextStyle(
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w600,
                                                 ),
-                                                maxLines: 1,
+                                                maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
-                                              const Text(
-                                                'Telegram',
-                                                style: TextStyle(
+                                              Text(
+                                                r.isFanOut
+                                                    ? t.get(
+                                                      'rules_route_fan_out',
+                                                      params: {
+                                                        'count':
+                                                            '${r.allTargets.length}',
+                                                      },
+                                                    )
+                                                    : 'Telegram',
+                                                style: const TextStyle(
                                                   fontSize: 10,
                                                   color: Color(0xFF38BDF8),
                                                 ),
@@ -490,6 +521,37 @@ class _RulesScreenState extends State<RulesScreen> {
                                         ),
                                       ],
                                     ),
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // The rule id is the per-task identity: it is
+                                  // what a log line, an audit event or a ticket
+                                  // quotes, so the card shows it up front.
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.fingerprint,
+                                        size: 13,
+                                        color: Colors.grey,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        t.get('rules_task_id'),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade400,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '#${r.shortId}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade300,
+                                          fontFamily: 'monospace',
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   const SizedBox(height: 10),
 

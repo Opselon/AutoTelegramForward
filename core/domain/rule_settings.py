@@ -188,9 +188,46 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     "link_buttons": _s(kind="list", default=[], group="automation",
                        item_kind="str"),
     "affiliate_kit": _s(kind="dict", default={}, group="automation"),
+
+    # ---- per-task content rules (blacklist / whitelist-only / replace) -----
+    # Read and written through the ForwardRule properties, which keep the whole
+    # policy in one metadata blob (`content_policy`) so a task carries its own
+    # rules with it through backup/restore and the API's settings surface.
+    "content_policy_enabled": _s(
+        kind="bool", default=False, group="content",
+        help="Master switch for this task's content rules."),
+    "blacklist_words": _s(
+        kind="list", default=[], group="content", item_kind="str",
+        help="Never forward a message that contains one of these words."),
+    "whitelist_words": _s(
+        kind="list", default=[], group="content", item_kind="str",
+        help="Forward only when the message contains these words (see whitelist_mode)."),
+    "whitelist_mode": _s(
+        kind="str", default="any", group="content", choices=("any", "all", "phrase"),
+        help="any = at least one word, all = every word, phrase = the words in order."),
+    # NB: "block_links" is registered once, under the media group (see above):
+    # it is the same entity property, and the content policy folds it in.
+    "remove_links": _s(
+        kind="bool", default=False, group="content",
+        help="Forward, but strip the links out of the text."),
+    "strip_words": _s(
+        kind="list", default=[], group="content", item_kind="str",
+        help="Forward, but remove these words from the text."),
+    "regex_block": _s(
+        kind="list", default=[], group="content", item_kind="str",
+        help="Never forward a message matching one of these patterns."),
+    "regex_require": _s(
+        kind="list", default=[], group="content", item_kind="str",
+        help="Forward only a message matching one of these patterns."),
+    "source_policies": _s(
+        kind="dict", default={}, group="content",
+        help="Per-source overrides, keyed by source chat id."),
+    "target_policies": _s(
+        kind="dict", default={}, group="content",
+        help="Per-target overrides, keyed by target chat id."),
 }
 
-_GROUP_ORDER = ("general", "cleanup", "media", "sending", "keywords",
+_GROUP_ORDER = ("general", "cleanup", "content", "media", "sending", "keywords",
                 "audience", "ai", "automation")
 
 

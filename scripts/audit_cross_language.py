@@ -86,31 +86,51 @@ def audit_source_hardcoded() -> None:
       - pv_responder's persona prompt (a user-authored Persian persona by
         design, not a UI string)
 
-    A pre-existing backlog is pinned in scripts/.persian_baseline.txt
-    (file:line per line). The audit fails only on leaks NOT in the
-    baseline — so CI stays green while the backlog is being extracted,
-    and any NEW hardcoded Persian fails immediately. Shrink the baseline
-    as functions are converted; never grow it.
+    A pre-existing backlog is pinned in scripts/.persian_baseline.txt, one entry
+    per line as ``path:lineno|text``. The audit fails only on leaks NOT in the
+    baseline — so CI stays green while the backlog is being extracted, and any
+    NEW hardcoded Persian fails immediately. Shrink the baseline as functions
+    are converted; never grow it.
+
+    The ``text`` half is what makes this stable. A bare line number is not: any
+    insertion above it (a new import, a new catalog key) shifts every entry
+    below and the whole backlog reads as "new" — a red CI run that has nothing
+    to do with the change. An offender counts as pinned when the same file has a
+    baselined line with the same text (position ignored), or, for entries that
+    carry no text, when the file:line still matches.
     """
     baseline_path = REPO / "scripts/.persian_baseline.txt"
-    baseline = set()
+    pinned_text: set[str] = set()
+    pinned_loc: set[str] = set()
     if baseline_path.exists():
-        baseline = {
-            ln.strip() for ln in baseline_path.read_text(encoding="utf-8").splitlines() if ln.strip()
-        }
+        for raw in baseline_path.read_text(encoding="utf-8").splitlines():
+            entry = raw.strip()
+            if not entry or entry.startswith("#"):
+                continue
+            locator, sep, text = entry.partition("|")
+            pinned_loc.add(locator.split("#")[0].strip())
+            if sep and text.strip():
+                pinned_text.add(f"{locator.split(':')[0]}|{text.strip()}")
 
     skip_dirs = {"tests", "locales", "__pycache__"}
     offenders: list[str] = []
+    new_leaks: list[str] = []
     for p in sorted(REPO.joinpath("core").rglob("*.py")):
         if any(part in skip_dirs for part in p.parts):
             continue
         if p.name == "pv_responder.py":
             continue
+        rel = p.relative_to(REPO)
         for i, line in enumerate(p.read_text(encoding="utf-8").split("\n"), 1):
             if RTL_GRAPHEMES.intersection(line) and "STR.Migrations" not in line:
-                offenders.append(f"{p.relative_to(REPO)}:{i}")
+                locator = f"{rel}:{i}"
+                offenders.append(locator)
+                if locator in pinned_loc:
+                    continue
+                if f"{rel}|{line.strip()}" in pinned_text:
+                    continue  # same line, moved by an insertion above it
+                new_leaks.append(locator)
 
-    new_leaks = [o for o in offenders if o not in baseline]
     if new_leaks:
         failures.append(
             f"source: {len(new_leaks)} NEW hardcoded Persian strings not in "
@@ -118,9 +138,10 @@ def audit_source_hardcoded() -> None:
             "Convert them to catalog keys, or if genuinely unavoidable, "
             "regenerate the baseline and explain why."
         )
-    if len(offenders) < len(baseline):
+    pinned_total = len(pinned_text) or len(pinned_loc)
+    if len(offenders) < pinned_total:
         print(
-            f"source: backlog shrank {len(baseline)} -> {len(offenders)}; "
+            f"source: backlog shrank {pinned_total} -> {len(offenders)}; "
             "regenerate scripts/.persian_baseline.txt to pin the progress."
         )
 

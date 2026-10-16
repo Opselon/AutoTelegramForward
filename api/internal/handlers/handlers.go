@@ -651,14 +651,57 @@ func cleanMask(in []string) []string {
 // always the first entry of the resolved list, so a client that only knows the
 // single-source field keeps working unchanged.
 func (h *Handlers) resolveSourceChats(ctx context.Context, sessionID string, rule *pb.ForwardRule, ownerID int64) ([]string, string) {
-	raw := make([]string, 0, len(rule.SourceChatIds)+1)
-	if rule.SourceChatId != "" {
-		raw = append(raw, rule.SourceChatId)
+	resolved, errStr := h.resolveEndpointChats(ctx, sessionID, rule.SourceChatId, rule.SourceChatIds, ownerID, "source_empty", "duplicate_source:")
+	if errStr != "" {
+		return nil, errStr
 	}
-	raw = append(raw, rule.SourceChatIds...)
+	rule.SourceChatIds = resolved
+	rule.SourceChatId = resolved[0]
+	return resolved, ""
+}
+
+// resolveTargetChats canonicalises a task's whole target list, mirroring
+// resolveSourceChats.
+//
+// A task can forward from several channels into several targets, and
+// `ForwardRule.all_targets` in the core reads `target_chat_id` first, so that
+// field stays authoritative and is always the first entry of the resolved list.
+// Every target is resolved, not just the primary, so a multi-target task cannot
+// store a raw username — the dispatcher does `int(chat_id)` before sending.
+func (h *Handlers) resolveTargetChats(ctx context.Context, sessionID string, rule *pb.ForwardRule, ownerID int64) ([]string, string) {
+	resolved, errStr := h.resolveEndpointChats(ctx, sessionID, rule.TargetChatId, rule.TargetChatIds, ownerID, "target_empty", "duplicate_target:")
+	if errStr != "" {
+		return nil, errStr
+	}
+	rule.TargetChatIds = resolved
+	rule.TargetChatId = resolved[0]
+	return resolved, ""
+}
+
+// resolveEndpointChats canonicalises one endpoint list: every entry is resolved
+// through the core, trimmed, empties are dropped, the first-seen order is kept
+// and the result is deduped. `legacy` is the single-value field that mirrors
+// repeated[0]; it comes first so the mirrored primary keeps its position.
+//
+// Returns the reason unchanged when a handle cannot be resolved
+// (resolveChat's "resolve_failed: ..."), `duplicateCode`+id when an entry
+// repeats inside `repeated`, and `emptyCode` when nothing is left.
+//
+// Duplicate detection deliberately looks only inside `repeated`: a client that
+// reads a rule back and re-sends it (GET -> PATCH) sets both the list and its
+// mirror to the same id, which is the documented shape and not a duplicate.
+func (h *Handlers) resolveEndpointChats(ctx context.Context, sessionID, legacy string, repeated []string, ownerID int64, emptyCode, duplicateCode string) ([]string, string) {
+	raw := make([]string, 0, len(repeated)+1)
+	if strings.TrimSpace(legacy) != "" {
+		raw = append(raw, legacy)
+	}
+	raw = append(raw, repeated...)
+	repeatedFrom := len(raw) - len(repeated) // first index that came from `repeated`
 
 	resolved := make([]string, 0, len(raw))
-	for _, candidate := range raw {
+	seen := make(map[string]struct{}, len(raw))
+	seenRepeated := make(map[string]struct{}, len(repeated))
+	for i, candidate := range raw {
 		candidate = strings.TrimSpace(candidate)
 		if candidate == "" {
 			continue
@@ -670,16 +713,146 @@ func (h *Handlers) resolveSourceChats(ctx context.Context, sessionID string, rul
 		if numeric == "" {
 			numeric = candidate
 		}
-		if !containsString(resolved, numeric) {
-			resolved = append(resolved, numeric)
+		if i >= repeatedFrom {
+			if _, dup := seenRepeated[numeric]; dup {
+				return nil, duplicateCode + numeric
+			}
+			seenRepeated[numeric] = struct{}{}
 		}
+		if _, dup := seen[numeric]; dup {
+			continue // already resolved (the legacy mirror repeats repeated[0])
+		}
+		seen[numeric] = struct{}{}
+		resolved = append(resolved, numeric)
 	}
 	if len(resolved) == 0 {
-		return nil, "source_empty"
+		return nil, emptyCode
 	}
-	rule.SourceChatIds = resolved
-	rule.SourceChatId = resolved[0]
 	return resolved, ""
+}
+
+// validateRoute rejects a rule whose source is also one of its targets: such a
+// task would forward its own output back into itself. It runs on the resolved
+// lists, so an overlap is caught however the two sides were spelled (bare id,
+// @username or t.me link). A partial update that touches one side only passes
+// the stored other side in, so the check still covers what is not changing.
+func validateRoute(sources, targets []string) string {
+	if len(sources) == 0 || len(targets) == 0 {
+		return ""
+	}
+	for _, source := range sources {
+		if containsString(targets, source) {
+			return "source_target_overlap:" + source
+		}
+	}
+	return ""
+}
+
+// writeEndpointFailure reports an endpoint or route validation failure the way
+// this handler family already does: HTTP 400 with the precise reason in
+// "error". The reason doubles as "code" (duplicate_target:-100,
+// source_target_overlap:-100, target_empty) so a client can branch on it;
+// resolution failures keep the historic source_/target_resolve_failed codes
+// while the core's own message stays visible in "error".
+func writeEndpointFailure(w http.ResponseWriter, reason, resolveCode string) {
+	code := reason
+	if strings.HasPrefix(reason, "resolve_failed") {
+		code = resolveCode
+	}
+	writeJSON(w, http.StatusBadRequest, map[string]string{"error": reason, "code": code})
+}
+
+// primaryChatID returns the effective primary endpoint of one side: the legacy
+// single-value field when it is set, otherwise the first list entry. A list-only
+// task (source_chat_ids/target_chat_ids and no scalar) still has a primary, and
+// that is the value the endpoint checks and the mirror have to look at.
+func primaryChatID(legacy string, list []string) string {
+	if v := strings.TrimSpace(legacy); v != "" {
+		return v
+	}
+	for _, v := range list {
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// storedChatList returns the endpoints a stored rule effectively has, legacy
+// scalar first, so a one-sided update can be validated against the side it is
+// not changing.
+func storedChatList(legacy string, repeated []string) []string {
+	out := make([]string, 0, len(repeated)+1)
+	if v := strings.TrimSpace(legacy); v != "" {
+		out = append(out, v)
+	}
+	for _, v := range repeated {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// maskNamesAny reports whether an update mask names any of the given fields.
+func maskNamesAny(mask []string, names ...string) bool {
+	for _, name := range names {
+		if containsString(mask, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// mergeChatIdTextFields folds the comma-separated convenience fields
+// source_chat_ids_text / target_chat_ids_text into the repeated lists.
+//
+// They are accepted because both handlers unmarshal with DiscardUnknown, so an
+// extra JSON key is ignored instead of failing the request — a form post or bot
+// message can then carry one string instead of an array. Split on ASCII ',' and
+// on the Persian '،' the Persian UI emits, trimmed and deduped in order.
+func mergeChatIdTextFields(body []byte, rule *pb.ForwardRule, withSource, withTarget bool) {
+	if len(body) == 0 || rule == nil || (!withSource && !withTarget) {
+		return
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return
+	}
+	if withSource {
+		rule.SourceChatIds = mergeChatIdText(rule.SourceChatIds, raw["source_chat_ids_text"])
+	}
+	if withTarget {
+		rule.TargetChatIds = mergeChatIdText(rule.TargetChatIds, raw["target_chat_ids_text"])
+	}
+}
+
+func mergeChatIdText(existing []string, raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return existing
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err != nil {
+		return existing
+	}
+	out := existing
+	for _, id := range splitChatIdText(text) {
+		if !containsString(out, id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func splitChatIdText(raw string) []string {
+	fields := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == '،' })
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if f = strings.TrimSpace(f); f != "" && !containsString(out, f) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // applyMaskToRule clears every field the mask does not name, so a partial update
@@ -737,8 +910,15 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	enrichCustomMetadata(body, &rule)
+	// The comma-separated convenience form of the endpoint lists, for clients
+	// that post one string instead of an array.
+	mergeChatIdTextFields(body, &rule, true, true)
 
-	if ok, errCode := checkRuleEndpoints(rule.SourceChatId, rule.TargetChatId, rule.IntermediateChannelId, rule.UseIntermediate); !ok {
+	// A list-only task (source_chat_ids/target_chat_ids without the legacy
+	// scalar) still has a primary endpoint: the first list entry.
+	rawSource := primaryChatID(rule.SourceChatId, rule.SourceChatIds)
+	rawTarget := primaryChatID(rule.TargetChatId, rule.TargetChatIds)
+	if ok, errCode := checkRuleEndpoints(rawSource, rawTarget, rule.IntermediateChannelId, rule.UseIntermediate); !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "Invalid rule endpoints: " + errCode,
 			"code":  errCode,
@@ -746,29 +926,35 @@ func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Always store canonical numeric chat ids: the dispatcher calls
-	// int(chat_id) before sending, so a username would break delivery.
+	// int(chat_id) before sending, so a username would break delivery. Both the
+	// source and the target list are resolved and mirrored onto their
+	// single-value fields (see resolveSourceChats/resolveTargetChats).
 	ctx, cancel0 := withTimeout(r)
 	resolvedSources, errS := h.resolveSourceChats(ctx, rule.SessionId, &rule, id.UserID)
 	cancel0()
 	if errS != "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
+		writeEndpointFailure(w, errS, "source_resolve_failed")
 		return
 	}
 	if rule.SourceChatName == "" {
 		rule.SourceChatName = resolvedSources[0]
 	}
 	ctx, cancel1 := withTimeout(r)
-	tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId, id.UserID)
+	resolvedTargets, errT := h.resolveTargetChats(ctx, rule.SessionId, &rule, id.UserID)
 	cancel1()
 	if errT != "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errT, "code": "target_resolve_failed"})
+		writeEndpointFailure(w, errT, "target_resolve_failed")
 		return
 	}
-	if tid != "" {
-		rule.TargetChatId = tid
-		if rule.TargetChatName == "" {
-			rule.TargetChatName = rule.TargetChatId
-		}
+	if rule.TargetChatName == "" && !isNumericChatID(normalizeChatID(rawTarget)) {
+		// A resolved handle makes a friendlier display name than the numeric id.
+		rule.TargetChatName = resolvedTargets[0]
+	}
+	// Fail closed on a self-loop: a source that is also a target would forward
+	// the task's own output back into itself.
+	if errO := validateRoute(resolvedSources, resolvedTargets); errO != "" {
+		writeEndpointFailure(w, errO, "route_conflict")
+		return
 	}
 	if rule.UseIntermediate && rule.IntermediateChannelId != "" {
 		ctx, cancel2 := withTimeout(r)
@@ -833,10 +1019,15 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 	}
 	enrichCustomMetadata(body, &rule)
 
-	// Drop everything the mask does not name before anything else runs, so the
-	// resolver and the core both see only the fields the caller actually asked
-	// to change.
+	// Which endpoint lists is the caller touching? Without a mask every field
+	// that arrived counts as touched (legacy full-body semantics).
+	sourceTouched, targetTouched := true, true
 	if len(updateMask) > 0 {
+		sourceTouched = maskNamesAny(updateMask, "source_chat_id", "source_chat_ids", "source_chat_ids_text")
+		targetTouched = maskNamesAny(updateMask, "target_chat_id", "target_chat_ids", "target_chat_ids_text")
+		// Drop everything the mask does not name before anything else runs, so
+		// the resolver and the core both see only the fields the caller actually
+		// asked to change.
 		applyMaskToRule(&rule, updateMask)
 	}
 
@@ -850,18 +1041,25 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 				rule.SessionId = current.SessionId
 			}
 		}
-		if !containsString(updateMask, "source_chat_id") && !containsString(updateMask, "source_chat_ids") {
+		if !sourceTouched {
 			rule.SourceChatId, rule.SourceChatIds = "", nil
 		}
-		if !containsString(updateMask, "target_chat_id") {
-			rule.TargetChatId = ""
+		if !targetTouched {
+			rule.TargetChatId, rule.TargetChatIds = "", nil
 		}
 		if !containsString(updateMask, "intermediate_channel_id") {
 			rule.IntermediateChannelId = ""
 		}
 	}
-	if rule.SourceChatId != "" && rule.TargetChatId != "" {
-		if ok, errCode := checkRuleEndpoints(rule.SourceChatId, rule.TargetChatId, rule.IntermediateChannelId, rule.UseIntermediate); !ok {
+	// The *_text convenience fields are not proto fields, so applyMaskToRule
+	// cannot see them: merge them after the mask, and only for the sides the
+	// mask actually names.
+	mergeChatIdTextFields(body, &rule, sourceTouched, targetTouched)
+
+	srcPrimary := primaryChatID(rule.SourceChatId, rule.SourceChatIds)
+	tgtPrimary := primaryChatID(rule.TargetChatId, rule.TargetChatIds)
+	if srcPrimary != "" && tgtPrimary != "" {
+		if ok, errCode := checkRuleEndpoints(srcPrimary, tgtPrimary, rule.IntermediateChannelId, rule.UseIntermediate); !ok {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error": "Invalid rule endpoints: " + errCode,
 				"code":  errCode,
@@ -870,19 +1068,49 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Canonicalize any username/link endpoints to numeric ids (same contract
-	// as CreateRule — see the resolveChat doc comment). Every source is resolved,
-	// not just the primary, so a multi-source task cannot store a raw username.
+	// as CreateRule — see the resolveChat doc comment). Every source *and* every
+	// target is resolved, not just the primary, so a multi-source/multi-target
+	// task cannot store a raw username.
+	var resolvedSources, resolvedTargets []string
 	if len(rule.SourceChatIds) > 0 || rule.SourceChatId != "" {
-		if _, errS := h.resolveSourceChats(ctx, rule.SessionId, &rule, id.UserID); errS != "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errS, "code": "source_resolve_failed"})
+		var errS string
+		if resolvedSources, errS = h.resolveSourceChats(ctx, rule.SessionId, &rule, id.UserID); errS != "" {
+			writeEndpointFailure(w, errS, "source_resolve_failed")
 			return
 		}
 	}
-	if tid, errT := h.resolveChat(ctx, rule.SessionId, rule.TargetChatId, id.UserID); errT != "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": errT, "code": "target_resolve_failed"})
+	if len(rule.TargetChatIds) > 0 || rule.TargetChatId != "" {
+		var errT string
+		if resolvedTargets, errT = h.resolveTargetChats(ctx, rule.SessionId, &rule, id.UserID); errT != "" {
+			writeEndpointFailure(w, errT, "target_resolve_failed")
+			return
+		}
+	}
+	// A partial update usually changes one side only, but the route still has to
+	// be checked as a whole — otherwise a target could be pointed at its own
+	// source. The untouched side comes from the stored rule.
+	if len(updateMask) > 0 && current != nil {
+		if resolvedSources == nil && resolvedTargets != nil {
+			resolvedSources = storedChatList(current.SourceChatId, current.SourceChatIds)
+		}
+		if resolvedTargets == nil && resolvedSources != nil {
+			resolvedTargets = storedChatList(current.TargetChatId, current.TargetChatIds)
+		}
+	}
+	if errO := validateRoute(resolvedSources, resolvedTargets); errO != "" {
+		writeEndpointFailure(w, errO, "route_conflict")
 		return
-	} else if tid != "" {
-		rule.TargetChatId = tid
+	}
+	// The core applies exactly the masked fields, so naming only the list would
+	// leave the single-value field the dispatcher reads first (all_targets) at
+	// its stale value. Name the mirror too, so both end up on the new primary.
+	if len(updateMask) > 0 {
+		if resolvedSources != nil && containsString(updateMask, "source_chat_ids") && !containsString(updateMask, "source_chat_id") {
+			updateMask = append(updateMask, "source_chat_id")
+		}
+		if resolvedTargets != nil && containsString(updateMask, "target_chat_ids") && !containsString(updateMask, "target_chat_id") {
+			updateMask = append(updateMask, "target_chat_id")
+		}
 	}
 	if rule.UseIntermediate && rule.IntermediateChannelId != "" {
 		if iid, errI := h.resolveChat(ctx, rule.SessionId, rule.IntermediateChannelId, id.UserID); errI != "" {

@@ -8,6 +8,8 @@ library;
 
 import 'package:flutter/foundation.dart';
 
+import 'route_input.dart';
+
 @immutable
 class AppError {
   const AppError({
@@ -174,6 +176,8 @@ class ForwardRule {
     required this.sourceChatId,
     required this.targetChatId,
     required this.isEnabled,
+    this.sourceChatIds = const [],
+    this.targetChatIds = const [],
     this.sourceChatTitle = '',
     this.targetChatTitle = '',
     this.sessionId = '',
@@ -229,6 +233,45 @@ class ForwardRule {
   final String sourceChatTitle;
   final String targetChatId;
   final String targetChatTitle;
+
+  /// Canonical endpoint lists. One rule carries every source and every target,
+  /// so 1->1, N->1, 1->N and M->N are the same shape; the server mirrors the
+  /// first entry of each list into the legacy singular fields above.
+  final List<String> sourceChatIds;
+  final List<String> targetChatIds;
+
+  /// Every source of this task. Falls back to the legacy single
+  /// [sourceChatId] so a payload written before multi-source routing parses
+  /// into a one-entry list instead of nothing.
+  List<String> get sourceIds {
+    if (sourceChatIds.isNotEmpty) return sourceChatIds;
+    return sourceChatId.isEmpty ? const <String>[] : <String>[sourceChatId];
+  }
+
+  /// Every target of this task, same fallback as [sourceIds].
+  List<String> get targetIds {
+    if (targetChatIds.isNotEmpty) return targetChatIds;
+    return targetChatId.isEmpty ? const <String>[] : <String>[targetChatId];
+  }
+
+  /// The fan-out list the engine delivers to: primary first, de-duplicated.
+  /// Mirrors `ForwardRule.all_targets` in the Python core so the client
+  /// previews exactly what will be delivered.
+  List<String> get allTargets {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final target in <String>[targetChatId, ...targetIds]) {
+      if (target.isNotEmpty && seen.add(target)) out.add(target);
+    }
+    return List<String>.unmodifiable(out);
+  }
+
+  /// The rule id is the per-task identity. Tasks carry UUID-ish ids, so the
+  /// first eight characters are what a user can read back and compare.
+  String get shortId => id.length > 8 ? id.substring(0, 8) : id;
+
+  /// True when this task fans a message out to more than one target.
+  bool get isFanOut => targetIds.length > 1;
 
   /// Task Overview & Advanced Settings Parity Fields
   final String name;
@@ -297,6 +340,8 @@ class ForwardRule {
     String? sourceChatTitle,
     String? targetChatId,
     String? targetChatTitle,
+    List<String>? sourceChatIds,
+    List<String>? targetChatIds,
     String? intermediateChannelId,
     bool? useVipRouting,
     List<String>? filters,
@@ -343,10 +388,18 @@ class ForwardRule {
   }) => ForwardRule(
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
-    sourceChatId: sourceChatId ?? this.sourceChatId,
+    sourceChatId:
+        sourceChatIds != null && sourceChatIds.isNotEmpty
+            ? sourceChatIds.first
+            : (sourceChatId ?? this.sourceChatId),
     sourceChatTitle: sourceChatTitle ?? this.sourceChatTitle,
-    targetChatId: targetChatId ?? this.targetChatId,
+    targetChatId:
+        targetChatIds != null && targetChatIds.isNotEmpty
+            ? targetChatIds.first
+            : (targetChatId ?? this.targetChatId),
     targetChatTitle: targetChatTitle ?? this.targetChatTitle,
+    sourceChatIds: sourceChatIds ?? this.sourceChatIds,
+    targetChatIds: targetChatIds ?? this.targetChatIds,
     intermediateChannelId: intermediateChannelId ?? this.intermediateChannelId,
     useVipRouting: useVipRouting ?? this.useVipRouting,
     filters: filters ?? this.filters,
@@ -393,11 +446,20 @@ class ForwardRule {
     syncEdits: syncEdits ?? this.syncEdits,
   );
 
+  /// Create payload.
+  ///
+  /// Both endpoint lists and the legacy singular fields go on the wire: the
+  /// lists are canonical (`source_chat_ids` / `target_chat_ids`), and the
+  /// singulars carry the first entry because a server predating multi-source
+  /// routing only understands those. The server resolves @usernames and links
+  /// inside every list entry.
   Map<String, dynamic> toCreateJson() => {
     'session_id': sessionId,
     'source_chat_id': sourceChatId,
+    'source_chat_ids': sourceIds,
     'source_chat_title': sourceChatTitle,
     'target_chat_id': targetChatId,
+    'target_chat_ids': targetIds,
     'target_chat_title': targetChatTitle,
     'name': name,
     'topic_id': topicId,
@@ -449,8 +511,60 @@ class ForwardRule {
     'is_enabled': isEnabled,
   };
 
+  /// Reads one endpoint list from a payload.
+  ///
+  /// The canonical form is a JSON array; a comma-separated string is accepted
+  /// too (ASCII ',' or Persian '،') because every surface lets the user type
+  /// one. Repeated entries are collapsed, first occurrence winning, so the
+  /// primary endpoint can never be pushed out of first place by a duplicate.
+  static List<String> _chatIdList(Object? raw) {
+    if (raw is String) return parseChatIdList(raw);
+    if (raw is! List) return const <String>[];
+    final seen = <String>{};
+    final out = <String>[];
+    for (final entry in raw) {
+      final value = entry?.toString().trim() ?? '';
+      if (value.isEmpty || !seen.add(value)) continue;
+      out.add(value);
+    }
+    return List<String>.unmodifiable(out);
+  }
+
+  /// Resolves one side of the route from a payload, preferring the canonical
+  /// list and falling back to the legacy singular field, then to the
+  /// server-computed fan-out list. Returns the endpoints plus the mirror value
+  /// for the singular field — always the first endpoint, which is exactly what
+  /// the server mirrors back, so a round-trip cannot reorder the route.
+  static (List<String>, String) _resolveEndpoints(
+    Map<String, dynamic> json,
+    String listKey,
+    String legacyKey, {
+    String fanOutKey = '',
+  }) {
+    final legacy = json[legacyKey]?.toString().trim() ?? '';
+    var endpoints = _chatIdList(json[listKey]);
+    if (endpoints.isEmpty && fanOutKey.isNotEmpty) {
+      endpoints = _chatIdList(json[fanOutKey]);
+    }
+    if (endpoints.isEmpty && legacy.isNotEmpty) {
+      endpoints = List<String>.unmodifiable(<String>[legacy]);
+    }
+    return (endpoints, endpoints.isEmpty ? '' : endpoints.first);
+  }
+
   factory ForwardRule.fromJson(Map<String, dynamic> json) {
     final meta = json['metadata'] is Map ? (json['metadata'] as Map) : const {};
+    final (sources, sourcePrimary) = _resolveEndpoints(
+      json,
+      'source_chat_ids',
+      'source_chat_id',
+    );
+    final (targets, targetPrimary) = _resolveEndpoints(
+      json,
+      'target_chat_ids',
+      'target_chat_id',
+      fanOutKey: 'all_targets',
+    );
     final rawAddons =
         json['paid_addons'] is Map
             ? json['paid_addons'] as Map
@@ -465,10 +579,12 @@ class ForwardRule {
     return ForwardRule(
       id: json['id'] as String,
       sessionId: json['session_id'] as String? ?? '',
-      sourceChatId: json['source_chat_id']?.toString() ?? '',
+      sourceChatId: sourcePrimary,
       sourceChatTitle: json['source_chat_title'] as String? ?? '',
-      targetChatId: json['target_chat_id']?.toString() ?? '',
+      targetChatId: targetPrimary,
       targetChatTitle: json['target_chat_title'] as String? ?? '',
+      sourceChatIds: sources,
+      targetChatIds: targets,
       intermediateChannelId: json['intermediate_channel_id']?.toString() ?? '',
       useVipRouting: json['use_vip_routing'] as bool? ?? false,
       name: (json['name'] as String?) ?? (meta['name'] as String? ?? ''),

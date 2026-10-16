@@ -205,6 +205,25 @@ class AppMessagesEn {
     'rules_replace_title': 'Replace Rules',
     'rules_replace_with': 'Replace with',
     'rules_replace_with_hint': 'Leave empty to remove the matched text',
+    'rules_route_chip_duplicate': 'Listed twice',
+    'rules_route_chip_ok': 'Accepted',
+    'rules_route_chip_overlap': 'Used on both sides',
+    'rules_route_chip_tooltip': '{reason} — tap the chip to edit this entry.',
+    'rules_route_duplicate_id':
+        '{id} is listed more than once. Remove the duplicate.',
+    'rules_route_empty':
+        'No channels yet. Type one or more, separated by commas.',
+    'rules_route_fan_out': '{count} targets',
+    'rules_route_overlap_id':
+        '{id} is both a source and a target. A task cannot forward to itself.',
+    'rules_route_preview': '{sources} → {targets}',
+    'rules_route_preview_label': 'Route preview',
+    'rules_route_remove': 'Remove this entry',
+    'rules_route_sources': 'Sources (comma separated)',
+    'rules_route_sources_hint':
+        'IDs, @usernames or t.me links, separated by commas',
+    'rules_route_targets': 'Targets (comma separated)',
+    'rules_route_targets_hint': 'Every message is fanned out to all of these',
     'rules_sched_auto': 'Auto Post Scheduler',
     'rules_sched_power': 'Power Control Schedule',
     'rules_sec_ai': 'AI Features',
@@ -250,6 +269,7 @@ class AppMessagesEn {
     'rules_sync_replies': 'Sync replies',
     'rules_target': 'Destination channel',
     'rules_target_required': 'Pick a destination channel',
+    'rules_task_id': 'Task ID',
     'rules_time_delay': 'Set delay (seconds)',
     'rules_time_edit_limit': 'Max edit time (seconds)',
     'rules_title': 'Forwarding rules',

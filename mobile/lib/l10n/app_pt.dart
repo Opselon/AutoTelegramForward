@@ -196,6 +196,27 @@ class AppMessagesPt {
     'rules_replace_title': 'Regras de substituição',
     'rules_replace_with': 'Substituir por',
     'rules_replace_with_hint': 'Deixe vazio para remover o texto encontrado',
+    'rules_route_chip_duplicate': 'Listado duas vezes',
+    'rules_route_chip_ok': 'Aceito',
+    'rules_route_chip_overlap': 'Usado nos dois lados',
+    'rules_route_chip_tooltip':
+        '{reason} — toque no chip para editar esta entrada.',
+    'rules_route_duplicate_id':
+        '{id} aparece mais de uma vez. Remova a duplicata.',
+    'rules_route_empty':
+        'Ainda não há canais. Digite um ou mais, separados por vírgulas.',
+    'rules_route_fan_out': '{count} destinos',
+    'rules_route_overlap_id':
+        '{id} é origem e destino ao mesmo tempo. Uma tarefa não pode encaminhar para si mesma.',
+    'rules_route_preview': '{sources} → {targets}',
+    'rules_route_preview_label': 'Pré-visualização da rota',
+    'rules_route_remove': 'Remover esta entrada',
+    'rules_route_sources': 'Origens (separadas por vírgula)',
+    'rules_route_sources_hint':
+        'IDs, @nomes de usuário ou links t.me, separados por vírgulas',
+    'rules_route_targets': 'Destinos (separados por vírgula)',
+    'rules_route_targets_hint':
+        'Cada mensagem é encaminhada para todos estes destinos',
     'rules_sched_auto': 'Agendador de publicações',
     'rules_sched_power': 'Agendamento de energia',
     'rules_sec_ai': 'Recursos de IA',
@@ -242,6 +263,7 @@ class AppMessagesPt {
     'rules_sync_replies': 'Sincronizar Respostas',
     'rules_target': 'Destino',
     'rules_target_required': 'Pick a destination channel',
+    'rules_task_id': 'ID da tarefa',
     'rules_time_delay': 'Definir atraso (segundos)',
     'rules_time_edit_limit': 'Tempo máximo de edição (segundos)',
     'rules_title': 'Tarefas de Encaminhamento',

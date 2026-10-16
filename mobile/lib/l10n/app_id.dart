@@ -192,6 +192,26 @@ class AppMessagesId {
     'rules_replace_title': 'Aturan Penggantian',
     'rules_replace_with': 'Ganti dengan',
     'rules_replace_with_hint': 'Kosongkan untuk menghapus teks yang ditemukan',
+    'rules_route_chip_duplicate': 'Tercantum dua kali',
+    'rules_route_chip_ok': 'Diterima',
+    'rules_route_chip_overlap': 'Digunakan di kedua sisi',
+    'rules_route_chip_tooltip':
+        '{reason} — ketuk chip untuk mengedit entri ini.',
+    'rules_route_duplicate_id':
+        '{id} tercantum lebih dari sekali. Hapus duplikatnya.',
+    'rules_route_empty':
+        'Belum ada kanal. Masukkan satu atau lebih, dipisahkan koma.',
+    'rules_route_fan_out': '{count} tujuan',
+    'rules_route_overlap_id':
+        '{id} adalah sumber sekaligus tujuan. Tugas tidak dapat meneruskan ke dirinya sendiri.',
+    'rules_route_preview': '{sources} → {targets}',
+    'rules_route_preview_label': 'Pratinjau rute',
+    'rules_route_remove': 'Hapus entri ini',
+    'rules_route_sources': 'Sumber (dipisahkan koma)',
+    'rules_route_sources_hint':
+        'ID, @nama pengguna atau tautan t.me, dipisahkan koma',
+    'rules_route_targets': 'Tujuan (dipisahkan koma)',
+    'rules_route_targets_hint': 'Setiap pesan dikirim ke semua tujuan ini',
     'rules_sched_auto': 'Penjadwal posting otomatis',
     'rules_sched_power': 'Jadwal daya',
     'rules_sec_ai': 'Fitur AI',
@@ -237,6 +257,7 @@ class AppMessagesId {
     'rules_sync_replies': 'Sinkronkan Balasan',
     'rules_target': 'Tujuan',
     'rules_target_required': 'Pick a destination channel',
+    'rules_task_id': 'ID tugas',
     'rules_time_delay': 'Atur jeda (detik)',
     'rules_time_edit_limit': 'Batas edit (detik)',
     'rules_title': 'Tugas Penerusan',

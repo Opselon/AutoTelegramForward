@@ -2,7 +2,9 @@
 ///
 /// Features:
 ///   * Session picker (populated from real `/api/sessions`).
-///   * Source & Destination channel IDs and titles.
+///   * Source & target LISTS (M sources -> N targets, so 1->1, N->1, 1->N and
+///     M->N are all the same form) with per-entry verification chips and a
+///     route preview.
 ///   * Intermediate VIP channel routing.
 ///   * Filters, header/footer templates, delay.
 ///   * Optimistic concurrency (submits `expected_version` on edit,
@@ -17,7 +19,11 @@ import 'rule_settings_sheet.dart';
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
+import '../../core/route_input.dart';
+import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
+import '../../widgets/app_ui.dart';
+import '../../widgets/chat_id_list_field.dart';
 
 class RuleEditorScreen extends StatefulWidget {
   const RuleEditorScreen({super.key, this.rule});
@@ -72,6 +78,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   /// Per-task text replace rules (find -> replace), edited in order.
   List<MapEntry<String, String>> _replacements = [];
 
+  /// Focus targets for the two endpoint fields, so a rejected chip can send
+  /// the caret straight back into the entry it belongs to.
+  final _sourceFocus = FocusNode();
+  final _targetFocus = FocusNode();
+
   /// Tenant's AI configs for the per-task AI picker.
   List<AiConfig> _aiConfigs = const [];
   String _selectedAiConfigId = '';
@@ -88,9 +99,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _topicCtrl = TextEditingController(
       text: r?.topicId != null && r!.topicId > 0 ? '${r.topicId}' : '',
     );
-    _sourceIdCtrl = TextEditingController(text: r?.sourceChatId ?? '');
+    _sourceIdCtrl = TextEditingController(text: r?.sourceIds.join(', ') ?? '');
     _sourceTitleCtrl = TextEditingController(text: r?.sourceChatTitle ?? '');
-    _targetIdCtrl = TextEditingController(text: r?.targetChatId ?? '');
+    _targetIdCtrl = TextEditingController(text: r?.targetIds.join(', ') ?? '');
     _targetTitleCtrl = TextEditingController(text: r?.targetChatTitle ?? '');
     _intermediateCtrl = TextEditingController(
       text: r?.intermediateChannelId ?? '',
@@ -133,12 +144,25 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _ignoreEdits = r?.ignoreEdits ?? false;
     _albumMode = r?.albumMode ?? 'album';
 
+    // The chips and the route preview are derived from the two endpoint fields,
+    // so they have to be recomputed as the user types.
+    _sourceIdCtrl.addListener(_onRouteTextChanged);
+    _targetIdCtrl.addListener(_onRouteTextChanged);
+
     _loadSessions();
     _loadAiConfigs();
   }
 
+  void _onRouteTextChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _sourceIdCtrl.removeListener(_onRouteTextChanged);
+    _targetIdCtrl.removeListener(_onRouteTextChanged);
+    _sourceFocus.dispose();
+    _targetFocus.dispose();
     _nameCtrl.dispose();
     _topicCtrl.dispose();
     _sourceIdCtrl.dispose();
@@ -252,9 +276,58 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     }
   }
 
+  /// Drops one entry from an endpoint field, leaving the other entries and
+  /// their order untouched — order matters because the first entry is the
+  /// primary source/target the server mirrors into the legacy field.
+  void _removeEntry(TextEditingController controller, String value) {
+    final entries = splitChatIdList(controller.text).toList();
+    final index = entries.indexOf(value);
+    if (index < 0) return;
+    entries.removeAt(index);
+    controller.value = TextEditingValue(
+      text: entries.join(', '),
+      selection: TextSelection.collapsed(offset: entries.join(', ').length),
+    );
+  }
+
+  /// Selects one entry inside its field so the user can correct just that id.
+  void _focusEntry(
+    TextEditingController controller,
+    FocusNode focusNode,
+    String value,
+  ) {
+    final index = controller.text.indexOf(value);
+    if (index < 0) return;
+    focusNode.requestFocus();
+    controller.selection = TextSelection(
+      baseOffset: index,
+      extentOffset: index + value.length,
+    );
+  }
+
+  /// Localised text for a rejected route. The duplicate/overlap messages carry
+  /// the offending entry, so the user is told *which* channel is wrong.
+  String _issueText(AppMessages t, RouteIssue issue) =>
+      t.get(issue.messageKey, params: {'id': issue.id});
+
   Future<void> _save() async {
     final t = AppMessages.of(context);
     if (!_formKey.currentState!.validate()) return;
+
+    final sources = parseChatIdList(_sourceIdCtrl.text);
+    final targets = parseChatIdList(_targetIdCtrl.text);
+
+    // Client-side route validation. The server re-checks, but a duplicate or a
+    // self-loop should never cost a round-trip: the inline error names the
+    // offending id and the save never happens.
+    final issue = validateRoute(
+      sourcesText: _sourceIdCtrl.text,
+      targetsText: _targetIdCtrl.text,
+    );
+    if (issue != null || sources.isEmpty || targets.isEmpty) {
+      setState(() {});
+      return;
+    }
 
     final sid = _selectedSessionId ?? '';
     if (sid.isEmpty && _sessions.isNotEmpty) {
@@ -275,19 +348,20 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
             .where((s) => s.isNotEmpty)
             .toList();
 
+    final sourceTitle = _sourceTitleCtrl.text.trim();
+    final targetTitle = _targetTitleCtrl.text.trim();
+
     final ruleData = ForwardRule(
       id: widget.rule?.id ?? '',
       sessionId: sid,
-      sourceChatId: _sourceIdCtrl.text.trim(),
-      sourceChatTitle:
-          _sourceTitleCtrl.text.trim().isNotEmpty
-              ? _sourceTitleCtrl.text.trim()
-              : _sourceIdCtrl.text.trim(),
-      targetChatId: _targetIdCtrl.text.trim(),
-      targetChatTitle:
-          _targetTitleCtrl.text.trim().isNotEmpty
-              ? _targetTitleCtrl.text.trim()
-              : _targetIdCtrl.text.trim(),
+      // Both lists are sent, and each legacy singular field carries the first
+      // entry so a server predating multi-source routing still works.
+      sourceChatId: sources.first,
+      sourceChatIds: sources,
+      sourceChatTitle: sourceTitle.isNotEmpty ? sourceTitle : sources.first,
+      targetChatId: targets.first,
+      targetChatIds: targets,
+      targetChatTitle: targetTitle.isNotEmpty ? targetTitle : targets.first,
       intermediateChannelId:
           _useVipRouting ? _intermediateCtrl.text.trim() : '',
       useVipRouting: _useVipRouting,
@@ -358,7 +432,35 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final t = AppMessages.of(context);
+    final theme = Theme.of(context);
     final isEditing = widget.rule != null;
+
+    // Everything the route section renders is derived from the two endpoint
+    // fields on every build, so the chips, the preview and the inline error can
+    // never drift from what a save would send.
+    final sources = parseChatIdList(_sourceIdCtrl.text);
+    final targets = parseChatIdList(_targetIdCtrl.text);
+    final sourceEntries = verifyRouteEntries(
+      _sourceIdCtrl.text,
+      peerRaw: _targetIdCtrl.text,
+    );
+    final targetEntries = verifyRouteEntries(
+      _targetIdCtrl.text,
+      peerRaw: _sourceIdCtrl.text,
+    );
+    // Only the structural rules (duplicate / self-loop) are surfaced while the
+    // user is still typing; emptiness is reported by the field validators and
+    // blocks the save.
+    final routeIssue = validateRoute(
+      sourcesText: _sourceIdCtrl.text,
+      targetsText: _targetIdCtrl.text,
+      requireSources: false,
+      requireTargets: false,
+    );
+    final routePreview = t.get(
+      'rules_route_preview',
+      params: {'sources': sources.join(', '), 'targets': targets.join(', ')},
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -390,6 +492,35 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                   child: Text(
                     _error!,
                     style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+
+              // The rule id is the per-task identity: an operator quoting a task
+              // in a ticket or in the log console reads it back from here.
+              if (isEditing)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.fingerprint,
+                        size: 16,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        t.get('rules_task_id'),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        '#${widget.rule!.shortId}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -496,68 +627,116 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Source Chat
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: TextFormField(
-                      controller: _sourceIdCtrl,
-                      decoration: InputDecoration(
-                        labelText: t.get('rules_source'),
-                        hintText: '-1001234567890',
-                      ),
-                      validator:
-                          (v) =>
-                              (v == null || v.trim().isEmpty)
-                                  ? t.get('rules_source_required')
-                                  : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 3,
-                    child: TextFormField(
-                      controller: _sourceTitleCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Title / Channel name',
-                      ),
-                    ),
-                  ),
-                ],
+              // Sources: one entry, or a comma-separated list. The chips are the
+              // verification result for exactly what was typed.
+              ChatIdListField(
+                fieldKey: const ValueKey<String>('rule_sources_field'),
+                focusNode: _sourceFocus,
+                controller: _sourceIdCtrl,
+                label: t.get('rules_route_sources'),
+                helper: t.get('rules_route_sources_hint'),
+                emptyLabel: t.get('rules_route_empty'),
+                entries: sourceEntries,
+                onRemove: (value) => _removeEntry(_sourceIdCtrl, value),
+                onFix:
+                    (value) => _focusEntry(_sourceIdCtrl, _sourceFocus, value),
+                validator:
+                    (v) =>
+                        parseChatIdList(v ?? '').isEmpty
+                            ? t.get('rules_source_required')
+                            : null,
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              // Titles stay the primary endpoint's label: the fan-out list is
+              // identified by ids, and the server keeps one title per side.
+              TextFormField(
+                controller: _sourceTitleCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Title / Channel name',
+                ),
               ),
               const SizedBox(height: 16),
 
-              // Target Chat
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: TextFormField(
-                      controller: _targetIdCtrl,
-                      decoration: InputDecoration(
-                        labelText: t.get('rules_target'),
-                        hintText: '-1009876543210',
-                      ),
-                      validator:
-                          (v) =>
-                              (v == null || v.trim().isEmpty)
-                                  ? t.get('rules_target_required')
-                                  : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 3,
-                    child: TextFormField(
-                      controller: _targetTitleCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Title / Channel name',
-                      ),
-                    ),
-                  ),
-                ],
+              // Targets: every entry here receives a copy of every forwarded
+              // message (1 target = N:1, several = M:N).
+              ChatIdListField(
+                fieldKey: const ValueKey<String>('rule_targets_field'),
+                focusNode: _targetFocus,
+                controller: _targetIdCtrl,
+                label: t.get('rules_route_targets'),
+                helper: t.get('rules_route_targets_hint'),
+                emptyLabel: t.get('rules_route_empty'),
+                entries: targetEntries,
+                icon: Icons.forward_to_inbox_rounded,
+                onRemove: (value) => _removeEntry(_targetIdCtrl, value),
+                onFix:
+                    (value) => _focusEntry(_targetIdCtrl, _targetFocus, value),
+                validator:
+                    (v) =>
+                        parseChatIdList(v ?? '').isEmpty
+                            ? t.get('rules_target_required')
+                            : null,
               ),
+              const SizedBox(height: AppSpacing.md),
+
+              TextFormField(
+                controller: _targetTitleCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Title / Channel name',
+                ),
+              ),
+
+              // What is about to be saved, in one line.
+              if (sources.isNotEmpty && targets.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(top: AppSpacing.lg),
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.35,
+                    ),
+                    borderRadius: AppRadii.allMd,
+                    border: Border.all(color: theme.dividerColor),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.alt_route_rounded,
+                        size: 16,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        t.get('rules_route_preview_label'),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          routePreview,
+                          key: const ValueKey<String>('rule_route_preview'),
+                          textAlign: TextAlign.end,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Rejected route: names the offending entry and blocks the save.
+              if (routeIssue != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.md),
+                  child: InlineBanner(
+                    message: _issueText(t, routeIssue),
+                    severity: 'error',
+                  ),
+                ),
               const SizedBox(height: 16),
 
               // Intermediate VIP Channel

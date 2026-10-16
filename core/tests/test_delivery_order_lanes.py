@@ -173,6 +173,41 @@ async def test_two_sources_into_one_destination_stay_deterministic(repo):
 
 
 @pytest.mark.asyncio
+async def test_a_burst_fans_out_to_every_target_in_order(repo):
+    """Fan-out (A -> X,Y) with a burst: each target gets it in source order.
+
+    A message with several targets is enqueued once per target, so a burst
+    becomes one lane per destination. The lanes are independent — neither target
+    waits for the other — and inside a lane the order is still the source order,
+    which is the property multi-target routing must not lose.
+    """
+    db, repo_ = repo
+    ids = list(range(1, 21))
+    shuffled = ids[:]
+    random.Random(11).shuffle(shuffled)  # ingest order is not the source order
+    for msg_id in shuffled:
+        await repo_.enqueue(_job(msg_id, target=TARGET))
+        await repo_.enqueue(_job(msg_id, target=OTHER_TARGET))
+
+    first = await repo_.claim_batch(worker_id="w1", batch_size=5, lease_duration=30.0)
+    # Both lanes are claimable in the same batch: one busy destination never
+    # stalls the other.
+    assert {j.target_chat_id for j in first} == {TARGET, OTHER_TARGET}
+    assert {j.source_message_id for j in first} == {1}
+
+    sent: dict[str, list[int]] = {TARGET: [], OTHER_TARGET: []}
+    claimed = first
+    while claimed:
+        await repo_.mark_sent_batch([(j.id, 1000 + j.source_message_id) for j in claimed])
+        for job in claimed:
+            sent[job.target_chat_id].append(job.source_message_id)
+        claimed = await repo_.claim_batch(worker_id="w1", batch_size=5, lease_duration=30.0)
+
+    assert sent[TARGET] == ids
+    assert sent[OTHER_TARGET] == ids
+
+
+@pytest.mark.asyncio
 async def test_an_expired_lease_on_the_lane_head_is_reclaimable(repo):
     """A crashed worker must not wedge its destination forever."""
     db, repo_ = repo

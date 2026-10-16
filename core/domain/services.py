@@ -513,10 +513,17 @@ class SmartRoutingEngine:
         if handling == "MEDIA_ONLY" and not payload.has_media:
             return False, "media_handling_media_only"
 
-        # Anti-loop check for primary target
-        is_loop, loop_reason = self.check_loop(payload, rule, rule.target_chat_id)
-        if is_loop:
-            return False, f"loop_detected:{loop_reason}"
+        # Anti-loop check. A task may fan out to many targets, so the rule is
+        # rejected only when *every* target would loop; a single looping target
+        # is skipped by the fan-out (see DurableMessagePipeline), which would
+        # otherwise silently drop the other, legitimate targets.
+        targets = list(getattr(rule, "all_targets", None) or [rule.target_chat_id])
+        targets = [t for t in targets if str(t).strip()]
+        if targets:
+            loops = [t for t in targets if self.check_loop(payload, rule, t)[0]]
+            if len(loops) == len(targets):
+                is_loop, loop_reason = self.check_loop(payload, rule, targets[0])
+                return False, f"loop_detected:{loop_reason}"
 
         return True, "matched"
 
@@ -567,6 +574,15 @@ class RoutingPolicy:
 
     def matching_rules(self, payload: MessagePayload, rules: List[ForwardRule]) -> List[ForwardRule]:
         return self._engine.matching_rules(payload, rules)
+
+    def is_loop(self, payload: MessagePayload, rule: ForwardRule, target_chat_id: str) -> Tuple[bool, str]:
+        """True when delivering to ``target_chat_id`` would create a loop.
+
+        Exposed per target because one task may fan out to many targets: the
+        caller skips the looping target instead of dropping the message for all
+        of them.
+        """
+        return self._engine.check_loop(payload, rule, target_chat_id)
 
 
 class DuplicateDetectionService:

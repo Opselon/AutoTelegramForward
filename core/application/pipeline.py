@@ -27,6 +27,7 @@ from ..domain.entities import (
     MessageMapping,
     MessagePayload,
 )
+from ..domain.content_policy import ContentPolicy, has_link
 from ..domain.services import (
     AdvancedSettingsEngine,
     FilterEngine,
@@ -574,12 +575,44 @@ class DurableMessagePipeline:
             logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: text blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
             return
         if getattr(rule, "block_links", False):
-            eff = payload.effective_text or ""
-            if "http://" in eff.lower() or "https://" in eff.lower() or "t.me/" in eff.lower():
+            if has_link(payload.effective_text or ""):
                 ctx.record_stage(PipelineStage.FILTER, False, reason="link_blocked")
                 self.metrics.filtered_total += 1
                 logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: link blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
                 return
+
+        # 4b. PER-TASK CONTENT RULES (blacklist / whitelist-only / block links),
+        # source-scoped. Runs after the media gates and *before* any transform:
+        # a message that will not be forwarded must not pay for a rewrite.
+        # The chain is the task's own policy plus the override for this source
+        # chat; every policy in it must allow the message (an override can only
+        # add constraints, never relax the task's).
+        policy_chain = (
+            rule.policy_chain(source_chat_id=payload.chat_id)
+            if hasattr(rule, "policy_chain") else []
+        )
+        for policy in policy_chain:
+            decision = policy.evaluate(payload.effective_text or "", m_type)
+            if not decision.allowed:
+                ctx.record_stage(PipelineStage.FILTER, False, reason=decision.reason)
+                self.metrics.filtered_total += 1
+                logger.info(
+                    "[PIPELINE:POLICY] [%s] Rule %s dropped msg %s at %s: %s",
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                    policy.source or "task", decision.reason,
+                )
+                await self._audit(ctx, "forward.filtered", "REJECTED",
+                                  reason_code="CONTENT_POLICY",
+                                  rule_id=rule.id, message_id=str(payload.message_id),
+                                  result_summary=f"{policy.source or 'task'}:{decision.reason}")
+                return
+        active_policies = [p for p in policy_chain if p.has_rules]
+        if active_policies:
+            logger.info(
+                "[PIPELINE:POLICY] [%s] Rule %s msg %s passed %d content polic(ies): %s",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                len(active_policies), [p.describe() for p in active_policies],
+            )
 
         ctx.record_stage(PipelineStage.FILTER, True, reason=eval_res.reason, duration_ms=(time.monotonic() - t0) * 1000)
         logger.info(
@@ -632,9 +665,67 @@ class DurableMessagePipeline:
 
         enqueued_any = False
         for target in targets:
+            # Anti-loop per target: with many targets, one of them may be the
+            # source itself (or the original forward origin). Skip that one
+            # instead of dropping the message for every other target, and say so
+            # in the log rather than failing silently.
+            try:
+                if hasattr(self._routing, "is_loop"):
+                    is_loop, loop_reason = self._routing.is_loop(payload, rule, target)
+                    if is_loop:
+                        # A skip is not a filter: the message still goes to every
+                        # other target, so counting it as "filtered" would
+                        # overstate what the content rules dropped.
+                        logger.info(
+                            "[PIPELINE:LOOP_SKIP] [%s] Rule %s msg %s not sent to target %s: %s",
+                            ctx.correlation_id[:8], rule.id[:8], payload.message_id, target, loop_reason,
+                        )
+                        continue
+            except Exception as exc:  # never let a guard crash a delivery
+                logger.warning("[PIPELINE:LOOP_SKIP] [%s] loop check failed for %s: %s",
+                               ctx.correlation_id[:8], target, exc)
+
+            # Per-target content override: one task can route A,B -> X,Y where X
+            # and Y want different rules. A target that rejects the message is
+            # skipped, not failed — the other targets still receive it, and the
+            # task's own transforms are already applied (only the override's
+            # rewrite runs here, on this target's copy of the text).
+            target_text = ctx.transformed_text
+            if hasattr(rule, "policy_chain") and (rule.target_policies or rule.content_policy.has_rules):
+                chain = rule.policy_chain(source_chat_id=payload.chat_id, target_chat_id=target)
+                target_reject = None
+                for policy in chain:
+                    decision = policy.evaluate(target_text or "", m_type)
+                    if not decision.allowed:
+                        target_reject = (policy, decision)
+                        break
+                if target_reject is not None:
+                    policy, decision = target_reject
+                    self.metrics.filtered_total += 1
+                    ctx.record_stage(PipelineStage.ENQUEUE, False, reason=f"target_filtered:{target}")
+                    await self._audit(ctx, "forward.filtered", "REJECTED",
+                                      reason_code="CONTENT_POLICY_TARGET",
+                                      rule_id=rule.id, message_id=str(payload.message_id),
+                                      result_summary=f"{policy.source or 'task'}:{decision.reason} -> {target}")
+                    logger.info(
+                        "[PIPELINE:POLICY_TARGET] [%s] Rule %s msg %s NOT sent to target %s (%s at %s)",
+                        ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
+                        decision.reason, policy.source or "task",
+                    )
+                    continue
+                for policy in chain[1:]:
+                    if policy.is_active:
+                        rewritten, notes = policy.transform(target_text or "")
+                        if notes:
+                            target_text = rewritten
+                            logger.info(
+                                "[PIPELINE:POLICY_TARGET] [%s] Rule %s rewrote msg %s for target %s at %s: %s",
+                                ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
+                                policy.source or "target", notes,
+                            )
             if self._queue is not None:
                 ok = await self._queue.enqueue_delivery(
-                    rule, payload, str(target), ctx.transformed_text, eval_res,
+                    rule, payload, str(target), target_text, eval_res,
                     correlation_id=ctx.correlation_id,
                 )
                 if ok:
@@ -779,6 +870,30 @@ class DurableMessagePipeline:
         # Replacements
         if getattr(rule, "replacements", None):
             text = self._filter_engine.replace_text(text, rule.replacements)
+
+        # Per-task content rules: remove-links / strip words / replacements.
+        # Runs after the legacy cleaner + link engine so the policy sees the
+        # text that will actually be sent, and before the AI stage so a rewrite
+        # can never resurrect content the task asked to remove.
+        if hasattr(rule, "content_policy"):
+            try:
+                policy_text, policy_notes = rule.content_policy.transform(text)
+                if policy_notes:
+                    logger.info(
+                        "[PIPELINE:POLICY] [%s] Rule %s rewrote msg %s at task policy: %s (len %d -> %d)",
+                        ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                        policy_notes, len(text), len(policy_text),
+                    )
+                    if policy_notes.get("links_removed"):
+                        evaluation.links_removed = True
+                    text = policy_text
+            except Exception as exc:
+                # A content rule must never drop a message by crashing: deliver
+                # the text we have and record the failure.
+                logger.warning(
+                    "[PIPELINE:POLICY] [%s] Rule %s content rules failed (%s) — delivering unmodified text",
+                    ctx.correlation_id[:8], rule.id[:8], exc,
+                )
 
         # AI Transformation (Modular, non-blocking, multi-layer defended)
         ai_cfg_id = getattr(rule, "ai_config_id", None)

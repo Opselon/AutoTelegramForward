@@ -83,8 +83,15 @@ def test_every_registered_setting_round_trips_through_the_entity():
               "list": ["zzz"], "dict": {"zzz": "probe"}}
     for key, spec in RS.SETTING_SPECS.items():
         r = _rule()
-        RS.apply_settings(r, {key: probes[spec.kind]})
-        assert getattr(r, key) == probes[spec.kind], key
+        probe = probes[spec.kind]
+        try:
+            RS.apply_settings(r, {key: probe})
+        except RS.SettingError:
+            # A constrained setting (choices, bounds) only accepts a value it
+            # declares; probe with that instead of an impossible one.
+            probe = spec.choices[0] if spec.choices else spec.minimum
+            RS.apply_settings(r, {key: probe})
+        assert getattr(r, key) == probe, key
 
 
 def test_registry_covers_both_directions_of_every_metadata_setting():

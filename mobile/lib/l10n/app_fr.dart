@@ -195,6 +195,27 @@ class AppMessagesFr {
     'rules_replace_title': 'Règles de remplacement',
     'rules_replace_with': 'Remplacer par',
     'rules_replace_with_hint': 'Laisser vide pour supprimer le texte trouvé',
+    'rules_route_chip_duplicate': 'Indiqué deux fois',
+    'rules_route_chip_ok': 'Accepté',
+    'rules_route_chip_overlap': 'Utilisé des deux côtés',
+    'rules_route_chip_tooltip':
+        '{reason} — appuyez sur la puce pour modifier cette entrée.',
+    'rules_route_duplicate_id':
+        '{id} est indiqué plus d’une fois. Supprimez le doublon.',
+    'rules_route_empty':
+        'Aucune chaîne pour le moment. Saisissez-en une ou plusieurs, séparées par des virgules.',
+    'rules_route_fan_out': '{count} destinations',
+    'rules_route_overlap_id':
+        '{id} est à la fois source et destination. Une tâche ne peut pas transmettre à elle-même.',
+    'rules_route_preview': '{sources} → {targets}',
+    'rules_route_preview_label': 'Aperçu de la route',
+    'rules_route_remove': 'Supprimer cette entrée',
+    'rules_route_sources': 'Sources (séparées par des virgules)',
+    'rules_route_sources_hint':
+        'ID, @noms d’utilisateur ou liens t.me, séparés par des virgules',
+    'rules_route_targets': 'Destinations (séparées par des virgules)',
+    'rules_route_targets_hint':
+        'Chaque message est diffusé vers toutes ces destinations',
     'rules_sched_auto': 'Planificateur de publications',
     'rules_sched_power': 'Planification de marche/arrêt',
     'rules_sec_ai': 'Fonctions IA',
@@ -241,6 +262,7 @@ class AppMessagesFr {
     'rules_sync_replies': 'Synchroniser les réponses',
     'rules_target': 'Cible',
     'rules_target_required': 'Pick a destination channel',
+    'rules_task_id': 'ID de la tâche',
     'rules_time_delay': 'Définir le délai (secondes)',
     'rules_time_edit_limit': 'Temps dédition max (secondes)',
     'rules_title': 'Tâches de transfert',

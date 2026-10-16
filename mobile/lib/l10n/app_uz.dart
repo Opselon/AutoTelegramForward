@@ -195,6 +195,26 @@ class AppMessagesUz {
     'rules_replace_with': 'Bilan almashtirish',
     'rules_replace_with_hint':
         'Mos kelgan matnni olib tashlash uchun boʻsh qoldiring',
+    'rules_route_chip_duplicate': 'Ikki marta kiritilgan',
+    'rules_route_chip_ok': 'Qabul qilindi',
+    'rules_route_chip_overlap': 'Ikkala tomonda ham ishlatilgan',
+    'rules_route_chip_tooltip':
+        '{reason} — bu yozuvni tahrirlash uchun chipni bosing.',
+    'rules_route_duplicate_id':
+        '{id} bir necha marta kiritilgan. Takrorini o‘chiring.',
+    'rules_route_empty':
+        'Hozircha kanal yo‘q. Bir yoki bir nechtasini vergul bilan ajratib kiriting.',
+    'rules_route_fan_out': '{count} manzil',
+    'rules_route_overlap_id':
+        '{id} ham manba, ham manzil. Vazifa o‘ziga yubora olmaydi.',
+    'rules_route_preview': '{sources} → {targets}',
+    'rules_route_preview_label': 'Marshrut ko‘rinishi',
+    'rules_route_remove': 'Bu yozuvni o‘chirish',
+    'rules_route_sources': 'Manbalar (vergul bilan ajratilgan)',
+    'rules_route_sources_hint':
+        'IDlar, @foydalanuvchi nomlari yoki t.me havolalari, vergul bilan ajratilgan',
+    'rules_route_targets': 'Manzillar (vergul bilan ajratilgan)',
+    'rules_route_targets_hint': 'Har bir xabar barcha manzillarga yuboriladi',
     'rules_sched_auto': 'Avto ebulon rejimi',
     'rules_sched_power': 'Rejim boshqaruvi',
     'rules_sec_ai': 'AI funksiyalari',
@@ -240,6 +260,7 @@ class AppMessagesUz {
     'rules_sync_replies': 'Javoblarni sinxronlash',
     'rules_target': 'Maqsad',
     'rules_target_required': 'Pick a destination channel',
+    'rules_task_id': 'Vazifa ID',
     'rules_time_delay': 'Kechikish (soniya)',
     'rules_time_edit_limit': 'Tahrir vaqti (soniya)',
     'rules_title': 'Uzatish vazifalari',
