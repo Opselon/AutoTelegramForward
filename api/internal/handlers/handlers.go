@@ -158,7 +158,38 @@ func (h *Handlers) TerminateSession(w http.ResponseWriter, r *http.Request) {
 
 // defaultChatLimit is the page size used when the client omits ?limit, matching
 // the mobile contract so both sides agree without a round-trip to negotiate it.
-const defaultChatLimit = 100
+const defaultChatLimit int32 = 100
+
+// maxChatLimit is the largest page this endpoint will assemble. The core clamps
+// too, but the bound here is what stops one client from asking for a reply the
+// API has to buffer in full.
+const maxChatLimit int32 = 200
+
+// maxChatOffset is the largest offset the 32-bit request field can carry.
+const maxChatOffset int32 = 1<<31 - 1
+
+// boundedQueryInt reads an int32 query parameter and clamps it into [lo, hi].
+//
+// The parse is done with a 32-bit size, so a value that cannot fit is rejected
+// instead of wrapped, and the clamp is applied on the int64 *before* the
+// narrowing conversion — which is what makes the int32(v) below safe on every
+// architecture. The obvious `strconv.Atoi` + `int32(...)` pair is correct only
+// by accident: Atoi yields an architecture-dependent int, and a reader (or an
+// analyzer) cannot see the bound without following the surrounding branches.
+func boundedQueryInt(raw string, lo, hi int32) (int32, bool) {
+	v, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil {
+		return 0, false
+	}
+	switch {
+	case v < int64(lo):
+		return lo, true
+	case v > int64(hi):
+		return hi, true
+	default:
+		return int32(v), true
+	}
+}
 
 // ListChats browses the dialogs (channels, groups, private chats) of one of the
 // caller's own sessions — the source/target picker feed for the mobile client.
@@ -197,34 +228,25 @@ func (h *Handlers) ListChats(w http.ResponseWriter, r *http.Request) {
 	// silent fallback that would hide a broken caller.
 	limit := defaultChatLimit
 	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
-		v, err := strconv.Atoi(raw)
-		if err != nil {
+		v, ok := boundedQueryInt(raw, 1, maxChatLimit)
+		if !ok {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error": "limit must be an integer", "code": "invalid_limit",
 			})
 			return
 		}
 		limit = v
-		if limit < 1 {
-			limit = 1
-		}
-		if limit > 200 {
-			limit = 200
-		}
 	}
-	offset := 0
+	offset := int32(0)
 	if raw := strings.TrimSpace(q.Get("offset")); raw != "" {
-		v, err := strconv.Atoi(raw)
-		if err != nil {
+		v, ok := boundedQueryInt(raw, 0, maxChatOffset)
+		if !ok {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error": "offset must be an integer", "code": "invalid_offset",
 			})
 			return
 		}
 		offset = v
-		if offset < 0 {
-			offset = 0
-		}
 	}
 
 	if h.c.Sessions == nil {

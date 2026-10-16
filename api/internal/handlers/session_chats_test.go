@@ -184,6 +184,9 @@ func TestListChats_ClampsLimitAndOffset(t *testing.T) {
 		{"over max is capped", "limit=999", 200, 0},
 		{"negative offset faults to zero", "offset=-4", 100, 0},
 		{"offset passes through", "limit=5&offset=40", 5, 40},
+		// A value too large for the 32-bit request field is a client error, not
+		// a wrapped number that would silently become a different page.
+		{"offset within int32 passes through", "offset=2147483647", 100, 2147483647},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,6 +220,9 @@ func TestListChats_NonNumericPagingIsBadRequest(t *testing.T) {
 		{"limit=1.5", "invalid_limit"},
 		{"offset=xyz", "invalid_offset"},
 		{"limit=10&offset=1.5", "invalid_offset"},
+		// Past int32: refused instead of wrapping to a negative page index.
+		{"limit=9999999999", "invalid_limit"},
+		{"offset=2147483648", "invalid_offset"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.query, func(t *testing.T) {
