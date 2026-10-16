@@ -1,0 +1,83 @@
+/**
+ * Single source of truth for the documentation sidebar and the search index.
+ * Paths are stored base-less; prefix them with url() at render time.
+ */
+export interface DocLink {
+  title: string;
+  path: string;
+  desc: string;
+  isNew?: boolean;
+}
+
+export interface DocSection {
+  category: string;
+  items: DocLink[];
+}
+
+export const docsNav: DocSection[] = [
+  {
+    category: 'Getting started',
+    items: [
+      { title: 'Install overview', path: '/getting-started/', desc: 'Choose docker, source or portable mode and know what each gives you.' },
+      { title: 'Docker Compose deployment', path: '/getting-started/docker/', desc: 'Run the four services with one compose file and verify the stack.' },
+      { title: 'Linux & Windows setup', path: '/getting-started/linux-windows/', desc: 'Native installers, virtualenv setup and boot persistence.' },
+      { title: 'Telegram bot configuration', path: '/getting-started/telegram-bot-setup/', desc: 'BotFather token, admin id, first login and the panel.' },
+      { title: 'Configuration & environment', path: '/getting-started/configuration/', desc: 'Every environment key, with its default and secret status.' },
+      { title: 'Verifying the installation', path: '/getting-started/verification/', desc: 'Prove each service is serving before you trust it.' },
+    ],
+  },
+  {
+    category: 'New in v2.0',
+    items: [
+      { title: 'Multi-source → multi-target routing', path: '/features/multi-source-routing/', desc: 'One task, many sources, many targets.', isNew: true },
+      { title: 'Per-task content rules', path: '/features/per-task-content-rules/', desc: 'Blacklists, whitelists, links, regex and replacements.', isNew: true },
+      { title: 'AI rewriting', path: '/features/ai-rewriting/', desc: 'Optional LLM pass with custom prompt templates.', isNew: true },
+      { title: 'Observability & log history', path: '/features/observability-and-logs/', desc: 'Attributable logs, stats, DLQ replay.', isNew: true },
+      { title: 'Ordered delivery', path: '/features/ordered-delivery/', desc: 'Bursts delivered in posted order.', isNew: true },
+      { title: 'Dedup, replies & edits', path: '/features/deduplication-and-replies/', desc: 'No repeats, no orphaned replies.', isNew: true },
+      { title: 'Clients & interfaces', path: '/features/clients-and-interfaces/', desc: 'Bot, dashboard, mobile and API parity.', isNew: true },
+      { title: 'Multilingual UI', path: '/features/multilingual-ui/', desc: 'Ten locales with enforced 1:1 parity.', isNew: true },
+      { title: 'DevOps CLI & upgrades', path: '/features/devops-cli/', desc: 'Validate, diagnose and upgrade the stack.', isNew: true },
+    ],
+  },
+  {
+    category: 'Feature deep dives',
+    items: [
+      { title: 'Feature overview', path: '/features/', desc: 'Everything the platform does, grouped by subsystem.' },
+      { title: 'Automated forwarding modes', path: '/features/automated-forwarding/', desc: 'Copy versus direct forward, topics and priority.' },
+      { title: 'Tasks & destinations', path: '/features/rules-and-destinations/', desc: 'Create, edit, clone, pause and delete tasks.' },
+      { title: 'Text cleaner', path: '/features/text-cleaner/', desc: 'URL, mention, hashtag, emoji and phone cleaning.' },
+      { title: 'Whitelist, blacklist & filters', path: '/features/whitelist-blacklist-filters/', desc: 'Keyword gates, link rules and media filters.' },
+      { title: 'Header & footer shortcodes', path: '/features/headers-footers-shortcodes/', desc: 'Twelve validated shortcodes for attribution.' },
+      { title: 'Replacements & regex', path: '/features/replacements-and-regex/', desc: 'Literal and pattern replacements.' },
+      { title: 'Scheduling & delays', path: '/features/scheduling-and-delays/', desc: 'Delays, windows and the edit guard.' },
+      { title: 'Media, albums & copy bypass', path: '/features/media-and-albums/', desc: 'Albums and protected-channel re-upload.' },
+      { title: 'Backup, clone & migration', path: '/features/backup-clone-migration/', desc: 'Encrypted .atf bundles.' },
+      { title: 'Multi-tenant security', path: '/features/multi-tenant-security/', desc: 'Fail-closed isolation and encryption.' },
+    ],
+  },
+  {
+    category: 'Reference',
+    items: [
+      { title: 'REST API', path: '/api/', desc: 'Control-plane endpoints, authentication and error model.' },
+      { title: 'CLI reference', path: '/cli/', desc: 'Every command group, with examples.' },
+      { title: 'Architecture', path: '/architecture/', desc: 'Services, pipeline stages, queues and storage.' },
+      { title: 'Security model', path: '/security/', desc: 'Tenant isolation, encryption and redaction.' },
+      { title: 'Operations & diagnostics', path: '/operations/', desc: 'Runbooks for the failures you will actually meet.' },
+    ],
+  },
+  {
+    category: 'Learn',
+    items: [
+      { title: 'Tutorials & recipes', path: '/tutorials/', desc: 'Copy-paste walkthroughs for common setups.' },
+      { title: 'Template playground', path: '/tools/playground/', desc: 'Try the cleaner and shortcodes in the browser.' },
+      { title: 'Releases', path: '/releases/', desc: 'What shipped, and when.' },
+      { title: 'FAQ', path: '/faq/', desc: 'Straight answers to the frequent questions.' },
+    ],
+  },
+];
+
+export const allDocLinks: DocLink[] = docsNav.flatMap((s) => s.items);
+
+/** Ordered flat list used for prev/next paging inside the docs layout. */
+export const docsOrder: string[] = allDocLinks.map((l) => l.path);

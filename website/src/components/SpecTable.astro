@@ -1,0 +1,62 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  headers: string[];
+  rows: string[][];
+  caption?: string;
+  class?: string;
+  /** Column index that becomes the card title on small screens. */
+  titleColumn?: number;
+}
+
+const { headers, rows, caption, class: cls = '', titleColumn = 0 } = Astro.props;
+
+const otherColumns = headers.map((header, index) => ({ header, index })).filter(({ index }) => index !== titleColumn);
+---
+
+<div class={`spec-table-wrap ${cls}`}>
+  <table class="spec-table">
+    {caption && <caption class="spec-table-caption">{caption}</caption>}
+    <thead>
+      <tr>
+        {headers.map((header) => (
+          <th scope="col">{header}</th>
+        ))}
+      </tr>
+    </thead>
+    <tbody>
+      {
+        rows.map((row) => (
+          <tr>
+            {row.map((cell, index) =>
+              index === 0 ? (
+                <th scope="row" set:html={cell} />
+              ) : (
+                <td set:html={cell} />
+              )
+            )}
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+
+  <ul class="spec-cards" aria-hidden="true">
+    {
+      rows.map((row) => (
+        <li class="spec-card">
+          <p class="spec-card-title" set:html={row[titleColumn]} />
+          <dl class="spec-card-fields">
+            {otherColumns.map(({ header, index }) => (
+              <div class="spec-card-field">
+                <dt>{header}</dt>
+                <dd set:html={row[index]} />
+              </div>
+            ))}
+          </dl>
+        </li>
+      ))
+    }
+  </ul>
+</div>

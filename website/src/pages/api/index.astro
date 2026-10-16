@@ -1,0 +1,299 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import SpecTable from '../../components/SpecTable.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import Callout from '../../components/Callout.astro';
+import Icon from '../../components/Icon.astro';
+import repoInfo from '../../data/repo-info.json';
+import { url } from '../../utils/paths';
+
+const pageTitle = 'REST API reference';
+const pageDesc = `Every route the AutoTelegramForward control plane registers — ${repoInfo.apiRoutes.length} endpoints across system health, authentication, the authenticated control plane and administration — with auth rules and cURL examples.`;
+
+const toc = [
+  { id: 'auth', title: 'Authentication' },
+  { id: 'conventions', title: 'Conventions' },
+  { id: 'examples', title: 'Worked examples' },
+  { id: 'highlights', title: 'Group highlights' },
+  { id: 'routes', title: 'Complete route table' },
+  { id: 'lifecycle', title: 'Delivery lifecycle' },
+  { id: 'errors', title: 'Errors & status codes' },
+];
+
+const groups = repoInfo.apiRouteGroupOrder as string[];
+const routesByGroup = Object.fromEntries(
+  groups.map((group) => [group, repoInfo.apiRoutes.filter((route: { group: string }) => route.group === group)]),
+);
+
+const authCount = repoInfo.apiRoutes.filter((r: { auth: string }) => r.auth === 'bearer').length;
+const methodTone: Record<string, string> = {
+  GET: 'text-emerald-300',
+  POST: 'text-sky-300',
+  PUT: 'text-amber-300',
+  PATCH: 'text-violet-300',
+  DELETE: 'text-rose-300',
+};
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/api/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'REST API', href: url('/api/') },
+  ]}
+  toc={toc}
+  keywords={['AutoTelegramForward API', 'Telegram forwarding REST API', 'control plane endpoints']}
+>
+  <p>
+    The control plane is a Go service that fronts the Python core. It owns authentication, tenancy, task CRUD, log
+    history, dead-letter control and administration. Every route below is parsed out of <code>api/main.go</code> at
+    build time, so this page cannot drift from the shipped binary.
+  </p>
+
+  <p class="not-prose flex flex-wrap gap-2">
+    <span class="chip">{repoInfo.apiRoutes.length} endpoints</span>
+    <span class="chip">{authCount} require a token</span>
+    <span class="chip">{groups.length} route groups</span>
+    <span class="chip">JSON in, JSON out</span>
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="auth">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Authentication</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Two schemes exist and they do different jobs. Clients (the web dashboard and the mobile app) obtain a session
+      token from the public authentication routes and send it as a bearer token. Machines that call the API
+      server-to-server can present a shared key instead.
+    </p>
+
+    <SpecTable
+      headers={['Scheme', 'Header', 'Used by', 'Behaviour']}
+      rows={[
+        [
+          '<code>Bearer token</code>',
+          '<code>Authorization: Bearer &lt;token&gt;</code>',
+          'Web dashboard, mobile app, <code>atf auth token --save</code>',
+          'Resolves to an identity; every query is scoped to that numeric user id.',
+        ],
+        [
+          '<code>ATF_API_KEY</code>',
+          '<code>X-API-Key: &lt;key&gt;</code>',
+          'Service-to-service automation',
+          'Only enforced when the key is configured on the server.',
+        ],
+        [
+          '<code>Init data</code>',
+          '<code>POST /api/auth/tma</code>',
+          'Telegram Mini App',
+          'The signed WebApp init data is verified before a token is issued.',
+        ],
+      ]}
+      caption="Authentication schemes accepted by the control plane"
+    />
+
+    <div class="grid gap-4 lg:grid-cols-2 mt-5">
+      <CodeBlock
+        label="Log in and call an endpoint"
+        language="bash"
+        content={`# 1. Exchange credentials for a token
+TOKEN=$(curl -s -X POST https://your-host/api/auth/login \\
+  -H 'Content-Type: application/json' \\
+  -d '{"email":"you@example.com","password":"…"}' \\
+  | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+# 2. Read your own tasks
+curl -s https://your-host/api/rules \\
+  -H "Authorization: Bearer $TOKEN"
+
+# 3. Or use the CLI, which stores the token for you
+atf auth token --save
+atf auth whoami`}
+      />
+      <CodeBlock
+        label="Public readiness route (no token)"
+        language="bash"
+        content={`curl -s https://your-host/api/system/setup | jq
+
+# {
+#   "ready": true,
+#   "version": "2.0.0",
+#   "env": { "ATF_BOT_TOKEN": { "set": true } },
+#   "services": { "core": true, "logger": true, "api": true, "web": true }
+# }
+
+# Ready verdict without probing the services:
+curl -s 'https://your-host/api/system/setup?probe=0'`}
+      />
+    </div>
+
+    <Callout type="warn" class="mt-4" title="Unlinked accounts see nothing">
+      <p>
+        An account that exists but has not linked a Telegram account resolves to user id 0. Every tenant-scoped handler
+        treats 0 as "own nothing" — the API returns an empty collection, never somebody else's data.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="conventions">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Conventions</h2>
+    <ul class="grid gap-2 list-none p-0 m-0">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span><strong class="text-slate-100">Versioned aliases.</strong> Health and system routes answer on both <code>/api/…</code> and <code>/api/v1/…</code>; the dashboard uses the mirrored forms.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span><strong class="text-slate-100">Partial updates are explicit.</strong> <code>PATCH</code> carries only what changes plus <code>update_mask</code>, which is the only way to set a field to false, zero or empty.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span><strong class="text-slate-100">Optimistic concurrency.</strong> Updating a task bumps its version, so a stale writer is rejected instead of silently overwriting.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span><strong class="text-slate-100">Correlation ids.</strong> Every response carries a correlation id that also appears in the log history, so an API call and its delivery can be joined.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span><strong class="text-slate-100">Bounded reads.</strong> Log and queue queries page with <code>limit</code> / <code>since</code> rather than returning unbounded history.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span><strong class="text-slate-100">Generated schema.</strong> The per-task settings surface publishes its own JSON schema at <code>/api/rules/settings/schema</code>, so editors can be built before any task exists.</span>
+      </li>
+    </ul>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="examples">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Worked examples</h2>
+    <div class="space-y-4">
+      <CodeBlock
+        label="Create a task with many sources and many targets"
+        language="bash"
+        content={`curl -s -X POST https://your-host/api/rules \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "name": "Market news → three channels",
+    "source_chats": ["-1001111111111", "-1002222222222"],
+    "target_chats": ["-1003333333333", "-1004444444444"],
+    "settings": {
+      "clean_links": true,
+      "clean_mentions": true,
+      "header_template": "📰 [[ORIGIN_NAME]]",
+      "footer_template": "🔗 [[ORIGIN_LINK]]"
+    }
+  }'`}
+      />
+      <CodeBlock
+        label="Dry-run a rule before it goes live"
+        language="bash"
+        content={`curl -s -X POST https://your-host/api/simulate \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"rule_id":"<id>","text":"BUY NOW t.me/spam @channel #deal"}' | jq`}
+      />
+      <CodeBlock
+        label="Inspect history, then replay a dead-lettered job"
+        language="bash"
+        content={`curl -s "https://your-host/api/logs?level=ERROR&limit=50" \\
+  -H "Authorization: Bearer $TOKEN" | jq '.items[0]'
+
+curl -s https://your-host/api/logs/stats -H "Authorization: Bearer $TOKEN" | jq
+
+curl -s https://your-host/api/dlq -H "Authorization: Bearer $TOKEN" | jq '.items[].id'
+curl -s -X POST https://your-host/api/dlq/<id>/retry \\
+  -H "Authorization: Bearer $TOKEN" | jq`}
+      />
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="highlights">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Group highlights</h2>
+    <div class="grid gap-4 lg:grid-cols-2">
+      {
+        repoInfo.apiGroups.map((group: { group: string; endpoints: string[][] }) => (
+          <div class="card">
+            <h3 class="text-sm font-bold text-white mb-3">{group.group}</h3>
+            <ul class="grid gap-2 list-none p-0 m-0">
+              {group.endpoints.map((endpoint) => (
+                <li class="text-[13px] leading-relaxed">
+                  <code class={`font-mono font-semibold ${methodTone[endpoint[0]] ?? 'text-slate-200'}`}>{endpoint[0]}</code>{' '}
+                  <code class="text-slate-300">{endpoint[1]}</code>
+                  <span class="block text-slate-400 text-[12.5px]">{endpoint[2]}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="routes">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Complete route table</h2>
+    <p class="m-0 mb-4 text-[15px] text-slate-300">
+      All {repoInfo.apiRoutes.length} registered routes, grouped by the mux that owns them and resolved through their
+      mount prefixes. Host and scheme are yours; the paths are exact.
+    </p>
+
+    {
+      groups.map((group) => (
+        <div class="mb-6">
+          <h3 class="text-xs font-bold uppercase tracking-[0.14em] text-sky-400 mb-3">
+            {group} · {routesByGroup[group].length} routes
+          </h3>
+          <SpecTable
+            headers={['Endpoint', 'Handler', 'Auth']}
+            rows={routesByGroup[group].map((route: { method: string; path: string; handler: string; auth: string }) => [
+              `<code class="font-mono"><span class="${methodTone[route.method] ?? 'text-slate-200'} font-semibold">${route.method}</span> ${route.path}</code>`,
+              `<code class="text-slate-400">${route.handler}</code>`,
+              route.auth === 'bearer' ? '<span class="chip chip-success">Bearer</span>' : '<span class="chip">Public</span>',
+            ])}
+          />
+        </div>
+      ))
+    }
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="lifecycle">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Delivery lifecycle</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Every delivery moves through these states, and the same vocabulary is used by the queue API, the log history and
+      the dashboard. Jobs in <code>RETRY_WAIT</code> are the ones a pause defers rather than fails.
+    </p>
+    <ul class="flex flex-wrap gap-2 list-none p-0 m-0">
+      {
+        repoInfo.lifecycleStates.map((state: string) => (
+          <li class="chip font-mono">{state}</li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="errors">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Errors & status codes</h2>
+    <SpecTable
+      headers={['Code', 'When', 'What to do']}
+      rows={[
+        ['<code>200</code>', 'Success.', 'Read the JSON body.'],
+        ['<code>400</code>', 'The body or query is malformed.', 'Check the settings schema and the environment contract.'],
+        ['<code>401</code>', 'Missing, expired or unverifiable token.', 'Log in again, or run <code>atf auth whoami</code>.'],
+        ['<code>403</code>', 'Administration route called without admin rights.', 'Use an administrator account.'],
+        ['<code>404</code>', 'The resource does not exist — or does not belong to you.', 'Ownership failures deliberately look identical to missing rows.'],
+        ['<code>409</code>', 'A concurrent update moved the version first.', 'Re-read the task, re-apply your change.'],
+        ['<code>422</code>', 'A setting was rejected by validation.', 'Read the field error in the response body.'],
+        ['<code>502</code>', 'The logger or core service is unreachable.', 'Check <code>/api/health/services</code> and <code>atf doctor</code>.'],
+      ]}
+      caption="Status codes returned by the control plane"
+    />
+    <Callout type="tip" class="mt-4" title="Prefer the CLI for diagnostics">
+      <p>
+        <code>atf doctor --fix</code> walks the same checks the API exposes and repairs what it can. See the{' '}
+        <a class="text-sky-400" href={url('/cli/')}>CLI reference</a>.
+      </p>
+    </Callout>
+  </section>
+</DocsLayout>

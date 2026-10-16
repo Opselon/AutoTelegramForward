@@ -1,0 +1,200 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import Callout from '../../components/Callout.astro';
+import Icon from '../../components/Icon.astro';
+import repoInfo from '../../data/repo-info.json';
+import { url } from '../../utils/paths';
+
+const pageTitle = 'CLI reference';
+const pageDesc = `The atf command line: ${repoInfo.stats.cliGroups} command groups covering installation, task control, log history, backups, diagnostics, releases and continuous supervision.`;
+
+const toc = [
+  { id: 'basics', title: 'How it works' },
+  { id: 'workflows', title: 'Everyday workflows' },
+  { id: 'groups', title: 'All command groups' },
+  { id: 'json', title: 'Scripting with --json' },
+];
+
+// The canonical first-run path, in the order a new operator actually runs it.
+const workflow = [
+  {
+    title: '1 · Install and verify',
+    steps: ['atf setup', 'atf status', 'atf validate --strict', 'atf doctor'],
+    note: 'The wizard builds the stack, then proves each service is serving before it exits.',
+  },
+  {
+    title: '2 · Connect Telegram',
+    steps: ['atf config set ATF_BOT_TOKEN', 'atf auth token --save', 'atf sessions list'],
+    note: 'Sessions are listed tenant-scoped; backups are encrypted before they touch disk.',
+  },
+  {
+    title: '3 · Create your first task',
+    steps: [
+      'atf rules create --name "News" --source -1001111111111 --target -1003333333333',
+      'atf rules list',
+      'atf rules settings set <id> clean_links=true',
+      'atf rules simulate <id> --text "BUY NOW t.me/spam"',
+    ],
+    note: 'Simulate runs the full pipeline on text you supply — nothing is sent to Telegram.',
+  },
+  {
+    title: '4 · Watch it work',
+    steps: ['atf logs tail --follow -n 50', 'atf logs stats', 'atf data queue', 'atf data dlq --replay'],
+    note: 'The queue and dead-letter views are the same data the dashboard shows.',
+  },
+  {
+    title: '5 · Upgrade with a gate',
+    steps: ['atf system upgrade', 'atf release verify', 'atf deploy --build'],
+    note: 'The upgrade path checks readiness and refuses to proceed on a failing stack.',
+  },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/cli/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'CLI', href: url('/cli/') },
+  ]}
+  toc={toc}
+  keywords={['atf CLI', 'AutoTelegramForward command line', 'Telegram forwarding CLI']}
+>
+  <p>
+    <code>atf</code> is the operator interface to the whole installation: it installs, validates, diagnoses, controls
+    tasks, reads log history, exports backups, regenerates gRPC stubs and supervises the running stack. Everything the
+    dashboard can do, the CLI can do — and it can do it from a cron job.
+  </p>
+
+  <p class="not-prose flex flex-wrap gap-2">
+    <span class="chip">{repoInfo.stats.cliGroups} command groups</span>
+    <span class="chip">{repoInfo.stats.grpcRpcCount} gRPC methods behind it</span>
+    <span class="chip">{repoInfo.stats.pythonTests + repoInfo.stats.goTests} test files</span>
+    <span class="chip">JSON output on demand</span>
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="basics">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">How it works</h2>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <CodeBlock
+        label="Invocation shape"
+        language="bash"
+        content={`atf <group> <command> [flags]
+
+# Group listing and per-command help
+atf --help
+atf rules --help
+atf rules settings --help`}
+      />
+      <div class="card">
+        <h3 class="text-sm font-bold text-white mb-3">Conventions worth knowing</h3>
+        <ul class="grid gap-2 list-none p-0 m-0">
+          <li class="flex gap-2 text-[13.5px] text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+            <span>Task ids accept the short prefix shown by <code>atf rules list</code>.</span>
+          </li>
+          <li class="flex gap-2 text-[13.5px] text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+            <span><code>--json</code> is available on the read commands and is what scripts should parse.</span>
+          </li>
+          <li class="flex gap-2 text-[13.5px] text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+            <span><code>atf validate</code> is read-only; <code>--strict</code> turns warnings into failures for CI.</span>
+          </li>
+          <li class="flex gap-2 text-[13.5px] text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+            <span><code>atf doctor --fix</code> repairs what it can and reports what it cannot.</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="workflows">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Everyday workflows</h2>
+    <div class="grid gap-4 sm:grid-cols-2">
+      {
+        workflow.map((item) => (
+          <div class="card">
+            <h3 class="text-sm font-bold text-white mb-3">{item.title}</h3>
+            <ol class="grid gap-2 list-none p-0 m-0 mb-3">
+              {item.steps.map((step) => (
+                <li>
+                  <code class="block font-mono text-[12.5px] text-sky-200 bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 overflow-x-auto whitespace-nowrap">
+                    {step}
+                  </code>
+                </li>
+              ))}
+            </ol>
+            <p class="m-0 text-[13px] text-slate-400">{item.note}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="groups">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">All command groups</h2>
+    <p class="m-0 mb-4 text-[15px] text-slate-300">
+      Read from the argument parser at build time, so this list is exactly what your binary accepts.
+    </p>
+
+    <div class="grid gap-3.5 lg:grid-cols-2">
+      {
+        repoInfo.cliGroups.map((group: { group: string; what: string; examples: string[] }) => (
+          <div class="card">
+            <h3 class="text-sm font-bold text-white mb-1.5">
+              <code class="font-mono text-sky-300">atf {group.group}</code>
+            </h3>
+            <p class="m-0 mb-3 text-[13px] leading-relaxed text-slate-400">{group.what}</p>
+            <ul class="grid gap-1.5 list-none p-0 m-0">
+              {group.examples.map((example) => (
+                <li class="flex items-start gap-2">
+                  <Icon name="arrow-right" class="w-3.5 h-3.5 mt-1 text-slate-600 shrink-0" />
+                  <code class="font-mono text-[12.5px] text-slate-300 break-all">{example}</code>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="json">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Scripting with --json</h2>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <CodeBlock
+        label="Alert when the queue backs up"
+        language="bash"
+        content={`#!/usr/bin/env bash
+set -euo pipefail
+
+depth=$(atf data queue --json | jq '.pending')
+if [ "$depth" -gt 500 ]; then
+  atf admin broadcast --text "Queue depth is $depth — investigating"
+fi`}
+      />
+      <CodeBlock
+        label="Gate a deployment on validation"
+        language="bash"
+        content={`# Fails the pipeline instead of deploying a broken stack
+atf validate --strict --json | jq -e '.ok == true' > /dev/null
+
+atf release verify
+atf deploy --build
+atf status --watch`}
+      />
+    </div>
+
+    <Callout type="tip" class="mt-4" title="Same data, two surfaces">
+      <p>
+        Logs, queue depth, delivery stats and dead-lettered jobs are readable through the CLI and the{' '}
+        <a class="text-sky-400" href={url('/api/')}>REST API</a>. Pick whichever fits the script; both are tenant-scoped.
+      </p>
+    </Callout>
+  </section>
+</DocsLayout>

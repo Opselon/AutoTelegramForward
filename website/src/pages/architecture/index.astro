@@ -1,116 +1,249 @@
 ---
 import DocsLayout from '../../layouts/DocsLayout.astro';
 import ArchitectureDiagram from '../../components/ArchitectureDiagram.astro';
+import SpecTable from '../../components/SpecTable.astro';
+import Callout from '../../components/Callout.astro';
+import Icon from '../../components/Icon.astro';
+import repoInfo from '../../data/repo-info.json';
 import { url } from '../../utils/paths';
 
-const pageTitle = "System Architecture & Engineering Specification";
-const pageDesc = "In-depth architecture reference of AutoTelegramForward: Python Core, Go API Gateway, gRPC transport, durable queues, and fail-closed tenant isolation.";
+const pageTitle = 'Architecture';
+const pageDesc = `How AutoTelegramForward is put together: four services, a ${repoInfo.stats.grpcRpcCount}-method gRPC contract, the message pipeline from ingest to delivery, ordered lanes and the durable queue.`;
+
+const toc = [
+  { id: 'services', title: 'Services' },
+  { id: 'pipeline', title: 'Message pipeline' },
+  { id: 'routing', title: 'Routing resolution' },
+  { id: 'durability', title: 'Queue & durability' },
+  { id: 'ordering', title: 'Ordering' },
+  { id: 'isolation', title: 'Isolation boundary' },
+];
+
+const services = [
+  {
+    name: 'atf-core',
+    port: '50051 (gRPC)',
+    tone: 'border-sky-900/70',
+    badge: 'Data plane',
+    icon: 'server',
+    what: 'Python core: MTProto sessions, the message pipeline, the durable queue and all persistence.',
+    bullets: [
+      'ClientPool keeps user and bot sessions alive, reconnects, and parks an account on FloodWait.',
+      'Content pipeline: normalize → route → filter → clean → transform → (optional) rewrite.',
+      'DurableQueue with leases, retries with jittered backoff, dead-letter capture.',
+      'Album aggregation inside a debounce window, so a media group is one job.',
+    ],
+  },
+  {
+    name: 'atf-api',
+    port: '8080 (HTTP)',
+    tone: 'border-emerald-900/70',
+    badge: 'Control plane',
+    icon: 'chip',
+    what: 'Go service that owns authentication, tenancy, task CRUD, log queries, DLQ control and admin.',
+    bullets: [
+      `Registers ${repoInfo.apiRoutes.length} routes across system, auth, control-plane and admin groups.`,
+      'Resolves identity once, then scopes every downstream gRPC call to that identity.',
+      'Mirrors every request — success and failure — into the logger with actor and correlation id.',
+      'Exposes readiness that answers in booleans, never configuration values.',
+    ],
+  },
+  {
+    name: 'atf-logger',
+    port: '50052 (gRPC)',
+    tone: 'border-violet-900/70',
+    badge: 'Observability',
+    icon: 'activity',
+    what: 'Structured log and audit store, kept off the delivery path so logging never slows a forward.',
+    bullets: [
+      'Stores attributable history: actor, service, level, subject task, correlation id.',
+      'Backs the dashboard log explorer, atf logs queries and the export endpoints.',
+      'Queries are paged and tenant-filtered server-side.',
+    ],
+  },
+  {
+    name: 'atf-web',
+    port: '8088 (HTTP)',
+    tone: 'border-amber-900/70',
+    badge: 'Client',
+    icon: 'devices',
+    what: 'React dashboard: tasks, per-task rules, sessions, AI configs, log explorer and queue control.',
+    bullets: [
+      'Talks only to the REST API — no direct database access.',
+      'Per-task rule editors render from the settings schema the API publishes.',
+      'Live log stream, delivery statistics, dead-letter inspection and replay.',
+    ],
+  },
+];
+
+const stages = [
+  ['INGEST', 'A Telegram update arrives over MTProto and is normalized into one internal shape (UTF-16 handled, album fragments buffered).'],
+  ['ROUTE', 'The task list is resolved for the source chat and owner. A task that is paused or disabled is skipped here, not halfway through.'],
+  ['AUTHORIZE', 'Ownership and subscription state are checked before any work is performed on the message.'],
+  ['FILTER', 'Media-type gates, link rules, whitelist and blacklist — Unicode-folded, word-boundary keyword matching with ReDoS-refused patterns.'],
+  ['CLEAN', 'URLs, mentions, hashtags, phone numbers, emojis and custom word lists are stripped deterministically in a single pass.'],
+  ['TRANSFORM', 'Replacements, then the header and footer with shortcode interpolation resolved per delivery.'],
+  ['REWRITE', 'Optional AI pass for this task only. Provider failure is non-fatal: the transformed text is delivered as-is.'],
+  ['QUEUE', 'The delivery job is persisted with a lease, then handed to a worker. Nothing is delivered straight from the event handler.'],
+  ['DELIVER', 'MTProto send, album as one atomic group, with copy-protection fallback to download-and-re-upload.'],
+  ['REPORT', 'Outcome is recorded: SUCCEEDED, FAILED (retry), or OUTCOME_UNCONFIRMED when Telegram did not confirm.'],
+];
 ---
 
 <DocsLayout
   title={pageTitle}
   description={pageDesc}
+  path="/architecture/"
   breadcrumbs={[
-    { name: 'Architecture', href: url('/architecture/') }
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'Architecture', href: url('/architecture/') },
   ]}
-  prev={{ title: 'Verification', href: url('/getting-started/verification/') }}
-  next={{ title: 'Operations & Troubleshooting', href: url('/operations/') }}
+  toc={toc}
+  keywords={['AutoTelegramForward architecture', 'gRPC microservices Telegram', 'durable delivery queue']}
 >
-  <div class="space-y-8">
-    <p class="text-base text-slate-300 leading-relaxed">
-      AutoTelegramForward is engineered as a decoupled, asynchronous microservices platform designed for high availability, zero message loss, and strict multi-tenant isolation.
-    </p>
+  <p>
+    Four services, one contract, one isolation boundary. The split exists for a reason: the Python core owns the
+    Telegram conversation, the Go API owns trust, the logger owns history, and the web client owns presentation. Each
+    can be replaced without touching the others.
+  </p>
 
-    <!-- Visual Architecture Component -->
-    <div class="not-prose my-6">
-      <ArchitectureDiagram />
-    </div>
-
-    <h2 id="service-breakdown">Microservice Responsibilities</h2>
-
-    <div class="space-y-4 not-prose my-6 text-xs">
-      
-      <!-- atf-core -->
-      <div class="p-5 rounded-xl bg-slate-900 border border-sky-500/30">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-base font-bold text-white font-mono">1. Python Core (atf-core) — Port 50051</h3>
-          <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-sky-950 text-sky-400 border border-sky-800">gRPC Server & MTProto Engine</span>
-        </div>
-        <p class="text-slate-300 mb-3 leading-relaxed font-sans">
-          The central data plane for AutoTelegramForward. Implemented in Python 3.12 with Pyrogram, <code>asyncio</code>, and SQLAlchemy.
-        </p>
-        <ul class="space-y-1.5 text-slate-400 font-sans list-disc ml-4">
-          <li><strong>ClientPool:</strong> Manages persistent MTProto TCP sessions to Telegram Data Centers (DC2/DC4) for both bot tokens and user accounts. Handles reconnects and FloodWait auto-pause.</li>
-          <li><strong>Pipeline Engine:</strong> Deterministic 5-stage sequential processing (<code>NORMALIZE</code> → <code>ROUTE</code> → <code>FILTER</code> → <code>CLEAN</code> → <code>TRANSFORM</code>).</li>
-          <li><strong>DurableQueue:</strong> SQLite/PostgreSQL-backed lease queue worker pool. Retries transient delivery errors with jittered exponential backoff.</li>
-          <li><strong>Album Aggregator:</strong> Groups multipart media updates using an 800ms debounce timer before dispatching unified <code>send_media_group</code> requests.</li>
-        </ul>
-      </div>
-
-      <!-- atf-api -->
-      <div class="p-5 rounded-xl bg-slate-900 border border-slate-800">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-base font-bold text-white font-mono">2. Go API Gateway (atf-api) — Port 8080</h3>
-          <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800">High-Concurrency REST API</span>
-        </div>
-        <p class="text-slate-300 mb-3 leading-relaxed font-sans">
-          Built in Golang for maximum concurrency and minimal memory overhead. Acts as the public ingress for HTTP clients and the Web Dashboard.
-        </p>
-        <ul class="space-y-1.5 text-slate-400 font-sans list-disc ml-4">
-          <li>Translates incoming REST requests into gRPC calls routed to <code>atf-core:50051</code>.</li>
-          <li>Enforces JWT authentication and verifies tenant ownership before dispatching gRPC RPCs.</li>
-          <li>Serves system health probes at <code>/health</code> with sub-millisecond response latency.</li>
-        </ul>
-      </div>
-
-      <!-- atf-logger -->
-      <div class="p-5 rounded-xl bg-slate-900 border border-slate-800">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-base font-bold text-white font-mono">3. Logger Service (atf-logger) — Port 50052</h3>
-          <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-purple-950 text-purple-400 border border-purple-800">Structured Telemetry</span>
-        </div>
-        <p class="text-slate-300 mb-3 leading-relaxed font-sans">
-          Dedicated gRPC service capturing structured pipeline telemetry events (<code>[PIPELINE:...]</code>) and audit events, preventing disk I/O bottlenecks in the core forwarding path.
-        </p>
-      </div>
-
-      <!-- atf-web -->
-      <div class="p-5 rounded-xl bg-slate-900 border border-slate-800">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-base font-bold text-white font-mono">4. Web Dashboard (atf-web) — Port 8088</h3>
-          <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-amber-950 text-amber-400 border border-amber-800">React Frontend</span>
-        </div>
-        <p class="text-slate-300 mb-3 leading-relaxed font-sans">
-          Responsive web UI built with React, Vite, and Tailwind CSS. Allows visual management of forwarding tasks, real-time message stream inspection, and rule configuration.
-        </p>
-      </div>
-
-    </div>
-
-    <h2 id="pipeline-lifecycle">Message Forwarding Pipeline Lifecycle</h2>
-    <p>
-      Every incoming Telegram event follows a strict, non-blocking lifecycle:
-    </p>
-
-    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs my-4 space-y-2 text-slate-300">
-      <div><span class="text-sky-400 font-bold">1. [MTPROTO:INGEST]</span> Message arrives via Pyrogram event handler.</div>
-      <div><span class="text-sky-400 font-bold">2. [PIPELINE:NORMALIZE]</span> Normalizes UTF-16 surrogates to Python str; buffers albums if media_group_id is present.</div>
-      <div><span class="text-sky-400 font-bold">3. [PIPELINE:ROUTE]</span> Queries ForwardRules matching <code>(source_chat_id, user_id)</code>. Dropped if inactive or suspended.</div>
-      <div><span class="text-sky-400 font-bold">4. [PIPELINE:FILTER]</span> Evaluates Media Type blocks, Link filter, Whitelist, and Blacklist. If rejected, emits <code>[PIPELINE:FILTER_DROP]</code>.</div>
-      <div><span class="text-sky-400 font-bold">5. [PIPELINE:CLEAN]</span> Strips URLs, @mentions, #hashtags, emojis, phones, or custom words.</div>
-      <div><span class="text-sky-400 font-bold">6. [PIPELINE:TRANSFORM]</span> Interpolates Header/Footer shortcodes and applies Regex replacements.</div>
-      <div><span class="text-sky-400 font-bold">7. [PIPELINE:QUEUE]</span> Enqueues delivery payload into DurableQueue with lease lock.</div>
-      <div><span class="text-sky-400 font-bold">8. [PIPELINE:DELIVERED]</span> Dispatches to destination chat via MTProto. Logs completion.</div>
-    </div>
-
-    <h2 id="durability">Durable Queue & Lease-Based Workers</h2>
-    <p>
-      To prevent message loss during service restarts or network partitions, forwarding jobs are persisted in SQLite/PostgreSQL with lease semantics:
-    </p>
-    <ul>
-      <li><strong>Worker Leases:</strong> When a worker takes a job, it acquires a 60-second lease lock.</li>
-      <li><strong>Automatic Failover:</strong> If a worker crashes mid-delivery, the lease expires and another worker immediately reclaims the task.</li>
-      <li><strong>Idempotency:</strong> <code>MessageMap</code> records the mapping between <code>(source_chat_id, source_message_id)</code> and <code>(dest_chat_id, dest_message_id)</code> to prevent duplicate deliveries.</li>
-    </ul>
+  <div class="not-prose my-5">
+    <ArchitectureDiagram />
   </div>
+
+  <section class="not-prose scroll-mt-24" id="services">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Services</h2>
+    <div class="grid gap-3.5 lg:grid-cols-2">
+      {
+        services.map((service) => (
+          <div class={`card border ${service.tone}`}>
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <Icon name={service.icon} class="w-4 h-4 text-sky-400" />
+              <h3 class="font-mono font-bold text-white text-sm m-0">{service.name}</h3>
+              <span class="chip font-mono">{service.port}</span>
+              <span class="chip chip-accent">{service.badge}</span>
+            </div>
+            <p class="m-0 mb-3 text-[13px] leading-relaxed text-slate-300">{service.what}</p>
+            <ul class="grid gap-1.5 list-none p-0 m-0">
+              {service.bullets.map((bullet) => (
+                <li class="flex gap-2 text-[13px] leading-relaxed text-slate-400">
+                  <span class="mt-[7px] w-1.5 h-1.5 rounded-full bg-sky-400/70 shrink-0" />
+                  <span>{bullet}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="pipeline">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Message pipeline</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Ten stages, strictly ordered, each producing a log line you can query later. A message that stops early stops with
+      a reason — never silently.
+    </p>
+
+    <ol class="grid gap-2 list-none p-0 m-0">
+      {
+        stages.map((stage, index) => (
+          <li class="flex gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+            <span class="w-7 h-7 shrink-0 rounded-lg bg-slate-900 border border-slate-700 text-sky-300 font-mono text-[12px] grid place-items-center">
+              {index + 1}
+            </span>
+            <div>
+              <p class="m-0 font-mono text-[12.5px] font-bold text-sky-300">{stage[0]}</p>
+              <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">{stage[1]}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="routing">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Routing resolution</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      A task holds a list of sources and a list of targets. The first entry of each list is mirrored into the legacy
+      scalar column so older code paths keep working, and the sanctioned write path keeps both in step. Overrides are
+      additive only: a per-target rule can add to the task policy, never silently replace it.
+    </p>
+
+    <div class="route-map">
+      <div class="route-column">
+        <p class="route-column-title">Sources (M)</p>
+        <div class="route-node"><Icon name="bot" class="w-4 h-4 text-sky-400" /> Channel A</div>
+        <div class="route-node"><Icon name="bot" class="w-4 h-4 text-sky-400" /> Channel B</div>
+        <div class="route-node"><Icon name="bot" class="w-4 h-4 text-sky-400" /> Group C · topic 12</div>
+      </div>
+      <div class="route-arrow"><Icon name="arrow-right" class="w-6 h-6" /></div>
+      <div class="route-column">
+        <p class="route-column-title">Targets (N)</p>
+        <div class="route-node"><Icon name="bolt" class="w-4 h-4 text-emerald-400" /> Mirror channel 1</div>
+        <div class="route-node"><Icon name="bolt" class="w-4 h-4 text-emerald-400" /> Mirror channel 2</div>
+        <div class="route-node"><Icon name="bolt" class="w-4 h-4 text-emerald-400" /> Archive · topic 4</div>
+      </div>
+    </div>
+
+    <Callout type="info" class="mt-4">
+      <p>
+        One task = one policy. Every source in that task is read with the same rule set and every target receives the
+        same transformed message, which is what keeps a fan-out predictable.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="durability">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Queue & durability</h2>
+    <SpecTable
+      headers={['Property', 'Behaviour', 'Why it matters']}
+      rows={[
+        ['Persistence', 'Jobs live in SQLite or PostgreSQL, not in memory', 'A restart does not lose accepted work'],
+        ['Leases', 'A worker holds a job under a lease while delivering', 'A crashed worker\'s job is reclaimed, not stranded'],
+        ['Retries', 'Transient errors retry with jittered exponential backoff', 'Ordered backoff instead of a retry storm'],
+        ['Dead-letter', 'Jobs past their retry budget land in the DLQ with the last error', 'Failures are inspectable, replayable and purgable'],
+        ['Idempotency', 'MessageMap links source message to delivered message', 'A reclaim cannot double-post'],
+        ['Unconfirmed', '<code>OUTCOME_UNCONFIRMED</code> is a first-class state', '"Maybe delivered" is never reported as success'],
+      ]}
+      caption="Durability guarantees"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="ordering">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Ordering</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Without help, a queue that runs jobs in parallel reorders a burst: post 3 finishes before post 1 and your mirror
+      reads backwards. Ordered lanes serialize per task, so the sequence a channel published is the sequence the target
+      shows, while different tasks still run concurrently.
+    </p>
+    <div class="grid gap-3.5 sm:grid-cols-3">
+      <div class="card">
+        <h3 class="text-sm font-bold text-white mb-1.5">Per-task lane</h3>
+        <p class="m-0 text-[13px] text-slate-400">Jobs of one task never overtake each other.</p>
+      </div>
+      <div class="card">
+        <h3 class="text-sm font-bold text-white mb-1.5">Parallel across tasks</h3>
+        <p class="m-0 text-[13px] text-slate-400">Throughput scales with the number of tasks, not the number of posts.</p>
+      </div>
+      <div class="card">
+        <h3 class="text-sm font-bold text-white mb-1.5">Edits keep their place</h3>
+        <p class="m-0 text-[13px] text-slate-400">An edited post updates in order instead of jumping to the end.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="isolation">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Isolation boundary</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The boundary sits in the API, not in the client. Identity is resolved once from a verified token, attached to the
+      request, and every storage operation below that point is scoped by it. A caller who is not linked to Telegram
+      resolves to id 0, which owns nothing — the failure direction is closed, never open.
+    </p>
+    <a href={url('/security/')} class="btn btn-secondary btn-sm">
+      Read the security model
+      <Icon name="arrow-right" class="w-3.5 h-3.5" />
+    </a>
+  </section>
 </DocsLayout>

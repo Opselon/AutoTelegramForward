@@ -1,138 +1,156 @@
 ---
 import DocsLayout from '../../layouts/DocsLayout.astro';
+import CapabilityMatrix from '../../components/CapabilityMatrix.astro';
+import FeatureCard from '../../components/FeatureCard.astro';
+import Callout from '../../components/Callout.astro';
+import SpecTable from '../../components/SpecTable.astro';
+import Icon from '../../components/Icon.astro';
+import { featureHub, featurePages } from '../../data/features';
+import repoInfo from '../../data/repo-info.json';
 import { url } from '../../utils/paths';
 
-const pageTitle = "AutoTelegramForward Features & Capabilities";
-const pageDesc = "Complete directory of verified AutoTelegramForward features including message cleaning, deterministic filters, dynamic shortcodes, and resilient queue forwarding.";
+const pageTitle = 'Features & Capabilities';
+const pageDesc =
+  'Every verified AutoTelegramForward capability: multi-source routing, per-task content rules, AI rewriting, durable ordered delivery, observability, ten-language UI and DevOps tooling.';
 
-const featureCategories = [
-  {
-    title: 'Automated Message Forwarding',
-    slug: 'automated-forwarding',
-    href: url('/features/automated-forwarding/'),
-    desc: 'Copy mode (clean without forward tag) vs Direct forward, channel/group/topic routing, and priority-ordered execution.',
-    badge: 'Core Engine'
-  },
-  {
-    title: 'Destination & Rules Management',
-    slug: 'rules-and-destinations',
-    href: url('/features/rules-and-destinations/'),
-    desc: 'Multi-target fan-out to 1-N destinations simultaneously, smart VIP routing, and intermediate channel origin masking.',
-    badge: 'Routing'
-  },
-  {
-    title: 'Advanced Content Cleaner',
-    slug: 'text-cleaner',
-    href: url('/features/text-cleaner/'),
-    desc: 'Strip URLs, Telegram invite links, @mentions, #hashtags, emojis, phone numbers, buttons, and custom word lists.',
-    badge: 'New in v17'
-  },
-  {
-    title: 'Whitelist, Blacklist & Filters',
-    slug: 'whitelist-blacklist-filters',
-    href: url('/features/whitelist-blacklist-filters/'),
-    desc: 'Deterministic keyword filtering, link blocking, ReDoS-protected regex, and media-type allow/deny controls.',
-    badge: 'Filters'
-  },
-  {
-    title: 'Header & Footer Templates',
-    slug: 'headers-footers-shortcodes',
-    href: url('/features/headers-footers-shortcodes/'),
-    desc: 'Interpolate 12 validated shortcodes like [[ORIGIN_NAME]], [[ORIGIN_POST_ID]], and dynamic clickable channel hyperlinks.',
-    badge: 'Templates'
-  },
-  {
-    title: 'Text Replacement & Regex',
-    slug: 'replacements-and-regex',
-    href: url('/features/replacements-and-regex/'),
-    desc: 'Configurable word replacement dictionaries, safe pattern substitution, and UTF-16 entity offset preservation.',
-    badge: 'Transform'
-  },
-  {
-    title: 'Scheduling & Max Time Edit',
-    slug: 'scheduling-and-delays',
-    href: url('/features/scheduling-and-delays/'),
-    desc: 'Anti-detection randomized delays, operating windows, and max_time_edit synchronization thresholds for edits.',
-    badge: 'Timing'
-  },
-  {
-    title: 'Media, Albums & Copy Bypass',
-    slug: 'media-and-albums',
-    href: url('/features/media-and-albums/'),
-    desc: 'Atomic album (media group) debounced bundling and automatic download/re-upload for copy-restricted channels.',
-    badge: 'Media'
-  },
-  {
-    title: 'Backup, Clone & Migration',
-    slug: 'backup-clone-migration',
-    href: url('/features/backup-clone-migration/'),
-    desc: 'AES-256-GCM encrypted backup bundles for rules and sessions, historical message cloning, and safe restoration.',
-    badge: 'Backup'
-  },
-  {
-    title: 'Multi-Tenant Security',
-    slug: 'multi-tenant-security',
-    href: url('/features/multi-tenant-security/'),
-    desc: 'Strict fail-closed tenant boundary enforcement across Bot, Web Dashboard, and internal gRPC services.',
-    badge: 'Security'
-  }
+const toc = [
+  { id: 'new', title: 'New in v2.0' },
+  { id: 'deep-dives', title: 'All features' },
+  { id: 'matrix', title: 'Capability parity' },
+  { id: 'capabilities', title: 'Verified capability list' },
+  { id: 'shortcodes', title: 'Shortcode reference' },
 ];
 ---
 
 <DocsLayout
   title={pageTitle}
   description={pageDesc}
+  path="/features/"
   breadcrumbs={[
-    { name: 'Features', href: url('/features/') }
+    { name: 'Home', href: url('/') },
+    { name: 'Features', href: url('/features/') },
   ]}
-  next={{ title: 'Automated Forwarding', href: url('/features/automated-forwarding/') }}
+  toc={toc}
+  itemList={{
+    name: 'AutoTelegramForward capabilities',
+    items: featurePages.map((feature) => ({
+      name: feature.cardTitle,
+      description: feature.description,
+      url: `/features/${feature.slug}/`,
+    })),
+  }}
 >
-  <div class="space-y-8">
-    <p class="text-base text-slate-300 leading-relaxed">
-      AutoTelegramForward is engineered as an enterprise-grade message processing platform for Telegram. Below is the comprehensive guide to every supported capability, validated against production code and tests.
+  <p>
+    AutoTelegramForward routes messages between Telegram chats: it reads from source chats you authorize, decides what
+    should go out, rewrites what needs rewriting, and delivers it durably to one or many targets. This page lists every
+    capability, grouped by the subsystem that owns it.
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="new">
+    <h2 class="display-3 text-white mb-2 scroll-mt-24">New in v{repoInfo.version}</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The nine deep dives below cover everything that changed in the v2.0 line — read them in order if you are upgrading
+      from an older release.
+    </p>
+    <div class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        featureHub[0].items.map((item) => (
+          <FeatureCard
+            title={item.title}
+            desc={item.desc}
+            href={url(item.href)}
+            icon={item.icon}
+            badge={item.badge}
+            isNew
+          />
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="deep-dives">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">All features</h2>
+    <div class="space-y-7">
+      {
+        featureHub.slice(1).map((group) => (
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-[0.14em] text-sky-400 mb-3">{group.group}</h3>
+            <div class="grid gap-3.5 sm:grid-cols-2">
+              {group.items.map((item) => (
+                <FeatureCard title={item.title} desc={item.desc} href={url(item.href)} icon={item.icon} badge={item.badge} />
+              ))}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="matrix">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Capability parity</h2>
+    <CapabilityMatrix
+      title="Same capabilities, four clients"
+      subtitle="Bot UI, dashboard, mobile app and the REST API are checked against each other, not just documented."
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="capabilities">
+    <h2 class="display-3 text-white mb-2 scroll-mt-24">Verified capability list</h2>
+    <p class="m-0 mb-4 text-[15px] text-slate-300">
+      Generated from the checkout at build time ({repoInfo.stats.featureCatalogEntries} catalogued behaviours,{' '}
+      {repoInfo.stats.grpcRpcCount} gRPC methods, {repoInfo.stats.cliGroups} CLI command groups).
     </p>
 
-    <!-- Features Cards Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 not-prose my-6">
-      {featureCategories.map((f) => (
-        <a
-          href={f.href}
-          class="p-5 rounded-xl border border-slate-800 bg-slate-900/50 hover:bg-slate-850 hover:border-sky-500/40 transition-all flex flex-col justify-between group shadow-sm hover:shadow-md hover:shadow-sky-950/20"
-        >
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-[11px] font-bold uppercase tracking-wider text-sky-400 font-mono">
-                {f.badge}
-              </span>
-              <span class="text-slate-500 group-hover:text-sky-400 group-hover:translate-x-0.5 transition-all text-xs font-bold">
-                Learn more →
-              </span>
-            </div>
-            <h3 class="text-base font-bold text-white group-hover:text-sky-300 transition-colors mb-1.5">
-              {f.title}
+    <div class="grid gap-4 lg:grid-cols-2">
+      {
+        repoInfo.verifiedFeatures.map((group: { category: string; items: string[] }) => (
+          <div class="card">
+            <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
+              <Icon name="check" class="w-4 h-4 text-emerald-400" strokeWidth={2.4} />
+              {group.category}
             </h3>
-            <p class="text-xs text-slate-400 leading-relaxed">
-              {f.desc}
-            </p>
+            <ul class="grid gap-2 list-none p-0 m-0">
+              {group.items.map((item) => (
+                <li class="flex gap-2 text-[13.5px] leading-relaxed text-slate-300">
+                  <span class="mt-[7px] w-1.5 h-1.5 rounded-full bg-sky-400/70 shrink-0"></span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-        </a>
-      ))}
+        ))
+      }
     </div>
 
-    <div class="p-5 rounded-xl bg-slate-900/80 border border-slate-800 not-prose mt-8">
-      <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
-        <span>🧪 Looking to test templates & cleaner rules right now?</span>
-      </h3>
-      <p class="text-xs text-slate-400 mb-3">
-        Use our client-side interactive simulator to preview transformations before saving them in your bot.
+    <Callout type="success" class="mt-5" title="Why these lists exist">
+      <p>
+        Numbers on this site are read from the repository during the build — the version file, the locale catalog, the
+        proto definitions and the CLI command modules. If the code changes without the site, the build changes with it.
       </p>
-      <a
-        href={url('/tools/playground/')}
-        class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-white transition-colors"
-      >
-        <span>Open Template & Cleaner Playground</span>
-        <span>→</span>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="shortcodes">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Shortcode reference</h2>
+    <SpecTable
+      headers={['Shortcode', 'Meaning', 'Rendered example']}
+      rows={repoInfo.supportedShortcodes.map((item: { code: string; desc: string; example: string }) => [
+        `<code>${item.code}</code>`,
+        item.desc,
+        `<code>${item.example}</code>`,
+      ])}
+      caption="Twelve validated shortcodes, interpolated per delivery"
+    />
+
+    <div class="mt-6 card">
+      <h3 class="text-sm font-bold text-white mb-2">Want to see them rendered?</h3>
+      <p class="m-0 mb-3 text-[13.5px] text-slate-400">
+        The playground runs the cleaner, the shortcode interpolation and the delivery preview entirely in your browser.
+      </p>
+      <a href={url('/tools/playground/')} class="btn btn-primary btn-sm">
+        Open the playground
+        <Icon name="arrow-right" class="w-3.5 h-3.5" />
       </a>
     </div>
-  </div>
+  </section>
 </DocsLayout>

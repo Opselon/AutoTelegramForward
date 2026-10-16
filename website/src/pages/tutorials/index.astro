@@ -1,111 +1,227 @@
 ---
 import DocsLayout from '../../layouts/DocsLayout.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import Callout from '../../components/Callout.astro';
+import Icon from '../../components/Icon.astro';
+import repoInfo from '../../data/repo-info.json';
 import { url } from '../../utils/paths';
 
-const pageTitle = "Tutorials & Practical Recipes";
-const pageDesc = "Step-by-step guides for setting up automated Telegram forwarding, content cleaning, header/footer templates, and bypass configurations.";
+const pageTitle = 'Tutorials & recipes';
+const pageDesc =
+  'Reproducible recipes for AutoTelegramForward: first task, many-to-many routing, anti-spam cleaning, branding with shortcodes, AI rewriting, protected channels, log-driven debugging and burst-safe delivery.';
 
-const tutorials = [
+const toc = [
+  { id: 'recipe-1', title: '1 · Your first task' },
+  { id: 'recipe-2', title: '2 · Many sources, many targets' },
+  { id: 'recipe-3', title: '3 · Scrub ads and spam' },
+  { id: 'recipe-4', title: '4 · Brand with shortcodes' },
+  { id: 'recipe-5', title: '5 · Rewrite with AI' },
+  { id: 'recipe-6', title: '6 · Protected channels' },
+  { id: 'recipe-7', title: '7 · Debug with log history' },
+  { id: 'recipe-8', title: '8 · Survive a burst' },
+];
+
+const recipes = [
   {
-    title: 'Recipe 1: Create Your First Forwarding Rule',
-    desc: 'Step-by-step guide to connect a source channel to a target channel using the Telegram Bot UI.',
-    tag: 'Beginner'
+    id: 'recipe-1',
+    title: 'Your first task, end to end',
+    tag: 'Beginner',
+    tone: 'chip-accent',
+    intro: 'Forward everything from a news channel into your own broadcast channel, as your own post rather than a forward.',
+    steps: [
+      'Add the bot as an administrator of the destination with permission to post messages.',
+      'In Telegram, open the bot and send <code>/settings</code>, then choose <strong>Create task</strong>.',
+      'Enter the source: <code>@MarketNews</code> (or the numeric id for a private channel).',
+      'Enter the target: <code>@MyBroadcast</code>.',
+      'Pick <strong>Copy mode</strong> so the post arrives without a "Forwarded from" banner.',
+      'Save and enable. The task appears in <code>atf rules list</code> immediately.',
+    ],
+    code: `atf rules list                     # confirm the task exists
+atf rules simulate <id> --text "Test post"   # dry run, nothing is sent
+atf logs tail --follow -n 20       # watch the first real delivery`,
+    note: 'Simulate first. It runs the entire pipeline on text you supply and shows you the exact message that would be delivered.',
   },
   {
-    title: 'Recipe 2: Scrub Unwanted Ads, Links & Mentions',
-    desc: 'Configure the Cleaner engine to strip promotional URLs, @handles, and hashtags while preserving text formatting.',
-    tag: 'Cleaning'
+    id: 'recipe-2',
+    title: 'Many sources into many targets',
+    tag: 'Routing',
+    tone: 'chip-accent',
+    intro: 'One task can watch several channels and publish to several destinations. Use it when a topic set should be mirrored as one stream.',
+    steps: [
+      'Create a task with the first source and the first target.',
+      'Add the remaining sources: <code>atf rules sources &lt;id&gt; add -1001111111111</code>.',
+      'Add the remaining targets the same way, or edit the task in the dashboard with the target list editor.',
+      'Address a forum topic on a target with the topic id so the mirror lands in the right thread.',
+      'Decide the policy once — every source in the task is read with the same rules.',
+    ],
+    code: `atf rules create --name "Market news" --source -1001111111111 --target -1003333333333
+atf rules sources <id> add -1002222222222
+atf rules show <id> --json | jq '.source_chats, .target_chats'`,
+    note: 'The primary source and target are derived from the first list entry, which is why the simple case behaves exactly as it did before v2.0.',
   },
   {
-    title: 'Recipe 3: Add Custom Branding with Dynamic Shortcodes',
-    desc: 'Attach clean headers and footers with clickable source links using [[ORIGIN_NAME_URL]] and [[ORIGIN_POST_DATE]].',
-    tag: 'Branding'
+    id: 'recipe-3',
+    title: 'Scrub ads, links and mentions',
+    tag: 'Cleaning',
+    tone: 'chip-success',
+    intro: 'Turn a channel full of sponsor links into clean text without breaking the formatting of what remains.',
+    steps: [
+      'Open the task settings and enable <strong>Remove URLs</strong>, <strong>Remove mentions</strong> and <strong>Remove hashtags</strong>.',
+      'Add sponsor phrases to the custom word list — folding means one entry catches Latin and Arabic-script spellings.',
+      'Enable phone-number stripping if the source posts contact numbers.',
+      'Add a blacklist rule if any post containing a word should be dropped entirely rather than cleaned.',
+      'Preview with the playground or <code>atf rules simulate</code> before enabling on live traffic.',
+    ],
+    code: `atf rules settings set <id> clean_links=true
+atf rules settings set <id> clean_mentions=true
+atf rules settings set <id> clean_hashtags=true
+atf rules settings set <id> custom_words="Sponsor,Join VIP,50% Off"
+
+atf rules simulate <id> --text "Join VIP t.me/spam @admin #deal"`,
+    note: 'Keyword matching is Unicode-folded and word-boundary aware, and hostile regex is refused rather than executed.',
   },
   {
-    title: 'Recipe 4: Forwarding from Copy-Protected Channels',
-    desc: 'Enable seamless download-and-reupload forwarding for channels with "Restrict saving content" enabled.',
-    tag: 'Advanced'
+    id: 'recipe-4',
+    title: 'Brand with header and footer shortcodes',
+    tag: 'Branding',
+    tone: 'chip-accent',
+    intro: 'Credit the original channel with a real clickable link, and stamp every delivery with its origin.',
+    steps: [
+      'Set a header template and a footer template on the task.',
+      'Use shortcodes for anything that changes per message — origin name, post id, date and link.',
+      'Check the rendered result in the playground before saving.',
+      'Note that only validated shortcodes interpolate; an unknown token is left as written rather than silently dropped.',
+    ],
+    code: `Header: 📢 [[ORIGIN_NAME]] · post [[ORIGIN_POST_ID]]
+Footer: ─────────────
+🔗 Original: [[ORIGIN_NAME_URL]]
+📅 [[ORIGIN_POST_DATE]]`,
+    note: `${repoInfo.supportedShortcodes.length} validated shortcodes are available; the full table is on the feature overview.`,
   },
   {
-    title: 'Recipe 5: Setting Up Anti-Spam Delays & Operating Hours',
-    desc: 'Configure randomized jitter delays and time-zone-based operating windows to emulate human publishing.',
-    tag: 'Automation'
-  }
+    id: 'recipe-5',
+    title: 'Rewrite posts with an AI provider',
+    tag: 'AI',
+    tone: 'chip-accent',
+    intro: 'Re-headline and re-word a source feed so the mirror reads as your own editorial voice, without letting a provider outage break delivery.',
+    steps: [
+      'Create an AI configuration: provider, model and a prompt template (or start from a preset).',
+      'Test it against sample text before wiring it to live traffic.',
+      'Enable rewriting on the task only — it is per task, not global.',
+      'Watch the first deliveries in the log history to confirm the rewrite stage ran and how long it took.',
+      'If the provider is unreachable, the cleaned text is delivered unchanged; the job is not failed.',
+    ],
+    code: `curl -s -X POST localhost:8080/api/ai-configs \\
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \\
+  -d '{"provider":"openai","model":"gpt-4o-mini","prompt_template":"Rewrite for a channel: {text}"}'
+
+curl -s -X POST localhost:8080/api/ai-configs/<id>/test \\
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \\
+  -d '{"text":"Sample post from the source channel"}' | jq`,
+    note: 'Prompt templates are versioned and ownership-scoped, so a shared installation does not share prompts.',
+  },
+  {
+    id: 'recipe-6',
+    title: 'Mirror a copy-protected channel',
+    tag: 'Advanced',
+    tone: 'chip-warn',
+    intro: 'When a channel forbids forwarding, the pipeline downloads the media and re-uploads it instead of failing.',
+    steps: [
+      'Nothing to configure: the fallback engages automatically when Telegram refuses the native forward.',
+      'Expect the log signal <code>[PIPELINE:RESTRICTED_BYPASS]</code> on those deliveries.',
+      'Check disk headroom — re-upload paths briefly stage media locally.',
+      'For large archives, import a session and use ordered lanes so a backfill does not reorder the channel.',
+    ],
+    code: `atf logs query --search "RESTRICTED_BYPASS" | head -20
+df -h .            # re-upload staging needs headroom`,
+    note: 'Re-uploaded posts are new messages: view counts and reactions do not carry over from the source.',
+  },
+  {
+    id: 'recipe-7',
+    title: 'Debug a missing delivery with log history',
+    tag: 'Ops',
+    tone: 'chip-success',
+    intro: 'The fastest way to answer "why did that post not arrive" is to follow one message through the pipeline.',
+    steps: [
+      'Query the task\'s own history first: <code>GET /api/rules/&lt;id&gt;/logs</code> or the dashboard log explorer filtered by task.',
+      'Read the last stage that logged for that message: a FILTER_DROP explains a deliberate skip, a QUEUE without DELIVERED means workers are stuck.',
+      'Check the queue depth and dead-letter list if the job never left the queue.',
+      'Compare the correlation id with the API call that created or changed the task.',
+    ],
+    code: `atf logs query --level ERROR | head -30
+atf data queue
+atf data dlq --replay      # only after the cause is fixed`,
+    note: 'Successes are logged too — that is what makes "it worked yesterday" answerable instead of guesswork.',
+  },
+  {
+    id: 'recipe-8',
+    title: 'Survive a burst without reordering',
+    tag: 'Reliability',
+    tone: 'chip-accent',
+    intro: 'A channel that posts ten updates in a minute will not arrive out of order, and a rate limit will not lose any of them.',
+    steps: [
+      'Leave ordering on for tasks where sequence matters — deliveries are serialized per task.',
+      'Keep tasks separate rather than merging unrelated feeds, so one slow target cannot delay another stream.',
+      'When a FloodWait hits, deliveries pause and jobs stay queued; nothing is dropped.',
+      'Verify after the fact: queue depth returns to zero and the DLQ stays empty.',
+    ],
+    code: `atf status --watch          # watch the board drain
+atf data queue --json | jq '.pending, .inflight'
+atf data dlq                # expect empty`,
+    note: 'Ordered lanes cost parallelism within a task only; different tasks still run concurrently.',
+  },
 ];
 ---
 
 <DocsLayout
   title={pageTitle}
   description={pageDesc}
+  path="/tutorials/"
   breadcrumbs={[
-    { name: 'Tutorials', href: url('/tutorials/') }
+    { name: 'Home', href: url('/') },
+    { name: 'Learn', href: url('/tutorials/') },
+    { name: 'Tutorials', href: url('/tutorials/') },
   ]}
-  prev={{ title: 'Architecture', href: url('/architecture/') }}
-  next={{ title: 'Operations & Troubleshooting', href: url('/operations/') }}
+  toc={toc}
+  keywords={['AutoTelegramForward tutorial', 'Telegram forwarding recipes', 'AI rewrite Telegram posts']}
 >
-  <div class="space-y-8">
-    <p class="text-base text-slate-300 leading-relaxed">
-      Practical, reproducible recipes to solve common Telegram channel management workflows with AutoTelegramForward.
+  <p>
+    Eight recipes, each one a task you can finish in a few minutes. They are written against the current release: the
+    commands are real, the endpoints exist, and the log signals are the ones the stack actually emits.
+  </p>
+
+  {
+    recipes.map((recipe) => (
+      <section class="not-prose scroll-mt-24" id={recipe.id}>
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <h2 class="display-3 text-white m-0 scroll-mt-24">{recipe.title}</h2>
+          <span class={`chip ${recipe.tone}`}>{recipe.tag}</span>
+        </div>
+        <p class="m-0 mb-3 text-[15px] leading-relaxed text-slate-300">{recipe.intro}</p>
+
+        <ol class="grid gap-2 list-none p-0 m-0 mb-4">
+          {recipe.steps.map((step) => (
+            <li class="flex gap-2.5 text-[14.5px] leading-relaxed text-slate-300">
+              <Icon name="check" class="w-4 h-4 mt-[3px] shrink-0 text-emerald-400" strokeWidth={2.4} />
+              <span set:html={step} />
+            </li>
+          ))}
+        </ol>
+
+        <CodeBlock label="Commands" language="bash" content={recipe.code} />
+        <Callout type="tip" class="mt-3">
+          <p set:html={recipe.note} />
+        </Callout>
+      </section>
+    ))
+  }
+
+  <Callout type="info" class="not-prose" title="Where to go next">
+    <p>
+      The <a class="text-sky-400" href={url('/features/')}>feature overview</a> explains what each stage does and why, the{' '}
+      <a class="text-sky-400" href={url('/operations/')}>operations runbook</a> covers failure modes, and the{' '}
+      <a class="text-sky-400" href={url('/tools/playground/')}>playground</a> lets you try transformations without
+      touching your installation.
     </p>
-
-    <!-- Recipe 1 -->
-    <section class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 id="recipe-1" class="text-lg font-bold text-white">Recipe 1: Create Your First Forwarding Rule</h2>
-        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-sky-950 text-sky-400 border border-sky-800">Beginner</span>
-      </div>
-      <p class="text-xs text-slate-300 leading-relaxed">
-        Let's forward all messages from a public crypto news channel (e.g. <code>@MarketNews</code>) to your private channel (e.g. <code>@MyBroadcast</code>).
-      </p>
-      <ol class="text-xs text-slate-400 space-y-2 list-decimal ml-4">
-        <li>Add your bot as an <strong>Administrator</strong> in <code>@MyBroadcast</code> with permission to <em>Post Messages</em>.</li>
-        <li>Open your bot in Telegram and send <code>/settings</code>.</li>
-        <li>Click <strong>➕ ایجاد قانون جدید (Create Rule)</strong>.</li>
-        <li>Send the source chat username or ID: <code>@MarketNews</code>.</li>
-        <li>Send the destination chat username or ID: <code>@MyBroadcast</code>.</li>
-        <li>Select <strong>حالت کپی (Copy Mode)</strong> so messages arrive cleanly without author watermarks.</li>
-        <li>Click <strong>ذخیره و فعال‌سازی (Save & Enable)</strong>.</li>
-      </ol>
-    </section>
-
-    <!-- Recipe 2 -->
-    <section class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 id="recipe-2" class="text-lg font-bold text-white">Recipe 2: Scrub Unwanted Ads, Links & Mentions</h2>
-        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800">Cleaner</span>
-      </div>
-      <p class="text-xs text-slate-300 leading-relaxed">
-        Remove promotional Telegram links, sponsor usernames, and hashtags from forwarded posts.
-      </p>
-      <ol class="text-xs text-slate-400 space-y-2 list-decimal ml-4">
-        <li>Send <code>/settings</code> and select your target rule.</li>
-        <li>Click <strong>🧹 پاک‌کننده (Cleaner)</strong>.</li>
-        <li>Toggle <strong>🔗 حذف لینک‌ها (Remove URLs)</strong> → Green Checkmark.</li>
-        <li>Toggle <strong>👤 حذف منشن‌ها (Remove Mentions)</strong> → Green Checkmark.</li>
-        <li>Toggle <strong>#️⃣ حذف هشتگ‌ها (Remove Hashtags)</strong> → Green Checkmark.</li>
-        <li>Click <strong>📝 کلمات سفارشی</strong> and enter sponsor words to delete: <code>Sponsor, Join VIP, 50% Off</code>.</li>
-      </ol>
-    </section>
-
-    <!-- Recipe 3 -->
-    <section class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 id="recipe-3" class="text-lg font-bold text-white">Recipe 3: Add Custom Branding with Dynamic Shortcodes</h2>
-        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-purple-950 text-purple-400 border border-purple-800">Branding</span>
-      </div>
-      <p class="text-xs text-slate-300 leading-relaxed">
-        Add custom header and footer branding that credits the original source with a clickable link.
-      </p>
-      <pre class="bg-slate-950 p-3 rounded-lg text-xs font-mono text-emerald-400"><code># Desired Header:
-📢 [[ORIGIN_NAME]] | پست شماره [[ORIGIN_POST_ID]]
-
-# Desired Footer:
-─────────────────────
-🔗 لینک پست اصلی: [[ORIGIN_NAME_URL]]
-📅 تاریخ انتشار: [[ORIGIN_POST_DATE]]</code></pre>
-      <p class="text-xs text-slate-400">
-        In the bot, navigate to <strong>📝 هدر / فوتر</strong>, paste the above templates, and click Save.
-      </p>
-    </section>
-  </div>
+  </Callout>
 </DocsLayout>

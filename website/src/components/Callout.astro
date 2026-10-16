@@ -1,0 +1,30 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  type?: 'info' | 'tip' | 'warn' | 'success';
+  title?: string;
+  class?: string;
+}
+
+const { type = 'info', title, class: cls = '' } = Astro.props;
+
+const styles: Record<string, { wrap: string; icon: string; iconName: string; label: string }> = {
+  info: { wrap: 'border-sky-800/60 bg-sky-950/30', icon: 'text-sky-400', iconName: 'info', label: 'Note' },
+  tip: { wrap: 'border-violet-800/60 bg-violet-950/25', icon: 'text-violet-400', iconName: 'bolt', label: 'Tip' },
+  warn: { wrap: 'border-amber-800/60 bg-amber-950/25', icon: 'text-amber-400', iconName: 'alert', label: 'Careful' },
+  success: { wrap: 'border-emerald-800/60 bg-emerald-950/25', icon: 'text-emerald-400', iconName: 'check', label: 'Verified' },
+};
+
+const s = styles[type] ?? styles.info;
+---
+
+<aside class={`callout ${s.wrap} ${cls}`}>
+  <span class={`callout-icon ${s.icon}`}>
+    <Icon name={s.iconName} class="w-4 h-4" strokeWidth={2.1} />
+  </span>
+  <div class="callout-body">
+    <p class="callout-title">{title ?? s.label}</p>
+    <div class="callout-content"><slot /></div>
+  </div>
+</aside>

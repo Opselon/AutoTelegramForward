@@ -1,92 +1,172 @@
 ---
 import DocsLayout from '../../layouts/DocsLayout.astro';
+import Steps from '../../components/Steps.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import Callout from '../../components/Callout.astro';
+import SpecTable from '../../components/SpecTable.astro';
+import Icon from '../../components/Icon.astro';
+import repoInfo from '../../data/repo-info.json';
 import { url } from '../../utils/paths';
 
-const pageTitle = "Getting Started with AutoTelegramForward";
-const pageDesc = "Step-by-step installation guides and prerequisites for deploying AutoTelegramForward on Linux, Windows, or Docker.";
+const pageTitle = 'Installation';
+const pageDesc = `Install AutoTelegramForward v${repoInfo.version}: pick a deployment path, run the guided setup, then prove all four services are serving before you trust it.`;
 
-const deploymentOptions = [
+const toc = [
+  { id: 'requirements', title: 'What you need' },
+  { id: 'paths', title: 'Deployment paths' },
+  { id: 'quickstart', title: 'Guided install' },
+  { id: 'next', title: 'After install' },
+];
+
+const paths = [
   {
-    title: 'Docker Compose (Recommended)',
-    desc: 'Deploy Python Core, Go API Gateway, Python Logger, and Web Dashboard in one command.',
+    name: 'Docker Compose',
+    badge: 'Recommended',
+    tone: 'chip-success',
+    icon: 'server',
     href: url('/getting-started/docker/'),
-    badge: 'Production Ready'
+    what: 'Four containers, one compose file, one command. The path most operators should take.',
+    when: 'A host you control, with Docker installed.',
   },
   {
-    title: 'Native Linux / Systemd',
-    desc: 'Install directly on Ubuntu/Debian/RHEL with automated systemd background services.',
+    name: 'Linux installer / wizard',
+    badge: 'Bare metal',
+    tone: 'chip-accent',
+    icon: 'terminal',
     href: url('/getting-started/linux-windows/'),
-    badge: 'Bare Metal / VPS'
+    what: 'Installer script or interactive wizard, then a systemd unit that survives reboots.',
+    when: 'A VPS or home server where you want native services.',
   },
   {
-    title: 'Windows PowerShell',
-    desc: 'Run natively on Windows 10/11 or Windows Server using Python virtual environments.',
+    name: 'Windows',
+    badge: 'Desktop / server',
+    tone: 'chip',
+    icon: 'keyboard',
     href: url('/getting-started/linux-windows/'),
-    badge: 'Desktop / Server'
+    what: 'PowerShell bootstrap of a checkout, same wizard, same CLI afterwards.',
+    when: 'Windows 10/11 or Windows Server.',
   },
   {
-    title: 'Telegram Bot & Credentials Setup',
-    desc: 'Obtain API ID, API Hash from my.telegram.org and create your management bot via @BotFather.',
-    href: url('/getting-started/telegram-bot-setup/'),
-    badge: 'Essential'
-  }
+    name: 'From source',
+    badge: 'Development',
+    tone: 'chip',
+    icon: 'code',
+    href: url('/getting-started/configuration/'),
+    what: 'Virtualenv, requirements, run the services yourself with hot reload.',
+    when: 'You are changing the code.',
+  },
+];
+
+const requirements = [
+  ['Hardware', '1 vCPU, 512 MB RAM (1 GB for heavy media), ~2 GB disk plus media staging headroom.'],
+  ['Software', 'Docker Engine 24+ with Compose v2, or Python 3.10+ for a native install.'],
+  ['Telegram', 'An account with <code>api_id</code> / <code>api_hash</code> from my.telegram.org, and a bot token from @BotFather.'],
+  ['Network', 'Outbound access to Telegram. Inbound only if you publish the dashboard.'],
+  ['Secrets', 'A bot token, your numeric admin user id, and a database URL if you are not using SQLite.'],
+];
+
+const installSteps = [
+  {
+    title: 'Fetch the source',
+    code: `git clone ${repoInfo.repoUrl}.git\ncd AutoTelegramForward`,
+    note: 'Every install path starts from the same checkout, so the CLI and the bot are identical afterwards.',
+  },
+  {
+    title: 'Run the wizard',
+    code: `# Linux / macOS\n./scripts/setup.sh\n\n# re-run or automate a known-good config\n./scripts/setup.sh --yes\n./scripts/setup.sh --answers answers.json\n\n# Windows\npython scripts\\bootstrap.py`,
+    note: 'The wizard detects the platform, validates each answer as you give it, and refuses to continue on a malformed value.',
+  },
+  {
+    title: 'Prove it is serving',
+    code: `atf status             # ports, reachability, task counts\natf validate --strict  # config, compose, catalog parity, secrets\natf doctor             # deeper checks; --fix repairs what it can`,
+    note: 'The install is only finished when these three are clean. "Running" and "serving" are different claims.',
+  },
+  {
+    title: 'Open the interfaces',
+    body: 'Dashboard on <code>:8088</code>, REST API on <code>:8080</code>, core gRPC on <code>:50051</code>.',
+    note: 'Message the bot with <code>/settings</code> to create your first task, or use <code>atf rules create</code>.',
+  },
 ];
 ---
 
 <DocsLayout
   title={pageTitle}
   description={pageDesc}
+  path="/getting-started/"
   breadcrumbs={[
-    { name: 'Getting Started', href: url('/getting-started/') }
+    { name: 'Home', href: url('/') },
+    { name: 'Get started', href: url('/getting-started/') },
+    { name: 'Installation', href: url('/getting-started/') },
   ]}
-  next={{ title: 'Docker Deployment', href: url('/getting-started/docker/') }}
+  toc={toc}
+  keywords={['install AutoTelegramForward', 'self-hosted Telegram forwarder setup', 'docker compose Telegram bot']}
 >
-  <div class="space-y-6">
-    <h2 id="prerequisites">Prerequisites & System Requirements</h2>
-    <p>
-      AutoTelegramForward is lightweight and engineered to run reliably on resource-constrained virtual private servers (VPS) as well as enterprise clusters:
+  <p>
+    One decision first: how do you want to run it? Everything after that is the same — the wizard, the CLI, the bot and
+    the dashboard are identical on every path, so you are not locked in by an install choice.
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="requirements">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">What you need</h2>
+    <SpecTable headers={['Requirement', 'Details']} rows={requirements} caption={`v${repoInfo.version} — runtime requirements`} />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="paths">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Deployment paths</h2>
+    <div class="grid gap-3.5 sm:grid-cols-2">
+      {
+        paths.map((path) => (
+          <a href={path.href} class="card hover:border-sky-700 transition-colors block">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <Icon name={path.icon} class="w-4 h-4 text-sky-400" />
+              <span class="font-bold text-white text-sm">{path.name}</span>
+              <span class={`chip ${path.tone}`}>{path.badge}</span>
+            </div>
+            <p class="m-0 mb-2 text-[13px] leading-relaxed text-slate-300">{path.what}</p>
+            <p class="m-0 text-[13px] text-slate-500"><strong class="text-slate-400">Best when:</strong> {path.when}</p>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="quickstart">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Guided install</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The wizard detects your platform, validates every answer as you type it, builds the stack, and finishes by probing
+      each service. It does not say "done" unless it can prove it.
     </p>
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 not-prose my-6 text-xs">
-      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
-        <span class="text-sky-400 font-bold block mb-1">💻 Hardware</span>
-        <span class="text-slate-300">1 vCPU, 512 MB RAM (1 GB recommended for high media volume), 2 GB Disk.</span>
-      </div>
-      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
-        <span class="text-sky-400 font-bold block mb-1">🐍 Software</span>
-        <span class="text-slate-300">Python 3.10+ (or Docker Engine 24+ & Docker Compose v2).</span>
-      </div>
-      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
-        <span class="text-sky-400 font-bold block mb-1">📱 Telegram Account</span>
-        <span class="text-slate-300">Active Telegram phone number and Bot Token from @BotFather.</span>
-      </div>
-    </div>
+    <Steps steps={installSteps} />
 
-    <h2 id="deployment-paths">Choose Deployment Path</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose my-6">
-      {deploymentOptions.map((opt) => (
-        <a
-          href={opt.href}
-          class="p-5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-850 hover:border-sky-500/40 transition-all flex flex-col justify-between group"
-        >
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-[11px] font-bold text-sky-400 font-mono">{opt.badge}</span>
-              <span class="text-slate-500 group-hover:text-sky-400 text-xs">Read →</span>
-            </div>
-            <h3 class="text-base font-bold text-white group-hover:text-sky-300 mb-1.5">{opt.title}</h3>
-            <p class="text-xs text-slate-400">{opt.desc}</p>
-          </div>
-        </a>
-      ))}
-    </div>
+    <Callout type="tip" class="mt-4" title="Prefer to see it before you install?">
+      <p>
+        The <a class="text-sky-400" href={url('/tools/playground/')}>playground</a> runs the cleaner and the shortcode
+        interpolation in your browser — no install, no account, nothing sent anywhere.
+      </p>
+    </Callout>
+  </section>
 
-    <h2 id="configuration-guide">Next Steps</h2>
-    <ol>
-      <li>Follow the <a href={url('/getting-started/telegram-bot-setup/')}>Telegram Bot Setup</a> guide to get your API credentials.</li>
-      <li>Pick your deployment method: <a href={url('/getting-started/docker/')}>Docker</a> or <a href={url('/getting-started/linux-windows/')}>Linux/Windows</a>.</li>
-      <li>Review the <a href={url('/getting-started/configuration/')}>Configuration Reference</a> to configure environment variables.</li>
-      <li>Verify your deployment using our <a href={url('/getting-started/verification/')}>Installation Health Check</a> checklist.</li>
+  <section class="not-prose scroll-mt-24" id="next">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">After install</h2>
+    <ol class="grid gap-2 list-none p-0 m-0">
+      {
+        [
+          ['Telegram credentials', '/getting-started/telegram-bot-setup/', 'Bot token, api_id/api_hash and the first admin login.'],
+          ['Configuration reference', '/getting-started/configuration/', 'Every environment key, whether it is secret and what it changes.'],
+          ['Verification checklist', '/getting-started/verification/', 'Prove each service is serving, not merely running.'],
+          ['Your first task', '/tutorials/', 'Recipes with real commands, in increasing difficulty.'],
+          ['Operations runbook', '/operations/', 'What to do when something is red.'],
+        ].map((item) => (
+          <li class="flex gap-2.5 text-[14.5px] text-slate-300">
+            <Icon name="arrow-right" class="w-4 h-4 mt-[3px] text-sky-400 shrink-0" />
+            <span>
+              <a class="text-slate-100 font-semibold hover:text-sky-300" href={url(item[1])}>{item[0]}</a>
+              <span class="text-slate-400"> — {item[2]}</span>
+            </span>
+          </li>
+        ))
+      }
     </ol>
-  </div>
+  </section>
 </DocsLayout>

@@ -1,0 +1,27 @@
+---
+interface Props {
+  items: Array<{ q: string; a: string }>;
+  class?: string;
+  openFirst?: boolean;
+}
+
+const { items, class: cls = '', openFirst = true } = Astro.props;
+---
+
+<div class={`faq-list ${cls}`}>
+  {
+    items.map((item, index) => (
+      <details class="faq-item" open={openFirst && index === 0}>
+        <summary class="faq-question">
+          <span>{item.q}</span>
+          <span class="faq-chevron" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+              <path d="M6 9.5l6 6 6-6" />
+            </svg>
+          </span>
+        </summary>
+        <div class="faq-answer"><p set:html={item.a} /></div>
+      </details>
+    ))
+  }
+</div>

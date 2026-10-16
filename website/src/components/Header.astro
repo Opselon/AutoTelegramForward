@@ -1,159 +1,348 @@
 ---
 import repoInfo from '../data/repo-info.json';
+import { primaryNav } from '../data/site';
 import { url } from '../utils/paths';
-
-const navItems = [
-  { name: 'Features', href: url('/features/') },
-  { name: 'Getting Started', href: url('/getting-started/') },
-  { name: 'Architecture', href: url('/architecture/') },
-  { name: 'Tutorials', href: url('/tutorials/') },
-  { name: 'Operations', href: url('/operations/') },
-  { name: 'Releases', href: url('/releases/') },
-  { name: 'Playground', href: url('/tools/playground/') },
-  { name: 'FAQ', href: url('/faq/') },
-];
+import Icon from './Icon.astro';
 
 const currentPath = Astro.url.pathname;
+const versionTag = `v${repoInfo.version}`;
+
+const isActive = (href: string) => {
+  const clean = href.replace(/\/$/, '') || '/';
+  const here = currentPath.replace(/\/$/, '') || '/';
+  if (clean === '/') return here === '/';
+  return here === clean || here.startsWith(`${clean}/`);
+};
 ---
 
-<header class="sticky top-0 z-50 w-full glass border-b border-slate-800">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex items-center justify-between h-16">
-      
-      <!-- Logo & Product Name -->
-      <div class="flex items-center gap-3">
-        <a href={url('/')} class="flex items-center gap-2.5 group" aria-label="AutoTelegramForward Home">
-          <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-tg-blue to-brand-500 flex items-center justify-center shadow-lg shadow-sky-500/20 group-hover:scale-105 transition-transform">
-            <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-          <span class="font-bold text-lg tracking-tight text-white flex items-center gap-2">
-            AutoTelegramForward
-            <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-950 text-sky-400 border border-sky-800/60">
-              v{repoInfo.version}
-            </span>
-          </span>
-        </a>
-      </div>
+<a
+  href="#main"
+  class="skip-link"
+>
+  Skip to content
+</a>
 
-      <!-- Desktop Nav -->
-      <nav class="hidden md:flex items-center gap-1" aria-label="Main Navigation">
-        {navItems.map((item) => {
-          const isActive = currentPath.startsWith(item.href) && (item.href !== url('/') || currentPath === url('/'));
-          return (
-            <a
-              href={item.href}
-              class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                isActive
-                  ? 'text-white bg-slate-800/90 shadow-sm border border-slate-700/60'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              {item.name}
-            </a>
-          );
-        })}
+<div id="scroll-progress" class="scroll-progress" aria-hidden="true"></div>
+
+<header class="sticky top-0 z-50 w-full glass border-b border-slate-800/80">
+  <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between gap-2 h-14 lg:h-16">
+      <a href={url('/')} class="flex items-center gap-2.5 group shrink-0" aria-label="AutoTelegramForward home">
+        <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-tg-blue to-brand-500 flex items-center justify-center shadow-lg shadow-sky-500/20 group-hover:scale-105 transition-transform">
+          <Icon name="bolt" class="w-5 h-5 text-white" strokeWidth={2.2} />
+        </span>
+        <span class="font-bold text-[15px] sm:text-lg tracking-tight text-white flex items-center gap-2">
+          <span class="hidden xs:inline">AutoTelegramForward</span>
+          <span class="xs:hidden">ATF</span>
+          <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-sky-950 text-sky-300 border border-sky-800/60">
+            {versionTag}
+          </span>
+        </span>
+      </a>
+
+      <nav class="hidden lg:flex items-center gap-0.5" aria-label="Main navigation">
+        {
+          primaryNav.map((group) => (
+            <details class="nav-pop">
+              <summary
+                class={`nav-pop-summary ${isActive(group.href) ? 'is-active' : ''}`}
+                aria-label={`${group.name} menu`}
+              >
+                {group.name}
+                <Icon name="chevron-right" class="w-3 h-3 rotate-90 opacity-60" strokeWidth={2.6} />
+              </summary>
+              <div class="nav-pop-panel">
+                <a href={group.href} class="nav-pop-all">
+                  <span>{group.name} overview</span>
+                  <Icon name="arrow-right" class="w-3.5 h-3.5" />
+                </a>
+                <ul class="nav-pop-list">
+                  {group.items?.map((item) => (
+                    <li>
+                      <a href={item.href} class="nav-pop-item" aria-current={isActive(item.href) ? 'page' : undefined}>
+                        <span class="nav-pop-title">{item.name}</span>
+                        {item.desc && <span class="nav-pop-desc">{item.desc}</span>}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </details>
+          ))
+        }
       </nav>
 
-      <!-- Right CTAs & GitHub -->
-      <div class="hidden sm:flex items-center gap-3">
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <button
+          type="button"
+          id="search-open"
+          class="flex items-center gap-2 px-2.5 sm:px-3 py-2 min-h-[40px] rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 border border-transparent hover:border-slate-700 transition-colors"
+          aria-label="Search documentation"
+        >
+          <Icon name="search" class="w-4 h-4" />
+          <span class="hidden md:inline text-slate-400">Search</span>
+          <kbd class="hidden md:inline text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-700 bg-slate-900 text-slate-400">/</kbd>
+        </button>
+
         <a
           href={repoInfo.repoUrl}
           target="_blank"
           rel="noopener noreferrer"
-          class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
-          aria-label="View on GitHub"
+          class="hidden sm:flex items-center gap-2 px-3 py-2 min-h-[40px] rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
+          aria-label="AutoTelegramForward on GitHub"
         >
-          <svg class="w-4 h-4 text-slate-300" viewBox="0 0 24 24" fill="currentColor">
-            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-          </svg>
-          <span>GitHub</span>
+          <Icon name="github" class="w-4 h-4 text-slate-300" />
+          <span class="hidden md:inline">GitHub</span>
         </a>
 
         <a
           href={url('/getting-started/')}
-          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-tg-blue hover:bg-sky-500 text-white shadow-sm shadow-sky-500/25 transition-all"
+          class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-semibold bg-tg-blue hover:bg-sky-500 text-white shadow-sm shadow-sky-500/25 transition-all"
         >
-          <span>Install Now</span>
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-          </svg>
+          <span>Install</span>
+          <Icon name="arrow-right" class="w-3.5 h-3.5" strokeWidth={2.4} />
         </a>
-      </div>
 
-      <!-- Mobile Menu Button -->
-      <div class="flex md:hidden items-center">
         <button
           type="button"
           id="mobile-menu-btn"
-          class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-tg-blue"
-          aria-label="Toggle mobile menu"
+          class="lg:hidden p-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+          aria-label="Toggle navigation menu"
           aria-expanded="false"
+          aria-controls="mobile-menu"
         >
-          <svg id="menu-icon-open" class="w-6 h-6 block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
-          </svg>
-          <svg id="menu-icon-close" class="w-6 h-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <Icon name="menu" class="w-5 h-5" id="menu-icon-open" />
+          <Icon name="close" class="w-5 h-5 hidden" id="menu-icon-close" />
         </button>
       </div>
-
     </div>
   </div>
 
-  <!-- Mobile Menu Dropdown -->
-  <div id="mobile-menu" class="hidden md:hidden border-b border-slate-800 bg-slate-900/95 backdrop-blur-xl px-4 pt-2 pb-6 space-y-1">
-    {navItems.map((item) => (
-      <a
-        href={item.href}
-        class="block px-3 py-2.5 rounded-md text-base font-medium text-slate-200 hover:text-white hover:bg-slate-800 transition-colors"
-      >
-        {item.name}
-      </a>
-    ))}
-    <div class="pt-4 border-t border-slate-800 flex flex-col gap-2.5">
-      <a
-        href={repoInfo.repoUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
-      >
-        <span>View on GitHub</span>
-      </a>
-      <a
-        href={url('/getting-started/')}
-        class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold bg-tg-blue hover:bg-sky-500 text-white shadow-md shadow-sky-500/20"
-      >
-        <span>Get Started</span>
-      </a>
-    </div>
+  <div
+    id="mobile-menu"
+    class="hidden lg:hidden border-t border-slate-800 bg-slate-950/98 backdrop-blur-xl max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain"
+  >
+    <nav class="px-3 pt-3 pb-28 space-y-1.5" aria-label="Mobile navigation">
+      {
+        primaryNav.map((group) => (
+          <details class="mobile-nav-group" open={isActive(group.href)}>
+            <summary class="mobile-nav-summary">
+              <span>{group.name}</span>
+              <Icon name="chevron-right" class="w-4 h-4 text-slate-500 transition-transform group-open:rotate-90" />
+            </summary>
+            <div class="px-2 pb-2">
+              <a href={group.href} class="block px-3 py-2.5 rounded-lg text-sm font-semibold text-sky-300 hover:bg-slate-800/70">
+                {group.name} overview
+              </a>
+              {group.items?.map((item) => (
+                <a
+                  href={item.href}
+                  class="block px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800/70"
+                  aria-current={isActive(item.href) ? 'page' : undefined}
+                >
+                  <span class="block font-medium">{item.name}</span>
+                  {item.desc && <span class="block text-[11.5px] text-slate-500 mt-0.5 leading-snug">{item.desc}</span>}
+                </a>
+              ))}
+            </div>
+          </details>
+        ))
+      }
+
+      <div class="pt-3 mt-3 border-t border-slate-800 flex flex-col gap-2.5">
+        <a
+          href={url('/getting-started/')}
+          class="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold bg-tg-blue hover:bg-sky-500 text-white shadow-md shadow-sky-500/20"
+        >
+          <Icon name="download" class="w-4 h-4" />
+          Install AutoTelegramForward
+        </a>
+        <a
+          href={repoInfo.repoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+        >
+          <Icon name="github" class="w-4 h-4" />
+          View source on GitHub
+        </a>
+      </div>
+    </nav>
   </div>
 </header>
 
+<div id="search-overlay" class="search-overlay hidden" role="dialog" aria-modal="true" aria-label="Search documentation">
+  <button type="button" class="search-backdrop" data-search-close aria-label="Close search"></button>
+  <div class="search-panel">
+    <div class="flex items-center gap-3 px-4 py-3 border-b border-slate-800">
+      <Icon name="search" class="w-4 h-4 text-slate-400 shrink-0" />
+      <input
+        id="search-input"
+        type="search"
+        autocomplete="off"
+        placeholder="Search features, guides and reference…"
+        class="flex-1 bg-transparent text-[15px] text-slate-100 placeholder-slate-500 focus:outline-none"
+        aria-label="Search query"
+        aria-controls="search-results"
+      />
+      <button
+        type="button"
+        class="text-[11px] font-mono px-2 py-1 rounded border border-slate-700 text-slate-400 hover:text-white"
+        data-search-close
+        aria-label="Close search"
+      >
+        ESC
+      </button>
+    </div>
+    <ul id="search-results" class="search-results" role="listbox" aria-label="Search results"></ul>
+    <div class="px-4 py-3 border-t border-slate-800 text-[11px] text-slate-500">
+      Search every feature, guide and reference page. <kbd class="font-mono">/</kbd> opens, <kbd class="font-mono">Esc</kbd> closes.
+    </div>
+  </div>
+</div>
+
 <script>
+  // ---------------------------------------------------------------- mobile menu
   const btn = document.getElementById('mobile-menu-btn');
   const menu = document.getElementById('mobile-menu');
   const iconOpen = document.getElementById('menu-icon-open');
   const iconClose = document.getElementById('menu-icon-close');
 
-  if (btn && menu && iconOpen && iconClose) {
-    btn.addEventListener('click', () => {
-      const isExpanded = btn.getAttribute('aria-expanded') === 'true';
-      btn.setAttribute('aria-expanded', String(!isExpanded));
-      const willShow = !isExpanded;
-      if (willShow) {
-        menu.classList.remove('hidden');
-        menu.style.display = 'block';
-        iconOpen.classList.add('hidden');
-        iconClose.classList.remove('hidden');
-      } else {
-        menu.classList.add('hidden');
-        menu.style.display = 'none';
-        iconOpen.classList.remove('hidden');
-        iconClose.classList.add('hidden');
-      }
+  const setMenu = (open: boolean) => {
+    if (!menu || !btn) return;
+    btn.setAttribute('aria-expanded', String(open));
+    menu.classList.toggle('hidden', !open);
+    if (iconOpen) iconOpen.classList.toggle('hidden', open);
+    if (iconClose) iconClose.classList.toggle('hidden', !open);
+  };
+
+  btn?.addEventListener('click', () => setMenu(btn.getAttribute('aria-expanded') !== 'true'));
+
+  // ------------------------------------------------------------ scroll progress
+  const bar = document.getElementById('scroll-progress');
+  const onScroll = () => {
+    if (!bar) return;
+    const doc = document.documentElement;
+    const max = doc.scrollHeight - window.innerHeight;
+    bar.style.transform = `scaleX(${max > 0 ? Math.min(doc.scrollTop / max, 1) : 0})`;
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  // --------------------------------------------------- desktop dropdown hygiene
+  const pops = Array.from(document.querySelectorAll('details.nav-pop')) as HTMLDetailsElement[];
+  pops.forEach((pop) => {
+    pop.addEventListener('toggle', () => {
+      if (pop.open) pops.forEach((other) => { if (other !== pop) other.open = false; });
     });
+  });
+  document.addEventListener('click', (event) => {
+    const target = event.target as Node;
+    pops.forEach((pop) => { if (pop.open && !pop.contains(target)) pop.open = false; });
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') pops.forEach((pop) => { pop.open = false; });
+  });
+
+  // ------------------------------------------------------------------- search
+  const base = import.meta.env.BASE_URL || '/';
+  const overlay = document.getElementById('search-overlay');
+  const input = document.getElementById('search-input') as HTMLInputElement | null;
+  const results = document.getElementById('search-results');
+  const openBtn = document.getElementById('search-open');
+
+  type IndexEntry = { title: string; url: string; desc: string; section: string; keywords?: string };
+  let index: IndexEntry[] = [];
+  let loadFailed = false;
+
+  async function loadIndex() {
+    if (index.length > 0 || loadFailed) return;
+    try {
+      const res = await fetch(`${base}search.json`);
+      index = (await res.json()) as IndexEntry[];
+    } catch {
+      loadFailed = true;
+    }
   }
+
+  const score = (entry: IndexEntry, q: string) => {
+    const title = entry.title.toLowerCase();
+    const desc = entry.desc.toLowerCase();
+    const keys = (entry.keywords || '').toLowerCase();
+    if (!`${title} ${desc} ${keys}`.includes(q)) return 0;
+    let s = 1;
+    if (title.startsWith(q)) s += 6;
+    else if (title.includes(q)) s += 4;
+    if (keys.includes(q)) s += 2;
+    if (desc.includes(q)) s += 1;
+    return s;
+  };
+
+  const escapeHtml = (value: string) =>
+    value.replace(/[&<>"']/g, (char) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] as string
+    );
+
+  function render(query: string) {
+    if (!results) return;
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      results.innerHTML = '<li class="search-empty">Type to search across the documentation.</li>';
+      return;
+    }
+    const hits = index
+      .map((entry) => ({ entry, s: score(entry, q) }))
+      .filter((hit) => hit.s > 0)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, 12);
+
+    if (!hits.length) {
+      results.innerHTML = `<li class="search-empty">No result for “${escapeHtml(query)}”. Try “routing”, “cleaner”, “upgrade” or “AI”.</li>`;
+      return;
+    }
+    results.innerHTML = hits
+      .map(
+        ({ entry }) => `<li role="option" aria-selected="false">
+        <a href="${escapeHtml(entry.url)}" class="search-result">
+          <span class="search-result-head">
+            <span class="search-result-title">${escapeHtml(entry.title)}</span>
+            <span class="search-result-section">${escapeHtml(entry.section)}</span>
+          </span>
+          <span class="search-result-desc">${escapeHtml(entry.desc)}</span>
+        </a>
+      </li>`
+      )
+      .join('');
+  }
+
+  const isOpen = () => !!overlay && !overlay.classList.contains('hidden');
+
+  async function openSearch() {
+    if (!overlay) return;
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    await loadIndex();
+    input?.focus();
+    render(input?.value || '');
+  }
+
+  function closeSearch() {
+    if (!overlay) return;
+    overlay.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  openBtn?.addEventListener('click', openSearch);
+  overlay?.querySelectorAll('[data-search-close]').forEach((el) => el.addEventListener('click', closeSearch));
+  input?.addEventListener('input', () => render(input.value));
+
+  document.addEventListener('keydown', (event) => {
+    const tag = (event.target as HTMLElement)?.tagName || '';
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA' || (event.target as HTMLElement)?.isContentEditable;
+    if (event.key === '/' && !typing && !isOpen()) {
+      event.preventDefault();
+      void openSearch();
+    }
+    if (event.key === 'Escape' && isOpen()) closeSearch();
+  });
 </script>

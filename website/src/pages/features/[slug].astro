@@ -1,0 +1,127 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import SpecTable from '../../components/SpecTable.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import Callout from '../../components/Callout.astro';
+import Accordion from '../../components/Accordion.astro';
+import FeatureCard from '../../components/FeatureCard.astro';
+import Icon from '../../components/Icon.astro';
+import { featurePages } from '../../data/features';
+import { url } from '../../utils/paths';
+
+export function getStaticPaths() {
+  return featurePages.map((page) => ({
+    params: { slug: page.slug },
+    props: { page },
+  }));
+}
+
+const { page } = Astro.props;
+const toc = page.sections.map((section) => ({ id: section.id, title: section.title }));
+const path = `/features/${page.slug}/`;
+---
+
+<DocsLayout
+  title={page.title}
+  description={page.description}
+  path={path}
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Features', href: url('/features/') },
+    { name: page.cardTitle, href: url(path) },
+  ]}
+  toc={toc}
+  faq={page.faq}
+  keywords={page.keywords}
+>
+  <p class="not-prose flex flex-wrap items-center gap-2 -mt-2">
+    <span class="chip chip-accent">
+      <Icon name={page.icon} class="w-3.5 h-3.5" />
+      {page.category}
+    </span>
+    {page.isNew && <span class="chip chip-success">New in v2.0</span>}
+  </p>
+
+  <div class="not-prose rounded-2xl border border-sky-900/60 bg-sky-950/25 p-4 sm:p-5">
+    <p class="m-0 flex gap-2.5 text-sm sm:text-[15px] leading-relaxed text-sky-100">
+      <Icon name="bolt" class="w-4 h-4 mt-0.5 shrink-0 text-sky-400" />
+      <span>{page.highlight}</span>
+    </p>
+  </div>
+
+  {page.sections.map((section) => (
+    <section class="not-prose scroll-mt-24">
+      <h2 id={section.id} class="display-3 text-white mb-3 scroll-mt-24">{section.title}</h2>
+
+      {section.lead && <p class="m-0 mb-3 text-[15px] leading-relaxed text-slate-300">{section.lead}</p>}
+
+      {section.paragraphs?.map((paragraph) => (
+        <p class="mt-0 mb-3 text-[15px] leading-relaxed text-slate-300">{paragraph}</p>
+      ))}
+
+      {section.bullets && (
+        <ul class="mt-0 mb-4 grid gap-2 list-none p-0">
+          {section.bullets.map((bullet) => (
+            <li class="flex gap-2.5 text-[14.5px] leading-relaxed text-slate-300">
+              <Icon name="check" class="w-4 h-4 mt-[3px] shrink-0 text-emerald-400" strokeWidth={2.4} />
+              <span>{bullet}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {section.code && (
+        <CodeBlock
+          label={section.code.label}
+          language={section.code.language}
+          content={section.code.content}
+          class="mb-4"
+        />
+      )}
+
+      {section.table && (
+        <SpecTable
+          headers={section.table.headers}
+          rows={section.table.rows}
+          caption={section.table.caption}
+          class="mb-4"
+        />
+      )}
+
+      {section.note && (
+        <Callout type="info">
+          <p set:html={section.note} />
+        </Callout>
+      )}
+    </section>
+  ))}
+
+  <section class="not-prose scroll-mt-24">
+    <h2 id="faq" class="display-3 text-white mb-3">Frequently asked</h2>
+    <Accordion items={page.faq} />
+  </section>
+
+  <section class="not-prose">
+    <h2 class="display-3 text-white mb-3">Keep reading</h2>
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {page.related.map((related) => (
+        <FeatureCard title={related.name} desc="Continue with the next piece of the control plane." href={url(related.path)} icon="arrow-right" />
+      ))}
+    </div>
+  </section>
+
+  <aside class="not-prose rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+    <h2 class="text-lg font-bold text-white m-0 mb-2">Try it in the playground</h2>
+    <p class="m-0 mb-4 text-sm text-slate-400">
+      Simulate cleaning, shortcodes and routing rules in the browser before you install anything.
+    </p>
+    <div class="flex flex-wrap gap-3">
+      <a href={url('/tools/playground/')} class="btn btn-primary btn-sm">
+        Open the playground
+        <Icon name="arrow-right" class="w-3.5 h-3.5" strokeWidth={2.4} />
+      </a>
+      <a href={url('/getting-started/')} class="btn btn-secondary btn-sm">Installation guide</a>
+      <a href={url('/api/')} class="btn btn-ghost btn-sm">REST API reference</a>
+    </div>
+  </aside>
+</DocsLayout>

@@ -1,214 +1,255 @@
 ---
 import BaseLayout from './BaseLayout.astro';
 import Breadcrumbs from '../components/Breadcrumbs.astro';
+import Icon from '../components/Icon.astro';
+import { docsNav, docsOrder, allDocLinks } from '../data/docs-nav';
 import { url } from '../utils/paths';
 
 interface Props {
   title: string;
   description: string;
   breadcrumbs: Array<{ name: string; href?: string }>;
+  /** Path of this page, base-less, e.g. "/features/text-cleaner/". Used for sidebar state and paging. */
+  path?: string;
   activeSlug?: string;
   toc?: Array<{ id: string; title: string }>;
   prev?: { title: string; href: string };
   next?: { title: string; href: string };
+  /** Optional page-level extra SEO payloads forwarded to the layout. */
+  faq?: Array<{ q: string; a: string }>;
+  keywords?: string[];
+  itemList?: { name: string; items: Array<{ name: string; description: string; url: string }> };
+  articleDate?: string;
 }
 
 const {
   title,
   description,
   breadcrumbs,
-  activeSlug = '',
+  path,
   toc = [],
   prev,
   next,
+  faq,
+  keywords,
+  itemList,
+  articleDate,
 } = Astro.props;
 
-const docNav = [
-  {
-    category: 'Getting Started',
-    items: [
-      { title: 'Overview & Prerequisites', href: url('/getting-started/') },
-      { title: 'Docker Compose Deployment', href: url('/getting-started/docker/') },
-      { title: 'Linux & Windows Setup', href: url('/getting-started/linux-windows/') },
-      { title: 'Telegram Bot Configuration', href: url('/getting-started/telegram-bot-setup/') },
-      { title: 'Configuration & Environment', href: url('/getting-started/configuration/') },
-      { title: 'Verifying Installation', href: url('/getting-started/verification/') },
-    ],
-  },
-  {
-    category: 'Features & Capabilities',
-    items: [
-      { title: 'Feature Catalog Overview', href: url('/features/') },
-      { title: 'Automated Forwarding Modes', href: url('/features/automated-forwarding/') },
-      { title: 'Destination & Rules Management', href: url('/features/rules-and-destinations/') },
-      { title: 'Text Cleaner (URL, Mention, Tag)', href: url('/features/text-cleaner/') },
-      { title: 'Whitelist, Blacklist & Filters', href: url('/features/whitelist-blacklist-filters/') },
-      { title: 'Header & Footer Shortcodes', href: url('/features/headers-footers-shortcodes/') },
-      { title: 'Replacements & Regex Rules', href: url('/features/replacements-and-regex/') },
-      { title: 'Scheduling & Max Time Edit', href: url('/features/scheduling-and-delays/') },
-      { title: 'Media, Albums & Copy Bypass', href: url('/features/media-and-albums/') },
-      { title: 'Backup, Clone & Migration', href: url('/features/backup-clone-migration/') },
-      { title: 'Multi-Tenant Isolation', href: url('/features/multi-tenant-security/') },
-    ],
-  },
-  {
-    category: 'System Architecture',
-    items: [
-      { title: 'Architecture Overview', href: url('/architecture/') },
-      { title: 'Forwarding Data Pipeline', href: url('/architecture/#pipeline') },
-      { title: 'Durable Queue & Leases', href: url('/architecture/#queue') },
-      { title: 'Multi-Tenant Security Model', href: url('/architecture/#security') },
-    ],
-  },
-  {
-    category: 'Tutorials & Recipes',
-    items: [
-      { title: 'Tutorials Overview', href: url('/tutorials/') },
-      { title: 'Clean Links & Mentions', href: url('/tutorials/#cleaner') },
-      { title: 'Dynamic Attribution Footers', href: url('/tutorials/#attribution') },
-      { title: 'Bypass Restricted Channels', href: url('/tutorials/#restricted') },
-      { title: 'Auto-Pause on FloodWait', href: url('/tutorials/#floodwait') },
-    ],
-  },
-  {
-    category: 'Operations & Support',
-    items: [
-      { title: 'Operations & Diagnostics', href: url('/operations/') },
-      { title: 'Frequently Asked Questions', href: url('/faq/') },
-      { title: 'Template Playground', href: url('/tools/playground/') },
-      { title: 'Releases & Changelog', href: url('/releases/') },
-    ],
-  },
-];
-
 const currentPath = Astro.url.pathname;
+const normalise = (value: string) => {
+  if (!value) return '/';
+  const stripped = value.replace(/^https?:\/\/[^/]+/, '').replace(/\/$/, '');
+  return stripped || '/';
+};
+
+// Strip the deployment base so a sidebar entry matches on any host/path.
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const routeOf = (value: string) => {
+  const clean = normalise(value);
+  return base && clean.startsWith(base) ? normalise(clean.slice(base.length)) : clean;
+};
+
+const here = routeOf(path || currentPath);
+
+const isCurrent = (itemPath: string) => {
+  const target = normalise(itemPath.split('#')[0]);
+  return target === here;
+};
+
+const isCategoryActive = (items: { path: string }[]) =>
+  items.some((item) => {
+    const target = normalise(item.path);
+    return target === here || (target !== '/' && here.startsWith(`${target}/`));
+  });
+
+// Prev/next derived from the ordered docs list unless a page passes its own.
+const fallbackIndex = docsOrder.indexOf(here);
+const autoPrev =
+  fallbackIndex > 0
+    ? {
+        title: allDocLinks[fallbackIndex - 1].title,
+        href: url(allDocLinks[fallbackIndex - 1].path),
+      }
+    : undefined;
+const autoNext =
+  fallbackIndex >= 0 && fallbackIndex < docsOrder.length - 1
+    ? {
+        title: allDocLinks[fallbackIndex + 1].title,
+        href: url(allDocLinks[fallbackIndex + 1].path),
+      }
+    : undefined;
+
+const prevLink = prev ?? autoPrev;
+const nextLink = next ?? autoNext;
 ---
 
 <BaseLayout
   title={title}
   description={description}
   type="article"
-  breadcrumbs={breadcrumbs.map(b => ({ name: b.name, url: b.href || '' }))}
+  breadcrumbs={breadcrumbs.map((b) => ({ name: b.name, url: b.href || '' }))}
+  faq={faq}
+  keywords={keywords}
+  itemList={itemList}
+  articleDate={articleDate}
 >
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    
-    <!-- Top Breadcrumbs -->
+  <div class="container-x py-5 sm:py-8">
     <Breadcrumbs items={breadcrumbs} />
 
-    <div class="lg:grid lg:grid-cols-12 lg:gap-8 pt-4">
-      
-      <!-- Left Sidebar (Desktop Navigation) -->
-      <aside class="hidden lg:block lg:col-span-3">
-        <div class="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-4 space-y-7 text-sm">
-          {docNav.map((sec) => (
-            <div>
-              <h3 class="font-semibold text-xs uppercase tracking-wider text-slate-400 mb-2.5">
-                {sec.category}
-              </h3>
-              <ul class="space-y-1 border-l border-slate-800/80 ml-1 pl-2.5">
-                {sec.items.map((it) => {
-                  const isActive = currentPath === it.href || (it.href !== url('/getting-started/') && it.href !== url('/features/') && currentPath.startsWith(it.href));
-                  return (
+    <div class="lg:grid lg:grid-cols-12 lg:gap-10 pt-4">
+      <!-- Sidebar: desktop -->
+      <aside class="hidden lg:block lg:col-span-3" aria-label="Documentation navigation">
+        <div class="docs-sidebar space-y-6">
+          {
+            docsNav.map((section) => (
+              <div>
+                <p class="docs-nav-category">{section.category}</p>
+                <ul class="space-y-0.5 list-none p-0 m-0">
+                  {section.items.map((item) => (
                     <li>
                       <a
-                        href={it.href}
-                        class={`block py-1 px-2 rounded-md transition-colors ${
-                          isActive
-                            ? 'font-medium text-sky-400 bg-sky-950/40 border-l-2 border-sky-400 -ml-[11px] pl-[9px]'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-                        }`}
+                        href={url(item.path)}
+                        class={`docs-nav-link ${isCurrent(item.path) ? 'is-active' : ''}`}
+                        aria-current={isCurrent(item.path) ? 'page' : undefined}
                       >
-                        {it.title}
+                        {item.title}
+                        {item.isNew && <span class="docs-nav-badge">new</span>}
                       </a>
                     </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+                  ))}
+                </ul>
+              </div>
+            ))
+          }
         </div>
       </aside>
 
-      <!-- Main Documentation Content -->
-      <article class="lg:col-span-9 xl:col-span-7 max-w-none">
-        
-        <!-- Header -->
-        <header class="mb-8 pb-6 border-b border-slate-800">
-          <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-3">
-            {title}
-          </h1>
-          <p class="text-base sm:text-lg text-slate-300 leading-relaxed">
-            {description}
-          </p>
+      <article class="lg:col-span-9 xl:col-span-7 max-w-none min-w-0">
+        <!-- Mobile docs navigation -->
+        <details class="lg:hidden mb-5 rounded-xl border border-slate-800 bg-slate-900/50">
+          <summary class="flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-100">
+            <span class="inline-flex items-center gap-2">
+              <Icon name="book" class="w-4 h-4 text-sky-400" />
+              Documentation menu
+            </span>
+            <Icon name="chevron-right" class="w-4 h-4 text-slate-500" />
+          </summary>
+          <div class="px-3 pb-4 space-y-4">
+            {
+              docsNav.map((section) => (
+                <div>
+                  <p class="docs-nav-category px-1">{section.category}</p>
+                  <ul class="space-y-0.5 list-none p-0 m-0">
+                    {section.items.map((item) => (
+                      <li>
+                        <a
+                          href={url(item.path)}
+                          class={`docs-nav-link ${isCurrent(item.path) ? 'is-active' : ''}`}
+                          aria-current={isCurrent(item.path) ? 'page' : undefined}
+                        >
+                          {item.title}
+                          {item.isNew && <span class="docs-nav-badge">new</span>}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))
+            }
+          </div>
+        </details>
+
+        <header class="mb-7 pb-5 border-b border-slate-800">
+          {
+            isCategoryActive([{ path: here }]) && breadcrumbs.length > 0 && (
+              <p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-400">
+                {breadcrumbs[breadcrumbs.length - 1].name}
+              </p>
+            )
+          }
+          <h1 class="display-2 text-white mb-3">{title}</h1>
+          <p class="text-base sm:text-lg text-slate-300 leading-relaxed">{description}</p>
         </header>
 
-        <!-- Document Body Slot -->
-        <div class="prose prose-invert prose-custom max-w-none space-y-6">
+        <!-- On-page contents: inline on small screens, sticky column on XL -->
+        {
+          toc.length > 2 && (
+            <details class="xl:hidden mb-6 rounded-xl border border-slate-800 bg-slate-900/40" open>
+              <summary class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">On this page</summary>
+              <ul class="px-3 pb-3 list-none m-0 space-y-0.5">
+                {toc.map((item) => (
+                  <li>
+                    <a href={`#${item.id}`} class="toc-link">
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )
+        }
+
+        <div class="prose-custom max-w-none space-y-6">
           <slot />
         </div>
 
-        <!-- Pagination (Prev / Next) -->
-        {(prev || next) && (
-          <nav aria-label="Page navigation" class="mt-12 pt-6 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {prev ? (
-              <a
-                href={prev.href}
-                class="p-4 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-800/60 transition-colors group flex flex-col items-start"
-              >
-                <span class="text-xs text-slate-400 font-medium flex items-center gap-1 group-hover:text-sky-400 transition-colors">
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Previous
-                </span>
-                <span class="font-semibold text-slate-200 mt-1 text-sm">
-                  {prev.title}
-                </span>
-              </a>
-            ) : <div />}
+        {
+          (prevLink || nextLink) && (
+            <nav aria-label="Page navigation" class="mt-12 pt-6 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {prevLink ? (
+                <a
+                  href={prevLink.href}
+                  class="p-4 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-800/60 transition-colors group flex flex-col items-start min-h-[64px]"
+                >
+                  <span class="text-xs text-slate-400 font-medium flex items-center gap-1 group-hover:text-sky-400 transition-colors">
+                    <Icon name="chevron-right" class="w-3.5 h-3.5 rotate-180" />
+                    Previous
+                  </span>
+                  <span class="font-semibold text-slate-200 mt-1 text-sm">{prevLink.title}</span>
+                </a>
+              ) : (
+                <span />
+              )}
 
-            {next ? (
-              <a
-                href={next.href}
-                class="p-4 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-800/60 transition-colors group flex flex-col items-end text-right"
-              >
-                <span class="text-xs text-slate-400 font-medium flex items-center gap-1 group-hover:text-sky-400 transition-colors">
-                  Next
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
-                </span>
-                <span class="font-semibold text-slate-200 mt-1 text-sm">
-                  {next.title}
-                </span>
-              </a>
-            ) : <div />}
-          </nav>
-        )}
-
+              {nextLink ? (
+                <a
+                  href={nextLink.href}
+                  class="p-4 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-800/60 transition-colors group flex flex-col items-end text-right min-h-[64px]"
+                >
+                  <span class="text-xs text-slate-400 font-medium flex items-center gap-1 group-hover:text-sky-400 transition-colors">
+                    Next
+                    <Icon name="chevron-right" class="w-3.5 h-3.5" />
+                  </span>
+                  <span class="font-semibold text-slate-200 mt-1 text-sm">{nextLink.title}</span>
+                </a>
+              ) : (
+                <span />
+              )}
+            </nav>
+          )
+        }
       </article>
 
-      <!-- Right Side: On-page TOC (Desktop XL) -->
-      {toc.length > 0 && (
-        <aside class="hidden xl:block xl:col-span-2">
-          <div class="sticky top-24 pl-4 text-xs">
-            <h4 class="font-semibold uppercase tracking-wider text-slate-400 mb-3">On this page</h4>
-            <ul class="space-y-2 border-l border-slate-800 pl-3">
-              {toc.map((item) => (
-                <li>
-                  <a
-                    href={`#${item.id}`}
-                    class="block text-slate-400 hover:text-sky-400 transition-colors line-clamp-2"
-                  >
-                    {item.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </aside>
-      )}
-
+      <!-- On-page TOC: desktop XL -->
+      {
+        toc.length > 0 && (
+          <aside class="hidden xl:block xl:col-span-2" aria-label="On this page">
+            <div class="sticky top-24 pl-4">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-3">On this page</p>
+              <ul class="space-y-1.5 border-l border-slate-800 pl-3 list-none m-0">
+                {toc.map((item) => (
+                  <li>
+                    <a href={`#${item.id}`} class="toc-link">
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </aside>
+        )
+      }
     </div>
   </div>
 </BaseLayout>

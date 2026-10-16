@@ -1,0 +1,51 @@
+---
+interface Props {
+  label?: string;
+  language?: string;
+  content: string;
+  class?: string;
+  wrap?: boolean;
+}
+
+const { label, language = 'bash', content, class: cls = '', wrap = true } = Astro.props;
+const id = `code-${Math.random().toString(36).slice(2, 9)}`;
+---
+
+<figure class={`codeblock ${cls}`} data-codeblock>
+  <figcaption class="codeblock-head">
+    <span class="codeblock-label">
+      <span class="codeblock-dot"></span>
+      {label ?? language}
+    </span>
+    <button type="button" class="codeblock-copy" data-copy-target={id} aria-label="Copy code to clipboard">Copy</button>
+  </figcaption>
+  <pre id={id} class={wrap ? '' : 'nowrap'} tabindex="0"><code>{content.trim()}</code></pre>
+</figure>
+
+<script>
+  const attach = () => {
+    document.querySelectorAll('[data-copy-target]').forEach((button) => {
+      if ((button as HTMLElement).dataset.bound === '1') return;
+      (button as HTMLElement).dataset.bound = '1';
+      button.addEventListener('click', async () => {
+        const target = document.getElementById((button as HTMLElement).dataset.copyTarget || '');
+        if (!target) return;
+        try {
+          await navigator.clipboard.writeText(target.textContent || '');
+          const previous = button.textContent;
+          button.textContent = 'Copied';
+          button.classList.add('is-copied');
+          window.setTimeout(() => {
+            button.textContent = previous;
+            button.classList.remove('is-copied');
+          }, 1800);
+        } catch {
+          button.textContent = 'Press ⌘C';
+          window.setTimeout(() => { button.textContent = 'Copy'; }, 1800);
+        }
+      });
+    });
+  };
+  attach();
+  document.addEventListener('astro:page-load', attach);
+</script>

@@ -1,0 +1,144 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import Callout from '../../components/Callout.astro';
+import Icon from '../../components/Icon.astro';
+import repoInfo from '../../data/repo-info.json';
+import releases from '../../data/releases.json';
+import { url } from '../../utils/paths';
+
+const pageTitle = 'Releases & changelog';
+const pageDesc = `Release history for AutoTelegramForward — what shipped in v${repoInfo.version} and every release before it, plus the verified upgrade path.`;
+
+const latest = releases[0];
+const older = releases.slice(1);
+
+const toc = [
+  { id: 'latest', title: `Latest: v${repoInfo.version}` },
+  { id: 'upgrade', title: 'Upgrading' },
+  { id: 'history', title: 'Release history' },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/releases/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Learn', href: url('/tutorials/') },
+    { name: 'Releases', href: url('/releases/') },
+  ]}
+  toc={toc}
+  articleDate={latest.date}
+  keywords={['AutoTelegramForward release notes', 'v2.0 changelog', 'upgrade Telegram forwarder']}
+>
+  <section class="not-prose scroll-mt-24" id="latest">
+    <div class="rounded-2xl border border-sky-900/60 bg-gradient-to-r from-sky-950/40 to-slate-900/60 p-5 sm:p-6">
+      <div class="flex flex-wrap items-center gap-2 mb-3">
+        <span class="chip chip-accent font-mono">v{repoInfo.version}</span>
+        <span class="chip chip-success">Current</span>
+        <span class="chip">{latest.date}</span>
+        <span class="chip font-mono">commit {repoInfo.gitCommit}</span>
+      </div>
+      <h2 class="display-3 text-white m-0 mb-2">{latest.title}</h2>
+      <p class="m-0 text-[15px] leading-relaxed text-slate-300">{latest.summary}</p>
+      <div class="flex flex-wrap gap-3 mt-4">
+        <a href={`${repoInfo.repoUrl}/releases/latest`} target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
+          <Icon name="github" class="w-3.5 h-3.5" />
+          Release assets
+        </a>
+        <a href={url('/features/')} class="btn btn-secondary btn-sm">
+          Every new capability
+          <Icon name="arrow-right" class="w-3.5 h-3.5" />
+        </a>
+      </div>
+    </div>
+
+    <h3 class="text-xs font-bold uppercase tracking-[0.14em] text-sky-400 mt-6 mb-3">
+      {latest.highlights.length} changes in this release
+    </h3>
+    <ul class="grid gap-2 list-none p-0 m-0">
+      {
+        latest.highlights.map((item: string) => (
+          <li class="flex gap-2.5 text-[14.5px] leading-relaxed text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] shrink-0 text-emerald-400" strokeWidth={2.4} />
+            <span>{item}</span>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="upgrade">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Upgrading</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The upgrade command is deliberately gated: it validates the configuration and refuses to proceed on a stack that
+      is already failing, so you never debug two problems at once.
+    </p>
+
+    <div class="grid gap-4 lg:grid-cols-2">
+      <CodeBlock
+        label="Recommended: gated upgrade"
+        language="bash"
+        content={`atf validate --strict     # fail fast on config drift
+atf system upgrade        # pull, rebuild, restart through the gate
+atf status                # live board: ports, reachability, task counts
+atf doctor                # deeper diagnosis if anything is red`}
+      />
+      <CodeBlock
+        label="Manual path (compose)"
+        language="bash"
+        content={`git pull origin master
+docker compose build
+docker compose up -d
+docker compose ps
+
+# Verify before trusting
+curl -s localhost:8080/api/system/setup | jq '.ready, .services'`}
+      />
+    </div>
+
+    <Callout type="warn" class="mt-4" title="Back up before a major version">
+      <p>
+        Export an encrypted bundle first — <code>atf data backup-export --out atf.atf</code>. It is the fastest way back
+        if an upgrade goes sideways, and it is the supported way to move an installation to another server.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="history">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Release history</h2>
+    <ol class="relative list-none p-0 m-0 space-y-4 border-l border-slate-800 pl-4 sm:pl-6">
+      {
+        older.map((release: { tag: string; date: string; title: string; summary: string; highlights: string[] }) => (
+          <li class="relative">
+            <span class="absolute -left-[22px] sm:-left-[30px] top-1.5 w-2.5 h-2.5 rounded-full bg-slate-700 ring-4 ring-slate-950" />
+            <div class="card">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="font-mono font-bold text-slate-100">{release.tag}</span>
+                <span class="text-xs text-slate-500">{release.date}</span>
+              </div>
+              <h3 class="text-sm font-bold text-white m-0 mb-2">{release.title}</h3>
+              <p class="m-0 mb-3 text-[13px] leading-relaxed text-slate-400">{release.summary}</p>
+              <ul class="grid gap-1.5 list-none p-0 m-0">
+                {release.highlights.map((item) => (
+                  <li class="flex gap-2 text-[13px] text-slate-300">
+                    <span class="mt-[7px] w-1.5 h-1.5 rounded-full bg-sky-400/70 shrink-0" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+
+    <p class="mt-5 text-[13px] text-slate-400">
+      Full tag history and signed artefacts live on{' '}
+      <a class="text-sky-400" href={`${repoInfo.repoUrl}/releases`}>GitHub releases</a>. The version numbers on this page
+      are read from the repository at build time.
+    </p>
+  </section>
+</DocsLayout>
