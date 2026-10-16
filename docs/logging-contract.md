@@ -82,6 +82,36 @@ Migrated installations get exactly this table — not "whatever the old config
 said" — because the old behaviour (`INFO` collected by default) is what made the
 hot path expensive.
 
+### Where the default policy is enforced today
+
+The table above is a *policy*, and a policy only exists if something enforces it.
+The Python Logger stores whatever it receives (it has no server-side severity
+filter), so the defaults are enforced **at the producer** in
+`core/application/log_policy.py`, applied to every lifecycle event at the single
+`_audit()` choke point in `core/application/pipeline.py`:
+
+* `ATF_LOG_LEVELS` — the collected set (default `WARN,ERROR,CRITICAL`).
+* `ATF_LOG_DIAGNOSTIC_SECONDS` — start a bounded diagnostic window at launch.
+* `ATF_LOG_VERBOSE_RATE` — a per-second cap on verbose events (0 = uncapped), so
+  turning diagnostics on under load cannot itself become the incident.
+
+Two rules the producer must not get wrong, and both are tested:
+
+1. **The gate governs the log emission only.** The durable audit write shares no
+   gate with it: suppressing a noisy category must never erase the audit trail.
+   (An early version of this code returned from the choke point on suppression
+   and silently dropped the audit record too — caught by
+   `test_suppressing_log_verbosity_never_erases_the_durable_audit_trail`.)
+2. **Suppression is counted, never silent.** `LogPolicy.snapshot()` reports
+   `emitted` / `emitted_security` / `suppressed_level` / `suppressed_rate` and the
+   effective level set, so "collection is off" is distinguishable from "nothing
+   happened". Security-relevant events (`auth.*`, `tenant.*`, `admin.*`,
+   `UNAUTHORIZED`, `CROSS_TENANT`, …) bypass the threshold, the diagnostic state
+   and the rate limit.
+
+Once the Rust engine owns a server-side filter, that filter becomes the primary
+enforcement point and this producer-side policy stays as defence in depth.
+
 ## 3. Four separate concepts that must not be conflated
 
 1. **Collection** — does the producer/Logger take the event at all? (§2)
