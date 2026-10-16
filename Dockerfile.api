@@ -16,9 +16,14 @@ RUN for i in 1 2 3 4 5; do \
       { echo "apk attempt $i failed, retrying..."; sleep 10; }; \
     done && apk info -e ca-certificates
 COPY --from=builder /atf-api /usr/local/bin/atf-api
+# The public /api/version endpoint reads its product version from this
+# file (the CLI does the same from the repo root). Without it the shipped
+# API answered "dev" to a question the mobile client displays.
+COPY VERSION /etc/atf/VERSION
 
 EXPOSE 8080
 ENV ATF_CORE_GRPC=core:50051 \
-    ATF_API_ADDR=:8080
+    ATF_API_ADDR=:8080 \
+    ATF_VERSION_FILE=/etc/atf/VERSION
 
 CMD ["atf-api"]
