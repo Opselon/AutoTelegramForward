@@ -106,6 +106,28 @@ impl Builder {
         self.bind(Param::Int(value))
     }
 
+    /// Bind one value the statement needs `occurrences` times.
+    ///
+    /// The two dialects cannot be treated the same here. PostgreSQL *names* a
+    /// parameter, so one value can be bound once and its `$n` repeated in the text.
+    /// SQLite has no named parameters in these statements: every `?` is positional
+    /// and consumes exactly one bound value, so the value has to be bound once per
+    /// occurrence. Reusing a returned `?` string is what produced the runtime
+    /// failure `Wrong number of parameters passed to query. Got 2, needed 3` — three
+    /// placeholders in the text, two values supplied. Binding twice is free for the
+    /// planner and is the only way the placeholder count and the parameter count
+    /// stay equal on both backends.
+    pub fn bind_repeated(&mut self, param: Param, occurrences: usize) -> Vec<String> {
+        let occurrences = occurrences.max(1);
+        match self.dialect {
+            SqlDialect::Postgres => {
+                let placeholder = self.bind(param);
+                vec![placeholder; occurrences]
+            }
+            SqlDialect::Sqlite => (0..occurrences).map(|_| self.bind(param.clone())).collect(),
+        }
+    }
+
     /// Which backend this statement is being built for. Needed where the two
     /// dialects disagree on semantics rather than syntax (`LIKE` is case-insensitive
     /// for ASCII in SQLite but case-sensitive in PostgreSQL, so PostgreSQL uses
@@ -318,7 +340,11 @@ impl PurgeFilter {
     pub fn describe(&self) -> String {
         format!(
             "level={} service={} category={} rule_id={} older_than_hours={} protected=[{}]",
-            if self.level.is_empty() { "-" } else { &self.level },
+            if self.level.is_empty() {
+                "-"
+            } else {
+                &self.level
+            },
             if self.service.is_empty() {
                 "-"
             } else {
@@ -329,11 +355,7 @@ impl PurgeFilter {
             } else {
                 &self.category
             },
-            if self.rule_id.is_empty() {
-                "-"
-            } else {
-                "*"
-            },
+            if self.rule_id.is_empty() { "-" } else { "*" },
             self.older_than_hours,
             self.protect_categories.join(",")
         )
@@ -532,7 +554,12 @@ pub fn select_page(filter: &QueryFilter, page: &Page, dialect: SqlDialect) -> Pl
     sql.push_str(order_clause(page.ascending));
     let limit_ph = builder.bind_int(page.limit as i64);
     sql.push_str(&format!(" LIMIT {limit_ph}"));
-    if page.offset > 0 {
+    // The Python engine's read statement is always `... LIMIT ? OFFSET ?`; mirroring
+    // it keeps the two engines' statements and parameter lists identical for the same
+    // wire request (an OFFSET of 0 is a no-op). A keyset seek addresses the page by
+    // `(ts, id)` and therefore replaces the offset entirely — only that path omits
+    // the clause.
+    if page.keyset.is_none() {
         let offset_ph = builder.bind_int(page.offset as i64);
         sql.push_str(&format!(" OFFSET {offset_ph}"));
     }
@@ -577,6 +604,13 @@ pub fn stats(scope: &StatsScope, dialect: SqlDialect) -> Plan {
 }
 
 /// `GROUP BY` statement for one dimension.
+///
+/// Ordering is `count DESC` — the "top" of a top-N listing is the biggest group —
+/// with a *deterministic* tie-break on the group's first row (`MIN(id)`, i.e.
+/// insertion order). Without it, two groups of equal size come back in whatever
+/// order the planner produced: SQLite answers `GROUP BY service` in ascending key
+/// order through `idx_logs_service`, so a tie silently depended on an index. The
+/// tie-break is explicit, identical on both backends, and stable across a restart.
 pub fn group_by(filter: &QueryFilter, by: GroupBy, limit: usize, dialect: SqlDialect) -> Plan {
     let mut builder = Builder::new(dialect);
     let where_sql = where_clause(filter, None, false, &[], &mut builder);
@@ -584,19 +618,21 @@ pub fn group_by(filter: &QueryFilter, by: GroupBy, limit: usize, dialect: SqlDia
     let limit_ph = builder.bind_int(limit.max(1) as i64);
     Plan {
         sql: format!(
-            "SELECT {column} AS k, COUNT(*) AS c FROM logs{where_sql} GROUP BY {column} ORDER BY c DESC, k ASC LIMIT {limit_ph}"
+            "SELECT {column} AS k, COUNT(*) AS c FROM logs{where_sql} GROUP BY {column} ORDER BY c DESC, MIN(id) ASC LIMIT {limit_ph}"
         ),
         params: builder.params(),
     }
 }
 
 /// The whole-archive `by_rule` aggregate the Python engine ran regardless of scope.
+/// Ordered like [`group_by`]: biggest group first, ties broken by the group's first
+/// row so the `MAX_RULE_GROUPS` cut is reproducible.
 pub fn by_rule(limit: usize, dialect: SqlDialect) -> Plan {
     let mut builder = Builder::new(dialect);
     let limit_ph = builder.bind_int(limit.max(1) as i64);
     Plan {
         sql: format!(
-            "SELECT rule_id AS k, COUNT(*) AS c FROM logs WHERE rule_id != '' GROUP BY rule_id ORDER BY c DESC, k ASC LIMIT {limit_ph}"
+            "SELECT rule_id AS k, COUNT(*) AS c FROM logs WHERE rule_id != '' GROUP BY rule_id ORDER BY c DESC, MIN(id) ASC LIMIT {limit_ph}"
         ),
         params: builder.params(),
     }
@@ -611,34 +647,58 @@ pub fn time_buckets(
 ) -> Plan {
     let bucket = bucket_secs.max(1);
     let mut builder = Builder::new(dialect);
+    // The bucket width sits in the SELECT list, i.e. it appears *before* the WHERE
+    // clause in the statement text. On SQLite `?` is positional, so the value must be
+    // bound in text order: binding the filter first handed the level names to the
+    // division and the bucket width to `level IN (...)`, which then matched nothing —
+    // the statement still *ran*, it just answered an empty result. Bind the SELECT
+    // list first, then build the filter into the same placeholders' tail.
+    let bucket_placeholders = builder.bind_repeated(Param::Int(bucket), 2);
     let where_sql = where_clause(filter, None, false, &[], &mut builder);
-    let bucket_ph = builder.bind_int(bucket);
     let limit_ph = builder.bind_int(max_buckets.max(1) as i64);
     // Integer division floors toward zero; `ts` is unsigned-in-practice for real
     // log timestamps, and the explicit `* bucket` keeps the alignment obvious.
     Plan {
         sql: format!(
-            "SELECT (ts / {bucket_ph}) * {bucket_ph} AS bucket, COUNT(*) AS c FROM logs{where_sql} GROUP BY bucket ORDER BY bucket ASC LIMIT {limit_ph}"
+            "SELECT (ts / {}) * {} AS bucket, COUNT(*) AS c FROM logs{where_sql} GROUP BY bucket ORDER BY bucket ASC LIMIT {limit_ph}",
+            bucket_placeholders[0], bucket_placeholders[1]
         ),
         params: builder.params(),
     }
 }
 
 /// Recurring-error aggregate: identical messages collapsed, newest first.
+///
+/// The group key is the message *signature* (`category`, `message`); severity is
+/// an attribute of the pattern, not part of its identity. Adding `level` to the
+/// group key split a single recurring failure into one row per severity — 15
+/// `ERROR` + 15 `WARN` occurrences of the same message reported as two groups,
+/// each with half the real count. The reported `level` is the level of the
+/// group's newest occurrence, i.e. the row `last_ts` points at, so the caller
+/// still sees the severity the pattern currently fires at.
 pub fn error_aggregates(filter: &QueryFilter, limit: usize, dialect: SqlDialect) -> Plan {
     let mut scoped = filter.clone();
     // Errors only: the caller may pass a narrower level set, but the aggregate is
     // about failures, so the failure levels are always included.
     if scoped.chosen_levels().is_empty() && scoped.level.trim().is_empty() {
-        scoped.levels = vec!["WARN".to_string(), "ERROR".to_string(), "CRITICAL".to_string()];
+        scoped.levels = vec![
+            "WARN".to_string(),
+            "ERROR".to_string(),
+            "CRITICAL".to_string(),
+        ];
     }
     let mut builder = Builder::new(dialect);
     let where_sql = where_clause(&scoped, None, false, &[], &mut builder);
     let limit_ph = builder.bind_int(limit.max(1) as i64);
     Plan {
         sql: format!(
-            "SELECT level, category, message, COUNT(*) AS c, MAX(ts) AS last_ts FROM logs{where_sql} \
-             GROUP BY level, category, message ORDER BY c DESC, last_ts DESC LIMIT {limit_ph}"
+            "SELECT level, category, message, c, last_ts FROM (\
+             SELECT level, category, message, \
+             COUNT(*) OVER (PARTITION BY category, message) AS c, \
+             MAX(ts) OVER (PARTITION BY category, message) AS last_ts, \
+             ROW_NUMBER() OVER (PARTITION BY category, message ORDER BY ts DESC, id DESC) AS rn \
+             FROM logs{where_sql}) AS pattern WHERE rn = 1 \
+             ORDER BY c DESC, last_ts DESC LIMIT {limit_ph}"
         ),
         params: builder.params(),
     }
@@ -734,11 +794,8 @@ impl OverrideSet {
             clauses.push(format!("UPPER(category) IN ({})", placeholders.join(", ")));
         }
         if !self.services.is_empty() {
-            let placeholders: Vec<String> = self
-                .services
-                .iter()
-                .map(|v| builder.bind_text(v))
-                .collect();
+            let placeholders: Vec<String> =
+                self.services.iter().map(|v| builder.bind_text(v)).collect();
             clauses.push(format!("service IN ({})", placeholders.join(", ")));
         }
         if clauses.is_empty() {
@@ -786,11 +843,7 @@ pub fn retention_delete_chunk(sweep: &RetentionSweep, chunk: usize, dialect: Sql
 /// Bounded count of the rows a retention sweep would delete if it were not
 /// budget-limited — the number that turns "retention seems slow" into "there are
 /// 400k rows due for expiry".
-pub fn retention_count_plan(
-    sweep: &RetentionSweep,
-    cap: i64,
-    dialect: SqlDialect,
-) -> Plan {
+pub fn retention_count_plan(sweep: &RetentionSweep, cap: i64, dialect: SqlDialect) -> Plan {
     let mut builder = Builder::new(dialect);
     let where_sql = where_clause(&sweep.filter, None, false, &sweep.protected, &mut builder);
     let mut sql = format!("SELECT COUNT(*) AS total FROM (SELECT 1 AS one FROM logs{where_sql}");
@@ -904,9 +957,15 @@ mod tests {
 
     #[test]
     fn never_selects_star() {
-        let plan = select_page(&QueryFilter::default(), &Page::default(), SqlDialect::Sqlite);
+        let plan = select_page(
+            &QueryFilter::default(),
+            &Page::default(),
+            SqlDialect::Sqlite,
+        );
         assert!(!plan.sql.contains("SELECT *"));
-        assert!(plan.sql.starts_with("SELECT id, ts, level, service, category"));
+        assert!(plan
+            .sql
+            .starts_with("SELECT id, ts, level, service, category"));
     }
 
     #[test]
@@ -938,7 +997,11 @@ mod tests {
         for n in numbers {
             assert!(plan.sql.contains(&n), "{} missing from {}", n, plan.sql);
         }
-        assert_eq!(plan.params.len(), 6, "levels(2) service(1) since(1) limit(1)");
+        assert_eq!(
+            plan.params.len(),
+            6,
+            "levels(2) service(1) since(1) limit(1) offset(1)"
+        );
     }
 
     #[test]
@@ -990,7 +1053,9 @@ mod tests {
         let plan = count(&QueryFilter::default(), None, SqlDialect::Sqlite);
         assert_eq!(plan.sql, "SELECT COUNT(*) AS total FROM logs WHERE 1=1");
         let capped = count(&QueryFilter::default(), Some(1000), SqlDialect::Postgres);
-        assert!(capped.sql.contains("FROM (SELECT 1 AS one FROM logs WHERE 1=1 LIMIT $1)"));
+        assert!(capped
+            .sql
+            .contains("FROM (SELECT 1 AS one FROM logs WHERE 1=1 LIMIT $1)"));
         assert_eq!(capped.params[0], Param::Int(1000));
     }
 
@@ -1015,10 +1080,15 @@ mod tests {
         assert!(plan.sql.contains("MIN(ts) AS oldest_ts"));
         assert!(plan.sql.contains("rule_id=?"));
         assert!(plan.sql.contains("user_id=?"));
-        let grouped = group_by(&QueryFilter::default(), GroupBy::Service, 10, SqlDialect::Postgres);
+        let grouped = group_by(
+            &QueryFilter::default(),
+            GroupBy::Service,
+            10,
+            SqlDialect::Postgres,
+        );
         assert!(grouped
             .sql
-            .contains("GROUP BY service ORDER BY c DESC, k ASC LIMIT $1"));
+            .contains("GROUP BY service ORDER BY c DESC, MIN(id) ASC LIMIT $1"));
         let by_rule = by_rule(MAX_RULE_GROUPS, SqlDialect::Sqlite);
         assert!(by_rule.sql.contains("WHERE rule_id != ''"));
     }
@@ -1028,7 +1098,9 @@ mod tests {
         let mut f = QueryFilter::default();
         f.level = "debug".to_string();
         let chunk = delete_chunk(&f, Some(1000), &[], 500, SqlDialect::Sqlite);
-        assert!(chunk.sql.starts_with("DELETE FROM logs WHERE id IN (SELECT id FROM logs"));
+        assert!(chunk
+            .sql
+            .starts_with("DELETE FROM logs WHERE id IN (SELECT id FROM logs"));
         assert!(chunk.sql.contains("AND ts < ?"));
         assert!(chunk.sql.contains("ORDER BY id LIMIT ?"));
         assert_eq!(placeholders(&chunk), vec!["DEBUG", "1000", "500"]);
@@ -1048,7 +1120,10 @@ mod tests {
             "{}",
             guarded.sql
         );
-        assert_eq!(placeholders(&guarded), vec!["DEBUG", "AUDIT", "1000", "500"]);
+        assert_eq!(
+            placeholders(&guarded),
+            vec!["DEBUG", "AUDIT", "1000", "500"]
+        );
         let all = delete_all(&f, None, &[], SqlDialect::Sqlite);
         assert_eq!(all.sql, "DELETE FROM logs WHERE 1=1 AND level=?");
     }
@@ -1056,9 +1131,7 @@ mod tests {
     #[test]
     fn time_buckets_align_to_the_bucket_width() {
         let plan = time_buckets(&QueryFilter::default(), 3600, 24, SqlDialect::Postgres);
-        assert!(plan
-            .sql
-            .contains("(ts / $1) * $1 AS bucket"));
+        assert!(plan.sql.contains("(ts / $1) * $1 AS bucket"));
         assert_eq!(plan.params[0], Param::Int(3600));
         assert_eq!(plan.params[1], Param::Int(24));
     }
@@ -1067,9 +1140,84 @@ mod tests {
     fn error_aggregates_default_to_failure_levels() {
         let plan = error_aggregates(&QueryFilter::default(), 20, SqlDialect::Sqlite);
         assert!(plan.sql.contains("level IN (?, ?, ?)"));
-        assert!(plan
-            .sql
-            .contains("GROUP BY level, category, message ORDER BY c DESC, last_ts DESC"));
+        // Regression: the group key is the message signature. Severity is an
+        // attribute of the pattern, so it must not partition the group (grouping on
+        // it reported 15 ERROR + 15 WARN of one message as two groups of 15).
+        assert!(
+            plan.sql.contains("PARTITION BY category, message"),
+            "{}",
+            plan.sql
+        );
+        assert!(!plan.sql.contains("GROUP BY level"), "{}", plan.sql);
+        assert_plan_is_bindable(&plan, SqlDialect::Sqlite, "error_aggregates");
+    }
+
+    #[test]
+    fn error_aggregates_collapse_severities_and_bind_every_dialect() {
+        let filters = vec![
+            ("default", QueryFilter::default()),
+            (
+                "levels",
+                QueryFilter {
+                    levels: vec!["ERROR".to_string(), "CRITICAL".to_string()],
+                    ..QueryFilter::default()
+                },
+            ),
+            (
+                "service-tenant",
+                QueryFilter {
+                    service: "core".to_string(),
+                    user_id: 42,
+                    ..QueryFilter::default()
+                },
+            ),
+            (
+                "window-search-correlation",
+                QueryFilter {
+                    since: 1_700_000_000,
+                    until: 1_700_000_500,
+                    search: "repeated failure".to_string(),
+                    correlation_id: "corr-1".to_string(),
+                    ..QueryFilter::default()
+                },
+            ),
+        ];
+        for dialect in [SqlDialect::Sqlite, SqlDialect::Postgres] {
+            for (label, filter) in &filters {
+                let plan = error_aggregates(filter, 20, dialect);
+                assert!(
+                    plan.sql
+                        .contains("COUNT(*) OVER (PARTITION BY category, message)"),
+                    "{label}: one count per message signature expected: {}",
+                    plan.sql
+                );
+                assert!(
+                    plan.sql.contains("WHERE rn = 1"),
+                    "{label}: one row per message signature expected: {}",
+                    plan.sql
+                );
+                assert_plan_is_bindable(&plan, dialect, &format!("error_aggregates {label}"));
+            }
+        }
+        // Levels are inlined when the caller names none, then the limit — the same
+        // order the placeholders appear in the statement text.
+        let sqlite = error_aggregates(&QueryFilter::default(), 20, SqlDialect::Sqlite);
+        assert_eq!(
+            sqlite.params,
+            vec![
+                Param::Text("WARN".to_string()),
+                Param::Text("ERROR".to_string()),
+                Param::Text("CRITICAL".to_string()),
+                Param::Int(20),
+            ]
+        );
+        let postgres = error_aggregates(&QueryFilter::default(), 20, SqlDialect::Postgres);
+        assert!(postgres.sql.contains("LIMIT $4"), "{}", postgres.sql);
+        assert!(
+            postgres.sql.contains("level IN ($1, $2, $3)"),
+            "{}",
+            postgres.sql
+        );
     }
 
     #[test]
@@ -1130,5 +1278,295 @@ mod tests {
         assert!(described.contains("search(16 chars)"));
         assert_eq!(QueryFilter::default().describe(), "all");
         assert!(QueryFilter::default().is_unfiltered());
+    }
+
+    // ----------------------------------------------------------------------- //
+    // Placeholder / parameter budget.
+    //
+    // The failure these pin was a runtime one, not a formatting one: a statement
+    // carried three placeholders but only two values (`Wrong number of parameters
+    // passed to query. Got 2, needed 3`) because one bound placeholder was pasted
+    // into two positions. Both dialects must bind exactly what the text asks for,
+    // and PostgreSQL's `$n` must follow the order the values are bound in.
+    // ----------------------------------------------------------------------- //
+
+    /// Every `$n` the statement uses, in the order the text first uses it.
+    fn postgres_placeholder_order(sql: &str) -> Vec<usize> {
+        let chars: Vec<char> = sql.chars().collect();
+        let mut numbers: Vec<usize> = Vec::new();
+        let mut index = 0;
+        while index < chars.len() {
+            if chars[index] == '$' {
+                let mut end = index + 1;
+                while end < chars.len() && chars[end].is_ascii_digit() {
+                    end += 1;
+                }
+                if end > index + 1 {
+                    let digits: String = chars[index + 1..end].iter().collect();
+                    let number: usize = digits.parse().expect("placeholder number");
+                    if !numbers.contains(&number) {
+                        numbers.push(number);
+                    }
+                    index = end;
+                    continue;
+                }
+            }
+            index += 1;
+        }
+        numbers
+    }
+
+    fn assert_plan_is_bindable(plan: &Plan, dialect: SqlDialect, what: &str) {
+        match dialect {
+            SqlDialect::Postgres => {
+                for number in 1..=plan.params.len() {
+                    let placeholder = format!("${number}");
+                    assert!(
+                        plan.sql.contains(&placeholder),
+                        "{what}: {placeholder} is bound but never used: {}",
+                        plan.sql
+                    );
+                }
+                assert_eq!(
+                    postgres_placeholder_order(&plan.sql),
+                    (1..=plan.params.len()).collect::<Vec<_>>(),
+                    "{what}: $n does not follow the binding order: {}",
+                    plan.sql
+                );
+            }
+            SqlDialect::Sqlite => {
+                let placeholders = plan.sql.matches('?').count();
+                assert_eq!(
+                    placeholders,
+                    plan.params.len(),
+                    "{what}: {placeholders} placeholders but {} bound values: {}",
+                    plan.params.len(),
+                    plan.sql
+                );
+            }
+        }
+    }
+
+    /// One filter per shape the wire contract can produce, including the
+    /// combinations that interleave text and integer parameters.
+    fn filter_matrix() -> Vec<(&'static str, QueryFilter)> {
+        vec![
+            ("unfiltered", QueryFilter::default()),
+            (
+                "levels list",
+                QueryFilter {
+                    levels: vec![
+                        "error".to_string(),
+                        "warn".to_string(),
+                        "critical".to_string(),
+                    ],
+                    ..QueryFilter::default()
+                },
+            ),
+            (
+                "single level",
+                QueryFilter {
+                    level: "debug".to_string(),
+                    ..QueryFilter::default()
+                },
+            ),
+            (
+                "service+category+rule+correlation",
+                QueryFilter {
+                    service: "core".to_string(),
+                    category: "system".to_string(),
+                    rule_id: "rule-1".to_string(),
+                    correlation_id: "corr-1".to_string(),
+                    ..QueryFilter::default()
+                },
+            ),
+            (
+                "tenant",
+                QueryFilter {
+                    user_id: 5_094_837_833,
+                    ..QueryFilter::default()
+                },
+            ),
+            (
+                "since+until",
+                QueryFilter {
+                    since: 1_700_000_000,
+                    until: 1_700_000_999,
+                    ..QueryFilter::default()
+                },
+            ),
+            (
+                "search",
+                QueryFilter {
+                    search: "needle".to_string(),
+                    ..QueryFilter::default()
+                },
+            ),
+            (
+                "everything at once",
+                QueryFilter {
+                    levels: vec!["error".to_string(), "critical".to_string()],
+                    level: "warn".to_string(),
+                    service: "core".to_string(),
+                    category: "system".to_string(),
+                    rule_id: "rule-1".to_string(),
+                    correlation_id: "corr-1".to_string(),
+                    user_id: 42,
+                    since: 1_700_000_000,
+                    until: 1_700_000_999,
+                    search: "needle".to_string(),
+                },
+            ),
+        ]
+    }
+
+    #[test]
+    fn every_statement_is_bindable_for_every_filter_combination() {
+        let sweep = |filter: &QueryFilter| RetentionSweep {
+            filter: filter.clone(),
+            cutoff: Some(1_700_000_000),
+            protected: vec!["audit".to_string()],
+            exclusions: OverrideSet {
+                levels: vec!["debug".to_string()],
+                categories: vec!["security".to_string()],
+                services: vec!["api".to_string()],
+            },
+        };
+        for (name, filter) in filter_matrix() {
+            for dialect in [SqlDialect::Sqlite, SqlDialect::Postgres] {
+                let offset_page = Page::clamped(25, 50, false);
+                let keyset_page = Page::keyset_page(25, true, Some(Keyset::new(1000, 7)));
+                let first_export_page = Page::keyset_page(50, false, None);
+                let scope = StatsScope {
+                    rule_id: filter.rule_id.clone(),
+                    user_id: filter.user_id,
+                };
+                let sweeps = sweep(&filter);
+                let statements: Vec<(&str, Plan)> = vec![
+                    ("select_page", select_page(&filter, &offset_page, dialect)),
+                    (
+                        "select_page/keyset",
+                        select_page(&filter, &keyset_page, dialect),
+                    ),
+                    (
+                        "select_page/first export page",
+                        select_page(&filter, &first_export_page, dialect),
+                    ),
+                    ("count", count(&filter, None, dialect)),
+                    ("count capped", count(&filter, Some(500), dialect)),
+                    ("stats", stats(&scope, dialect)),
+                    (
+                        "group_by",
+                        group_by(&filter, GroupBy::Category, 10, dialect),
+                    ),
+                    ("by_rule", by_rule(MAX_RULE_GROUPS, dialect)),
+                    ("time_buckets", time_buckets(&filter, 3600, 24, dialect)),
+                    ("error_aggregates", error_aggregates(&filter, 20, dialect)),
+                    (
+                        "delete_chunk",
+                        delete_chunk(&filter, Some(1_000), &["audit".to_string()], 500, dialect),
+                    ),
+                    (
+                        "delete_all",
+                        delete_all(&filter, Some(1_000), &["audit".to_string()], dialect),
+                    ),
+                    (
+                        "count_protected_candidates",
+                        count_protected_candidates(
+                            &filter,
+                            Some(1_000),
+                            &["audit".to_string()],
+                            250,
+                            dialect,
+                        ),
+                    ),
+                    (
+                        "retention_delete_chunk",
+                        retention_delete_chunk(&sweeps, 500, dialect),
+                    ),
+                    (
+                        "retention_count_plan",
+                        retention_count_plan(&sweeps, 250, dialect),
+                    ),
+                ];
+                for (what, plan) in statements {
+                    assert_plan_is_bindable(
+                        &plan,
+                        dialect,
+                        &format!("{name} / {what} / {dialect:?}"),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeated_values_are_bound_once_per_placeholder() {
+        // PostgreSQL reuses one `$n`; SQLite must supply one value per `?`, and in
+        // both dialects the order has to follow the statement text — the bucket
+        // width is written in the SELECT list, so it is bound first.
+        let sqlite = time_buckets(&filter(), 10, 100, SqlDialect::Sqlite);
+        assert_eq!(sqlite.sql.matches('?').count(), 7, "{}", sqlite.sql);
+        assert_eq!(
+            placeholders(&sqlite),
+            vec!["10", "10", "ERROR", "WARN", "core", "100", "100"]
+        );
+        assert_plan_is_bindable(&sqlite, SqlDialect::Sqlite, "time_buckets/sqlite");
+
+        let postgres = time_buckets(&filter(), 10, 100, SqlDialect::Postgres);
+        assert!(
+            postgres.sql.contains("SELECT (ts / $1) * $1 AS bucket"),
+            "{}",
+            postgres.sql
+        );
+        assert_eq!(postgres.params.len(), 6);
+        assert_plan_is_bindable(&postgres, SqlDialect::Postgres, "time_buckets/postgres");
+    }
+
+    #[test]
+    fn select_page_always_binds_limit_and_offset_unless_seeking_by_keyset() {
+        let plan = select_page(
+            &QueryFilter::default(),
+            &Page::default(),
+            SqlDialect::Postgres,
+        );
+        assert!(plan.sql.ends_with("LIMIT $1 OFFSET $2"), "{}", plan.sql);
+        assert_eq!(plan.params, vec![Param::Int(100), Param::Int(0)]);
+        let plan = select_page(
+            &QueryFilter::default(),
+            &Page::clamped(25, 50, false),
+            SqlDialect::Sqlite,
+        );
+        assert!(plan.sql.ends_with("LIMIT ? OFFSET ?"), "{}", plan.sql);
+        assert_eq!(plan.params, vec![Param::Int(25), Param::Int(50)]);
+        // A keyset seek replaces the offset entirely.
+        let keyset = select_page(
+            &QueryFilter::default(),
+            &Page::keyset_page(10, false, Some(Keyset::new(5, 1))),
+            SqlDialect::Postgres,
+        );
+        assert!(!keyset.sql.contains("OFFSET"), "{}", keyset.sql);
+        assert!(keyset.sql.ends_with("LIMIT $4"), "{}", keyset.sql);
+        assert_plan_is_bindable(&keyset, SqlDialect::Postgres, "keyset page");
+    }
+
+    #[test]
+    fn group_ties_break_on_the_first_row_not_on_the_planner() {
+        for dialect in [SqlDialect::Sqlite, SqlDialect::Postgres] {
+            let grouped = group_by(&QueryFilter::default(), GroupBy::Service, 10, dialect);
+            assert!(
+                grouped.sql.contains("ORDER BY c DESC, MIN(id) ASC LIMIT"),
+                "{:?}: {}",
+                dialect,
+                grouped.sql
+            );
+            let rules = by_rule(MAX_RULE_GROUPS, dialect);
+            assert!(
+                rules.sql.contains("ORDER BY c DESC, MIN(id) ASC LIMIT"),
+                "{:?}: {}",
+                dialect,
+                rules.sql
+            );
+        }
     }
 }

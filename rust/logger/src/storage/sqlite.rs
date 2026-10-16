@@ -92,7 +92,10 @@ pub const MIGRATION_COLUMNS: [(&str, &str); 3] = [
 
 /// The Python engine's index set, same names, same columns.
 pub const INDEXES: [(&str, &str); 7] = [
-    ("idx_logs_ts", "CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts)"),
+    (
+        "idx_logs_ts",
+        "CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts)",
+    ),
     (
         "idx_logs_level",
         "CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level)",
@@ -176,7 +179,10 @@ impl SqliteStorage {
             max_rows_per_statement: backend.max_rows_per_statement.max(1),
             metrics,
         };
-        storage.metrics.storage_pool_capacity.set(storage.readers.len() as i64 + 1);
+        storage
+            .metrics
+            .storage_pool_capacity
+            .set(storage.readers.len() as i64 + 1);
         // Prove the archive is usable before the service advertises readiness.
         storage.probe()?;
         Ok(storage)
@@ -244,16 +250,18 @@ impl SqliteStorage {
     }
 }
 
-fn open_connection(path: &str, busy_timeout_ms: u64, is_writer: bool) -> Result<Connection, StorageError> {
+fn open_connection(
+    path: &str,
+    busy_timeout_ms: u64,
+    is_writer: bool,
+) -> Result<Connection, StorageError> {
     let conn = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_WRITE
             | OpenFlags::SQLITE_OPEN_CREATE
             | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(|err| {
-        StorageError::Config(format!("cannot open SQLite archive {path}: {err}"))
-    })?;
+    .map_err(|err| StorageError::Config(format!("cannot open SQLite archive {path}: {err}")))?;
     // `busy_timeout` first: every later statement depends on it. SQLite's default
     // is 0, which turns ordinary write contention into an immediate failure.
     conn.busy_timeout(std::time::Duration::from_millis(busy_timeout_ms))
@@ -346,7 +354,9 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<Record> {
         ts: row.get("ts")?,
         level: row.get::<_, Option<String>>("level")?.unwrap_or_default(),
         service: row.get::<_, Option<String>>("service")?.unwrap_or_default(),
-        category: row.get::<_, Option<String>>("category")?.unwrap_or_default(),
+        category: row
+            .get::<_, Option<String>>("category")?
+            .unwrap_or_default(),
         message: row.get::<_, Option<String>>("message")?.unwrap_or_default(),
         detail: row.get::<_, Option<String>>("detail")?.unwrap_or_default(),
         rule_id: row.get::<_, Option<String>>("rule_id")?.unwrap_or_default(),
@@ -583,7 +593,8 @@ impl Storage for SqliteStorage {
                 // chooses which rows to delete: an audit row cannot be removed by a
                 // broad retention rule, only by an explicit purge that names its
                 // category.
-                let plan = query::delete_chunk(&scoped, cutoff, &protected, take, SqlDialect::Sqlite);
+                let plan =
+                    query::delete_chunk(&scoped, cutoff, &protected, take, SqlDialect::Sqlite);
                 let mut statement = transaction
                     .prepare(&plan.sql)
                     .map_err(|err| map_error(err, "prepare purge chunk"))?;
@@ -795,7 +806,11 @@ mod tests {
             self.storage_with(2, 500)
         }
 
-        fn storage_with(&self, readers: usize, rows_per_statement: usize) -> (Arc<SqliteStorage>, Arc<Metrics>) {
+        fn storage_with(
+            &self,
+            readers: usize,
+            rows_per_statement: usize,
+        ) -> (Arc<SqliteStorage>, Arc<Metrics>) {
             let mut cfg = Config::default();
             cfg.read_pool_size = readers;
             let backend = BackendConfig {
@@ -810,7 +825,8 @@ mod tests {
                 max_rows_per_statement: rows_per_statement,
             };
             let metrics = Arc::new(Metrics::new());
-            let storage = Arc::new(SqliteStorage::open(&cfg, &backend, Arc::clone(&metrics)).unwrap());
+            let storage =
+                Arc::new(SqliteStorage::open(&cfg, &backend, Arc::clone(&metrics)).unwrap());
             (storage, metrics)
         }
 
@@ -843,8 +859,16 @@ mod tests {
         assert_eq!(
             columns,
             vec![
-                "id", "ts", "level", "service", "category", "message", "detail", "rule_id",
-                "user_id", "correlation_id"
+                "id",
+                "ts",
+                "level",
+                "service",
+                "category",
+                "message",
+                "detail",
+                "rule_id",
+                "user_id",
+                "correlation_id"
             ]
         );
         let journal: String = conn
@@ -863,7 +887,10 @@ mod tests {
             rows
         };
         for (name, _) in INDEXES {
-            assert!(indexes.contains(&name.to_string()), "missing index {name}: {indexes:?}");
+            assert!(
+                indexes.contains(&name.to_string()),
+                "missing index {name}: {indexes:?}"
+            );
         }
         assert!(storage.describe().contains("sqlite"));
     }
@@ -903,7 +930,9 @@ mod tests {
         // The Rust engine adopts it in place: no rebuild, no data loss, no duplicate
         // index, and the pre-canonicalisation level stays readable.
         let (storage, _metrics) = archive.storage();
-        let (rows, total) = storage.query(&QueryFilter::default(), &Page::default()).unwrap();
+        let (rows, total) = storage
+            .query(&QueryFilter::default(), &Page::default())
+            .unwrap();
         assert_eq!(total, 1);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].level, "WARNING");
@@ -943,7 +972,11 @@ mod tests {
         let written = storage.insert_batch(&batch).unwrap();
         assert_eq!(written, 10);
         assert_eq!(storage.table_rows().unwrap(), 10);
-        assert_eq!(metrics.events_persisted.get(), 0, "storage must not count events");
+        assert_eq!(
+            metrics.events_persisted.get(),
+            0,
+            "storage must not count events"
+        );
         assert_eq!(metrics.storage_write_seconds.count(), 1);
         // Ids are assigned by the database and are increasing.
         let (rows, _) = storage
@@ -964,8 +997,16 @@ mod tests {
         let (storage, _metrics) = archive.storage();
         let mut batch = Vec::new();
         for index in 0..25 {
-            let mut row = record(1_700_000_000 + index, if index % 5 == 0 { "ERROR" } else { "INFO" }, &format!("event {index}"));
-            row.category = if index % 2 == 0 { "system".to_string() } else { "forward".to_string() };
+            let mut row = record(
+                1_700_000_000 + index,
+                if index % 5 == 0 { "ERROR" } else { "INFO" },
+                &format!("event {index}"),
+            );
+            row.category = if index % 2 == 0 {
+                "system".to_string()
+            } else {
+                "forward".to_string()
+            };
             row.detail = format!("{{\"seq\":{index},\"correlation_id\":\"corr-{index}\"}}");
             row.correlation_id = format!("corr-{index}");
             batch.push(row);
@@ -973,7 +1014,9 @@ mod tests {
         storage.insert_batch(&batch).unwrap();
 
         // Newest first, with the exact total.
-        let (rows, total) = storage.query(&QueryFilter::default(), &Page::default()).unwrap();
+        let (rows, total) = storage
+            .query(&QueryFilter::default(), &Page::default())
+            .unwrap();
         assert_eq!(total, 25);
         assert_eq!(rows.len(), 25);
         assert!(rows[0].ts > rows[1].ts);
@@ -1041,7 +1084,9 @@ mod tests {
             )
             .unwrap();
         assert_eq!(next.len(), 5);
-        assert!(next.iter().all(|row| (row.ts, row.id) < (cursor.ts, cursor.id)));
+        assert!(next
+            .iter()
+            .all(|row| (row.ts, row.id) < (cursor.ts, cursor.id)));
 
         // Time range.
         let filter = QueryFilter {
@@ -1065,7 +1110,10 @@ mod tests {
         assert_eq!(storage.query(&filter, &Page::default()).unwrap().1, 0);
 
         // Bounded observation count.
-        assert_eq!(storage.count(&QueryFilter::default(), Some(10)).unwrap(), 10);
+        assert_eq!(
+            storage.count(&QueryFilter::default(), Some(10)).unwrap(),
+            10
+        );
         assert_eq!(storage.count(&QueryFilter::default(), None).unwrap(), 25);
     }
 
@@ -1075,9 +1123,21 @@ mod tests {
         let (storage, _metrics) = archive.storage();
         let mut batch = Vec::new();
         for index in 0..12 {
-            let mut row = record(1_700_000_100 + index, if index % 3 == 0 { "ERROR" } else { "INFO" }, "m");
-            row.service = if index % 2 == 0 { "core".to_string() } else { "api".to_string() };
-            row.rule_id = if index < 6 { "rule-a".to_string() } else { String::new() };
+            let mut row = record(
+                1_700_000_100 + index,
+                if index % 3 == 0 { "ERROR" } else { "INFO" },
+                "m",
+            );
+            row.service = if index % 2 == 0 {
+                "core".to_string()
+            } else {
+                "api".to_string()
+            };
+            row.rule_id = if index < 6 {
+                "rule-a".to_string()
+            } else {
+                String::new()
+            };
             row.user_id = if index < 4 { 1 } else { 2 };
             batch.push(row);
         }
@@ -1131,6 +1191,59 @@ mod tests {
         assert!(!buckets.is_empty());
         let summed: i64 = buckets.iter().map(|b| b.count).sum();
         assert_eq!(summed, 12);
+    }
+
+    #[test]
+    fn recurring_errors_collapse_across_severities() {
+        // Regression: identical messages that differ only in severity are ONE
+        // recurring failure. Grouping the aggregate by level reported the fixture
+        // below as two groups of 3, each half the real count, with the older row's
+        // level attached to the newer occurrences.
+        let archive = TempArchive::new();
+        let (storage, _metrics) = archive.storage();
+        let mut batch = Vec::new();
+        for index in 0..6 {
+            let mut row = record(
+                1_700_000_000 + index,
+                if index < 3 { "ERROR" } else { "WARN" },
+                "flaky publish",
+            );
+            row.category = "publish".to_string();
+            batch.push(row);
+        }
+        // Same message, different category: a different signature, so its own group
+        // (the aggregate reports the category, it cannot report an arbitrary one).
+        let mut other_category = record(1_700_000_100, "ERROR", "flaky publish");
+        other_category.category = "billing".to_string();
+        batch.push(other_category);
+        // A different message in the same category is a different failure too.
+        let mut other_message = record(1_700_000_200, "ERROR", "timeout");
+        other_message.category = "publish".to_string();
+        batch.push(other_message);
+        storage.insert_batch(&batch).unwrap();
+
+        let aggregates = storage
+            .error_aggregates(&QueryFilter::default(), 10)
+            .unwrap();
+        assert_eq!(aggregates.len(), 3, "{aggregates:?}");
+
+        let flaky = aggregates
+            .iter()
+            .find(|agg| agg.category == "publish" && agg.message == "flaky publish")
+            .unwrap_or_else(|| panic!("missing publish/flaky publish: {aggregates:?}"));
+        assert_eq!(flaky.count, 6, "all six occurrences, both severities");
+        assert_eq!(flaky.last_ts, 1_700_000_005);
+        assert_eq!(
+            flaky.level, "WARN",
+            "the newest occurrence's level, i.e. the row last_ts points at"
+        );
+        assert_eq!(
+            aggregates
+                .iter()
+                .find(|agg| agg.category == "billing")
+                .map(|agg| (agg.message.as_str(), agg.count)),
+            Some(("flaky publish", 1))
+        );
     }
 
     #[test]
@@ -1224,7 +1337,9 @@ mod tests {
             std::thread::spawn(move || {
                 let mut reads = 0u64;
                 while !stop.load(Ordering::Relaxed) {
-                    let _ = reader.query(&QueryFilter::default(), &Page::default()).unwrap();
+                    let _ = reader
+                        .query(&QueryFilter::default(), &Page::default())
+                        .unwrap();
                     reads += 1;
                 }
                 reads
@@ -1240,5 +1355,228 @@ mod tests {
         let reads = read_thread.join().unwrap();
         assert!(reads > 0);
         assert_eq!(storage.table_rows().unwrap(), 400);
+    }
+
+    #[test]
+    fn every_statement_executes_for_every_filter_combination() {
+        // Regression for the parameter/placeholder mismatch: `time_buckets` emitted
+        // the bucket width as one bound value in two `?` positions, so SQLite
+        // refused the statement with `Wrong number of parameters passed to query.
+        // Got 2, needed 3` before it ever reached the archive. Every read this
+        // engine can build must execute for every filter shape, and the filtered
+        // aggregates must still add up.
+        let archive = TempArchive::new();
+        let (storage, _metrics) = archive.storage();
+        let mut batch = Vec::new();
+        for index in 0..20 {
+            let mut row = record(
+                1_700_000_000 + index * 600,
+                if index % 4 == 0 { "ERROR" } else { "INFO" },
+                "m",
+            );
+            row.service = if index % 2 == 0 {
+                "core".to_string()
+            } else {
+                "api".to_string()
+            };
+            row.user_id = (index % 3) as i64;
+            row.correlation_id = format!("corr-{index}");
+            batch.push(row);
+        }
+        storage.insert_batch(&batch).unwrap();
+
+        let mut filters = vec![
+            QueryFilter::default(),
+            QueryFilter {
+                levels: vec!["error".to_string(), "warn".to_string()],
+                level: "info".to_string(),
+                ..QueryFilter::default()
+            },
+            QueryFilter {
+                level: "error".to_string(),
+                ..QueryFilter::default()
+            },
+            QueryFilter {
+                service: "core".to_string(),
+                category: "system".to_string(),
+                ..QueryFilter::default()
+            },
+            QueryFilter {
+                rule_id: "rule-1".to_string(),
+                correlation_id: "corr-3".to_string(),
+                ..QueryFilter::default()
+            },
+            QueryFilter {
+                user_id: 2,
+                ..QueryFilter::default()
+            },
+            QueryFilter {
+                since: 1_700_000_600,
+                until: 1_700_005_000,
+                ..QueryFilter::default()
+            },
+            QueryFilter {
+                search: "corr-1".to_string(),
+                ..QueryFilter::default()
+            },
+        ];
+        filters.push(QueryFilter {
+            levels: vec!["error".to_string(), "critical".to_string()],
+            level: "warn".to_string(),
+            service: "core".to_string(),
+            category: "system".to_string(),
+            rule_id: "rule-1".to_string(),
+            correlation_id: "corr-4".to_string(),
+            user_id: 1,
+            since: 1_000,
+            until: 9_999_999_999,
+            search: "m".to_string(),
+        });
+
+        for filter in filters {
+            let label = filter.describe();
+            storage
+                .query(&filter, &Page::clamped(25, 5, false))
+                .unwrap_or_else(|err| panic!("query [{label}]: {err:?}"));
+            storage
+                .query(
+                    &filter,
+                    &Page::keyset_page(5, true, Some(Keyset::new(1_700_005_000, 3))),
+                )
+                .unwrap_or_else(|err| panic!("query/keyset [{label}]: {err:?}"));
+            storage
+                .count(&filter, Some(5))
+                .unwrap_or_else(|err| panic!("count [{label}]: {err:?}"));
+            storage
+                .count(&filter, None)
+                .unwrap_or_else(|err| panic!("count uncapped [{label}]: {err:?}"));
+            let stats = storage
+                .stats(&StatsScope {
+                    rule_id: filter.rule_id.clone(),
+                    user_id: filter.user_id,
+                })
+                .unwrap_or_else(|err| panic!("stats [{label}]: {err:?}"));
+            assert!(stats.total >= 0);
+            storage
+                .top_groups(&filter, GroupBy::Service, 10)
+                .unwrap_or_else(|err| panic!("top_groups [{label}]: {err:?}"));
+            let buckets = storage
+                .time_buckets(&filter, 600, 64)
+                .unwrap_or_else(|err| panic!("time_buckets [{label}]: {err:?}"));
+            let bucketed: i64 = buckets.iter().map(|b| b.count).sum();
+            assert_eq!(
+                bucketed,
+                storage.count(&filter, None).unwrap(),
+                "buckets must cover every match [{label}]"
+            );
+            storage
+                .error_aggregates(&filter, 10)
+                .unwrap_or_else(|err| panic!("error_aggregates [{label}]: {err:?}"));
+            storage
+                .export_chunk(&filter, &Page::keyset_page(5, false, None))
+                .unwrap_or_else(|err| panic!("export_chunk [{label}]: {err:?}"));
+        }
+
+        // The two statements that carry the protected-category guard, the exclusion
+        // set and the cutoff all run without touching a row here.
+        let report = storage
+            .purge(
+                &PurgeFilter {
+                    level: "debug".to_string(),
+                    older_than_hours: 1,
+                    protect_categories: vec!["audit".to_string()],
+                    now: 1_700_000_000,
+                    ..PurgeFilter::default()
+                },
+                3,
+                10,
+            )
+            .unwrap();
+        assert_eq!(report.purged, 0);
+        assert_eq!(report.remaining, 20);
+        let sweep = query::RetentionSweep {
+            filter: QueryFilter {
+                level: "trace".to_string(),
+                ..QueryFilter::default()
+            },
+            cutoff: Some(-1),
+            protected: vec!["audit".to_string(), "security".to_string()],
+            exclusions: query::OverrideSet {
+                levels: vec!["debug".to_string()],
+                categories: vec!["security".to_string()],
+                services: vec!["api".to_string()],
+            },
+        };
+        let report = storage.retention_purge(&sweep, 4, 20).unwrap();
+        assert_eq!(report.purged, 0);
+        assert_eq!(report.remaining, 20);
+    }
+
+    #[test]
+    fn group_listings_break_ties_on_the_first_row_not_on_the_planner() {
+        // `core` and `api` hold six rows each in this fixture. Ordering by volume
+        // alone would leave the tie to the query planner — SQLite answers
+        // `GROUP BY service` through `idx_logs_service`, i.e. alphabetically — so
+        // the listing has an explicit, plan-independent tie-break: the group whose
+        // first row entered the archive first wins.
+        let archive = TempArchive::new();
+        let (storage, _metrics) = archive.storage();
+        let mut batch = Vec::new();
+        for index in 0..12 {
+            let mut row = record(
+                1_700_000_100 + index,
+                if index % 3 == 0 { "ERROR" } else { "INFO" },
+                "m",
+            );
+            row.service = if index % 2 == 0 {
+                "core".to_string()
+            } else {
+                "api".to_string()
+            };
+            row.rule_id = if index < 6 {
+                "rule-a".to_string()
+            } else {
+                String::new()
+            };
+            row.user_id = if index < 4 { 1 } else { 2 };
+            batch.push(row);
+        }
+        storage.insert_batch(&batch).unwrap();
+
+        let expected = vec![("core".to_string(), 6), ("api".to_string(), 6)];
+        for round in 0..3 {
+            let top = storage
+                .top_groups(&QueryFilter::default(), GroupBy::Service, 10)
+                .unwrap();
+            assert_eq!(top, expected, "round {round}: the tie order must be stable");
+        }
+        // A filtered listing keeps the same rule and the same counts. Tenant 1 owns
+        // the first four rows — two `core`, two `api` — so this is a tie again and
+        // `core` still wins it.
+        let top = storage
+            .top_groups(
+                &QueryFilter {
+                    user_id: 1,
+                    ..QueryFilter::default()
+                },
+                GroupBy::Service,
+                10,
+            )
+            .unwrap();
+        assert_eq!(
+            top,
+            vec![("core".to_string(), 2), ("api".to_string(), 2)],
+            "only the first four rows belong to tenant 1"
+        );
+        // `by_rule` is whole-archive, exactly like the Python engine, and it is not
+        // truncated by the scoped slice.
+        let stats = storage
+            .stats(&StatsScope {
+                rule_id: String::new(),
+                user_id: 1,
+            })
+            .unwrap();
+        assert_eq!(stats.total, 4);
+        assert_eq!(stats.by_rule.get("rule-a"), Some(&6));
     }
 }
