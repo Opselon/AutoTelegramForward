@@ -27,6 +27,7 @@ const (
 	SessionControlService_RestoreSession_FullMethodName   = "/autoforward.SessionControlService/RestoreSession"
 	SessionControlService_TerminateSession_FullMethodName = "/autoforward.SessionControlService/TerminateSession"
 	SessionControlService_ResolveChat_FullMethodName      = "/autoforward.SessionControlService/ResolveChat"
+	SessionControlService_ListChats_FullMethodName        = "/autoforward.SessionControlService/ListChats"
 )
 
 // SessionControlServiceClient is the client API for SessionControlService service.
@@ -41,6 +42,8 @@ type SessionControlServiceClient interface {
 	RestoreSession(ctx context.Context, in *RestoreSessionRequest, opts ...grpc.CallOption) (*RestoreSessionResponse, error)
 	TerminateSession(ctx context.Context, in *TerminateSessionRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 	ResolveChat(ctx context.Context, in *ResolveChatRequest, opts ...grpc.CallOption) (*ResolveChatResponse, error)
+	// ListChats browses the caller's own session dialogs (channels/groups/chats).
+	ListChats(ctx context.Context, in *ListChatsRequest, opts ...grpc.CallOption) (*ListChatsResponse, error)
 }
 
 type sessionControlServiceClient struct {
@@ -131,6 +134,16 @@ func (c *sessionControlServiceClient) ResolveChat(ctx context.Context, in *Resol
 	return out, nil
 }
 
+func (c *sessionControlServiceClient) ListChats(ctx context.Context, in *ListChatsRequest, opts ...grpc.CallOption) (*ListChatsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListChatsResponse)
+	err := c.cc.Invoke(ctx, SessionControlService_ListChats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SessionControlServiceServer is the server API for SessionControlService service.
 // All implementations must embed UnimplementedSessionControlServiceServer
 // for forward compatibility.
@@ -143,6 +156,8 @@ type SessionControlServiceServer interface {
 	RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error)
 	TerminateSession(context.Context, *TerminateSessionRequest) (*StatusResponse, error)
 	ResolveChat(context.Context, *ResolveChatRequest) (*ResolveChatResponse, error)
+	// ListChats browses the caller's own session dialogs (channels/groups/chats).
+	ListChats(context.Context, *ListChatsRequest) (*ListChatsResponse, error)
 	mustEmbedUnimplementedSessionControlServiceServer()
 }
 
@@ -176,6 +191,9 @@ func (UnimplementedSessionControlServiceServer) TerminateSession(context.Context
 }
 func (UnimplementedSessionControlServiceServer) ResolveChat(context.Context, *ResolveChatRequest) (*ResolveChatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveChat not implemented")
+}
+func (UnimplementedSessionControlServiceServer) ListChats(context.Context, *ListChatsRequest) (*ListChatsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListChats not implemented")
 }
 func (UnimplementedSessionControlServiceServer) mustEmbedUnimplementedSessionControlServiceServer() {}
 func (UnimplementedSessionControlServiceServer) testEmbeddedByValue()                               {}
@@ -342,6 +360,24 @@ func _SessionControlService_ResolveChat_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SessionControlService_ListChats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListChatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionControlServiceServer).ListChats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionControlService_ListChats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionControlServiceServer).ListChats(ctx, req.(*ListChatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SessionControlService_ServiceDesc is the grpc.ServiceDesc for SessionControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -380,6 +416,10 @@ var SessionControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveChat",
 			Handler:    _SessionControlService_ResolveChat_Handler,
+		},
+		{
+			MethodName: "ListChats",
+			Handler:    _SessionControlService_ListChats_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

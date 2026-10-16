@@ -242,6 +242,37 @@ message ResolveChatResponse {
   string error = 6;        // human-readable failure reason when not found
 }
 
+// ListChats is the browse counterpart to ResolveChat: instead of turning one
+// handle into an id, it returns the dialogs a session can actually see, so the
+// mobile source/target pickers can be populated without the user typing ids.
+// owner_user_id is the authenticated tenant resolved from the JWT by the Go
+// API — a client-supplied owner is never trusted. query/limit/offset page the
+// fetched dialog snapshot server-side.
+message ListChatsRequest {
+  string session_id = 1;
+  int64 owner_user_id = 2;  // scope the session to this account (0 = refuse)
+  string query = 3;         // case-insensitive substring on title/username ("" = all)
+  int32 limit = 4;          // page size, clamped by the API to 1..200
+  int32 offset = 5;         // rows to skip into the matching snapshot
+}
+
+message ChatSummary {
+  string chat_id = 1;    // canonical numeric id (string-formatted)
+  string title = 2;      // chat display name
+  string username = 3;   // public @username (empty for private chats)
+  string chat_type = 4;  // channel | supergroup | group | private | bot (lowercase)
+  int64 members = 5;     // participant count when the peer exposes it (0 = unknown)
+  bool is_forum = 6;     // forum-enabled supergroup (topic-based)
+}
+
+message ListChatsResponse {
+  string session_id = 1;
+  repeated ChatSummary chats = 2;  // the requested page
+  int32 count = 3;                 // chats in THIS page (== len(chats))
+  int32 total = 4;                 // matching chats in the snapshot before paging
+  bool truncated = 5;              // the dialog snapshot hit the fetch cap
+}
+
 message UpdateRuleRequest {
   ForwardRule rule = 1;
   // Optional. When non-empty, ONLY the named ForwardRule fields are applied.
@@ -691,6 +722,8 @@ service SessionControlService {
   rpc RestoreSession(RestoreSessionRequest) returns (RestoreSessionResponse);
   rpc TerminateSession(TerminateSessionRequest) returns (StatusResponse);
   rpc ResolveChat(ResolveChatRequest) returns (ResolveChatResponse);
+  // ListChats browses the caller's own session dialogs (channels/groups/chats).
+  rpc ListChats(ListChatsRequest) returns (ListChatsResponse);
 }
 
 service ForwardRuleControlService {

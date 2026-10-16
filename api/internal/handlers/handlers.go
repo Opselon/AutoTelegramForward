@@ -138,6 +138,107 @@ func (h *Handlers) TerminateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// defaultChatLimit is the page size used when the client omits ?limit, matching
+// the mobile contract so both sides agree without a round-trip to negotiate it.
+const defaultChatLimit = 100
+
+// ListChats browses the dialogs (channels, groups, private chats) of one of the
+// caller's own sessions — the source/target picker feed for the mobile client.
+//
+// The tenant scope is derived ONLY from the verified JWT identity: owner_user_id
+// is copied from identity(r), never read from the query string or body, so a
+// caller cannot enumerate another account's chats by editing the URL. The
+// session id is the sole client input, and the core re-checks that the session
+// belongs to that owner before it touches a Telegram client.
+func (h *Handlers) ListChats(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+
+	id := identity(r)
+	if id == nil || id.UserID <= 0 {
+		// Reached only when the route is mounted without the auth middleware;
+		// an unlinked account (id 0) must never fall through to a core call.
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "authentication required", "code": "unauthenticated",
+		})
+		return
+	}
+
+	sessionID := strings.TrimSpace(r.PathValue("sessionId"))
+	if sessionID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "session id is required", "code": "session_id_required",
+		})
+		return
+	}
+
+	q := r.URL.Query()
+	// Absent limit => the documented default. A supplied value is clamped into
+	// 1..200 so a client cannot ask for a zero-row page or drain the whole
+	// snapshot in one reply; a non-numeric value is a client error, not a
+	// silent fallback that would hide a broken caller.
+	limit := defaultChatLimit
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "limit must be an integer", "code": "invalid_limit",
+			})
+			return
+		}
+		limit = v
+		if limit < 1 {
+			limit = 1
+		}
+		if limit > 200 {
+			limit = 200
+		}
+	}
+	offset := 0
+	if raw := strings.TrimSpace(q.Get("offset")); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "offset must be an integer", "code": "invalid_offset",
+			})
+			return
+		}
+		offset = v
+		if offset < 0 {
+			offset = 0
+		}
+	}
+
+	if h.c.Sessions == nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "core service unavailable"})
+		return
+	}
+	resp, err := h.c.Sessions.ListChats(ctx, &pb.ListChatsRequest{
+		SessionId:   sessionID,
+		OwnerUserId: id.UserID,
+		Query:       q.Get("query"),
+		Limit:       int32(limit),
+		Offset:      int32(offset),
+	})
+	if err != nil {
+		chatListError(w, err)
+		return
+	}
+	chats := resp.Chats
+	if chats == nil {
+		// JSON null would make the mobile list parser choke; an empty array is
+		// "no matching chats", which is a valid, expected answer.
+		chats = []*pb.ChatSummary{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"session_id": resp.SessionId,
+		"chats":      chats,
+		"count":      resp.Count,
+		"total":      resp.Total,
+		"truncated":  resp.Truncated,
+	})
+}
+
 // ----------------------------------------------------------------- rules
 func (h *Handlers) ListRules(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
@@ -2696,6 +2797,32 @@ func grpcError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": st.Message(), "code": code})
 	default:
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": st.Message()})
+	}
+}
+
+// chatListError maps the core's ListChats failures onto the mobile contract.
+// It exists because the chat-list error vocabulary is richer than the shared
+// grpcError table allows: a session that exists but has no live Telegram client
+// is a 503 (the core signals FAILED_PRECONDITION), which grpcError would fold
+// into a 500. Unknown/foreign sessions keep the standard 404, and everything
+// else (core unreachable => 502, internal => 500) falls back to grpcError.
+func chatListError(w http.ResponseWriter, err error) {
+	st, _ := status.FromError(err)
+	switch st.Code() {
+	case codes.FailedPrecondition:
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": st.Message(), "code": "session_not_connected",
+		})
+	case codes.Unauthenticated:
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": st.Message(), "code": "unauthenticated",
+		})
+	case codes.NotFound:
+		writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": st.Message(), "code": "session_not_found",
+		})
+	default:
+		grpcError(w, err)
 	}
 }
 

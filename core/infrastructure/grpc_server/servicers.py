@@ -527,6 +527,106 @@ def _ai_pb(c, mask_key: bool = True) -> pb.AIConfig:
     )
 
 
+# --------------------------------------------------------------------------- #
+# Chat listing (ListChats)
+#
+# The dialog snapshot is bounded on purpose: one request against an account in
+# thousands of chats must not allocate an unbounded list or pin a gRPC worker
+# for the whole fetch. Telegram returns dialogs newest-first, which is the order
+# a picker wants anyway, and `truncated` flags when the cap was hit so the
+# client knows there is more.
+# --------------------------------------------------------------------------- #
+_CHAT_LIST_MAX_DIALOGS = 1000
+
+# Page size used when the caller supplies no limit. A proto3 scalar cannot
+# distinguish "unset" from 0, so the core must treat 0 as "unset" and fall back
+# to this default — faulting 0 to a single row would silently look like an
+# account that owns exactly one chat.
+_DEFAULT_CHAT_LIMIT = 100
+
+
+def _chat_type_of(chat) -> str:
+    """Normalise a chat kind to the lowercase wire vocabulary.
+
+    pyrogram reports the kind either as an enum member (``ChatType.SUPERGROUP``)
+    or, on lighter previews, a plain string; both collapse to one stable value
+    (``supergroup``) so the mobile client can branch on a single set.
+    """
+    raw = getattr(chat, "type", None)
+    if raw is None:
+        return type(chat).__name__.lower()
+    return str(getattr(raw, "value", raw)).lower()
+
+
+def _chat_members(chat) -> int:
+    """Participant count when the peer exposes it, else 0 (unknown, not an error).
+
+    Telegram omits the count for private chats and small groups on the dialog
+    preview, so a missing value must not fail the row — it is advisory only.
+    """
+    for attr in ("members_count", "participants_count"):
+        val = getattr(chat, attr, None)
+        if val:
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                continue
+    return 0
+
+
+def _chat_summary_from_dialog(dialog) -> "pb.ChatSummary":
+    """Map one dialog to a ChatSummary, raising so the caller can skip the row.
+
+    ``dialog.chat`` is accessed directly rather than with a default: a malformed
+    dialog then raises here, where the caller logs the count and continues,
+    instead of silently emitting an empty entry the UI cannot act on.
+    """
+    chat = dialog.chat
+    username = getattr(chat, "username", "") or ""
+    title = (
+        getattr(chat, "title", "")
+        or getattr(chat, "first_name", "")
+        or username
+        or str(getattr(chat, "id", ""))
+    )
+    return pb.ChatSummary(
+        chat_id=str(chat.id),
+        title=str(title),
+        username=username,
+        chat_type=_chat_type_of(chat),
+        members=_chat_members(chat),
+        is_forum=bool(getattr(chat, "is_forum", False)),
+    )
+
+
+def _chat_matches_query(summary, query: str) -> bool:
+    """Case-insensitive substring match on the title or the @username."""
+    if not query:
+        return True
+    needle = query.lower()
+    return (
+        needle in (summary.title or "").lower()
+        or needle in (summary.username or "").lower()
+    )
+
+
+def _clamp_chat_limit(value) -> int:
+    """Resolve the requested page size into the documented 1..200 window.
+
+    A positive value is clamped so a direct gRPC caller cannot drain the whole
+    snapshot in one reply. A zero/absent value (which proto3 cannot tell apart)
+    takes the default page size rather than faulting to one row, so an omitted
+    limit behaves the same here as it does at the API boundary.
+    """
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return _DEFAULT_CHAT_LIMIT
+    if n <= 0:
+        return _DEFAULT_CHAT_LIMIT
+    return min(200, n)
+
+
 class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
     def __init__(self, sessions, pool) -> None:
         self._sessions = sessions
@@ -667,6 +767,107 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
             title=str(title),
             username=username,
             chat_type=chat_type,
+        )
+
+    async def ListChats(self, request, context):
+        """List the live dialogs (channels/groups/chats) of one owned session.
+
+        This is the browse surface behind the mobile source/target pickers, so
+        the tenant boundary and the Telegram client are resolved here rather
+        than trusted from the caller. Every decision fails closed:
+          * no owner  -> the request is unauthenticated (the API always copies
+            the owner from the verified JWT, so 0 only reaches the core from a
+            direct, unauthenticated gRPC caller);
+          * unknown OR foreign session -> an identical NOT_FOUND, so the reply
+            cannot be used to probe for another tenant's session ids;
+          * no live client -> FAILED_PRECONDITION, not an empty list: an empty
+            page would be indistinguishable from "this account really has no
+            chats" and would silently break the picker.
+        A read path must not spawn a Telegram client as a side effect, so a
+        disconnected session is reported, never reconnected here.
+        """
+        owner = int(request.owner_user_id or 0)
+        session_id = (request.session_id or "").strip()
+        query = (request.query or "").strip()
+        limit = _clamp_chat_limit(request.limit)
+        offset = max(int(request.offset or 0), 0)
+
+        if not owner:
+            logger.warning("[PIPELINE:CHAT_LIST:ERROR] refused: owner_user_id missing")
+            await context.abort(grpc.StatusCode.UNAUTHENTICATED, "owner_user_id is required")
+            return pb.ListChatsResponse()
+        if not session_id:
+            logger.warning("[PIPELINE:CHAT_LIST:ERROR] refused: session_id missing owner=%s", owner)
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "session_id is required")
+            return pb.ListChatsResponse()
+
+        session = await self._sessions.get_owned(session_id, owner)
+        if session is None:
+            # Foreign and missing answer identically on purpose (see docstring).
+            logger.warning(
+                "[PIPELINE:CHAT_LIST:ERROR] session lookup denied owner=%s", owner,
+            )
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details("session_not_found")
+            return pb.ListChatsResponse()
+
+        client = self._pool.get(session.id) if self._pool is not None else None
+        if client is None:
+            logger.warning(
+                "[PIPELINE:CHAT_LIST:ERROR] no live client owner=%s session=%s",
+                owner, session.id[:8],
+            )
+            context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+            context.set_details("session_not_connected")
+            return pb.ListChatsResponse()
+
+        logger.info(
+            "[PIPELINE:CHAT_LIST:START] owner=%s session=%s query_len=%d limit=%d offset=%d",
+            owner, session.id[:8], len(query), limit, offset,
+        )
+
+        # Build the whole snapshot first, then filter and page it in memory:
+        # offset beyond the end must yield an empty page, which is only possible
+        # if the total is known before slicing.
+        snapshot: List[Any] = []
+        skipped = 0
+        try:
+            async for dialog in client.get_dialogs(limit=_CHAT_LIST_MAX_DIALOGS):
+                try:
+                    snapshot.append(_chat_summary_from_dialog(dialog))
+                except Exception as exc:  # noqa: BLE001 - one bad row must not kill the page
+                    skipped += 1
+                    logger.warning(
+                        "[PIPELINE:CHAT_LIST:DIALOG_SKIPPED] reason=%s skipped=%d",
+                        type(exc).__name__, skipped,
+                    )
+        except Exception as exc:  # noqa: BLE001 - surface a soft failure to the UI
+            logger.error(
+                "[PIPELINE:CHAT_LIST:ERROR] dialog fetch failed owner=%s reason=%s",
+                owner, type(exc).__name__,
+            )
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details(f"dialog_fetch_failed: {type(exc).__name__}")
+            return pb.ListChatsResponse()
+
+        matched = [c for c in snapshot if _chat_matches_query(c, query)]
+        total = len(matched)
+        page = matched[offset:offset + limit]
+        # The snapshot hit the fetch cap, so there may be dialogs we never saw;
+        # Telegram returns dialogs newest-first, which is the order a picker wants.
+        truncated = len(snapshot) >= _CHAT_LIST_MAX_DIALOGS
+
+        logger.info(
+            "[PIPELINE:CHAT_LIST:COMPLETE] owner=%s session=%s fetched=%d matched=%d "
+            "page=%d skipped=%d truncated=%s",
+            owner, session.id[:8], len(snapshot), total, len(page), skipped, truncated,
+        )
+        return pb.ListChatsResponse(
+            session_id=session.id,
+            chats=page,
+            count=len(page),
+            total=total,
+            truncated=truncated,
         )
 
 

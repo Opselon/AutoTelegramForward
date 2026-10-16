@@ -78,6 +78,11 @@ class SessionControlServiceStub:
                 request_serializer=autoforward__pb2.ResolveChatRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.ResolveChatResponse.FromString,
                 _registered_method=True)
+        self.ListChats = channel.unary_unary(
+                '/autoforward.SessionControlService/ListChats',
+                request_serializer=autoforward__pb2.ListChatsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListChatsResponse.FromString,
+                _registered_method=True)
 
 
 class SessionControlServiceServicer:
@@ -135,6 +140,13 @@ class SessionControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListChats(self, request, context):
+        """ListChats browses the caller's own session dialogs (channels/groups/chats).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SessionControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -177,6 +189,11 @@ def add_SessionControlServiceServicer_to_server(servicer, server):
                     servicer.ResolveChat,
                     request_deserializer=autoforward__pb2.ResolveChatRequest.FromString,
                     response_serializer=autoforward__pb2.ResolveChatResponse.SerializeToString,
+            ),
+            'ListChats': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListChats,
+                    request_deserializer=autoforward__pb2.ListChatsRequest.FromString,
+                    response_serializer=autoforward__pb2.ListChatsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -399,6 +416,33 @@ class SessionControlService:
             '/autoforward.SessionControlService/ResolveChat',
             autoforward__pb2.ResolveChatRequest.SerializeToString,
             autoforward__pb2.ResolveChatResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListChats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.SessionControlService/ListChats',
+            autoforward__pb2.ListChatsRequest.SerializeToString,
+            autoforward__pb2.ListChatsResponse.FromString,
             options,
             channel_credentials,
             insecure,
