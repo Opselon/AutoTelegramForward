@@ -60,6 +60,26 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
   String? _loadError;
   String? _saveError;
 
+  /// Live filter over the whole schema. With ~120 settings, scrolling to find
+  /// "remove_links" is the slow path; typing three letters is the fast one.
+  String _query = '';
+
+  /// The keys offered in the quick-cleanup card, in the order a user fixes a
+  /// channel: strip the decoration, then the links, then the noise.
+  ///
+  /// These are ordinary registry keys — pinning them changes only where they
+  /// are rendered, never what they do or how they are validated.
+  static const List<String> _quickKeys = <String>[
+    'remove_emojis',
+    'remove_links',
+    'block_links',
+    'clean_usernames',
+    'clean_hashtags',
+    'clean_phones',
+    'clean_empty_lines',
+    'strip_words',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -310,6 +330,30 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
               ),
               const Divider(height: 1),
 
+              // -------------------------------------------------------- search
+              if (_schema != null && _loadError == null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: TextField(
+                    key: const ValueKey<String>('rules_settings_search'),
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      prefixIcon: const Icon(Icons.search, size: 18),
+                      suffixIcon:
+                          _query.isEmpty
+                              ? null
+                              : IconButton(
+                                icon: const Icon(Icons.close, size: 16),
+                                onPressed: () => setState(() => _query = ''),
+                              ),
+                      hintText: t.get('rules_settings_search_hint'),
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (v) => setState(() => _query = v.trim()),
+                  ),
+                ),
+
               // --------------------------------------------------------- body
               Expanded(child: _buildBody()),
 
@@ -424,9 +468,85 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
       ...grouped.keys.where((g) => !schema.groups.contains(g)),
     ];
 
+    // A query turns the grouped catalogue into a flat result list: a match in
+    // the middle of "cleanup" is useless if the user has to find the group too.
+    if (_query.isNotEmpty) {
+      final needle = _query.toLowerCase();
+      final hits =
+          schema.settings
+              .where(
+                (spec) =>
+                    spec.key.toLowerCase().contains(needle) ||
+                    spec.label.toLowerCase().contains(needle) ||
+                    spec.help.toLowerCase().contains(needle),
+              )
+              .toList();
+      if (hits.isEmpty) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              t.get('rules_settings_no_match', params: {'q': _query}),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        );
+      }
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        children: [
+          for (final spec in hits) ...[
+            Text(
+              spec.key,
+              style: const TextStyle(
+                fontSize: 10,
+                letterSpacing: 0.4,
+                color: Colors.grey,
+              ),
+            ),
+            _field(spec),
+          ],
+        ],
+      );
+    }
+
+    // The quick card only shows keys this server actually offers, so a build
+    // against an older core degrades to the plain grouped list instead of
+    // rendering switches for settings that do not exist.
+    final pinned = <RuleSettingSpec>[
+      for (final key in _quickKeys)
+        ...schema.settings.where((spec) => spec.key == key),
+    ];
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       children: [
+        if (pinned.isNotEmpty) ...[
+          Row(
+            children: [
+              const Icon(Icons.auto_fix_high_outlined, size: 16),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  t.get('rules_settings_quick_cleanup'),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            t.get('rules_settings_quick_cleanup_hint'),
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+          for (final spec in pinned) _field(spec),
+          const Divider(height: 18),
+        ],
         for (final group in ordered) ...[
           Padding(
             padding: const EdgeInsets.only(top: 6, bottom: 6),
@@ -439,7 +559,10 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
               ),
             ),
           ),
-          for (final spec in grouped[group]!) _field(spec),
+          // Pinned keys are rendered once, above: repeating them inside their
+          // group would give two switches for one value and let them disagree.
+          for (final spec in grouped[group]!)
+            if (!_quickKeys.contains(spec.key)) _field(spec),
           const SizedBox(height: 8),
         ],
       ],
@@ -501,6 +624,29 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
     }
 
     final t = AppMessages.of(context);
+
+    // `replacements` is the one dict that is genuinely a flat find/replace list,
+    // so it gets a row editor. Every other dict holds structured data — nested
+    // cleaner config, per-source overrides — where rows would lie about the
+    // shape, so it keeps the JSON field.
+    if (spec.key == 'replacements') {
+      final raw = value is Map ? value : const <String, dynamic>{};
+      return _PairEditor(
+        key: const ValueKey<String>('replacements_editor'),
+        label: spec.label,
+        help: spec.help,
+        error: error,
+        initial: <String, String>{
+          for (final entry in raw.entries) '${entry.key}': '${entry.value}',
+        },
+        onChanged:
+            (map) => setState(() {
+              _values[spec.key] = map;
+              _errors.remove(spec.key);
+            }),
+      );
+    }
+
     if (spec.isDict) {
       return _textField(
         spec,
@@ -644,6 +790,186 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
             );
           }
         },
+      ),
+    );
+  }
+}
+
+/// One find/replace pair, with its own controllers so a rebuild elsewhere in
+/// the sheet cannot move the caret while the user is typing.
+class _PairRow {
+  _PairRow(String find, String replace)
+    : find = TextEditingController(text: find),
+      replace = TextEditingController(text: replace);
+
+  final TextEditingController find;
+  final TextEditingController replace;
+
+  void dispose() {
+    find.dispose();
+    replace.dispose();
+  }
+}
+
+/// Row editor for the flat `replacements` map.
+///
+/// The registry stores it as a dict, so the generic renderer would offer raw
+/// JSON — unusable with a phone keyboard. The rows rebuild that dict on every
+/// keystroke, which keeps `_values` exactly equal to what a save would send.
+class _PairEditor extends StatefulWidget {
+  const _PairEditor({
+    super.key,
+    required this.initial,
+    required this.label,
+    required this.help,
+    required this.error,
+    required this.onChanged,
+  });
+
+  final Map<String, String> initial;
+  final String label;
+  final String help;
+  final String? error;
+  final ValueChanged<Map<String, String>> onChanged;
+
+  @override
+  State<_PairEditor> createState() => _PairEditorState();
+}
+
+class _PairEditorState extends State<_PairEditor> {
+  late final List<_PairRow> _rows;
+  bool _duplicate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // `widget.initial` is only a starting point: the rows are the truth after
+    // the first keystroke, so a later rebuild must not resurrect old values.
+    _rows = [
+      for (final entry in widget.initial.entries)
+        _PairRow(entry.key, entry.value),
+    ];
+  }
+
+  @override
+  void dispose() {
+    for (final row in _rows) {
+      row.dispose();
+    }
+    super.dispose();
+  }
+
+  /// Writes the rows back into a map and hands it to the sheet.
+  ///
+  /// A blank "find" is a row the user has not filled in yet, so it is skipped
+  /// rather than saved as an empty-string rule; a repeated "find" is flagged,
+  /// because one of the two rules would silently win.
+  void _emit() {
+    final map = <String, String>{};
+    var duplicate = false;
+    for (final row in _rows) {
+      final find = row.find.text.trim();
+      if (find.isEmpty) continue;
+      if (map.containsKey(find)) duplicate = true;
+      map[find] = row.replace.text;
+    }
+    setState(() => _duplicate = duplicate);
+    widget.onChanged(map);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppMessages.of(context);
+    final problem =
+        _duplicate ? t.get('rules_settings_pair_duplicate') : widget.error;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.find_replace_outlined, size: 16),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(widget.label, style: const TextStyle(fontSize: 13)),
+              ),
+            ],
+          ),
+          if (widget.help.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 4),
+              child: Text(
+                widget.help,
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ),
+          for (var i = 0; i < _rows.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: ValueKey<String>('replace_find_$i'),
+                      controller: _rows[i].find,
+                      style: const TextStyle(fontSize: 13),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: t.get('rules_settings_pair_find'),
+                        border: const OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => _emit(),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6),
+                    child: Icon(Icons.arrow_forward, size: 16),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      key: ValueKey<String>('replace_with_$i'),
+                      controller: _rows[i].replace,
+                      style: const TextStyle(fontSize: 13),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: t.get('rules_settings_pair_with'),
+                        border: const OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => _emit(),
+                    ),
+                  ),
+                  IconButton(
+                    key: ValueKey<String>('replace_remove_$i'),
+                    icon: const Icon(Icons.close, size: 16),
+                    tooltip: t.get('rules_settings_pair_remove'),
+                    onPressed: () {
+                      setState(() {
+                        _rows.removeAt(i).dispose();
+                      });
+                      _emit();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              key: const ValueKey<String>('replace_add'),
+              onPressed: () {
+                setState(() => _rows.add(_PairRow('', '')));
+              },
+              icon: const Icon(Icons.add, size: 16),
+              label: Text(t.get('rules_settings_pair_add')),
+            ),
+          ),
+          if (problem != null)
+            Text(
+              problem,
+              style: const TextStyle(fontSize: 11, color: Colors.red),
+            ),
+        ],
       ),
     );
   }

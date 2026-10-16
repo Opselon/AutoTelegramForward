@@ -21,6 +21,7 @@ import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../../l10n/app_messages.dart';
 import '../../widgets/list_state_view.dart';
+import 'log_policy_tab.dart';
 
 class LogsScreen extends StatefulWidget {
   const LogsScreen({
@@ -432,7 +433,7 @@ class _LogsScreenState extends State<LogsScreen> {
     final t = AppMessages.of(context);
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text(
@@ -461,14 +462,31 @@ class _LogsScreenState extends State<LogsScreen> {
               onPressed: (_loading || _loadingAudit) ? null : _reloadAll,
             ),
           ],
-          bottom: const TabBar(
+          // Tab labels are catalog keys: the app ships ten locales, and a
+          // hardcoded 'Logs' is the one string a screenshot would betray.
+          bottom: TabBar(
             tabs: [
-              Tab(icon: Icon(Icons.history_outlined), text: 'Logs'),
-              Tab(icon: Icon(Icons.verified_outlined), text: 'Audit'),
+              Tab(
+                icon: const Icon(Icons.history_outlined),
+                text: t.get('logs_tab_stream'),
+              ),
+              Tab(
+                icon: const Icon(Icons.verified_outlined),
+                text: t.get('logs_tab_audit'),
+              ),
+              Tab(
+                icon: const Icon(Icons.tune_outlined),
+                text: t.get('logs_tab_policy'),
+              ),
             ],
           ),
         ),
-        body: TabBarView(children: [_buildLogsTab(t), _buildAuditTab(t)]),
+        // The policy tab loads on its own: the header refresh reloads the
+        // stream and the audit trail, and forcing a policy read with it would
+        // make a slow producer block the tab the user actually asked for.
+        body: TabBarView(
+          children: [_buildLogsTab(t), _buildAuditTab(t), const LogPolicyTab()],
+        ),
       ),
     );
   }

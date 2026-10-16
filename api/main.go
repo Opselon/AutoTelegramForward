@@ -90,6 +90,9 @@ func main() {
 	dashMux.HandleFunc("PUT /rules/{id}/settings", h.UpdateRuleSettings)
 	dashMux.HandleFunc("PATCH /rules/{id}/settings", h.UpdateRuleSettings)
 	dashMux.HandleFunc("GET /sessions", h.ListSessions)
+	// Session chat list for the mobile source/target pickers. Scoped entirely
+	// from the JWT identity, so it sits with the other /sessions routes.
+	dashMux.HandleFunc("GET /sessions/{sessionId}/chats", h.ListChats)
 	dashMux.HandleFunc("POST /sessions/{id}/backup", h.BackupSession)
 	dashMux.HandleFunc("DELETE /sessions/{id}", h.TerminateSession)
 	dashMux.HandleFunc("GET /ai-configs", h.ListAIConfigs)

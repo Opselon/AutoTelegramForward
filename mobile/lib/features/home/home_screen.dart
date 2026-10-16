@@ -1,12 +1,12 @@
 /// Root navigation shell.
 ///
-/// Seven top-level destinations do not fit a Material bottom navigation bar on
+/// Nine top-level destinations do not fit a Material bottom navigation bar on
 /// a phone — labels collide and targets drop below the 48dp touch minimum. So
 /// the shell is adaptive:
 ///   * wide windows (>= 900dp, tablet / desktop / landscape) get a labelled
-///     [NavigationRail] down the side, where seven entries fit comfortably;
-///   * narrow windows get a bottom [NavigationBar] showing icons with a short
-///     label, keeping every target tappable.
+///     [NavigationRail] down the side, where nine entries fit comfortably;
+///   * narrow windows get a bottom [NavigationBar] that drops to icons with the
+///     selected label, keeping every target tappable at nine entries.
 /// Both surfaces are generated from one destination list so they can never
 /// drift apart, and the selected index is preserved across layout changes.
 library;
@@ -16,7 +16,9 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../ai/ai_screen.dart';
+import '../chats/chats_screen.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../delivery/delivery_screen.dart';
 import '../filters/filters_screen.dart';
 import '../logs/logs_screen.dart';
 import '../rules/rules_screen.dart';
@@ -65,6 +67,13 @@ class _HomeScreenState extends State<HomeScreen> {
       selectedIcon: Icons.alt_route,
       labelKey: 'nav_rules',
     ),
+    // Chats sits next to Rules on purpose: it answers the question Rules raises
+    // ("which chat is this id?"), so the two belong in the same reach.
+    _Destination(
+      icon: Icons.forum_outlined,
+      selectedIcon: Icons.forum,
+      labelKey: 'nav_chats',
+    ),
     _Destination(
       icon: Icons.send_outlined,
       selectedIcon: Icons.send,
@@ -85,6 +94,14 @@ class _HomeScreenState extends State<HomeScreen> {
       selectedIcon: Icons.history,
       labelKey: 'nav_logs',
     ),
+    // Delivery sits next to Logs: both answer "what happened to my traffic",
+    // and this one answers the part the log stream cannot — what is still
+    // pending, and what the engine has given up on.
+    _Destination(
+      icon: Icons.local_shipping_outlined,
+      selectedIcon: Icons.local_shipping,
+      labelKey: 'nav_delivery',
+    ),
     _Destination(
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
@@ -95,10 +112,12 @@ class _HomeScreenState extends State<HomeScreen> {
   static const List<Widget> _screens = [
     DashboardScreen(),
     RulesScreen(),
+    ChatsScreen(),
     SessionsScreen(),
     FiltersScreen(),
     AiScreen(),
     LogsScreen(),
+    DeliveryScreen(),
     SettingsScreen(),
   ];
 

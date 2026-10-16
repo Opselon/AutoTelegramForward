@@ -1477,3 +1477,341 @@ class DiagnosticsReport {
     );
   }
 }
+
+/// One chat the connected Telegram account can see.
+///
+/// This is the read side of routing: a user picks sources and targets out of
+/// their own chat list instead of remembering `-100…` ids. The id here is the
+/// same string a rule stores in `source_chat_ids` / `target_chat_ids`, so a
+/// picked chat round-trips without a second resolution step.
+///
+/// Parsing is deliberately lenient: the endpoint is newer than some servers,
+/// and a row missing an optional field must render as a plain title, never
+/// throw and blank the list.
+@immutable
+class ChatSummary {
+  const ChatSummary({
+    required this.chatId,
+    this.title = '',
+    this.username = '',
+    this.chatType = '',
+    this.members = 0,
+    this.isForum = false,
+  });
+
+  final String chatId;
+  final String title;
+  final String username;
+
+  /// `channel` | `supergroup` | `group` | `private` | `bot` | `` (unknown).
+  final String chatType;
+  final int members;
+
+  /// A forum (topic-enabled supergroup): a task can target one topic, so the
+  /// distinction is worth surfacing rather than flattening into "group".
+  final bool isForum;
+
+  /// What to show on a row: the chat's name, else its @username, else the id.
+  String get displayTitle {
+    if (title.trim().isNotEmpty) return title.trim();
+    if (username.trim().isNotEmpty) return '@${username.trim()}';
+    return chatId;
+  }
+
+  /// True for a person/bot rather than a broadcast or group chat. Drives the
+  /// icon and the type filter, so it is derived once here.
+  bool get isUserChat => chatType == 'private' || chatType == 'bot';
+
+  /// A `t.me` link for a public chat, or '' when the chat is private. Used for
+  /// the "open in Telegram" affordance; never fabricated from an id, because a
+  /// numeric id does not address a public link.
+  String get publicLink =>
+      username.trim().isEmpty ? '' : 'https://t.me/${username.trim()}';
+
+  factory ChatSummary.fromJson(Map<String, dynamic> json) => ChatSummary(
+    chatId:
+        json['chat_id']?.toString() ??
+        json['id']?.toString() ??
+        json['peer_id']?.toString() ??
+        '',
+    title: json['title']?.toString() ?? '',
+    username: json['username']?.toString() ?? '',
+    chatType: (json['chat_type']?.toString() ?? '').toLowerCase(),
+    members: (json['members'] as num?)?.toInt() ?? 0,
+    isForum: json['is_forum'] as bool? ?? false,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is ChatSummary && other.chatId == chatId;
+
+  @override
+  int get hashCode => chatId.hashCode;
+
+  @override
+  String toString() => 'ChatSummary($chatId, $chatType)';
+}
+
+/// One page of a session's chat list (`GET /api/sessions/{id}/chats`).
+///
+/// [total] is the server's count of matches for the current query, so a client
+/// can say "showing 100 of 431" instead of implying the list is complete.
+@immutable
+class ChatListPage {
+  const ChatListPage({
+    this.sessionId = '',
+    this.chats = const [],
+    this.total = 0,
+    this.truncated = false,
+  });
+
+  final String sessionId;
+  final List<ChatSummary> chats;
+  final int total;
+  final bool truncated;
+
+  factory ChatListPage.fromJson(Map<String, dynamic> json) {
+    final raw = (json['chats'] as List?) ?? const [];
+    final chats = <ChatSummary>[];
+    final seen = <String>{};
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final chat = ChatSummary.fromJson(entry.cast<String, dynamic>());
+      // A repeated id would render twice and make "select all" ambiguous.
+      if (chat.chatId.isEmpty || !seen.add(chat.chatId)) continue;
+      chats.add(chat);
+    }
+    return ChatListPage(
+      sessionId: json['session_id']?.toString() ?? '',
+      chats: List<ChatSummary>.unmodifiable(chats),
+      total: (json['total'] as num?)?.toInt() ?? chats.length,
+      truncated: json['truncated'] as bool? ?? false,
+    );
+  }
+}
+
+/// The verdict of a dry run of one task against a sample message
+/// (`POST /api/simulate`).
+///
+/// This is the server's own routing decision — the same engine, the same
+/// per-task settings — so a difference between this and what actually happens
+/// is a bug in the report, not a difference of opinion. The rendered text is
+/// included on purpose: it is how a user checks that "remove emojis" or "strip
+/// links" does to their message what they meant, before enabling the task.
+@immutable
+class RuleSimulation {
+  const RuleSimulation({
+    this.matched = false,
+    this.matchReason = '',
+    this.ruleName = '',
+    this.messageCategory = '',
+    this.isVip = false,
+    this.vipReason = '',
+    this.loopDetected = false,
+    this.loopReason = '',
+    this.forwardMode = '',
+    this.fallbackMode = '',
+    this.renderedText = '',
+    this.renderedHeader = '',
+    this.renderedFooter = '',
+    this.deliveryTargets = const [],
+    this.intermediateChannelId = '',
+    this.useIntermediate = false,
+  });
+
+  final bool matched;
+  final String matchReason;
+  final String ruleName;
+  final String messageCategory;
+  final bool isVip;
+  final String vipReason;
+  final bool loopDetected;
+  final String loopReason;
+  final String forwardMode;
+  final String fallbackMode;
+  final String renderedText;
+  final String renderedHeader;
+  final String renderedFooter;
+  final List<String> deliveryTargets;
+  final String intermediateChannelId;
+  final bool useIntermediate;
+
+  factory RuleSimulation.fromJson(Map<String, dynamic> json) => RuleSimulation(
+    matched: json['matched'] as bool? ?? false,
+    matchReason: json['match_reason'] as String? ?? '',
+    ruleName: json['rule_name'] as String? ?? '',
+    messageCategory: json['message_category'] as String? ?? '',
+    isVip: json['is_vip'] as bool? ?? false,
+    vipReason: json['vip_reason'] as String? ?? '',
+    loopDetected: json['loop_detected'] as bool? ?? false,
+    loopReason: json['loop_reason'] as String? ?? '',
+    forwardMode: json['forward_mode'] as String? ?? '',
+    fallbackMode: json['fallback_mode'] as String? ?? '',
+    renderedText: json['rendered_text'] as String? ?? '',
+    renderedHeader: json['rendered_header'] as String? ?? '',
+    renderedFooter: json['rendered_footer'] as String? ?? '',
+    deliveryTargets: ((json['delivery_targets'] as List?) ?? const [])
+        .map((e) => '$e')
+        .toList(growable: false),
+    intermediateChannelId: json['intermediate_channel_id'] as String? ?? '',
+    useIntermediate: json['use_intermediate'] as bool? ?? false,
+  );
+}
+
+/// One task's live delivery counters (`GET /api/queue`).
+///
+/// `errors` counts failures without saying where they went, which is why the
+/// screen shows [lastError] beside it: a task with errors and no message is a
+/// number the operator cannot act on.
+@immutable
+class RuleLiveStat {
+  const RuleLiveStat({
+    required this.ruleId,
+    this.ruleName = '',
+    this.isActive = false,
+    this.isPaused = false,
+    this.forwarded = 0,
+    this.filtered = 0,
+    this.errors = 0,
+    this.lastError = '',
+  });
+
+  final String ruleId;
+  final String ruleName;
+  final bool isActive;
+  final bool isPaused;
+  final int forwarded;
+  final int filtered;
+  final int errors;
+  final String lastError;
+
+  factory RuleLiveStat.fromJson(Map<String, dynamic> json) => RuleLiveStat(
+    ruleId: json['rule_id'] as String? ?? '',
+    ruleName: json['rule_name'] as String? ?? '',
+    isActive: json['is_active'] as bool? ?? false,
+    isPaused: json['is_paused'] as bool? ?? false,
+    forwarded: (json['forwarded'] as num?)?.toInt() ?? 0,
+    filtered: (json['filtered'] as num?)?.toInt() ?? 0,
+    errors: (json['errors'] as num?)?.toInt() ?? 0,
+    lastError: json['last_error'] as String? ?? '',
+  );
+}
+
+/// Aggregate delivery counters for the whole account (`GET /api/queue`).
+@immutable
+class DeliveryStats {
+  const DeliveryStats({
+    this.processedTotal = 0,
+    this.forwardedTotal = 0,
+    this.failedTotal = 0,
+    this.dedupSkippedTotal = 0,
+    this.filteredTotal = 0,
+    this.inQueue = 0,
+    this.deadLetteredTotal = 0,
+    this.retryTotal = 0,
+    this.rules = const [],
+    this.errors = const [],
+  });
+
+  final int processedTotal;
+  final int forwardedTotal;
+  final int failedTotal;
+  final int dedupSkippedTotal;
+  final int filteredTotal;
+  final int inQueue;
+  final int deadLetteredTotal;
+  final int retryTotal;
+  final List<RuleLiveStat> rules;
+  final List<RecentDeliveryError> errors;
+
+  factory DeliveryStats.fromJson(Map<String, dynamic> json) {
+    int num_(String key) => (json[key] as num?)?.toInt() ?? 0;
+    return DeliveryStats(
+      processedTotal: num_('processed_total'),
+      forwardedTotal: num_('forwarded_total'),
+      failedTotal: num_('failed_total'),
+      dedupSkippedTotal: num_('dedup_skipped_total'),
+      filteredTotal: num_('filtered_total'),
+      inQueue: num_('in_queue'),
+      deadLetteredTotal: num_('dead_lettered_total'),
+      retryTotal: num_('retry_total'),
+      rules: ((json['rules'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(RuleLiveStat.fromJson)
+          .toList(growable: false),
+      errors: ((json['errors'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(RecentDeliveryError.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+/// A delivery failure as the queue reports it: severity and category, so the
+/// screen can separate "Telegram said no" from "we could not reach Telegram".
+@immutable
+class RecentDeliveryError {
+  const RecentDeliveryError({
+    required this.ruleId,
+    this.errorName = '',
+    this.severity = '',
+    this.detail = '',
+    this.category = '',
+  });
+
+  final String ruleId;
+  final String errorName;
+  final String severity;
+  final String detail;
+  final String category;
+
+  factory RecentDeliveryError.fromJson(Map<String, dynamic> json) =>
+      RecentDeliveryError(
+        ruleId: json['rule_id'] as String? ?? '',
+        errorName: json['error_name'] as String? ?? '',
+        severity: json['severity'] as String? ?? '',
+        detail: json['detail'] as String? ?? '',
+        category: json['category'] as String? ?? '',
+      );
+}
+
+/// One job in the dead-letter queue (`GET /api/dlq`).
+///
+/// Carries the source and target it failed between, because "job 4711 failed"
+/// is not actionable: which route, and how many times, is.
+@immutable
+class DeadLetterJob {
+  const DeadLetterJob({
+    required this.id,
+    this.ruleId = '',
+    this.sourceChatId = '',
+    this.sourceMessageId = 0,
+    this.targetChatId = '',
+    this.attempts = 0,
+    this.lastError = '',
+    this.errorCategory = '',
+    this.deadLetteredAt = 0,
+  });
+
+  final String id;
+  final String ruleId;
+  final String sourceChatId;
+  final int sourceMessageId;
+  final String targetChatId;
+  final int attempts;
+  final String lastError;
+  final String errorCategory;
+  final int deadLetteredAt;
+
+  factory DeadLetterJob.fromJson(Map<String, dynamic> json) => DeadLetterJob(
+    id: json['id'] as String? ?? '',
+    ruleId: json['rule_id'] as String? ?? '',
+    sourceChatId: json['source_chat_id'] as String? ?? '',
+    sourceMessageId: (json['source_message_id'] as num?)?.toInt() ?? 0,
+    targetChatId: json['target_chat_id'] as String? ?? '',
+    attempts: (json['attempts'] as num?)?.toInt() ?? 0,
+    lastError: json['last_error'] as String? ?? '',
+    errorCategory: json['error_category'] as String? ?? '',
+    deadLetteredAt: (json['dead_lettered_at'] as num?)?.toInt() ?? 0,
+  );
+}

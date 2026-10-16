@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'rule_settings_sheet.dart';
+import 'rule_simulator_sheet.dart';
 
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
@@ -24,11 +25,30 @@ import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../../widgets/app_ui.dart';
 import '../../widgets/chat_id_list_field.dart';
+import '../chats/chat_picker_sheet.dart';
 
 class RuleEditorScreen extends StatefulWidget {
-  const RuleEditorScreen({super.key, this.rule});
+  const RuleEditorScreen({
+    super.key,
+    this.rule,
+    this.initialSessionId,
+    this.prefillSourceIds = const [],
+    this.prefillTargetIds = const [],
+  });
 
   final ForwardRule? rule;
+
+  /// Selected when the editor opens for a NEW task (the Chats page knows which
+  /// account's chat list the user was looking at). An existing rule's own
+  /// session always wins.
+  final String? initialSessionId;
+
+  /// Endpoints merged in from a chat pick: the chat the user tapped is added to
+  /// the side they chose while everything already stored stays put. They land in
+  /// the same text field the user types into, so there is exactly one source of
+  /// truth and the normal save path validates the result.
+  final List<String> prefillSourceIds;
+  final List<String> prefillTargetIds;
 
   @override
   State<RuleEditorScreen> createState() => _RuleEditorScreenState();
@@ -99,9 +119,13 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _topicCtrl = TextEditingController(
       text: r?.topicId != null && r!.topicId > 0 ? '${r.topicId}' : '',
     );
-    _sourceIdCtrl = TextEditingController(text: r?.sourceIds.join(', ') ?? '');
+    _sourceIdCtrl = TextEditingController(
+      text: _seedRoute(r?.sourceIds ?? const [], widget.prefillSourceIds),
+    );
     _sourceTitleCtrl = TextEditingController(text: r?.sourceChatTitle ?? '');
-    _targetIdCtrl = TextEditingController(text: r?.targetIds.join(', ') ?? '');
+    _targetIdCtrl = TextEditingController(
+      text: _seedRoute(r?.targetIds ?? const [], widget.prefillTargetIds),
+    );
     _targetTitleCtrl = TextEditingController(text: r?.targetChatTitle ?? '');
     _intermediateCtrl = TextEditingController(
       text: r?.intermediateChannelId ?? '',
@@ -115,7 +139,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _footerCtrl = TextEditingController(text: r?.footerTemplate ?? '');
     _watermarkCtrl = TextEditingController(text: r?.watermark ?? '');
 
-    _selectedSessionId = r?.sessionId;
+    _selectedSessionId = r?.sessionId ?? widget.initialSessionId;
     _filterMode = r?.filterMode ?? 'all';
     _mediaMode = r?.mediaMode ?? 'all';
     _useVipRouting =
@@ -287,6 +311,52 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     controller.value = TextEditingValue(
       text: entries.join(', '),
       selection: TextSelection.collapsed(offset: entries.join(', ').length),
+    );
+  }
+
+  /// Stored endpoints plus anything picked from the chat list, in that order.
+  ///
+  /// Deduplication uses [chatIdKey] — the same comparison the route validator
+  /// applies — so a chat that is already a source cannot be added twice by
+  /// picking it, and `@Channel` will not sneak in beside `t.me/channel`.
+  static String _seedRoute(List<String> stored, List<String> picked) {
+    final out = <String>[...stored];
+    final seen = stored.map(chatIdKey).toSet();
+    for (final entry in picked) {
+      final value = entry.trim();
+      if (value.isEmpty || !seen.add(chatIdKey(value))) continue;
+      out.add(value);
+    }
+    return out.join(', ');
+  }
+
+  /// Opens the chat-list picker for one side of the route and writes the
+  /// confirmed selection back into that side's field.
+  ///
+  /// The picker opens with the current entries ticked, so its answer is the
+  /// complete list for that side — de-selecting a chat really removes it. An
+  /// entry typed by hand is carried in as a ticked entry (keyed by [chatIdKey])
+  /// and comes back unchanged, so opening the picker never silently drops
+  /// something the user pasted.
+  ///
+  /// Without a session there is no chat list to read, so the button is hidden
+  /// and the field stays the manual surface it has always been.
+  Future<void> _pickChats({required bool asSource}) async {
+    final sessionId = _selectedSessionId ?? '';
+    if (sessionId.isEmpty) return;
+    final t = AppMessages.of(context);
+    final controller = asSource ? _sourceIdCtrl : _targetIdCtrl;
+    final picked = await showChatPickerSheet(
+      context,
+      title: t.get(asSource ? 'rules_pick_sources' : 'rules_pick_targets'),
+      sessionId: sessionId,
+      alreadySelected: splitChatIdList(controller.text).toSet(),
+    );
+    if (picked == null || !mounted) return;
+    final merged = _seedRoute(const [], picked);
+    controller.value = TextEditingValue(
+      text: merged,
+      selection: TextSelection.collapsed(offset: merged.length),
     );
   }
 
@@ -466,6 +536,29 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       appBar: AppBar(
         title: Text(isEditing ? t.get('action_edit') : t.get('rules_create')),
         actions: [
+          // The dry run is only meaningful once the server has stored the
+          // settings, so it appears for an existing task and not on a form the
+          // user has not saved yet.
+          if (isEditing)
+            IconButton(
+              icon: const Icon(Icons.science_outlined),
+              tooltip: t.get('rules_simulate_title'),
+              onPressed:
+                  _saving
+                      ? null
+                      : () => showRuleSimulatorSheet(
+                        context,
+                        ruleId: widget.rule!.id,
+                        ruleLabel:
+                            widget.rule!.name.isNotEmpty
+                                ? widget.rule!.name
+                                : widget.rule!.shortId,
+                        initialChatId:
+                            parseChatIdList(_sourceIdCtrl.text).isEmpty
+                                ? ''
+                                : parseChatIdList(_sourceIdCtrl.text).first,
+                      ),
+            ),
           IconButton(
             icon: const Icon(Icons.check),
             tooltip: t.get('action_save'),
@@ -609,7 +702,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                     child: SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(t.get('rules_sec_status')),
-                      subtitle: Text(_isEnabled ? 'RUNNING' : 'PAUSED'),
+                      subtitle: Text(
+                        _isEnabled
+                            ? t.get('rules_state_running')
+                            : t.get('rules_state_paused'),
+                      ),
                       value: _isEnabled,
                       onChanged: (v) => setState(() => _isEnabled = v),
                     ),
@@ -618,7 +715,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                     child: SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(t.get('rules_sec_debug')),
-                      subtitle: Text(_debugMode ? 'ON' : 'OFF'),
+                      subtitle: Text(
+                        _debugMode
+                            ? t.get('rules_state_on')
+                            : t.get('rules_state_off'),
+                      ),
                       value: _debugMode,
                       onChanged: (v) => setState(() => _debugMode = v),
                     ),
@@ -646,14 +747,27 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                             ? t.get('rules_source_required')
                             : null,
               ),
+              // The chat list is the faster way in, but only once an account is
+              // selected: without one there is nothing to list, so the button is
+              // absent rather than disabled-looking.
+              if ((_selectedSessionId ?? '').isNotEmpty)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    key: const ValueKey<String>('rule_pick_sources'),
+                    onPressed: () => _pickChats(asSource: true),
+                    icon: const Icon(Icons.forum_outlined, size: 18),
+                    label: Text(t.get('rules_pick_from_chats')),
+                  ),
+                ),
               const SizedBox(height: AppSpacing.md),
 
               // Titles stay the primary endpoint's label: the fan-out list is
               // identified by ids, and the server keeps one title per side.
               TextFormField(
                 controller: _sourceTitleCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Title / Channel name',
+                decoration: InputDecoration(
+                  labelText: t.get('rules_chat_title'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -678,12 +792,22 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                             ? t.get('rules_target_required')
                             : null,
               ),
+              if ((_selectedSessionId ?? '').isNotEmpty)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    key: const ValueKey<String>('rule_pick_targets'),
+                    onPressed: () => _pickChats(asSource: false),
+                    icon: const Icon(Icons.forum_outlined, size: 18),
+                    label: Text(t.get('rules_pick_from_chats')),
+                  ),
+                ),
               const SizedBox(height: AppSpacing.md),
 
               TextFormField(
                 controller: _targetTitleCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Title / Channel name',
+                decoration: InputDecoration(
+                  labelText: t.get('rules_chat_title'),
                 ),
               ),
 
@@ -749,8 +873,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
               if (_useVipRouting)
                 TextFormField(
                   controller: _intermediateCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'VIP Intermediate Channel ID',
+                  decoration: InputDecoration(
+                    labelText: t.get('rules_intermediate_id'),
                     hintText: '-1000000000000',
                   ),
                 ),
@@ -824,10 +948,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_block_voice')),
-                        secondary: const Text(
-                          '🎙',
-                          style: TextStyle(fontSize: 18),
-                        ),
+                        secondary: const Icon(Icons.mic_none_rounded, size: 20),
                         value: _blockVoice,
                         onChanged: (v) => setState(() => _blockVoice = v),
                       ),
@@ -835,9 +956,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_block_stickers')),
-                        secondary: const Text(
-                          '🎭',
-                          style: TextStyle(fontSize: 18),
+                        secondary: const Icon(
+                          Icons.sticky_note_2_outlined,
+                          size: 20,
                         ),
                         value: _blockStickers,
                         onChanged: (v) => setState(() => _blockStickers = v),
@@ -846,9 +967,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_remove_emojis')),
-                        secondary: const Text(
-                          '😀',
-                          style: TextStyle(fontSize: 18),
+                        secondary: const Icon(
+                          Icons.emoji_emotions_outlined,
+                          size: 20,
                         ),
                         value: _removeEmojis,
                         onChanged: (v) => setState(() => _removeEmojis = v),
@@ -857,10 +978,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_sync_deletes')),
-                        secondary: const Text(
-                          '🗑',
-                          style: TextStyle(fontSize: 18),
-                        ),
+                        secondary: const Icon(Icons.delete_outline, size: 20),
                         value: _syncDeletes,
                         onChanged: (v) => setState(() => _syncDeletes = v),
                       ),
@@ -868,9 +986,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_ignore_edits')),
-                        secondary: const Text(
-                          '✏️',
-                          style: TextStyle(fontSize: 18),
+                        secondary: const Icon(
+                          Icons.edit_off_outlined,
+                          size: 20,
                         ),
                         value: _ignoreEdits,
                         onChanged: (v) => setState(() => _ignoreEdits = v),
@@ -900,6 +1018,44 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           if (v != null) setState(() => _albumMode = v);
                         },
                       ),
+                      const Divider(height: AppSpacing.lg),
+                      // The cleaner is a per-task SETTING (server-validated), not
+                      // a rule field, so it is edited through the settings sheet
+                      // — which also means every one of its ~50 switches stays in
+                      // one place instead of being duplicated here.
+                      ListTile(
+                        key: const ValueKey<String>('rule_open_settings'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        leading: const Icon(
+                          Icons.cleaning_services_outlined,
+                          size: 20,
+                        ),
+                        title: Text(
+                          t.get('rules_cleanup_open'),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        subtitle: Text(
+                          t.get('rules_cleanup_hint'),
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        trailing: const Icon(Icons.chevron_right, size: 18),
+                        // A task that has not been created yet has no id, so
+                        // there is nothing to attach settings to; the tile says
+                        // so instead of opening an empty sheet.
+                        enabled: widget.rule != null,
+                        onTap:
+                            widget.rule == null
+                                ? null
+                                : () => showRuleSettingsSheet(
+                                  context,
+                                  ruleId: widget.rule!.id,
+                                  ruleLabel:
+                                      widget.rule!.name.isNotEmpty
+                                          ? widget.rule!.name
+                                          : widget.rule!.shortId,
+                                ),
+                      ),
                     ],
                   ),
                 ),
@@ -912,9 +1068,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        '🎚 Advanced Settings Categories',
-                        style: TextStyle(
+                      Text(
+                        t.get('rules_adv_categories'),
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
@@ -929,7 +1085,19 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         ),
                         title: Text(t.get('rules_sec_filters')),
                         subtitle: Text(
-                          'Duplicate: ${_duplicateFilters ? "ON" : "OFF"} • Crypto: ${_cryptoMode ? "ON" : "OFF"}',
+                          t.get(
+                            'rules_filters_summary',
+                            params: {
+                              'duplicate':
+                                  _duplicateFilters
+                                      ? t.get('rules_state_on')
+                                      : t.get('rules_state_off'),
+                              'crypto':
+                                  _cryptoMode
+                                      ? t.get('rules_state_on')
+                                      : t.get('rules_state_off'),
+                            },
+                          ),
                         ),
                         children: [
                           SwitchListTile(

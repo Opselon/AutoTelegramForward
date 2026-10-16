@@ -789,6 +789,129 @@ class ApiClient {
     retryable: false,
   );
 
+  /// The chats the account behind [sessionId] can see
+  /// (`GET /api/sessions/{id}/chats`).
+  ///
+  /// This is what turns source/target editing from "type a numeric id you had
+  /// to look up elsewhere" into "pick from your own list". The server scopes the
+  /// call to the session's owner from the Bearer token, so a session id that
+  /// belongs to somebody else answers 404 rather than leaking a chat list.
+  ///
+  /// [query] is matched server-side (title and @username); [limit] is clamped by
+  /// the server to its own maximum. The endpoint is newer than some deployed
+  /// servers, so callers must treat a 404/405 as "no chat list here" and fall
+  /// back to manual entry instead of failing the screen.
+  Future<ChatListPage> listChats(
+    String sessionId, {
+    String query = '',
+    int limit = 100,
+    int offset = 0,
+  }) => _request(
+    method: 'GET',
+    path: '/api/sessions/$sessionId/chats',
+    query: {
+      if (query.trim().isNotEmpty) 'query': query.trim(),
+      'limit': '$limit',
+      'offset': '$offset',
+    },
+    fromJson: ChatListPage.fromJson,
+    retryable: true,
+  );
+
+  /// Dry-runs one task against a sample message (`POST /api/simulate`).
+  ///
+  /// The server evaluates the real engine with the task's real settings and
+  /// returns what it *would* do — the verdict, the reason, and the transformed
+  /// text. That last part is the point: it is the only way to see what "remove
+  /// emojis" or "strip links" does to a message before turning the task on.
+  ///
+  /// This never forwards anything: the request carries an owner-scoped rule id,
+  /// and the server evaluates without touching the delivery queue.
+  Future<RuleSimulation> simulateRule({
+    required String ruleId,
+    required String sampleText,
+    String sampleChatId = '',
+    String sampleSenderId = '',
+    bool sampleHasMedia = false,
+    String sampleMediaType = '',
+  }) => _request(
+    method: 'POST',
+    path: '/api/simulate',
+    body: {
+      'rule_id': ruleId,
+      'sample_text': sampleText,
+      if (sampleChatId.isNotEmpty) 'sample_chat_id': sampleChatId,
+      if (sampleSenderId.isNotEmpty) 'sample_sender_id': sampleSenderId,
+      'sample_has_media': sampleHasMedia,
+      if (sampleMediaType.isNotEmpty) 'sample_media_type': sampleMediaType,
+    },
+    fromJson: RuleSimulation.fromJson,
+    retryable: false,
+  );
+
+  /// Live delivery counters and the most recent failures (`GET /api/queue`).
+  ///
+  /// [inQueue] is what is still pending, which is the number that distinguishes
+  /// "slow" from "stuck" — the totals only ever grow.
+  Future<DeliveryStats> deliveryStats() => _request(
+    method: 'GET',
+    path: '/api/queue',
+    fromJson: DeliveryStats.fromJson,
+    retryable: true,
+  );
+
+  /// Jobs that exhausted their retries (`GET /api/dlq`).
+  ///
+  /// The server scopes these to the caller's own tasks and accepts both `jobs`
+  /// and `entries` as the list key, so this reads whichever the deployed release
+  /// sends instead of showing an empty queue.
+  Future<List<DeadLetterJob>> deadLetter({
+    String ruleId = '',
+    int limit = 50,
+    int since = 0,
+  }) async {
+    final json = await _request(
+      method: 'GET',
+      path: '/api/dlq',
+      query: {
+        if (ruleId.isNotEmpty) 'rule_id': ruleId,
+        'limit': '$limit',
+        if (since > 0) 'since': '$since',
+      },
+      fromJson: (json) => json,
+      retryable: true,
+    );
+    final raw = (json['jobs'] ?? json['entries']) as List? ?? const [];
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map(DeadLetterJob.fromJson)
+        .toList(growable: false);
+  }
+
+  /// Replays one dead-lettered job (`POST /api/dlq/{id}/retry`).
+  Future<Map<String, dynamic>> retryDeadLetter(String id) => _request(
+    method: 'POST',
+    path: '/api/dlq/$id/retry',
+    fromJson: (json) => json,
+    retryable: false,
+  );
+
+  /// Removes dead-lettered jobs (`DELETE /api/dlq`).
+  ///
+  /// Scoped by [ruleId] (empty = every task) and by [olderThan]; the server,
+  /// not the client, decides what "older than" means, so this cannot be turned
+  /// into "delete everything" by a stray tap.
+  Future<Map<String, dynamic>> purgeDeadLetter({
+    String ruleId = '',
+    int olderThan = 0,
+  }) => _request(
+    method: 'DELETE',
+    path: '/api/dlq',
+    body: {if (ruleId.isNotEmpty) 'rule_id': ruleId, 'older_than': olderThan},
+    fromJson: (json) => json,
+    retryable: false,
+  );
+
   Future<List<FilterRule>> listFilters() => _requestList(
     method: 'GET',
     path: '/api/filters',
@@ -1010,6 +1133,58 @@ class ApiClient {
     );
     return response.body;
   }
+
+  /// The effective log collection policy, per producer process
+  /// (`GET /api/logs/policy`).
+  ///
+  /// Returned as a raw map on purpose: the payload is a set of *scopes*, each of
+  /// which may be unavailable with a reason (a producer that exposes no policy
+  /// RPC reports that instead of a zero that would read as "nothing was
+  /// suppressed"). Typing it into a model would invite a client to invent the
+  /// missing numbers.
+  ///
+  /// Advisory by construction: an older server 404s, which callers render as
+  /// "this server does not report its policy" rather than as a failure.
+  Future<Map<String, dynamic>> logPolicy() => _request(
+    method: 'GET',
+    path: '/api/logs/policy',
+    fromJson: (json) => json,
+    retryable: true,
+  );
+
+  /// Per-service logging reachability and the age of the newest stored record
+  /// (`GET /api/logs/health`). This is what separates "the log screen is quiet"
+  /// from "nothing is reaching the Logger".
+  Future<Map<String, dynamic>> logHealth() => _request(
+    method: 'GET',
+    path: '/api/logs/health',
+    fromJson: (json) => json,
+    retryable: true,
+  );
+
+  /// Opens a bounded, self-expiring verbose window on the server's own
+  /// producer policy (`POST /api/logs/diagnostics/start`).
+  ///
+  /// Admin-only server-side; a non-admin gets 403 and the screen says so. The
+  /// window is bounded by the server (it refuses out-of-range values instead of
+  /// clamping), so this never becomes "collect everything, forever".
+  Future<Map<String, dynamic>> startLogDiagnostics({int seconds = 600}) =>
+      _request(
+        method: 'POST',
+        path: '/api/logs/diagnostics/start',
+        body: {'seconds': seconds},
+        fromJson: (json) => json,
+        retryable: false,
+      );
+
+  /// Closes the verbose window early. The server reports whether one was open,
+  /// so a retry is harmless and the UI can tell the user what actually changed.
+  Future<Map<String, dynamic>> stopLogDiagnostics() => _request(
+    method: 'POST',
+    path: '/api/logs/diagnostics/stop',
+    fromJson: (json) => json,
+    retryable: false,
+  );
 
   /// Centralized audit events (`GET /api/audit/events`) — the durable
   /// PostgreSQL execution-assurance trail. Tenant-scoped server-side: the
