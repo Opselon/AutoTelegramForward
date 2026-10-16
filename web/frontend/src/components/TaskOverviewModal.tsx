@@ -544,7 +544,7 @@ export function TaskOverviewModal({
                       type="number"
                       placeholder="Topic Thread ID (0 to remove)"
                       value={draft.topic_id || ''}
-                      onChange={(e) => setDraft({ ...draft, topic_id: parseInt(e.target.value) || 0 })}
+                      onChange={(e) => setDraft({ ...draft, topic_id: e.target.value })}
                       style={{
                         flex: 1,
                         background: '#1e293b',

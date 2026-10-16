@@ -27,8 +27,8 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
         }
         // Auto-login immediately upon registration
         const loginResp = await api.login({ username, password })
-        if (loginResp.success && (loginResp as any).token) {
-          localStorage.setItem('auth_token', (loginResp as any).token)
+        if (loginResp.success && loginResp.token) {
+          localStorage.setItem('auth_token', loginResp.token)
           onLogin()
           return
         }
@@ -42,7 +42,7 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
         if (!resp.success) {
           throw new Error(resp.message || (isRtl ? 'نام کاربری یا رمز عبور اشتباه است' : 'Invalid credentials'))
         }
-        const token = (resp as any).token
+        const token = resp.token
         if (!token) throw new Error(isRtl ? 'توکن ورود دریافت نشد' : 'No token received')
         localStorage.setItem('auth_token', token)
         onLogin()
