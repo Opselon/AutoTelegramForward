@@ -267,6 +267,12 @@ def build_container(cfg: Config) -> dict:
         durable_pipeline=durable_pipeline,
         pv_responder=pv_responder,
     )
+    # The branding hop (A -> C -> B) needs a live client and the transform-aware
+    # posting routine, both of which live on the dispatcher; the pipeline decides
+    # *whether* to hop (shared decision) and hands the resulting plan to the
+    # durable queue as job state. Wiring them here keeps the application layer
+    # free of infrastructure imports.
+    durable_pipeline.set_branding_hop(dispatcher)
     i18n = I18n()
     i18n.set_language(cfg.language)
 

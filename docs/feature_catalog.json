@@ -37,6 +37,14 @@
       "implementation_status": "IMPLEMENTED"
     },
     {
+      "id": "FWD_BRANDING_HOP",
+      "name": "Branding hop (A -> C -> B) composed with every message transform",
+      "entry_points": ["core/domain/branding.py#should_hop", "core/application/branding_hop.py#post_to_channel", "core/application/pipeline.py#_perform_brand_hop", "core/infrastructure/telegram/dispatcher.py#perform_branding_hop", "core/infrastructure/telegram/durable_queue.py#_dispatch_to_telegram"],
+      "db_tables": ["delivery_jobs (branding hop state)"],
+      "completion_condition": "the processed message is posted into C once per deliverable and the target receives a forward of C; transforms run exactly once (never skipped or doubled by the worker); any hop failure falls back to a direct A -> B delivery",
+      "implementation_status": "IMPLEMENTED"
+    },
+    {
       "id": "FWD_CONTENT_DEDUP",
       "name": "SHA-256 content fingerprint deduplication",
       "entry_points": ["core/application/pipeline.py#_process_for_rule", "core/infrastructure/persistence/postgres_repositories.py#PostgresMessageMapRepository.was_content_forwarded"],

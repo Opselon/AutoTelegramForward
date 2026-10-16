@@ -18,6 +18,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 import uuid
 
+from ..domain import branding
 from ..domain.entities import (
     DeliveryJob,
     DeliveryStatus,
@@ -270,6 +271,7 @@ class DurableMessagePipeline:
         log_client: Optional[Any] = None,
         audit_repo: Optional[Any] = None,
         log_policy: Optional["LogPolicy"] = None,
+        branding_hop: Optional[Any] = None,
     ) -> None:
         self._rules = rule_repo
         self._filters = filter_repo
@@ -285,6 +287,10 @@ class DurableMessagePipeline:
         self._pool = pool
         self._log_client = log_client
         self._audit_repo = audit_repo
+        # Branding hop performer (port): the dispatcher, wired by main.py. Kept
+        # optional so a bare pipeline — unit tests, embedded use — still runs;
+        # without it a rule that asks for the hop simply delivers directly.
+        self._branding_hop = branding_hop
         self.metrics = PipelineMetrics()
         # Which lifecycle events may leave this process, and how often. The
         # Logger has no server-side filter yet, so the documented severity
@@ -353,6 +359,43 @@ class DurableMessagePipeline:
                 pass
 
     # -----------------------------------------------------------------
+    def set_branding_hop(self, performer: Optional[Any]) -> None:
+        """Wire the branding hop performer (the dispatcher) after construction.
+
+        ``main.py`` builds the pipeline before the dispatcher exists, and the hop
+        needs the dispatcher's live session pool and posting routine; this setter
+        is how the two halves meet without the application layer importing the
+        infrastructure layer.
+        """
+        self._branding_hop = performer
+
+    async def _perform_brand_hop(self, ctx: "PipelineContext", rule: ForwardRule,
+                                 text: str) -> Optional[Dict[str, Any]]:
+        """Ask the performer to post ``text`` into C; never raise at the caller."""
+        try:
+            plan = await self._branding_hop.perform_branding_hop(  # type: ignore[union-attr]
+                ctx.payload, rule, text,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[PIPELINE:BRANDING] [%s] Rule %s hop failed (%s) — delivering directly",
+                ctx.correlation_id[:8], rule.id[:8], exc,
+            )
+            return None
+        if plan:
+            logger.info(
+                "[PIPELINE:BRANDING] [%s] Rule %s msg %s posted to C=%s msg=%s ids=%s (%s)",
+                ctx.correlation_id[:8], rule.id[:8], ctx.payload.message_id,
+                plan.get("chat_id"), plan.get("message_id"), plan.get("message_ids"),
+                plan.get("reason", ""),
+            )
+        else:
+            logger.warning(
+                "[PIPELINE:BRANDING] [%s] Rule %s msg %s: nothing posted into C — delivering directly",
+                ctx.correlation_id[:8], rule.id[:8], getattr(ctx.payload, "message_id", "?"),
+            )
+        return plan
+
     async def process(self, raw_message: Any, trigger: str = "NEW_MESSAGE") -> PipelineContext:
         ctx = PipelineContext(trigger=trigger, raw_message=raw_message)
         t_start = time.monotonic()
@@ -683,7 +726,41 @@ class DurableMessagePipeline:
             return
 
         enqueued_any = False
-        for target in targets:
+        # --- Branding hop (A -> C -> B) ------------------------------------- #
+        # The hop runs *after* every transform, on the text this target would
+        # otherwise have received, so C holds the processed message (Replace
+        # rules, AI rewrite, header/footer, watermark included) and B's forward
+        # of C therefore carries the branded *and* processed content. The
+        # decision comes from the same shared source the dashboard/bot preview
+        # uses; the posting itself is the dispatcher's `perform_branding_hop`, so
+        # the queue and direct paths cannot drift apart.
+        hop_enabled, hop_reason = False, "branding_hop_unwired"
+        if self._branding_hop is not None:
+            try:
+                hop_enabled, hop_reason = self._branding_hop.branding_decision(payload, rule)
+            except Exception as exc:  # a decision failure must never block delivery
+                hop_enabled, hop_reason = False, f"branding_decision_failed:{exc}"
+        delivery_targets = list(targets)
+        if hop_enabled:
+            brand_channel = branding.channel_id(rule).strip()
+            remaining = [t for t in targets if str(t).strip() != brand_channel]
+            if not brand_channel or not remaining or brand_channel == str(payload.chat_id).strip():
+                # C is the source, or the rule's only destination: there is no
+                # stage 2 to brand, so the message is delivered directly rather
+                # than posted into C and left there.
+                logger.warning(
+                    "[PIPELINE:BRANDING] [%s] Rule %s: hop not possible for msg %s "
+                    "(C=%s, remaining targets=%d) — delivering directly",
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                    brand_channel, len(remaining),
+                )
+                hop_enabled = False
+            else:
+                # C receives exactly one post; it is not a stage-2 destination.
+                delivery_targets = remaining
+        hop_plans: Dict[str, Optional[Dict[str, Any]]] = {}
+
+        for target in delivery_targets:
             # Anti-loop per target: with many targets, one of them may be the
             # source itself (or the original forward origin). Skip that one
             # instead of dropping the message for every other target, and say so
@@ -742,10 +819,23 @@ class DurableMessagePipeline:
                                 ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
                                 policy.source or "target", notes,
                             )
+            # Branding hop: post this target's processed text into C once, then
+            # hand the plan to the queue so the worker reproduces the hop. The
+            # outcome (including a failure) is cached per distinct text — C must
+            # never receive two copies of one message, and a hop miss must fall
+            # back to a direct delivery rather than drop the message.
+            branding_plan = None
+            if hop_enabled and self._branding_hop is not None:
+                hop_key = target_text or ""
+                if hop_key not in hop_plans:
+                    hop_plans[hop_key] = await self._perform_brand_hop(ctx, rule, target_text)
+                branding_plan = hop_plans[hop_key]
+
             if self._queue is not None:
                 ok = await self._queue.enqueue_delivery(
                     rule, payload, str(target), target_text, eval_res,
                     correlation_id=ctx.correlation_id,
+                    branding=branding_plan,
                 )
                 if ok:
                     enqueued_any = True
@@ -789,7 +879,11 @@ class DurableMessagePipeline:
                 payload.effective_text or ctx.transformed_text or "", rule,
             )
             if reply_text:
-                for target in targets:
+                # Replies go to the same destinations as the forward, minus C:
+                # branding is about the *forward header* of the forwarded
+                # message, and a keyword reply is our own plain text (it carries
+                # no header to brand), so it must not be posted into C.
+                for target in delivery_targets:
                     if self._queue is None:
                         break
                     # job_kind="keyword_reply" gives the reply its own
