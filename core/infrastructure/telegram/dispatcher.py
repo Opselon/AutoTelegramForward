@@ -525,6 +525,9 @@ class MessageDispatcher:
                 reupload=lambda target, caption, mode: self._reupload_media(
                     client, payload, target, caption, mode,
                 ),
+                reupload_album=lambda target, caption, mode: self._post_album_into_c(
+                    client, payload, target, caption, mode,
+                ),
             )
         except Exception as exc:
             key, sev, recoverable = tg_error(exc)
@@ -544,6 +547,32 @@ class MessageDispatcher:
 
         plan["reason"] = hop_reason
         return plan
+
+    async def _post_album_into_c(self, client, payload, target, caption, mode_val):
+        """Re-upload a whole album into C when Telegram refuses to copy the group.
+
+        The download/upload routine already exists for stage 2 (the durable queue
+        owns it), so the hop borrows it rather than keeping a second copy of the
+        media plumbing; it is asked for *every* message id of the new group, since
+        the target must receive the album, not one item of it. Returns ``None``
+        when no album-aware path exists, and the hop then degrades to the first
+        item instead of dropping the message.
+        """
+        album_ids = [int(m.message_id) for m in (getattr(payload, "album_messages", None) or [])
+                     if getattr(m, "message_id", None)]
+        if not album_ids:
+            album_ids = [int(getattr(payload, "message_id", 0) or 0)]
+        queue_manager = getattr(self, "_queue_manager", None)
+        if queue_manager is None or not hasattr(queue_manager, "_reupload_album"):
+            return None
+        try:
+            return await queue_manager._reupload_album(
+                client, int(payload.chat_id), album_ids, target, caption, return_all=True,
+            )
+        except TypeError:  # older signature without return_all
+            return await queue_manager._reupload_album(
+                client, int(payload.chat_id), album_ids, target, caption,
+            )
 
     def _brand_hop_decision(self, payload: MessagePayload, rule) -> tuple:
         """Should this message take the branding hop? (shared decision, see domain).
@@ -583,6 +612,9 @@ class MessageDispatcher:
                 client, payload, rule, text,
                 caption_template=rule.custom_caption_template or None,
                 reupload=lambda target, caption, mode: self._reupload_media(
+                    client, payload, target, caption, mode,
+                ),
+                reupload_album=lambda target, caption, mode: self._post_album_into_c(
                     client, payload, target, caption, mode,
                 ),
             )

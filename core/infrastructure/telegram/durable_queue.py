@@ -880,7 +880,15 @@ class DurableQueueManager:
         album_ids: List[int],
         target: Any,
         caption: Optional[str],
-    ) -> int:
+        return_all: bool = False,
+    ) -> Any:
+        """Re-download and re-upload a whole album.
+
+        Returns the new first message id (the delivery uses it as its result), or
+        the ids of *every* message of the re-created group when ``return_all`` is
+        set — the branding hop needs all of them so stage 2 can forward the album
+        instead of one item of it.
+        """
         temp_files: List[str] = []
         try:
             from pyrogram.types import InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo
@@ -915,6 +923,8 @@ class DurableQueueManager:
 
             if media_list and hasattr(client, "send_media_group"):
                 res = await client.send_media_group(chat_id=target, media=media_list)
+                if return_all and isinstance(res, list):
+                    return [getattr(m, "id", 0) for m in res if getattr(m, "id", 0)]
                 if isinstance(res, list) and res:
                     return res[0].id
                 return getattr(res, "id", 0)

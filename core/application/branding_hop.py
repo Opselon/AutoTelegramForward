@@ -21,7 +21,10 @@ Two rules follow from that and are enforced here:
    media, even when the source message had some), ``MEDIA_ONLY`` puts the media
    with no caption, ``AUTO``/``TEXT_AND_MEDIA`` put media + the processed caption.
    Without this a hop would silently *add* media to a text-only task, or *add* a
-   caption to a media-only one — i.e. the hop would change the payload.
+   caption to a media-only one — i.e. the hop would change the payload. An album
+   is hopped as an album: copying only its first message would turn a grouped
+   post into a single one for the target. If no album-aware call is available the
+   hop degrades to the first item (with the full caption) rather than dropping it.
 2. **Entities survive only while their offsets are valid.** Caption entities are
    Telegram UTF-16 offsets into the text they belong to. When no transform
    changed the text, the source entities are shifted and forwarded so bold/links
@@ -41,13 +44,15 @@ from ..domain.services import CaptionManagementEngine
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["MODE_TEXT_ONLY", "MODE_MEDIA_ONLY", "dot", "post_to_channel", "source_entities"]
+__all__ = ["MODE_TEXT_ONLY", "MODE_MEDIA_ONLY", "album_ids", "dot", "post_to_channel",
+           "source_entities"]
 
 MODE_TEXT_ONLY = "TEXT_ONLY"
 MODE_MEDIA_ONLY = "MEDIA_ONLY"
 
 #: ``await reupload(target_chat, caption, mode_val)`` — infrastructure supplies a
-#: media re-uploader for channels whose content protection refuses a copy.
+#: media re-uploader for channels whose content protection refuses a copy. The
+#: album variant returns every message id of the re-created group (or one id).
 ReuploadFn = Callable[[Any, Optional[str], str], Awaitable[Any]]
 
 
@@ -57,6 +62,21 @@ def dot(rule: Any, name: str, default: Any = None) -> Any:
     if value is None:
         return default
     return getattr(value, "value", value)
+
+
+def album_ids(payload: Any) -> List[int]:
+    """Message ids of the album this payload belongs to (empty when it is not one).
+
+    The album aggregator attaches every message of a media group to the flushed
+    payload; a single-media message has none, so the hop falls back to its own
+    message id.
+    """
+    ids: List[int] = []
+    for message in getattr(payload, "album_messages", None) or []:
+        mid = getattr(message, "message_id", None)
+        if mid:
+            ids.append(int(mid))
+    return ids
 
 
 def _mode_of(rule: Any) -> str:
@@ -125,6 +145,7 @@ async def post_to_channel(
     caption_template: Optional[str] = None,
     thread_kwargs: Optional[Dict[str, Any]] = None,
     reupload: Optional[ReuploadFn] = None,
+    reupload_album: Optional[ReuploadFn] = None,
 ) -> Optional[Dict[str, Any]]:
     """Post the processed message into channel C and return the hop plan.
 
@@ -165,6 +186,7 @@ async def post_to_channel(
     caption: Optional[str] = None
     entities: Optional[List[Any]] = None
     overflow: Optional[str] = None
+    src_caption = str(getattr(payload, "caption", "") or "")
     if mode_val != MODE_MEDIA_ONLY:
         raw = str(text or caption_template or "")
         caption, entities, overflow = CaptionManagementEngine.format_caption(
@@ -174,6 +196,50 @@ async def post_to_channel(
         )
         caption = caption or None
         entities = entities or None
+
+    # --- album (media group) deliverable ---------------------------------- #
+    # A grouped post must stay grouped: copying only its first message into C
+    # would silently turn an album into a single one-item post for the target.
+    # `copy_media_group` re-uploads by file id (no download) and accepts the
+    # processed caption, so C holds the same group with the same text.
+    group_ids = album_ids(payload)
+    if len(group_ids) > 1 and has_media and mode_val != MODE_TEXT_ONLY:
+        captions_arg: Any = None
+        if mode_val == MODE_MEDIA_ONLY:
+            captions_arg = ""  # "" on a string form clears every caption
+        elif caption and caption != src_caption:
+            # A list keeps the other items' own captions and overrides the first.
+            captions_arg = [caption] + [None] * (len(group_ids) - 1)
+        if hasattr(client, "copy_media_group"):
+            try:
+                res = await client.copy_media_group(
+                    chat_id=target, from_chat_id=src_chat,
+                    message_id=group_ids[0], captions=captions_arg,
+                )
+                ids = [i for i in (_message_id(m) for m in (res or [])) if i]
+                if ids:
+                    return _plan(inter_id, ids, rule, mode_val, "album")
+            except Exception as exc:
+                logger.warning(
+                    "[PIPELINE:BRANDING] album copy into C=%s failed (%s) — re-uploading the album",
+                    inter_id, exc,
+                )
+        if reupload_album is not None:
+            try:
+                res = await reupload_album(
+                    target, caption if mode_val != MODE_MEDIA_ONLY else None, mode_val,
+                )
+                ids = [int(i) for i in (res if isinstance(res, list) else [res]) if i]
+                if ids:
+                    return _plan(inter_id, ids, rule, mode_val, "album_reupload")
+            except Exception as exc:
+                logger.warning(
+                    "[PIPELINE:BRANDING] album re-upload into C=%s failed (%s) — "
+                    "falling back to the first item",
+                    inter_id, exc,
+                )
+        # Nothing album-aware worked: fall through and hop the first item, which
+        # carries the full processed caption. Degraded, never dropped.
 
     copy_kwargs = dict(kwargs)
     if mode_val == MODE_MEDIA_ONLY:

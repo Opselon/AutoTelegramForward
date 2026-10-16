@@ -48,7 +48,9 @@ class FakeClient:
         self.forwards: List[Dict[str, Any]] = []
         self.copies: List[Dict[str, Any]] = []
         self.sends: List[Dict[str, Any]] = []
+        self.groups: List[Dict[str, Any]] = []
         self.fail_copy_with: Optional[Exception] = None
+        self.fail_group_with: Optional[Exception] = None
         self._next_id = 900
 
     def _id(self) -> int:
@@ -70,6 +72,16 @@ class FakeClient:
         })
         return types.SimpleNamespace(id=mid)
 
+    async def copy_media_group(self, chat_id: Any, from_chat_id: Any, message_id: int, **kwargs) -> Any:
+        if self.fail_group_with is not None and str(chat_id) == C_CHANNEL:
+            raise self.fail_group_with
+        mids = [self._id() for _ in range(3)]
+        self.groups.append({
+            "chat_id": str(chat_id), "from_chat_id": str(from_chat_id),
+            "message_id": int(message_id), "ids": mids, "kwargs": kwargs,
+        })
+        return [types.SimpleNamespace(id=i) for i in mids]
+
     async def forward_messages(self, chat_id: Any, from_chat_id: Any, message_ids: List[int], **kwargs) -> Any:
         mid = self._id()
         self.forwards.append({
@@ -81,6 +93,10 @@ class FakeClient:
     @property
     def c_posts(self) -> List[Dict[str, Any]]:
         return [c for c in self.copies + self.sends if c["chat_id"] == C_CHANNEL]
+
+    @property
+    def c_groups(self) -> List[Dict[str, Any]]:
+        return [g for g in self.groups if g["chat_id"] == C_CHANNEL]
 
 
 class FakePool:
@@ -195,6 +211,20 @@ def _media_payload(text: str = "hello world", caption: Optional[str] = None,
         payload.caption = caption
     if entities is not None:
         payload.caption_entities = entities
+    return payload
+
+
+def _album_payload(caption: str = "album caption", message_id: int = 20,
+                   count: int = 3) -> MessagePayload:
+    """What the album aggregator hands downstream: the first message plus the rest."""
+    payload = MessagePayload(chat_id="-1001234", message_id=message_id, text=caption)
+    payload.has_media = True
+    payload.media_type = "photo"
+    payload.caption = caption
+    payload.media_group_id = f"g{message_id}"
+    payload.album_messages = [
+        types.SimpleNamespace(message_id=message_id + i) for i in range(count)
+    ]
     return payload
 
 
@@ -425,6 +455,109 @@ class TestHopKeepsTheDeliverable:
         assert len(client.c_posts) == 1
         posted = client.c_posts[0]["kwargs"].get("caption") or ""
         assert len(posted) <= 1024
+
+
+# --------------------------------------------------------------------------- #
+# Media handling: an album stays an album (hop and worker alike)
+# --------------------------------------------------------------------------- #
+class TestAlbumComposition:
+    @pytest.mark.asyncio
+    async def test_pipeline_hops_an_album_as_a_group(self):
+        client = _client()
+        queue = FakeQueue()
+        payload = _album_payload()
+
+        await _run(_pipeline(_rule(), client, queue), payload)
+
+        assert len(client.c_groups) == 1, "an album is one grouped post into C"
+        group = client.c_groups[0]
+        assert group["message_id"] == payload.message_id
+        assert group["kwargs"].get("captions") is None, "an unchanged caption is kept as-is"
+        plan = queue.branding_for(B_TARGET)
+        assert len(plan["message_ids"]) == 3, "every item of the group is handed to the queue"
+
+    @pytest.mark.asyncio
+    async def test_transformed_caption_reaches_c_and_keeps_the_other_items(self):
+        client = _client()
+        queue = FakeQueue()
+        rule = _rule()
+        rule.replacements = {"album": "gallery"}
+        payload = _album_payload("album caption")
+
+        await _run(_pipeline(rule, client, queue), payload)
+
+        captions = client.c_groups[0]["kwargs"].get("captions")
+        assert captions == ["gallery caption", None, None], \
+            "the first item carries the processed caption, the rest keep their own"
+        assert queue.text_for(B_TARGET) == "gallery caption"
+
+    @pytest.mark.asyncio
+    async def test_media_only_album_loses_every_caption_in_c(self):
+        client = _client()
+        rule = _rule(content_mode=ContentMode.MEDIA_ONLY)
+
+        await _run(_pipeline(rule, client), _album_payload())
+
+        assert client.c_groups[0]["kwargs"].get("captions") == "", \
+            "MEDIA_ONLY means the group carries no caption either"
+
+    @pytest.mark.asyncio
+    async def test_text_only_album_is_text_in_c_with_no_media(self):
+        client = _client()
+        rule = _rule(content_mode=ContentMode.TEXT_ONLY)
+
+        await _run(_pipeline(rule, client), _album_payload("album caption"))
+
+        assert client.c_groups == [] and client.copies == []
+        assert [s["text"] for s in client.sends] == ["album caption"]
+
+    @pytest.mark.asyncio
+    async def test_album_copy_refusal_falls_back_to_the_album_re_upload(self):
+        client = _client()
+        client.fail_group_with = RuntimeError("CHAT_FORWARDS_RESTRICTED")
+        rule = _rule()
+        calls: List[tuple] = []
+
+        async def _reupload_album(target, caption, mode_val):
+            calls.append((target, caption, mode_val))
+            return [501, 502, 503]
+
+        plan = await post_to_channel(
+            client, _album_payload(), rule, "album caption", reupload_album=_reupload_album,
+        )
+
+        assert calls and calls[0][1] == "album caption"
+        assert plan["message_ids"] == [501, 502, 503], "the whole album travels to stage 2"
+
+    @pytest.mark.asyncio
+    async def test_album_degrades_to_the_first_item_when_nothing_album_aware_works(self):
+        client = _client()
+        client.fail_group_with = RuntimeError("CHAT_FORWARDS_RESTRICTED")
+        plan = await post_to_channel(client, _album_payload(), _rule(), "album caption")
+
+        assert plan is not None, "a hop miss must never become a dropped album"
+        assert len(client.copies) == 1 and client.copies[0]["from_chat_id"] == "-1001234"
+
+    @pytest.mark.asyncio
+    async def test_worker_forwards_the_whole_album_from_c(self):
+        client = _client()
+        job = DeliveryJob(
+            id="j5", rule_id="rule-bh", source_chat_id="-1001234", source_message_id=20,
+            target_chat_id=B_TARGET,
+            payload_data={
+                "forward_mode": ForwardMode.COPY_MESSAGE.value, "content_mode": "AUTO",
+                "text": "album caption", "has_media": True, "media_type": "photo",
+                "media_group_id": "g20", "album_message_ids": [20, 21, 22],
+                "branding": {"chat_id": C_CHANNEL, "message_id": 88,
+                             "message_ids": [88, 89, 90], "force_forward": True},
+            },
+        )
+
+        await _drain(WorkerStub(), client, job)
+
+        assert client.forwards[-1]["from_chat_id"] == C_CHANNEL
+        assert client.forwards[-1]["message_ids"] == [88, 89, 90], \
+            "stage 2 forwards C's group, not the source album"
 
 
 # --------------------------------------------------------------------------- #
