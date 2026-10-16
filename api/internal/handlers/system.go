@@ -155,51 +155,73 @@ func envAnySet(names ...string) bool {
 }
 
 // EnvContract is the API's own configuration contract, as booleans.
+//
+// It lists what THIS deployment style (docker compose) provides to the api
+// container — the addresses it needs to reach its peers and the optional knobs
+// the compose file passes. The bot token deliberately is not required here: in
+// compose mode the bot session lives in the core container, and listing it as
+// required would report a healthy stack as broken.
 func (h *Handlers) EnvContract() []EnvCheck {
 	return []EnvCheck{
 		{
-			Key:    "ATF_BOT_TOKEN",
+			Key:    "ATF_CORE_GRPC",
 			Level:  "required",
-			Set:    envAnySet("ATF_BOT_TOKEN", "TELEGRAM_BOT_TOKEN", "BOT_TOKEN"),
-			Reason: "bot token exchange and Telegram Mini App auth",
-			Hint:   "set ATF_BOT_TOKEN in .env and restart (atf system restart)",
+			Set:    envAnySet("ATF_CORE_GRPC"),
+			Reason: "core gRPC address (rules, sessions, pipeline stats)",
+			Hint:   "ATF_CORE_GRPC=core:50051 (set by docker-compose.yml)",
+		},
+		{
+			Key:    "ATF_LOGGER_GRPC",
+			Level:  "required",
+			Set:    envAnySet("ATF_LOGGER_GRPC"),
+			Reason: "logger gRPC address (log ingest and query)",
+			Hint:   "ATF_LOGGER_GRPC=logger:50052 (set by docker-compose.yml)",
 		},
 		{
 			Key:    "ATF_API_KEY",
 			Level:  "recommended",
 			Set:    envAnySet("ATF_API_KEY"),
-			Reason: "pre-shared CLI/service key for the admin surface",
-			Hint:   "atf setup generates this automatically",
+			Reason: "pre-shared key for scripted/CLI clients",
+			Hint:   "atf setup generates ATF_API_KEY automatically, then: atf system restart",
 		},
 		{
-			Key:    "ATF_WEB_URL",
+			Key:    "ATF_WEB_HEALTH_URL",
 			Level:  "recommended",
-			Set:    envAnySet("ATF_WEB_URL"),
-			Reason: "absolute links in bot messages and the dashboard",
-			Hint:   "ATF_WEB_URL=https://your-domain (or http://127.0.0.1:8088)",
+			Set:    envAnySet("ATF_WEB_HEALTH_URL"),
+			Reason: "reachable web gateway health URL, probed by /api/health/services",
+			Hint:   "ATF_WEB_HEALTH_URL=http://web:8088/healthz (set by docker-compose.yml)",
 		},
 		{
-			Key:    "ATF_TLS_DOMAIN",
+			Key:    "ATF_ADDR",
 			Level:  "optional",
-			Set:    envAnySet("ATF_TLS_DOMAIN"),
-			Reason: "reverse proxy terminates TLS for this domain",
-			Hint:   "leave empty for a local-only dashboard",
+			Set:    envAnySet("ATF_API_ADDR"),
+			Reason: "listen address (defaults to :8080)",
+			Hint:   "leave unset unless the port must change",
 		},
 		{
-			Key:    "ATF_TLS_EMAIL",
+			Key:    "ATF_BOT_TOKEN",
 			Level:  "optional",
-			Set:    envAnySet("ATF_TLS_EMAIL"),
-			Reason: "Let's Encrypt contact address",
-			Hint:   "set it once ATF_TLS_DOMAIN is set",
+			Set:    envAnySet("ATF_BOT_TOKEN", "TELEGRAM_BOT_TOKEN", "BOT_TOKEN"),
+			Reason: "only for bare-metal API deployments that exchange bot tokens themselves (compose puts the bot in core)",
+			Hint:   "not needed with docker compose",
 		},
 	}
 }
 
 // missingRequired returns the required keys that are not set.
 func missingRequired(checks []EnvCheck) []string {
+	return missingAtLevel(checks, "required")
+}
+
+// missingRecommended returns the recommended keys that are not set.
+func missingRecommended(checks []EnvCheck) []string {
+	return missingAtLevel(checks, "recommended")
+}
+
+func missingAtLevel(checks []EnvCheck, level string) []string {
 	out := []string{}
 	for _, c := range checks {
-		if c.Level == "required" && !c.Set {
+		if c.Level == level && !c.Set {
 			out = append(out, c.Key)
 		}
 	}
@@ -213,9 +235,11 @@ func (h *Handlers) EnvContractHandler(w http.ResponseWriter, r *http.Request) {
 	checks := h.EnvContract()
 	missing := missingRequired(checks)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"checks":           checks,
-		"missing_required": missing,
-		"ok":               len(missing) == 0,
+		"checks":              checks,
+		"missing_required":    missing,
+		"missing_recommended": missingRecommended(checks),
+		"deployment":          "docker-compose",
+		"ok":                  len(missing) == 0,
 	})
 }
 
@@ -252,15 +276,17 @@ func (h *Handlers) SetupReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ready":            ready,
-		"time":             time.Now().UTC().Format(time.RFC3339),
-		"product_version":  resolveProductVersion(),
-		"api_version":      APIVersion,
-		"commit_sha":       resolveCommitSHA(),
-		"features":         VersionFeatures,
-		"checks":           checks,
-		"missing_required": missing,
-		"services":         probes,
-		"next_steps":       nextSteps,
+		"ready":               ready,
+		"time":                time.Now().UTC().Format(time.RFC3339),
+		"product_version":     resolveProductVersion(),
+		"api_version":         APIVersion,
+		"commit_sha":          resolveCommitSHA(),
+		"features":            VersionFeatures,
+		"deployment":          "docker-compose",
+		"checks":              checks,
+		"missing_required":    missing,
+		"missing_recommended": missingRecommended(checks),
+		"services":            probes,
+		"next_steps":          nextSteps,
 	})
 }
