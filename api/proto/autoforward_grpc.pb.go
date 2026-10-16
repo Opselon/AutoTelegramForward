@@ -1759,6 +1759,7 @@ var AIControlService_ServiceDesc = grpc.ServiceDesc{
 const (
 	SystemStatusControlService_GetSystemStats_FullMethodName = "/autoforward.SystemStatusControlService/GetSystemStats"
 	SystemStatusControlService_GetLogPolicy_FullMethodName   = "/autoforward.SystemStatusControlService/GetLogPolicy"
+	SystemStatusControlService_SetLogPolicy_FullMethodName   = "/autoforward.SystemStatusControlService/SetLogPolicy"
 )
 
 // SystemStatusControlServiceClient is the client API for SystemStatusControlService service.
@@ -1769,6 +1770,10 @@ type SystemStatusControlServiceClient interface {
 	// Additive (no existing field or RPC changed): lets the control plane report
 	// Core's producer-side collection policy instead of leaving it unavailable.
 	GetLogPolicy(ctx context.Context, in *LogPolicyRequest, opts ...grpc.CallOption) (*LogPolicyResponse, error)
+	// Additive: lets an operator change the policy Core enforces, validated and
+	// persisted by the process that has to live with the value. The answer is the
+	// policy now in force, read back from the instance the emitter uses.
+	SetLogPolicy(ctx context.Context, in *SetLogPolicyRequest, opts ...grpc.CallOption) (*LogPolicyResponse, error)
 }
 
 type systemStatusControlServiceClient struct {
@@ -1799,6 +1804,16 @@ func (c *systemStatusControlServiceClient) GetLogPolicy(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *systemStatusControlServiceClient) SetLogPolicy(ctx context.Context, in *SetLogPolicyRequest, opts ...grpc.CallOption) (*LogPolicyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LogPolicyResponse)
+	err := c.cc.Invoke(ctx, SystemStatusControlService_SetLogPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SystemStatusControlServiceServer is the server API for SystemStatusControlService service.
 // All implementations must embed UnimplementedSystemStatusControlServiceServer
 // for forward compatibility.
@@ -1807,6 +1822,10 @@ type SystemStatusControlServiceServer interface {
 	// Additive (no existing field or RPC changed): lets the control plane report
 	// Core's producer-side collection policy instead of leaving it unavailable.
 	GetLogPolicy(context.Context, *LogPolicyRequest) (*LogPolicyResponse, error)
+	// Additive: lets an operator change the policy Core enforces, validated and
+	// persisted by the process that has to live with the value. The answer is the
+	// policy now in force, read back from the instance the emitter uses.
+	SetLogPolicy(context.Context, *SetLogPolicyRequest) (*LogPolicyResponse, error)
 	mustEmbedUnimplementedSystemStatusControlServiceServer()
 }
 
@@ -1822,6 +1841,9 @@ func (UnimplementedSystemStatusControlServiceServer) GetSystemStats(context.Cont
 }
 func (UnimplementedSystemStatusControlServiceServer) GetLogPolicy(context.Context, *LogPolicyRequest) (*LogPolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetLogPolicy not implemented")
+}
+func (UnimplementedSystemStatusControlServiceServer) SetLogPolicy(context.Context, *SetLogPolicyRequest) (*LogPolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetLogPolicy not implemented")
 }
 func (UnimplementedSystemStatusControlServiceServer) mustEmbedUnimplementedSystemStatusControlServiceServer() {
 }
@@ -1881,6 +1903,24 @@ func _SystemStatusControlService_GetLogPolicy_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SystemStatusControlService_SetLogPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetLogPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemStatusControlServiceServer).SetLogPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemStatusControlService_SetLogPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemStatusControlServiceServer).SetLogPolicy(ctx, req.(*SetLogPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SystemStatusControlService_ServiceDesc is the grpc.ServiceDesc for SystemStatusControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1895,6 +1935,10 @@ var SystemStatusControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetLogPolicy",
 			Handler:    _SystemStatusControlService_GetLogPolicy_Handler,
+		},
+		{
+			MethodName: "SetLogPolicy",
+			Handler:    _SystemStatusControlService_SetLogPolicy_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
