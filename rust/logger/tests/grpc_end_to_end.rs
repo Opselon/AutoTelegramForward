@@ -37,8 +37,10 @@ fn no_env(_: &str) -> Option<String> {
 const CALL_TIMEOUT: Duration = Duration::from_secs(20);
 
 struct Started {
-    /// Kept alive so the archive path survives the server.
-    _dir: tempfile::TempDir,
+    /// Kept alive so an engine-created archive survives the server. `None` when the
+    /// caller owns the archive (the restart test), which is exactly the case where
+    /// the file must outlive this struct.
+    _dir: Option<tempfile::TempDir>,
     db_path: String,
     client: Client,
     pipeline: Arc<Pipeline>,
@@ -71,12 +73,26 @@ impl Started {
 
 async fn start_with(config: Config, policy: CollectPolicy) -> Started {
     let dir = tempfile::tempdir().expect("temp archive dir");
+    let db_path = dir.path().join("atf_logs.db").to_string_lossy().to_string();
+    start_on_archive(config, policy, &db_path, Some(dir)).await
+}
+
+/// Start an engine on an archive the caller owns.
+///
+/// `dir` keeps an engine-created archive alive as long as the `Started` does, and
+/// deletes it on drop. `None` means the archive outlives the server, which is the
+/// only way to test a real restart: `shutdown(self)` *consumes* the `Started`, so
+/// a server-owned temp archive is deleted the moment the server stops and the
+/// reopen would silently create a fresh, empty file -- a durability check that
+/// passes while proving nothing.
+async fn start_on_archive(
+    config: Config,
+    policy: CollectPolicy,
+    db_path: &str,
+    dir: Option<tempfile::TempDir>,
+) -> Started {
     let mut config = config;
-    config.db_path = dir
-        .path()
-        .join("atf_logs.db")
-        .to_string_lossy()
-        .to_string();
+    config.db_path = db_path.to_string();
     let backend = BackendConfig::from_config(&config, &no_env).expect("explicit backend config");
     let metrics = Arc::new(Metrics::new());
     let health = Arc::new(HealthState::new());
@@ -299,7 +315,10 @@ async fn insert_query_stats_purge_over_real_grpc() {
     .await;
     assert!(purged.success, "{purged:?}");
     assert_eq!(purged.purged, 30);
-    assert_eq!(purged.remaining, 1, "the fresh row survives its own purge scope");
+    assert_eq!(
+        purged.remaining, 1,
+        "the fresh row survives its own purge scope"
+    );
     assert_eq!(server.storage.table_rows().unwrap(), 1);
 
     server.shutdown().await;
@@ -340,7 +359,10 @@ async fn every_supported_event_field_round_trips() {
     assert_eq!(got.service, sent.service);
     assert_eq!(got.category, sent.category);
     assert_eq!(got.message, sent.message);
-    assert_eq!(got.detail, sent.detail, "detail is preserved verbatim when clean");
+    assert_eq!(
+        got.detail, sent.detail,
+        "detail is preserved verbatim when clean"
+    );
     assert_eq!(got.rule_id, sent.rule_id);
     assert_eq!(got.user_id, sent.user_id);
     assert_eq!(got.correlation_id, sent.correlation_id);
@@ -410,14 +432,23 @@ async fn reads_an_existing_python_created_archive() {
         conn.execute(
             "INSERT INTO logs (ts, level, service, category, message, detail)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![1_650_000_100i64, "ERROR", "legacy-service", "legacy", "old error", "{}"],
+            rusqlite::params![
+                1_650_000_100i64,
+                "ERROR",
+                "legacy-service",
+                "legacy",
+                "old error",
+                "{}"
+            ],
         )
         .unwrap();
         conn.execute_batch("PRAGMA journal_mode=WAL").unwrap();
     }
 
-    let mut config = Config::default();
-    config.db_path = db_path.clone();
+    let config = Config {
+        db_path: db_path.clone(),
+        ..Default::default()
+    };
     let backend = BackendConfig::from_config(&config, &no_env).unwrap();
     let metrics = Arc::new(Metrics::new());
     let health = Arc::new(HealthState::new());
@@ -462,7 +493,10 @@ async fn reads_an_existing_python_created_archive() {
     .await;
     assert_eq!(page.total, 2, "both archived rows must be readable");
     let legacy = &page.logs[0];
-    assert_eq!(legacy.level, "WARNING", "the archive is read, not rewritten");
+    assert_eq!(
+        legacy.level, "WARNING",
+        "the archive is read, not rewritten"
+    );
     assert_eq!(legacy.message, "archived by the python engine");
     assert_eq!(legacy.detail, r#"{"kept":true}"#);
     assert_eq!(legacy.rule_id, "legacy-rule");
@@ -529,7 +563,10 @@ async fn reads_an_existing_python_created_archive() {
         "user_id",
         "correlation_id",
     ] {
-        assert!(columns.contains(&expected.to_string()), "missing {expected}: {columns:?}");
+        assert!(
+            columns.contains(&expected.to_string()),
+            "missing {expected}: {columns:?}"
+        );
     }
     let indexes: Vec<String> = conn
         .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='logs'")
@@ -547,7 +584,10 @@ async fn reads_an_existing_python_created_archive() {
         "idx_logs_user",
         "idx_logs_corr",
     ] {
-        assert!(indexes.contains(&expected.to_string()), "missing index {expected}: {indexes:?}");
+        assert!(
+            indexes.contains(&expected.to_string()),
+            "missing index {expected}: {indexes:?}"
+        );
     }
 }
 
@@ -629,8 +669,15 @@ async fn concurrent_readers_and_writers() {
         },
     )
     .await;
-    assert_eq!(page.total, (writers * per_writer) as i32, "every acked write is readable");
-    assert_eq!(server.storage.table_rows().unwrap(), (writers * per_writer) as i64);
+    assert_eq!(
+        page.total,
+        (writers * per_writer),
+        "every acked write is readable"
+    );
+    assert_eq!(
+        server.storage.table_rows().unwrap(),
+        (writers * per_writer) as i64
+    );
     assert_eq!(
         server.metrics.events_persisted.get(),
         (writers * per_writer) as u64
@@ -646,37 +693,49 @@ async fn restart_recovers_every_durable_record() {
     // a brand-new engine instance: this is what a process restart looks like.
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("restart.db").to_string_lossy().to_string();
-    let mut config = Config::default();
-    config.db_path = db_path.clone();
+    let config = Config {
+        db_path: db_path.clone(),
+        ..Default::default()
+    };
 
-    let write_config = config.clone();
-    {
-        let mut server = start(write_config).await;
-        // `start` builds its own temp dir; point the reopen check at *that* file.
-        let live_path = server.db_path.clone();
-        for index in 0..50 {
-            let response = log(
-                &mut server.client,
-                pb::LogEntry {
-                    ts: 1_700_000_000 + index,
-                    correlation_id: format!("durable-{index}"),
-                    ..entry("ERROR", &format!("durable {index}"))
-                },
-            )
-            .await;
-            assert!(response.success, "durable write {index} refused: {response:?}");
-        }
-        assert_eq!(server.storage.table_rows().unwrap(), 50);
-        server.shutdown().await;
-
-        // Reopen the archive the first server left behind.
-        config.db_path = live_path;
+    // The archive belongs to THIS test, not to the server: `shutdown(self)`
+    // consumes the `Started`, and a server-owned temp archive would be deleted
+    // before the reopen below -- which would then create a fresh empty file and
+    // pass while proving nothing.
+    let mut server =
+        start_on_archive(config.clone(), CollectPolicy::permissive(), &db_path, None).await;
+    for index in 0..50 {
+        let response = log(
+            &mut server.client,
+            pb::LogEntry {
+                ts: 1_700_000_000 + index,
+                correlation_id: format!("durable-{index}"),
+                ..entry("ERROR", &format!("durable {index}"))
+            },
+        )
+        .await;
+        assert!(
+            response.success,
+            "durable write {index} refused: {response:?}"
+        );
     }
+    assert_eq!(
+        server.storage.table_rows().unwrap(),
+        50,
+        "all 50 committed before the stop"
+    );
+    server.shutdown().await;
+
+    // Reopen the archive the first server left behind (same config, same path).
 
     let backend = BackendConfig::from_config(&config, &no_env).unwrap();
     let metrics = Arc::new(Metrics::new());
     let storage = storage::open(&config, &backend, Arc::clone(&metrics)).expect("reopen archive");
-    assert_eq!(storage.table_rows().unwrap(), 50, "durable records survive a restart");
+    assert_eq!(
+        storage.table_rows().unwrap(),
+        50,
+        "durable records survive a restart"
+    );
     let (rows, total) = storage
         .query(
             &atf_logger::query::QueryFilter::default(),
@@ -735,20 +794,37 @@ async fn redaction_happens_before_persistence() {
     assert!(row.message.contains("[REDACTED]"), "{}", row.message);
 
     let raw = std::fs::read_to_string(&server.db_path).unwrap_or_default();
-    let raw_bytes = std::fs::read(&server.db_path).unwrap_or_default();
+    let raw_bytes = std::fs::read(&server.db_path).expect("the archive must exist to be searched");
+    assert!(
+        !raw_bytes.is_empty(),
+        "the archive is empty; a missing file would make the checks below vacuous"
+    );
     let raw_text = format!("{raw}{}", String::from_utf8_lossy(&raw_bytes));
     assert!(
         !raw_text.contains("SECRET-VALUE-1234567"),
         "the secret is in the archive file"
     );
-    assert!(!raw_text.contains("hunter2"), "the password is in the archive file");
+    assert!(
+        !raw_text.contains("hunter2"),
+        "the password is in the archive file"
+    );
 
     server.shutdown().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn graceful_stop_refuses_new_work_and_drains_the_queue() {
-    let server = start(Config::default()).await;
+    // Queued acks so the 20 records really are in the lanes when the drain starts.
+    // Under the default durable mode every ack returns only once its batch has
+    // committed, so the queues are necessarily empty and `drained_records` can
+    // only ever be 0 -- the property this test exists to check (records in flight
+    // are committed rather than lost) would be untestable.
+    let config = Config {
+        ack_mode: AckMode::Queued,
+        batch_delay_ms: 5_000,
+        ..Default::default()
+    };
+    let server = start(config).await;
     let mut client = server.client.clone();
     // Fill the pipeline, then drain it.
     for index in 0..20 {
@@ -808,8 +884,10 @@ async fn graceful_stop_refuses_new_work_and_drains_the_queue() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn queued_ack_mode_answers_immediately_and_is_marked_degraded() {
-    let mut config = Config::default();
-    config.ack_mode = AckMode::Queued;
+    let config = Config {
+        ack_mode: AckMode::Queued,
+        ..Default::default()
+    };
     let mut server = start(config).await;
     let response = log(
         &mut server.client,
@@ -830,7 +908,9 @@ async fn queued_ack_mode_answers_immediately_and_is_marked_degraded() {
         Arc::clone(&server.health),
         Duration::from_secs(10),
     );
-    assert!(shutdown.run(StopSignal::Sigterm, &server.pipeline, None).clean());
+    assert!(shutdown
+        .run(StopSignal::Sigterm, &server.pipeline, None)
+        .clean());
     assert_eq!(server.storage.table_rows().unwrap(), 1);
     let mut server = server;
     if let Some(stop) = server.stop.take() {

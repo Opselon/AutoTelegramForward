@@ -14,7 +14,7 @@
 use atf_logger::config::Config;
 use atf_logger::metrics::Metrics;
 use atf_logger::query::{GroupBy, Page, PurgeFilter, QueryFilter, RetentionSweep, StatsScope};
-use atf_logger::storage::{self, Backend, BackendConfig, Record, Storage};
+use atf_logger::storage::{self, Backend, BackendConfig, Record};
 use std::sync::Arc;
 
 fn dsn() -> Option<String> {
@@ -33,12 +33,21 @@ fn no_env(_: &str) -> Option<String> {
 
 /// Turn a DSN into the explicit backend selection the binary would use.
 fn backend_config(dsn: &str) -> BackendConfig {
-    let mut config = Config::default();
-    config.db_path = dsn.to_string();
+    let config = Config {
+        db_path: dsn.to_string(),
+        ..Default::default()
+    };
     BackendConfig::from_config(&config, &no_env).expect("postgres selected by DSN")
 }
 
-fn record(ts: i64, level: &str, service: &str, category: &str, message: &str, corr: &str) -> Record {
+fn record(
+    ts: i64,
+    level: &str,
+    service: &str,
+    category: &str,
+    message: &str,
+    corr: &str,
+) -> Record {
     Record {
         id: 0,
         ts,
@@ -74,8 +83,10 @@ fn a_broken_postgres_configuration_fails_loudly_and_never_falls_back() {
 
     let dir = tempfile::tempdir().unwrap();
     let sqlite_path = dir.path().join("must-not-be-created.db");
-    let mut config = Config::default();
-    config.db_path = sqlite_path.to_string_lossy().to_string();
+    let config = Config {
+        db_path: sqlite_path.to_string_lossy().to_string(),
+        ..Default::default()
+    };
 
     let error = storage::open(&config, &backend, test_metrics())
         .err()
@@ -89,11 +100,12 @@ fn a_broken_postgres_configuration_fails_loudly_and_never_falls_back() {
 
 #[test]
 fn an_unknown_backend_is_refused_not_guessed() {
-    let mut config = Config::default();
-    config.db_path = "mysql://nope/db".to_string();
-    let error = BackendConfig::from_config(&config, &no_env)
-        .err()
-        .expect("an unknown DSN must be refused");
+    let config = Config {
+        db_path: "mysql://nope/db".to_string(),
+        ..Default::default()
+    };
+    let error =
+        BackendConfig::from_config(&config, &no_env).expect_err("an unknown DSN must be refused");
     let message = error.message();
     assert!(
         message.contains("ATF_LOGGER_BACKEND") || message.contains("postgres"),
@@ -108,8 +120,10 @@ fn postgres_end_to_end() {
         return;
     };
     let backend = backend_config(&dsn);
-    let mut config = Config::default();
-    config.db_path = dsn;
+    let config = Config {
+        db_path: dsn,
+        ..Default::default()
+    };
 
     // ---- open + migrate + probe ------------------------------------------
     let storage = storage::open(&config, &backend, test_metrics())
@@ -118,7 +132,9 @@ fn postgres_end_to_end() {
     storage.probe().expect("probe after migration");
 
     // Clear leftovers from an earlier run so the counts below are exact.
-    storage.purge(&everything(), 1_000, u64::MAX).expect("clear");
+    storage
+        .purge(&everything(), 1_000, u64::MAX)
+        .expect("clear");
     assert_eq!(storage.table_rows().unwrap(), 0);
 
     // ---- batched insert --------------------------------------------------
@@ -145,7 +161,11 @@ fn postgres_end_to_end() {
         })
         .collect();
     assert_eq!(storage.insert_batch(&records).expect("batched insert"), 250);
-    assert_eq!(storage.table_rows().unwrap(), 250, "one statement per batch commits every row");
+    assert_eq!(
+        storage.table_rows().unwrap(),
+        250,
+        "one statement per batch commits every row"
+    );
 
     // ---- query -----------------------------------------------------------
     let errors = QueryFilter {
@@ -218,13 +238,9 @@ fn postgres_end_to_end() {
         })
         .unwrap();
     assert_eq!(scoped_stats.total, 125);
-    let groups = storage
-        .top_groups(&searched, GroupBy::Service, 10)
-        .unwrap();
+    let groups = storage.top_groups(&searched, GroupBy::Service, 10).unwrap();
     assert_eq!(groups.len(), 2, "two services");
-    let buckets = storage
-        .time_buckets(&searched, 60, 1_000)
-        .unwrap();
+    let buckets = storage.time_buckets(&searched, 60, 1_000).unwrap();
     assert!(!buckets.is_empty());
     let failures = storage.error_aggregates(&errors, 10).unwrap();
     assert!(!failures.is_empty());
@@ -245,7 +261,10 @@ fn postgres_end_to_end() {
             None,
         )
         .unwrap();
-    assert!(protected_candidates > 0, "the fixture must contain protected candidates");
+    assert!(
+        protected_candidates > 0,
+        "the fixture must contain protected candidates"
+    );
     let audit_before = storage
         .count(
             &QueryFilter {
@@ -326,7 +345,12 @@ fn postgres_end_to_end() {
     assert_eq!(over_budget.purged, 1, "a budget of one row deletes one row");
 
     // ---- cleanup ----------------------------------------------------------
-    storage.purge(&everything(), 1_000, u64::MAX).expect("cleanup");
+    storage
+        .purge(&everything(), 1_000, u64::MAX)
+        .expect("cleanup");
     assert_eq!(storage.table_rows().unwrap(), 0);
-    eprintln!("PostgreSQL integration passed against {}", storage.describe());
+    eprintln!(
+        "PostgreSQL integration passed against {}",
+        storage.describe()
+    );
 }

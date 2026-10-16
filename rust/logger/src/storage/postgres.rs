@@ -418,7 +418,7 @@ impl PgStorage {
     }
 
     /// Bind a plan's parameters for `postgres`.
-    fn bind<'a>(params: &'a [query::Param]) -> Vec<&'a (dyn ToSql + Sync)> {
+    fn bind(params: &[query::Param]) -> Vec<&(dyn ToSql + Sync)> {
         params
             .iter()
             .map(|param| match param {
@@ -1032,8 +1032,10 @@ mod tests {
             eprintln!("SKIPPED (no ATF_LOGGER_TEST_PG_DSN): PostgreSQL round trip not run");
             return;
         };
-        let mut config = Config::default();
-        config.db_path = dsn;
+        let config = Config {
+            db_path: dsn,
+            ..Default::default()
+        };
         let backend = BackendConfig::from_config(&config, &|_: &str| None)
             .expect("a postgres:// DSN selects the PostgreSQL backend");
         let storage = crate::storage::open(&config, &backend, Arc::new(Metrics::new()))

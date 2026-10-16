@@ -434,7 +434,11 @@ mod tests {
     use crate::storage::{Backend, BackendConfig, Record};
 
     fn storage(dir: &tempfile::TempDir, metrics: Arc<Metrics>) -> Arc<SqliteStorage> {
-        let path = dir.path().join("retention.db").to_string_lossy().to_string();
+        let path = dir
+            .path()
+            .join("retention.db")
+            .to_string_lossy()
+            .to_string();
         Arc::new(
             SqliteStorage::open(
                 &Config::default(),
@@ -470,13 +474,18 @@ mod tests {
         }
     }
 
-    fn policy(rules: Vec<RetentionRule>, categories: Vec<RetentionRule>, default_hours: u64) -> RetentionPolicy {
-        let mut config = Config::default();
-        config.retention_enabled = true;
-        config.retention_default_max_age_hours = default_hours;
-        config.retention_level_hours = rules;
-        config.retention_category_hours = categories;
-        RetentionPolicy::from_config(&config)
+    fn policy(
+        rules: Vec<RetentionRule>,
+        categories: Vec<RetentionRule>,
+        default_hours: u64,
+    ) -> RetentionPolicy {
+        RetentionPolicy::from_config(&Config {
+            retention_enabled: true,
+            retention_default_max_age_hours: default_hours,
+            retention_level_hours: rules,
+            retention_category_hours: categories,
+            ..Default::default()
+        })
     }
 
     #[test]
@@ -676,7 +685,10 @@ mod tests {
 
         let policy = policy(vec![], vec![], 720).with_budget(50, 120);
         let report = run_cycle(&policy, storage.as_ref(), &metrics, Some(now));
-        assert_eq!(report.purged, 120, "the budget must stop the cycle: {report:?}");
+        assert_eq!(
+            report.purged, 120,
+            "the budget must stop the cycle: {report:?}"
+        );
         assert!(report.budget_exhausted);
         assert_eq!(storage.table_rows().unwrap(), 180);
         // Progress is monotonic across cycles until the backlog is gone.
@@ -699,7 +711,11 @@ mod tests {
             .unwrap();
         let mut policy = policy(vec![], vec![], 1);
         policy.enabled = false;
-        let retention = Retention::start(policy, Arc::clone(&storage) as Arc<dyn Storage>, Arc::clone(&metrics));
+        let retention = Retention::start(
+            policy,
+            Arc::clone(&storage) as Arc<dyn Storage>,
+            Arc::clone(&metrics),
+        );
         assert!(!retention.is_running());
         let report = retention.run_once();
         assert_eq!(report.purged, 0);
@@ -719,7 +735,11 @@ mod tests {
 
         let mut policy = policy(vec![], vec![], 720);
         policy.interval = Duration::from_millis(150);
-        let mut retention = Retention::start(policy, Arc::clone(&storage) as Arc<dyn Storage>, Arc::clone(&metrics));
+        let mut retention = Retention::start(
+            policy,
+            Arc::clone(&storage) as Arc<dyn Storage>,
+            Arc::clone(&metrics),
+        );
         assert!(retention.is_running());
         // Wait for at least one scheduled cycle.
         let deadline = Instant::now() + Duration::from_secs(5);

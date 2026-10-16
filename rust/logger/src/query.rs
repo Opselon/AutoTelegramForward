@@ -1006,8 +1006,10 @@ mod tests {
 
     #[test]
     fn search_uses_like_on_both_columns() {
-        let mut f = QueryFilter::default();
-        f.search = "needle".to_string();
+        let f = QueryFilter {
+            search: "needle".to_string(),
+            ..Default::default()
+        };
         let sqlite = select_page(&f, &Page::default(), SqlDialect::Sqlite);
         assert!(sqlite.sql.contains("(message LIKE ? OR detail LIKE ?)"));
         assert_eq!(placeholders(&sqlite)[0], "%needle%");
@@ -1032,8 +1034,10 @@ mod tests {
 
     #[test]
     fn protected_categories_are_excluded_case_insensitively() {
-        let mut f = QueryFilter::default();
-        f.category = String::new();
+        let f = QueryFilter {
+            category: String::new(),
+            ..Default::default()
+        };
         let mut builder = Builder::new(SqlDialect::Sqlite);
         let sql = where_clause(
             &f,
@@ -1095,8 +1099,10 @@ mod tests {
 
     #[test]
     fn delete_chunk_is_bounded_and_delete_all_is_not() {
-        let mut f = QueryFilter::default();
-        f.level = "debug".to_string();
+        let f = QueryFilter {
+            level: "debug".to_string(),
+            ..Default::default()
+        };
         let chunk = delete_chunk(&f, Some(1000), &[], 500, SqlDialect::Sqlite);
         assert!(chunk
             .sql
@@ -1248,8 +1254,10 @@ mod tests {
 
     #[test]
     fn protected_candidate_count_is_bounded() {
-        let mut f = QueryFilter::default();
-        f.level = "debug".to_string();
+        let f = QueryFilter {
+            level: "debug".to_string(),
+            ..Default::default()
+        };
         let plan = count_protected_candidates(
             &f,
             Some(500),
@@ -1270,9 +1278,11 @@ mod tests {
 
     #[test]
     fn filter_description_never_echoes_search_text() {
-        let mut f = QueryFilter::default();
-        f.search = "password=hunter2".to_string();
-        f.user_id = 5;
+        let f = QueryFilter {
+            search: "password=hunter2".to_string(),
+            user_id: 5,
+            ..Default::default()
+        };
         let described = f.describe();
         assert!(!described.contains("hunter2"));
         assert!(described.contains("search(16 chars)"));

@@ -163,7 +163,8 @@ async fn run(config: Config) -> i32 {
     };
 
     // ---- retention -------------------------------------------------------
-    let policy = CollectPolicy::from_env(&config.protected_categories, &|key| std::env::var(key).ok());
+    let policy =
+        CollectPolicy::from_env(&config.protected_categories, &|key| std::env::var(key).ok());
     let mut retention = Retention::start(
         RetentionPolicy::from_config(&config),
         Arc::clone(&storage),

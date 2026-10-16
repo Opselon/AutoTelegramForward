@@ -96,9 +96,12 @@ impl Child {
 
     /// SIGTERM and wait, returning the exit code.
     fn terminate(&mut self) -> i32 {
-        let status = Command::new("kill")
-            .arg("-TERM")
-            .arg(self.process.id().to_string())
+        // Via the shell: `kill` is a builtin, and a minimal builder image
+        // (rust:*-slim without procps) has no kill(1) on PATH -- spawning it
+        // directly fails with ENOENT rather than signalling anything.
+        let status = Command::new("sh")
+            .arg("-c")
+            .arg(format!("kill -TERM {}", self.process.id()))
             .status()
             .expect("send SIGTERM");
         assert!(status.success(), "kill -TERM failed: {status:?}");
@@ -141,10 +144,13 @@ async fn http_get(addr: &str, path: &str) -> String {
     let request = format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
     socket.write_all(request.as_bytes()).await.expect("write");
     let mut response = String::new();
-    tokio::time::timeout(Duration::from_secs(10), socket.read_to_string(&mut response))
-        .await
-        .expect("the metrics listener did not answer within 10s")
-        .expect("read the response");
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        socket.read_to_string(&mut response),
+    )
+    .await
+    .expect("the metrics listener did not answer within 10s")
+    .expect("read the response");
     response
 }
 
@@ -221,7 +227,10 @@ async fn binary_serves_grpc_exposes_metrics_and_restarts_durably() {
         "atf_logger_liveness",
         "atf_logger_storage_up",
     ] {
-        assert!(metrics.contains(family), "missing {family} in the exposition");
+        assert!(
+            metrics.contains(family),
+            "missing {family} in the exposition"
+        );
     }
     let health = http_get(&child.metrics_addr, "/healthz").await;
     assert!(health.starts_with("HTTP/1.1 200 OK"), "{health}");

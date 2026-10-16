@@ -166,8 +166,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Pinned, not `stable`: this job denies warnings, so a toolchain bump would
+      # otherwise be able to block unrelated PRs. 1.90.0 is what Cargo.toml
+      # declares as `rust-version` and what the image builds with.
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: 1.90.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -187,6 +191,10 @@ jobs:
       - name: Integration tests (gRPC over real TCP + real SQLite)
         working-directory: rust/logger
         run: cargo test --test grpc_end_to_end --test binary_end_to_end
+      # The packaging image is a deliverable, so a Dockerfile that no longer
+      # builds has to fail here rather than at deploy time.
+      - name: Build the logger image
+        run: docker build -f Dockerfile.logger-rust -t atf-logger-rust:ci .
 # Live PostgreSQL (tests/postgres_end_to_end.rs) is env-gated on
 # ATF_LOGGER_TEST_PG_DSN; add a postgres:16-alpine service container and set
 # that env var to make it a required gate once the adapter is verified.

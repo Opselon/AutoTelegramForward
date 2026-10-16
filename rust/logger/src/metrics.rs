@@ -266,11 +266,15 @@ impl LabeledCounter {
 
     fn render(&self, out: &mut String) {
         let series = self.series.lock().unwrap_or_else(|e| e.into_inner());
+        // The family header is written even when there is no series yet. A family
+        // that only appears after its first event is invisible to a scrape that
+        // has to alert on it -- "no events dropped" and "this metric does not
+        // exist" must not look the same to Prometheus.
+        let _ = writeln!(out, "# HELP {} {}", self.name, self.help);
+        let _ = writeln!(out, "# TYPE {} counter", self.name);
         if series.is_empty() {
             return;
         }
-        let _ = writeln!(out, "# HELP {} {}", self.name, self.help);
-        let _ = writeln!(out, "# TYPE {} counter", self.name);
         for (label_value, counter) in series.iter() {
             let _ = writeln!(
                 out,

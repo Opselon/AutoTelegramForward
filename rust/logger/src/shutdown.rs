@@ -85,7 +85,14 @@ impl ShutdownOutcome {
         let steps: Vec<String> = self
             .steps
             .iter()
-            .map(|step| format!("{}({}ms,{})", step.name, step.millis, if step.ok { "ok" } else { "FAILED" }))
+            .map(|step| {
+                format!(
+                    "{}({}ms,{})",
+                    step.name,
+                    step.millis,
+                    if step.ok { "ok" } else { "FAILED" }
+                )
+            })
             .collect();
         format!(
             "signal={} drained={} remaining={} drained_records={} elapsed_ms={} steps=[{}]",
@@ -350,7 +357,13 @@ mod tests {
         let pipeline = Pipeline::start(
             PipelineConfig {
                 ack_mode: AckMode::Durable,
-                batch_size: 16,
+                // No incidental flush may happen before the signal, or the writer
+                // commits some prefix and `drained_records` is decided by thread
+                // scheduling instead of by the shutdown path this test exercises.
+                // A batch target that cannot be reached plus a linger longer than
+                // the test leaves the drain's forced flush as the only flush.
+                batch_size: 1_000_000,
+                batch_delay: Duration::from_secs(60),
                 ..PipelineConfig::from_config(&Config::default())
             },
             Arc::clone(&harness.storage),
@@ -441,7 +454,10 @@ mod tests {
             fn backend(&self) -> Backend {
                 Backend::Sqlite
             }
-            fn insert_batch(&self, _records: &[Record]) -> Result<usize, crate::storage::StorageError> {
+            fn insert_batch(
+                &self,
+                _records: &[Record],
+            ) -> Result<usize, crate::storage::StorageError> {
                 std::thread::sleep(Duration::from_millis(50));
                 Ok(_records.len())
             }

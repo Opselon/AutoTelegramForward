@@ -154,10 +154,7 @@ impl HealthState {
     }
 
     pub fn state(&self) -> Ready {
-        self.inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .state
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).state
     }
 
     pub fn state_label(&self) -> &'static str {
@@ -165,10 +162,7 @@ impl HealthState {
     }
 
     pub fn reason_code(&self) -> &'static str {
-        self.inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .reason
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).reason
     }
 
     pub fn detail(&self) -> String {
@@ -239,7 +233,11 @@ pub fn note(event: &str, detail: &str) {
 
 /// Emergency line with structured, bounded fields (`key=value`, newlines folded).
 pub fn emergency_fields(event: &str, fields: &[(&str, &str)]) {
-    let mut line = format!("atf-logger EMERGENCY ts={} event={}", now_secs(), sanitize(event));
+    let mut line = format!(
+        "atf-logger EMERGENCY ts={} event={}",
+        now_secs(),
+        sanitize(event)
+    );
     for (key, value) in fields {
         line.push(' ');
         line.push_str(&sanitize(key));
@@ -310,7 +308,10 @@ mod tests {
     #[test]
     fn queued_ack_mode_is_degraded_not_ready_for_durability() {
         let health = HealthState::new();
-        health.mark_degraded(REASON_ACK_MODE_QUEUED, "ack-mode=queued: success means enqueued");
+        health.mark_degraded(
+            REASON_ACK_MODE_QUEUED,
+            "ack-mode=queued: success means enqueued",
+        );
         assert!(health.is_ready(), "queued mode still serves requests");
         assert_eq!(health.state_label(), "degraded");
         assert_eq!(health.reason_code(), "ack_mode_queued");
@@ -329,7 +330,10 @@ mod tests {
     fn emergency_does_not_panic_without_a_logger() {
         // No subscriber installed, no runtime, no storage: still safe.
         emergency("test_event", "detail\nwith newline");
-        emergency_fields("test_fields", &[("backend", "sqlite"), ("path", "/tmp/x.db")]);
+        emergency_fields(
+            "test_fields",
+            &[("backend", "sqlite"), ("path", "/tmp/x.db")],
+        );
         assert!(HealthState::new().describe().contains("state=starting"));
     }
 }

@@ -189,7 +189,10 @@ pub fn normal_lane_capacity(total: usize, priority: usize) -> usize {
 
 impl Config {
     /// Parse `args` (without the program name) and `env`.
-    pub fn from_parts(args: &[String], env: &dyn Fn(&str) -> Option<String>) -> Result<Self, ConfigError> {
+    pub fn from_parts(
+        args: &[String],
+        env: &dyn Fn(&str) -> Option<String>,
+    ) -> Result<Self, ConfigError> {
         let mut cfg = Config::default();
         cfg.apply_env(env)?;
         let mut i = 0;
@@ -324,21 +327,53 @@ impl Config {
                 }
             };
         }
-        from_env!("ATF_LOGGER_QUEUE_CAPACITY", self.queue_capacity, parse_usize);
-        from_env!("ATF_LOGGER_PRIORITY_CAPACITY", self.priority_capacity, parse_usize);
+        from_env!(
+            "ATF_LOGGER_QUEUE_CAPACITY",
+            self.queue_capacity,
+            parse_usize
+        );
+        from_env!(
+            "ATF_LOGGER_PRIORITY_CAPACITY",
+            self.priority_capacity,
+            parse_usize
+        );
         from_env!("ATF_LOGGER_BATCH_SIZE", self.batch_size, parse_usize);
         from_env!("ATF_LOGGER_BATCH_DELAY_MS", self.batch_delay_ms, parse_u64);
-        from_env!("ATF_LOGGER_POLL_INTERVAL_MS", self.poll_interval_ms, parse_u64);
+        from_env!(
+            "ATF_LOGGER_POLL_INTERVAL_MS",
+            self.poll_interval_ms,
+            parse_u64
+        );
         from_env!("ATF_LOGGER_ACK_TIMEOUT_MS", self.ack_timeout_ms, parse_u64);
-        from_env!("ATF_LOGGER_BUSY_TIMEOUT_MS", self.busy_timeout_ms, parse_u64);
-        from_env!("ATF_LOGGER_READ_POOL_SIZE", self.read_pool_size, parse_usize);
+        from_env!(
+            "ATF_LOGGER_BUSY_TIMEOUT_MS",
+            self.busy_timeout_ms,
+            parse_u64
+        );
+        from_env!(
+            "ATF_LOGGER_READ_POOL_SIZE",
+            self.read_pool_size,
+            parse_usize
+        );
         from_env!("ATF_LOGGER_MAX_RETRIES", self.max_retries, |k, v| {
             parse_usize(k, v).map(|n| n as u32)
         });
         from_env!("ATF_LOGGER_RETRY_BASE_MS", self.retry_base_ms, parse_u64);
-        from_env!("ATF_LOGGER_DRAIN_TIMEOUT_MS", self.drain_timeout_ms, parse_u64);
-        from_env!("ATF_LOGGER_DEDUPE_WINDOW_SECS", self.dedupe_window_secs, parse_u64);
-        from_env!("ATF_LOGGER_RETENTION_INTERVAL_SECS", self.retention_interval_secs, parse_u64);
+        from_env!(
+            "ATF_LOGGER_DRAIN_TIMEOUT_MS",
+            self.drain_timeout_ms,
+            parse_u64
+        );
+        from_env!(
+            "ATF_LOGGER_DEDUPE_WINDOW_SECS",
+            self.dedupe_window_secs,
+            parse_u64
+        );
+        from_env!(
+            "ATF_LOGGER_RETENTION_INTERVAL_SECS",
+            self.retention_interval_secs,
+            parse_u64
+        );
         from_env!(
             "ATF_LOGGER_RETENTION_MAX_AGE_HOURS",
             self.retention_default_max_age_hours,
@@ -412,13 +447,13 @@ impl Config {
             return Err(ConfigError::new("--batch-size", "must be <= 100000"));
         }
         if self.batch_delay_ms == 0 || self.batch_delay_ms > 60_000 {
-            return Err(ConfigError::new(
-                "--batch-delay-ms",
-                "must be in 1..=60000",
-            ));
+            return Err(ConfigError::new("--batch-delay-ms", "must be in 1..=60000"));
         }
         if self.poll_interval_ms == 0 || self.poll_interval_ms > 5_000 {
-            return Err(ConfigError::new("--poll-interval-ms", "must be in 1..=5000"));
+            return Err(ConfigError::new(
+                "--poll-interval-ms",
+                "must be in 1..=5000",
+            ));
         }
         if self.ack_timeout_ms == 0 {
             return Err(ConfigError::new("--ack-timeout-ms", "must be > 0"));
@@ -489,7 +524,7 @@ impl Config {
         feed(&self.dedupe_window_secs.to_string());
         feed(&self.retention_enabled.to_string());
         feed(&self.retention_default_max_age_hours.to_string());
-        feed(&self.retention_ts_unit.as_str());
+        feed(self.retention_ts_unit.as_str());
         for c in &self.protected_categories {
             feed(c);
         }
@@ -518,9 +553,9 @@ fn parse_u64(key: &str, v: &str) -> Result<u64, ConfigError> {
 }
 
 fn parse_rule(key: &str, v: &str) -> Result<RetentionRule, ConfigError> {
-    let (name, hours) = v.split_once('=').ok_or_else(|| {
-        ConfigError::new(key, format!("expected NAME=HOURS, got {v}"))
-    })?;
+    let (name, hours) = v
+        .split_once('=')
+        .ok_or_else(|| ConfigError::new(key, format!("expected NAME=HOURS, got {v}")))?;
     if name.trim().is_empty() {
         return Err(ConfigError::new(key, "selector must not be empty"));
     }
@@ -634,7 +669,12 @@ mod tests {
     #[test]
     fn rejects_metrics_on_grpc_port() {
         let err = Config::from_parts(
-            &args(&["--listen", "0.0.0.0:50052", "--metrics-listen", "0.0.0.0:50052"]),
+            &args(&[
+                "--listen",
+                "0.0.0.0:50052",
+                "--metrics-listen",
+                "0.0.0.0:50052",
+            ]),
             &no_env,
         )
         .unwrap_err();
@@ -660,7 +700,9 @@ mod tests {
             "--batch-size"
         );
         assert_eq!(
-            Config::from_parts(&args(&["--nope"]), &no_env).unwrap_err().key,
+            Config::from_parts(&args(&["--nope"]), &no_env)
+                .unwrap_err()
+                .key,
             "--nope"
         );
     }
@@ -668,7 +710,9 @@ mod tests {
     #[test]
     fn rejects_missing_flag_value() {
         assert_eq!(
-            Config::from_parts(&args(&["--db"]), &no_env).unwrap_err().key,
+            Config::from_parts(&args(&["--db"]), &no_env)
+                .unwrap_err()
+                .key,
             "--db"
         );
     }

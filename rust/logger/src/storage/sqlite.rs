@@ -811,8 +811,10 @@ mod tests {
             readers: usize,
             rows_per_statement: usize,
         ) -> (Arc<SqliteStorage>, Arc<Metrics>) {
-            let mut cfg = Config::default();
-            cfg.read_pool_size = readers;
+            let cfg = Config {
+                read_pool_size: readers,
+                ..Default::default()
+            };
             let backend = BackendConfig {
                 backend: Backend::Sqlite,
                 sqlite_path: self.path.to_string_lossy().to_string(),
@@ -1379,7 +1381,7 @@ mod tests {
             } else {
                 "api".to_string()
             };
-            row.user_id = (index % 3) as i64;
+            row.user_id = index % 3;
             row.correlation_id = format!("corr-{index}");
             batch.push(row);
         }

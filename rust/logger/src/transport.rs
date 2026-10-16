@@ -33,9 +33,7 @@ use crate::ingest::{self, CollectPolicy, Limits, RawEntry, Reject};
 use crate::metrics::{self, Metrics};
 use crate::pb;
 use crate::pipeline::{Ack, AdmitError, Pipeline};
-use crate::query::{
-    self, Exporter, GroupBy, Page, PurgeFilter, QueryFilter, StatsScope, MAX_PAGE,
-};
+use crate::query::{self, Exporter, GroupBy, Page, PurgeFilter, QueryFilter, StatsScope, MAX_PAGE};
 use crate::storage::{PurgeReport, Record, Storage, StorageError};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -81,7 +79,7 @@ impl LogControl {
         // A durable ack is bounded by `ack_timeout_ms`; the time a producer may
         // spend waiting for a queue slot is capped well below it so a saturated
         // queue answers "overload" instead of burning the whole ack budget.
-        let admission_wait = Duration::from_millis(config.ack_timeout_ms.min(1_000).max(1));
+        let admission_wait = Duration::from_millis(config.ack_timeout_ms.clamp(1, 1_000));
         LogControl {
             pipeline,
             storage,
@@ -130,7 +128,11 @@ impl LogControl {
         pb::StatusResponse {
             success,
             message: message.into(),
-            error_code: if success { String::new() } else { code.to_string() },
+            error_code: if success {
+                String::new()
+            } else {
+                code.to_string()
+            },
         }
     }
 
@@ -146,7 +148,9 @@ impl LogControl {
             "TIMEOUT" => "timeout",
             _ => "storage",
         };
-        self.metrics.events_rejected.inc(metrics::reason_label(reason));
+        self.metrics
+            .events_rejected
+            .inc(metrics::reason_label(reason));
         if filtered {
             self.metrics
                 .events_filtered
@@ -393,10 +397,8 @@ impl pb::log_control_service_server::LogControlService for LogControl {
                     Ok(Ok(Err(storage_error))) => {
                         guard.finish(13); // INTERNAL
                         let mut response = self.reject(storage_error.code(), None, false);
-                        response.message = format!(
-                            "record was not persisted: {}",
-                            storage_error.message()
-                        );
+                        response.message =
+                            format!("record was not persisted: {}", storage_error.message());
                         Ok(tonic::Response::new(response))
                     }
                     Ok(Err(_recv)) => {
@@ -565,9 +567,8 @@ impl pb::log_control_service_server::LogControlService for LogControl {
         };
         let storage = Arc::clone(&self.storage);
         let chunk = query::MAX_PAGE;
-        let join = tokio::task::spawn_blocking(move || {
-            storage.purge(&filter, chunk, MAX_PURGE_ROWS)
-        });
+        let join =
+            tokio::task::spawn_blocking(move || storage.purge(&filter, chunk, MAX_PURGE_ROWS));
         let result = tokio::time::timeout(self.purge_timeout, join).await;
         match result {
             Ok(Ok(Ok(report))) => {
@@ -653,24 +654,39 @@ mod tests {
     use crate::config::{AckMode, Config};
     use crate::pipeline::PipelineConfig;
     use crate::storage::sqlite::SqliteStorage;
-    use crate::storage::BackendConfig;
     use crate::storage::Backend;
+    use crate::storage::BackendConfig;
 
     struct Harness {
         _dir: tempfile::TempDir,
         storage: Arc<dyn Storage>,
         metrics: Arc<Metrics>,
-        health: Arc<HealthState>,
+        // Built so the service has one, not so the assertions can read it.
+        _health: Arc<HealthState>,
         pipeline: Arc<Pipeline>,
         service: LogControl,
     }
 
     fn harness(config: Config) -> Harness {
+        harness_with(config, AckMode::Durable)
+    }
+
+    /// The ack mode is a parameter, not a constant, because it decides whether a
+    /// caller is admitted and released at once (`Queued`) or held until its batch
+    /// committed (`Durable`) -- and that difference decides whether a flood is
+    /// observable at this boundary at all: under `Durable` each call returns only
+    /// after the writer has drained the record, so the lanes are empty again
+    /// before the next call arrives and overload is unreachable.
+    fn harness_with(config: Config, ack_mode: AckMode) -> Harness {
         let dir = tempfile::tempdir().unwrap();
         let metrics = Arc::new(Metrics::new());
         let backend = BackendConfig {
             backend: Backend::Sqlite,
-            sqlite_path: dir.path().join("transport.db").to_string_lossy().to_string(),
+            sqlite_path: dir
+                .path()
+                .join("transport.db")
+                .to_string_lossy()
+                .to_string(),
             postgres_dsn: None,
             busy_timeout_ms: 5_000,
             read_pool_size: 2,
@@ -679,12 +695,11 @@ mod tests {
             transaction_timeout_ms: 0,
             max_rows_per_statement: 500,
         };
-        let storage: Arc<dyn Storage> = Arc::new(
-            SqliteStorage::open(&config, &backend, Arc::clone(&metrics)).unwrap(),
-        );
+        let storage: Arc<dyn Storage> =
+            Arc::new(SqliteStorage::open(&config, &backend, Arc::clone(&metrics)).unwrap());
         let pipeline = Pipeline::start(
             PipelineConfig {
-                ack_mode: AckMode::Durable,
+                ack_mode,
                 batch_size: 32,
                 ..PipelineConfig::from_config(&config)
             },
@@ -708,7 +723,7 @@ mod tests {
             _dir: dir,
             storage,
             metrics,
-            health,
+            _health: health,
             pipeline,
             service,
         }
@@ -741,20 +756,18 @@ mod tests {
         let harness = harness(Config::default());
         let runtime = runtime();
         let response = runtime
-            .block_on(
-                pb::log_control_service_server::LogControlService::log(
-                    &harness.service,
-                    tonic::Request::new(pb::LogRequest {
-                        entry: Some(pb::LogEntry {
-                            message: "login failed for Authorization: Bearer SECRET-TOKEN-XYZ"
-                                .to_string(),
-                            detail: r#"{"password":"hunter2","nested":{"token":"abc12345"}}"#
-                                .to_string(),
-                            ..entry("ERROR", "unused")
-                        }),
+            .block_on(pb::log_control_service_server::LogControlService::log(
+                &harness.service,
+                tonic::Request::new(pb::LogRequest {
+                    entry: Some(pb::LogEntry {
+                        message: "login failed for Authorization: Bearer SECRET-TOKEN-XYZ"
+                            .to_string(),
+                        detail: r#"{"password":"hunter2","nested":{"token":"abc12345"}}"#
+                            .to_string(),
+                        ..entry("ERROR", "unused")
                     }),
-                ),
-            )
+                }),
+            ))
             .unwrap()
             .into_inner();
         assert!(response.success, "{response:?}");
@@ -763,10 +776,18 @@ mod tests {
         assert_eq!(harness.storage.table_rows().unwrap(), 1);
         let rows = harness.service.recent(&QueryFilter::default(), 10).unwrap();
         assert_eq!(rows.len(), 1);
-        assert!(!rows[0].message.contains("SECRET-TOKEN-XYZ"), "{}", rows[0].message);
+        assert!(
+            !rows[0].message.contains("SECRET-TOKEN-XYZ"),
+            "{}",
+            rows[0].message
+        );
         assert!(!rows[0].detail.contains("hunter2"), "{}", rows[0].detail);
         assert!(!rows[0].detail.contains("abc12345"), "{}", rows[0].detail);
-        assert!(rows[0].message.contains("[REDACTED]"), "{}", rows[0].message);
+        assert!(
+            rows[0].message.contains("[REDACTED]"),
+            "{}",
+            rows[0].message
+        );
         assert_eq!(harness.metrics.events_received.get(), 1);
         assert_eq!(harness.metrics.events_accepted.with("ERROR").get(), 1);
         assert_eq!(harness.metrics.events_persisted.get(), 1);
@@ -779,12 +800,10 @@ mod tests {
         let harness = harness(Config::default());
         let runtime = runtime();
         let response = runtime
-            .block_on(
-                pb::log_control_service_server::LogControlService::log(
-                    &harness.service,
-                    tonic::Request::new(pb::LogRequest { entry: None }),
-                ),
-            )
+            .block_on(pb::log_control_service_server::LogControlService::log(
+                &harness.service,
+                tonic::Request::new(pb::LogRequest { entry: None }),
+            ))
             .unwrap()
             .into_inner();
         assert!(!response.success);
@@ -810,9 +829,8 @@ mod tests {
             transaction_timeout_ms: 0,
             max_rows_per_statement: 500,
         };
-        let storage: Arc<dyn Storage> = Arc::new(
-            SqliteStorage::open(&config, &backend, Arc::clone(&metrics)).unwrap(),
-        );
+        let storage: Arc<dyn Storage> =
+            Arc::new(SqliteStorage::open(&config, &backend, Arc::clone(&metrics)).unwrap());
         let pipeline = Pipeline::start(
             PipelineConfig::from_config(&config),
             Arc::clone(&storage),
@@ -831,44 +849,38 @@ mod tests {
         );
         let runtime = runtime();
         let filtered = runtime
-            .block_on(
-                pb::log_control_service_server::LogControlService::log(
-                    &service,
-                    tonic::Request::new(pb::LogRequest {
-                        entry: Some(entry("INFO", "chatty")),
-                    }),
-                ),
-            )
+            .block_on(pb::log_control_service_server::LogControlService::log(
+                &service,
+                tonic::Request::new(pb::LogRequest {
+                    entry: Some(entry("INFO", "chatty")),
+                }),
+            ))
             .unwrap()
             .into_inner();
         assert!(!filtered.success);
         assert_eq!(filtered.error_code, "FILTERED");
         assert!(filtered.message.contains("ATF_LOGGER_COLLECT_LEVELS"));
         let kept = runtime
-            .block_on(
-                pb::log_control_service_server::LogControlService::log(
-                    &service,
-                    tonic::Request::new(pb::LogRequest {
-                        entry: Some(entry("ERROR", "important")),
-                    }),
-                ),
-            )
+            .block_on(pb::log_control_service_server::LogControlService::log(
+                &service,
+                tonic::Request::new(pb::LogRequest {
+                    entry: Some(entry("ERROR", "important")),
+                }),
+            ))
             .unwrap()
             .into_inner();
         assert!(kept.success, "{kept:?}");
         // Audit categories bypass the threshold even at INFO.
         let audit = runtime
-            .block_on(
-                pb::log_control_service_server::LogControlService::log(
-                    &service,
-                    tonic::Request::new(pb::LogRequest {
-                        entry: Some(pb::LogEntry {
-                            category: "audit".to_string(),
-                            ..entry("INFO", "operator login")
-                        }),
+            .block_on(pb::log_control_service_server::LogControlService::log(
+                &service,
+                tonic::Request::new(pb::LogRequest {
+                    entry: Some(pb::LogEntry {
+                        category: "audit".to_string(),
+                        ..entry("INFO", "operator login")
                     }),
-                ),
-            )
+                }),
+            ))
             .unwrap()
             .into_inner();
         assert!(audit.success, "{audit:?}");
@@ -897,12 +909,10 @@ mod tests {
         }
         for entry in entries {
             let response = runtime
-                .block_on(
-                    pb::log_control_service_server::LogControlService::log(
-                        &harness.service,
-                        tonic::Request::new(pb::LogRequest { entry: Some(entry) }),
-                    ),
-                )
+                .block_on(pb::log_control_service_server::LogControlService::log(
+                    &harness.service,
+                    tonic::Request::new(pb::LogRequest { entry: Some(entry) }),
+                ))
                 .unwrap()
                 .into_inner();
             assert!(response.success, "{response:?}");
@@ -1016,18 +1026,16 @@ mod tests {
                 _ => "CRITICAL",
             };
             runtime
-                .block_on(
-                    pb::log_control_service_server::LogControlService::log(
-                        &harness.service,
-                        tonic::Request::new(pb::LogRequest {
-                            entry: Some(pb::LogEntry {
-                                rule_id: if index % 2 == 0 { "rule-a" } else { "rule-b" }.to_string(),
-                                user_id: if index % 2 == 0 { 5 } else { 6 },
-                                ..entry(level, &format!("stats {index}"))
-                            }),
+                .block_on(pb::log_control_service_server::LogControlService::log(
+                    &harness.service,
+                    tonic::Request::new(pb::LogRequest {
+                        entry: Some(pb::LogEntry {
+                            rule_id: if index % 2 == 0 { "rule-a" } else { "rule-b" }.to_string(),
+                            user_id: if index % 2 == 0 { 5 } else { 6 },
+                            ..entry(level, &format!("stats {index}"))
                         }),
-                    ),
-                )
+                    }),
+                ))
                 .unwrap();
         }
         let stats = runtime
@@ -1086,18 +1094,16 @@ mod tests {
         .enumerate()
         {
             let response = runtime
-                .block_on(
-                    pb::log_control_service_server::LogControlService::log(
-                        &harness.service,
-                        tonic::Request::new(pb::LogRequest {
-                            entry: Some(pb::LogEntry {
-                                ts: now - (age_hours as i64) * 3600,
-                                category: category.to_string(),
-                                ..entry("ERROR", &format!("purge {index}"))
-                            }),
+                .block_on(pb::log_control_service_server::LogControlService::log(
+                    &harness.service,
+                    tonic::Request::new(pb::LogRequest {
+                        entry: Some(pb::LogEntry {
+                            ts: now - (age_hours as i64) * 3600,
+                            category: category.to_string(),
+                            ..entry("ERROR", &format!("purge {index}"))
                         }),
-                    ),
-                )
+                    }),
+                ))
                 .unwrap()
                 .into_inner();
             assert!(response.success, "{response:?}");
@@ -1121,7 +1127,10 @@ mod tests {
         assert!(purged.success, "{purged:?}");
         assert_eq!(purged.purged, 2);
         assert_eq!(purged.remaining, 2);
-        assert!(purged.error.contains("protected categories were spared"), "{purged:?}");
+        assert!(
+            purged.error.contains("protected categories were spared"),
+            "{purged:?}"
+        );
         assert_eq!(harness.storage.table_rows().unwrap(), 2);
 
         // An explicit purge of a protected category is refused, not silently empty.
@@ -1177,8 +1186,13 @@ mod tests {
         harness.pipeline.stop(Duration::from_secs(5));
 
         let filter = QueryFilter::default();
-        let groups = harness.service.top_groups(&filter, GroupBy::Level, 10).unwrap();
-        assert!(groups.iter().any(|(key, count)| key == "ERROR" && *count == 15));
+        let groups = harness
+            .service
+            .top_groups(&filter, GroupBy::Level, 10)
+            .unwrap();
+        assert!(groups
+            .iter()
+            .any(|(key, count)| key == "ERROR" && *count == 15));
         let buckets = harness.service.buckets(&filter, 10, 100).unwrap();
         assert_eq!(buckets.iter().map(|b| b.count).sum::<i64>(), 30);
         let errors = harness.service.error_groups(&filter, 10).unwrap();
@@ -1209,14 +1223,20 @@ mod tests {
             guard.finish(0);
             guard.finish(0);
         }
-        assert_eq!(metrics.rpc_cancelled.get(), 1, "a finished RPC is not cancelled");
+        assert_eq!(
+            metrics.rpc_cancelled.get(),
+            1,
+            "a finished RPC is not cancelled"
+        );
         assert_eq!(metrics.rpc_total.with("Log").get(), 2);
     }
 
     #[test]
     fn queued_ack_mode_reports_degraded_readiness() {
-        let mut config = Config::default();
-        config.ack_mode = AckMode::Queued;
+        let config = Config {
+            ack_mode: AckMode::Queued,
+            ..Default::default()
+        };
         let harness = harness(config);
         let health = HealthState::new();
         harness.service.mark_ack_mode(&health);
@@ -1228,23 +1248,27 @@ mod tests {
 
     #[test]
     fn overload_is_refused_with_overload_and_counted() {
-        let mut config = Config::default();
-        config.queue_capacity = 2;
-        config.priority_capacity = 1;
-        config.batch_delay_ms = 5_000;
-        let harness = harness(config);
+        let config = Config {
+            queue_capacity: 2,
+            priority_capacity: 1,
+            batch_delay_ms: 5_000,
+            ..Default::default()
+        };
+        // Queued acks so that the 40 records really pile up against the 3 slots;
+        // a durable ack only returns once the batch has committed, which drains
+        // the lane between calls and makes this test vacuous (observed: 40 x the
+        // 5 s linger, zero refusals). The property under test is unchanged.
+        let harness = harness_with(config, AckMode::Queued);
         let runtime = runtime();
         let mut refused = 0;
         for index in 0..40 {
             let response = runtime
-                .block_on(
-                    pb::log_control_service_server::LogControlService::log(
-                        &harness.service,
-                        tonic::Request::new(pb::LogRequest {
-                            entry: Some(entry("ERROR", &format!("flood {index}"))),
-                        }),
-                    ),
-                )
+                .block_on(pb::log_control_service_server::LogControlService::log(
+                    &harness.service,
+                    tonic::Request::new(pb::LogRequest {
+                        entry: Some(entry("ERROR", &format!("flood {index}"))),
+                    }),
+                ))
                 .unwrap()
                 .into_inner();
             if !response.success {
@@ -1252,8 +1276,14 @@ mod tests {
                 refused += 1;
             }
         }
-        assert!(refused > 0, "a 3-slot pipeline must refuse a 40-record flood");
-        assert_eq!(harness.metrics.events_rejected.with("overload").get(), refused);
+        assert!(
+            refused > 0,
+            "a 3-slot pipeline must refuse a 40-record flood"
+        );
+        assert_eq!(
+            harness.metrics.events_rejected.with("overload").get(),
+            refused
+        );
         assert!(harness.metrics.queue_rejected_full.total() >= refused);
         harness.pipeline.stop(Duration::from_secs(10));
     }

@@ -29,8 +29,7 @@ pub mod sqlite;
 use crate::config::Config;
 use crate::metrics::Metrics;
 use crate::query::{
-    Bucket, ErrorAgg, GroupBy, Page, PurgeFilter, QueryFilter, RetentionSweep, Stats,
-    StatsScope,
+    Bucket, ErrorAgg, GroupBy, Page, PurgeFilter, QueryFilter, RetentionSweep, Stats, StatsScope,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -77,6 +76,11 @@ pub enum StorageError {
     Transient(String),
     /// A real failure: the statement or transaction is broken.
     Backend(String),
+    /// The store cannot be reached at all (connect refused, pool exhausted at
+    /// startup, archive not openable). Distinct from `Backend`, which means the
+    /// store answered but the statement failed: the producer must be able to tell
+    /// "try again later" from "your write is malformed".
+    Unavailable(String),
     /// Misconfiguration or startup failure.
     Config(String),
     /// The operation is not supported by this backend.
@@ -85,7 +89,22 @@ pub enum StorageError {
 
 impl StorageError {
     pub fn is_retryable(&self) -> bool {
-        matches!(self, StorageError::Busy(_) | StorageError::Transient(_))
+        matches!(
+            self,
+            StorageError::Busy(_) | StorageError::Transient(_) | StorageError::Unavailable(_)
+        )
+    }
+
+    /// Reclassify an open-time failure as "the store is not reachable". `Config`
+    /// and `Unsupported` keep their own codes: those are the operator's mistakes,
+    /// not a transient outage, and telling them apart is the whole point.
+    pub fn as_unavailable(self) -> StorageError {
+        match self {
+            StorageError::Config(_)
+            | StorageError::Unsupported(_)
+            | StorageError::Unavailable(_) => self,
+            other => StorageError::Unavailable(other.message()),
+        }
     }
 
     /// Stable code for the gRPC ack path (never a raw backend message).
@@ -94,6 +113,7 @@ impl StorageError {
             StorageError::Busy(_) => "STORAGE_BUSY",
             StorageError::Transient(_) => "STORAGE_TRANSIENT",
             StorageError::Backend(_) => "STORAGE_ERROR",
+            StorageError::Unavailable(_) => "STORAGE_UNAVAILABLE",
             StorageError::Config(_) => "STORAGE_CONFIG",
             StorageError::Unsupported(_) => "STORAGE_UNSUPPORTED",
         }
@@ -103,6 +123,7 @@ impl StorageError {
         match self {
             StorageError::Busy(m)
             | StorageError::Transient(m)
+            | StorageError::Unavailable(m)
             | StorageError::Backend(m)
             | StorageError::Config(m) => m.clone(),
             StorageError::Unsupported(m) => format!("unsupported by this backend: {m}"),
@@ -173,6 +194,16 @@ impl BackendConfig {
             .map(|v| v.trim().to_ascii_lowercase())
             .filter(|v| !v.is_empty());
 
+        // A scheme we do not speak is refused, never guessed: without this,
+        // "mysql://host/db" would be accepted and used as a literal SQLite
+        // filename, and the operator would find out by finding an empty archive.
+        if !path_is_dsn && db_path.contains("://") {
+            return Err(StorageError::Config(
+                "unsupported database DSN scheme: expected a postgres:// or                  postgresql:// DSN, or a plain SQLite file path"
+                    .to_string(),
+            ));
+        }
+
         let backend = match explicit.as_deref() {
             Some("sqlite") => Backend::Sqlite,
             Some("postgres") | Some("postgresql") | Some("pg") => Backend::Postgres,
@@ -192,11 +223,7 @@ impl BackendConfig {
 
         match backend {
             Backend::Postgres => {
-                let dsn = if path_is_dsn {
-                    Some(db_path)
-                } else {
-                    dsn_env
-                };
+                let dsn = if path_is_dsn { Some(db_path) } else { dsn_env };
                 let dsn = dsn.ok_or_else(|| {
                     StorageError::Config(
                         "PostgreSQL was selected but no DSN was supplied: set ATF_LOGGER_PG_DSN \
@@ -372,14 +399,18 @@ pub fn open(
     backend: &BackendConfig,
     metrics: Arc<Metrics>,
 ) -> Result<Arc<dyn Storage>, StorageError> {
-    match backend.backend {
-        Backend::Sqlite => Ok(Arc::new(sqlite::SqliteStorage::open(
-            cfg, backend, metrics,
-        )?)),
-        Backend::Postgres => Ok(Arc::new(postgres::PgStorage::open(
-            cfg, backend, metrics,
-        )?)),
-    }
+    // Note the absence of `?` inside the arms: the error has to be captured and
+    // reclassified, not propagated raw. A failure to open the store at all is an
+    // availability problem -- there is no storage behind this process yet -- which
+    // is exactly the condition main.rs reports as `storage_unavailable` on the
+    // readiness surface. The code a producer sees must agree with that.
+    let opened = match backend.backend {
+        Backend::Sqlite => sqlite::SqliteStorage::open(cfg, backend, metrics)
+            .map(|storage| Arc::new(storage) as Arc<dyn Storage>),
+        Backend::Postgres => postgres::PgStorage::open(cfg, backend, metrics)
+            .map(|storage| Arc::new(storage) as Arc<dyn Storage>),
+    };
+    opened.map_err(StorageError::as_unavailable)
 }
 
 /// Insert with bounded retries on retryable failures.
@@ -444,8 +475,10 @@ mod tests {
 
     #[test]
     fn postgres_can_be_selected_by_dsn_in_db_path() {
-        let mut cfg = Config::default();
-        cfg.db_path = "postgres://user:pw@db:5432/atf".to_string();
+        let cfg = Config {
+            db_path: "postgres://user:pw@db:5432/atf".to_string(),
+            ..Default::default()
+        };
         let backend = BackendConfig::from_config(&cfg, &no_env).unwrap();
         assert_eq!(backend.backend, Backend::Postgres);
         assert!(backend.postgres_dsn.is_some());
@@ -489,6 +522,8 @@ mod tests {
         assert!(StorageError::Transient("reset".into()).is_retryable());
         assert!(!StorageError::Backend("bad sql".into()).is_retryable());
         assert_eq!(StorageError::Busy("x".into()).code(), "STORAGE_BUSY");
-        assert!(StorageError::Unsupported("x").to_string().contains("unsupported"));
+        assert!(StorageError::Unsupported("x")
+            .to_string()
+            .contains("unsupported"));
     }
 }
