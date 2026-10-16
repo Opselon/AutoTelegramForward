@@ -225,10 +225,36 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     "target_policies": _s(
         kind="dict", default={}, group="content",
         help="Per-target overrides, keyed by target chat id."),
+    # --- Branding hop (A -> C -> B) --------------------------------------- #
+    # The enable switch and the channel itself (`use_intermediate`,
+    # `intermediate_channel_id`) are first-class rule fields, not settings —
+    # exactly one write path keeps the two from disagreeing. What is registered
+    # here is the *trigger* policy: which messages earn the branded hop.
+    "branding_triggers_enabled": _s(
+        kind="bool", default=False, group="branding",
+        help="When off every matched message takes the hop via C; when on, the triggers below decide."),
+    "branding_origin_titles": _s(
+        kind="list", default=[], group="branding", item_kind="str",
+        help="Hop only when the message was forwarded from one of these channel names."),
+    "branding_origin_ids": _s(
+        kind="list", default=[], group="branding", item_kind="str",
+        help="Hop only when the message was forwarded from one of these chat ids/@usernames."),
+    "branding_keywords": _s(
+        kind="list", default=[], group="branding", item_kind="str",
+        help="Hop only when the message text contains one of these words."),
+    "branding_match_mode": _s(
+        kind="str", default="any", group="branding", choices=("any", "all"),
+        help="any = one trigger is enough, all = every configured trigger must match."),
+    "branding_require_forward": _s(
+        kind="bool", default=False, group="branding",
+        help="Refuse the hop unless the message is itself a forward."),
+    "branding_force_forward": _s(
+        kind="bool", default=True, group="branding",
+        help="Send the final step as a native forward of C, so B's header names C."),
 }
 
-_GROUP_ORDER = ("general", "cleanup", "content", "media", "sending", "keywords",
-                "audience", "ai", "automation")
+_GROUP_ORDER = ("general", "cleanup", "content", "media", "branding", "sending",
+                "keywords", "audience", "ai", "automation")
 
 
 # --------------------------------------------------------------------------- #

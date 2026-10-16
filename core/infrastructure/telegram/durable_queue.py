@@ -173,6 +173,7 @@ class DurableQueueManager:
         evaluation: Any = None,
         job_kind: str = "forward",
         correlation_id: str = "",
+        branding: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Enqueue a delivery job for one target chat.
 
@@ -182,6 +183,16 @@ class DurableQueueManager:
         secondary side-effect deliveries such as the keyword-reply add-on
         (``"keyword_reply"``). Without it both jobs produce the same id
         (``rule:chat:msg:target``) and the reply is silently deduplicated away.
+
+        ``branding`` carries the already-performed branding hop: ``{"chat_id": C,
+        "message_id": <post in C>, "force_forward": bool}``. The hop itself runs
+        on the dispatch path (it needs a live client and must not be retried
+        blindly); the queue only has to *reproduce* it, otherwise the worker
+        delivers source=A and the target shows the original channel's header —
+        the exact failure that made the feature look "configured but useless".
+        The job's own source stays the original message on purpose: the mapping
+        and the idempotency key are keyed on it, so a replay never posts a second
+        copy into C.
         """
         # 1. Backpressure guard
         pending_count = await self._queue.get_pending_count()
@@ -229,6 +240,10 @@ class DurableQueueManager:
             # re-copy or re-forward the source message's media.
             "is_reply": job_kind != "forward",
             "correlation_id": correlation_id or getattr(payload, "correlation_id", "") or "",
+            # --- Branding hop (A -> C -> B) ----------------------------------
+            # Already performed on the dispatch path; the worker only repeats it
+            # so B receives a forward of C instead of the original source.
+            "branding": dict(branding) if branding else None,
         }
 
         # 3. Insert or update initial mapping as PENDING
@@ -264,6 +279,12 @@ class DurableQueueManager:
             payload_data=payload_dict,
             status=DeliveryStatus.PENDING,
             next_retry_at=next_retry_at,
+            # Audit trail for the hop: which channel C carried this delivery and
+            # which post in C the target is forwarded from (columns exist since
+            # v9 and were never populated on the dispatch path).
+            intermediate_chat_id=str(branding["chat_id"]) if branding else None,
+            intermediate_message_id=int(branding["message_id"]) if branding else None,
+            delivery_stage="BRANDED" if branding else "DIRECT",
         )
 
         enqueued = await self._enqueue_atomic(mapping, job)
@@ -983,6 +1004,55 @@ class DurableQueueManager:
         thread_kwargs: Dict[str, Any] = {}
         if topic_id > 0:
             thread_kwargs["message_thread_id"] = topic_id
+
+        # --- Branding hop (A -> C -> B) --------------------------------------
+        # The message was already copied into our channel C on the dispatch path
+        # and the target must now receive a forward of *that* post, so the header
+        # names C. Without this the worker delivered source=A and the target saw
+        # the original channel's header — the hop was configured, the post landed
+        # in C, and the branding never reached B.
+        branding = data.get("branding") or {}
+        if branding and branding.get("chat_id") and branding.get("message_id"):
+            c_chat = branding["chat_id"]
+            c_chat = int(c_chat) if str(c_chat).lstrip("-").isdigit() else c_chat
+            c_msg_id = int(branding["message_id"])
+            if bool(branding.get("force_forward", True)):
+                try:
+                    res = await client.forward_messages(
+                        chat_id=target, from_chat_id=c_chat,
+                        message_ids=[c_msg_id], **thread_kwargs,
+                    )
+                    if isinstance(res, list) and res:
+                        return getattr(res[0], "id", 0)
+                    return getattr(res, "id", 0)
+                except Exception as hop_err:
+                    err_str = str(hop_err).lower()
+                    if any(k in err_str for k in ("restrict", "protect", "forbidden", "chatforwardsrestricted")):
+                        logger.info(
+                            "[PIPELINE:BRANDING] forward from C=%s restricted (%s) — copying C's post instead",
+                            c_chat, hop_err,
+                        )
+                    else:
+                        raise
+            # Clean copy of C's own post (either requested, or the forward was
+            # restricted): content still comes from C, never from the source.
+            try:
+                res = await client.copy_message(
+                    chat_id=target, from_chat_id=c_chat, message_id=c_msg_id,
+                    caption=caption, **thread_kwargs,
+                )
+                return getattr(res, "id", 0)
+            except Exception as copy_err:
+                err_str = str(copy_err).lower()
+                if any(k in err_str for k in ("restrict", "protect", "forbidden", "chatforwardsrestricted")):
+                    logger.info(
+                        "[PIPELINE:BRANDING] copy from C=%s restricted (%s) — re-uploading",
+                        c_chat, copy_err,
+                    )
+                    return await self._reupload_media(
+                        client, c_chat, c_msg_id, target, caption, data.get("media_type", ""),
+                    )
+                raise
 
         # 1. DIRECT_FORWARD
         if forward_mode == ForwardMode.DIRECT_FORWARD.value:

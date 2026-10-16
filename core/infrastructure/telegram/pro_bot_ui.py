@@ -51,6 +51,7 @@ from ...application.use_cases import (
     MessageForwardingUseCase,
     SessionUseCases,
 )
+from ...domain import branding as branding_policy
 from ...domain.entities import AIConfig, FilterRule, ForwardRule
 from ...domain.value_objects import AIProviderType, ForwardMode, RoutingType, RoutingDecision
 from .client_pool import ClientPool
@@ -224,6 +225,18 @@ ROUTE_CANCEL_WORDS = (
     "\u0627\u0646\u0635\u0631\u0627\u0641",
     "\u0644\u063a\u0648",
     "\u0628\u0627\u0632\u06af\u0634\u062a",
+)
+
+#: Clear words accepted inside the branding-filter screens: the neutral ASCII
+#: tokens plus the Persian synonyms the editor already accepts, spelled as
+#: escapes so this file carries no literal non-ASCII.
+BRAND_CLEAR_WORDS = (
+    "-",
+    "clear",
+    "none",
+    "0",
+    "\u067e\u0627\u06a9",
+    "\u062d\u0630\u0641",
 )
 
 #: route_lists validation code -> catalog key. Every message names the
@@ -2770,12 +2783,38 @@ class ProBotUI:
         mode_desc = (self._t("ui_smart_match_all", lang=lang) if match_mode == "ALL"
                      else self._t("ui_smart_match_any", lang=lang))
 
+        # Branding hop (A -> C -> B): the per-task filter that decides whether a
+        # message actually travels through C before reaching B. Rendered from the
+        # same config the engine reads, so the panel cannot drift from the route.
+        brand_cfg = branding_policy.read_config(rule)
+        brand_origins = list(brand_cfg.get("origin_titles") or []) + list(brand_cfg.get("origin_ids") or [])
+        brand_words = list(brand_cfg.get("keywords") or [])
+        brand_filtered = bool(brand_cfg.get("triggers_enabled")) and bool(brand_origins or brand_words)
+        brand_state = self._t("ui_smart_brand_state_filtered" if brand_filtered else "ui_smart_brand_state_all",
+                              lang=lang)
+
+        def _brand_display(values: List[str]) -> str:
+            if not values:
+                return _ns
+            return ", ".join(f"`{str(v).replace('`', '')[:30]}`" for v in values)
+
+        origins_display = _brand_display(brand_origins)
+        words_display = _brand_display(brand_words)
+        gate_label = self._t("ui_smart_btn_brand_gate_on" if brand_cfg.get("require_forward")
+                             else "ui_smart_btn_brand_gate_off", lang=lang)
+        force_label = self._t("ui_smart_btn_brand_force_on" if brand_cfg.get("force_forward")
+                              else "ui_smart_btn_brand_force_off", lang=lang)
+
         lines = [
             self._t("ui_smart_title", lang=lang),
             self._t("ui_smart_rule_line", lang=lang, src=src_label, dst=dst_label),
             "────────────────────",
             self._t("ui_smart_active_path", lang=lang, path_desc=path_desc),
             self._t("ui_smart_mid_channel", lang=lang, mid=mid_display),
+            self._t("ui_smart_brand_block", lang=lang),
+            self._t("ui_smart_brand_state", lang=lang, state=brand_state),
+            self._t("ui_smart_brand_origins", lang=lang, origins=origins_display),
+            self._t("ui_smart_brand_words", lang=lang, words=words_display),
             self._t("ui_smart_match_logic", lang=lang, match_mode=match_mode, mode_desc=mode_desc),
             self._t("ui_smart_keywords", lang=lang, keywords=kw_display),
             self._t("ui_smart_regex", lang=lang, regex=regex_display),
@@ -2796,6 +2835,14 @@ class ProBotUI:
             [
                 (self._t("ui_smart_btn_keywords", lang=lang), f"rsmtx:{rule.id}"),
                 (self._t("ui_smart_btn_regex", lang=lang), f"rsmrx:{rule.id}"),
+            ],
+            [
+                (self._t("ui_smart_btn_brand_origins", lang=lang), f"rsmbo:{rule.id}"),
+                (self._t("ui_smart_btn_brand_words", lang=lang), f"rsmbk:{rule.id}"),
+            ],
+            [
+                (gate_label, f"rsmbr:{rule.id}"),
+                (force_label, f"rsmbf:{rule.id}"),
             ],
             [
                 (self._t("ui_smart_btn_header", lang=lang), f"rsmh:{rule.id}"),
@@ -7119,6 +7166,110 @@ class ProBotUI:
             )
             await cq.answer()
 
+        @b.on_callback_query(filters.regex(r"^rsmbo:(.+)$"))
+        @self._localized_handler
+        async def _cb_smart_brand_origins_prompt(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            st = self._state(cq.from_user.id)
+            st.step = "smart_set_brand_origins"
+            st.buffer = {"rule_id": rule_id}
+            await self._persist(cq.from_user.id, st)
+            prompt = self._t("ui_brand_origins_prompt") + "\n\n" + self._t("ui_cancel_hint")
+            await self._safe_edit(
+                cq,
+                prompt,
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rsm:{rule_id}")]]),
+            )
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rsmbk:(.+)$"))
+        @self._localized_handler
+        async def _cb_smart_brand_words_prompt(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            st = self._state(cq.from_user.id)
+            st.step = "smart_set_brand_words"
+            st.buffer = {"rule_id": rule_id}
+            await self._persist(cq.from_user.id, st)
+            prompt = self._t("ui_brand_words_prompt") + "\n\n" + self._t("ui_cancel_hint")
+            await self._safe_edit(
+                cq,
+                prompt,
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rsm:{rule_id}")]]),
+            )
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rsmbr:(.+)$"))
+        @self._localized_handler
+        async def _cb_smart_brand_gate_toggle(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            cfg = branding_policy.read_config(rule)
+            cfg["require_forward"] = not bool(cfg.get("require_forward"))
+            branding_policy.write_config(rule, {"require_forward": cfg["require_forward"]})
+            await self._save_owned_rule(rule, cq.from_user.id)
+            await cq.answer(self._t("ui_brand_gate_saved", lang=self._resolve_lang(cq.from_user.id),
+                                    state=self._t("ui_brand_on" if cfg["require_forward"] else "ui_brand_off")))
+            text, kbd = self._render_smart_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmbf:(.+)$"))
+        @self._localized_handler
+        async def _cb_smart_brand_force_toggle(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            cfg = branding_policy.read_config(rule)
+            cfg["force_forward"] = not bool(cfg.get("force_forward"))
+            branding_policy.write_config(rule, {"force_forward": cfg["force_forward"]})
+            await self._save_owned_rule(rule, cq.from_user.id)
+            await cq.answer(self._t("ui_brand_force_saved", lang=self._resolve_lang(cq.from_user.id),
+                                    state=self._t("ui_brand_on" if cfg["force_forward"] else "ui_brand_off")))
+            text, kbd = self._render_smart_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmbt:(.+)$"))
+        @self._localized_handler
+        async def _cb_smart_brand_triggers_toggle(_, cq: CallbackQuery):
+            if not self._is_admin(cq.from_user.id):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._rules.get(rule_id)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            cfg = branding_policy.read_config(rule)
+            enable = not bool(cfg.get("triggers_enabled"))
+            # Enabling the filter with nothing configured would make the hop
+            # unreachable (a filter with no criteria matches nothing); refuse it
+            # instead of saving a rule that can never deliver.
+            if enable and not (cfg.get("origin_titles") or cfg.get("origin_ids") or cfg.get("keywords")):
+                return await cq.answer(
+                    self._t("ui_brand_needs_criteria", lang=self._resolve_lang(cq.from_user.id)),
+                    show_alert=True,
+                )
+            branding_policy.write_config(rule, {"triggers_enabled": enable})
+            await self._save_owned_rule(rule, cq.from_user.id)
+            state_key = "ui_smart_brand_state_filtered" if enable else "ui_smart_brand_state_all"
+            await cq.answer(self._t("ui_brand_triggers_saved", lang=self._resolve_lang(cq.from_user.id),
+                                    state=self._t(state_key)))
+            text, kbd = self._render_smart_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
         @b.on_callback_query(filters.regex(r"^rsmh:(.+)$"))
         @self._localized_handler
         async def _cb_smart_set_header_prompt(_, cq: CallbackQuery):
@@ -9757,6 +9908,103 @@ class ProBotUI:
         await self._persist(message.from_user.id, st)
 
         await message.reply_text(ans)
+        m_text, m_kbd = self._render_smart_menu(rule)
+        await message.reply_text(m_text, reply_markup=m_kbd)
+
+    async def _step_smart_set_brand_origins(self, message: Message, st: UiState, text: str) -> None:
+        """Set the forward-origin filter: channel names (or ids / @usernames).
+
+        Matched against Telegram's "Forwarded from <channel>" header — the origin
+        channel, not text inside the message body.
+        """
+        uid = int(message.from_user.id if message.from_user else 0)
+        rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
+            return
+
+        if text.strip().lower() in ROUTE_CANCEL_WORDS:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            m_text, m_kbd = self._render_smart_menu(rule)
+            await message.reply_text(self._t("ui_cancel"), reply_markup=m_kbd)
+            return
+
+        raw = text.strip()
+        cfg = branding_policy.read_config(rule)
+        cleared = raw.casefold() in BRAND_CLEAR_WORDS
+        if cleared:
+            cfg["origin_titles"] = []
+            cfg["origin_ids"] = []
+            ans = self._t("ui_brand_cleared")
+        else:
+            titles: List[str] = []
+            ids: List[str] = []
+            for token in raw.replace("،", ",").replace("\n", ",").split(","):
+                item = token.strip()
+                if not item:
+                    continue
+                looks_like_ref = item.startswith("@") or item.startswith("-") or item.lstrip("-").isdigit()
+                (ids if looks_like_ref else titles).append(item)
+            cfg["origin_titles"] = titles
+            cfg["origin_ids"] = ids
+            values = ", ".join(f"`{v}`" for v in (titles + ids))
+            ans = self._t("ui_brand_origins_saved", value=values)
+        cfg["triggers_enabled"] = bool(cfg["origin_titles"] or cfg["origin_ids"] or cfg["keywords"])
+        branding_policy.write_config(rule, cfg)
+        await self._save_owned_rule(rule, uid)
+
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+
+        await message.reply_text(ans, reply_markup=self._main_menu())
+        m_text, m_kbd = self._render_smart_menu(rule)
+        await message.reply_text(m_text, reply_markup=m_kbd)
+
+    async def _step_smart_set_brand_words(self, message: Message, st: UiState, text: str) -> None:
+        """Set the word list that must appear in the message body for the hop."""
+        uid = int(message.from_user.id if message.from_user else 0)
+        rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
+            return
+
+        if text.strip().lower() in ROUTE_CANCEL_WORDS:
+            st.step = ""
+            st.buffer = {}
+            await self._persist(message.from_user.id, st)
+            m_text, m_kbd = self._render_smart_menu(rule)
+            await message.reply_text(self._t("ui_cancel"), reply_markup=m_kbd)
+            return
+
+        raw = text.strip()
+        cfg = branding_policy.read_config(rule)
+        if raw.casefold() in BRAND_CLEAR_WORDS:
+            cfg["keywords"] = []
+            ans = self._t("ui_brand_cleared")
+        else:
+            words = [w.strip() for w in raw.replace("،", ",").replace("\n", ",").split(",") if w.strip()]
+            cfg["keywords"] = words
+            ans = self._t("ui_brand_words_saved", value=", ".join(f"`{w}`" for w in words))
+        cfg["triggers_enabled"] = bool(cfg["origin_titles"] or cfg["origin_ids"] or cfg["keywords"])
+        branding_policy.write_config(rule, cfg)
+        await self._save_owned_rule(rule, uid)
+
+        st.step = ""
+        st.buffer = {}
+        await self._persist(message.from_user.id, st)
+
+        await message.reply_text(ans, reply_markup=self._main_menu())
         m_text, m_kbd = self._render_smart_menu(rule)
         await message.reply_text(m_text, reply_markup=m_kbd)
 
