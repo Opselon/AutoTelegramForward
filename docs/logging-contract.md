@@ -11,7 +11,7 @@ here is inferred from "the code is written in Rust".
 
 ## 1. Delivery contract (producer → Logger)
 
-`logger/log_client.py` is the producer side. Its counters are the contract:
+`core/observability/log_client.py` is the producer side. Its counters are the contract:
 
 | counter | meaning |
 | --- | --- |

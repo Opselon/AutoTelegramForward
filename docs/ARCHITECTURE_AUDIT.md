@@ -8,9 +8,9 @@
 ## 1. Executive Summary & Architecture Reality
 
 AutoTelegramForward is composed of four distinct languages:
-- **Python:** Telegram MTProto Engine (`core/`) + Observability Logger daemon (`logger/`)
+- **Python:** Telegram MTProto Engine (`core/`) — forwarding/domain logic; produces logs through the `core/observability/log_client.py` adapter
 - **Go:** Control Plane & REST API (`api/`)
-- **Rust (Axum):** Web Gateway & BFF (`web/backend/`)
+- **Rust:** Web Gateway & BFF (`web/backend/`, Axum) + Observability Logger engine (`rust/logger/`, tonic gRPC)
 - **React (TypeScript):** Modern Management Dashboard (`web/frontend/`)
 
 ### Core Findings & Audit Discrepancies
@@ -27,7 +27,7 @@ AutoTelegramForward is composed of four distinct languages:
 | Service | Language | Port | Primary Responsibility | Data Ownership | Communication |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Core** | Python 3.12 | `:6001` (gRPC) | Telegram MTProto, session client pool, rule pipeline, VIP hops, media matrix, deduplication | **Exclusive owner** of `data/atf.db` | gRPC server |
-| **Logger** | Python 3.12 | `:6002` (gRPC) | Structured log ingestion, search, audit trail, retention | **Exclusive owner** of `data/atf_logs.db` | gRPC server |
+| **Logger** | Rust 1.90 | `:6002` (gRPC) | Structured log ingestion, search, audit trail, retention | **Exclusive owner** of `data/atf_logs_rust.db` | gRPC server |
 | **Control Plane** | Go 1.24+ | `:8080` (HTTP) | REST API, validation, auth, rate limiting, OpenAPI, coordinating Core & Logger | **No direct DB writes**; talks over gRPC | gRPC client → Core & Logger; HTTP server |
 | **Web Gateway** | Rust (Axum) | `:8088` (HTTP) | Web Gateway / BFF, embeds React SPA, reverse proxies `/api/*` to Go REST API, security headers, web sessions | **No direct DB writes**; proxies to Go API | Upstream HTTP client → Go API; HTTP server for Web UI |
 | **Frontend** | React 19 / TS | Browser | Management UI, responsive views, zero secrets embedded | N/A | HTTP client → Web Gateway `:8088` |
@@ -49,11 +49,11 @@ AutoTelegramForward is composed of four distinct languages:
          │
          ├── gRPC (:6001) ──► [Python Core Engine] ──► SQLite (atf.db)
          │                                       ──► Telegram MTProto
-         └── gRPC (:6002) ──► [Python Logger]     ──► SQLite (atf_logs.db)
+         └── gRPC (:6002) ──► [Rust Logger Engine] ──► SQLite (atf_logs_rust.db)
 ```
 
 - **Loopback isolation:** On local host deployments, gRPC ports (`:6001`, `:6002`) and Go API (`:8080`) bind to `127.0.0.1` by default. Only the Web Gateway (`:8088`) is exposed to the user.
-- **Single Writer per Database:** `atf.db` is exclusively accessed by Core; `atf_logs.db` is exclusively accessed by Logger.
+- **Single Writer per Database:** `atf.db` is exclusively accessed by Core; `atf_logs_rust.db` is exclusively accessed by the Rust Logger engine.
 
 ---
 
@@ -70,8 +70,9 @@ For each release target:
 1. `web/frontend`: `npm run build` compiles React TypeScript into `dist/`.
 2. `web/backend`: `cargo build --release` compiles Rust Axum, embedding `dist/` directly via `rust-embed`.
 3. `api`: `go build -o atf-api .` compiles Go REST API into a static binary.
-4. `atf.py`: PyInstaller builds the one-file binary, bundling `atf-api` and `atf-web-backend` using `--add-binary`.
-5. At runtime on a clean machine:
-   - `atf.py` starts Logger and Core internally from the bundled Python runtime.
+4. `rust/logger`: `cargo build --release` compiles the Rust Logger engine (`atf-logger`).
+5. `atf.py`: PyInstaller builds the one-file binary, bundling `atf-api`, `atf-web-backend`, and `atf-logger` using `--add-binary`.
+6. At runtime on a clean machine:
+   - `atf.py` starts the Rust Logger engine (`atf-logger`) and the Python Core internally — the engine as a native binary, Core from the bundled Python runtime.
    - `atf.py` extracts and launches `atf-api` and `atf-web-backend` from `sys._MEIPASS` with readiness probes.
    - Zero dependencies required on host.

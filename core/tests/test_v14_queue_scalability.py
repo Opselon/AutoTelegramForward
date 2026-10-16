@@ -332,7 +332,7 @@ def test_config_queue_defaults():
 @pytest.mark.asyncio
 async def test_log_client_queue_is_bounded_and_drops_oldest():
     """A bounded LogClient drops the oldest record instead of growing."""
-    from logger.log_client import LogClient
+    from core.observability.log_client import LogClient
 
     client = LogClient(address="localhost:1", max_queue_size=4)
     # Never connect: _stub stays None so log() is a no-op, but the bound is
@@ -356,7 +356,7 @@ async def test_log_client_queue_is_bounded_and_drops_oldest():
 
 @pytest.mark.asyncio
 async def test_log_client_queue_bound_default_is_set():
-    from logger.log_client import LogClient
+    from core.observability.log_client import LogClient
 
     client = LogClient(address="localhost:1")
     assert client._queue.maxsize > 0, "queue must be bounded by default"

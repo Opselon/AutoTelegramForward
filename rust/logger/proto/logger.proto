@@ -1,6 +1,6 @@
 // Vendored subset of proto/autoforward.proto — the LogControlService surface
 // only. Names, field numbers and types match the canonical file exactly so the
-// existing Python (logger/log_client.py) and Go clients keep working unchanged.
+// existing Python (core/observability/log_client.py) and Go clients keep working unchanged.
 //
 // Do not renumber or rename anything here: the wire format is shared.
 

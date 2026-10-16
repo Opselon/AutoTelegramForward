@@ -556,6 +556,14 @@ class ProBotUI:
         except Exception:
             logger.debug("ui state persist failed", exc_info=True)
 
+    def _toggle_toast(self, key: str, on: bool) -> str:
+        """Callback-toast line for a settings toggle: '<Label>: <ON/OFF>'."""
+        return self._t(key, state=self._t("ui_status_on" if on else "ui_status_off"))
+
+    def _toggle_count_toast(self, key: str, **kw: Any) -> str:
+        """Callback-toast line for a settings count (placeholders filled)."""
+        return self._t(key, **kw)
+
     def _t(self, key: str, lang: Optional[str] = None, **kw) -> str:
         # Explicit locale wins; otherwise use the current update's isolated locale.
         cur_lang = lang or _BOT_RENDER_LANGUAGE.get() or "en"
@@ -5494,7 +5502,7 @@ class ProBotUI:
             rule.paid_addons = addons
             await self._save_owned_rule(rule, uid)
             st_text = self._t("ui_rule_status_on") if not curr else self._t("ui_rule_status_off_white")
-            await cq.answer(f"{addon_key}: {st_text}")
+            await cq.answer(self._t("ui_toggle_addon", addon=addon_key, state=st_text))
             if is_modal:
                 text, kbd = self._render_all_addons(rule)
             else:
@@ -5560,7 +5568,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.duplicate_filters = not rule.duplicate_filters
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"Duplicate Filters: {'ON' if rule.duplicate_filters else 'OFF'}")
+            await cq.answer(self._toggle_toast("ui_toggle_duplicate_filters", rule.duplicate_filters))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5575,7 +5583,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.crypto_mode = not rule.crypto_mode
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"Crypto Mode: {'ON' if rule.crypto_mode else 'OFF'}")
+            await cq.answer(self._toggle_toast("ui_toggle_crypto_mode", rule.crypto_mode))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5590,7 +5598,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.process_raw_text = not rule.process_raw_text
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"Process Raw Text: {'ON' if rule.process_raw_text else 'OFF'}")
+            await cq.answer(self._toggle_toast("ui_toggle_process_raw_text", rule.process_raw_text))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5605,7 +5613,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.button_to_text = not rule.button_to_text
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"Button To Text: {'ON' if rule.button_to_text else 'OFF'}")
+            await cq.answer(self._toggle_toast("ui_toggle_button_to_text", rule.button_to_text))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5620,7 +5628,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.ocr_image_ai = not rule.ocr_image_ai
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"OCR Image AI: {'ON' if rule.ocr_image_ai else 'OFF'}")
+            await cq.answer(self._toggle_toast("ui_toggle_ocr_image_ai", rule.ocr_image_ai))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5635,7 +5643,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.smart_ai_rewrite = not rule.smart_ai_rewrite
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"Smart AI Rewrite: {'ON' if rule.smart_ai_rewrite else 'OFF'}")
+            await cq.answer(self._toggle_toast("ui_toggle_smart_ai_rewrite", rule.smart_ai_rewrite))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5650,7 +5658,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.news_digest = not rule.news_digest
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"News Digest: {'ON' if rule.news_digest else 'OFF'}")
+            await cq.answer(self._toggle_toast("ui_toggle_news_digest", rule.news_digest))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5764,7 +5772,7 @@ class ProBotUI:
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             cnt = len(rule.blacklist_users)
-            await cq.answer(f"Blacklist Users: {cnt} blocked", show_alert=True)
+            await cq.answer(self._t("ui_blacklist_users_count", count=cnt), show_alert=True)
 
         @b.on_callback_query(filters.regex(r"^rfl_wu:(.+)$"))
         @self._localized_handler
@@ -5776,7 +5784,7 @@ class ProBotUI:
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             cnt = len(rule.whitelist_users)
-            await cq.answer(f"Whitelist Users: {cnt} allowed", show_alert=True)
+            await cq.answer(self._t("ui_whitelist_users_count", count=cnt), show_alert=True)
 
         # --- Whitelist Handlers ---
         @b.on_callback_query(filters.regex(r"^rfl_wl:(.+)$"))
@@ -5918,7 +5926,7 @@ class ProBotUI:
             curr = bool(rule.auto_post_scheduler.get("enabled", False))
             rule.auto_post_scheduler["enabled"] = not curr
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"Auto Post Scheduler: {'ON' if not curr else 'OFF'}")
+            await cq.answer(self._toggle_toast("ui_toggle_auto_post_scheduler", not curr))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5934,7 +5942,7 @@ class ProBotUI:
             curr = bool(rule.power_schedule.get("enabled", False))
             rule.power_schedule["enabled"] = not curr
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"Power Schedule: {'ON' if not curr else 'OFF'}")
+            await cq.answer(self._toggle_toast("ui_toggle_power_schedule", not curr))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5950,7 +5958,7 @@ class ProBotUI:
             curr = bool(rule.affiliate_kit.get("enabled", False))
             rule.affiliate_kit["enabled"] = not curr
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"Affiliate Kit: {'ON' if not curr else 'OFF'}")
+            await cq.answer(self._toggle_toast("ui_toggle_affiliate_kit", not curr))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -5964,7 +5972,7 @@ class ProBotUI:
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             btn_cnt = len(rule.link_buttons)
-            await cq.answer(f"Link Buttons: {btn_cnt} active", show_alert=True)
+            await cq.answer(self._t("ui_link_buttons_count", count=btn_cnt), show_alert=True)
 
         @b.on_callback_query(filters.regex(r"^rai_cfg:(.+)$"))
         @self._localized_handler
@@ -5980,7 +5988,7 @@ class ProBotUI:
             next_c = 0.7 if curr_c == 0.2 else (1.0 if curr_c == 0.7 else 0.2)
             rule.ai_creativity = next_c
             await self._save_owned_rule(rule, uid)
-            await cq.answer(f"AI Creativity: {next_c}")
+            await cq.answer(self._t("ui_ai_creativity_cycle", value=next_c))
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -8702,7 +8710,7 @@ class ProBotUI:
         except ValueError as exc:
             st.step = ""
             await self._persist(uid, st)
-            return await message.reply_text(f"❌ {exc}")
+            return await message.reply_text(self._t("ui_backup_import_error", error=exc))
 
         try:
             stats = await self._backup.restore_snapshot(

@@ -11,3 +11,21 @@ spec:
   resources:
     requests:
       storage: 5Gi
+---
+# The logger engine owns its own archive. Keeping it off `atf-data-pvc` means
+# (a) it never shares a ReadWriteOnce volume with Core, and (b) the retired
+# Python engine's archive in `atf-data-pvc` is never reopened or written.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: atf-logger-pvc
+  namespace: autoforward
+  labels:
+    app.kubernetes.io/name: autotelegramforward
+    app.kubernetes.io/component: logger
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

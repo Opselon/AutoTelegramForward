@@ -28,7 +28,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Python tests
-        run: python -m pytest -q core/tests logger/tests scripts/tests
+        run: python -m pytest -q core/tests scripts/tests
 
       - name: Telegram UI hardcoded-string guard
         # New visible strings in Telegram UI handlers, callbacks, and button

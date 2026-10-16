@@ -1,7 +1,7 @@
 //! The gRPC `LogControlService` implementation.
 //!
 //! This is the whole public surface of the Rust logger: four RPCs, exactly as
-//! `proto/autoforward.proto` defines them, exactly as `logger/log_client.py` and
+//! `proto/autoforward.proto` defines them, exactly as `core/observability/log_client.py` and
 //! the Go API call them. There is no REST API here and there never will be —
 //! business/domain HTTP lives in Go, and the only listener Rust owns besides this
 //! one is the metrics/health endpoint.

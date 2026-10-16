@@ -188,6 +188,68 @@ threshold. Filtering is counted and reported, never silent. This is why
 Scenario A sets `all`: a throughput run against the default policy would have
 measured rejection cost, not ingest.
 
+### Scenario D — paired side-by-side: Rust engine vs the retired Python engine
+
+The cutover mission could not claim an improvement without measuring the engine
+it replaced, so the retired implementation was measured too. The Python engine
+is either the retained rollback image
+(`autotelegramforward-logger-python:legacy-rollback`) or a historical checkout of
+`logger/main.py`; `scripts/bench/logger_legacy_bench.py` drives **either** with
+the *same* client container (`autotelegramforward-core`), the *same* flags and
+the *same* host, on its own throwaway bridge network with a scratch bind mount —
+it never opens the retained `atf-data/logger.db` archive.
+
+```sh
+# the Rust half (identical flags to the Python half)
+python3 -m scripts.bench.logger_rust_bench --rates 1000,10000 --seconds 5 \
+  --producers 4 --profile small --query-iterations 20 \
+  --out docs/benchmarks/logger-rust-bench-pairing.json \
+  --engine-args --batch-size 512 --batch-delay-ms 2 --ack-mode durable
+
+# the retired Python half
+python3 scripts/bench/logger_legacy_bench.py --rates 1000,10000 --seconds 5 \
+  --producers 4 --profile small --query-iterations 20 \
+  --out docs/benchmarks/logger-python-bench-pairing.json
+```
+
+Both halves on the same 2-vCPU host, 4 producer workers, 5 s per rate:
+
+| ENGINE | TARGET/s | OFFERED | ACCEPTED | ACCEPTED/s | REJECTED | ON DISK | p50 ms | p95 ms | p99 ms | producer blocked |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Rust | 1 000 | 5 000 | 5 000 | 999.8 | 0 | 5 000 | 4.5 | 8.9 | 24.8 | 4 ms |
+| Python (retired) | 1 000 | 5 000 | 5 000 | 999.8 | 0 | 5 000 | 2.0 | 20.6 | 36.2 | 5 ms |
+| Rust | 10 000 | 49 476 | 49 476 | 9 888.6 | 0 | 49 476 | 9.2 | 34.0 | 78.5 | 4.5 s |
+| Python (retired) | 10 000 | 7 538 | 7 538 | 1 506.9 | 0 | 7 538 | 154.5 | 289.1 | 295.5 | 19.8 s |
+
+Honest reading of these numbers:
+
+* **At 1 000/s the two are equivalent** (both admit 5 000/5 000 with zero loss),
+  and the retired engine's *p50 is lower* — 2.0 ms vs 4.5 ms. That is not
+  measurement noise, it is the ack contract: Python commits and answers each
+  insert inline, while Rust's `--ack-mode durable` deliberately waits for a
+  batch commit, so it pays up to the 2 ms batch delay plus the commit. The Rust
+  engine is not faster at this rate, and this document does not claim it is.
+* **At 10 000/s the retired engine is the bottleneck**: with 4 producers it
+  managed 7 538 of the ~50 000 events it was offered (~1 507/s, p50 154.5 ms)
+  and its producers sat blocked 19.8 s of the 20 s of producer wall-clock — the
+  client was waiting on the engine, not the other way round. The Rust engine
+  accepted every offered event at ~9 889/s with p50 9.2 ms in the same slot.
+  **6.6× the admitted load, 17× lower p50, zero rejections on both sides.**
+* **The Rust leg is client-limited, not engine-limited** (see "What could not be
+  measured"): it hit the harness's own ~10-12k RPC/s per-process ceiling, so
+  9 889/s is a floor for the engine and a ceiling for the harness. The Python
+  figure is the opposite — a real engine limit, which is why the ratio is
+  reported as "≥6.6×", not as a saturation comparison.
+* **Read paths are not comparable across legs**: `search_corr` (free-text
+  `search` over the archive) took p50 77.1 ms on the Rust leg over 49 476 rows
+  vs 2.2 ms on the Python leg over 7 538 rows. Different archive sizes, same
+  outlier cause — the Rust engine's free-text search path is the one query with
+  a visibly weaker p50, and it is measured honestly in Scenario A as well.
+* Both legs recorded `accepted == persisted` at every rate (Rust via the
+  engine's own `atf_logger_events_persisted_total`, Python via a host-side
+  `SELECT COUNT(*)`), and neither produced a single `OVERLOAD`, `STORAGE`,
+  `FILTERED` or error code during these runs.
+
 ### Independent cross-check
 
 Three independent sources agree on Scenario A's 1 000/s run:
@@ -213,10 +275,15 @@ Stated plainly, because a missing number is more useful than a guessed one:
   stayed at ~29 % of a core, and the engine answered `success=true` with zero
   rejections at every offered rate including the ~15.3k/s aggregate. The engine
   was never pushed to its limit, so its limit is unknown from these runs.
-* **A Rust-vs-Python comparison** — not measured. The Python engine
-  (`logger.main`) is deleted on this branch, so the historical ≈1,150 events/s
-  figure in `docs/logger-modernization-baseline.md` could not be re-confirmed
-  and no side-by-side was run.
+* **A *saturation* comparison between the two engines** — not measured. The
+  paired run in Scenario D drove both engines with identical load, but the Rust
+  leg stopped at the harness's own ~10-12k RPC/s per-process ceiling while the
+  retired engine stopped at its own limit (~1.5k/s), so the comparison bounds
+  the ratio (≥6.6×) instead of locating the Rust engine's true saturation point.
+* **Per-engine CPU cost** — not measured. `docker stats` was sampled for the
+  Rust runs (client 100 %, engine ~29 %) but no equivalent sample was taken for
+  the Python leg, so Scenario D compares throughput and latency only; no
+  efficiency-per-event claim is made.
 * **The PostgreSQL backend** — not measured. The harness drives the SQLite
   archive under a bind mount; it has no DSN option.
 * **Sustained-load behaviour** — not measured. Every run here is a 5 s burst;
@@ -235,6 +302,12 @@ Stated plainly, because a missing number is more useful than a guessed one:
   * `docs/benchmarks/logger-rust-bench-scenario-a.json` — Scenario A
   * `docs/benchmarks/logger-rust-bench-scenario-b.json` — Scenario B
   * `docs/benchmarks/logger-rust-bench-scenario-c.json` — Scenario C
+  * `docs/benchmarks/logger-rust-bench-pairing.json` — Scenario D, Rust leg
+  * `docs/benchmarks/logger-python-bench-pairing.json` — Scenario D, retired
+    Python engine leg (same client, same flags)
+* **Harnesses:** `scripts/bench/logger_rust_bench.py` (either engine; the `logger`
+  service name is unchanged) and `scripts/bench/logger_legacy_bench.py` (the
+  retired Python engine, from its rollback image or a historical checkout).
 * **Unit tests:** `scripts/tests/test_logger_rust_bench.py` (10 tests, no Docker
   required). Full suite after the change:
-  `python -m pytest -q core/tests logger/tests scripts/tests` → `821 passed, 9 skipped`.
+  `python -m pytest -q core/tests scripts/tests` → `821 passed, 9 skipped`.

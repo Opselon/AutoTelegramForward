@@ -237,12 +237,12 @@ async def test_log_client_reports_delivery_failures(monkeypatch):
     Regression: _pump did `except Exception: pass`, so a broken gRPC pipe made
     every log disappear and the service looked healthy.
     """
-    from logger.log_client import LogClient
+    from core.observability.log_client import LogClient
 
     client = LogClient("localhost:1")  # nothing listening
     errors = []
     monkeypatch.setattr(
-        "logger.log_client.logger",
+        "core.observability.log_client.logger",
         SimpleNamespace(error=lambda *a, **k: errors.append(a)),
     )
 

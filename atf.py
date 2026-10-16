@@ -98,11 +98,17 @@ LOGGER_LOCAL_DB = ROOT / "data" / "atf_logs_rust.db"
 LOGGER_LOCAL_LISTEN = "127.0.0.1:6002"
 LOGGER_LOCAL_METRICS_LISTEN = "127.0.0.1:9108"
 
-# Resolution order for the engine binary: $ATF_LOGGER_BIN, a cargo release
-# build, then a cargo debug build; anything else is an actionable error.
+# Resolution order for the engine binary: $ATF_LOGGER_BIN, the copy bundled into
+# a frozen single-file release, then bin/ next to a source checkout, then cargo
+# release/debug builds; anything else is an actionable error.
 LOGGER_BIN_NAME = "atf-logger.exe" if IS_WIN else "atf-logger"
-LOGGER_RELEASE_BIN = ROOT / "rust" / "logger" / "target" / "release" / LOGGER_BIN_NAME
-LOGGER_DEBUG_BIN = ROOT / "rust" / "logger" / "target" / "debug" / LOGGER_BIN_NAME
+LOGGER_CANDIDATES = [
+    BUNDLE / LOGGER_BIN_NAME,
+    ROOT / LOGGER_BIN_NAME,
+    ROOT / "bin" / LOGGER_BIN_NAME,
+    ROOT / "rust" / "logger" / "target" / "release" / LOGGER_BIN_NAME,
+    ROOT / "rust" / "logger" / "target" / "debug" / LOGGER_BIN_NAME,
+]
 LOGGER_BUILD_CMD = "cargo build --release --manifest-path rust/logger/Cargo.toml"
 
 # Public api_id/api_hash from the open-source Telegram Desktop client.
@@ -356,16 +362,17 @@ def build_web() -> "Path | None":
 def find_logger() -> "Path | None":
     """Resolve the Rust logging engine in the documented order.
 
-    `$ATF_LOGGER_BIN` wins, then a cargo release build, then a cargo debug
-    build. Returns None when none exists; callers turn that into an actionable
-    error rather than starting nothing and leaving port 6002 dead.
+    `$ATF_LOGGER_BIN` wins, then the engine bundled into a frozen single-file
+    release, then `bin/` next to a source checkout, then a cargo release build,
+    then a cargo debug build. Returns None when none exists; callers turn that
+    into an actionable error rather than starting nothing and leaving port 6002
+    dead.
     """
     candidates = []
     env_bin = os.environ.get("ATF_LOGGER_BIN", "").strip()
     if env_bin:
         candidates.append(Path(env_bin))
-    candidates.append(LOGGER_RELEASE_BIN)
-    candidates.append(LOGGER_DEBUG_BIN)
+    candidates.extend(LOGGER_CANDIDATES)
     for cand in candidates:
         try:
             if cand.is_file():

@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from logger.log_client import LogClient  # noqa: E402
+from core.observability.log_client import LogClient  # noqa: E402
 
 
 class FakeStub:

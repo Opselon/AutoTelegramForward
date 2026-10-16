@@ -20,7 +20,7 @@ const pageDesc = "Deploy the stack with Docker Compose: the four containers, vol
   <div class="space-y-6">
     <h2 id="overview">Overview</h2>
     <p>
-      Docker Compose is the recommended production deployment method for AutoTelegramForward. It encapsulates all 4 microservices—Python Core, Go API Gateway, Python Logger, and Web Dashboard—in isolated containers connected via an internal bridge network.
+      Docker Compose is the recommended production deployment method for AutoTelegramForward. It encapsulates all 4 microservices—Python Core, Go API Gateway, Rust Logger Engine, and Web Dashboard—in isolated containers connected via an internal bridge network.
     </p>
 
     <h2 id="services">Container Composition</h2>
@@ -40,7 +40,7 @@ const pageDesc = "Deploy the stack with Docker Compose: the four containers, vol
       </div>
 
       <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
-        <div class="text-sky-400 font-bold mb-1">atf-logger (Python 3.12)</div>
+        <div class="text-sky-400 font-bold mb-1">atf-logger (Rust 1.90)</div>
         <p class="text-slate-400 font-sans">
           Centralized structured logging service capturing audit logs and pipeline telemetry over gRPC port <code>50052</code>.
         </p>

@@ -28,7 +28,7 @@
 //!
 //! Two different components with two different overflow policies, deliberately:
 //!
-//! * `logger/log_client.py` — the **producer's** bounded in-process queue. Its
+//! * `core/observability/log_client.py` — the **producer's** bounded in-process queue. Its
 //!   overflow policy is *evict the oldest* and it counts that in `dropped`, because
 //!   it sits inside the emitting process and its only alternatives are "grow without
 //!   bound" or "block the caller".

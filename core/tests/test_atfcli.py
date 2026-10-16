@@ -259,6 +259,11 @@ def test_tracked_source_carries_no_credential_shaped_literal():
 
     finding = report.findings[-1]
     assert finding.check == "secrets-scan", finding.detail
+    if finding.status == "warn" and "unavailable" in finding.detail:
+        pytest.skip(
+            "this environment cannot enumerate tracked files "
+            f"({finding.detail}) — the scan under test never ran"
+        )
     assert finding.status == "ok", finding.detail
 
 

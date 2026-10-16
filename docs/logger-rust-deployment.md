@@ -25,6 +25,42 @@ The image is multi-stage: `rust:1.90-slim-bookworm` + `protobuf-compiler` /
 the unprivileged `logger` user. Only `rust/logger/**` is copied into the build
 stage, so a compose/docs change does not invalidate the cached compile.
 
+## Release artifacts
+
+Every supported artifact carries the engine; none of them needs a Rust toolchain
+on the target host.
+
+- **Container image** `ghcr.io/<owner>/atf-logger` — built by
+  `Dockerfile.logger-rust`; entrypoint is the release binary, healthcheck probes
+  `:9109/healthz`.
+- **Single-file CLI** (`atf-linux-x64`, `atf-macos-arm64`, `atf-windows-x64.exe`)
+  — the release job runs
+  `cargo build --release --manifest-path rust/logger/Cargo.toml` and PyInstaller
+  bundles `bin/atf-logger` with `--add-binary`. `find_logger()` resolves
+  `$ATF_LOGGER_BIN` first, then the frozen bundle (`sys._MEIPASS/atf-logger`),
+  then `bin/`, then a cargo release/debug build — and `atf logger` prints the
+  exact build command when none of them exists.
+- **Source tarball** — ships `rust/logger/`, so a source deployment builds the
+  engine from source with that same command.
+- **Kubernetes** (`k8s/`) — the `atf-logger` Deployment sets
+  `ATF_LOGGER_DB_PATH=/app/data/atf_logs_rust.db` on its own `atf-logger-pvc`
+  (never Core's RWO volume), exposes `:50052` gRPC + `:9109` metrics, wires
+  liveness `/healthz` and readiness `/readyz` to the metrics port, and allows
+  30 s termination grace for the shutdown drain.
+
+```sh
+# a release artifact needs no toolchain and no configuration
+./atf logger        # gRPC 127.0.0.1:6002, metrics 127.0.0.1:9108, archive data/atf_logs_rust.db
+curl -fsS http://127.0.0.1:9108/healthz
+```
+
+The release job asserts this before publishing: it starts the frozen binary's
+engine, waits for `:9108/healthz`, and fails the release if the bundled engine
+does not come up or does not create its SQLite archive. The compose smoke test
+(`clean-install`) additionally proves the deployed service is the Rust engine
+(no Python runtime in the image, `:9109/metrics` populated) and replays the
+24-check gRPC acceptance suite through Core's own stubs.
+
 ## Run
 
 ```sh
