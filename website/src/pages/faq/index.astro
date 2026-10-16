@@ -1,118 +1,222 @@
 ---
 import DocsLayout from '../../layouts/DocsLayout.astro';
+import Accordion from '../../components/Accordion.astro';
+import Callout from '../../components/Callout.astro';
+import Icon from '../../components/Icon.astro';
 import repoInfo from '../../data/repo-info.json';
 import { url } from '../../utils/paths';
 
-const pageTitle = "Frequently Asked Questions & Technical Glossary";
-const pageDesc = "Frequently asked questions, common misconceptions, technical glossary, and community support channels for AutoTelegramForward.";
+const pageTitle = 'FAQ & technical glossary';
+const pageDesc =
+  'Straight answers about forwarding modes, multi-source routing, content rules, AI rewriting, rate limits, tenancy and licensing — plus a glossary of the terms this project uses.';
 
-const faqs = [
+const toc = [
+  { id: 'product', title: 'Product & scope' },
+  { id: 'routing', title: 'Routing & rules' },
+  { id: 'limits', title: 'Telegram limits' },
+  { id: 'security', title: 'Security & privacy' },
+  { id: 'operations', title: 'Operations' },
+  { id: 'glossary', title: 'Glossary' },
+];
+
+const sections = [
   {
-    q: "Is AutoTelegramForward free to use?",
-    a: "Yes. AutoTelegramForward is completely free and open-source software distributed under the MIT license. You host it on your own server or virtual private machine with zero subscription fees."
+    id: 'product',
+    title: 'Product & scope',
+    items: [
+      {
+        q: 'What is AutoTelegramForward in one sentence?',
+        a: 'A self-hosted platform that watches Telegram chats you authorize and republishes what they post to the chats you choose, after cleaning, filtering, templating and optionally rewriting the content.',
+      },
+      {
+        q: 'Is it free?',
+        a: 'Yes — MIT licensed, no subscription, no telemetry. You pay for the server you run it on and nothing else.',
+      },
+      {
+        q: 'Do I need to be an admin of the source channel?',
+        a: 'No. It reads through a Telegram user session, so any channel or group your account can see is a valid source.',
+      },
+      {
+        q: 'Which clients are there?',
+        a: 'A Telegram bot control panel, a web dashboard, a Flutter mobile app and the REST API — all four are checked against each other for capability parity.',
+      },
+      {
+        q: 'How do I update it?',
+        a: 'atf system upgrade pulls, rebuilds through the gated path and verifies the stack. atf validate --strict tells you whether the configuration is still valid before you deploy.',
+      },
+    ],
   },
   {
-    q: "Can I forward from private channels where I am only a subscriber?",
-    a: "Yes. By connecting a Telegram User Session (MTProto client) rather than a bot token, AutoTelegramForward can read and forward posts from any channel, group, or chat that your account can view."
+    id: 'routing',
+    title: 'Routing & rules',
+    items: [
+      {
+        q: 'Can one task read several channels and post to several destinations?',
+        a: 'Yes. Sources and targets are lists on a single task: M sources to N targets. The primary source and primary target are derived from those lists, so the simple case behaves exactly as before.',
+      },
+      {
+        q: 'Are rules global or per task?',
+        a: 'Per task. The content policy — cleaning, filters, replacements, header, footer and the AI toggle — lives on the task itself and is stored in metadata, so adding a setting never requires a schema migration.',
+      },
+      {
+        q: 'Can I test a rule without sending anything?',
+        a: 'Yes: atf rules simulate <id> --text "…" in the terminal, POST /api/simulate over HTTP, or the browser playground for the cleaner and templates.',
+      },
+      {
+        q: 'What does copy mode change?',
+        a: 'Copy mode republishes the content as your own message, so no "Forwarded from" banner appears. Direct forward keeps the attribution. Both are per task.',
+      },
+      {
+        q: 'Can it rewrite text with an LLM?',
+        a: 'It can, per task, with your provider, model and prompts. Without an AI configuration the pipeline is unchanged — and a provider outage never blocks delivery.',
+      },
+      {
+        q: 'Do edits and replies on the original message follow through?',
+        a: 'Yes. Edited posts update their delivered copies within the edit window, and a reply to a message that was not forwarded is skipped rather than posted as an orphan.',
+      },
+    ],
   },
   {
-    q: "Can AutoTelegramForward forward from channels that have 'Restrict saving content' enabled?",
-    a: "Yes. When a source channel disables standard Telegram forwarding (ChatForwardsRestricted), AutoTelegramForward's pipeline automatically falls back to downloading the media to a temporary disk stream and re-uploading it as a fresh message to your destination."
+    id: 'limits',
+    title: 'Telegram limits',
+    items: [
+      {
+        q: 'Can it forward from channels with "Restrict saving content" enabled?',
+        a: 'Yes. When Telegram refuses a native forward (ChatForwardsRestricted), the pipeline downloads the media and re-uploads it as a fresh message instead of giving up.',
+      },
+      {
+        q: 'What happens during FloodWait?',
+        a: 'The affected account is marked time-limited, its deliveries pause, the jobs stay queued, and everything resumes when the restriction expires. Nothing is dropped and nothing is retried into a ban.',
+      },
+      {
+        q: 'How are albums handled?',
+        a: 'Album fragments are grouped inside a short debounce window and delivered as one atomic album, so a photo set never arrives as five separate posts.',
+      },
+      {
+        q: 'Is delivery order preserved?',
+        a: 'Yes — bursts are serialized per task so messages arrive in the order they were posted, even when several workers are draining the queue.',
+      },
+      {
+        q: 'Which message types are supported?',
+        a: `All of them: ${repoInfo.supportedMediaTypes.length} classes, from text with formatting entities through albums, polls, video notes and protected media.`,
+      },
+    ],
   },
   {
-    q: "Does AutoTelegramForward strip author watermark tags?",
-    a: "Yes. When configured in 'Copy Mode', messages are delivered as clean publications without any 'Forwarded from' banner."
+    id: 'security',
+    title: 'Security & privacy',
+    items: [
+      {
+        q: 'Can one user see another user\'s tasks?',
+        a: 'No. Every read and write is scoped server-side to the authenticated numeric Telegram user id, and a mismatch fails closed. An account that has not linked Telegram resolves to id 0 and therefore owns nothing.',
+      },
+      {
+        q: 'Where do credentials live?',
+        a: 'API keys and session strings are encrypted at rest with AES-256-GCM; passwords are hashed with PBKDF2-SHA256 and 240 000 iterations. The environment contract endpoint reports whether a key is set, never its value.',
+      },
+      {
+        q: 'Does anything leave my server?',
+        a: 'Only what you configure: Telegram itself, and your AI provider if you enable rewriting. There is no telemetry or phone-home.',
+      },
+      {
+        q: 'What is the honest security caveat?',
+        a: 'Static analysis reports pre-existing findings in the backup export helper. They are known and tracked, they do not cross tenant boundaries, and you should review that path before handling third-party data. See the security page for the full list of known limits.',
+      },
+    ],
   },
   {
-    q: "How does the bot handle Telegram rate limits (FloodWait)?",
-    a: "When Telegram issues a FloodWait, the ClientPool marks the affected account as time-limited and temporarily suspends deliveries for that specific account. Messages remain safely buffered in the persistent queue and resume automatically the moment the restriction clears."
+    id: 'operations',
+    title: 'Operations',
+    items: [
+      {
+        q: 'How do I know the stack is healthy?',
+        a: 'atf status prints a live board with ports and reachability; atf doctor diagnoses deeper; GET /api/health/services reports per-service reachability and latency.',
+      },
+      {
+        q: 'Can I see why a specific message failed?',
+        a: 'Yes. Log history is attributable — actor, service, level, subject task and correlation id — queryable from the dashboard log explorer, atf logs query, or GET /api/logs with bounded paging.',
+      },
+      {
+        q: 'What happens to jobs that keep failing?',
+        a: 'They land in the dead-letter queue with their last error. Inspect them with atf data dlq, then replay with atf data dlq --replay or POST /api/dlq/{id}/retry once the cause is fixed.',
+      },
+      {
+        q: 'How do I move an installation to another server?',
+        a: 'Export an encrypted bundle (atf data backup-export or POST /api/backup/export), copy it, then import on the target. Configuration can be exported without secrets when you only need the shape.',
+      },
+      {
+        q: 'Is it observable in a distributed setup?',
+        a: 'Every request carries a correlation id that also appears in the log history, so an API call and the deliveries it caused can be joined in one query.',
+      },
+    ],
   },
-  {
-    q: "Can other users on the server see or modify my forwarding tasks?",
-    a: "No. AutoTelegramForward enforces strict fail-closed multi-tenant isolation. All use-cases, gRPC RPCs, and database operations enforce owner verification. Missing or mismatched identity headers are immediately rejected."
-  }
 ];
 
 const glossary = [
-  { term: "MTProto", def: "Telegram's mobile protocol used for encrypted real-time client-server communication with Telegram Data Centers." },
-  { term: "FloodWait", def: "A Telegram API exception signaling that an account or bot has sent too many requests in a short period and must pause for N seconds." },
-  { term: "ChatForwardsRestricted", def: "A channel security flag that blocks native forward_messages calls; bypassed via download-and-reupload." },
-  { term: "Shortcode", def: "A template variable (e.g. [[ORIGIN_NAME]]) dynamically replaced with real metadata from the incoming message." },
-  { term: "Fail-Closed", def: "A security architecture principle where any missing, ambiguous, or unverified credential defaults to total access denial." },
-  { term: "Debounce Window", def: "A short timing buffer (e.g. 800ms) that groups split MTProto album fragments into an atomic media group." },
+  { term: 'MTProto', def: 'Telegram\'s client protocol. A user session speaks it, which is why ATF can read channels a bot cannot.' },
+  { term: 'FloodWait', def: 'Telegram rate-limit response. ATF pauses the affected account and resumes automatically when it expires.' },
+  { term: 'ChatForwardsRestricted', def: 'The flag that blocks native forwarding; ATF bypasses it by downloading and re-uploading.' },
+  { term: 'Content policy', def: 'The per-task rule set: cleaning, filters, replacements, header and footer, and the AI toggle.' },
+  { term: 'Shortcode', def: 'A placeholder such as [[ORIGIN_NAME]] replaced with real metadata from the incoming message.' },
+  { term: 'Dead-letter queue', def: 'Where jobs go after exhausting retries, with their last error, ready to be replayed.' },
+  { term: 'Fail-closed', def: 'Design rule that an unverified or missing identity gets no access at all, rather than default access.' },
+  { term: 'Correlation id', def: 'An id attached to a request and its deliveries, so log history can be stitched together.' },
+  { term: 'Debounce window', def: 'The short buffer that turns split album fragments into one atomic media group.' },
+  { term: 'Tenant', def: 'One linked Telegram account and everything it owns: tasks, sessions, filters, AI configs and history.' },
+  { term: 'Capability parity', def: 'Checking that the bot, dashboard, mobile app and API expose the same capabilities, not just documenting it.' },
+  { term: 'Ordered delivery', def: 'Guarantee that a burst of posts is delivered in posting order, not completion order.' },
 ];
+
+const allFaq = sections.flatMap((section) => section.items);
 ---
 
 <DocsLayout
   title={pageTitle}
   description={pageDesc}
+  path="/faq/"
   breadcrumbs={[
-    { name: 'FAQ & Glossary', href: url('/faq/') }
+    { name: 'Home', href: url('/') },
+    { name: 'Learn', href: url('/tutorials/') },
+    { name: 'FAQ', href: url('/faq/') },
   ]}
-  prev={{ title: 'Releases', href: url('/releases/') }}
+  toc={toc}
+  faq={allFaq}
+  keywords={['AutoTelegramForward FAQ', 'Telegram forward bot questions', 'Telegram forwarding limits']}
 >
-  <div class="space-y-8">
-    <p class="text-base text-slate-300 leading-relaxed">
-      Find answers to common questions about deployment, feature capabilities, Telegram limitations, and terminology.
+  <p>
+    Twenty-plus questions grouped by what you are actually trying to decide. If an answer here contradicts the code, the
+    code wins — and the page is wrong, so report it.
+  </p>
+
+  {
+    sections.map((section) => (
+      <section class="not-prose scroll-mt-24">
+        <h2 id={section.id} class="display-3 text-white mb-3 scroll-mt-24">{section.title}</h2>
+        <Accordion items={section.items} openFirst={section.id === 'product'} />
+      </section>
+    ))
+  }
+
+  <section class="not-prose scroll-mt-24">
+    <h2 id="glossary" class="display-3 text-white mb-3 scroll-mt-24">Glossary</h2>
+    <dl class="grid gap-3 sm:grid-cols-2 m-0">
+      {
+        glossary.map((entry) => (
+          <div class="card">
+            <dt class="font-mono text-[13px] font-bold text-sky-300 mb-1">{entry.term}</dt>
+            <dd class="m-0 text-[13px] leading-relaxed text-slate-400">{entry.def}</dd>
+          </div>
+        ))
+      }
+    </dl>
+  </section>
+
+  <Callout type="info" class="not-prose" title="Still stuck?">
+    <p>
+      Open an issue on <a class="text-sky-400" href={`${repoInfo.repoUrl}/issues`}>GitHub</a>, read the{' '}
+      <a class="text-sky-400" href={url('/operations/')}>operations runbook</a>, or check the{' '}
+      <a class="text-sky-400" href={url('/security/')}>security model</a> for isolation details. Maintainer:{' '}
+      <a class="text-sky-400" href={repoInfo.maintainer.url}>{repoInfo.maintainer.handle}</a>.
     </p>
-
-    <!-- FAQ Accordion / Grid -->
-    <section class="space-y-4">
-      <h2 id="faq" class="text-xl font-bold text-white">Frequently Asked Questions</h2>
-      <div class="space-y-3 not-prose">
-        {faqs.map((f) => (
-          <div class="p-4 rounded-xl bg-slate-900/70 border border-slate-800">
-            <h3 class="text-sm font-bold text-white mb-2 font-sans flex items-center gap-2">
-              <span class="text-sky-400">Q:</span>
-              {f.q}
-            </h3>
-            <p class="text-xs text-slate-400 leading-relaxed font-sans pl-5">
-              {f.a}
-            </p>
-          </div>
-        ))}
-      </div>
-    </section>
-
-    <!-- Glossary -->
-    <section class="space-y-4">
-      <h2 id="glossary" class="text-xl font-bold text-white">Technical Glossary</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose">
-        {glossary.map((g) => (
-          <div class="p-4 rounded-xl bg-slate-900/50 border border-slate-800">
-            <span class="text-xs font-mono font-bold text-sky-400 block mb-1">{g.term}</span>
-            <p class="text-xs text-slate-300 font-sans leading-relaxed">{g.def}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-
-    <!-- Community & Support -->
-    <section class="p-6 rounded-2xl bg-gradient-to-r from-slate-900 to-sky-950/30 border border-slate-800 space-y-3">
-      <h2 id="community" class="text-base font-bold text-white">Community & Maintainer Support</h2>
-      <p class="text-xs text-slate-300 leading-relaxed">
-        AutoTelegramForward is actively maintained by <strong class="text-white">Opselon</strong> and lead engineer <a href="https://t.me/Capxi" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline">@Capxi</a>.
-      </p>
-      <div class="flex flex-wrap gap-3 pt-2">
-        <a
-          href="https://t.me/Capxi"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="px-4 py-2 rounded-xl text-xs font-semibold bg-tg-blue hover:bg-sky-500 text-white transition-colors inline-flex items-center gap-1.5"
-        >
-          <span>Contact Lead Engineer (@Capxi)</span>
-          <span>→</span>
-        </a>
-        <a
-          href={repoInfo.repoUrl + "/issues"}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors inline-flex items-center gap-1.5"
-        >
-          <span>Report an Issue on GitHub</span>
-          <span>→</span>
-        </a>
-      </div>
-    </section>
-  </div>
+  </Callout>
 </DocsLayout>

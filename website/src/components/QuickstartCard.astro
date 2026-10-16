@@ -1,160 +1,163 @@
 ---
+import Icon from './Icon.astro';
 import repoInfo from '../data/repo-info.json';
----
+import { url } from '../utils/paths';
 
-<div class="glass-card rounded-2xl border border-slate-800 p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-800">
-    <div class="flex items-center gap-2.5">
-      <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
-      <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-      <div class="w-3 h-3 rounded-full bg-emerald-500/80"></div>
-      <span class="text-xs font-mono text-slate-400 ml-2">Quick Deployment</span>
-    </div>
-    
-    <!-- Tab Selectors -->
-    <div class="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs font-medium">
-      <button
-        type="button"
-        class="tab-btn px-3 py-1 rounded-md text-white bg-slate-800 shadow-sm"
-        data-target="tab-docker"
-      >
-        Docker Compose
-      </button>
-      <button
-        type="button"
-        class="tab-btn px-3 py-1 rounded-md text-slate-400 hover:text-white"
-        data-target="tab-linux"
-      >
-        Linux / Bash
-      </button>
-      <button
-        type="button"
-        class="tab-btn px-3 py-1 rounded-md text-slate-400 hover:text-white"
-        data-target="tab-windows"
-      >
-        Windows (PowerShell)
-      </button>
-    </div>
-  </div>
+const cloneLine = `git clone ${repoInfo.repoUrl}.git && cd AutoTelegramForward`;
 
-  <!-- Tab 1: Docker -->
-  <div id="tab-docker" class="tab-content block">
-    <div class="relative group">
-      <pre class="bg-slate-950 p-4 rounded-xl text-xs sm:text-sm font-mono text-emerald-400 overflow-x-auto leading-relaxed"><code># 1. Clone the verified repository
-git clone {repoInfo.repoUrl}.git
-cd AutoTelegramForward
+const tabs = [
+  {
+    id: 'tab-docker',
+    label: 'Docker',
+    blurb: 'Four containers — core, logger, api, web — behind one compose file.',
+    code: `# v${repoInfo.version} — guided install (recommended)
+${cloneLine}
+./scripts/setup.sh
 
-# 2. Configure credentials & start services
-cp .env.example .env
+# Manual compose path
+cp .env.example .env      # add your bot token + admin id
 docker compose up -d
+docker compose ps         # core, logger, api, web`,
+    copy: `${cloneLine}\n./scripts/setup.sh`,
+    href: url('/getting-started/docker/'),
+    linkLabel: 'Docker guide',
+  },
+  {
+    id: 'tab-linux',
+    label: 'Linux / macOS',
+    blurb: 'Installer or wizard, then a systemd service that survives reboots.',
+    code: `# One-line installer
+curl -sSL ${repoInfo.repoUrl.replace('https://github.com/', 'https://raw.githubusercontent.com/')}/master/install.sh | bash
 
-# 3. Check container health
-docker compose ps</code></pre>
-      <button
-        type="button"
-        class="copy-code-btn absolute top-3 right-3 px-2.5 py-1 text-xs font-medium rounded-md bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700 opacity-80 group-hover:opacity-100 transition-opacity"
-        data-code={`git clone ${repoInfo.repoUrl}.git\ncd AutoTelegramForward\ncp .env.example .env\ndocker compose up -d\ndocker compose ps`}
-      >
-        Copy
-      </button>
-    </div>
-    <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
-      <span>🚀 Boots Core (50051), API Gateway (8080), Logger (50052) & Dashboard (8088).</span>
-      <a href="/getting-started/docker/" class="text-sky-400 hover:underline">Full Docker Guide →</a>
-    </div>
-  </div>
+# Or the interactive wizard
+${cloneLine}
+./scripts/setup.sh
+atf status                # live board with ports + reachability`,
+    copy: `curl -sSL ${repoInfo.repoUrl.replace('https://github.com/', 'https://raw.githubusercontent.com/')}/master/install.sh | bash`,
+    href: url('/getting-started/linux-windows/'),
+    linkLabel: 'Linux guide',
+  },
+  {
+    id: 'tab-windows',
+    label: 'Windows',
+    blurb: 'PowerShell installer, then the same wizard and the same CLI.',
+    code: `# PowerShell, no prerequisites beyond Python
+irm ${repoInfo.repoUrl.replace('https://github.com/', 'https://raw.githubusercontent.com/')}/master/install.ps1 | iex
 
-  <!-- Tab 2: Linux Bash -->
-  <div id="tab-linux" class="tab-content hidden">
-    <div class="relative group">
-      <pre class="bg-slate-950 p-4 rounded-xl text-xs sm:text-sm font-mono text-emerald-400 overflow-x-auto leading-relaxed"><code># Run official automated Linux installer
-curl -sSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash
-
-# Or run manually in Python virtual environment:
+# Or bootstrap a checkout
+git clone ${repoInfo.repoUrl}.git; cd AutoTelegramForward
+python scripts\\bootstrap.py
+atf status`,
+    copy: `irm ${repoInfo.repoUrl.replace('https://github.com/', 'https://raw.githubusercontent.com/')}/master/install.ps1 | iex`,
+    href: url('/getting-started/linux-windows/'),
+    linkLabel: 'Windows guide',
+  },
+  {
+    id: 'tab-source',
+    label: 'From source',
+    blurb: 'Virtualenv, requirements, then run the services yourself.',
+    code: `${cloneLine}
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python3 -m core.main</code></pre>
-      <button
-        type="button"
-        class="copy-code-btn absolute top-3 right-3 px-2.5 py-1 text-xs font-medium rounded-md bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700 opacity-80 group-hover:opacity-100 transition-opacity"
-        data-code="curl -sSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash"
-      >
-        Copy
-      </button>
+python3 -m core.main        # Python core on :50051
+atf validate --strict       # layout, env, compose, catalog parity`,
+    copy: `${cloneLine}\npython3 -m venv .venv && source .venv/bin/activate\npip install -r requirements.txt`,
+    href: url('/getting-started/'),
+    linkLabel: 'Install overview',
+  },
+];
+---
+
+<div class="card !p-0 overflow-hidden shadow-2xl">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-b border-slate-800">
+    <div class="flex items-center gap-2">
+      <span class="w-2.5 h-2.5 rounded-full bg-rose-500/80"></span>
+      <span class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></span>
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></span>
+      <span class="ml-2 font-mono text-xs text-slate-400">install · v{repoInfo.version}</span>
     </div>
-    <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
-      <span>🐧 Configures systemd background service and log rotation.</span>
-      <a href="/getting-started/linux-windows/" class="text-sky-400 hover:underline">Linux Guide →</a>
+
+    <div role="tablist" aria-label="Install method" class="flex gap-1 overflow-x-auto -mx-1 px-1 pb-0.5">
+      {
+        tabs.map((tab, index) => (
+          <button
+            type="button"
+            role="tab"
+            class="tab-btn"
+            data-target={tab.id}
+            aria-controls={tab.id}
+            aria-selected={index === 0 ? 'true' : 'false'}
+          >
+            {tab.label}
+          </button>
+        ))
+      }
     </div>
   </div>
 
-  <!-- Tab 3: Windows PowerShell -->
-  <div id="tab-windows" class="tab-content hidden">
-    <div class="relative group">
-      <pre class="bg-slate-950 p-4 rounded-xl text-xs sm:text-sm font-mono text-emerald-400 overflow-x-auto leading-relaxed"><code># Run official Windows PowerShell installer
-irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex
-
-# Or run with Python:
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m core.main</code></pre>
-      <button
-        type="button"
-        class="copy-code-btn absolute top-3 right-3 px-2.5 py-1 text-xs font-medium rounded-md bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700 opacity-80 group-hover:opacity-100 transition-opacity"
-        data-code="irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex"
-      >
-        Copy
-      </button>
-    </div>
-    <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
-      <span>🪟 Automated dependency check and execution script.</span>
-      <a href="/getting-started/linux-windows/" class="text-sky-400 hover:underline">Windows Guide →</a>
-    </div>
-  </div>
+  {
+    tabs.map((tab, index) => (
+      <div id={tab.id} class="tab-content" role="tabpanel" data-tab-panel data-active={index === 0 ? 'true' : 'false'}>
+        <div class="relative group">
+          <pre class="quickstart-pre"><code>{tab.code}</code></pre>
+          <button
+            type="button"
+            class="copy-code-btn absolute top-3 right-3 px-2.5 py-1.5 text-xs font-medium rounded-md bg-slate-800/90 text-slate-300 hover:text-white border border-slate-700"
+            data-code={tab.copy}
+            aria-label={`Copy the ${tab.label} install commands`}
+          >
+            Copy
+          </button>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-slate-400 border-t border-slate-800">
+          <span class="inline-flex items-center gap-2">
+            <Icon name="check" class="w-3.5 h-3.5 text-emerald-400" strokeWidth={2.4} />
+            {tab.blurb}
+          </span>
+          <a href={tab.href} class="link-inline">
+            {tab.linkLabel}
+            <Icon name="arrow-right" class="w-3 h-3" />
+          </a>
+        </div>
+      </div>
+    ))
+  }
 </div>
 
 <script>
-  // Tab switching
-  const tabs = document.querySelectorAll('.tab-btn');
-  const contents = document.querySelectorAll('.tab-content');
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.tab-btn'));
+  const panels = Array.from(document.querySelectorAll<HTMLElement>('.tab-content'));
 
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const targetId = tab.getAttribute('data-target');
-      tabs.forEach(t => {
-        t.classList.remove('bg-slate-800', 'text-white', 'shadow-sm');
-        t.classList.add('text-slate-400');
-      });
-      tab.classList.add('bg-slate-800', 'text-white', 'shadow-sm');
-      tab.classList.remove('text-slate-400');
-
-      contents.forEach(c => {
-        const el = c as HTMLElement;
-        if (c.id === targetId) {
-          c.classList.remove('hidden');
-          c.classList.add('block');
-          el.style.display = 'block';
-        } else {
-          c.classList.add('hidden');
-          c.classList.remove('block');
-          el.style.display = 'none';
-        }
-      });
+  const activate = (target: string | null) => {
+    buttons.forEach((button) => {
+      const on = button.dataset.target === target;
+      button.classList.toggle('is-active', on);
+      button.setAttribute('aria-selected', on ? 'true' : 'false');
     });
+    panels.forEach((panel) => {
+      const on = panel.id === target;
+      panel.dataset.active = on ? 'true' : 'false';
+      panel.hidden = !on;
+    });
+  };
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', () => activate(button.dataset.target ?? null));
   });
 
-  // Copy code buttons
-  document.querySelectorAll('.copy-code-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const code = btn.getAttribute('data-code');
-      if (code) {
-        navigator.clipboard.writeText(code).then(() => {
-          const orig = btn.textContent;
-          btn.textContent = 'Copied!';
-          setTimeout(() => { btn.textContent = orig; }, 2000);
-        });
+  document.querySelectorAll<HTMLButtonElement>('.copy-code-btn').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const code = button.dataset.code ?? '';
+      const original = button.textContent ?? 'Copy';
+      try {
+        await navigator.clipboard.writeText(code);
+        button.textContent = 'Copied';
+      } catch {
+        button.textContent = 'Press ⌘C';
       }
+      setTimeout(() => {
+        button.textContent = original;
+      }, 2000);
     });
   });
 </script>

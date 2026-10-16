@@ -1,124 +1,245 @@
 ---
 import DocsLayout from '../../layouts/DocsLayout.astro';
+import SpecTable from '../../components/SpecTable.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import Callout from '../../components/Callout.astro';
+import Icon from '../../components/Icon.astro';
 import { url } from '../../utils/paths';
 
-const pageTitle = "Operations, Troubleshooting & Security Diagnostics";
-const pageDesc = "Operational guide for AutoTelegramForward: resolving FloodWait, handling SQLite concurrency locks, inspecting pipeline logs, and enforcing fail-closed security.";
+const pageTitle = 'Operations & troubleshooting';
+const pageDesc =
+  'Runbook for AutoTelegramForward: read the health board, query attributable log history, handle FloodWait, resolve database contention, replay dead-lettered jobs and roll back safely.';
+
+const toc = [
+  { id: 'health', title: 'Health checks' },
+  { id: 'logs', title: 'Log history' },
+  { id: 'floodwait', title: 'FloodWait' },
+  { id: 'database', title: 'Database contention' },
+  { id: 'dlq', title: 'Dead-letter queue' },
+  { id: 'backup', title: 'Backup & rollback' },
+  { id: 'upgrade', title: 'Upgrades' },
+];
+
+const logSignals = [
+  ['[PIPELINE:ROUTE]', 'A task matched this source message.', 'Normal. Check the task list if you expected a different target.'],
+  ['[PIPELINE:FILTER_DROP]', 'A filter rejected the message.', 'Expected only if the rule says so — inspect the task policy.'],
+  ['[PIPELINE:CLEAN]', 'Cleaner removed content.', 'Normal when cleaning is enabled.'],
+  ['[PIPELINE:REWRITE]', 'The AI pass rewrote the text.', 'If it did not run, check the task toggle and provider reachability.'],
+  ['[PIPELINE:RESTRICTED_BYPASS]', 'Protected content was re-uploaded instead of forwarded.', 'Normal copy-protection handling.'],
+  ['[PIPELINE:QUEUE]', 'The job was persisted with a lease.', 'A job stuck here means workers are not draining.'],
+  ['[PIPELINE:DELIVERED]', 'Telegram accepted the delivery.', 'Done.'],
+  ['[PIPELINE:RETRY_WAIT]', 'The job is waiting out its backoff.', 'A paused task keeps jobs here by design.'],
+  ['[PIPELINE:DLQ]', 'Retries were exhausted.', 'Read the recorded error, fix the cause, then replay.'],
+];
 ---
 
 <DocsLayout
   title={pageTitle}
   description={pageDesc}
+  path="/operations/"
   breadcrumbs={[
-    { name: 'Operations', href: url('/operations/') }
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'Operations', href: url('/operations/') },
   ]}
-  prev={{ title: 'Tutorials', href: url('/tutorials/') }}
-  next={{ title: 'Releases & Changelog', href: url('/releases/') }}
+  toc={toc}
+  keywords={['AutoTelegramForward troubleshooting', 'Telegram FloodWait handling', 'dead letter queue replay']}
 >
-  <div class="space-y-8">
-    <p class="text-base text-slate-300 leading-relaxed">
-      Comprehensive runbook for diagnosing production incidents, handling Telegram API rate limits, resolving database contention, and auditing security boundaries.
+  <p>
+    This is the page you open when something is wrong. Every section ends in a command or an endpoint you can actually
+    run, and the log signals below are the vocabulary the stack logs in.
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="health">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Health checks</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Start broad, then narrow. The CLI status board answers "is anything red", the readiness endpoint answers "is this
+      deployment configured", and doctor answers "why".
     </p>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <CodeBlock
+        label="Three levels of diagnosis"
+        language="bash"
+        content={`atf status             # live board: ports, reachability, task counts
+atf validate --strict  # config, compose, catalog parity, secrets scan
+atf doctor --fix       # deep checks across DB, binaries, ports, gRPC
 
-    <!-- Section 1: FloodWait -->
-    <section class="space-y-4">
-      <h2 id="floodwait">1. Telegram API FloodWait & Rate Limiting</h2>
-      <p class="text-sm text-slate-300">
-        Telegram enforces strict server-side rate limits on message broadcasting and API requests. When a limit is breached, Telegram returns a <code>FloodWait(x)</code> exception, where <code>x</code> is the mandatory cooldown in seconds.
+# The same, over HTTP
+curl -s localhost:8080/api/health/services | jq
+curl -s localhost:8080/api/system/setup | jq '.ready, .env'`}
+      />
+      <SpecTable
+        headers={['Signal', 'Means']}
+        rows={[
+          ['<code>ready: false</code>', 'At least one required environment key is missing or a service is unreachable.'],
+          ['<code>core: false</code>', 'The Python core is down — nothing is being read from Telegram.'],
+          ['<code>logger: false</code>', 'Log endpoints answer 502; delivery continues but history is not being recorded.'],
+          ['<code>api: false</code>', 'Clients cannot reach the control plane.'],
+          ['<code>web: false</code>', 'Only the dashboard is affected; the bot and API still work.'],
+        ]}
+      />
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="logs">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Log history</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      History is attributable: entries name the actor, the service, the level, the subject task and the correlation id.
+      That is what lets you answer "who changed this, and what happened next" hours later.
+    </p>
+    <div class="grid gap-4 lg:grid-cols-2 mb-4">
+      <CodeBlock
+        label="Query history from the CLI"
+        language="bash"
+        content={`atf logs tail --follow -n 50     # live stream
+atf logs query --level ERROR     # filtered query
+atf logs stats                   # counts by service and level
+atf logs export --format csv --out logs.csv`}
+      />
+      <CodeBlock
+        label="Query history over HTTP"
+        language="bash"
+        content={`# Bounded paging, tenant-scoped server-side
+curl -s "localhost:8080/api/logs?service=core&level=ERROR&limit=50" \\
+  -H "Authorization: Bearer $TOKEN" | jq '.items'
+
+# Aggregates, one task's history, and export
+curl -s localhost:8080/api/logs/stats -H "Authorization: Bearer $TOKEN" | jq
+curl -s localhost:8080/api/rules/<id>/logs -H "Authorization: Bearer $TOKEN" | jq
+curl -s localhost:8080/api/logs/export -H "Authorization: Bearer $TOKEN" -o logs.json`}
+      />
+    </div>
+
+    <SpecTable headers={['Signal', 'Meaning', 'What to do']} rows={logSignals} caption="Pipeline log vocabulary" />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="floodwait">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">FloodWait</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Telegram rate-limits accounts, and fighting it is how accounts get banned. ATF treats a FloodWait as a scheduling
+      signal: the account is marked time-limited, its deliveries pause, jobs stay queued, and everything resumes when
+      the window closes.
+    </p>
+    <ol class="grid gap-2 list-none p-0 m-0">
+      <li class="flex gap-2.5 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>The client pool records the affected account and the moment it becomes usable again.</span>
+      </li>
+      <li class="flex gap-2.5 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>Workers skip that account and keep serving the others — one limited account does not stall the installation.</span>
+      </li>
+      <li class="flex gap-2.5 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>When the window expires the queue drains automatically. Repeated FloodWaits mean your rates are too high, not that the code is broken.</span>
+      </li>
+    </ol>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="database">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Database contention</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Under a burst of concurrent tasks, SQLite can report <code>database is locked</code> if writes pile up. The fix is
+      either a better journal mode or a real database engine.
+    </p>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <CodeBlock
+        label="Keep SQLite, make it concurrent"
+        language="bash"
+        content={`sqlite3 data/atf.db "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;"
+atf db status          # integrity and lock visibility
+atf db snapshot        # consistent copy before changing anything`}
+      />
+      <CodeBlock
+        label="Move to PostgreSQL"
+        language="bash"
+        content={`# .env
+DATABASE_URL=postgresql://atf_user:password@localhost:5432/atf_db
+
+atf db snapshot
+atf system services    # restart the stack
+atf doctor             # confirm every service reconnected`}
+      />
+    </div>
+    <Callout type="warn" class="mt-4" title="Do not delete the WAL files to unlock a database">
+      <p>
+        Removing <code>-wal</code>/<code>-shm</code> files while the stack is running can lose writes that were never
+        checkpointed. Stop the stack first, or raise <code>busy_timeout</code> and let it settle.
       </p>
+    </Callout>
+  </section>
 
-      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 not-prose text-xs space-y-2">
-        <div class="font-bold text-sky-400">Automatic Account Suspension & Resume Architecture</div>
-        <p class="text-slate-400 font-sans">
-          When an account encounters <code>FloodWait(seconds)</code>:
-        </p>
-        <ol class="list-decimal ml-4 space-y-1 text-slate-300 font-sans">
-          <li>The client pool executes <code>set_time_limit(account_id, until_timestamp)</code>.</li>
-          <li>All active durable queue workers check <code>pool.is_time_limited(account_id)</code> before attempting deliveries.</li>
-          <li>Jobs for the limited account remain safe in the persistent queue rather than failing or triggering further Telegram penalties.</li>
-          <li>The second the cooldown expires, <code>is_time_limited()</code> automatically returns <code>False</code> and the queue resumes at full speed.</li>
-        </ol>
-      </div>
-    </section>
+  <section class="not-prose scroll-mt-24" id="dlq">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Dead-letter queue</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      A job that exhausts its retries stops guessing and lands in the DLQ with the error that killed it. Replay is
+      deliberate: fix the cause, then replay, one job or all of them.
+    </p>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <CodeBlock
+        label="Inspect and replay"
+        language="bash"
+        content={`atf data queue            # depth and in-flight jobs
+atf data dlq              # list dead-lettered jobs with errors
+atf data dlq --replay     # replay once the cause is fixed`}
+      />
+      <CodeBlock
+        label="The same over HTTP"
+        language="bash"
+        content={`curl -s localhost:8080/api/queue -H "Authorization: Bearer $TOKEN" | jq
+curl -s localhost:8080/api/dlq -H "Authorization: Bearer $TOKEN" | jq '.items'
+curl -s -X POST localhost:8080/api/dlq/<id>/retry \\
+  -H "Authorization: Bearer $TOKEN" | jq`}
+      />
+    </div>
+  </section>
 
-    <!-- Section 2: Database Locking -->
-    <section class="space-y-4">
-      <h2 id="database-locking">2. Resolving SQLite Database Contention ("Database is locked")</h2>
-      <p class="text-sm text-slate-300">
-        When dozens of high-traffic channels forward posts simultaneously in SQLite, you might see <code>sqlite3.OperationalError: database is locked</code> if busy timeouts are not configured properly.
+  <section class="not-prose scroll-mt-24" id="backup">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Backup & rollback</h2>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <CodeBlock
+        label="Encrypted export / import"
+        language="bash"
+        content={`atf data backup-export --out atf-$(date +%F).atf
+atf db snapshot --out data-snapshot.db
+atf sessions backup --out sessions.bak
+
+# Restore on this host or another
+atf data backup-import --in atf-2026-10-16.atf`}
+      />
+      <CodeBlock
+        label="Roll back an upgrade"
+        language="bash"
+        content={`# Pin the previous tag, rebuild what changed
+git fetch --tags
+git checkout v1.5.2
+docker compose build && docker compose up -d
+
+atf validate --strict
+curl -f localhost:8080/healthz`}
+      />
+    </div>
+    <Callout type="tip" class="mt-4" title="Config without secrets">
+      <p>
+        When you only need the shape of an installation — for review or on a ticket — export configuration without
+        secrets and keep credentials where they belong.
       </p>
+    </Callout>
+  </section>
 
-      <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 not-prose text-xs">
-        <div class="font-bold text-white mb-2 font-sans">Recommended Mitigation:</div>
-        <p class="text-slate-400 mb-2 font-sans">
-          1. Verify that Write-Ahead Logging (WAL) is enabled in <code>atf.db</code>:
-        </p>
-        <pre class="bg-slate-950 p-2.5 rounded font-mono text-emerald-400"><code>sqlite3 data/atf.db "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;"</code></pre>
-        <p class="text-slate-400 mt-3 font-sans">
-          2. For enterprise deployments exceeding 50 concurrent active forward rules, migrate to PostgreSQL by updating your <code>.env</code>:
-        </p>
-        <pre class="bg-slate-950 p-2.5 rounded font-mono text-emerald-400"><code>DATABASE_URL=postgresql://atf_user:secure_pass@localhost:5432/atf_db</code></pre>
-      </div>
-    </section>
-
-    <!-- Section 3: Structured Logging Forensics -->
-    <section class="space-y-4">
-      <h2 id="logging-forensics">3. Structured Pipeline Log Forensics</h2>
-      <p class="text-sm text-slate-300">
-        AutoTelegramForward outputs standardized structured markers in stdout to enable instant diagnosis with <code>grep</code> or log aggregators:
-      </p>
-
-      <div class="overflow-x-auto not-prose">
-        <table class="w-full text-left text-xs border border-slate-800 rounded-xl overflow-hidden font-mono">
-          <thead class="bg-slate-900 text-slate-300 uppercase text-[11px] font-sans">
-            <tr>
-              <th class="p-3">Log Tag</th>
-              <th class="p-3">Meaning</th>
-              <th class="p-3">Next Action</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-800/80 bg-slate-950/60">
-            <tr>
-              <td class="p-3 text-sky-400 font-bold">[PIPELINE:ROUTE]</td>
-              <td class="p-3 text-slate-300 font-sans">Matching rule identified for incoming post.</td>
-              <td class="p-3 text-slate-400 font-sans">Normal execution.</td>
-            </tr>
-            <tr>
-              <td class="p-3 text-rose-400 font-bold">[PIPELINE:FILTER_DROP]</td>
-              <td class="p-3 text-slate-300 font-sans">Message rejected by Whitelist, Blacklist, or Media filter.</td>
-              <td class="p-3 text-slate-400 font-sans">Inspect filter configuration if post was expected.</td>
-            </tr>
-            <tr>
-              <td class="p-3 text-purple-400 font-bold">[PIPELINE:RESTRICTED_BYPASS]</td>
-              <td class="p-3 text-slate-300 font-sans">ChatForwardsRestricted triggered download-and-reupload fallback.</td>
-              <td class="p-3 text-slate-400 font-sans">Normal copy-protection handling.</td>
-            </tr>
-            <tr>
-              <td class="p-3 text-emerald-400 font-bold">[PIPELINE:DELIVERED]</td>
-              <td class="p-3 text-slate-300 font-sans">Post successfully dispatched to target chat.</td>
-              <td class="p-3 text-slate-400 font-sans">Delivery completed.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- Section 4: Safe Updates & Rollback -->
-    <section class="space-y-4">
-      <h2 id="updates-rollback">4. Safe Updates & Rollback Strategy</h2>
-      <p class="text-sm text-slate-300">
-        Before pulling updates from GitHub, create a snapshot of your persistent database and session files:
-      </p>
-      <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code># 1. Backup persistent state
-tar -czvf atf-backup-$(date +%F).tar.gz data/ sessions/
-
-# 2. Pull updates and rebuild
-git pull origin master
-docker compose build core
-docker restart atf-core
-
-# 3. Confirm health
-curl -f http://localhost:8080/health</code></pre>
-    </section>
-  </div>
+  <section class="not-prose scroll-mt-24" id="upgrade">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Upgrades</h2>
+    <CodeBlock
+      label="The gated path"
+      language="bash"
+      content={`atf validate --strict    # refuse to start from a broken state
+atf system upgrade       # pull, rebuild, restart, verify
+atf status --watch       # keep an eye on the board afterwards
+atf release verify       # manifest + portable build integrity`}
+    />
+    <p class="mt-4 text-[13px] text-slate-400">
+      Release-by-release notes live on the <a class="text-sky-400" href={url('/releases/')}>releases page</a>; the
+      command surface is documented in the <a class="text-sky-400" href={url('/cli/')}>CLI reference</a>.
+    </p>
+  </section>
 </DocsLayout>

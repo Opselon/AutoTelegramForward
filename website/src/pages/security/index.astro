@@ -1,0 +1,224 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import Callout from '../../components/Callout.astro';
+import SpecTable from '../../components/SpecTable.astro';
+import Icon from '../../components/Icon.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = 'Security & tenant isolation';
+const pageDesc =
+  'How AutoTelegramForward keeps tenants apart: fail-closed identity scoping across bot, dashboard, mobile app, REST API and gRPC, AES-256-GCM encryption at rest, PBKDF2 password hashing and non-leaking ownership checks.';
+
+const toc = [
+  { id: 'model', title: 'Isolation model' },
+  { id: 'enforcement', title: 'Where it is enforced' },
+  { id: 'crypto', title: 'Cryptography' },
+  { id: 'secrets', title: 'Secrets handling' },
+  { id: 'network', title: 'Network posture' },
+  { id: 'audit', title: 'Audit trail' },
+  { id: 'limits', title: 'Known limits' },
+];
+
+const layers = [
+  {
+    name: 'Telegram bot',
+    detail: 'Commands resolve the caller to a numeric user id and load only that account\'s tasks, sessions and history.',
+    icon: 'bot',
+  },
+  {
+    name: 'Web dashboard',
+    detail: 'Bearer token from the authentication routes; every request carries the resolved identity into the handler.',
+    icon: 'devices',
+  },
+  {
+    name: 'Mobile app',
+    detail: 'Signs in through the same routes and talks to the same API — there is no second, weaker path.',
+    icon: 'phone',
+  },
+  {
+    name: 'REST API',
+    detail: 'Tenant-scoped handlers; an unlinked account resolves to id 0 and therefore owns nothing.',
+    icon: 'chip',
+  },
+  {
+    name: 'gRPC services',
+    detail: 'Internal calls carry the caller identity that the control plane verified, never one the client asserts.',
+    icon: 'server',
+  },
+  {
+    name: 'Administration',
+    detail: 'Mounted behind RequireAdmin: without admin rights the route set is unreachable, not merely hidden.',
+    icon: 'shield',
+  },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/security/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'Security', href: url('/security/') },
+  ]}
+  toc={toc}
+  keywords={['Telegram forwarding security', 'multi-tenant isolation', 'fail-closed design']}
+>
+  <p>
+    AutoTelegramForward runs one installation for one operator's accounts — and optionally for many. The design decision
+    that shapes everything else is that isolation is <strong>fail-closed</strong>: the default answer to "may this caller
+    read this row?" is no, and a caller who has not linked a Telegram account can read nothing at all.
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="model">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Isolation model</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Identity is a number, not a claim. Each surface resolves the caller to a numeric Telegram user id, that id travels
+      with the request through every layer, and each data access is scoped by it.
+    </p>
+
+    <div class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        layers.map((layer) => (
+          <div class="card">
+            <span class="inline-flex w-9 h-9 items-center justify-center rounded-xl bg-sky-500/10 border border-sky-900/60 text-sky-300 mb-3">
+              <Icon name={layer.icon} class="w-4 h-4" />
+            </span>
+            <h3 class="text-sm font-bold text-white mb-1.5">{layer.name}</h3>
+            <p class="m-0 text-[13px] leading-relaxed text-slate-400">{layer.detail}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="enforcement">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Where it is enforced</h2>
+    <SpecTable
+      headers={['Control', 'Implementation', 'Failure mode']}
+      rows={[
+        ['<strong>Ownership checks</strong>', 'Every task, session, filter, AI configuration and prompt template is read through the caller\'s own scope.', 'Not-yours and not-found return the same 404, so ids cannot be probed.'],
+        ['<strong>Unlinked accounts</strong>', 'A zero user id is treated as owning nothing.', 'Empty collections, never a fallback to a shared account.'],
+        ['<strong>Admin routes</strong>', 'Mounted behind an admin requirement in the parent mux', 'The route does not exist for non-admins.'],
+        ['<strong>Simulation</strong>', 'The dry-run endpoint loads the rule through the same ownership check', 'You can only preview rules you own.'],
+        ['<strong>Log history</strong>', 'Queries are filtered server-side by actor and scope before returning rows', 'No client-side filtering to bypass.'],
+        ['<strong>Backups</strong>', 'Export and import are tenant-scoped and encrypted', 'A stolen file is useless without the passphrase.'],
+      ]}
+      caption="Isolation controls and what happens when they say no"
+    />
+
+    <Callout type="success" class="mt-4" title="Tested, not asserted">
+      <p>
+        Tenant isolation has dedicated Go test files in the API package and Python tests in the core. That is why the
+        front page can claim zero cross-tenant leaks without an asterisk.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="crypto">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Cryptography</h2>
+    <SpecTable
+      headers={['Data', 'Protection', 'Notes']}
+      rows={[
+        ['Session strings and API keys at rest', '<strong>AES-256-GCM</strong>', 'Authenticated encryption; a modified ciphertext fails to decrypt rather than decrypting wrongly.'],
+        ['Account passwords', '<strong>PBKDF2-SHA256</strong>, 240 000 iterations, per-user salt', 'Verified in constant time; the iteration count is stored per row so it can be raised later.'],
+        ['Configuration backups', '<strong>AES-256-GCM bundle</strong>', 'Portable between servers: export on one host, import on the next.'],
+        ['Session backups', '<strong>Encrypted archive</strong>', 'Written only after the export succeeds, and never in plaintext.'],
+        ['Web traffic', '<strong>TLS</strong>', 'Terminate at your reverse proxy; the app itself is meant to sit behind one.'],
+      ]}
+      caption="Cryptographic primitives in use"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="secrets">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Secrets handling</h2>
+    <ul class="grid gap-2 list-none p-0 m-0 mb-4">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span><strong class="text-slate-100">The API never echoes a secret.</strong> The environment-contract route reports <code>set: true/false</code> per key plus a fix hint — never the value.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span><strong class="text-slate-100">Validation scans for committed secrets</strong> as part of the read-only check set, alongside layout, compose, catalog parity and ports.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span><strong class="text-slate-100">Backups can be exported without secrets</strong>, so a configuration bundle can be shared for review while credentials stay home.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span><strong class="text-slate-100">Setup writes <code>.env</code> with restrictive permissions</strong> and refuses to continue when a required key is missing or malformed.</span>
+      </li>
+    </ul>
+    <a href={url('/getting-started/configuration/')} class="btn btn-secondary btn-sm">
+      Environment key contract
+      <Icon name="arrow-right" class="w-3.5 h-3.5" />
+    </a>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="network">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Network posture</h2>
+    <SpecTable
+      headers={['Surface', 'Default exposure', 'Hardening']}
+      rows={[
+        ['Dashboard/API', 'Behind your reverse proxy', 'TLS at the proxy; the app trusts only what the proxy forwards.'],
+        ['Bot', 'Outbound to Telegram only', 'No inbound listener beyond the Telegram connection itself.'],
+        ['gRPC core', 'Loopback inside the compose network', 'Containers reach each other by service name; nothing is published.'],
+        ['Logger service', 'Loopback inside the compose network', 'The API proxies log queries, so clients never address it directly.'],
+        ['PostgreSQL', 'Loopback unless you expose it', 'Use the bundled default for single-host installs.'],
+        ['Health endpoints', 'Public', 'Return booleans and latencies only — never configuration values.'],
+      ]}
+      caption="What listens where, and how to tighten it"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="audit">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Audit trail</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The access logger mirrors every request — successes included, not just failures — into the central logger with the
+      verified actor, the subject task and the correlation id. That is what makes "who changed this rule, and what did
+      it do next" answerable after the fact.
+    </p>
+    <div class="grid gap-3.5 sm:grid-cols-3">
+      <div class="card">
+        <h3 class="text-sm font-bold text-white mb-1.5">Attributable entries</h3>
+        <p class="m-0 text-[13px] text-slate-400">Each entry names the actor, the service, the level and the subject.</p>
+      </div>
+      <div class="card">
+        <h3 class="text-sm font-bold text-white mb-1.5">Bounded queries</h3>
+        <p class="m-0 text-[13px] text-slate-400">Filter by service, level, text and time; results page instead of flooding.</p>
+      </div>
+      <div class="card">
+        <h3 class="text-sm font-bold text-white mb-1.5">Exportable evidence</h3>
+        <p class="m-0 text-[13px] text-slate-400">History exports as JSON or CSV, and purge is an explicit, scoped action.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="limits">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Known limits</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Being straight about the boundaries is part of the design. These are the things you should know before you rely on
+      the platform in a regulated setting.
+    </p>
+    <ul class="grid gap-2 list-none p-0 m-0">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="info" class="w-4 h-4 mt-[3px] text-amber-400 shrink-0" strokeWidth={2.2} />
+        <span>Static analysis reports pre-existing findings in the backup export helper. They are known, tracked and do not grant a tenant access to another tenant's data — but the export path deserves your own review before you handle third-party data.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="info" class="w-4 h-4 mt-[3px] text-amber-400 shrink-0" strokeWidth={2.2} />
+        <span>TLS is expected at your reverse proxy. The service itself speaks plain HTTP on the internal network by design.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="info" class="w-4 h-4 mt-[3px] text-amber-400 shrink-0" strokeWidth={2.2} />
+        <span>Encryption keys are your responsibility: lose the key material and encrypted backups cannot be recovered, by us or by anyone.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="info" class="w-4 h-4 mt-[3px] text-amber-400 shrink-0" strokeWidth={2.2} />
+        <span>Your Telegram accounts remain subject to Telegram's own rate limits and terms; the platform is built to respect FloodWait rather than defeat it.</span>
+      </li>
+    </ul>
+  </section>
+</DocsLayout>

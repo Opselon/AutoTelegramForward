@@ -3,289 +3,332 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import QuickstartCard from '../components/QuickstartCard.astro';
 import ArchitectureDiagram from '../components/ArchitectureDiagram.astro';
 import Playground from '../components/Playground.astro';
+import CapabilityMatrix from '../components/CapabilityMatrix.astro';
+import FeatureCard from '../components/FeatureCard.astro';
+import Accordion from '../components/Accordion.astro';
+import Icon from '../components/Icon.astro';
+import { featurePages } from '../data/features';
+import { localeLabels, site } from '../data/site';
 import repoInfo from '../data/repo-info.json';
 import { url } from '../utils/paths';
 
-const pageTitle = "AutoTelegramForward — Production Telegram Message Forwarding Engine";
-const pageDesc = "High-performance, multi-tenant Telegram forwarding bot with intelligent content cleaning, granular filters, dynamic header/footer shortcodes, copy-protection bypass, and durable queue resilience.";
+const pageTitle = 'AutoTelegramForward — Telegram Message Forwarding & Routing Platform';
+const pageDesc =
+  'Self-hosted Telegram routing platform: one task fans out from many source chats to many targets, with per-task content rules, optional AI rewriting, ten-language UI, durable ordered delivery and a fail-closed multi-tenant control plane.';
+
+const stats = [
+  { value: `${site.stats.services}`, label: 'Microservices' },
+  { value: `${site.stats.locales}`, label: 'UI languages' },
+  { value: `${site.stats.i18nKeys}`, label: 'Localized strings' },
+  { value: `${site.stats.cliGroups}`, label: 'CLI command groups' },
+  { value: `${site.stats.grpcRpcCount}`, label: 'gRPC methods' },
+  { value: '100%', label: 'Fail-closed isolation' },
+];
+
+const homeFaq = [
+  {
+    q: 'What exactly is AutoTelegramForward?',
+    a: 'A self-hosted Telegram message routing platform. A task watches one or more source chats and delivers to one or more targets, applying per-task content rules, templates and an optional AI rewriting pass on the way. It ships as four microservices you run yourself.',
+  },
+  {
+    q: 'Can one task read several channels and post to several destinations?',
+    a: 'Yes. Sources and targets are lists, so a single task can route many channels into many destinations. The primary source and target are derived from the lists and always kept consistent.',
+  },
+  {
+    q: 'Do I need an AI provider to use it?',
+    a: 'No. AI rewriting is an optional per-task toggle. Without it the cleaner, filters and templates still work exactly the same, and a provider that is down never blocks delivery.',
+  },
+  {
+    q: 'How do I install it?',
+    a: 'Clone the repository and run ./scripts/setup.sh on Linux or macOS, python scripts\\bootstrap.py on Windows, or the zero-prerequisite installers. Each path ends in the same guided wizard that builds the stack and proves every service is serving.',
+  },
+  {
+    q: 'Is it multi-tenant?',
+    a: 'Yes, and isolation is fail-closed: every read and write is scoped to the authenticated numeric Telegram user id, across the bot, dashboard, mobile app, REST API and gRPC services.',
+  },
+  {
+    q: 'Which Telegram content types are supported?',
+    a: 'Text, photos, albums, video, documents, audio, voice notes, video notes, stickers, polls, locations, contacts and copy-protected content that is re-uploaded rather than forwarded.',
+  },
+];
+
+const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
 ---
 
-<BaseLayout title={pageTitle} description={pageDesc}>
-  
-  <!-- Hero Section -->
-  <section class="relative overflow-hidden pt-12 pb-20 lg:pt-20 lg:pb-28">
-    <!-- Background Glow -->
-    <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-sky-500/15 via-emerald-500/10 to-transparent blur-3xl pointer-events-none -z-10 rounded-full"></div>
+<BaseLayout
+  title={pageTitle}
+  description={pageDesc}
+  faq={homeFaq}
+  itemList={{
+    name: 'AutoTelegramForward feature deep dives',
+    items: featurePages.map((feature) => ({
+      name: feature.cardTitle,
+      description: feature.description,
+      url: `/features/${feature.slug}/`,
+    })),
+  }}
+>
+  <!-- Hero -->
+  <section class="relative overflow-hidden">
+    <div class="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(60%_60%_at_50%_0%,rgba(36,161,222,0.18),transparent_70%)] pointer-events-none"></div>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-      
-      <!-- Top Release Pill -->
-      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-300 shadow-md mb-8 hover:border-slate-700 transition-colors">
+    <div class="container-x relative pt-10 pb-12 sm:pt-16 sm:pb-16 lg:pt-20 text-center">
+      <a
+        href={url('/releases/')}
+        class="inline-flex items-center gap-2 px-3.5 py-1.5 min-h-[36px] rounded-full text-xs font-semibold bg-slate-900/90 border border-slate-800 text-slate-300 hover:border-sky-700 transition-colors mb-6"
+      >
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span>Version {repoInfo.version} Available</span>
-        <span class="text-slate-600">•</span>
-        <a href={url('/releases/')} class="text-sky-400 hover:text-sky-300">What's New →</a>
-      </div>
+        v{repoInfo.version} — multi-source routing, per-task policies, full observability
+        <Icon name="arrow-right" class="w-3.5 h-3.5 text-sky-400" />
+      </a>
 
-      <!-- Main Headline -->
-      <h1 class="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white max-w-4xl mx-auto leading-[1.1] mb-6">
-        Intelligent, Resilient <br class="hidden sm:inline" />
-        <span class="bg-gradient-to-r from-sky-400 via-emerald-400 to-sky-300 bg-clip-text text-transparent">
-          Telegram Message Forwarding
-        </span>
+      <h1 class="display-1 text-white mx-auto max-w-4xl mb-5">
+        Self-hosted Telegram{' '}
+        <br class="hidden sm:block" />
+        <span class="text-gradient">Message Forwarding</span>{' '}
+        built for scale
       </h1>
 
-      <!-- Subheadline -->
-      <p class="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed mb-10">
-        Automate real-time channel & group broadcasting with granular content cleaning (URLs, @mentions, #hashtags), 12 dynamic shortcodes, ReDoS-safe filters, and automatic FloodWait pausing.
+      <p class="lede mx-auto max-w-2xl mb-8">
+        One task, many sources, many targets. Per-task content rules, validated shortcodes, optional AI rewriting,
+        ordered durable delivery and fail-closed multi-tenancy — running on your own infrastructure.
       </p>
 
-      <!-- Primary Action Buttons -->
-      <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
-        <a
-          href={url('/getting-started/')}
-          class="w-full sm:w-auto px-7 py-3.5 rounded-xl font-semibold text-sm bg-gradient-to-r from-tg-blue to-sky-500 hover:from-sky-500 hover:to-sky-400 text-white shadow-lg shadow-sky-500/25 transition-all flex items-center justify-center gap-2 group"
-        >
-          <span>Get Started Free</span>
-          <svg class="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-          </svg>
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 mb-8 max-w-3xl mx-auto">
+        <a href={url('/getting-started/')} class="btn btn-primary w-full sm:w-auto px-7">
+          Get Started Free
+          <Icon name="arrow-right" class="w-4 h-4" strokeWidth={2.4} />
         </a>
-
-        <a
-          href={url('/tools/playground/')}
-          class="w-full sm:w-auto px-7 py-3.5 rounded-xl font-semibold text-sm bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 transition-colors flex items-center justify-center gap-2"
-        >
-          <span>Interactive Playground</span>
+        <a href={url('/tools/playground/')} class="btn btn-secondary w-full sm:w-auto px-7">
+          <Icon name="beaker" class="w-4 h-4" />
+          Interactive Playground
         </a>
-
         <a
           href={repoInfo.repoUrl}
           target="_blank"
           rel="noopener noreferrer"
-          class="w-full sm:w-auto px-6 py-3.5 rounded-xl font-semibold text-sm bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800 transition-colors flex items-center justify-center gap-2"
+          class="btn btn-ghost w-full sm:w-auto px-6 border border-slate-800"
         >
-          <svg class="w-4 h-4 text-slate-300" viewBox="0 0 24 24" fill="currentColor">
-            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-          </svg>
-          <span>Star on GitHub</span>
+          <Icon name="github" class="w-4 h-4" />
+          Star on GitHub
         </a>
       </div>
 
-      <!-- Quickstart Snippet Card -->
+      <ul class="flex flex-wrap items-center justify-center gap-2 mb-10 list-none p-0">
+        <li class="chip"><Icon name="lock" class="w-3.5 h-3.5" /> Fail-closed tenant isolation</li>
+        <li class="chip"><Icon name="globe" class="w-3.5 h-3.5" /> {site.stats.locales} languages, 1:1 parity</li>
+        <li class="chip"><Icon name="shield" class="w-3.5 h-3.5" /> AES-256-GCM at rest</li>
+        <li class="chip"><Icon name="scale" class="w-3.5 h-3.5" /> MIT licensed</li>
+      </ul>
+
       <div class="max-w-3xl mx-auto text-left">
         <QuickstartCard />
       </div>
-
     </div>
   </section>
 
-  <!-- Key Metrics / Assurance Strip -->
-  <section class="border-y border-slate-900 bg-slate-950/60 py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-        <div>
-          <div class="text-3xl font-extrabold text-white font-mono">100%</div>
-          <div class="text-xs text-slate-400 mt-1 uppercase tracking-wider font-semibold">Fail-Closed Isolation</div>
+  <!-- Numbers that come from the checkout -->
+  <section class="section-tight border-y border-slate-900 bg-slate-950/60">
+    <div class="container-x">
+      <dl class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 m-0">
+        <div class="stat">
+          <dt class="stat-label">Microservices</dt>
+          <dd class="stat-value m-0">{site.stats.services}</dd>
         </div>
-        <div>
-          <div class="text-3xl font-extrabold text-sky-400 font-mono">12+</div>
-          <div class="text-xs text-slate-400 mt-1 uppercase tracking-wider font-semibold">Validated Shortcodes</div>
+        <div class="stat">
+          <dt class="stat-label">UI languages</dt>
+          <dd class="stat-value m-0">{site.stats.locales}</dd>
         </div>
-        <div>
-          <div class="text-3xl font-extrabold text-emerald-400 font-mono">0.8s</div>
-          <div class="text-xs text-slate-400 mt-1 uppercase tracking-wider font-semibold">Album Debounce Window</div>
+        <div class="stat">
+          <dt class="stat-label">Localized strings</dt>
+          <dd class="stat-value m-0">{site.stats.i18nKeys}</dd>
         </div>
-        <div>
-          <div class="text-3xl font-extrabold text-amber-400 font-mono">375+</div>
-          <div class="text-xs text-slate-400 mt-1 uppercase tracking-wider font-semibold">Passing Unit & E2E Tests</div>
+        <div class="stat">
+          <dt class="stat-label">CLI groups</dt>
+          <dd class="stat-value m-0">{site.stats.cliGroups}</dd>
         </div>
+        <div class="stat">
+          <dt class="stat-label">gRPC methods</dt>
+          <dd class="stat-value m-0">{site.stats.grpcRpcCount}</dd>
+        </div>
+        <div class="stat">
+          <dt class="stat-label">Cross-tenant leaks</dt>
+          <dd class="stat-value m-0 text-emerald-400">0</dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- New in v2.0 -->
+  <section class="section" id="whats-new">
+    <div class="container-x">
+      <header class="max-w-2xl mb-8">
+        <p class="eyebrow">New in v{repoInfo.version}</p>
+        <h2 class="display-2 text-white mt-2 mb-3">Nine upgrades that change how you run channels</h2>
+        <p class="lede m-0">
+          Routing became a first-class model, rules moved onto the task, AI became switchable, and the whole stack
+          became observable and scriptable.
+        </p>
+      </header>
+
+      <div class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+        {featurePages.map((feature) => (
+          <FeatureCard
+            title={feature.cardTitle}
+            desc={feature.description}
+            href={url(`/features/${feature.slug}/`)}
+            icon={feature.icon}
+            badge={feature.category}
+            isNew={feature.isNew}
+          />
+        ))}
+      </div>
+
+      <div class="mt-6 flex flex-wrap gap-3">
+        <a href={url('/features/')} class="btn btn-secondary btn-sm">
+          Browse every capability
+          <Icon name="arrow-right" class="w-3.5 h-3.5" />
+        </a>
+        <a href={url('/releases/')} class="btn btn-ghost btn-sm">Read the release notes</a>
       </div>
     </div>
   </section>
 
-  <!-- Core Features Grid -->
-  <section class="py-16 lg:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="text-center max-w-3xl mx-auto mb-16">
-      <h2 class="text-xs font-bold text-sky-400 uppercase tracking-widest mb-3">Enterprise-Grade Features</h2>
-      <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-        Engineered for Reliability, Speed & Control
-      </h3>
-      <p class="text-slate-400 mt-3 text-base">
-        Every capability is backed by real domain services, durable SQLite/PostgreSQL persistence, and asynchronous worker queues.
-      </p>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      
-      <!-- Card 1: Content Cleaner -->
-      <div class="glass-card p-6 rounded-2xl">
-        <div class="w-10 h-10 rounded-xl bg-sky-950 text-sky-400 border border-sky-800 flex items-center justify-center mb-4">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </div>
-        <h4 class="text-lg font-bold text-white mb-2">Advanced Content Cleaner</h4>
-        <p class="text-sm text-slate-400 leading-relaxed mb-4">
-          Strip URLs, Telegram t.me links, @mentions, multi-lingual #hashtags, phone numbers, emojis, and custom keyword lists with zero regex crashes.
-        </p>
-        <a href={url('/features/text-cleaner/')} class="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1">
-          Explore Cleaner Details →
-        </a>
-      </div>
-
-      <!-- Card 2: Header / Footer Shortcodes -->
-      <div class="glass-card p-6 rounded-2xl">
-        <div class="w-10 h-10 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center mb-4">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-          </svg>
-        </div>
-        <h4 class="text-lg font-bold text-white mb-2">Dynamic Shortcodes</h4>
-        <p class="text-sm text-slate-400 leading-relaxed mb-4">
-          Personalize forwarded messages using 12 validated shortcodes like <code>[[ORIGIN_NAME]]</code>, <code>[[ORIGIN_POST_ID]]</code>, and dynamic clickable channel links.
-        </p>
-        <a href={url('/features/headers-footers-shortcodes/')} class="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
-          View Shortcodes Reference →
-        </a>
-      </div>
-
-      <!-- Card 3: Whitelist & Filters -->
-      <div class="glass-card p-6 rounded-2xl">
-        <div class="w-10 h-10 rounded-xl bg-purple-950 text-purple-400 border border-purple-800 flex items-center justify-center mb-4">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
-        </div>
-        <h4 class="text-lg font-bold text-white mb-2">Deterministic Filtering</h4>
-        <p class="text-sm text-slate-400 leading-relaxed mb-4">
-          Block forbidden keywords, require whitelist terms, filter media types (video, audio, stickers, voice, text), and drop spam links automatically.
-        </p>
-        <a href={url('/features/whitelist-blacklist-filters/')} class="text-xs font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1">
-          Filter Rules & Logic →
-        </a>
-      </div>
-
-      <!-- Card 4: Copy-Protection Bypass -->
-      <div class="glass-card p-6 rounded-2xl">
-        <div class="w-10 h-10 rounded-xl bg-amber-950 text-amber-400 border border-amber-800 flex items-center justify-center mb-4">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-        </div>
-        <h4 class="text-lg font-bold text-white mb-2">Restricted Content Bypass</h4>
-        <p class="text-sm text-slate-400 leading-relaxed mb-4">
-          When channels block standard forwarding with <code>ChatForwardsRestricted</code>, ATF automatically downloads and re-uploads media cleanly.
-        </p>
-        <a href={url('/features/media-and-albums/')} class="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1">
-          Media Handling Guide →
-        </a>
-      </div>
-
-      <!-- Card 5: FloodWait Auto-Resume -->
-      <div class="glass-card p-6 rounded-2xl">
-        <div class="w-10 h-10 rounded-xl bg-rose-950 text-rose-400 border border-rose-800 flex items-center justify-center mb-4">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <h4 class="text-lg font-bold text-white mb-2">FloodWait Auto-Resumption</h4>
-        <p class="text-sm text-slate-400 leading-relaxed mb-4">
-          Accounts hitting Telegram rate-limits automatically pause their queues and safely resume forwarding the second the time-limit expires.
-        </p>
-        <a href={url('/operations/')} class="text-xs font-semibold text-rose-400 hover:text-rose-300 flex items-center gap-1">
-          Operational Diagnostics →
-        </a>
-      </div>
-
-      <!-- Card 6: Multi-Tenant Isolation -->
-      <div class="glass-card p-6 rounded-2xl">
-        <div class="w-10 h-10 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center mb-4">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
-        </div>
-        <h4 class="text-lg font-bold text-white mb-2">Fail-Closed Multi-Tenancy</h4>
-        <p class="text-sm text-slate-400 leading-relaxed mb-4">
-          Strict server-side validation guarantees users only manage their own tasks, sessions, and configs. Zero cross-tenant data leaks.
-        </p>
-        <a href={url('/features/multi-tenant-security/')} class="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
-          Security Principles →
-        </a>
-      </div>
-
+  <!-- Capability matrix -->
+  <section class="section-tight bg-slate-900/30 border-y border-slate-900">
+    <div class="container-x">
+      <CapabilityMatrix />
     </div>
   </section>
 
-  <!-- Architecture Overview Section -->
-  <section class="py-12 lg:py-16 bg-slate-900/30 border-y border-slate-900">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+  <!-- Architecture -->
+  <section class="section">
+    <div class="container-x">
       <ArchitectureDiagram />
     </div>
   </section>
 
-  <!-- Interactive Sandbox Section -->
-  <section class="py-16 lg:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="mb-10 text-center max-w-2xl mx-auto">
-      <h2 class="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2">Try It In Browser</h2>
-      <h3 class="text-3xl font-extrabold text-white">Live Transformation Simulator</h3>
-      <p class="text-slate-400 text-sm mt-2">
-        See how AutoTelegramForward strips ads and formats messages before you even install it.
-      </p>
+  <!-- Playground -->
+  <section class="section bg-slate-900/20 border-y border-slate-900">
+    <div class="container-x">
+      <header class="text-center max-w-2xl mx-auto mb-8">
+        <p class="eyebrow">Try it in the browser</p>
+        <h2 class="display-2 text-white mt-2 mb-3">See the transformation before you install</h2>
+        <p class="lede m-0">
+          Paste a real post, toggle the cleaner, write a header and footer with shortcodes, and watch the delivery
+          preview update instantly. Nothing leaves your browser.
+        </p>
+      </header>
+      <Playground />
     </div>
-    <Playground />
   </section>
 
-  <!-- Supported Message Types Matrix -->
-  <section class="py-12 lg:py-16 border-t border-slate-900 bg-slate-950">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center max-w-2xl mx-auto mb-10">
-        <h3 class="text-2xl font-bold text-white">Supported Telegram Content Types</h3>
-        <p class="text-slate-400 text-sm mt-1">
-          Comprehensive support for all Telegram message classes verified against live API calls.
+  <!-- Content coverage -->
+  <section class="section">
+    <div class="container-x">
+      <header class="max-w-2xl mb-7">
+        <p class="eyebrow">Coverage</p>
+        <h2 class="display-2 text-white mt-2 mb-3">Every Telegram message class, handled</h2>
+        <p class="lede m-0">Verified against the Telegram layer, including the awkward cases: albums, video notes and protected content.</p>
+      </header>
+
+      <ul class="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 list-none p-0">
+        {
+          repoInfo.supportedMediaTypes.map((item) => (
+            <li class="card">
+              <p class="m-0 mb-1 font-semibold text-slate-100 text-sm">{item.type}</p>
+              <p class="m-0 mb-2 text-[12.5px] leading-relaxed text-slate-400">{item.desc}</p>
+              <span class="chip chip-success">{item.status}</span>
+            </li>
+          ))
+        }
+      </ul>
+
+      <div class="mt-8 grid gap-4 lg:grid-cols-2">
+        <div class="card">
+          <h3 class="text-sm font-bold text-white mb-3">Headers and footers, personalized</h3>
+          <ul class="grid gap-2 list-none p-0 m-0">
+            {
+              shortcodePreview.map((item) => (
+                <li class="flex flex-wrap items-baseline gap-2 text-[13px]">
+                  <code class="text-sky-300 font-mono">{item.code}</code>
+                  <span class="text-slate-400">{item.desc}</span>
+                </li>
+              ))
+            }
+          </ul>
+          <a href={url('/features/headers-footers-shortcodes/')} class="btn btn-ghost btn-sm mt-3 px-0">
+            All twelve shortcodes
+            <Icon name="arrow-right" class="w-3.5 h-3.5" />
+          </a>
+        </div>
+
+        <div class="card">
+          <h3 class="text-sm font-bold text-white mb-3">Ten languages, one catalog</h3>
+          <ul class="flex flex-wrap gap-2 list-none p-0 m-0">
+            {
+              repoInfo.locales.map((code: string) => {
+                const meta = localeLabels[code];
+                return (
+                  <li class="chip" dir={meta?.rtl ? 'rtl' : 'ltr'}>
+                    {meta?.native ?? code}
+                  </li>
+                );
+              })
+            }
+          </ul>
+          <p class="mt-3 mb-0 text-[13px] text-slate-400">
+            Parity is enforced by an audit that fails the build when a key is missing in any language, and English is
+            the only fallback.
+          </p>
+          <a href={url('/features/multilingual-ui/')} class="btn btn-ghost btn-sm mt-2 px-0">
+            How localization is verified
+            <Icon name="arrow-right" class="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section-tight bg-slate-900/30 border-y border-slate-900">
+    <div class="container-x container-narrow" style="padding-inline: 0;">
+      <header class="mb-6">
+        <p class="eyebrow">Answers</p>
+        <h2 class="display-2 text-white mt-2 mb-3">Questions people actually ask</h2>
+      </header>
+      <Accordion items={homeFaq} openFirst={false} />
+      <a href={url('/faq/')} class="btn btn-secondary btn-sm mt-5">
+        Read the full FAQ
+        <Icon name="arrow-right" class="w-3.5 h-3.5" />
+      </a>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section">
+    <div class="container-x">
+      <div class="rounded-3xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 p-7 sm:p-12 text-center relative overflow-hidden">
+        <div class="absolute -right-20 -top-20 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <h2 class="display-2 text-white mb-4">Ship your routing in one command</h2>
+        <p class="lede mx-auto max-w-xl mb-8">
+          The setup wizard detects your platform, validates every answer, builds the four services and then proves each
+          one is serving before it says done.
+        </p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <a href={url('/getting-started/')} class="btn btn-primary w-full sm:w-auto px-8">
+            <Icon name="download" class="w-4 h-4" />
+            Installation guide
+          </a>
+          <a href={url('/cli/')} class="btn btn-secondary w-full sm:w-auto px-8">
+            <Icon name="terminal" class="w-4 h-4" />
+            CLI reference
+          </a>
+        </div>
+        <p class="mt-6 mb-0 text-xs text-slate-500">
+          MIT licensed · {site.stats.services} services · {site.stats.locales} languages · {site.stats.grpcRpcCount} gRPC methods
         </p>
       </div>
-
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs font-mono">
-        {repoInfo.supportedMediaTypes.map((item) => (
-          <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 flex flex-col justify-between">
-            <div class="font-bold text-white mb-1 font-sans">{item.type}</div>
-            <div class="text-[11px] text-slate-400 mb-2 font-sans">{item.desc}</div>
-            <span class="inline-flex self-start px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800/60">
-              {item.status}
-            </span>
-          </div>
-        ))}
-      </div>
     </div>
   </section>
-
-  <!-- Bottom CTA Callout -->
-  <section class="py-16 lg:py-20 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-    <div class="p-8 sm:p-12 rounded-3xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 shadow-2xl relative overflow-hidden">
-      <div class="absolute -right-16 -top-16 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
-      
-      <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-4">
-        Ready to Automate Your Telegram Channels?
-      </h3>
-      <p class="text-slate-300 text-base max-w-xl mx-auto mb-8 leading-relaxed">
-        Deploy in minutes using Docker Compose, native Linux systemd, or Windows PowerShell. Open-source under the MIT license.
-      </p>
-      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <a
-          href={url('/getting-started/')}
-          class="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-sm bg-tg-blue hover:bg-sky-500 text-white shadow-lg shadow-sky-500/25 transition-all"
-        >
-          Read Installation Guide
-        </a>
-        <a
-          href={url('/features/')}
-          class="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
-        >
-          Browse All Features
-        </a>
-      </div>
-    </div>
-  </section>
-
 </BaseLayout>

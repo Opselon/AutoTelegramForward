@@ -1,0 +1,28 @@
+---
+import { bottomNav } from '../data/site';
+import Icon from './Icon.astro';
+
+const currentPath = Astro.url.pathname.replace(/\/$/, '') || '/';
+const isActive = (href: string) => {
+  if (href.startsWith('http')) return false;
+  const clean = href.replace(/\/$/, '') || '/';
+  if (clean === '/') return currentPath === '/';
+  return currentPath === clean || currentPath.startsWith(`${clean}/`);
+};
+---
+
+<nav class="bottom-nav lg:hidden" aria-label="Quick navigation">
+  {
+    bottomNav.map((item) => (
+      <a
+        href={item.href}
+        class={`bottom-nav-item ${isActive(item.href) ? 'is-active' : ''}`}
+        aria-current={isActive(item.href) ? 'page' : undefined}
+        {...(item.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      >
+        <Icon name={item.icon} class="w-[18px] h-[18px]" strokeWidth={2} />
+        <span>{item.name}</span>
+      </a>
+    ))
+  }
+</nav>

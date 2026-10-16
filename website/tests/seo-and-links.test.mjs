@@ -115,6 +115,53 @@ if (!fs.existsSync(robotsPath)) {
   }
 }
 
+// 5. Internal link integrity
+//    Every root-relative link and asset reference in the built site must resolve
+//    to something that exists in dist/. Base-prefixed hrefs are de-prefixed
+//    first, because the site ships under /AutoTelegramForward/.
+const basePrefix = (process.env.BASE_PATH || '/AutoTelegramForward').replace(/\/$/, '');
+const stripBase = (href) => (basePrefix && href.startsWith(basePrefix) ? href.slice(basePrefix.length) || '/' : href);
+
+const distHas = (href) => {
+  const clean = href.split('#')[0].split('?')[0];
+  if (!clean || clean === '/') return fs.existsSync(path.join(distDir, 'index.html'));
+  const rel = clean.replace(/^\//, '');
+  const candidates = [
+    path.join(distDir, rel),
+    path.join(distDir, rel, 'index.html'),
+    `${path.join(distDir, rel)}.html`,
+  ];
+  return candidates.some((candidate) => fs.existsSync(candidate));
+};
+
+let linkCount = 0;
+
+for (const file of htmlFiles) {
+  const relPath = path.relative(distDir, file);
+  // Script bodies contain template literals (`${...}`) that are not links.
+  const content = fs.readFileSync(file, 'utf8').replace(/<script[\s\S]*?<\/script>/gi, '');
+
+  for (const match of content.matchAll(/(?:href|src)="([^"]+)"/g)) {
+    const raw = match[1];
+    if (!raw || raw.startsWith('http') || raw.startsWith('//')) continue;
+    if (raw.startsWith('#') || raw.startsWith('mailto:') || raw.startsWith('tel:') || raw.startsWith('data:')) continue;
+    if (!raw.startsWith('/')) {
+      console.error(`❌ [${relPath}] Relative link is not base-safe: ${raw}`);
+      errors++;
+      continue;
+    }
+
+    linkCount++;
+    const target = stripBase(raw);
+    if (!distHas(target)) {
+      console.error(`❌ [${relPath}] Internal link points at a missing page: ${raw}`);
+      errors++;
+    }
+  }
+}
+
+console.log(`🔗 Checked ${linkCount} internal links and asset references`);
+
 if (errors > 0) {
   console.error(`\n❌ SEO Audit Failed with ${errors} errors!`);
   process.exit(1);

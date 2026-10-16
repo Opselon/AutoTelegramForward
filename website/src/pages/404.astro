@@ -1,44 +1,59 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/Icon.astro';
 import { url } from '../utils/paths';
 
-const pageTitle = "404 — Page Not Found";
-const pageDesc = "The page you are looking for does not exist or has been moved.";
+const pageTitle = '404 — page not found';
+const pageDesc = 'That page does not exist. Jump back into the documentation, the feature deep dives or the install guide.';
+
+const destinations = [
+  { name: 'Feature overview', href: url('/features/'), icon: 'sparkles', desc: 'Every capability, grouped by subsystem' },
+  { name: 'Install guide', href: url('/getting-started/'), icon: 'download', desc: 'Docker, source or portable — pick one' },
+  { name: 'REST API', href: url('/api/'), icon: 'chip', desc: 'Every route the control plane serves' },
+  { name: 'CLI reference', href: url('/cli/'), icon: 'terminal', desc: 'The atf command groups' },
+  { name: 'Playground', href: url('/tools/playground/'), icon: 'beaker', desc: 'Try the cleaner in your browser' },
+  { name: 'FAQ', href: url('/faq/'), icon: 'book', desc: 'Straight answers, no marketing' },
+];
 ---
 
-<BaseLayout title={pageTitle} description={pageDesc}>
-  <div class="min-h-[60vh] flex items-center justify-center py-20 px-4 text-center">
-    <div class="max-w-md w-full glass-card p-8 rounded-2xl border border-slate-800 shadow-2xl space-y-6">
-      <div class="w-16 h-16 rounded-2xl bg-sky-950 border border-sky-800 flex items-center justify-center mx-auto text-sky-400 font-mono text-2xl font-bold">
-        404
-      </div>
-      <div>
-        <h1 class="text-2xl font-extrabold text-white">Page Not Found</h1>
-        <p class="text-xs text-slate-400 mt-2 leading-relaxed">
-          The requested page could not be located. It may have moved or been reorganized in the latest documentation release.
-        </p>
-      </div>
+<BaseLayout title={pageTitle} description={pageDesc} noindex>
+  <section class="container-x py-16 sm:py-24 text-center">
+    <p class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 mb-6">
+      <Icon name="alert" class="w-3.5 h-3.5 text-amber-400" />
+      Error 404
+    </p>
 
-      <div class="pt-4 border-t border-slate-800 space-y-2 text-xs">
-        <a
-          href={url('/')}
-          class="block w-full py-2.5 rounded-xl font-semibold bg-sky-500 hover:bg-sky-400 text-white transition-colors"
-        >
-          Return to Homepage
-        </a>
-        <a
-          href={url('/features/')}
-          class="block w-full py-2.5 rounded-xl font-semibold bg-slate-900 hover:bg-slate-850 text-slate-300 border border-slate-800 transition-colors"
-        >
-          Explore Features
-        </a>
-        <a
-          href={url('/getting-started/')}
-          class="block w-full py-2.5 rounded-xl font-semibold bg-slate-900 hover:bg-slate-850 text-slate-300 border border-slate-800 transition-colors"
-        >
-          Installation Guide
-        </a>
-      </div>
+    <h1 class="display-1 text-white mb-4">We cannot find that page</h1>
+    <p class="lede mx-auto max-w-xl mb-8">
+      The link may be from an older release, or the page moved while the documentation was reorganised. Everything below
+      is one click away.
+    </p>
+
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 mb-12 max-w-lg mx-auto">
+      <a href={url('/')} class="btn btn-primary w-full sm:w-auto px-7">
+        <Icon name="home" class="w-4 h-4" />
+        Back to home
+      </a>
+      <button type="button" data-search-open class="btn btn-secondary w-full sm:w-auto px-7">
+        <Icon name="search" class="w-4 h-4" />
+        Search the docs
+      </button>
     </div>
-  </div>
+
+    <ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl mx-auto list-none p-0 text-left">
+      {
+        destinations.map((item) => (
+          <li>
+            <a href={item.href} class="card block h-full hover:border-sky-700 transition-colors">
+              <span class="inline-flex items-center gap-2 text-slate-100 font-semibold text-sm mb-1">
+                <Icon name={item.icon} class="w-4 h-4 text-sky-400" />
+                {item.name}
+              </span>
+              <span class="block text-[13px] text-slate-400">{item.desc}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
 </BaseLayout>

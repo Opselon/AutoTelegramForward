@@ -1,0 +1,75 @@
+---
+import repoInfo from '../data/repo-info.json';
+import Icon from './Icon.astro';
+
+interface Props {
+  clients?: { bot?: boolean; web?: boolean; mobile?: boolean; api?: boolean };
+  class?: string;
+  title?: string;
+  subtitle?: string;
+}
+
+const {
+  clients = { bot: true, web: true, mobile: true, api: true },
+  class: cls = '',
+  title = 'Capability parity across clients',
+  subtitle = 'One control plane, four interfaces. Verified, not assumed.',
+} = Astro.props;
+
+const rows = repoInfo.capabilityMatrix;
+const columns = [
+  { key: 'bot', label: 'Bot UI', icon: 'keyboard' },
+  { key: 'web', label: 'Web dashboard', icon: 'devices' },
+  { key: 'mobile', label: 'Mobile app', icon: 'devices' },
+  { key: 'api', label: 'REST API', icon: 'chip' },
+].filter((column) => (clients as Record<string, boolean>)[column.key]);
+---
+
+<section class={`matrix ${cls}`} aria-labelledby="matrix-title">
+  <header class="matrix-head">
+    <h2 id="matrix-title" class="matrix-title">{title}</h2>
+    <p class="matrix-sub">{subtitle}</p>
+  </header>
+
+  <div class="matrix-scroll">
+    <table class="matrix-table">
+      <thead>
+        <tr>
+          <th scope="col">Capability</th>
+          {
+            columns.map((column) => (
+              <th scope="col">
+                <span class="matrix-col">
+                  <Icon name={column.icon} class="w-3.5 h-3.5" />
+                  {column.label}
+                </span>
+              </th>
+            ))
+          }
+        </tr>
+      </thead>
+      <tbody>
+        {
+          rows.map((row: Record<string, unknown>) => (
+            <tr>
+              <th scope="row">{row.feature as string}</th>
+              {columns.map((column) => (
+                <td>
+                  {row[column.key] ? (
+                    <span class="matrix-yes" aria-label="Supported">
+                      <Icon name="check" class="w-3.5 h-3.5" strokeWidth={2.6} />
+                    </span>
+                  ) : (
+                    <span class="matrix-no" aria-label="Not available">
+                      —
+                    </span>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+</section>

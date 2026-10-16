@@ -1,0 +1,40 @@
+---
+import Icon from './Icon.astro';
+
+interface Step {
+  title: string;
+  body?: string;
+  code?: string;
+  note?: string;
+}
+
+interface Props {
+  steps: Step[];
+  class?: string;
+}
+
+const { steps, class: cls = '' } = Astro.props;
+---
+
+<ol class={`steps ${cls}`}>
+  {
+    steps.map((step, index) => (
+      <li class="step">
+        <span class="step-marker" aria-hidden="true">
+          <span class="step-number">{index + 1}</span>
+        </span>
+        <div class="step-body">
+          <h3 class="step-title">{step.title}</h3>
+          {step.body && <p class="step-text" set:html={step.body} />}
+          {step.code && <pre class="step-code" tabindex="0"><code>{step.code}</code></pre>}
+          {step.note && (
+            <p class="step-note">
+              <Icon name="info" class="w-3.5 h-3.5 shrink-0" />
+              <span set:html={step.note} />
+            </p>
+          )}
+        </div>
+      </li>
+    ))
+  }
+</ol>

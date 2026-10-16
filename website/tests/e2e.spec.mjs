@@ -111,4 +111,78 @@ test.describe('AutoTelegramForward Official Platform Smoke Tests', () => {
     await expect(mobileMenu).toBeHidden();
   });
 
+  test('Every new v2.0 feature deep dive renders with FAQ structured data', async ({ page }) => {
+    const slugs = [
+      'multi-source-routing',
+      'per-task-content-rules',
+      'ai-rewriting',
+      'observability-and-logs',
+      'ordered-delivery',
+      'deduplication-and-replies',
+      'clients-and-interfaces',
+      'multilingual-ui',
+      'devops-cli',
+    ];
+
+    for (const slug of slugs) {
+      const response = await page.goto(`/features/${slug}/`);
+      expect(response?.status()).toBe(200);
+
+      await expect(page.locator('h1')).toBeVisible();
+      await expect(page.locator('nav[aria-label="Breadcrumbs"]')).toBeVisible();
+
+      // Each deep dive must ship a FAQPage graph node for rich results.
+      const html = await page.content();
+      expect(html).toContain('FAQPage');
+    }
+  });
+
+  test('REST and CLI references render their generated tables', async ({ page }) => {
+    await page.goto('/api/');
+    await expect(page.locator('h1')).toBeVisible();
+    // The route table is generated from api/main.go at build time.
+    const endpointRows = page.locator('.spec-table tbody tr');
+    expect(await endpointRows.count()).toBeGreaterThan(50);
+    // Mobile fallback cards must exist alongside the table.
+    expect(await page.locator('.spec-cards .spec-card').count()).toBeGreaterThan(50);
+
+    await page.goto('/cli/');
+    await expect(page.locator('h1')).toBeVisible();
+    const groups = await page.locator('code:has-text("atf ")').count();
+    expect(groups).toBeGreaterThan(20);
+  });
+
+  test('Security page states the isolation model and its limits', async ({ page }) => {
+    await page.goto('/security/');
+    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.getByText(/fail-closed/i).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Known limits' })).toBeVisible();
+  });
+
+  test('Search overlay finds new documentation from the generated index', async ({ page, isMobile }) => {
+    if (isMobile) return;
+
+    await page.goto('/');
+    await page.locator('#search-open').click();
+
+    const input = page.locator('#search-input');
+    await expect(input).toBeVisible();
+    await input.fill('rewrite');
+
+    const results = page.locator('#search-results a');
+    await expect(results.first()).toBeVisible();
+    expect(await results.count()).toBeGreaterThan(0);
+  });
+
+  test('Bottom navigation is mobile-only', async ({ page, isMobile }) => {
+    await page.goto('/');
+    const bottomNav = page.locator('.bottom-nav');
+
+    if (isMobile) {
+      await expect(bottomNav).toBeVisible();
+    } else {
+      await expect(bottomNav).toBeHidden();
+    }
+  });
+
 });

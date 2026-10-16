@@ -1,43 +1,72 @@
 [
   {
-    "version": "v17.0.0",
+    "version": "v2.0.0",
+    "tag": "v2.0.0",
+    "date": "2026-10-16",
+    "title": "v2.0 — Multi-Source Routing, Per-Task Policies, AI Control & Full Observability",
+    "summary": "v2.0 turns the forwarder into a routing platform: one task fans out from any number of sources to any number of targets, each with its own content policy. AI rewriting is switchable per task, the whole stack is observable, scriptable and upgradeable from the command line, and both clients share one contract-gated system surface.",
+    "highlights": [
+      "M sources → N targets per task, with the primary mirror kept in step by a single sanctioned write path",
+      "Per-task content rules (metadata[\"content_policy\"]) plus per-source and per-target overrides that are additive only",
+      "Unicode-folded, word-boundary keyword matching — one blacklist catches Persian, Arabic and English spellings alike",
+      "ReDoS-refused regex gates, single-pass deterministic replacements and cheapest-first evaluation",
+      "AI rewrite enable/disable per task, custom prompt templates with versioning, and delivery that never blocks when the model is unreachable",
+      "Central logger with attributable, queryable history plus a log explorer with live stream, stats and purge",
+      "Dead-letter queue inspect / replay / purge, tenant-scoped, with OUTCOME_UNCONFIRMED as a first-class outcome",
+      "Ordered delivery lanes so a burst is delivered in the order it was posted",
+      "Atomic channel cursor persistence — the poller can no longer race the connection",
+      "Modern system surface shared by web and mobile, protected by a contract gate that fails on drift",
+      "Full-stack DevOps CLI with 24 command groups, plus atf validate as a CI pre-deploy gate",
+      "Automated upgrade engine: git pull → build → recreate → network alias repair → health gate",
+      "10-language UI with enforced 1:1 catalog parity and strict English fallback"
+    ]
+  },
+  {
+    "version": "v1.5.2",
+    "tag": "v1.5.2",
     "date": "2026-10-13",
-    "title": "Production Upgrade: Advanced Cleaner, Link Filters, Header/Footer Shortcodes & Bugfixes",
-    "summary": "Comprehensive production upgrade introducing granular cleaner formats, media and link filters, 12 validated shortcodes, max_time_edit synchronization limit, copy-protected content bypass, and multi-tenant profile management.",
+    "title": "Mobile release hardening",
+    "summary": "Android permission and packaging fixes on top of the Flutter client preview.",
     "highlights": [
-      "Cleaner module with independent URL, @mention, #hashtag, emoji, phone, and custom words stripping",
-      "Dedicated link blocking filter and granular media type blocking (video, audio, stickers, text, voice)",
-      "12 validated header and footer shortcodes with dynamic channel hyperlink attribution",
-      "max_time_edit rule threshold to ignore stale source edits with /forward command",
-      "Automatic re-evaluation of whitelist/blacklist on edits with destination deletion on violation",
-      "Bypass for copy-protected channels (ChatForwardsRestricted) via secure download and re-upload",
-      "Batch media group (album) atomic forwarding and copying",
-      "Account time-limit auto-pause and auto-resume in ClientPool and DurableQueueManager",
-      "Multi-tenant profile dashboard with Restart Setup and Reset Config options"
+      "INTERNET permission restored in the Android manifest",
+      "Release APK and Play Store bundle pipeline stabilised",
+      "Mobile reachability probing before any credential prompt"
     ]
   },
   {
-    "version": "v16.0.0",
-    "date": "2026-10-12",
-    "title": "High-Throughput Pipeline & Diagnostic Tracing",
-    "summary": "Enhanced logging architecture with [PIPELINE:*] correlation IDs, improved error diagnostics, and queue backpressure controls.",
+    "version": "v1.5.1",
+    "tag": "v1.5.1",
+    "date": "2026-10-13",
+    "title": "Flutter client parity pass",
+    "summary": "Mobile client aligned with the dashboard surface and the localization rules.",
     "highlights": [
-      "Structured pipeline logs covering Normalize, Route, Filter, Transform, Dispatch, Delivered",
-      "Improved gRPC retry policy with exponential backoff",
-      "Pyrogram Unicode surrogate-pair decoding fixes for emojis and regional indicators",
-      "Queue throughput metrics and latency counters"
+      "RTL/LTR layout handling verified on Android",
+      "Secure credential storage for sessions and passwords",
+      "Protocol version compatibility check against the API"
     ]
   },
   {
-    "version": "v15.0.0",
-    "date": "2026-10-10",
-    "title": "Multi-Tenant Security Hardening & Bot UI Redesign",
-    "summary": "Fail-closed ownership enforcement across all domain use-cases, gRPC services, and inline Telegram bot wizards.",
+    "version": "v1.5.0",
+    "tag": "v1.5.0",
+    "date": "2026-10-13",
+    "title": "Flutter mobile client",
+    "summary": "First packaged mobile release mirroring the dashboard capabilities.",
     "highlights": [
-      "Fail-closed tenant authorization on all rule and session mutations",
-      "Interactive button-driven control panel with FSM wizard",
-      "Isolated PVResponder configuration per owner_user_id",
-      "Clean onboarding for unlinked users"
+      "Native Android build embedding the full control surface",
+      "Encrypted local storage of the dashboard token",
+      "Live health and topology screen on mobile"
+    ]
+  },
+  {
+    "version": "v1.4.1",
+    "tag": "v1.4.1",
+    "date": "2026-10-11",
+    "title": "Bot-layer tenant isolation",
+    "summary": "Fail-closed ownership enforcement extended into the Telegram bot layer.",
+    "highlights": [
+      "Numeric-id authorization for every bot action",
+      "Clean onboarding for unlinked users (no premature dashboard links)",
+      "Structured [PIPELINE:*] logging across the bot commands"
     ]
   }
 ]
