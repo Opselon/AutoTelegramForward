@@ -201,7 +201,8 @@ impl CollectPolicy {
     /// * `ATF_LOGGER_COLLECT_UNKNOWN` — `1`/`true` collects unknown levels too.
     pub fn from_env(protected_categories: &[String], env: &dyn Fn(&str) -> Option<String>) -> Self {
         let mut policy = CollectPolicy::contract_default(protected_categories);
-        let truthy = |v: &str| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes");
+        let truthy =
+            |v: &str| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes");
         if let Some(raw) = env("ATF_LOGGER_COLLECT_LEVELS") {
             let raw = raw.trim();
             if !raw.is_empty() {
@@ -363,10 +364,7 @@ pub enum Reject {
     /// The record is malformed in a way that cannot be repaired.
     Invalid(String),
     /// A collection-policy decision. Counted, reported, never silent.
-    Filtered {
-        level: String,
-        category: String,
-    },
+    Filtered { level: String, category: String },
 }
 
 impl Reject {
@@ -454,13 +452,13 @@ pub fn prepare(
     adjustments.structured_detail = detail.structured;
     adjustments.redacted |= detail.text != entry.detail;
 
-    let service = bound_tag(&entry.service, "core", limits.max_tag_bytes, &mut adjustments);
-    let category_bounded = bound_tag(
-        &category,
-        "system",
+    let service = bound_tag(
+        &entry.service,
+        "core",
         limits.max_tag_bytes,
         &mut adjustments,
     );
+    let category_bounded = bound_tag(&category, "system", limits.max_tag_bytes, &mut adjustments);
     let rule_id = bound_identifier(
         &entry.rule_id,
         limits.max_tag_bytes,
@@ -670,9 +668,15 @@ mod tests {
             level: String::new(),
             service: String::new(),
             category: String::new(),
-            message: "x".repeat(10_000),
-            detail: "y".repeat(10_000),
-            rule_id: "z".repeat(1024),
+            // 10 KiB of filler and an 800 byte identifier: the point of this
+            // test is the bound, so the filler must not itself be
+            // secret-shaped. A run of 80+ characters from `[A-Za-z0-9+/]` is
+            // the session-string shape the reference redacts (parity fixture
+            // case `session_blob`), which is covered by
+            // `blob_shaped_message_and_identifier_are_redacted`.
+            message: "x ".repeat(5_000),
+            detail: "y ".repeat(5_000),
+            rule_id: "z-".repeat(400),
             correlation_id: String::new(),
             user_id: 0,
         };
@@ -738,5 +742,31 @@ mod tests {
         let mut other = record.clone();
         other.message = "boom2".to_string();
         assert_ne!(dedupe_key(&record), dedupe_key(&other));
+    }
+    /// Regression: blob-shaped fields must be redacted *and* bounded before they
+    /// are stored. `x`/`y`/`z` runs of 80+ characters are the Telegram
+    /// session-string shape (parity fixture case `session_blob`), so the stored
+    /// record carries the replacement, never the blob.
+    #[test]
+    fn blob_shaped_message_and_identifier_are_redacted() {
+        let entry = RawEntry {
+            ts: 7,
+            level: "ERROR".to_string(),
+            service: "core".to_string(),
+            category: "pipeline".to_string(),
+            message: "x".repeat(5_000),
+            detail: "y".repeat(5_000),
+            rule_id: "z".repeat(1_024),
+            correlation_id: "Bearer abcdefghijklmnop".to_string(),
+            user_id: 7,
+        };
+        let prepared = prepare(&entry, limits(), true, &CollectPolicy::permissive(), 0).unwrap();
+        assert_eq!(prepared.record.message, redaction::REPLACEMENT);
+        assert_eq!(prepared.record.detail, redaction::REPLACEMENT);
+        assert_eq!(prepared.record.rule_id, redaction::REPLACEMENT);
+        assert!(!prepared.record.correlation_id.contains("abcdefghijklmnop"));
+        assert!(prepared.adjustments.redacted);
+        assert!(prepared.adjustments.message_truncated);
+        assert!(prepared.adjustments.detail_truncated);
     }
 }
