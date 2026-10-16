@@ -59,6 +59,16 @@ services:
       # `9router` and every AI rewrite fails with PROVIDER_ERROR (seen as
       # "AI rewrite does nothing"), so the AI base_url is http://9router:20128/v1.
       - ai-net
+    # Core has no HTTP surface, so liveness is its gRPC listener. Probing it in
+    # Python keeps the check inside the image (no curl/wget needed) and turns a
+    # wedged process — which still counts as "running" to Docker — into an
+    # unhealthy container that tools and operators can actually see.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(0 if s.connect_ex(('127.0.0.1', int(os.environ.get('ATF_GRPC_PORT') or 50051))) == 0 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
   api:
     build:
@@ -87,6 +97,15 @@ services:
       # fails with `lookup 9router on 127.0.0.11:53: server misbehaving` and
       # reports every AI config as unreachable even though rewrites succeed.
       - ai-net
+    # Without this the api had no health signal at all: a hung handler or a
+    # dead gRPC client still showed as "Up". /healthz is the handler's own
+    # readiness route and needs no extra tooling beyond the image's wget.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   web:
     build:
