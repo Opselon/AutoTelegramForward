@@ -72,6 +72,119 @@ import type {
   DiagnosticsResponse,
 } from './types'
 
+// ---------------------------------------------------------------------------
+// Branding hop (A → C → B)
+//
+// C is one of the operator's own channels: a matched message is copied into C
+// first and only then delivered from C to the final target B, so B's forward
+// header names C instead of the original source channel.
+//
+// The enable switch and channel C are first-class rule fields
+// (`use_intermediate` / `intermediate_channel_id`). The trigger configuration
+// rides in the rule's free-form metadata under `branding_hop` — the same blob
+// the bot, the per-task settings registry and the engine's decision read.
+//
+// Every key is optional on the wire and no configured trigger means "always
+// hop", so the editor writes nothing until the operator actually changes a
+// field: an untouched rule saves byte-identical metadata.
+const BRANDING_HOP_KEY = 'branding_hop'
+
+interface BrandingHopConfig {
+  triggers_enabled: boolean
+  origin_ids: string[]
+  origin_titles: string[]
+  keywords: string[]
+  match_mode: 'any' | 'all'
+  require_forward: boolean
+  force_forward: boolean
+}
+
+const BRANDING_HOP_DEFAULTS: BrandingHopConfig = {
+  triggers_enabled: false,
+  origin_ids: [],
+  origin_titles: [],
+  keywords: [],
+  match_mode: 'any',
+  require_forward: false,
+  force_forward: true,
+}
+
+/** Trimmed, de-duplicated, non-empty entries — the server coerces the same way. */
+function brandingList(value: any): string[] {
+  const items = Array.isArray(value) ? value : value === undefined || value === null || value === '' ? [] : [value]
+  const out: string[] = []
+  for (const item of items) {
+    const text = String(item ?? '').trim()
+    if (text && !out.includes(text)) out.push(text)
+  }
+  return out
+}
+
+/**
+ * `metadata.branding_hop` as a complete config. A missing blob, a half-written
+ * one, or a foreign type (another client may store anything under the key) all
+ * fall back to the defaults instead of throwing while the editor renders.
+ */
+function readBrandingHop(meta: Record<string, any> | null | undefined): BrandingHopConfig {
+  const raw = meta && typeof meta === 'object' ? meta[BRANDING_HOP_KEY] : null
+  const blob: Record<string, any> = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+  return {
+    triggers_enabled: blob.triggers_enabled === true,
+    origin_ids: brandingList(blob.origin_ids),
+    origin_titles: brandingList(blob.origin_titles),
+    keywords: brandingList(blob.keywords),
+    match_mode: String(blob.match_mode || '').toLowerCase() === 'all' ? 'all' : 'any',
+    require_forward: blob.require_forward === true,
+    force_forward: blob.force_forward === undefined ? BRANDING_HOP_DEFAULTS.force_forward : blob.force_forward === true,
+  }
+}
+
+/** The list fields are edited as one comma-separated text input. */
+function brandingListToText(value: string[] | undefined): string {
+  return (value || []).join(', ')
+}
+
+function brandingTextToList(raw: string): string[] {
+  return brandingList(String(raw || '').split(/[,\n]/))
+}
+
+/**
+ * One plain-language line describing the route that will actually run, so the
+ * operator reads the outcome instead of inferring it from a pile of switches.
+ * Mirrors the engine's decision: no trigger means "always hop",
+ * `require_forward` is a gate on top of the match, and `force_forward` is what
+ * makes B show C's header (a copy from C would not).
+ */
+function brandingHopSummary(isRtl: boolean, hop: BrandingHopConfig, route: string): string {
+  const delivery = hop.force_forward
+    ? (isRtl ? 'ارسال نیتیو از C (B هدر C را نشان می‌دهد)' : 'native forward from C (B shows C)')
+    : (isRtl ? 'کپی از C (بدون هدر برند)' : 'copy from C (no branded header)')
+  const gate = hop.triggers_enabled && hop.require_forward
+    ? (isRtl ? ' · فقط اگر پیام خودش فوروارد باشد' : ' · only if the message is itself a forward')
+    : ''
+  if (!hop.triggers_enabled) {
+    return isRtl
+      ? `${route}: همه پیام‌ها · ${delivery}`
+      : `${route}: every message · ${delivery}`
+  }
+  const parts: string[] = []
+  const origins = [...hop.origin_titles, ...hop.origin_ids]
+  if (origins.length) {
+    parts.push(isRtl ? `فورواردشده از ${origins.join(' / ')}` : `forwarded from ${origins.join(' / ')}`)
+  }
+  if (hop.keywords.length) {
+    parts.push(isRtl ? `حاوی ${hop.keywords.join(' / ')}` : `containing ${hop.keywords.join(' / ')}`)
+  }
+  if (!parts.length) {
+    return isRtl
+      ? `${route}: همه پیام‌ها · ${delivery}${gate}`
+      : `${route}: every message · ${delivery}${gate}`
+  }
+  const joiner = hop.match_mode === 'all' ? (isRtl ? ' و ' : ' and ') : (isRtl ? ' یا ' : ' or ')
+  const scope = isRtl ? 'فقط پیام‌هایی که' : 'only messages'
+  return `${route}: ${scope} ${parts.join(joiner)} · ${delivery}${gate}`
+}
+
 export function App() {
   // Language follows the user, not a hardcoded default:
   // previously this defaulted to 'fa' so every user's first dashboard render
@@ -534,6 +647,40 @@ export function App() {
     }
   }
 
+  // Branding hop (A → C → B) triggers: read from `metadata.branding_hop` and
+  // merged back into the *raw* blob, so a sibling key written by the bot or
+  // another client survives an edit here. Nothing is written until a field is
+  // touched, which keeps an untouched rule's metadata byte-identical.
+  const brandingHop = readBrandingHop(ruleMeta)
+  const patchBrandingHop = (patch: Partial<BrandingHopConfig>) => {
+    setRuleMeta((prev) => {
+      const raw = prev?.[BRANDING_HOP_KEY]
+      const blob = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+      return { ...prev, [BRANDING_HOP_KEY]: { ...blob, ...patch } }
+    })
+  }
+  // The list fields are typed as free text, so a draft keeps exactly what was
+  // typed: deriving the input value from the parsed list would eat the ", "
+  // separator mid-keystroke and make a second entry impossible to type. The
+  // draft is keyed by the open task, so switching tasks drops it during render
+  // (no effect, no stale flash).
+  const [brandingListDrafts, setBrandingListDrafts] = useState<{ key: string; values: Record<string, string> }>({
+    key: '',
+    values: {},
+  })
+  const brandingDraftKey = `${ruleFormData.id || 'new'}:${isRuleModalOpen ? 'open' : 'closed'}`
+  const brandingListValue = (key: 'origin_ids' | 'origin_titles' | 'keywords') =>
+    (brandingListDrafts.key === brandingDraftKey && brandingListDrafts.values[key] !== undefined)
+      ? brandingListDrafts.values[key]
+      : brandingListToText(brandingHop[key])
+  const onBrandingListInput = (key: 'origin_ids' | 'origin_titles' | 'keywords', raw: string) => {
+    setBrandingListDrafts((prev) => ({
+      key: brandingDraftKey,
+      values: { ...(prev.key === brandingDraftKey ? prev.values : {}), [key]: raw },
+    }))
+    patchBrandingHop({ [key]: brandingTextToList(raw) } as Partial<BrandingHopConfig>)
+  }
+
   const PV_PRESETS = {
     casual: {
       label_fa: '😃 خودمانی و صمیمی (پیش‌فرض)',
@@ -617,6 +764,15 @@ export function App() {
       const saved = await api.saveRule({
         ...ruleFormData,
         prompt_id: ruleMeta.prompt_id || ruleFormData.prompt_id,
+        // The per-task metadata is sent through the top-level `metadata` object
+        // as well as the JSON string. The server merges `metadata` *over*
+        // `custom_metadata_json`, and editing a task spreads the rule as it came
+        // back from a GET — so without this the stale copy wins and every edit
+        // to a metadata-backed field (the branding-hop triggers included) is
+        // silently reverted on save. Both objects carry the whole key set
+        // (`metaToSave` is the metadata blob with this form's edits applied), so
+        // no other feature loses a key.
+        metadata: metaToSave,
         custom_metadata_json: JSON.stringify(metaToSave),
       } as SaveRuleRequest)
       setRules((prev) => {
@@ -3728,7 +3884,8 @@ export function App() {
                 return null
               })()}
 
-              {/* Hop Intermediate Settings */}
+              {/* Branding hop (A → C → B). The enable switch and channel C are
+                  rule fields; the trigger configuration is metadata.branding_hop. */}
               <div
                 style={{
                   background: 'rgba(15, 23, 42, 0.6)',
@@ -3750,32 +3907,162 @@ export function App() {
                 </label>
 
                 {ruleFormData.use_intermediate && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                        {isRtl ? 'شناسه کانال واسط C:' : 'Intermediate Channel ID (C):'}
-                      </label>
-                      <input
-                        type="text"
-                        value={ruleFormData.intermediate_channel_id || ''}
-                        onChange={(e) => setRuleFormData({ ...ruleFormData, intermediate_channel_id: e.target.value })}
-                        className="input-field"
-                        placeholder="-1002222222222"
-                      />
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                          {isRtl ? 'شناسه کانال واسط C:' : 'Intermediate Channel ID (C):'}
+                        </label>
+                        <input
+                          type="text"
+                          value={ruleFormData.intermediate_channel_id || ''}
+                          onChange={(e) => setRuleFormData({ ...ruleFormData, intermediate_channel_id: e.target.value })}
+                          className="input-field"
+                          placeholder="-1002222222222"
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                          {isRtl ? 'نام کانال واسط C:' : 'Intermediate Title:'}
+                        </label>
+                        <input
+                          type="text"
+                          value={ruleFormData.intermediate_channel_name || ''}
+                          onChange={(e) => setRuleFormData({ ...ruleFormData, intermediate_channel_name: e.target.value })}
+                          className="input-field"
+                          placeholder="My Brand Channel"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                        {isRtl ? 'نام کانال واسط C:' : 'Intermediate Title:'}
+
+                    {/* Hop triggers — stored in the rule metadata under branding_hop */}
+                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#fbbf24', marginBottom: 8 }}>
+                        {isRtl ? 'شرط‌های طی کردن مسیر برند (اختیاری)' : 'Branding hop triggers (optional)'}
+                      </div>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 10 }}>
+                        <input
+                          type="checkbox"
+                          checked={brandingHop.triggers_enabled}
+                          onChange={(e) => patchBrandingHop({ triggers_enabled: e.target.checked })}
+                        />
+                        <span>
+                          {isRtl
+                            ? 'فقط پیام‌های مطابق شرط‌های زیر از کانال C عبور کنند (در غیر این صورت همه پیام‌ها)'
+                            : 'Only hop messages matching the triggers below (otherwise every matched message hops)'}
+                        </span>
                       </label>
-                      <input
-                        type="text"
-                        value={ruleFormData.intermediate_channel_name || ''}
-                        onChange={(e) => setRuleFormData({ ...ruleFormData, intermediate_channel_name: e.target.value })}
-                        className="input-field"
-                        placeholder="My Brand Channel"
-                      />
+
+                      {brandingHop.triggers_enabled && (
+                        <>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                                {isRtl ? 'نام کانال مبدأ فوروارد (هدر «فوروارد از»):' : 'Forward-origin channel names:'}
+                              </label>
+                              <input
+                                type="text"
+                                value={brandingListValue('origin_titles')}
+                                onChange={(e) => onBrandingListInput('origin_titles', e.target.value)}
+                                className="input-field"
+                                placeholder="Premium Deals, Forex VIP"
+                              />
+                              <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 4 }}>
+                                {isRtl
+                                  ? 'با کاما جدا کنید. تطبیق با نام کانال در هدر فوروارد انجام می‌شود، نه با متن پیام.'
+                                  : 'Comma separated. Matches the channel name in the forward header, not the message body.'}
+                              </div>
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                                {isRtl ? 'شناسه یا یوزرنیم کانال مبدأ فوروارد:' : 'Forward-origin channel IDs:'}
+                              </label>
+                              <input
+                                type="text"
+                                value={brandingListValue('origin_ids')}
+                                onChange={(e) => onBrandingListInput('origin_ids', e.target.value)}
+                                className="input-field"
+                                placeholder="-1001111111111, @premium_deals"
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ marginTop: 12 }}>
+                            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                              {isRtl ? 'کلمات کلیدی متن پیام:' : 'Message text keywords:'}
+                            </label>
+                            <input
+                              type="text"
+                              value={brandingListValue('keywords')}
+                              onChange={(e) => onBrandingListInput('keywords', e.target.value)}
+                              className="input-field"
+                              placeholder="BUY, SIGNAL, طلا"
+                            />
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                                {isRtl ? 'حالت تطبیق شرط‌ها:' : 'Trigger match mode:'}
+                              </label>
+                              <select
+                                value={brandingHop.match_mode}
+                                onChange={(e) => patchBrandingHop({ match_mode: e.target.value === 'all' ? 'all' : 'any' })}
+                                className="input-field"
+                                style={{ width: '100%' }}
+                              >
+                                <option value="any">{isRtl ? 'any — یکی از شرط‌ها کافی است' : 'any — one matching group is enough'}</option>
+                                <option value="all">{isRtl ? 'all — همه شرط‌ها باید مطابق باشند' : 'all — every matching group must match'}</option>
+                              </select>
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.78rem', color: '#cbd5e1', marginTop: 18 }}>
+                              <input
+                                type="checkbox"
+                                checked={brandingHop.require_forward}
+                                onChange={(e) => patchBrandingHop({ require_forward: e.target.checked })}
+                              />
+                              <span>{isRtl ? 'پیام‌های غیرفوروارد عبور نکنند' : 'Refuse messages that are not forwards'}</span>
+                            </label>
+                          </div>
+                        </>
+                      )}
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.78rem', color: '#cbd5e1', marginTop: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={brandingHop.force_forward}
+                          onChange={(e) => patchBrandingHop({ force_forward: e.target.checked })}
+                        />
+                        <span>
+                          {isRtl
+                            ? 'ارسال نیتیو از C (تنها حالتی که B هدر C را نشان می‌دهد)'
+                            : 'Native forward from C (the only way B shows C in the header)'}
+                        </span>
+                      </label>
+
+                      <div
+                        dir={isRtl ? 'rtl' : 'ltr'}
+                        style={{
+                          marginTop: 10,
+                          padding: '8px 10px',
+                          background: 'rgba(245, 158, 11, 0.08)',
+                          border: '1px dashed rgba(245, 158, 11, 0.35)',
+                          borderRadius: 8,
+                          fontSize: '0.75rem',
+                          color: '#fcd34d',
+                          lineHeight: 1.6,
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {brandingHopSummary(
+                          isRtl,
+                          brandingHop,
+                          `${ruleFormData.source_chat_name || ruleFormData.source_chat_id || 'A'} → ${ruleFormData.intermediate_channel_name || ruleFormData.intermediate_channel_id || 'C'} → ${ruleFormData.target_chat_name || ruleFormData.target_chat_id || 'B'}`,
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
 
