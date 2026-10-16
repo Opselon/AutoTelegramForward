@@ -176,10 +176,16 @@ func main() {
 	// The collection policy is enforced at the producer boundary: the Logger
 	// stores whatever it is handed, so "INFO is not collected by default" is only
 	// true if this side refuses it. Same env contract as the Python producer.
-	handler = middleware.AccessLogger(logSink, handler)
+	// The API-key gate sits INSIDE AccessLogger on purpose. Wrapped on the
+	// outside it makes every refused key invisible twice over: no access-trail
+	// entry in the central logger, and no stdout line either, because
+	// RequestLogger is inside it too. An unauthenticated attempt is security
+	// evidence an operator must be able to see, so it is recorded (as a
+	// security-relevant WARN, which the collection policy must not suppress).
 	if apiKey != "" {
 		handler = middleware.APIKeyAuth(apiKey, handler)
 	}
+	handler = middleware.AccessLogger(logSink, handler)
 	// Extract, validate, or generate end-to-end Correlation ID
 	handler = middleware.CorrelationID(handler)
 
