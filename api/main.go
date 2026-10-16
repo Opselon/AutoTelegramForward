@@ -8,6 +8,7 @@ import (
 
 	"autoforward/internal/grpcclient"
 	"autoforward/internal/handlers"
+	"autoforward/internal/logpolicy"
 	"autoforward/internal/middleware"
 )
 
@@ -155,7 +156,13 @@ func main() {
 	// correlation id. Previously only 4xx/5xx were persisted, so the dashboard
 	// Log Explorer could show what went wrong but never the full history of
 	// what was actually done.
-	handler = middleware.AccessLogger(&middleware.ErrorLogSink{Client: clients.Logs}, handler)
+	// The collection policy is enforced at the producer boundary: the Logger
+	// stores whatever it is handed, so "INFO is not collected by default" is only
+	// true if this side refuses it. Same env contract as the Python producer.
+	handler = middleware.AccessLogger(&middleware.ErrorLogSink{
+		Client: clients.Logs,
+		Policy: logpolicy.FromEnv(),
+	}, handler)
 	if apiKey != "" {
 		handler = middleware.APIKeyAuth(apiKey, handler)
 	}

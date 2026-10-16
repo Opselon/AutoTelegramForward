@@ -50,3 +50,24 @@ running `atf-api`**, and they are the reference for:
 
 Optional-at-runtime fields (`hint`, `commit_sha`) are warnings, not errors: the
 server omits them when empty.
+
+## `log_policy_decisions.json` is a different kind of fixture
+
+Everything described above is about *shapes*: it proves two clients read the same
+JSON field names. `log_policy_decisions.json` is about **behaviour**, and it is
+shared for the same underlying reason — one rule implemented twice drifts.
+
+The log collection policy runs in two processes, written in two languages
+(`core/application/log_policy.py`, `api/internal/logpolicy`). The file lists the
+decisions both must reach — which levels are collected, which legacy names
+normalise where, and which events stay auditable even below a raised threshold —
+and both suites must satisfy it:
+
+- `core/tests/test_log_policy_fixtures.py`
+- `api/internal/logpolicy/policy_test.go`
+
+It is deliberately **not** in `fixtures/`: `audit_api_contract.py` walks that
+directory expecting captured API responses, and a behavioural table there would be
+audited as if it were one. When a case in this file fails, the fix is a real
+behavioural change in an implementation — never an edit that makes the fixture
+agree with the code.
