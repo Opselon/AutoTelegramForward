@@ -409,3 +409,45 @@ def test_content_rules_survive_the_draft_round_trip():
     other.apply_draft({"content_policy": {"blacklist_words": ["y"], "remove_links": True}})
     assert other.blacklist_words == ["y"]
     assert other.content_policy.remove_links is True
+
+# --------------------------------------------------------------------------
+# One fact, two spellings: the target list and the mirrored primary
+# --------------------------------------------------------------------------
+
+
+def test_a_target_list_always_mirrors_its_first_entry():
+    """Every documented write path leaves `target_chat_id` = first target.
+
+    The dispatcher reads `all_targets` (scalar first, then the list), so a task
+    whose list is set but whose primary is empty would route correctly while
+    every legacy reader — and `destination_chat_id` — saw nothing.
+    """
+    built = ForwardRule(id="t", name="n", target_chat_ids=["-2001", "-2002"])
+    assert built.target_chat_ids == ["-2001", "-2002"]
+    assert built.target_chat_id == "-2001"
+    assert built.destination_chat_id == "-2001"
+
+    via_method = ForwardRule(id="t2", name="n", source_chat_id="-1001")
+    via_method.set_targets(["-3001", "-3001", "-3002"], names=["First", "Second"])
+    assert via_method.target_chat_ids == ["-3001", "-3002"], "deduped, order kept"
+    assert via_method.target_chat_id == "-3001"
+    assert via_method.target_chat_name == "First"
+
+    via_draft = ForwardRule(id="t3", name="n")
+    via_draft.apply_draft({"target_chat_ids": ["-4001", "-4002"]})
+    assert via_draft.target_chat_id == "-4001"
+    assert via_draft.all_targets == ["-4001", "-4002"]
+
+    # the draft is authoritative: naming only the list makes its first entry the
+    # primary (that list *is* the whole route)...
+    routed = ForwardRule(id="t4", name="n", target_chat_id="-5000")
+    routed.apply_draft({"target_chat_ids": ["-5001", "-5002"]})
+    assert routed.target_chat_id == "-5001"
+    assert routed.all_targets == ["-5001", "-5002"]
+
+    # ...and a client that sends both (as the app and the API do) keeps the
+    # scalar it sent, with the extra targets after it.
+    kept = ForwardRule(id="t5", name="n", target_chat_id="-6000")
+    kept.apply_draft({"target_chat_id": "-6000", "target_chat_ids": ["-6000", "-6001"]})
+    assert kept.target_chat_id == "-6000"
+    assert kept.all_targets == ["-6000", "-6001"]

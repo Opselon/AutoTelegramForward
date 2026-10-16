@@ -259,6 +259,43 @@ class ForwardRule:
         elif isinstance(self.trigger_events, str):
             self.trigger_events = [self.trigger_events]
 
+        # The target list and its primary are two spellings of one fact: the
+        # legacy `target_chat_id` mirrors the first list entry. Sources enforce
+        # this in their setter; targets cannot (the list is a plain field read by
+        # the dispatcher and by older clients), so the invariant is applied here
+        # as well — otherwise a task built as `ForwardRule(target_chat_ids=[...])`
+        # routes correctly (all_targets reads the list) while `target_chat_id`,
+        # `destination_chat_id` and every legacy reader see nothing.
+        if self.target_chat_ids:
+            self.target_chat_ids = [str(t).strip() for t in self.target_chat_ids if str(t).strip()]
+            if not self.target_chat_id and self.target_chat_ids:
+                self.target_chat_id = self.target_chat_ids[0]
+                if not self.target_chat_name:
+                    self.target_chat_name = self.target_chat_id
+
+    def set_targets(self, ids, names=None) -> None:
+        """Set the whole target list, mirroring the first entry into the primary.
+
+        The sanctioned write path for multi-target tasks: it keeps
+        `target_chat_ids` and `target_chat_id` in step whatever the caller knows
+        about (a caller that only has ids still gets a correct primary).
+        """
+        seen: set = set()
+        uniq: List[str] = []
+        for raw in ids or []:
+            tid = str(raw).strip()
+            if tid and tid not in seen:
+                seen.add(tid)
+                uniq.append(tid)
+        self.target_chat_ids = uniq
+        if uniq:
+            self.target_chat_id = uniq[0]
+            clean_names = [str(n).strip() for n in (names or []) if str(n).strip()]
+            if clean_names:
+                self.target_chat_name = clean_names[0]
+            elif not self.target_chat_name:
+                self.target_chat_name = uniq[0]
+
     def mark_updated(self) -> None:
         self.updated_at = _now()
 
