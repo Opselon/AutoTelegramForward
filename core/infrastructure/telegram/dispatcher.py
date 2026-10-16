@@ -22,6 +22,7 @@ import time
 from collections import defaultdict, deque
 from typing import Any, Optional
 
+from ...application import branding_hop
 from ...domain import branding
 from ...domain.entities import MessagePayload
 from ...domain.services import AdvancedSettingsEngine, CaptionManagementEngine, safe_text_preview
@@ -390,53 +391,40 @@ class MessageDispatcher:
         # Branding hop (A -> C -> B)
         # Our own channel C is posted first, then the final target receives a
         # *forward of C*, so its forward header names C — never the original
-        # source channel. The decision is the domain's, not a local shortcut:
-        # `should_brand_hop` is what the bot/dashboard preview shows, so the two
-        # can never disagree about which messages take the hop.
+        # source channel. Two shared pieces keep the hop honest: the domain
+        # decision (`_brand_hop_decision`, what the dashboard/bot preview shows)
+        # and `perform_branding_hop` (the very same posting routine the durable
+        # pipeline calls), so C receives the *processed* text this rule would
+        # otherwise have delivered directly.
         hop_msg_id = None
         branding_plan = None
         take_hop, hop_reason = self._brand_hop_decision(payload, rule)
         if take_hop:
             inter_id = branding.channel_id(rule)
             final_targets = [t for t in targets if str(t).strip() != inter_id]
-            if final_targets and inter_id not in (str(payload.chat_id),):
-                try:
-                    hop_res = await self._hop_intermediate(payload, rule, text, inter_id)
-                    if isinstance(hop_res, list) and hop_res:
-                        hop_msg_id = getattr(hop_res[0], "id", None) or getattr(hop_res[0], "message_id", None)
-                    elif hop_res is not None:
-                        hop_msg_id = getattr(hop_res, "id", None) or getattr(hop_res, "message_id", None)
-                    if hop_msg_id:
-                        # Final delivery uses the intermediate as its source identity.
-                        targets = final_targets
-                        branding_plan = {
-                            "chat_id": inter_id,
-                            "message_id": int(hop_msg_id),
-                            "force_forward": branding.force_forward(rule),
-                            "reason": hop_reason,
-                        }
-                        logger.info(
-                            "[PIPELINE:BRANDING] rule=%s %s -> C=%s msg=%s -> %d target(s) (%s)",
-                            getattr(rule, "id", "?")[:8], payload.chat_id, inter_id,
-                            hop_msg_id, len(targets), hop_reason,
-                        )
-                    else:
-                        logger.warning(
-                            "[PIPELINE:BRANDING] rule=%s hop to C=%s returned no message id — delivering directly",
-                            getattr(rule, "id", "?")[:8], inter_id,
-                        )
-                except Exception as exc:
-                    key, sev, recoverable = tg_error(exc)
-                    logger.warning(
-                        "intermediate hop → %s failed: %s (recoverable=%s) — delivering directly",
-                        inter_id, tg_detail(exc), recoverable,
-                    )
-                    # Fall back to direct delivery without the intermediate hop.
+            if not inter_id or inter_id == str(payload.chat_id):
+                logger.debug(
+                    "[PIPELINE:BRANDING] rule=%s hop skipped: C=%s is the message's own source",
+                    getattr(rule, "id", "?")[:8], inter_id,
+                )
             elif not final_targets:
                 logger.warning(
                     "[PIPELINE:BRANDING] rule=%s has no target other than C=%s — delivering directly",
                     getattr(rule, "id", "?")[:8], inter_id,
                 )
+            else:
+                branding_plan = await self.perform_branding_hop(payload, rule, text)
+                if branding_plan is not None:
+                    # Stage 2 starts from C, and C is not a target of it: the hop
+                    # post *is* C's copy, so delivering to C again would duplicate
+                    # the message in our own channel.
+                    targets = final_targets
+                    hop_msg_id = int(branding_plan["message_id"])
+                    logger.info(
+                        "[PIPELINE:BRANDING] rule=%s %s -> C=%s msg=%s -> %d target(s) (%s)",
+                        getattr(rule, "id", "?")[:8], payload.chat_id, inter_id,
+                        hop_msg_id, len(targets), hop_reason,
+                    )
 
         # If durable queue manager is active, delegate delivery non-blockingly!
         if self._queue_manager is not None:
@@ -489,6 +477,74 @@ class MessageDispatcher:
                 continue  # a multi-target rule must still try its other targets
         return ok_any
 
+    def branding_decision(self, payload: MessagePayload, rule) -> tuple:
+        """Public form of the shared hop decision, for callers outside this class.
+
+        The durable pipeline asks the same question through this method, so both
+        delivery paths (queue and direct) hop on exactly the same messages.
+        """
+        return self._brand_hop_decision(payload, rule)
+
+    async def perform_branding_hop(self, payload: MessagePayload, rule, text: str) -> Optional[dict]:
+        """Post the processed message into our channel C and return the hop plan.
+
+        ``text`` is the final processed text (cleaner -> replace rules ->
+        content policies -> AI rewrite -> header/footer -> watermark), i.e. what
+        the target would have received without the hop, so the hop changes the
+        *header* B sees and nothing else.
+
+        Returns ``None`` whenever the hop cannot or should not happen (no channel,
+        no live client, decision miss, Telegram error). Callers must treat that as
+        "deliver directly" — never as "drop the message".
+        """
+        take_hop, hop_reason = self._brand_hop_decision(payload, rule)
+        if not take_hop:
+            logger.debug(
+                "[PIPELINE:BRANDING] rule=%s msg=%s takes no hop (%s)",
+                getattr(rule, "id", "?")[:8], getattr(payload, "message_id", "?"), hop_reason,
+            )
+            return None
+
+        inter_id = branding.channel_id(rule)
+        if not inter_id:
+            return None
+
+        client = self._pool.get(rule.session_id)
+        if client is None:
+            logger.warning(
+                "[PIPELINE:BRANDING] rule=%s hop to C=%s skipped: no live client for session %s — delivering directly",
+                getattr(rule, "id", "?")[:8], inter_id, rule.session_id,
+            )
+            return None
+
+        await self._throttle(inter_id)
+        try:
+            plan = await branding_hop.post_to_channel(
+                client, payload, rule, text,
+                caption_template=rule.custom_caption_template or None,
+                reupload=lambda target, caption, mode: self._reupload_media(
+                    client, payload, target, caption, mode,
+                ),
+            )
+        except Exception as exc:
+            key, sev, recoverable = tg_error(exc)
+            await self._record_send_error(payload, rule, inter_id, exc, sev)
+            logger.warning(
+                "[PIPELINE:BRANDING] rule=%s hop to C=%s failed: %s (recoverable=%s) — delivering directly",
+                getattr(rule, "id", "?")[:8], inter_id, tg_detail(exc), recoverable,
+            )
+            return None
+
+        if plan is None:
+            logger.warning(
+                "[PIPELINE:BRANDING] rule=%s posted nothing into C=%s — delivering directly",
+                getattr(rule, "id", "?")[:8], inter_id,
+            )
+            return None
+
+        plan["reason"] = hop_reason
+        return plan
+
     def _brand_hop_decision(self, payload: MessagePayload, rule) -> tuple:
         """Should this message take the branding hop? (shared decision, see domain).
 
@@ -505,32 +561,31 @@ class MessageDispatcher:
         return branding.should_hop(payload, rule)
 
     async def _hop_intermediate(self, payload: MessagePayload, rule, text: str, inter_id: str) -> Any:
-        """Deliver the message to the intermediate (VIP hop) channel exactly once.
+        """Compatibility shim: post the processed message into C.
 
-        Guarantees:
-          * the message is never sent back to its own source chat,
-          * idempotency is preserved by the queue/processed layer above,
-          * the intermediate message is a COPY (no original author header),
-            so the final forward header will read as the intermediate channel.
+        The hop now lives in one place — :func:`core.application.branding_hop.post_to_channel`,
+        reached through :meth:`perform_branding_hop` — because it must behave the
+        same on the direct path and inside the durable pipeline. This wrapper is
+        kept for callers that still invoke it directly and returns the hop plan
+        (``{chat_id, message_id, message_ids, force_forward, ...}``) or ``None``.
+
+        Guarantees, unchanged: the message is never sent back to its own source
+        chat, and the intermediate post is a COPY (no original author header), so
+        the final forward header reads as the intermediate channel.
         """
-        if str(payload.chat_id).strip() == inter_id.strip():
-            logger.debug("intermediate hop skipped: target is the message source (%s)", inter_id)
-            return None
-
         client = self._pool.get(rule.session_id)
         if client is None:
             logger.warning("intermediate hop: no live client for session %s", rule.session_id)
             raise RuntimeError(f"no_live_client:{rule.session_id}")
-
         await self._throttle(inter_id)
         try:
-            res = await self._deliver_copy(
-                client, payload, rule, text, inter_id,
-                enum_str(getattr(rule, "content_mode", None), "AUTO"),
-                rule.custom_caption_template or None,
+            return await branding_hop.post_to_channel(
+                client, payload, rule, text,
+                caption_template=rule.custom_caption_template or None,
+                reupload=lambda target, caption, mode: self._reupload_media(
+                    client, payload, target, caption, mode,
+                ),
             )
-            logger.debug("intermediate hop → %s ok: %s", inter_id, bool(res))
-            return res
         except Exception as exc:
             # record the exact Telegram error for the diagnostics panel
             key, sev, recoverable = tg_error(exc)

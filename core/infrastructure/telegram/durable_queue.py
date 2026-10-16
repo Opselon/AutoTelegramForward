@@ -1007,20 +1007,25 @@ class DurableQueueManager:
 
         # --- Branding hop (A -> C -> B) --------------------------------------
         # The message was already copied into our channel C on the dispatch path
-        # and the target must now receive a forward of *that* post, so the header
-        # names C. Without this the worker delivered source=A and the target saw
-        # the original channel's header — the hop was configured, the post landed
-        # in C, and the branding never reached B.
+        # (with every transform applied) and the target must now receive a forward
+        # of *that* post, so the header names C. Without this the worker delivered
+        # source=A and the target saw the original channel's header — the hop was
+        # configured, the post landed in C, and the branding never reached B.
+        #
+        # Stage 2 reproduces C's post and nothing more: the content is never
+        # re-processed here, so Replace rules / AI rewrite / header / watermark
+        # are applied exactly once (on the dispatch path, before the hop) and can
+        # neither be skipped nor doubled by a retry.
         branding = data.get("branding") or {}
         if branding and branding.get("chat_id") and branding.get("message_id"):
             c_chat = branding["chat_id"]
             c_chat = int(c_chat) if str(c_chat).lstrip("-").isdigit() else c_chat
-            c_msg_id = int(branding["message_id"])
+            c_ids = [int(i) for i in (branding.get("message_ids") or [branding["message_id"]])]
             if bool(branding.get("force_forward", True)):
                 try:
                     res = await client.forward_messages(
                         chat_id=target, from_chat_id=c_chat,
-                        message_ids=[c_msg_id], **thread_kwargs,
+                        message_ids=c_ids, **thread_kwargs,
                     )
                     if isinstance(res, list) and res:
                         return getattr(res[0], "id", 0)
@@ -1035,13 +1040,23 @@ class DurableQueueManager:
                     else:
                         raise
             # Clean copy of C's own post (either requested, or the forward was
-            # restricted): content still comes from C, never from the source.
+            # restricted): content still comes from C, never from the source. No
+            # caption is passed, so Telegram keeps C's caption *and* its entities
+            # verbatim — re-sending `text` here would be a second application of
+            # the same content.
             try:
-                res = await client.copy_message(
-                    chat_id=target, from_chat_id=c_chat, message_id=c_msg_id,
-                    caption=caption, **thread_kwargs,
-                )
-                return getattr(res, "id", 0)
+                last_id = 0
+                for c_msg_id in c_ids:
+                    copy_kwargs = dict(thread_kwargs)
+                    if content_mode == "MEDIA_ONLY":
+                        # Mirror the direct path: media only means no caption.
+                        copy_kwargs["caption"] = ""
+                    res = await client.copy_message(
+                        chat_id=target, from_chat_id=c_chat, message_id=c_msg_id,
+                        **copy_kwargs,
+                    )
+                    last_id = getattr(res, "id", last_id) or last_id
+                return last_id
             except Exception as copy_err:
                 err_str = str(copy_err).lower()
                 if any(k in err_str for k in ("restrict", "protect", "forbidden", "chatforwardsrestricted")):
@@ -1050,7 +1065,9 @@ class DurableQueueManager:
                         c_chat, copy_err,
                     )
                     return await self._reupload_media(
-                        client, c_chat, c_msg_id, target, caption, data.get("media_type", ""),
+                        client, c_chat, c_ids[0], target,
+                        None if content_mode == "MEDIA_ONLY" else caption,
+                        data.get("media_type", ""),
                     )
                 raise
 

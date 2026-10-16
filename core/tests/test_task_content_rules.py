@@ -52,10 +52,10 @@ class RecordingQueue:
 
     async def enqueue_delivery(self, rule, payload, target_chat_id, text,
                                evaluation=None, job_kind="forward",
-                               correlation_id=""):
+                               correlation_id="", branding=None):
         if job_kind == "forward":
             self.jobs.append({"target": str(target_chat_id), "text": text,
-                              "msg": payload.message_id})
+                              "msg": payload.message_id, "branding": branding})
         return True
 
     async def get_pending_count(self):
