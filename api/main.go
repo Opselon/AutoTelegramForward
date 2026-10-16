@@ -38,6 +38,12 @@ func main() {
 	mux.HandleFunc("GET /api/version", h.Version)
 	mux.HandleFunc("GET /api/v1/health/services", h.ServicesHealth)
 	mux.HandleFunc("GET /api/health/services", h.ServicesHealth)
+	// Setup/readiness surface: what this deployment is configured with (booleans
+	// only, never secret values) and whether every service in the chain answers.
+	mux.HandleFunc("GET /api/system/setup", h.SetupReport)
+	mux.HandleFunc("GET /api/v1/system/setup", h.SetupReport)
+	mux.HandleFunc("GET /api/system/env", h.EnvContractHandler)
+	mux.HandleFunc("GET /api/v1/system/env", h.EnvContractHandler)
 
 	// Public authentication endpoints (no Bearer token required).
 	authMux := http.NewServeMux()

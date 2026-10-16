@@ -24,7 +24,7 @@ var (
 )
 
 // VersionFeatures lists the capability keys clients can probe.
-var VersionFeatures = []string{"rules", "filters", "ai_configs", "sessions", "logs", "dlq", "backup"}
+var VersionFeatures = []string{"rules", "filters", "ai_configs", "sessions", "logs", "dlq", "backup", "system_setup", "env_contract"}
 
 type versionResponse struct {
 	ProductVersion     string   `json:"product_version"`

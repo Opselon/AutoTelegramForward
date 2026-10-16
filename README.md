@@ -26,33 +26,63 @@
 
 ---
 
-## ⚡ One-Command Installation (Zero Setup Hassle)
+## ⚡ Quick start — one command, on any platform
 
-Install, configure, and launch the complete 4-microservice suite in seconds with a single command:
+Every path below ends in the same place: a guided wizard that detects the
+machine, asks only what it cannot work out itself, validates every answer, builds
+the four microservices, and then **proves** each one is serving.
 
-### 🐧 Linux / macOS / WSL (Universal Installer)
+### 🐧 Linux / macOS / WSL
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash
+git clone https://github.com/Opselon/AutoTelegramForward && cd AutoTelegramForward
+./scripts/setup.sh            # venv + deps + `atf` on PATH + guided setup
+./scripts/setup.sh --check    # read-only readiness report, changes nothing
 ```
+`scripts/setup.sh` hands over to `scripts/bootstrap.py`, which finds a Python
+3.11+, creates `.venv`, installs dependencies, symlinks `atf` into
+`/usr/local/bin`, and starts the wizard.
 
-### 🪟 Windows (PowerShell)
+### 🪟 Windows (PowerShell, or Git Bash/WSL)
 ```powershell
-irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex
+git clone https://github.com/Opselon/AutoTelegramForward; cd AutoTelegramForward
+python scripts\bootstrap.py
 ```
+Identical steps to Linux — the same file, not a second implementation. It uses
+Docker Desktop (WSL2 backend) when docker is available and offers source mode when
+it is not.
 
-### 📦 Standalone Single-File Binary (Zero Host Dependencies)
-No Python, Go, Rust, Node.js, or compiler toolchains required on your machine:
+### 🌐 Zero-prerequisite installers
 ```bash
-curl -fsSL https://github.com/Opselon/AutoTelegramForward/releases/latest/download/atf-linux-x64 -o atf && chmod +x atf
-./atf setup    # Interactive onboarding wizard (asks only for your Telegram Bot Token)
-./atf start    # Launches all 4 microservices simultaneously
+curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash   # Linux/macOS/WSL/*BSD
 ```
+```powershell
+irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex        # Windows
+```
+Both install Python/git when missing, clone the repo, and end in the same wizard.
 
-### 🐳 Docker Compose (Multi-Arch: `amd64` + `arm64`)
+### 📦 Portable single file (no install, no venv, no checkout)
+Needs only Python 3.11+ on the target machine:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/docker-compose.yml -o docker-compose.yml
+python3 atf.pyz platform      # what this host is, and the exact docker install commands for it
+python3 atf.pyz setup         # the same wizard
+```
+Build it from a checkout with `atf release portable` → `dist/atf.pyz` (~88 KB,
+standard library only, runs on Linux/macOS/Windows).
+
+### 🐳 Docker Compose only (no CLI)
+```bash
+cp .env.example .env          # fill ATF_API_ID, ATF_API_HASH, ATF_BOT_TOKEN, ADMIN_USER_ID
 docker compose up -d
+docker compose ps             # atf-core, atf-logger, atf-api, atf-web
 ```
+
+| You have | Use | Result |
+| --- | --- | --- |
+| docker + python 3.11+ | `./scripts/setup.sh` | docker mode: full stack, verified, boot service optional |
+| python 3.11+ only | `atf setup --source-wizard` | source mode: venv + supervised local processes |
+| neither, want one file | `atf release portable` → `atf.pyz` | portable: copy one file, run `setup` |
+| Windows + Docker Desktop | `python scripts\bootstrap.py` | docker mode on WSL2 |
+| only want the containers | `docker compose up -d` | the stack, managed by hand |
 
 ---
 
@@ -218,6 +248,15 @@ Start the bot with `/start` to access the interactive panel without typing compl
 
 ## 🔌 REST API Endpoints (Go Control Plane, `:8080`)
 
+```http
+# Setup & readiness (auth as usual; booleans only — no secret value is ever returned)
+GET /api/system/setup            # ready verdict + version + env contract + live service probes
+GET /api/system/setup?probe=0    # the same, instantly, without probing services
+GET /api/system/env              # configuration contract: each key with set:true/false and a fix hint
+GET /api/health/services         # per-service reachability, latency and detail (core/logger/api/web)
+```
+
+
 All API endpoints are documented with OpenAPI schemas:
 
 ```http
@@ -316,8 +355,12 @@ atf up                      # build + start the whole stack (shortcut for `syste
 atf down                    # stop the containers (`system stop`)
 atf restart                 # restart and re-verify health (`system restart`)
 atf status                  # live board: services, ports, rules
+atf system services         # microservice table: state, health, reachability, endpoint, version
+atf platform                # what this host is + how to install docker on it
 atf doctor --fix            # repair whatever the checks flag
 atf system upgrade          # git pull → build → recreate → alias repair → health gate
+atf system service install  # start the stack at boot (systemd unit)
+atf release portable        # build dist/atf.pyz — the single-file CLI
 ```
 
 `atf up` is **validator-gated**: it runs the static validation below first and
@@ -345,6 +388,13 @@ repo's own i18n audits).
 | `proto` | generated stubs are not older than the `.proto` sources |
 | `ports` | the ATF ports are not held by a foreign process |
 
+`--runtime` additionally proves the live deployment: `containers` (all four
+running), `network aliases` (compose aliases + the external AI bridge attached),
+`api` (`/healthz` + upstream session), `services` (all four answering over gRPC and
+HTTP), `certificate` (TLS expiry), and `container-env` — which asks the running API
+which configuration it actually received and fails when the container is older than
+`.env`, i.e. the "I set the token but the bot still says unconfigured" bug.
+
 ```bash
 atf validate                 # human report with per-check fixes
 atf validate --json          # exactly one JSON object on stdout (scripts, cron, CI)
@@ -354,3 +404,98 @@ atf validate --strict        # non-zero exit on warnings too
 Every command supports `--json` (one JSON document on stdout, placed before or
 after the group name), and every line the CLI writes goes through a single
 redaction filter, so a leaked bot token or API key cannot appear in a transcript.
+
+
+## 🧙 The setup wizard (`atf setup`)
+
+One command for a machine that has never run ATF. It asks, validates, builds, and
+then verifies — in that order, and it refuses a wrong answer instead of storing it.
+
+```bash
+atf setup                          # interactive wizard
+atf setup --check                  # read-only readiness report (safe before anything exists)
+atf setup --yes                    # take every default, never prompt (CI/cron)
+atf setup --answers answers.json   # non-interactive answers
+atf setup --print-answers          # emit the answers template
+atf setup --no-build --no-start    # prepare .env only
+atf setup --source-wizard          # bare-metal path for a machine without docker
+```
+
+### What it asks, and how each answer is validated
+
+| Question | Validator (a wrong answer is refused, never written) |
+| --- | --- |
+| Run mode | one of `docker`, `source`, `portable` |
+| Bot token (@BotFather) | `<digits>:<35+ chars>`; typed blind, stored in `.env` as `0600` |
+| `api_id` | numeric, ≥ 1 (defaults to the public Telegram Desktop value) |
+| `api_hash` | exactly 32 hex characters |
+| Admin user id | numeric, ≥ 1 |
+| Dashboard URL | must start with `http://` or `https://` |
+| TLS domain | optional; if set, a valid domain **and** a contact email become required |
+| Boot service / start now / mint token | explicit yes/no |
+
+Before anything is written it echoes every answer back in a review panel with the
+secrets masked (`set (52 chars)`), and asks once more.
+
+### What it proves before it says "done"
+
+"`docker compose` returned 0" is not evidence. After the build the wizard inspects
+each service and reports state, health, reachability, endpoint and version:
+
+```
+Microservices
+  SERVICE                               CONTAINER   STATUS  STATE    UP   ENDPOINT     VER
+  logger — log ingest + query API (gRPC)  atf-logger  OK      running  yes  grpc :50052  -
+  core — Telegram core: engine (gRPC)     atf-core    OK      running  yes  grpc :50051  -
+  api — Go gateway for dashboard/mobile   atf-api     OK      running  yes  http :8080   -
+  web — Rust Axum gateway + React SPA     atf-web     OK      running  yes  http :8088   2.0.0
+```
+
+Anything not healthy gets a fix line (`docker logs --tail 50 atf-core`, `atf system
+restart`). The same table is available any time:
+
+```bash
+atf system services            # colourised table + fix hints, exit 1 if something is down
+atf system services --json     # {services:[...], healthy:N, total:4, failing:[...]}
+atf system service status      # boot unit + container state
+```
+
+### Platform detection and boot persistence
+
+`atf platform` (also `python3 atf.pyz platform`) reports the host and prints the
+exact docker commands for **that** distribution — apt/dnf/pacman/apk/zypper, brew
+(Desktop or Colima), `winget` on Windows, WSL integration notes, or the
+container case:
+
+```bash
+atf platform            # host, docker, compose, install commands, the three run modes
+atf platform --json     # the same as one JSON object
+```
+
+On systemd hosts the wizard can install `atf-stack.service`, so the stack starts at
+boot instead of at someone's login:
+
+```bash
+atf system service install      # writes + enables the unit, then shows its status
+atf system service status       # unit state, container state
+atf system service uninstall    # disable and remove it
+```
+
+### `--dry-run` is really a dry run
+
+Every mutating path (`run`, `run_streaming`, the wizard, the portable build) prints
+`[dry-run] …` and stops. Read-only host inspection — docker detection, the service
+probe, the validator — still runs, so `atf setup --dry-run` tells the truth about
+your machine without touching it.
+
+## 🩺 Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `docker is not usable here` | no docker / daemon down | run `atf platform` for this host's exact install command; or `atf setup --source-wizard` |
+| `port 8088 is already in use` | something else owns the port | `atf validate --runtime` reports the owner (`ports` check) |
+| Bot says it is unconfigured although `.env` is filled | the container predates the `.env` change | `atf system restart` (`container-env` check detects exactly this) |
+| `container-env` warns `/api/system/env unavailable` | older api image | `atf system restart` to pick up the current image |
+| Upstream disconnected | Telegram session not authorised | `atf sessions list`, then re-login |
+| Wizard hangs on a piped stdin | it is waiting for a human | use `--yes`, `--answers file.json`, or a terminal |
+| Colours look wrong / logs are noisy | ANSI in a pipe | `NO_COLOR=1`, `--no-color`, or `--json` |
