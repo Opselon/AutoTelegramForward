@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -19,11 +20,28 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"autoforward/internal/grpcclient"
+	"autoforward/internal/logpolicy"
 	pb "autoforward/proto"
 )
 
 type Handlers struct {
 	c *grpcclient.Clients
+
+	// Policy is THIS API process's own log collection policy: the same instance
+	// the access trail and the administrative audit trail are gated by, so the
+	// control plane cannot report one configuration while another is in force.
+	// nil when the API runs without one (tests, embedded use).
+	Policy *logpolicy.Policy
+
+	// LogAudit records an administrative change in the durable log store. It is
+	// set by main.go to the same sink the access trail uses, so a policy change
+	// cannot silence the record of itself.
+	LogAudit func(actor int64, action, reasonCode string, detail map[string]any)
+
+	// diagMu guards lastDiagStart: the diagnostic window is per-process state
+	// mutated from concurrent HTTP handlers.
+	diagMu        sync.Mutex
+	lastDiagStart time.Time
 }
 
 func New(c *grpcclient.Clients) *Handlers { return &Handlers{c: c} }
