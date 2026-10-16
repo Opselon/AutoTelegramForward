@@ -1,0 +1,90 @@
+// Vendored subset of proto/autoforward.proto — the LogControlService surface
+// only. Names, field numbers and types match the canonical file exactly so the
+// existing Python (logger/log_client.py) and Go clients keep working unchanged.
+//
+// Do not renumber or rename anything here: the wire format is shared.
+
+syntax = "proto3";
+
+package autoforward;
+
+message StatusResponse {
+  bool success = 1;
+  string message = 2;
+  string error_code = 3;
+}
+
+message LogEntry {
+  int64 ts = 1;
+  string level = 2;
+  string service = 3;
+  string category = 4;
+  string message = 5;
+  string detail = 6;
+  string rule_id = 7;
+  int64 user_id = 8;
+  string correlation_id = 9;
+}
+
+message LogRequest {
+  LogEntry entry = 1;
+}
+
+message QueryLogsRequest {
+  string level = 1;
+  string service = 2;
+  string category = 3;
+  string search = 4;
+  int32 limit = 5;
+  int64 since = 6;
+  string rule_id = 7;
+  int64 until = 8;
+  int32 offset = 9;
+  bool ascending = 10;
+  repeated string levels = 11;
+  int64 user_id = 12;
+  string correlation_id = 13;
+}
+
+message PurgeLogsRequest {
+  string level = 1;
+  string service = 2;
+  string category = 3;
+  int64 older_than_hours = 4;
+  string rule_id = 5;
+}
+
+message PurgeLogsResponse {
+  bool success = 1;
+  int64 purged = 2;
+  int64 remaining = 3;
+  string error = 4;
+}
+
+message QueryLogsResponse {
+  repeated LogEntry logs = 1;
+  int32 total = 2;
+  bool has_more = 3;
+}
+
+message LogStatsRequest {
+  string rule_id = 1;
+  int64 user_id = 2;
+}
+
+message LogStatsResponse {
+  int64 total = 1;
+  map<string, int32> by_level = 2;
+  map<string, int32> by_category = 3;
+  map<string, int32> by_rule = 4;
+  map<string, int32> by_service = 5;
+  int64 oldest_ts = 6;
+  int64 newest_ts = 7;
+}
+
+service LogControlService {
+  rpc Log(LogRequest) returns (StatusResponse);
+  rpc QueryLogs(QueryLogsRequest) returns (QueryLogsResponse);
+  rpc LogStats(LogStatsRequest) returns (LogStatsResponse);
+  rpc PurgeLogs(PurgeLogsRequest) returns (PurgeLogsResponse);
+}

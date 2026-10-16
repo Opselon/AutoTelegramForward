@@ -1,0 +1,554 @@
+{
+ "generated_from": "logger/redaction.py",
+ "note": "expected == Python redact(input); python_redacts records whether that pass removed the secret. The Rust engine's ingest path (redact_detail) must leak none of them.",
+ "cases": [
+  {
+   "name": "empty",
+   "input": "",
+   "expected": "",
+   "secrets": []
+  },
+  {
+   "name": "plain",
+   "input": "forwarded 42 messages to -1001234567890",
+   "expected": "forwarded 42 messages to -1001[PHONE]",
+   "secrets": []
+  },
+  {
+   "name": "kv_unquoted_password",
+   "input": "password=hunter2",
+   "expected": "password=[REDACTED]",
+   "secrets": [
+    {
+     "value": "hunter2",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "kv_colon_password",
+   "input": "password: hunter2",
+   "expected": "password: [REDACTED]",
+   "secrets": [
+    {
+     "value": "hunter2",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "kv_json_password",
+   "input": "{\"password\": \"hunter2\"}",
+   "expected": "{\"password\": \"[REDACTED]\"}",
+   "secrets": [
+    {
+     "value": "hunter2",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "kv_single_quoted",
+   "input": "password='hunter2'",
+   "expected": "password='[REDACTED]'",
+   "secrets": [
+    {
+     "value": "hunter2",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "kv_quoted_api_key",
+   "input": "\"api_key\": \"sk-live-abc123def456\"",
+   "expected": "\"api_key\": \"[REDACTED]\"",
+   "secrets": [
+    {
+     "value": "sk-live-abc123def456",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "kv_unquoted_api_key",
+   "input": "api_key: sk-live-abc123def456",
+   "expected": "api_key: [REDACTED]",
+   "secrets": [
+    {
+     "value": "sk-live-abc123def456",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "kv_space_separated",
+   "input": "api_key: \"sk-1234567890\"",
+   "expected": "api_key: \"[REDACTED]\"",
+   "secrets": [
+    {
+     "value": "sk-1234567890",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "bearer_jwt",
+   "input": "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+   "expected": "Authorization: [REDACTED] [REDACTED]",
+   "secrets": [
+    {
+     "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "bearer_lowercase",
+   "input": "authorization: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+   "expected": "authorization: [REDACTED] [REDACTED]",
+   "secrets": [
+    {
+     "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "token_keyword",
+   "input": "token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+   "expected": "token [REDACTED]",
+   "secrets": [
+    {
+     "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "bearer_too_short",
+   "input": "Bearer short",
+   "expected": "Bearer short",
+   "secrets": []
+  },
+  {
+   "name": "bot_token",
+   "input": "bot 123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw",
+   "expected": "bot [REDACTED]",
+   "secrets": [
+    {
+     "value": "123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "bot_token_kv",
+   "input": "bot_token=123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw",
+   "expected": "bot_token=[REDACTED]",
+   "secrets": [
+    {
+     "value": "123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "session_blob",
+   "input": "session AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "expected": "session [REDACTED]",
+   "secrets": [
+    {
+     "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "session_telegram",
+   "input": "telegram session 1BVtsOKlu9zZBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB==",
+   "expected": "telegram session [REDACTED]==",
+   "secrets": [
+    {
+     "value": "1BVtsOKlu9zZBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB==",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "session_string_quoted",
+   "input": "\"session_string\": \"1BVtsOKlu9zZ\"",
+   "expected": "\"session_string\": \"[REDACTED]\"",
+   "secrets": [
+    {
+     "value": "1BVtsOKlu9zZ",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "session_string_unquoted",
+   "input": "session_string=1BVtsOKlu9zZ",
+   "expected": "session_string=[REDACTED]",
+   "secrets": [
+    {
+     "value": "1BVtsOKlu9zZ",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "long_hex",
+   "input": "sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "expected": "sha [REDACTED]",
+   "secrets": [
+    {
+     "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "long_hex_upper",
+   "input": "digest ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789",
+   "expected": "digest [REDACTED]",
+   "secrets": [
+    {
+     "value": "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "phone_plus",
+   "input": "call +989123456789 now",
+   "expected": "call +989[PHONE] now",
+   "secrets": [
+    {
+     "value": "+989123456789",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "phone_local",
+   "input": "n 0912345678",
+   "expected": "n 0912[PHONE]",
+   "secrets": [
+    {
+     "value": "0912345678",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "phone_long",
+   "input": "n 9891234567890",
+   "expected": "n 9891[PHONE]",
+   "secrets": [
+    {
+     "value": "9891234567890",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "phone_16_digits_untouched",
+   "input": "x1234567890123456",
+   "expected": "x1234567890123456",
+   "secrets": []
+  },
+  {
+   "name": "chat_id_is_a_phone_shape",
+   "input": "chat -100123456789",
+   "expected": "chat -1001[PHONE]",
+   "secrets": []
+  },
+  {
+   "name": "api_credentials",
+   "input": "passwd: p@ss, api_id=12345&api_hash=deadbeef0123",
+   "expected": "passwd: [REDACTED], api_id=[REDACTED]&api_hash=[REDACTED]",
+   "secrets": [
+    {
+     "value": "p@ss",
+     "python_redacts": true
+    },
+    {
+     "value": "deadbeef0123",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "cookie",
+   "input": "cookie: abcdefghijklmnop",
+   "expected": "cookie: [REDACTED]",
+   "secrets": [
+    {
+     "value": "abcdefghijklmnop",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "x_api_key_and_cookie",
+   "input": "x-api-key=abc123; cookie=sessionid",
+   "expected": "x-api-key=[REDACTED]; cookie=[REDACTED]",
+   "secrets": [
+    {
+     "value": "abc123",
+     "python_redacts": true
+    },
+    {
+     "value": "sessionid",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "x_auth_token",
+   "input": "X-Auth-Token: abcdef1234567890",
+   "expected": "X-Auth-Token: [REDACTED]",
+   "secrets": [
+    {
+     "value": "abcdef1234567890",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "two_factor",
+   "input": "two_factor=123456 and code=999999",
+   "expected": "two_factor=[REDACTED] and code=999999",
+   "secrets": [
+    {
+     "value": "123456",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "phone_code",
+   "input": "phone_code=98765",
+   "expected": "phone_code=[REDACTED]",
+   "secrets": [
+    {
+     "value": "98765",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "login_code",
+   "input": "login_code: 987654",
+   "expected": "login_code: [REDACTED]",
+   "secrets": [
+    {
+     "value": "987654",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "refresh_token",
+   "input": "refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+   "expected": "refresh_token: [REDACTED]",
+   "secrets": [
+    {
+     "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "access_token",
+   "input": "access_token=ya29a0AfH6SMBxyz",
+   "expected": "access_token=[REDACTED]",
+   "secrets": [
+    {
+     "value": "ya29a0AfH6SMBxyz",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "secret_value",
+   "input": "secret=supersecretvalue",
+   "expected": "secret=[REDACTED]",
+   "secrets": [
+    {
+     "value": "supersecretvalue",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "auth_key",
+   "input": "auth_key=7f8e9d0c1b2a3f4e",
+   "expected": "auth_key=[REDACTED]",
+   "secrets": [
+    {
+     "value": "7f8e9d0c1b2a3f4e",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "basic_auth",
+   "input": "Authorization: basic dXNlcjpwYXNzd29yZA==",
+   "expected": "Authorization: [REDACTED] dXNlcjpwYXNzd29yZA==",
+   "secrets": [
+    {
+     "value": "dXNlcjpwYXNzd29yZA==",
+     "python_redacts": false
+    }
+   ]
+  },
+  {
+   "name": "basic_auth_caps",
+   "input": "authorization: Basic dXNlcjpwYXNzd29yZA==",
+   "expected": "authorization: [REDACTED] dXNlcjpwYXNzd29yZA==",
+   "secrets": [
+    {
+     "value": "dXNlcjpwYXNzd29yZA==",
+     "python_redacts": false
+    }
+   ]
+  },
+  {
+   "name": "proxy_auth_digest",
+   "input": "Proxy-Authorization: Digest dXNlcjpwYXNzd29yZA==",
+   "expected": "Proxy-Authorization: [REDACTED] dXNlcjpwYXNzd29yZA==",
+   "secrets": [
+    {
+     "value": "dXNlcjpwYXNzd29yZA==",
+     "python_redacts": false
+    }
+   ]
+  },
+  {
+   "name": "dsn_with_password",
+   "input": "tmpdir=/var/lib/postgresql/data password=pgpass host=db",
+   "expected": "tmpdir=/var/lib/postgresql/data password=[REDACTED] host=db",
+   "secrets": [
+    {
+     "value": "pgpass",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "nested_json",
+   "input": "{\"nested\": {\"password\": \"secret\", \"note\": \"Bearer abcdefghijklmnop\"}}",
+   "expected": "{\"nested\": {\"password\": \"[REDACTED]\", \"note\": \"Bearer [REDACTED]\"}}",
+   "secrets": [
+    {
+     "value": "secret",
+     "python_redacts": true
+    },
+    {
+     "value": "abcdefghijklmnop",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "json_detail_typical",
+   "input": "{\"rule_id\": \"r-7\", \"chat_id\": \"-1001234567890\", \"bot_token\": \"123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw\"}",
+   "expected": "{\"rule_id\": \"r-7\", \"chat_id\": \"-1001[PHONE]\", \"bot_token\": \"[REDACTED]\"}",
+   "secrets": [
+    {
+     "value": "123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "json_detail_api_hash",
+   "input": "{\"api_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"ok\": true}",
+   "expected": "{\"api_hash\": \"[REDACTED]\", \"ok\": true}",
+   "secrets": [
+    {
+     "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "unicode_text",
+   "input": "uni: پاسورد=secret éèê 日本語",
+   "expected": "uni: پاسورد=secret éèê 日本語",
+   "secrets": []
+  },
+  {
+   "name": "unicode_and_secret",
+   "input": "پیام: api_hash=deadbeef01 éè",
+   "expected": "پیام: api_hash=[REDACTED] éè",
+   "secrets": [
+    {
+     "value": "deadbeef01",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "unicode_digits_phone",
+   "input": "۹۸۷۶۵۴۳۲۱۰",
+   "expected": "۹۸۷۶[PHONE]",
+   "secrets": []
+  },
+  {
+   "name": "multiline",
+   "input": "line1 password=hunter2\nline2 token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+   "expected": "line1 password=[REDACTED]\nline2 token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+   "secrets": [
+    {
+     "value": "hunter2",
+     "python_redacts": true
+    },
+    {
+     "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+     "python_redacts": false
+    }
+   ]
+  },
+  {
+   "name": "already_redacted",
+   "input": "password=[REDACTED]",
+   "expected": "password=[REDACTED]",
+   "secrets": []
+  },
+  {
+   "name": "no_secret_long_sentence",
+   "input": "message 1234 forwarded from chat to chat without credentials",
+   "expected": "message 1234 forwarded from chat to chat without credentials",
+   "secrets": []
+  },
+  {
+   "name": "empty_kv_value",
+   "input": "password=",
+   "expected": "password=",
+   "secrets": []
+  },
+  {
+   "name": "two_secrets",
+   "input": "password=hunter2 api_key=sk-live-abcdef",
+   "expected": "password=[REDACTED] api_key=[REDACTED]",
+   "secrets": [
+    {
+     "value": "hunter2",
+     "python_redacts": true
+    },
+    {
+     "value": "sk-live-abcdef",
+     "python_redacts": true
+    }
+   ]
+  },
+  {
+   "name": "long_sentence_with_digits",
+   "input": "delivered 12 of 34 messages in 500 ms to 3 targets",
+   "expected": "delivered 12 of 34 messages in 500 ms to 3 targets",
+   "secrets": []
+  }
+ ]
+}
