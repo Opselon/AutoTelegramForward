@@ -11,8 +11,8 @@ Key facts, all derived from the repository at build time:
 - UI languages: 10 (en, fa, ru, zh, pt, uz, id, es, fr, it) with enforced 1:1 catalog parity and strict English fallback
 - Localized strings: 1168
 - CLI command groups: 24
-- gRPC RPCs: 61
-- Registered REST routes parsed from api/main.go: 81
+- gRPC RPCs: 62
+- Registered REST routes parsed from api/main.go: 82
 - Media classes handled: 12
 
 ## Start here
@@ -79,6 +79,12 @@ Key facts, all derived from the repository at build time:
 - [Media, albums & copy bypass](https://opselon.github.io/AutoTelegramForward/features/media-and-albums/): Albums and protected-channel re-upload.
 - [Backup, clone & migration](https://opselon.github.io/AutoTelegramForward/features/backup-clone-migration/): Encrypted .atf bundles.
 - [Multi-tenant security](https://opselon.github.io/AutoTelegramForward/features/multi-tenant-security/): Fail-closed isolation and encryption.
+
+### System atlas
+
+- [System atlas overview](https://opselon.github.io/AutoTelegramForward/system/): The whole repository mapped from its own source, with every claim traced.
+- [Dependency & structure atlas](https://opselon.github.io/AutoTelegramForward/system/dependencies/): Module graph, keystone ranking, cross-subsystem traffic and cycles.
+- [Connection map (3D)](https://opselon.github.io/AutoTelegramForward/system/connections/): Simulate the runtime links and replay a request path packet by packet.
 
 ### Reference
 
