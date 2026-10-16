@@ -147,6 +147,42 @@ jobs:
           cd ../..
           ls -la bin/
 
+      # The Rust logging engine is what every deployment runs — it replaced the
+      # Python logger (`logger/main.py`, deleted). Pin the toolchain exactly like
+      # the CI Rust job (Cargo.toml declares rust-version 1.90) and bundle the
+      # binary into the frozen CLI, so `atf logger` / local dev mode work on a
+      # release artifact with no cargo toolchain present.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust/logger
+      # build.rs generates the gRPC code with prost, which shells out to protoc.
+      - name: Install protoc (Rust logger build.rs)
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends protobuf-compiler
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            brew install protobuf
+          else
+            choco install protoc -y
+          fi
+          protoc --version
+
+      - name: Build Rust Logger Engine
+        shell: bash
+        run: |
+          cargo build --release --manifest-path rust/logger/Cargo.toml
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp rust/logger/target/release/atf-logger.exe bin/atf-logger.exe
+          else
+            cp rust/logger/target/release/atf-logger bin/atf-logger
+          fi
+          ls -la bin/
+
       - name: Install PyInstaller + requirements
         run: |
           python -m pip install --upgrade pip
@@ -178,6 +214,7 @@ jobs:
             --add-data "config.example.yaml:." \
             --add-binary "bin/atf-api:." \
             --add-binary "bin/atf-web-backend:." \
+            --add-binary "bin/atf-logger:." \
             --hidden-import "pyrogram" \
             --hidden-import "pyrogram.session" \
             --hidden-import "pyrogram.connection" \
@@ -191,6 +228,32 @@ jobs:
             atf.py
           chmod +x dist/atf
           ./dist/atf version
+          # The artifact must actually RUN its bundled Rust engine: the freeze
+          # above put `atf-logger` in sys._MEIPASS, and this runner has no cargo
+          # project, so a healthy engine proves the bundle is complete. The
+          # engine's local-dev metrics port is 9108 (9109 is the container's).
+          rm -rf dist/data
+          ./dist/atf logger > logger-smoke.log 2>&1 &
+          smoke_pid=$!
+          smoke_ok=""
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9108/healthz >/dev/null 2>&1; then smoke_ok=1; break; fi
+            sleep 1
+          done
+          kill "$smoke_pid" 2>/dev/null || true
+          wait "$smoke_pid" 2>/dev/null || true
+          # Match the engine's own argv, never this step's command line.
+          pkill -f "atf-logger --db" 2>/dev/null || true
+          if [ -z "$smoke_ok" ]; then
+            echo "::error::the frozen artifact did not start its bundled Rust logger"
+            cat logger-smoke.log || true
+            exit 1
+          fi
+          if [ ! -f dist/data/atf_logs_rust.db ]; then
+            echo "::error::the bundled engine did not create its SQLite archive"
+            exit 1
+          fi
+          echo "bundled Rust logger healthy on :9108 and wrote its archive"
           cp dist/atf "assets/atf-${{ matrix.suffix }}"
 
       - name: Freeze single-file CLI (Windows)
@@ -205,6 +268,7 @@ jobs:
             --add-data "config.example.yaml;." \
             --add-binary "bin/atf-api.exe;." \
             --add-binary "bin/atf-web-backend.exe;." \
+            --add-binary "bin/atf-logger.exe;." \
             --hidden-import "pyrogram" \
             --hidden-import "pyrogram.session" \
             --hidden-import "pyrogram.connection" \
@@ -228,6 +292,7 @@ jobs:
             --add-data "logger:logger" \
             --add-data "proto:proto" \
             --add-data "config.example.yaml:." \
+            --add-binary "bin/atf-logger:." \
             --hidden-import "pyrogram" \
             --hidden-import "pyrogram.session" \
             --hidden-import "pyrogram.connection" \
@@ -250,6 +315,7 @@ jobs:
             --add-data "logger;logger" `
             --add-data "proto;proto" `
             --add-data "config.example.yaml;." `
+            --add-binary "bin/atf-logger.exe;." `
             --hidden-import "pyrogram" `
             --hidden-import "pyrogram.session" `
             --hidden-import "pyrogram.connection" `
@@ -718,6 +784,20 @@ jobs:
           docker compose logs --tail=100
           exit 1
 
+      - name: Prove the logger is the Rust engine and it ingests end-to-end
+        # A stack that answers /healthz is not enough: the logging service must
+        # be the Rust engine (the Python daemon is gone) and a real gRPC write
+        # must survive all the way to storage and back out of a query.
+        shell: bash
+        run: |
+          docker compose exec -T logger sh -c 'command -v atf-logger && ! command -v python3'
+          docker compose exec -T logger curl -fsS http://127.0.0.1:9109/healthz
+          docker compose exec -T logger curl -fsS http://127.0.0.1:9109/readyz
+          docker compose exec -T logger curl -fsS http://127.0.0.1:9109/metrics | grep -q '^atf_logger_events_'
+          # 24 contract checks through Core's own stubs and producer class.
+          docker compose exec -e ATF_LOGGER_ADDR=logger:50052 -T core python - \
+            < scripts/acceptance/logger_acceptance.py
+
       - name: Compose down (always)
         if: always()
         shell: bash
@@ -842,7 +922,7 @@ jobs:
           AutoTelegramForward is a high-performance Telegram MTProto forwarding and routing suite engineered with clean microservice boundaries. Every platform release is a self-contained, native single executable that embeds and orchestrates all four decoupled services with zero external dependencies (no Python, Go, Rust, Node.js, or compiler toolchains required on host systems):
 
           1. **Python Core Engine (:6001)** — Telegram MTProto client pool, rule engine, smart routing, link sanitization, and multi-provider AI text transformations.
-          2. **Python Logger Service (:6002)** — Telemetry, queryable structured logs with dedicated SQLite storage.
+          2. **Rust Logger Engine (:6002)** — High-throughput gRPC log ingestion with secret redaction, queryable structured logs, and a dedicated SQLite archive.
           3. **Go REST API (:8080)** — Production control-plane, OpenAPI REST endpoints for rules, sessions, and telemetry.
           4. **Rust Axum Web Gateway & React Dashboard (:8088)** — Zero-dependency web server embedding the React Single Page App, providing security headers, high-throughput reverse proxying to the Go API, and health metrics.
 
