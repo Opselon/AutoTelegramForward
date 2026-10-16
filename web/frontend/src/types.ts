@@ -415,6 +415,45 @@ export interface ServicesHealthResponse {
   services: ServiceHealth[]
 }
 
+/**
+ * One line of the server's configuration contract.
+ *
+ * `set` is a boolean by construction: /api/system/env reports *whether* a key is
+ * configured and never its value, so a dashboard can display the contract
+ * without a token ever reaching the browser.
+ */
+export interface EnvCheck {
+  key: string
+  level: 'required' | 'recommended' | 'optional'
+  set: boolean
+  reason: string
+  hint: string
+}
+
+export interface EnvContract {
+  ok: boolean
+  deployment: string
+  checks: EnvCheck[]
+  missing_required: string[]
+  missing_recommended: string[]
+}
+
+/** GET /api/system/setup — readiness verdict + evidence, shared by CLI, web, mobile. */
+export interface SetupReport {
+  ready: boolean
+  time: string
+  deployment: string
+  product_version: string
+  api_version: string
+  commit_sha: string
+  features: string[]
+  checks: EnvCheck[]
+  services: ServiceHealth[]
+  missing_required: string[]
+  missing_recommended: string[]
+  next_steps: string[]
+}
+
 export interface SimulateRequest {
   rule_id?: string
   test_text: string

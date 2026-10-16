@@ -43,6 +43,13 @@ jobs:
         # to English users in production, October 2026).
         run: python scripts/audit_cross_language.py
 
+      - name: API contract audit
+        # The web dashboard, the mobile app and the Go handler must agree on
+        # every field of the system payloads. A renamed field compiles on both
+        # sides and simply renders blank, so the shared fixtures in
+        # contracts/fixtures/ are the reference for all three.
+        run: python scripts/audit_api_contract.py
+
   go-tests:
     runs-on: ubuntu-latest
     steps:
@@ -84,6 +91,31 @@ jobs:
       # needing rustc >= 1.86). Keep this so the failure surfaces pre-merge.
       - name: Build web image
         run: docker build -f Dockerfile.web -t atf-web .
+
+  web-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web/frontend
+        run: npm ci
+
+      - name: Typecheck
+        # The build alone is not enough: vite transpiles without checking, so a
+        # field renamed in types.ts would ship and only fail at runtime.
+        working-directory: web/frontend
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: web/frontend
+        run: npm run build
 
   flutter:
     runs-on: ubuntu-latest

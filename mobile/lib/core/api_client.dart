@@ -674,6 +674,26 @@ class ApiClient {
     listKey: 'services',
   );
 
+  /// The setup/readiness surface added in v19: verdict, version block, the
+  /// configuration contract (booleans only) and live per-service probes.
+  ///
+  /// Advisory by construction: a server predating this endpoint returns 404, and
+  /// callers treat that as "no panel", not as a broken deployment.
+  Future<SetupReport> systemSetup({bool probe = true}) => _request(
+    method: 'GET',
+    path: '/api/system/setup${probe ? '' : '?probe=0'}',
+    fromJson: SetupReport.fromJson,
+    retryable: true,
+  );
+
+  /// Contract only, no probes - the cheap call for refresh-on-focus.
+  Future<Map<String, dynamic>> systemEnv() => _request(
+    method: 'GET',
+    path: '/api/system/env',
+    fromJson: (m) => m,
+    retryable: true,
+  );
+
   /// Preflight diagnostics: the server-side "catch problems early" pass,
   /// returning a graded report of configuration defects with remediation hints.
   Future<DiagnosticsReport> diagnostics() => _request(

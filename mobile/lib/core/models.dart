@@ -795,6 +795,115 @@ class ServiceHealth {
   );
 }
 
+/// One entry of the server's configuration contract.
+///
+/// `set` is a boolean **by design**: `/api/system/env` reports whether a key is
+/// configured and never its value, so a token can never be read back out of the
+/// API by a client (or by a screenshot of this screen).
+@immutable
+class EnvCheck {
+  const EnvCheck({
+    required this.key,
+    required this.level,
+    required this.set,
+    this.reason = '',
+    this.hint = '',
+  });
+
+  final String key;
+
+  /// `required`, `recommended` or `optional`.
+  final String level;
+  final bool set;
+  final String reason;
+  final String hint;
+
+  bool get isRequired => level == 'required';
+
+  factory EnvCheck.fromJson(Map<String, dynamic> json) => EnvCheck(
+    key: json['key'] as String? ?? '',
+    level: json['level'] as String? ?? 'optional',
+    set: json['set'] as bool? ?? false,
+    reason: json['reason'] as String? ?? '',
+    hint: json['hint'] as String? ?? '',
+  );
+}
+
+/// The readiness report: `GET /api/system/setup`.
+///
+/// This is the machine-readable answer to "is this deployment actually set up?"
+/// that the CLI wizard, the web dashboard and the mobile client all read, so a
+/// new operator sees the same verdict on every surface.
+///
+/// Parsing is deliberately lenient: every optional section defaults to empty, so
+/// an older server that omits `features` or `checks` degrades to a smaller panel
+/// instead of throwing a `TypeError` and blanking the screen.
+@immutable
+class SetupReport {
+  const SetupReport({
+    required this.ready,
+    required this.time,
+    this.deployment = '',
+    this.productVersion = '',
+    this.apiVersion = '',
+    this.commitSha = '',
+    this.features = const [],
+    this.checks = const [],
+    this.services = const [],
+    this.missingRequired = const [],
+    this.missingRecommended = const [],
+    this.nextSteps = const [],
+  });
+
+  final bool ready;
+  final String time;
+  final String deployment;
+  final String productVersion;
+  final String apiVersion;
+  final String commitSha;
+  final List<String> features;
+  final List<EnvCheck> checks;
+  final List<ServiceHealth> services;
+  final List<String> missingRequired;
+  final List<String> missingRecommended;
+  final List<String> nextSteps;
+
+  int get onlineServices => services.where((s) => s.online).length;
+
+  bool get hasContractGaps => missingRequired.isNotEmpty;
+
+  factory SetupReport.fromJson(Map<String, dynamic> json) => SetupReport(
+    ready: json['ready'] as bool? ?? false,
+    time: json['time'] as String? ?? '',
+    deployment: json['deployment'] as String? ?? '',
+    productVersion: json['product_version'] as String? ?? '',
+    apiVersion: json['api_version'] as String? ?? '',
+    commitSha: json['commit_sha'] as String? ?? '',
+    features:
+        (json['features'] as List?)?.whereType<String>().toList() ?? const [],
+    checks:
+        (json['checks'] as List?)
+            ?.whereType<Map>()
+            .map((e) => EnvCheck.fromJson(e.cast<String, dynamic>()))
+            .toList() ??
+        const [],
+    services:
+        (json['services'] as List?)
+            ?.whereType<Map>()
+            .map((e) => ServiceHealth.fromJson(e.cast<String, dynamic>()))
+            .toList() ??
+        const [],
+    missingRequired:
+        (json['missing_required'] as List?)?.whereType<String>().toList() ??
+        const [],
+    missingRecommended:
+        (json['missing_recommended'] as List?)?.whereType<String>().toList() ??
+        const [],
+    nextSteps:
+        (json['next_steps'] as List?)?.whereType<String>().toList() ?? const [],
+  );
+}
+
 @immutable
 class LogEntry {
   const LogEntry({

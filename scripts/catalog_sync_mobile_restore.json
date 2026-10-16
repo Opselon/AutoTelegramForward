@@ -1,0 +1,17 @@
+{
+ "incompatible_server": {
+  "en": "This server is running an older AutoTelegramForward release. Update it to {version} or newer.",
+  "fa": "این سرور نسخه قدیمی‌تری از AutoTelegramForward را اجرا می‌کند. آن را به {version} یا جدیدتر به‌روز کنید.",
+  "pt": "Este servidor está a executar uma versão mais antiga do AutoTelegramForward. Atualize para {version} ou mais recente.",
+  "uz": "Bu server AutoTelegramForward’ning eski versiyasini ishlatmoqda. Uni {version} yoki yangiroq versiyaga yangilang.",
+  "ru": "Этот сервер работает на более старой версии AutoTelegramForward. Обновите её до {version} или новее.",
+  "id": "Server ini menjalankan rilis AutoTelegramForward yang lebih lama. Perbarui ke {version} atau lebih baru.",
+  "es": "Este servidor ejecuta una versión anterior de AutoTelegramForward. Actualízalo a {version} o superior.",
+  "fr": "Ce serveur exécute une version plus ancienne d'AutoTelegramForward. Mettez-la à jour vers {version} ou plus récente.",
+  "it": "Questo server esegue una versione precedente di AutoTelegramForward. Aggiornala a {version} o successiva.",
+  "zh": "此服务器运行的是较旧的 AutoTelegramForward 版本。请更新到 {version} 或更高版本。"
+ },
+ "server_probe_unreachable": {
+  "en": "Cannot reach the server. Check the address and your network."
+ }
+}

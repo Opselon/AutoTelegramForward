@@ -24,6 +24,7 @@ class AppState extends ChangeNotifier {
     required this.env,
     required this.tokenStore,
     required this.preferenceStore,
+    this.transportOverride,
   }) : _serverUrl = env.defaultBaseUrl,
        _status = SessionStatus.unknown,
        _themeMode = ThemeMode.system,
@@ -32,6 +33,11 @@ class AppState extends ChangeNotifier {
   final AppEnv env;
   final SecureTokenStore tokenStore;
   final PreferenceStore preferenceStore;
+
+  /// Test seam: a screen that builds its own client ([buildApiClient] with no
+  /// explicit transport) still needs to be drivable from a widget test with a
+  /// canned server. Null in production, where `ioTransport` is used.
+  final HttpTransport? transportOverride;
 
   String _serverUrl;
   String? _token;
@@ -223,7 +229,7 @@ class AppState extends ChangeNotifier {
     final client = ApiClient(
       baseUrl: _serverUrl,
       tokenStore: tokenStore,
-      transport: transport ?? ioTransport(kHttpClient),
+      transport: transport ?? transportOverride ?? ioTransport(kHttpClient),
     );
     final currentToken = _token;
     if (currentToken != null && currentToken.isNotEmpty) {

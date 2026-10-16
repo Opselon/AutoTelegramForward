@@ -45,6 +45,7 @@ import { AuditEventsPanel } from './components/AuditEventsPanel'
 import { ClientSettings } from './components/ClientSettings'
 import { TaskOverviewModal } from './components/TaskOverviewModal'
 import { DiagnosticsPanel } from './components/DiagnosticsPanel'
+import { SystemPanel } from './components/SystemPanel'
 import type {
   ForwardRule,
   SaveRuleRequest,
@@ -86,7 +87,7 @@ export function App() {
   useEffect(() => {
     try { localStorage.setItem('atf_lang', lang) } catch { /* ignore */ }
   }, [lang])
-  const [activeTab, setActiveTab] = useState<'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('rules')
+  const [activeTab, setActiveTab] = useState<'system' | 'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('system')
   const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(null)
   const [rules, setRules] = useState<ForwardRule[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
@@ -1132,6 +1133,22 @@ export function App() {
         }}
       >
         <button
+          onClick={() => setActiveTab('system')}
+          className="btn"
+          style={{
+            background: activeTab === 'system' ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+            color: activeTab === 'system' ? '#38bdf8' : '#94a3b8',
+            border: activeTab === 'system' ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid transparent',
+            fontWeight: activeTab === 'system' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Server size={15} />
+          <span>{isRtl ? 'وضعیت سیستم' : 'System'}</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('rules')}
           className="btn"
           style={{
@@ -1326,6 +1343,9 @@ export function App() {
           </button>
         )}
       </div>
+
+      {/* TAB 0: SYSTEM — readiness, topology, contract */}
+      {activeTab === 'system' && <SystemPanel isRtl={isRtl} />}
 
       {/* TAB 1: RULES & ROUTES */}
       {activeTab === 'rules' && (
