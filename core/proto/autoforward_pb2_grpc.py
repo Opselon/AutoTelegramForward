@@ -1797,6 +1797,11 @@ class SystemStatusControlServiceStub:
                 request_serializer=autoforward__pb2.LogPolicyRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.LogPolicyResponse.FromString,
                 _registered_method=True)
+        self.SetLogPolicy = channel.unary_unary(
+                '/autoforward.SystemStatusControlService/SetLogPolicy',
+                request_serializer=autoforward__pb2.SetLogPolicyRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.LogPolicyResponse.FromString,
+                _registered_method=True)
 
 
 class SystemStatusControlServiceServicer:
@@ -1816,6 +1821,15 @@ class SystemStatusControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SetLogPolicy(self, request, context):
+        """Additive: lets an operator change the policy Core enforces, validated and
+        persisted by the process that has to live with the value. The answer is the
+        policy now in force, read back from the instance the emitter uses.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SystemStatusControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -1827,6 +1841,11 @@ def add_SystemStatusControlServiceServicer_to_server(servicer, server):
             'GetLogPolicy': grpc.unary_unary_rpc_method_handler(
                     servicer.GetLogPolicy,
                     request_deserializer=autoforward__pb2.LogPolicyRequest.FromString,
+                    response_serializer=autoforward__pb2.LogPolicyResponse.SerializeToString,
+            ),
+            'SetLogPolicy': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetLogPolicy,
+                    request_deserializer=autoforward__pb2.SetLogPolicyRequest.FromString,
                     response_serializer=autoforward__pb2.LogPolicyResponse.SerializeToString,
             ),
     }
@@ -1883,6 +1902,33 @@ class SystemStatusControlService:
             target,
             '/autoforward.SystemStatusControlService/GetLogPolicy',
             autoforward__pb2.LogPolicyRequest.SerializeToString,
+            autoforward__pb2.LogPolicyResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetLogPolicy(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.SystemStatusControlService/SetLogPolicy',
+            autoforward__pb2.SetLogPolicyRequest.SerializeToString,
             autoforward__pb2.LogPolicyResponse.FromString,
             options,
             channel_credentials,

@@ -16,6 +16,7 @@ from ...application.backup_service import (  # noqa: E402
     encrypt_bundle,
     serialize_bundle,
 )
+from ...application.log_policy import LogPolicyError  # noqa: E402
 
 
 def _status(success: bool, message: str = "", error_code: str = "") -> pb.StatusResponse:
@@ -1934,7 +1935,7 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
 
 class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):
     def __init__(self, sessions, rules, pipeline, bot_username: str, version: str,
-                 log_policy=None) -> None:
+                 log_policy=None, log_policy_store=None, log_client=None) -> None:
         self._sessions = sessions
         self._rules = rules
         self._pipeline = pipeline
@@ -1945,6 +1946,22 @@ class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):
         # servicer constructible in tests that do not boot the logging stack;
         # a missing policy is reported as unavailable rather than as a zero.
         self._log_policy = log_policy
+        # Where a change is persisted, so it outlives a restart. Absent means
+        # this build holds the policy in memory, which a change reports as
+        # persisted=false rather than pretending otherwise.
+        self._log_policy_store = log_policy_store
+        # The same client the rest of Core emits through, used for the audit
+        # record of a change: the trail goes through the policy being changed.
+        self._log_client = log_client
+
+    def attach_log_client(self, log_client) -> None:
+        """Late-bind the Logger client used for the audit record of a change.
+
+        The servicer is registered before the client is built (the client needs
+        the policy this servicer reports), so the wiring is completed here rather
+        than by rebuilding the servicer and re-registering it.
+        """
+        self._log_client = log_client
 
     async def GetSystemStats(self, request, context):
         s = self._pipeline.stats
@@ -1982,6 +1999,76 @@ class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):
                 available=False,
                 reason="no collection policy attached to this core process",
             )
+        return self._policy_response(policy)
+
+    async def SetLogPolicy(self, request, context):
+        """Change the policy Core enforces, or refuse the request intact.
+
+        The change is validated and persisted *here*, by the process that has to
+        live with the value: a control plane cannot know whether a level name
+        means what its caller thinks it means, and a policy the producer
+        interpreted differently would be worse than no policy at all. A rejected
+        request changes nothing, and the answer is the policy that is in force
+        afterwards — read back from the very instance the emitter consults — plus
+        whether that change is durable, because "applied but lost on restart" and
+        "saved" are different promises.
+        """
+        policy = self._log_policy
+        if policy is None:
+            return pb.LogPolicyResponse(
+                available=False,
+                reason="no collection policy attached to this core process",
+            )
+
+        actor = (request.actor or "").strip()
+        correlation = (request.correlation_id or "").strip()
+        try:
+            policy.reconfigure(
+                levels=list(request.levels) if request.levels else None,
+                verbose_rate_per_second=(
+                    float(request.verbose_rate_per_second)
+                    if request.verbose_rate_per_second
+                    else None
+                ),
+                diagnostic_seconds=int(request.diagnostic_seconds or 0) or None,
+                disable_diagnostics=bool(request.disable_diagnostics),
+            )
+        except LogPolicyError as exc:
+            self._audit_policy_change(
+                actor, applied=False, detail={"error": str(exc)}, correlation_id=correlation
+            )
+            response = self._policy_response(policy)
+            response.applied = False
+            response.persisted = False
+            response.reason = str(exc)
+            return response
+
+        persisted = True
+        if self._log_policy_store is None:
+            # No store attached means this build keeps the policy in memory:
+            # report it as volatile rather than claiming durability it lacks.
+            persisted = False
+        else:
+            persisted = bool(self._log_policy_store.save(policy.export_state()))
+
+        response = self._policy_response(policy)
+        response.applied = True
+        response.persisted = persisted
+        self._audit_policy_change(
+            actor,
+            applied=True,
+            detail={
+                "configured_levels": list(response.configured_levels),
+                "verbose_rate_per_second": response.verbose_rate_per_second,
+                "diagnostic_active": response.diagnostic_active,
+                "persisted": persisted,
+            },
+            correlation_id=correlation,
+        )
+        return response
+
+    def _policy_response(self, policy) -> "pb.LogPolicyResponse":
+        """The enforced policy, as the control plane and the audit trail see it."""
         snap = policy.snapshot()
         return pb.LogPolicyResponse(
             available=True,
@@ -1996,6 +2083,37 @@ class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):
             suppressed_rate=int(snap.get("suppressed_rate") or 0),
             diagnostic_activations=int(snap.get("diagnostic_activations") or 0),
         )
+
+    def _audit_policy_change(
+        self, actor: str, applied: bool, detail: dict, correlation_id: str = ""
+    ) -> None:
+        """Record an administrative policy change through the policy it changed.
+
+        The event type starts with `admin.`, which the policy never suppresses:
+        a threshold is a noise control, and "who turned collection off" is
+        exactly the kind of fact it must not be able to hide.
+        """
+        log_client = self._log_client
+        if log_client is None:
+            return
+        payload = {"actor": actor or "unattributed", "applied": applied}
+        payload.update(detail)
+        try:
+            log_client.log(
+                "WARN",
+                "core",
+                "admin",
+                f"log collection policy change {'applied' if applied else 'rejected'}"
+                + (f" by {actor}" if actor else ""),
+                payload,
+                correlation_id=correlation_id,
+                # Naming the event keeps it outside every threshold: the policy
+                # must not be able to suppress the record of its own change.
+                event_type="admin.log_policy.changed",
+                reason_code="ADMIN_REQUIRED",
+            )
+        except Exception as exc:  # never fail a policy change on audit trouble
+            logger.warning("[PIPELINE:log_policy] audit emit failed: %s", exc)
 
 
 class BackupControlServicer(pb_grpc.BackupControlServiceServicer):

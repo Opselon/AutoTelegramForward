@@ -15,6 +15,9 @@ import type {
   GatewaySystemInfo,
   LogItem,
   LogPage,
+  LogPolicyResponse,
+  LogPolicyUpdateRequest,
+  LogPolicyUpdateResponse,
   LogQuery,
   LogStats,
   LoginAccountResponse,
@@ -470,6 +473,17 @@ export const api = {
   purgeLogs: (req: PurgeLogsRequest) =>
     fetchJson<PurgeLogsResponse>(`${API_BASE}/logs/purge`, {
       method: 'POST',      body: JSON.stringify(req),
+    }),
+  /** The collection policy each producer is enforcing, read from each process. */
+  getLogPolicy: () => fetchJson<LogPolicyResponse>(`${API_BASE}/logs/policy`),
+  /**
+   * Change the policy atf-core enforces (admin-only). The response carries the
+   * state read back from the core, not an echo of the request.
+   */
+  updateLogPolicy: (req: LogPolicyUpdateRequest) =>
+    fetchJson<LogPolicyUpdateResponse>(`${API_BASE}/logs/policy`, {
+      method: 'PUT',
+      body: JSON.stringify(req),
     }),
   // Centralized audit events (observability platform) — tenant-scoped server-side.
   queryAuditEvents: async (params?: QueryAuditEventsParams): Promise<QueryAuditEventsResponse> => {

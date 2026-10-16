@@ -122,14 +122,27 @@ not the other.
 
 ### Who owns the effective policy (and what is still missing)
 
-Today **no process owns it**: each producer reads its own environment at
-construction, so there is no persisted policy, no version, no propagation to a
-running process and no staleness detection. A change means an environment update
-and a restart of the affected service. That is a limitation of the current state,
-not a design — the intended owner is the Rust Logger (persisted, versioned,
-published), with producers caching the last validated version and reporting its age
-so a stale cache is visible rather than silently effective. Until that exists,
-nothing may describe the policy as centrally managed.
+Each producer still reads its own environment at construction, and **no process
+owns a system-wide policy**: there is no version, no propagation between
+processes, and no staleness detection. What now exists is narrower and should be
+described that way — **a producer can change its own effective policy at runtime**:
+
+* `atf-core` owns its policy in-process, validates a requested change *before*
+  mutating anything, applies it as a single atomic swap (a concurrent decision
+  sees the whole old or the whole new policy, never a half-applied one), and
+  persists it through its own `app_settings` store so it survives a restart.
+  The environment stays the baseline; a stored override sits on top; a stale or
+  invalid stored value is ignored rather than fatal.
+* Only the process that enforces a policy may report or apply it. A control plane
+  cannot infer another process's enforcement state from its own configuration, so
+  the API forwards the change over the internal `SetLogPolicy` RPC and then reads
+  the result back. A change the core refuses is reported with the core's own
+  reason and applied nowhere.
+
+A change means an environment update **or** an admin-only runtime change to that
+one producer; it is still not a centrally managed policy, and nothing may
+describe it as one until the Rust Logger owns a persisted, versioned policy that
+producers cache and report the age of.
 
 `LogPolicy.snapshot()` consequently exposes only **process-local** counters: a
 number it reports is what *that* process decided, never a system total.
@@ -139,11 +152,37 @@ number it reports is what *that* process decided, never a system total.
 | Route | Auth | Behaviour |
 | --- | --- | --- |
 | `GET /api/logs/policy` | any authenticated caller | Effective policy per producer, each scope labelled `api` / `core`, with the scope's counters and an explicit `counter_scope` string |
+| `PUT /api/logs/policy` | **admin only** | Changes the policy `atf-core` enforces, then answers with the state read back from that process |
 | `GET /api/logs/health` | any authenticated caller | Per-service logging reachability plus record age, so "quiet" can be told apart from "not being fed" |
 | `POST /api/logs/diagnostics/start` | **admin only** | Opens one bounded window (default 600 s, hard maximum 3600 s) on this API's producer policy |
 | `POST /api/logs/diagnostics/stop` | **admin only** | Closes it early |
 
-Four properties the routes are built around, each with a test:
+The mutation route carries five rules, each pinned by a test:
+
+1. **The change is validated before anything is mutated.** A rejected request is a
+   pure no-op: unknown level names are an error rather than being coerced (a typo
+   like `WARNN` must not silently start collecting every `INFO` event — the exact
+   high-volume path the default policy exists to suppress), a negative rate or a
+   diagnostic window outside `1..3600` is refused, and nothing reaches the store.
+2. **The answer describes the process, not the request.** The handler reads the
+   *enforced* policy first, merges the requested change onto it, applies it and
+   reads back, so the response cannot revert a field by assuming a baseline.
+3. **A refusal is reported as a refusal.** When core declines, the API returns
+   core's own reason and claims nothing was applied.
+4. **`persisted: false` is a distinct promise.** A change that is in force but
+   could not be saved says so, because "until the next restart" and "saved" are
+   different guarantees and only one of them survives a restart.
+5. **The evidence cannot be suppressed by the change.** Every applied or refused
+   change emits `admin.log_policy.changed` through the same policy it alters;
+   `admin.*` is security-relevant and exempt from the threshold, so "who turned
+   collection off" stays visible when collection is off.
+
+Reads are authenticated but not admin-only: the answer describes *this* API
+process's own configuration, not another tenant's data. Mutations are admin-only
+via the existing server-verified `RequireAdmin`, which reads the identity Core
+validated — never a client-supplied `is_admin`.
+
+The read and diagnostics routes carry four further properties, each with a test:
 
 1. **A scope that cannot be read is reported unavailable, not zero.**
    `atf-core` enforces its own policy in its own process, so the API asks it over

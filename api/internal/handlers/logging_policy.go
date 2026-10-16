@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"autoforward/internal/middleware"
@@ -37,7 +38,22 @@ const (
 	// button (or a retrying client) cannot keep resetting the expiry and leave a
 	// window open indefinitely.
 	diagnosticRestartGuard = 5 * time.Second
+	// maxLogPolicyBodyBytes caps a policy change body. The policy is a handful of
+	// scalars and a seven-name list, so anything larger is a mistake or an
+	// attempt; refusing it early keeps the parse bounded.
+	maxLogPolicyBodyBytes = 4096
 )
+
+// logPolicyUpdateRequest is an operator's change. Every field is optional so one
+// thing can be changed without restating the rest, and `nil` means "leave this
+// alone" — which is why the handler refuses a body with no fields at all rather
+// than answering success to a request that did nothing.
+type logPolicyUpdateRequest struct {
+	Levels               *[]string `json:"levels"`
+	VerboseRatePerSecond *float64  `json:"verbose_rate_per_second"`
+	DiagnosticSeconds    *int      `json:"diagnostic_seconds"`
+	DisableDiagnostics   *bool     `json:"disable_diagnostics"`
+}
 
 type policyCounters struct {
 	Emitted              int64 `json:"emitted"`
@@ -144,6 +160,158 @@ func (h *Handlers) corePolicyScope(r *http.Request, now time.Time) policyScope {
 	return scope
 }
 
+// LogPolicyUpdate applies an operator's change to atf-core's collection policy.
+//
+// The write path is deliberately longer than "forward the request": the change is
+// merged onto what the core reports it is *enforcing* (never onto an assumed
+// baseline, which is how one change silently reverts another field), the core is
+// asked to apply it, and then the policy is read back so the answer describes the
+// process rather than the request. A change the core refuses is reported with the
+// core's own reason and applied nowhere.
+func (h *Handlers) LogPolicyUpdate(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC()
+	actor := actorID(r)
+
+	if h.c == nil || h.c.System == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "no atf-core gRPC client configured; the core policy cannot be changed",
+		})
+		return
+	}
+
+	var body logPolicyUpdateRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLogPolicyBodyBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "body must be JSON of the form " +
+				`{"levels":["WARN","ERROR"],"verbose_rate_per_second":20,"diagnostic_seconds":600,"disable_diagnostics":false}`,
+		})
+		return
+	}
+	if body.Levels == nil && body.VerboseRatePerSecond == nil &&
+		body.DiagnosticSeconds == nil && body.DisableDiagnostics == nil {
+		// An empty body that quietly succeeds would let a caller believe it changed
+		// something. Say what is missing instead.
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error":  "no policy field supplied",
+			"fields": []string{"levels", "verbose_rate_per_second", "diagnostic_seconds", "disable_diagnostics"},
+		})
+		return
+	}
+	if body.DiagnosticSeconds != nil && *body.DiagnosticSeconds > 0 &&
+		body.DisableDiagnostics != nil && *body.DisableDiagnostics {
+		// The core refuses this too; answering before the round trip keeps the
+		// contradiction and the refusal in one place for the caller.
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "diagnostic_seconds and disable_diagnostics are mutually exclusive",
+		})
+		return
+	}
+
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+
+	// Read first: the change is a merge onto the policy the core is enforcing, so
+	// an unreadable baseline must refuse the write rather than guess at it.
+	current, err := h.c.System.GetLogPolicy(ctx, &pb.LogPolicyRequest{})
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{
+			"error": "could not read the policy atf-core is enforcing: " + err.Error(),
+		})
+		return
+	}
+	if !current.Available {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error":  "atf-core reports no collection policy to change",
+			"reason": current.Reason,
+		})
+		return
+	}
+
+	desired := &pb.SetLogPolicyRequest{
+		Levels:               current.ConfiguredLevels,
+		VerboseRatePerSecond: current.VerboseRatePerSecond,
+		Actor:                strconv.FormatInt(actor, 10),
+		CorrelationId:        middleware.CorrelationIDFromContext(r.Context()),
+	}
+	if body.Levels != nil {
+		desired.Levels = *body.Levels
+	}
+	if body.VerboseRatePerSecond != nil {
+		desired.VerboseRatePerSecond = *body.VerboseRatePerSecond
+	}
+	if body.DiagnosticSeconds != nil {
+		desired.DiagnosticSeconds = int32(*body.DiagnosticSeconds)
+	}
+	if body.DisableDiagnostics != nil {
+		desired.DisableDiagnostics = *body.DisableDiagnostics
+	}
+
+	before := policyChangeSummary(current)
+	resp, err := h.c.System.SetLogPolicy(ctx, desired)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{
+			"error": "atf-core could not be asked to change its policy: " + err.Error(),
+		})
+		return
+	}
+	if !resp.Available {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error":  "atf-core reports no collection policy to change",
+			"reason": resp.Reason,
+		})
+		return
+	}
+	if !resp.Applied {
+		// The producer refused it, so the policy is unchanged. Recording the
+		// refusal is the point: an operator who cannot turn collection off is
+		// something the trail should show.
+		h.auditAction(r, actor, "logging.policy.update", map[string]any{
+			"result": "rejected", "error": resp.Reason, "before": before,
+		})
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error":   resp.Reason,
+			"applied": false,
+			"policy":  h.corePolicyScope(r, now),
+		})
+		return
+	}
+
+	// Read back rather than describing the request: this is what the core is
+	// enforcing now, and it is the only answer that can be trusted after a change.
+	scope := h.corePolicyScope(r, now)
+	h.auditAction(r, actor, "logging.policy.update", map[string]any{
+		"result":    "applied",
+		"before":    before,
+		"after":     policyChangeSummary(resp),
+		"persisted": resp.Persisted,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"applied":   true,
+		"persisted": resp.Persisted,
+		"before":    before,
+		"scope":     scope,
+		"notes": []string{
+			"the reported policy is read back from the core process after the change",
+			"persisted=false means the change is in force now but will not survive a restart",
+		},
+	})
+}
+
+// policyChangeSummary is the part of a policy an operator compares across a
+// change: the configured levels, the rate ceiling and the diagnostic window.
+func policyChangeSummary(resp *pb.LogPolicyResponse) map[string]any {
+	return map[string]any{
+		"configured_levels":       resp.ConfiguredLevels,
+		"verbose_rate_per_second": resp.VerboseRatePerSecond,
+		"diagnostic_active":       resp.DiagnosticActive,
+		"diagnostic_until":        resp.DiagnosticUntil,
+	}
+}
+
 func (h *Handlers) apiPolicyScope(now time.Time) policyScope {
 	if h.Policy == nil {
 		return policyScope{
@@ -155,6 +323,7 @@ func (h *Handlers) apiPolicyScope(now time.Time) policyScope {
 		}
 	}
 	snapshot := h.Policy.Snapshot()
+
 	scope := policyScope{
 		Available:            true,
 		Scope:                "atf-api producer policy",

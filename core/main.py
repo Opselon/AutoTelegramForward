@@ -25,6 +25,7 @@ from core.domain.services import FilterEngine, RoutingPolicy  # noqa: E402
 from core.infrastructure.ai.providers import AIProviderFactory  # noqa: E402
 from core.infrastructure.grpc_server import servicers  # noqa: E402
 from core.infrastructure.persistence.database import SqliteDatabase  # noqa: E402
+from core.infrastructure.persistence.log_policy_store import LogPolicyStore  # noqa: E402
 from core.infrastructure.persistence.postgres_repositories import (  # noqa: E402
     PostgresDeliveryQueueRepository,
     PostgresForwardRuleRepository,
@@ -326,8 +327,27 @@ def build_container(cfg: Config) -> dict:
         # build it here so BOTH the log client that enforces it and the control
         # plane that reports it (over GetLogPolicy) share one instance. Two
         # instances would let the API read a policy the process is not applying.
-        "log_policy": LogPolicy.from_env(),
+        # An operator change is restored from the store on top of the environment
+        # defaults, so "turn on INFO for an hour" survives a restart of this
+        # process instead of silently reverting at the next deploy.
+        "log_policy": _restored_log_policy(db),
+        "log_policy_store": LogPolicyStore(db),
     }
+
+
+def _restored_log_policy(db) -> LogPolicy:
+    """The policy Core must enforce: environment defaults, then the saved override.
+
+    The environment stays the baseline and the store only overrides it, so an
+    install that has never been changed behaves exactly as its configuration
+    says — and a saved state that no longer validates is ignored, not fatal.
+    """
+    policy = LogPolicy.from_env()
+    try:
+        LogPolicyStore(db).restore_into(policy)
+    except Exception as exc:  # a bad settings row must not stop Core starting
+        logger.warning("[PIPELINE:log_policy] could not restore the saved policy: %s", exc)
+    return policy
 
 
 async def _resolve_pg_pool(container: dict) -> None:
@@ -378,16 +398,22 @@ async def serve_grpc(container: dict, cfg: Config):
         ),
         server,
     )
-    pb_grpc.add_SystemStatusControlServiceServicer_to_server(
-        servicers.SystemStatusControlServicer(
-            container["sessions"], container["rules"],
-            container["pipeline"], "", cfg.version,
-            # Same instance the log client enforces, so the control plane
-            # reports the policy this process is really applying.
-            log_policy=container.get("log_policy"),
-        ),
-        server,
+    system_status = servicers.SystemStatusControlServicer(
+        container["sessions"], container["rules"],
+        container["pipeline"], "", cfg.version,
+        # Same instance the log client enforces, so the control plane
+        # reports the policy this process is really applying.
+        log_policy=container.get("log_policy"),
+        # ... and the same store, so a change an operator makes here is the one
+        # that survives a restart.
+        log_policy_store=container.get("log_policy_store"),
     )
+    # Kept so the Logger client, built further down, can be attached to it: the
+    # audit record of a policy change has to travel through the same policy and
+    # the same client as every other event, and the servicer is constructed
+    # before the client exists.
+    container["system_status_servicer"] = system_status
+    pb_grpc.add_SystemStatusControlServiceServicer_to_server(system_status, server)
     pb_grpc.add_DeliveryControlServiceServicer_to_server(
         servicers.DeliveryControlServicer(
             container["db"],
@@ -524,6 +550,10 @@ async def main() -> None:
     except Exception as exc:
         logger.warning("Logger service unreachable at %s: %s", cfg.logger_addr, exc)
     container["log_client"] = log_client
+    # Attach the client to the control-plane servicer now that it exists, so a
+    # policy change writes its audit record through the policy it changed rather
+    # than escaping to a private sink.
+    container["system_status_servicer"].attach_log_client(log_client)
     log_client.info("core", "system", "core started", {"version": cfg.version})
     # Mirror every WARNING/ERROR from any python module (pv_responder,
     # dispatcher, pipeline, client_pool, …) into the central logger so the

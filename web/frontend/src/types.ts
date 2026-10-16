@@ -609,6 +609,65 @@ export interface PurgeLogsResponse {
   error?: string
 }
 
+// ---- Collection policy (per producer) -------------------------------------
+//
+// The policy is enforced per process, so every reading is scoped and labelled.
+// A scope that cannot be read is reported as unavailable *with the reason* rather
+// than as zeros: a zero would read as "nothing was suppressed", which is the
+// opposite of the truth.
+
+export interface LogPolicyCounters {
+  emitted: number
+  emitted_security: number
+  suppressed_level: number
+  suppressed_rate: number
+  diagnostic_activations: number
+}
+
+export interface LogPolicyScope {
+  available: boolean
+  scope: string
+  process?: string
+  reason?: string
+  configured_levels?: string[]
+  effective_levels?: string[]
+  diagnostic_active: boolean
+  diagnostic_until?: number
+  diagnostic_seconds_remaining?: number
+  verbose_rate_per_second?: number
+  counters?: LogPolicyCounters
+  counter_scope?: string
+  observed_at: string
+}
+
+export type LogPolicyScopes = Record<string, LogPolicyScope>
+
+export interface LogPolicyResponse {
+  generated_at: string
+  scopes: LogPolicyScopes
+  notes?: string[]
+}
+
+/** A change to the core's policy. Omitted fields are left as they are. */
+export interface LogPolicyUpdateRequest {
+  levels?: string[]
+  verbose_rate_per_second?: number
+  /** > 0 opens a bounded window; 0 leaves an active one alone. */
+  diagnostic_seconds?: number
+  disable_diagnostics?: boolean
+}
+
+export interface LogPolicyUpdateResponse {
+  ok: boolean
+  applied: boolean
+  /** false = in force now but reset by a restart. */
+  persisted: boolean
+  before: Record<string, unknown>
+  /** The policy read back from the core process after the change. */
+  scope: LogPolicyScope
+  notes?: string[]
+}
+
 // ---- Centralized audit events (observability platform) --------------------
 
 export interface AuditEventEntry {

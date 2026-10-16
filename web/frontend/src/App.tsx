@@ -45,6 +45,7 @@ import { AuditEventsPanel } from './components/AuditEventsPanel'
 import { ClientSettings } from './components/ClientSettings'
 import { TaskOverviewModal } from './components/TaskOverviewModal'
 import { DiagnosticsPanel } from './components/DiagnosticsPanel'
+import { LogPolicyPanel } from './components/LogPolicyPanel'
 import { SystemPanel } from './components/SystemPanel'
 import type {
   ForwardRule,
@@ -2861,6 +2862,10 @@ export function App() {
               </div>
             )
           })()}
+
+          {/* Collection policy: what each process is actually recording, and the
+              admin-only control that changes it through the core itself. */}
+          <LogPolicyPanel lang={lang} />
 
           {/* Pro Active Log Explorer */}
           <div className="glass-panel" style={{ padding: 20 }}>

@@ -121,6 +121,10 @@ func main() {
 	dashMux.HandleFunc("GET /logs/health", h.LoggingHealth)
 	dashMux.Handle("POST /logs/diagnostics/start", h.RequireAdmin(http.HandlerFunc(h.LogDiagnosticsStart)))
 	dashMux.Handle("POST /logs/diagnostics/stop", h.RequireAdmin(http.HandlerFunc(h.LogDiagnosticsStop)))
+	// Changing what atf-core collects, through the process that enforces it.
+	// Admin-only and audited: this is the one control that can decide what the
+	// evidence trail keeps.
+	dashMux.Handle("PUT /logs/policy", h.RequireAdmin(http.HandlerFunc(h.LogPolicyUpdate)))
 	dashMux.HandleFunc("POST /logs/purge", h.PurgeLogs)
 	// v18: a downloadable copy of the filtered history (json|csv), so evidence
 	// can leave the box without an operator screen-scraping the console.

@@ -517,6 +517,30 @@ message SystemStatsResponse {
 // not attached — never a plausible-looking zero.
 message LogPolicyRequest {}
 
+// A policy change addressed to the process that enforces it. The request states
+// the policy the operator wants, not a patch: a partial update would let a field
+// be silently kept, and "collect nothing" would be indistinguishable from "leave
+// it alone". Re-sending the same request is the same as sending it once.
+message SetLogPolicyRequest {
+  // The levels to collect. Empty is a validation error, never "keep the current
+  // set", because the two are not the same intent.
+  repeated string levels = 1;
+  // 0 means no rate limit for verbose levels.
+  double verbose_rate_per_second = 2;
+  // > 0 opens a bounded diagnostic window of that length; 0 leaves any active
+  // window alone, so a levels-only change cannot silently cancel one.
+  int32 diagnostic_seconds = 3;
+  // Close any active diagnostic window. Mutually exclusive with a non-zero
+  // diagnostic_seconds: one request cannot both open and close a window.
+  bool disable_diagnostics = 4;
+  // Who asked. Carried so the producer's audit record names the actor.
+  string actor = 5;
+  // The control plane's correlation id, so the producer's audit line and the
+  // control plane's own audit line join on the same value instead of describing
+  // the same change twice with nothing to link them.
+  string correlation_id = 6;
+}
+
 message LogPolicyResponse {
   bool available = 1;
   string reason = 2;
@@ -530,6 +554,12 @@ message LogPolicyResponse {
   int64 suppressed_level = 10;
   int64 suppressed_rate = 11;
   int64 diagnostic_activations = 12;
+  // SetLogPolicy only: whether the requested change was applied, and whether it
+  // is durable. `reason` carries the validation error when it was not applied,
+  // and an accepted-but-volatile change reports persisted=false rather than
+  // implying it will survive a restart.
+  bool applied = 13;
+  bool persisted = 14;
 }
 
 // -----------------------------------------------------------------------------
@@ -800,6 +830,10 @@ service SystemStatusControlService {
   // Additive (no existing field or RPC changed): lets the control plane report
   // Core's producer-side collection policy instead of leaving it unavailable.
   rpc GetLogPolicy(LogPolicyRequest) returns (LogPolicyResponse);
+  // Additive: lets an operator change the policy Core enforces, validated and
+  // persisted by the process that has to live with the value. The answer is the
+  // policy now in force, read back from the instance the emitter uses.
+  rpc SetLogPolicy(SetLogPolicyRequest) returns (LogPolicyResponse);
 }
 
 // -----------------------------------------------------------------------------
