@@ -137,63 +137,62 @@ class _LogsScreenState extends State<LogsScreen> {
         context: context,
         showDragHandle: true,
         isScrollControlled: true,
-        builder:
-            (ctx) => SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${format.toUpperCase()} export • '
-                            '${body.length} chars',
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        TextButton.icon(
-                          icon: const Icon(Icons.copy, size: 16),
-                          label: Text(t.get('logs_copy')),
-                          onPressed: () async {
-                            await Clipboard.setData(ClipboardData(text: body));
-                            if (ctx.mounted) Navigator.of(ctx).pop();
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(t.get('logs_export_copied')),
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 380),
-                      child: SingleChildScrollView(
-                        child: SelectableText(
-                          body.length > 20000
-                              ? '${body.substring(0, 20000)}\n'
-                                  '${t.get('logs_truncated_display')}'
-                              : body,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontFamily: 'monospace',
-                          ),
+                    Expanded(
+                      child: Text(
+                        '${format.toUpperCase()} export • '
+                        '${body.length} chars',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.copy, size: 16),
+                      label: Text(t.get('logs_copy')),
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: body));
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(t.get('logs_export_copied')),
+                            ),
+                          );
+                        }
+                      },
+                    ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 380),
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      body.length > 20000
+                          ? '${body.substring(0, 20000)}\n'
+                                '${t.get('logs_truncated_display')}'
+                          : body,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
+        ),
       );
     } on ApiException catch (exc) {
       if (!mounted) return;
@@ -246,88 +245,86 @@ class _LogsScreenState extends State<LogsScreen> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder:
-          (ctx) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    log.message,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ...meta
-                      .where((m) => m.$2.isNotEmpty)
-                      .map(
-                        (m) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                width: 112,
-                                child: Text(
-                                  m.$1,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                log.message,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...meta
+                  .where((m) => m.$2.isNotEmpty)
+                  .map(
+                    (m) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 112,
+                            child: Text(
+                              m.$1,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
                               ),
-                              Expanded(
-                                child: SelectableText(
-                                  m.$2,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontFamily:
-                                        m.$1.contains('id')
-                                            ? 'monospace'
-                                            : null,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  if (pretty.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      t.get('logs_detail_label'),
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 6),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 260),
-                      child: SingleChildScrollView(
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: SelectableText(
-                            pretty,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontFamily: 'monospace',
                             ),
                           ),
+                          Expanded(
+                            child: SelectableText(
+                              m.$2,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontFamily: m.$1.contains('id')
+                                    ? 'monospace'
+                                    : null,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              if (pretty.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  t.get('logs_detail_label'),
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 260),
+                  child: SingleChildScrollView(
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SelectableText(
+                        pretty,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
                         ),
                       ),
                     ),
-                  ],
-                ],
-              ),
-            ),
+                  ),
+                ),
+              ],
+            ],
           ),
+        ),
+      ),
     );
   }
 
@@ -363,20 +360,17 @@ class _LogsScreenState extends State<LogsScreen> {
         return;
       }
       setState(
-        () =>
-            _error =
-                exc.error.message.isNotEmpty
-                    ? exc.error.message
-                    : 'Logger request failed',
+        () => _error = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : 'Logger request failed',
       );
     } catch (exc) {
       if (!mounted) return;
       // Never swallow: a dead endpoint must not masquerade as "no logs".
       setState(
-        () =>
-            _error =
-                'Cannot reach the log service: '
-                '${exc.toString().split('(').first.trim()}',
+        () => _error =
+            'Cannot reach the log service: '
+            '${exc.toString().split('(').first.trim()}',
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -405,19 +399,16 @@ class _LogsScreenState extends State<LogsScreen> {
       // Audit events are a newer endpoint; an older server may not ship it.
       // Degrade to "unavailable", do not block the log view.
       setState(
-        () =>
-            _auditError =
-                exc.error.message.isNotEmpty
-                    ? exc.error.message
-                    : 'Audit events unavailable on this server',
+        () => _auditError = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : 'Audit events unavailable on this server',
       );
     } catch (exc) {
       if (!mounted) return;
       setState(
-        () =>
-            _auditError =
-                'Audit events unavailable: '
-                '${exc.toString().split('(').first.trim()}',
+        () => _auditError =
+            'Audit events unavailable: '
+            '${exc.toString().split('(').first.trim()}',
       );
     } finally {
       if (mounted) setState(() => _loadingAudit = false);
@@ -440,8 +431,8 @@ class _LogsScreenState extends State<LogsScreen> {
             widget.initialRuleId.isEmpty
                 ? t.get('logs_title')
                 : (widget.initialRuleLabel.isNotEmpty
-                    ? widget.initialRuleLabel
-                    : AppMessages.of(context).get('rules_logs_title')),
+                      ? widget.initialRuleLabel
+                      : AppMessages.of(context).get('rules_logs_title')),
           ),
           actions: [
             if (_ruleFilter.isNotEmpty)
@@ -542,7 +533,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _ruleFilter,
+                      initialValue: _ruleFilter,
                       isDense: true,
                       decoration: InputDecoration(
                         isDense: true,
@@ -586,7 +577,7 @@ class _LogsScreenState extends State<LogsScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _serviceFilter,
+                      initialValue: _serviceFilter,
                       isDense: true,
                       decoration: InputDecoration(
                         isDense: true,
@@ -728,21 +719,18 @@ class _LogsScreenState extends State<LogsScreen> {
               IconButton(
                 icon: const Icon(Icons.keyboard_arrow_up, size: 20),
                 tooltip: t.get('logs_newer'),
-                onPressed:
-                    _offset == 0 || _loading
-                        ? null
-                        : () => _load(offset: _offset - _pageSize),
+                onPressed: _offset == 0 || _loading
+                    ? null
+                    : () => _load(offset: _offset - _pageSize),
               ),
               IconButton(
                 icon: const Icon(Icons.keyboard_arrow_down, size: 20),
-                tooltip:
-                    _hasMore
-                        ? t.get('logs_older')
-                        : t.get('logs_end_of_history'),
-                onPressed:
-                    !_hasMore || _loading
-                        ? null
-                        : () => _load(offset: _offset + _pageSize),
+                tooltip: _hasMore
+                    ? t.get('logs_older')
+                    : t.get('logs_end_of_history'),
+                onPressed: !_hasMore || _loading
+                    ? null
+                    : () => _load(offset: _offset + _pageSize),
               ),
             ],
           ),
@@ -752,128 +740,119 @@ class _LogsScreenState extends State<LogsScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: _reloadAll,
-            child:
-                _logs.isEmpty && !_loading
-                    ? ListStateView(
-                      isEmpty: true,
-                      isLoading: false,
-                      error: _error,
-                      emptyTitle: t.get('logs_empty'),
-                      onRetry: _reloadAll,
-                    )
-                    : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      itemCount: _logs.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final log = _logs[index];
-                        final isErr = log.isError;
-                        final isWarn = log.isWarning;
-                        final when = log.when;
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            isErr
-                                ? Icons.error
-                                : (isWarn ? Icons.warning : Icons.info_outline),
-                            color:
-                                isErr
-                                    ? Colors.red
-                                    : (isWarn ? Colors.amber : Colors.blue),
-                            size: 20,
-                          ),
-                          title: Text(
-                            log.message,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                [
-                                  if (when != null)
-                                    when.toIso8601String().substring(11, 19),
-                                  log.service.isNotEmpty ? log.service : 'core',
-                                  if (log.category.isNotEmpty) log.category,
-                                ].join(' • '),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
+            child: _logs.isEmpty && !_loading
+                ? ListStateView(
+                    isEmpty: true,
+                    isLoading: false,
+                    error: _error,
+                    emptyTitle: t.get('logs_empty'),
+                    onRetry: _reloadAll,
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    itemCount: _logs.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final log = _logs[index];
+                      final isErr = log.isError;
+                      final isWarn = log.isWarning;
+                      final when = log.when;
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          isErr
+                              ? Icons.error
+                              : (isWarn ? Icons.warning : Icons.info_outline),
+                          color: isErr
+                              ? Colors.red
+                              : (isWarn ? Colors.amber : Colors.blue),
+                          size: 20,
+                        ),
+                        title: Text(
+                          log.message,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              [
+                                if (when != null)
+                                  when.toIso8601String().substring(11, 19),
+                                log.service.isNotEmpty ? log.service : 'core',
+                                if (log.category.isNotEmpty) log.category,
+                              ].join(' • '),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            // Attribution chips: tap to narrow the whole
+                            // stream to this task or this request.
+                            if (log.ruleId.isNotEmpty ||
+                                log.correlationId.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Wrap(
+                                  spacing: 6,
+                                  children: [
+                                    if (log.ruleId.isNotEmpty)
+                                      ActionChip(
+                                        visualDensity: VisualDensity.compact,
+                                        label: Text(
+                                          t.get(
+                                            'logs_scope_task_chip',
+                                            params: {
+                                              'id': log.ruleId.length > 8
+                                                  ? log.ruleId.substring(0, 8)
+                                                  : log.ruleId,
+                                            },
+                                          ),
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
+                                        onPressed: () {
+                                          setState(() {
+                                            _ruleFilter = log.ruleId;
+                                            _offset = 0;
+                                          });
+                                          _load(offset: 0);
+                                        },
+                                      ),
+                                    if (log.correlationId.isNotEmpty)
+                                      ActionChip(
+                                        visualDensity: VisualDensity.compact,
+                                        label: Text(
+                                          t.get(
+                                            'logs_scope_corr_chip',
+                                            params: {
+                                              'id': log.correlationId.length > 8
+                                                  ? log.correlationId.substring(
+                                                      0,
+                                                      8,
+                                                    )
+                                                  : log.correlationId,
+                                            },
+                                          ),
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
+                                        onPressed: () {
+                                          final corr = log.correlationId;
+                                          setState(() {
+                                            _search = corr;
+                                            _offset = 0;
+                                          });
+                                          _load(offset: 0);
+                                        },
+                                      ),
+                                  ],
                                 ),
                               ),
-                              // Attribution chips: tap to narrow the whole
-                              // stream to this task or this request.
-                              if (log.ruleId.isNotEmpty ||
-                                  log.correlationId.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Wrap(
-                                    spacing: 6,
-                                    children: [
-                                      if (log.ruleId.isNotEmpty)
-                                        ActionChip(
-                                          visualDensity: VisualDensity.compact,
-                                          label: Text(
-                                            t.get(
-                                              'logs_scope_task_chip',
-                                              params: {
-                                                'id':
-                                                    log.ruleId.length > 8
-                                                        ? log.ruleId.substring(
-                                                          0,
-                                                          8,
-                                                        )
-                                                        : log.ruleId,
-                                              },
-                                            ),
-                                            style: const TextStyle(
-                                              fontSize: 10,
-                                            ),
-                                          ),
-                                          onPressed: () {
-                                            setState(() {
-                                              _ruleFilter = log.ruleId;
-                                              _offset = 0;
-                                            });
-                                            _load(offset: 0);
-                                          },
-                                        ),
-                                      if (log.correlationId.isNotEmpty)
-                                        ActionChip(
-                                          visualDensity: VisualDensity.compact,
-                                          label: Text(
-                                            t.get(
-                                              'logs_scope_corr_chip',
-                                              params: {
-                                                'id':
-                                                    log.correlationId.length > 8
-                                                        ? log.correlationId
-                                                            .substring(0, 8)
-                                                        : log.correlationId,
-                                              },
-                                            ),
-                                            style: const TextStyle(
-                                              fontSize: 10,
-                                            ),
-                                          ),
-                                          onPressed: () {
-                                            final corr = log.correlationId;
-                                            setState(() {
-                                              _search = corr;
-                                              _offset = 0;
-                                            });
-                                            _load(offset: 0);
-                                          },
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                          onTap: () => _showLogDetail(log),
-                        );
-                      },
-                    ),
+                          ],
+                        ),
+                        onTap: () => _showLogDetail(log),
+                      );
+                    },
+                  ),
           ),
         ),
       ],
@@ -894,32 +873,31 @@ class _LogsScreenState extends State<LogsScreen> {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder:
-          (ctx) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.data_object),
-                  title: Text(t.get('logs_export_json')),
-                  subtitle: Text(t.get('logs_export_json_sub')),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _export('json');
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.table_chart_outlined),
-                  title: Text(t.get('logs_export_csv')),
-                  subtitle: Text(t.get('logs_export_csv_sub')),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _export('csv');
-                  },
-                ),
-              ],
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.data_object),
+              title: Text(t.get('logs_export_json')),
+              subtitle: Text(t.get('logs_export_json_sub')),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _export('json');
+              },
             ),
-          ),
+            ListTile(
+              leading: const Icon(Icons.table_chart_outlined),
+              title: Text(t.get('logs_export_csv')),
+              subtitle: Text(t.get('logs_export_csv_sub')),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _export('csv');
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -946,104 +924,101 @@ class _LogsScreenState extends State<LogsScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: _reloadAll,
-            child:
-                _audit.isEmpty && !_loadingAudit
-                    ? ListStateView(
-                      isEmpty: true,
-                      isLoading: false,
-                      error: _auditError,
-                      emptyTitle: 'No audit events yet',
-                      emptySubtitle:
-                          'Execution-assurance events appear here as messages '
-                          'flow through the pipeline.\n'
-                          'Failures show the reason code; pending work stays '
-                          'distinct from success.',
-                      onRetry: _loadAudit,
-                    )
-                    : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _audit.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final evt = _audit[index];
-                        final outcome = evt.outcome.toUpperCase();
-                        final isFail = outcome == 'FAILED';
-                        final isUnconfirmed = outcome == 'OUTCOME_UNCONFIRMED';
-                        final isOk = outcome == 'SUCCEEDED';
-                        return ListTile(
-                          leading: Icon(
-                            isOk
-                                ? Icons.check_circle
-                                : (isFail
+            child: _audit.isEmpty && !_loadingAudit
+                ? ListStateView(
+                    isEmpty: true,
+                    isLoading: false,
+                    error: _auditError,
+                    emptyTitle: 'No audit events yet',
+                    emptySubtitle:
+                        'Execution-assurance events appear here as messages '
+                        'flow through the pipeline.\n'
+                        'Failures show the reason code; pending work stays '
+                        'distinct from success.',
+                    onRetry: _loadAudit,
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _audit.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final evt = _audit[index];
+                      final outcome = evt.outcome.toUpperCase();
+                      final isFail = outcome == 'FAILED';
+                      final isUnconfirmed = outcome == 'OUTCOME_UNCONFIRMED';
+                      final isOk = outcome == 'SUCCEEDED';
+                      return ListTile(
+                        leading: Icon(
+                          isOk
+                              ? Icons.check_circle
+                              : (isFail
                                     ? Icons.cancel
                                     : (isUnconfirmed
-                                        ? Icons.help_outline
-                                        : Icons.history)),
-                            color:
-                                isOk
-                                    ? Colors.green
-                                    : (isFail
-                                        ? Colors.red
-                                        : (isUnconfirmed
-                                            ? Colors.amber
-                                            : Colors.grey)),
-                            size: 20,
+                                          ? Icons.help_outline
+                                          : Icons.history)),
+                          color: isOk
+                              ? Colors.green
+                              : (isFail
+                                    ? Colors.red
+                                    : (isUnconfirmed
+                                          ? Colors.amber
+                                          : Colors.grey)),
+                          size: 20,
+                        ),
+                        title: Text(
+                          evt.eventType,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
-                          title: Text(
-                            evt.eventType,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (evt.reasonCode.isNotEmpty)
-                                Text(
-                                  evt.reasonCode,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.red.shade300,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (evt.reasonCode.isNotEmpty)
                               Text(
-                                '${evt.service} • ${evt.timestamp} • ${evt.outcome}',
+                                evt.reasonCode,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.red.shade300,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            Text(
+                              '${evt.service} • ${evt.timestamp} • ${evt.outcome}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            if (evt.resultSummary.isNotEmpty)
+                              Text(
+                                evt.resultSummary,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey,
                                 ),
                               ),
-                              if (evt.resultSummary.isNotEmpty)
-                                Text(
-                                  evt.resultSummary,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
+                          ],
+                        ),
+                        trailing: evt.correlationId.isNotEmpty
+                            ? Text(
+                                evt.correlationId.length > 8
+                                    ? evt.correlationId.substring(0, 8)
+                                    : evt.correlationId,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                  color: Colors.grey,
                                 ),
-                            ],
-                          ),
-                          trailing:
-                              evt.correlationId.isNotEmpty
-                                  ? Text(
-                                    evt.correlationId.length > 8
-                                        ? evt.correlationId.substring(0, 8)
-                                        : evt.correlationId,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontFamily: 'monospace',
-                                      color: Colors.grey,
-                                    ),
-                                  )
-                                  : null,
-                          onTap: () => _showAuditDetail(context, evt),
-                        );
-                      },
-                    ),
+                              )
+                            : null,
+                        onTap: () => _showAuditDetail(context, evt),
+                      );
+                    },
+                  ),
           ),
         ),
       ],
@@ -1068,55 +1043,52 @@ class _LogsScreenState extends State<LogsScreen> {
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
-      builder:
-          (ctx) => SafeArea(
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              children: [
-                Text(
-                  evt.eventType,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          children: [
+            Text(
+              evt.eventType,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            ...fields
+                .where((f) => f.$2.isNotEmpty)
+                .map(
+                  (f) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 112,
+                          child: Text(
+                            f.$1,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            f.$2,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontFamily: f.$1.contains('id')
+                                  ? 'monospace'
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                ...fields
-                    .where((f) => f.$2.isNotEmpty)
-                    .map(
-                      (f) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 112,
-                              child: Text(
-                                f.$1,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                f.$2,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontFamily:
-                                      f.$1.contains('id') ? 'monospace' : null,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-              ],
-            ),
-          ),
+          ],
+        ),
+      ),
     );
   }
 }

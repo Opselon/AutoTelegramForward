@@ -106,11 +106,10 @@ class AuthSession {
     username: json['username'] as String,
     isAdmin: json['is_admin'] as bool? ?? false,
     serverUrl: json['server_url'] as String,
-    expiresAt:
-        json['expires_at'] is String
-            ? DateTime.tryParse(json['expires_at'] as String) ??
-                DateTime.now().add(const Duration(days: 7))
-            : DateTime.now().add(const Duration(days: 7)),
+    expiresAt: json['expires_at'] is String
+        ? DateTime.tryParse(json['expires_at'] as String) ??
+              DateTime.now().add(const Duration(days: 7))
+        : DateTime.now().add(const Duration(days: 7)),
   );
 
   @override
@@ -144,12 +143,9 @@ class TelegramSession {
   /// Echoed by the server only; the client never trusts a client-side value.
   final int ownerUserId;
 
-  String get displayName =>
-      firstName.isNotEmpty
-          ? firstName
-          : (username.isNotEmpty
-              ? '@$username'
-              : (phone.isNotEmpty ? phone : id));
+  String get displayName => firstName.isNotEmpty
+      ? firstName
+      : (username.isNotEmpty ? '@$username' : (phone.isNotEmpty ? phone : id));
 
   factory TelegramSession.fromJson(Map<String, dynamic> json) =>
       TelegramSession(
@@ -388,15 +384,13 @@ class ForwardRule {
   }) => ForwardRule(
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
-    sourceChatId:
-        sourceChatIds != null && sourceChatIds.isNotEmpty
-            ? sourceChatIds.first
-            : (sourceChatId ?? this.sourceChatId),
+    sourceChatId: sourceChatIds != null && sourceChatIds.isNotEmpty
+        ? sourceChatIds.first
+        : (sourceChatId ?? this.sourceChatId),
     sourceChatTitle: sourceChatTitle ?? this.sourceChatTitle,
-    targetChatId:
-        targetChatIds != null && targetChatIds.isNotEmpty
-            ? targetChatIds.first
-            : (targetChatId ?? this.targetChatId),
+    targetChatId: targetChatIds != null && targetChatIds.isNotEmpty
+        ? targetChatIds.first
+        : (targetChatId ?? this.targetChatId),
     targetChatTitle: targetChatTitle ?? this.targetChatTitle,
     sourceChatIds: sourceChatIds ?? this.sourceChatIds,
     targetChatIds: targetChatIds ?? this.targetChatIds,
@@ -565,12 +559,9 @@ class ForwardRule {
       'target_chat_id',
       fanOutKey: 'all_targets',
     );
-    final rawAddons =
-        json['paid_addons'] is Map
-            ? json['paid_addons'] as Map
-            : (meta['paid_addons'] is Map
-                ? meta['paid_addons'] as Map
-                : const {});
+    final rawAddons = json['paid_addons'] is Map
+        ? json['paid_addons'] as Map
+        : (meta['paid_addons'] is Map ? meta['paid_addons'] as Map : const {});
     final Map<String, bool> parsedAddons = {};
     rawAddons.forEach((k, v) {
       if (k != null) parsedAddons[k.toString()] = v == true;
@@ -633,12 +624,11 @@ class ForwardRule {
       watermark:
           (json['watermark'] as String?) ??
           (meta['watermark'] as String? ?? ''),
-      replacements:
-          meta['replacements'] is Map
-              ? (meta['replacements'] as Map).map(
-                (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
-              )
-              : const {},
+      replacements: meta['replacements'] is Map
+          ? (meta['replacements'] as Map).map(
+              (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
+            )
+          : const {},
       aiCreativity:
           (json['ai_creativity'] as num?)?.toDouble() ??
           ((meta['ai_creativity'] as num?)?.toDouble() ?? 0.7),
@@ -851,18 +841,16 @@ class SystemStats {
 
   factory SystemStats.fromJson(Map<String, dynamic> json) {
     final dynamic rules = json['rules'];
-    final int totalRules =
-        rules is Map
-            ? (rules['total'] as num?)?.toInt() ??
-                (json['total_rules'] as num?)?.toInt() ??
-                0
-            : (json['total_rules'] as num?)?.toInt() ?? 0;
-    final int activeRules =
-        rules is Map
-            ? (rules['active'] as num?)?.toInt() ??
-                (json['active_rules'] as num?)?.toInt() ??
-                0
-            : (json['active_rules'] as num?)?.toInt() ?? 0;
+    final int totalRules = rules is Map
+        ? (rules['total'] as num?)?.toInt() ??
+              (json['total_rules'] as num?)?.toInt() ??
+              0
+        : (json['total_rules'] as num?)?.toInt() ?? 0;
+    final int activeRules = rules is Map
+        ? (rules['active'] as num?)?.toInt() ??
+              (json['active_rules'] as num?)?.toInt() ??
+              0
+        : (json['active_rules'] as num?)?.toInt() ?? 0;
     return SystemStats(
       totalRules: totalRules,
       activeRules: activeRules,
@@ -1076,12 +1064,11 @@ class LogEntry {
 
   factory LogEntry.fromJson(Map<String, dynamic> json) {
     final rawTs = json['ts'] ?? json['timestamp'] ?? json['time'];
-    final seconds =
-        rawTs is int
-            ? rawTs
-            : rawTs is num
-            ? rawTs.toInt()
-            : int.tryParse('$rawTs') ?? 0;
+    final seconds = rawTs is int
+        ? rawTs
+        : rawTs is num
+        ? rawTs.toInt()
+        : int.tryParse('$rawTs') ?? 0;
     return LogEntry(
       timestamp: rawTs is String ? rawTs : (seconds > 0 ? '$seconds' : ''),
       tsSeconds: seconds,
@@ -1126,13 +1113,12 @@ class LogPage {
 
   factory LogPage.fromJson(Map<String, dynamic> json) {
     final raw = json['logs'];
-    final logs =
-        raw is List
-            ? raw
-                .whereType<Map<String, dynamic>>()
-                .map(LogEntry.fromJson)
-                .toList(growable: false)
-            : const <LogEntry>[];
+    final logs = raw is List
+        ? raw
+              .whereType<Map<String, dynamic>>()
+              .map(LogEntry.fromJson)
+              .toList(growable: false)
+        : const <LogEntry>[];
     final total = (json['total'] as num?)?.toInt() ?? logs.length;
     return LogPage(
       logs: logs,
@@ -1235,10 +1221,9 @@ class RuleSettingSpec {
       label: json['label'] as String? ?? '',
       help: json['help'] as String? ?? '',
       defaultValue: json['default'],
-      choices:
-          rawChoices is List
-              ? rawChoices.map((e) => '$e').toList(growable: false)
-              : const [],
+      choices: rawChoices is List
+          ? rawChoices.map((e) => '$e').toList(growable: false)
+          : const [],
       minimum: json['minimum'] as num?,
       maximum: json['maximum'] as num?,
       nullable: json['nullable'] as bool? ?? false,
@@ -1280,19 +1265,15 @@ class RuleSettingsSchema {
     final raw = json['settings'];
     return RuleSettingsSchema(
       version: (json['version'] as num?)?.toInt() ?? 0,
-      groups:
-          json['groups'] is List
-              ? (json['groups'] as List)
-                  .map((e) => '$e')
-                  .toList(growable: false)
-              : const [],
-      settings:
-          raw is List
-              ? raw
-                  .whereType<Map<String, dynamic>>()
-                  .map(RuleSettingSpec.fromJson)
-                  .toList(growable: false)
-              : const [],
+      groups: json['groups'] is List
+          ? (json['groups'] as List).map((e) => '$e').toList(growable: false)
+          : const [],
+      settings: raw is List
+          ? raw
+                .whereType<Map<String, dynamic>>()
+                .map(RuleSettingSpec.fromJson)
+                .toList(growable: false)
+          : const [],
     );
   }
 }

@@ -105,9 +105,7 @@ HttpTransport _transport(
     if (url.path.endsWith('/retry') && method == 'POST') {
       actioned = true;
       return http.Response(
-        actionOk
-            ? '{"success":true,"message":"requeued"}'
-            : '{"success":false,"message":"not_found","error_code":"not_found"}',
+        actionOk ? '{"success":true,"message":"requeued"}' : '{"success":false,"message":"not_found","error_code":"not_found"}',
         200,
         headers: _json,
       );

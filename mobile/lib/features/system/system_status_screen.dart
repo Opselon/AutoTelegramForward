@@ -184,19 +184,19 @@ class _SystemStatusScreenState extends State<SystemStatusScreen> {
         ready: report.ready,
         title: report.ready ? t.get('sys_ready') : t.get('sys_not_ready'),
         subtitle: t.get('sys_subtitle'),
-        verdictLabel:
-            report.ready ? t.get('sys_ready') : t.get('sys_not_ready'),
+        verdictLabel: report.ready
+            ? t.get('sys_ready')
+            : t.get('sys_not_ready'),
         serviceSummary: t.get(
           'sys_services_online',
           params: {'online': '$online', 'total': '$total'},
         ),
-        footnote:
-            report.missingRequired.isEmpty
-                ? null
-                : t.get(
-                  'sys_missing_required',
-                  params: {'count': '${report.missingRequired.length}'},
-                ),
+        footnote: report.missingRequired.isEmpty
+            ? null
+            : t.get(
+                'sys_missing_required',
+                params: {'count': '${report.missingRequired.length}'},
+              ),
       ),
       AppSpacing.gapLg,
 
@@ -213,8 +213,9 @@ class _SystemStatusScreenState extends State<SystemStatusScreen> {
             ),
             _DetailRow(
               label: t.get('sys_product_version'),
-              value:
-                  report.productVersion.isEmpty ? '—' : report.productVersion,
+              value: report.productVersion.isEmpty
+                  ? '—'
+                  : report.productVersion,
             ),
             _DetailRow(
               label: t.get('sys_api_version'),
@@ -237,32 +238,31 @@ class _SystemStatusScreenState extends State<SystemStatusScreen> {
       SectionCard(
         title: t.get('sys_services_title'),
         icon: Icons.dns_rounded,
-        child:
-            report.services.isEmpty
-                ? EmptyStateView(
-                  message: t.get('state_empty'),
-                  icon: Icons.cloud_off_rounded,
-                  color: AppTheme.warning,
-                )
-                : Column(
-                  children: [
-                    for (var i = 0; i < report.services.length; i++) ...[
-                      if (i > 0) const Divider(height: 1),
-                      ServiceTile(
-                        name: report.services[i].name,
-                        online: report.services[i].online,
-                        detail: report.services[i].detail,
-                        latencyMs: report.services[i].latencyMs,
-                        onlineLabel: t.get('status_online'),
-                        offlineLabel: t.get('status_offline'),
-                        latencyLabel: t.get(
-                          'sys_latency',
-                          params: {'ms': '${report.services[i].latencyMs}'},
-                        ),
+        child: report.services.isEmpty
+            ? EmptyStateView(
+                message: t.get('state_empty'),
+                icon: Icons.cloud_off_rounded,
+                color: AppTheme.warning,
+              )
+            : Column(
+                children: [
+                  for (var i = 0; i < report.services.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ServiceTile(
+                      name: report.services[i].name,
+                      online: report.services[i].online,
+                      detail: report.services[i].detail,
+                      latencyMs: report.services[i].latencyMs,
+                      onlineLabel: t.get('status_online'),
+                      offlineLabel: t.get('status_offline'),
+                      latencyLabel: t.get(
+                        'sys_latency',
+                        params: {'ms': '${report.services[i].latencyMs}'},
                       ),
-                    ],
+                    ),
                   ],
-                ),
+                ],
+              ),
       ),
       AppSpacing.gapLg,
 
@@ -292,10 +292,9 @@ class _SystemStatusScreenState extends State<SystemStatusScreen> {
                   reason: report.checks[i].reason,
                   hint: report.checks[i].hint,
                   isSet: report.checks[i].set,
-                  stateLabel:
-                      report.checks[i].set
-                          ? t.get('sys_check_set')
-                          : t.get('sys_check_unset'),
+                  stateLabel: report.checks[i].set
+                      ? t.get('sys_check_set')
+                      : t.get('sys_check_unset'),
                 ),
               ],
             ],

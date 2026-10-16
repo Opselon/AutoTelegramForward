@@ -97,13 +97,12 @@ class ChatIdListField extends StatelessWidget {
   Widget _chip(AppMessages t, RouteEntry entry) {
     final color = entry.isOk ? AppTheme.success : AppTheme.error;
     return Tooltip(
-      message:
-          entry.isOk
-              ? t.get(entry.messageKey)
-              : t.get(
-                'rules_route_chip_tooltip',
-                params: {'reason': t.get(entry.messageKey)},
-              ),
+      message: entry.isOk
+          ? t.get(entry.messageKey)
+          : t.get(
+              'rules_route_chip_tooltip',
+              params: {'reason': t.get(entry.messageKey)},
+            ),
       child: InputChip(
         key: ValueKey<String>('route_chip_${entry.value}'),
         label: Text(entry.value),

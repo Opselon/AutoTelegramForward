@@ -245,52 +245,49 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     final formKey = GlobalKey<FormState>();
     final ok = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Text(t.get('rules_replace_add')),
-            content: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: findCtrl,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      labelText: t.get('rules_replace_find'),
-                    ),
-                    validator:
-                        (v) =>
-                            (v == null || v.trim().isEmpty)
-                                ? t.get('rules_replace_find_required')
-                                : null,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: replaceCtrl,
-                    decoration: InputDecoration(
-                      labelText: t.get('rules_replace_with'),
-                      helperText: t.get('rules_replace_with_hint'),
-                    ),
-                  ),
-                ],
+      builder: (ctx) => AlertDialog(
+        title: Text(t.get('rules_replace_add')),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: findCtrl,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: t.get('rules_replace_find'),
+                ),
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? t.get('rules_replace_find_required')
+                    : null,
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(t.get('action_cancel')),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (formKey.currentState!.validate()) {
-                    Navigator.pop(ctx, true);
-                  }
-                },
-                child: Text(t.get('action_save')),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: replaceCtrl,
+                decoration: InputDecoration(
+                  labelText: t.get('rules_replace_with'),
+                  helperText: t.get('rules_replace_with_hint'),
+                ),
               ),
             ],
           ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t.get('action_cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: Text(t.get('action_save')),
+          ),
+        ],
+      ),
     );
     if (ok == true) {
       setState(() {
@@ -411,12 +408,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     });
 
     final client = context.read<AppState>().buildApiClient();
-    final filters =
-        _filtersCtrl.text
-            .split(',')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .toList();
+    final filters = _filtersCtrl.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
 
     final sourceTitle = _sourceTitleCtrl.text.trim();
     final targetTitle = _targetTitleCtrl.text.trim();
@@ -432,8 +428,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       targetChatId: targets.first,
       targetChatIds: targets,
       targetChatTitle: targetTitle.isNotEmpty ? targetTitle : targets.first,
-      intermediateChannelId:
-          _useVipRouting ? _intermediateCtrl.text.trim() : '',
+      intermediateChannelId: _useVipRouting
+          ? _intermediateCtrl.text.trim()
+          : '',
       useVipRouting: _useVipRouting,
       filters: filters,
       filterMode: _filterMode,
@@ -485,10 +482,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
         } else if (exc.error.kind == ErrorKind.validation) {
           _error = t.get('rules_validation_failed');
         } else {
-          _error =
-              exc.error.message.isNotEmpty
-                  ? exc.error.message
-                  : t.get('state_error');
+          _error = exc.error.message.isNotEmpty
+              ? exc.error.message
+              : t.get('state_error');
         }
       });
     } catch (_) {
@@ -543,21 +539,18 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
             IconButton(
               icon: const Icon(Icons.science_outlined),
               tooltip: t.get('rules_simulate_title'),
-              onPressed:
-                  _saving
-                      ? null
-                      : () => showRuleSimulatorSheet(
-                        context,
-                        ruleId: widget.rule!.id,
-                        ruleLabel:
-                            widget.rule!.name.isNotEmpty
-                                ? widget.rule!.name
-                                : widget.rule!.shortId,
-                        initialChatId:
-                            parseChatIdList(_sourceIdCtrl.text).isEmpty
-                                ? ''
-                                : parseChatIdList(_sourceIdCtrl.text).first,
-                      ),
+              onPressed: _saving
+                  ? null
+                  : () => showRuleSimulatorSheet(
+                      context,
+                      ruleId: widget.rule!.id,
+                      ruleLabel: widget.rule!.name.isNotEmpty
+                          ? widget.rule!.name
+                          : widget.rule!.shortId,
+                      initialChatId: parseChatIdList(_sourceIdCtrl.text).isEmpty
+                          ? ''
+                          : parseChatIdList(_sourceIdCtrl.text).first,
+                    ),
             ),
           IconButton(
             icon: const Icon(Icons.check),
@@ -620,18 +613,17 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
               // Session Selector
               if (_sessions.isNotEmpty)
                 DropdownButtonFormField<String>(
-                  value: _selectedSessionId,
+                  initialValue: _selectedSessionId,
                   decoration: InputDecoration(
                     labelText: t.get('rules_session'),
                     prefixIcon: const Icon(Icons.send_rounded),
                   ),
-                  items:
-                      _sessions.map((s) {
-                        return DropdownMenuItem(
-                          value: s.id,
-                          child: Text(s.displayName),
-                        );
-                      }).toList(),
+                  items: _sessions.map((s) {
+                    return DropdownMenuItem(
+                      value: s.id,
+                      child: Text(s.displayName),
+                    );
+                  }).toList(),
                   onChanged: (val) => setState(() => _selectedSessionId = val),
                 ),
               const SizedBox(height: 16),
@@ -669,7 +661,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
               // Sender Type
               DropdownButtonFormField<String>(
-                value: _senderType,
+                initialValue: _senderType,
                 decoration: const InputDecoration(
                   labelText: 'Sender Type',
                   prefixIcon: Icon(Icons.person_outline),
@@ -688,10 +680,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                     child: Text('MTProto Premium Userbot'),
                   ),
                 ],
-                onChanged:
-                    (val) => setState(
-                      () => _senderType = val ?? 'Personal Telegram Account',
-                    ),
+                onChanged: (val) => setState(
+                  () => _senderType = val ?? 'Personal Telegram Account',
+                ),
               ),
               const SizedBox(height: 12),
 
@@ -739,13 +730,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                 emptyLabel: t.get('rules_route_empty'),
                 entries: sourceEntries,
                 onRemove: (value) => _removeEntry(_sourceIdCtrl, value),
-                onFix:
-                    (value) => _focusEntry(_sourceIdCtrl, _sourceFocus, value),
-                validator:
-                    (v) =>
-                        parseChatIdList(v ?? '').isEmpty
-                            ? t.get('rules_source_required')
-                            : null,
+                onFix: (value) =>
+                    _focusEntry(_sourceIdCtrl, _sourceFocus, value),
+                validator: (v) => parseChatIdList(v ?? '').isEmpty
+                    ? t.get('rules_source_required')
+                    : null,
               ),
               // The chat list is the faster way in, but only once an account is
               // selected: without one there is nothing to list, so the button is
@@ -784,13 +773,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                 entries: targetEntries,
                 icon: Icons.forward_to_inbox_rounded,
                 onRemove: (value) => _removeEntry(_targetIdCtrl, value),
-                onFix:
-                    (value) => _focusEntry(_targetIdCtrl, _targetFocus, value),
-                validator:
-                    (v) =>
-                        parseChatIdList(v ?? '').isEmpty
-                            ? t.get('rules_target_required')
-                            : null,
+                onFix: (value) =>
+                    _focusEntry(_targetIdCtrl, _targetFocus, value),
+                validator: (v) => parseChatIdList(v ?? '').isEmpty
+                    ? t.get('rules_target_required')
+                    : null,
               ),
               if ((_selectedSessionId ?? '').isNotEmpty)
                 Align(
@@ -925,9 +912,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
               Card(
                 margin: EdgeInsets.zero,
                 elevation: 0,
-                color: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.3),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -995,7 +981,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        value: _albumMode,
+                        initialValue: _albumMode,
                         decoration: InputDecoration(
                           labelText: t.get('rules_album_mode'),
                           prefixIcon: const Icon(Icons.photo_library_outlined),
@@ -1044,17 +1030,15 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         // there is nothing to attach settings to; the tile says
                         // so instead of opening an empty sheet.
                         enabled: widget.rule != null,
-                        onTap:
-                            widget.rule == null
-                                ? null
-                                : () => showRuleSettingsSheet(
-                                  context,
-                                  ruleId: widget.rule!.id,
-                                  ruleLabel:
-                                      widget.rule!.name.isNotEmpty
-                                          ? widget.rule!.name
-                                          : widget.rule!.shortId,
-                                ),
+                        onTap: widget.rule == null
+                            ? null
+                            : () => showRuleSettingsSheet(
+                                context,
+                                ruleId: widget.rule!.id,
+                                ruleLabel: widget.rule!.name.isNotEmpty
+                                    ? widget.rule!.name
+                                    : widget.rule!.shortId,
+                              ),
                       ),
                     ],
                   ),
@@ -1088,14 +1072,12 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           t.get(
                             'rules_filters_summary',
                             params: {
-                              'duplicate':
-                                  _duplicateFilters
-                                      ? t.get('rules_state_on')
-                                      : t.get('rules_state_off'),
-                              'crypto':
-                                  _cryptoMode
-                                      ? t.get('rules_state_on')
-                                      : t.get('rules_state_off'),
+                              'duplicate': _duplicateFilters
+                                  ? t.get('rules_state_on')
+                                  : t.get('rules_state_off'),
+                              'crypto': _cryptoMode
+                                  ? t.get('rules_state_on')
+                                  : t.get('rules_state_off'),
                             },
                           ),
                         ),
@@ -1106,8 +1088,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                               'Media & text deep fingerprint deduplication',
                             ),
                             value: _duplicateFilters,
-                            onChanged:
-                                (v) => setState(() => _duplicateFilters = v),
+                            onChanged: (v) =>
+                                setState(() => _duplicateFilters = v),
                           ),
                           SwitchListTile(
                             title: Text(t.get('rules_filters_crypto')),
@@ -1222,15 +1204,13 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                 ),
                               ),
                               FilledButton.tonal(
-                                onPressed:
-                                    () => showRuleSettingsSheet(
-                                      context,
-                                      ruleId: widget.rule!.id,
-                                      ruleLabel:
-                                          _nameCtrl.text.trim().isNotEmpty
-                                              ? _nameCtrl.text.trim()
-                                              : widget.rule!.sourceChatTitle,
-                                    ),
+                                onPressed: () => showRuleSettingsSheet(
+                                  context,
+                                  ruleId: widget.rule!.id,
+                                  ruleLabel: _nameCtrl.text.trim().isNotEmpty
+                                      ? _nameCtrl.text.trim()
+                                      : widget.rule!.sourceChatTitle,
+                                ),
                                 child: Text(t.get('rules_full_control_open')),
                               ),
                             ],
@@ -1251,8 +1231,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           SwitchListTile(
                             title: Text(t.get('rules_proc_raw')),
                             value: _processRawText,
-                            onChanged:
-                                (v) => setState(() => _processRawText = v),
+                            onChanged: (v) =>
+                                setState(() => _processRawText = v),
                           ),
                           SwitchListTile(
                             title: Text(t.get('rules_proc_btn2txt')),
@@ -1352,13 +1332,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                         size: 18,
                                       ),
                                       tooltip: t.get('rules_replace_move_up'),
-                                      onPressed:
-                                          () => setState(() {
-                                            final tmp = _replacements[i - 1];
-                                            _replacements[i - 1] =
-                                                _replacements[i];
-                                            _replacements[i] = tmp;
-                                          }),
+                                      onPressed: () => setState(() {
+                                        final tmp = _replacements[i - 1];
+                                        _replacements[i - 1] = _replacements[i];
+                                        _replacements[i] = tmp;
+                                      }),
                                     ),
                                   IconButton(
                                     icon: const Icon(
@@ -1366,10 +1344,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                       size: 18,
                                     ),
                                     tooltip: t.get('action_delete'),
-                                    onPressed:
-                                        () => setState(
-                                          () => _replacements.removeAt(i),
-                                        ),
+                                    onPressed: () => setState(
+                                      () => _replacements.removeAt(i),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -1398,27 +1375,32 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                               : _aiConfigLabel(_selectedAiConfigId),
                         ),
                         children: [
-                          RadioListTile<String>(
-                            dense: true,
-                            value: '',
+                          // Both the "none" row and the configs share one
+                          // selection, so they must sit under one RadioGroup:
+                          // splitting them would leave the group unaware of the
+                          // other options' selection state.
+                          RadioGroup<String>(
                             groupValue: _selectedAiConfigId,
-                            onChanged:
-                                (v) => setState(() => _selectedAiConfigId = ''),
-                            title: Text(t.get('rules_ai_pick_none')),
-                          ),
-                          ..._aiConfigs.map(
-                            (c) => RadioListTile<String>(
-                              dense: true,
-                              value: c.id,
-                              groupValue: _selectedAiConfigId,
-                              onChanged:
-                                  (v) => setState(
-                                    () => _selectedAiConfigId = v ?? '',
+                            onChanged: (v) =>
+                                setState(() => _selectedAiConfigId = v ?? ''),
+                            child: Column(
+                              children: [
+                                RadioListTile<String>(
+                                  dense: true,
+                                  value: '',
+                                  title: Text(t.get('rules_ai_pick_none')),
+                                ),
+                                ..._aiConfigs.map(
+                                  (c) => RadioListTile<String>(
+                                    dense: true,
+                                    value: c.id,
+                                    title: Text(_aiConfigLabel(c.id)),
+                                    subtitle: Text(
+                                      '${c.provider}${c.model.isNotEmpty ? ' · ${c.model}' : ''}',
+                                    ),
                                   ),
-                              title: Text(_aiConfigLabel(c.id)),
-                              subtitle: Text(
-                                '${c.provider}${c.model.isNotEmpty ? ' · ${c.model}' : ''}',
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                           if (_aiConfigs.isEmpty)
@@ -1455,8 +1437,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                               'LLM intelligent content rephrasing',
                             ),
                             value: _smartAiRewrite,
-                            onChanged:
-                                (v) => setState(() => _smartAiRewrite = v),
+                            onChanged: (v) =>
+                                setState(() => _smartAiRewrite = v),
                           ),
                           SwitchListTile(
                             title: Text(t.get('rules_ai_digest')),
@@ -1497,8 +1479,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                 key.replaceAll('_', ' ').toUpperCase(),
                               ),
                               value: val,
-                              onChanged:
-                                  (v) => setState(() => _paidAddons[key] = v),
+                              onChanged: (v) =>
+                                  setState(() => _paidAddons[key] = v),
                             );
                           }),
                         ],
@@ -1511,17 +1493,16 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
               ElevatedButton(
                 onPressed: _saving ? null : _save,
-                child:
-                    _saving
-                        ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                        : Text(t.get('action_save')),
+                child: _saving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(t.get('action_save')),
               ),
             ],
           ),

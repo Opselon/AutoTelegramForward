@@ -24,8 +24,7 @@ class AppMessagesId {
     'ai_empty': 'No AI configuration yet.',
     'ai_language': 'Target language',
     'ai_model': 'Model',
-    'ai_note':
-        'Kunci API diatur oleh bot atau dasbor web; aplikasi seluler tidak menyimpan kunci penyedia.',
+    'ai_note': 'Kunci API diatur oleh bot atau dasbor web; aplikasi seluler tidak menyimpan kunci penyedia.',
     'ai_prompt': 'Prompt',
     'ai_provider': 'Provider',
     'ai_title': 'AI rewriting',
@@ -38,8 +37,7 @@ class AppMessagesId {
     'chats_members': '{n} anggota',
     'chats_new_task': 'Tugas baru dari chat ini',
     'chats_new_task_hint': 'Lalu pilih sisi lain dari rute',
-    'chats_no_sessions':
-        'Hubungkan akun Telegram terlebih dahulu: daftar chat dibaca dari akun itu.',
+    'chats_no_sessions': 'Hubungkan akun Telegram terlebih dahulu: daftar chat dibaca dari akun itu.',
     'chats_picker_add': 'Tambah {n}',
     'chats_picker_add_none': 'Tambah',
     'chats_picker_clear': 'Bersihkan',
@@ -71,8 +69,7 @@ class AppMessagesId {
     'chats_session_active': 'terhubung',
     'chats_session_idle': 'tidak terhubung',
     'chats_session_label': 'Akun Telegram',
-    'chats_subtitle':
-        'Semua chat yang dapat dilihat akun ini, dan ke mana chat itu sudah diarahkan',
+    'chats_subtitle': 'Semua chat yang dapat dilihat akun ini, dan ke mana chat itu sudah diarahkan',
     'chats_title': 'Chat',
     'chats_unavailable': 'Server ini tidak dapat menampilkan daftar chat',
     'chats_unused': 'belum dipakai',
@@ -97,8 +94,7 @@ class AppMessagesId {
     'dash_total_rules': 'Rules',
     'dash_uptime': 'Uptime',
     'delivery_attempts': '{n} percobaan',
-    'delivery_dlq_empty':
-        'Tidak ada yang macet: tidak ada pekerjaan yang kehabisan percobaan ulang.',
+    'delivery_dlq_empty': 'Tidak ada yang macet: tidak ada pekerjaan yang kehabisan percobaan ulang.',
     'delivery_dlq_retry': 'Proses ulang',
     'delivery_failed': 'Gagal',
     'delivery_filtered': 'Difilter',
@@ -112,8 +108,7 @@ class AppMessagesId {
     'delivery_retry_failed': 'Tidak dapat memproses ulang pekerjaan: {error}',
     'delivery_retry_ok': '{n} pekerjaan diproses ulang',
     'delivery_rule_line': '{forwarded} diteruskan · {errors} kesalahan',
-    'delivery_subtitle':
-        'Apa yang sedang dilakukan mesin saat ini, dan apa yang sudah ditinggalkannya',
+    'delivery_subtitle': 'Apa yang sedang dilakukan mesin saat ini, dan apa yang sudah ditinggalkannya',
     'delivery_tab_dlq': 'Pesan mati',
     'delivery_tab_queue': 'Antrean',
     'delivery_title': 'Pengiriman',
@@ -127,8 +122,7 @@ class AppMessagesId {
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
     'filters_title': 'Filters',
-    'incompatible_server':
-        'Server ini menjalankan rilis AutoTelegramForward yang lebih lama. Perbarui ke {version} atau lebih baru.',
+    'incompatible_server': 'Server ini menjalankan rilis AutoTelegramForward yang lebih lama. Perbarui ke {version} atau lebih baru.',
     'lang_label': 'Bahasa',
     'lang_native_en': 'English',
     'lang_native_es': 'Español',
@@ -191,14 +185,12 @@ class AppMessagesId {
     'logs_policy_admin_required':
         'Hanya administrator yang dapat membuka jendela verbose.',
     'logs_policy_configured': 'Dikonfigurasi: {levels}',
-    'logs_policy_counters':
-        'Dipancarkan {emitted} · ditahan oleh level {by_level} · oleh laju {by_rate}',
+    'logs_policy_counters': 'Dipancarkan {emitted} · ditahan oleh level {by_level} · oleh laju {by_rate}',
     'logs_policy_counters_scope': 'Penghitung bersifat {scope}',
     'logs_policy_data_age': 'Catatan terbaru {seconds} detik lalu',
     'logs_policy_diag_off': 'Jendela verbose ditutup',
     'logs_policy_diag_on': 'Jendela verbose terbuka — sisa {seconds} detik',
-    'logs_policy_diagnostics_hint':
-        'Hanya untuk administrator. Terbuka selama {seconds} detik dan menutup sendiri.',
+    'logs_policy_diagnostics_hint': 'Hanya untuk administrator. Terbuka selama {seconds} detik dan menutup sendiri.',
     'logs_policy_diagnostics_title': 'Jendela pengumpulan verbose',
     'logs_policy_effective': 'Mengumpulkan: {levels}',
     'logs_policy_health_title': 'Kesehatan pipeline',
@@ -218,8 +210,7 @@ class AppMessagesId {
     'logs_policy_stop': 'Tutup jendela',
     'logs_policy_stop_none': 'Tidak ada jendela verbose yang terbuka',
     'logs_policy_stopped': 'Jendela verbose ditutup',
-    'logs_policy_unavailable_hint':
-        'Server ini tidak melaporkan kebijakan log-nya. Perbarui server untuk memakai tab ini.',
+    'logs_policy_unavailable_hint': 'Server ini tidak melaporkan kebijakan log-nya. Perbarui server untuk memakai tab ini.',
     'logs_scope_corr_chip': 'kor:{id}',
     'logs_scope_service': 'Layanan',
     'logs_scope_task': 'Tugas',
@@ -286,8 +277,7 @@ class AppMessagesId {
     'rules_footer': 'Footer template',
     'rules_forward_mode': 'Mode Penerusan',
     'rules_full_control': 'Kontrol penuh',
-    'rules_full_control_desc':
-        'Setiap pengaturan per tugas yang dipatuhi mesin, divalidasi di server.',
+    'rules_full_control_desc': 'Setiap pengaturan per tugas yang dipatuhi mesin, divalidasi di server.',
     'rules_full_control_open': 'Buka',
     'rules_header': 'Header template',
     'rules_ignore_edits': 'Ignore Edits',
@@ -324,8 +314,7 @@ class AppMessagesId {
     'rules_route_empty':
         'Belum ada kanal. Masukkan satu atau lebih, dipisahkan koma.',
     'rules_route_fan_out': '{count} tujuan',
-    'rules_route_overlap_id':
-        '{id} adalah sumber sekaligus tujuan. Tugas tidak dapat meneruskan ke dirinya sendiri.',
+    'rules_route_overlap_id': '{id} adalah sumber sekaligus tujuan. Tugas tidak dapat meneruskan ke dirinya sendiri.',
     'rules_route_preview': '{sources} → {targets}',
     'rules_route_preview_label': 'Pratinjau rute',
     'rules_route_remove': 'Hapus entri ini',
@@ -423,8 +412,7 @@ class AppMessagesId {
         'Server menolak formulir. Periksa kolom yang ditandai.',
     'server_probe_bad_response':
         'Server menjawab, tetapi isinya tidak terduga.',
-    'server_probe_no_version':
-        'Server ini tidak menyediakan endpoint versi. Periksa alamat atau perbarui server.',
+    'server_probe_no_version': 'Server ini tidak menyediakan endpoint versi. Periksa alamat atau perbarui server.',
     'server_probe_reachable': 'Server reachable and compatible',
     'server_probe_test': 'Test connection',
     'server_probe_testing': 'Testing connection…',
@@ -490,8 +478,7 @@ class AppMessagesId {
     'sys_subtitle':
         'Kesiapan server, topologi layanan, dan kontrak konfigurasi',
     'sys_title': 'Sistem',
-    'sys_unavailable':
-        'Server ini tidak menyediakan endpoint status sistem. Perbarui server untuk melihat kesiapan di sini.',
+    'sys_unavailable': 'Server ini tidak menyediakan endpoint status sistem. Perbarui server untuk melihat kesiapan di sini.',
     'tg_login_cancel': 'Cancel login',
     'tg_login_code': 'Verification code',
     'tg_login_code_hint': 'Code from the Telegram app',

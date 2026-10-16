@@ -94,10 +94,9 @@ class _LoginScreenState extends State<LoginScreen> {
             exc.error.kind == ErrorKind.timeout) {
           _error = t.get('login_error_network');
         } else {
-          _error =
-              exc.error.message.isNotEmpty
-                  ? exc.error.message
-                  : t.get('state_error');
+          _error = exc.error.message.isNotEmpty
+              ? exc.error.message
+              : t.get('state_error');
         }
       });
     } catch (exc) {
@@ -146,9 +145,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       t.get('app_tagline'),
                       textAlign: TextAlign.center,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: Colors.grey),
                     ),
                     const SizedBox(height: 32),
 
@@ -198,11 +196,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         labelText: t.get('login_username'),
                         prefixIcon: const Icon(Icons.person_outline),
                       ),
-                      validator:
-                          (v) =>
-                              (v == null || v.trim().isEmpty)
-                                  ? t.get('login_username')
-                                  : null,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? t.get('login_username')
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -212,40 +208,36 @@ class _LoginScreenState extends State<LoginScreen> {
                         labelText: t.get('login_password'),
                         prefixIcon: const Icon(Icons.lock_outline),
                       ),
-                      validator:
-                          (v) =>
-                              (v == null || v.isEmpty)
-                                  ? t.get('login_password')
-                                  : null,
+                      validator: (v) => (v == null || v.isEmpty)
+                          ? t.get('login_password')
+                          : null,
                     ),
                     const SizedBox(height: 24),
 
                     ElevatedButton(
                       onPressed: _loading ? null : _submit,
-                      child:
-                          _loading
-                              ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                              : Text(
-                                _isRegister
-                                    ? t.get('login_register')
-                                    : t.get('login_submit'),
+                      child: _loading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
                               ),
+                            )
+                          : Text(
+                              _isRegister
+                                  ? t.get('login_register')
+                                  : t.get('login_submit'),
+                            ),
                     ),
                     const SizedBox(height: 12),
 
                     TextButton(
-                      onPressed:
-                          () => setState(() {
-                            _isRegister = !_isRegister;
-                            _error = null;
-                          }),
+                      onPressed: () => setState(() {
+                        _isRegister = !_isRegister;
+                        _error = null;
+                      }),
                       child: Text(
                         _isRegister
                             ? t.get('login_have_account')
@@ -268,9 +260,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Text(
                             state.serverUrl,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Colors.grey),
                           ),
                         ),
                         TextButton(

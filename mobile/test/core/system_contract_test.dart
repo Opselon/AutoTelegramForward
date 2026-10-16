@@ -58,11 +58,13 @@ void main() {
         final check = entry as Map<String, dynamic>;
         // Exactly these keys: a `value` key would mean the API started echoing
         // configuration back to clients.
-        expect(
-          check.keys.toSet(),
-          {'key', 'level', 'set', 'reason', 'hint'},
-          reason: 'unexpected field in a contract check: $check',
-        );
+        expect(check.keys.toSet(), {
+          'key',
+          'level',
+          'set',
+          'reason',
+          'hint',
+        }, reason: 'unexpected field in a contract check: $check');
         expect(check['set'], isA<bool>());
       }
       for (final check in report.checks) {
@@ -113,11 +115,10 @@ void main() {
   group('ServiceHealth (GET /api/v1/health/services)', () {
     test('parses the live payload including the list key', () {
       final payload = _fixture('health_services');
-      final services =
-          (payload['services'] as List)
-              .whereType<Map>()
-              .map((e) => ServiceHealth.fromJson(e.cast<String, dynamic>()))
-              .toList();
+      final services = (payload['services'] as List)
+          .whereType<Map>()
+          .map((e) => ServiceHealth.fromJson(e.cast<String, dynamic>()))
+          .toList();
       expect(services, isNotEmpty);
       expect(payload['status'], isIn(['healthy', 'degraded']));
       expect(services.map((s) => s.name), contains('core'));
@@ -129,11 +130,10 @@ void main() {
       final payload = _fixture('system_env');
       expect(payload['ok'], isA<bool>());
       expect(payload['deployment'], isA<String>());
-      final checks =
-          (payload['checks'] as List)
-              .whereType<Map>()
-              .map((e) => EnvCheck.fromJson(e.cast<String, dynamic>()))
-              .toList();
+      final checks = (payload['checks'] as List)
+          .whereType<Map>()
+          .map((e) => EnvCheck.fromJson(e.cast<String, dynamic>()))
+          .toList();
       expect(checks, isNotEmpty);
       expect(checks.any((c) => c.set), isTrue);
       for (final check in checks) {

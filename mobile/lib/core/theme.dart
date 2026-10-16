@@ -139,10 +139,9 @@ class AppGlass {
       color: gradient == null ? base.withValues(alpha: 0.72) : null,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color:
-            highlight
-                ? Colors.white.withValues(alpha: dark ? 0.10 : 0.6)
-                : Colors.transparent,
+        color: highlight
+            ? Colors.white.withValues(alpha: dark ? 0.10 : 0.6)
+            : Colors.transparent,
       ),
       boxShadow: AppShadows.dark(brightness),
     );
@@ -153,22 +152,21 @@ class AppGlass {
 class AppShadows {
   const AppShadows._();
 
-  static List<BoxShadow> dark(Brightness b) =>
-      b == Brightness.dark
-          ? const [
-            BoxShadow(
-              color: Color(0x33000000),
-              blurRadius: 18,
-              offset: Offset(0, 8),
-            ),
-          ]
-          : const [
-            BoxShadow(
-              color: Color(0x14000000),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ];
+  static List<BoxShadow> dark(Brightness b) => b == Brightness.dark
+      ? const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ]
+      : const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ];
 }
 
 class AppTheme {
@@ -222,14 +220,12 @@ class AppTheme {
   /// operational screens need slightly tighter line heights and clearer
   /// weight separation between labels and values.
   static TextTheme _textTheme(Brightness brightness) {
-    final onSurface =
-        brightness == Brightness.dark
-            ? const Color(0xFFE2E8F0)
-            : const Color(0xFF0F172A);
-    final muted =
-        brightness == Brightness.dark
-            ? const Color(0xFF94A3B8)
-            : const Color(0xFF64748B);
+    final onSurface = brightness == Brightness.dark
+        ? const Color(0xFFE2E8F0)
+        : const Color(0xFF0F172A);
+    final muted = brightness == Brightness.dark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
     return TextTheme(
       headlineSmall: TextStyle(
         fontWeight: FontWeight.w700,
@@ -304,7 +300,7 @@ class AppTheme {
       colorScheme: scheme,
       textTheme: _textTheme(brightness),
       iconTheme: IconThemeData(color: scheme.onSurface.withValues(alpha: 0.85)),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: surface,
         elevation: 0,
         margin: EdgeInsets.zero,
@@ -334,10 +330,9 @@ class AppTheme {
           return TextStyle(
             fontSize: 11,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color:
-                selected
-                    ? scheme.onSurface
-                    : scheme.onSurface.withValues(alpha: 0.6),
+            color: selected
+                ? scheme.onSurface
+                : scheme.onSurface.withValues(alpha: 0.6),
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
@@ -480,8 +475,9 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor:
-            isDark ? const Color(0xFF0B1220) : const Color(0xFF0F172A),
+        backgroundColor: isDark
+            ? const Color(0xFF0B1220)
+            : const Color(0xFF0F172A),
         contentTextStyle: const TextStyle(color: Colors.white),
         shape: RoundedRectangleBorder(borderRadius: AppRadii.allMd),
       ),

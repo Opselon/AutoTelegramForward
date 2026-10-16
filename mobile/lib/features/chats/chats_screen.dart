@@ -238,17 +238,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 isDense: true,
                 prefixIcon: const Icon(Icons.search, size: 20),
                 hintText: t.get('chats_search_hint'),
-                suffixIcon:
-                    _loading
-                        ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                        : null,
+                suffixIcon: _loading
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -268,8 +267,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         key: ValueKey<String>('chats_filter_${entry.$1}'),
                         label: Text(t.get(entry.$2)),
                         selected: _typeFilter == entry.$1,
-                        onSelected:
-                            (_) => setState(() => _typeFilter = entry.$1),
+                        onSelected: (_) =>
+                            setState(() => _typeFilter = entry.$1),
                       ),
                     ),
                 ],
@@ -306,7 +305,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       icon: Icons.send_outlined,
       child: DropdownButtonFormField<String>(
         key: const ValueKey<String>('chats_session_dropdown'),
-        value: _sessionId.isEmpty ? null : _sessionId,
+        initialValue: _sessionId.isEmpty ? null : _sessionId,
         isDense: true,
         items: [
           for (final s in _sessions)
@@ -341,10 +340,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final visible = _visible;
     if (visible.isEmpty) {
       return EmptyStateView(
-        message:
-            _chats.isEmpty
-                ? t.get('chats_empty')
-                : t.get('chats_picker_filtered_empty'),
+        message: _chats.isEmpty
+            ? t.get('chats_empty')
+            : t.get('chats_picker_filtered_empty'),
         icon: Icons.forum_outlined,
       );
     }
@@ -409,12 +407,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   asSource.isEmpty && asTarget.isEmpty
                       ? t.get('chats_usage_none')
                       : t.get(
-                        'chats_usage',
-                        params: {
-                          'sources': '${asSource.length}',
-                          'targets': '${asTarget.length}',
-                        },
-                      ),
+                          'chats_usage',
+                          params: {
+                            'sources': '${asSource.length}',
+                            'targets': '${asTarget.length}',
+                          },
+                        ),
                   style: Theme.of(sheetCtx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -487,40 +485,39 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final selected = await showModalBottomSheet<ForwardRule>(
       context: context,
       useSafeArea: true,
-      builder:
-          (sheetCtx) => ListView(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            shrinkWrap: true,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Text(
-                  asSource
-                      ? t.get('chats_choose_source_task')
-                      : t.get('chats_choose_target_task'),
-                  style: Theme.of(sheetCtx).textTheme.titleMedium,
-                ),
-              ),
-              for (final rule in _rules)
-                ListTile(
-                  key: ValueKey<String>('chat_task_${rule.id}'),
-                  leading: const Icon(Icons.alt_route_rounded),
-                  title: Text(
-                    rule.name.isNotEmpty ? rule.name : rule.shortId,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    rule.sourceIds.isEmpty
-                        ? t.get('chats_use_source_none')
-                        : rule.sourceIds.join(', '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onTap: () => Navigator.of(sheetCtx).pop(rule),
-                ),
-            ],
+      builder: (sheetCtx) => ListView(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        shrinkWrap: true,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Text(
+              asSource
+                  ? t.get('chats_choose_source_task')
+                  : t.get('chats_choose_target_task'),
+              style: Theme.of(sheetCtx).textTheme.titleMedium,
+            ),
           ),
+          for (final rule in _rules)
+            ListTile(
+              key: ValueKey<String>('chat_task_${rule.id}'),
+              leading: const Icon(Icons.alt_route_rounded),
+              title: Text(
+                rule.name.isNotEmpty ? rule.name : rule.shortId,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                rule.sourceIds.isEmpty
+                    ? t.get('chats_use_source_none')
+                    : rule.sourceIds.join(', '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () => Navigator.of(sheetCtx).pop(rule),
+            ),
+        ],
+      ),
     );
     if (selected == null || !mounted) return;
     _openEditor(
@@ -537,15 +534,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder:
-            (_) => RuleEditorScreen(
-              rule: rule,
-              initialSessionId: _sessionId,
-              prefillSourceIds:
-                  prefillSource.isEmpty ? const [] : <String>[prefillSource],
-              prefillTargetIds:
-                  prefillTarget.isEmpty ? const [] : <String>[prefillTarget],
-            ),
+        builder: (_) => RuleEditorScreen(
+          rule: rule,
+          initialSessionId: _sessionId,
+          prefillSourceIds: prefillSource.isEmpty
+              ? const []
+              : <String>[prefillSource],
+          prefillTargetIds: prefillTarget.isEmpty
+              ? const []
+              : <String>[prefillTarget],
+        ),
       ),
     );
     // A save can change which tasks use this chat, so the usage counts and the

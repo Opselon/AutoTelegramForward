@@ -53,8 +53,9 @@ class _AiConfigEditorDialogState extends State<AiConfigEditorDialog> {
   }
 
   AiConfig _build() {
-    final provider =
-        _name.text.trim().isEmpty ? 'openai' : _name.text.trim().toLowerCase();
+    final provider = _name.text.trim().isEmpty
+        ? 'openai'
+        : _name.text.trim().toLowerCase();
     return AiConfig(
       id: widget.existing?.id ?? '',
       provider: provider,
@@ -82,14 +83,12 @@ class _AiConfigEditorDialogState extends State<AiConfigEditorDialog> {
                 labelText: 'Provider',
                 border: OutlineInputBorder(),
               ),
-              value:
-                  _providers.contains(_name.text.trim().toLowerCase())
-                      ? _name.text.trim().toLowerCase()
-                      : 'openai',
-              items:
-                  _providers
-                      .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                      .toList(),
+              initialValue: _providers.contains(_name.text.trim().toLowerCase())
+                  ? _name.text.trim().toLowerCase()
+                  : 'openai',
+              items: _providers
+                  .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                  .toList(),
               onChanged: (v) {
                 if (v != null) _name.text = v;
               },

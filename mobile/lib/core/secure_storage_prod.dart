@@ -23,10 +23,18 @@ class SecureStorageProd implements SecureTokenStore {
     : _storage =
           storage ??
           const FlutterSecureStorage(
-            aOptions: AndroidOptions(
-              encryptedSharedPreferences: true,
-              resetOnError: true,
-            ),
+            // flutter_secure_storage 11 removed `encryptedSharedPreferences`:
+            // Android storage is now always AES-GCM with the key wrapped by an
+            // RSA-OAEP key in the Android Keystore (API 23+), so there is no
+            // insecure default left to opt out of. `resetOnError` keeps the old
+            // behaviour of clearing a value the keystore can no longer decrypt
+            // rather than throwing on every read.
+            //
+            // Upgrading from 9.x changes the on-disk format, so a session
+            // written by an older build is not readable by this one; `read()`
+            // treats that as "no session" and the app asks the user to sign in
+            // again once, instead of holding a token it cannot verify.
+            aOptions: AndroidOptions(resetOnError: true),
             iOptions: IOSOptions(
               accessibility: KeychainAccessibility.first_unlock_this_device,
             ),

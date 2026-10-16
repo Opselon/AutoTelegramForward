@@ -24,8 +24,7 @@ class AppMessagesFr {
     'ai_empty': 'No AI configuration yet.',
     'ai_language': 'Target language',
     'ai_model': 'Model',
-    'ai_note':
-        'Les clés d\'API sont configurées par le bot ou le tableau de bord web ; l\'application mobile ne stocke jamais les clés de fournisseur.',
+    'ai_note': 'Les clés d\'API sont configurées par le bot ou le tableau de bord web ; l\'application mobile ne stocke jamais les clés de fournisseur.',
     'ai_prompt': 'Prompt',
     'ai_provider': 'Provider',
     'ai_title': 'AI rewriting',
@@ -38,8 +37,7 @@ class AppMessagesFr {
     'chats_members': '{n} membres',
     'chats_new_task': 'Nouvelle tâche depuis ce chat',
     'chats_new_task_hint': 'Choisissez ensuite l\'autre côté de la route',
-    'chats_no_sessions':
-        'Connectez d\'abord un compte Telegram : la liste des chats en est lue.',
+    'chats_no_sessions': 'Connectez d\'abord un compte Telegram : la liste des chats en est lue.',
     'chats_picker_add': 'Ajouter {n}',
     'chats_picker_add_none': 'Ajouter',
     'chats_picker_clear': 'Effacer',
@@ -62,8 +60,7 @@ class AppMessagesFr {
     'chats_picker_search_hint': 'Rechercher des chats',
     'chats_picker_select_all': 'Sélectionner tout ce qui est affiché',
     'chats_picker_selected_count': '{n} sélectionné(s)',
-    'chats_picker_subtitle':
-        'La sélection n\'enregistre rien — confirmez pour l\'écrire dans le champ.',
+    'chats_picker_subtitle': 'La sélection n\'enregistre rien — confirmez pour l\'écrire dans le champ.',
     'chats_picker_total': 'affichage de {shown} sur {total}',
     'chats_picker_unavailable':
         'Ce serveur ne liste pas les chats ; saisissez plutôt des id.',
@@ -128,8 +125,7 @@ class AppMessagesFr {
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
     'filters_title': 'Filters',
-    'incompatible_server':
-        'Ce serveur exécute une version plus ancienne d\'AutoTelegramForward. Mettez-la à jour vers {version} ou plus récente.',
+    'incompatible_server': 'Ce serveur exécute une version plus ancienne d\'AutoTelegramForward. Mettez-la à jour vers {version} ou plus récente.',
     'lang_label': 'Langue',
     'lang_native_en': 'English',
     'lang_native_es': 'Español',
@@ -193,14 +189,12 @@ class AppMessagesFr {
     'logs_policy_admin_required':
         'Seul un administrateur peut ouvrir une fenêtre détaillée.',
     'logs_policy_configured': 'Configuré : {levels}',
-    'logs_policy_counters':
-        'Émis {emitted} · supprimés par niveau {by_level} · par débit {by_rate}',
+    'logs_policy_counters': 'Émis {emitted} · supprimés par niveau {by_level} · par débit {by_rate}',
     'logs_policy_counters_scope': 'Portée des compteurs : {scope}',
     'logs_policy_data_age': 'Dernier enregistrement il y a {seconds} s',
     'logs_policy_diag_off': 'Fenêtre détaillée fermée',
     'logs_policy_diag_on': 'Fenêtre détaillée ouverte — {seconds} s restantes',
-    'logs_policy_diagnostics_hint':
-        'Administrateurs uniquement. S\'ouvre pendant {seconds} s et se ferme toute seule.',
+    'logs_policy_diagnostics_hint': 'Administrateurs uniquement. S\'ouvre pendant {seconds} s et se ferme toute seule.',
     'logs_policy_diagnostics_title': 'Fenêtre de collecte détaillée',
     'logs_policy_effective': 'Collecte : {levels}',
     'logs_policy_health_title': 'Santé du pipeline',
@@ -220,8 +214,7 @@ class AppMessagesFr {
     'logs_policy_stop': 'Fermer la fenêtre',
     'logs_policy_stop_none': 'Aucune fenêtre détaillée n\'était ouverte',
     'logs_policy_stopped': 'Fenêtre détaillée fermée',
-    'logs_policy_unavailable_hint':
-        'Ce serveur ne publie pas sa politique de journaux. Mettez à jour le serveur pour utiliser cet onglet.',
+    'logs_policy_unavailable_hint': 'Ce serveur ne publie pas sa politique de journaux. Mettez à jour le serveur pour utiliser cet onglet.',
     'logs_scope_corr_chip': 'corr:{id}',
     'logs_scope_service': 'Service',
     'logs_scope_task': 'Tâche',
@@ -250,8 +243,7 @@ class AppMessagesFr {
     'rules_ai_digest_sub': 'Puces de résumé automatisé des actualités',
     'rules_ai_ocr': 'OCR dimage par IA',
     'rules_ai_ocr_sub': 'Reconnaissance optique de caractères via IA de vision',
-    'rules_ai_pick_empty':
-        'Aucune configuration d\'IA pour l\'instant. Créez-en une dans l\'écran IA.',
+    'rules_ai_pick_empty': 'Aucune configuration d\'IA pour l\'instant. Créez-en une dans l\'écran IA.',
     'rules_ai_pick_none': 'Sans IA (transfert direct)',
     'rules_ai_pick_title': 'Configuration IA',
     'rules_ai_rewrite': 'Réécriture intelligente par IA',
@@ -276,8 +268,7 @@ class AppMessagesFr {
     'rules_disabled': 'Disabled',
     'rules_duplicate_filters': 'Filtre de doublons',
     'rules_edit': 'Modifier la tâche',
-    'rules_empty':
-        'Aucune tâche pour l\'instant. Créez-en une pour commencer le transfert.',
+    'rules_empty': 'Aucune tâche pour l\'instant. Créez-en une pour commencer le transfert.',
     'rules_enabled': 'Enabled',
     'rules_filter_mode': 'Filter mode',
     'rules_filters': 'Filtres',
@@ -325,11 +316,9 @@ class AppMessagesFr {
         '{reason} — appuyez sur la puce pour modifier cette entrée.',
     'rules_route_duplicate_id':
         '{id} est indiqué plus d’une fois. Supprimez le doublon.',
-    'rules_route_empty':
-        'Aucune chaîne pour le moment. Saisissez-en une ou plusieurs, séparées par des virgules.',
+    'rules_route_empty': 'Aucune chaîne pour le moment. Saisissez-en une ou plusieurs, séparées par des virgules.',
     'rules_route_fan_out': '{count} destinations',
-    'rules_route_overlap_id':
-        '{id} est à la fois source et destination. Une tâche ne peut pas transmettre à elle-même.',
+    'rules_route_overlap_id': '{id} est à la fois source et destination. Une tâche ne peut pas transmettre à elle-même.',
     'rules_route_preview': '{sources} → {targets}',
     'rules_route_preview_label': 'Aperçu de la route',
     'rules_route_remove': 'Supprimer cette entrée',
@@ -429,13 +418,11 @@ class AppMessagesFr {
         'Le serveur a refusé le formulaire. Vérifiez les champs signalés.',
     'server_probe_bad_response':
         'Le serveur a répondu, mais avec un contenu inattendu.',
-    'server_probe_no_version':
-        'Ce serveur n\'expose pas d\'endpoint de version. Vérifiez l\'adresse ou mettez à jour le serveur.',
+    'server_probe_no_version': 'Ce serveur n\'expose pas d\'endpoint de version. Vérifiez l\'adresse ou mettez à jour le serveur.',
     'server_probe_reachable': 'Server reachable and compatible',
     'server_probe_test': 'Test connection',
     'server_probe_testing': 'Testing connection…',
-    'server_probe_tls_error':
-        'La connexion sécurisée a échoué. Vérifiez le certificat et utilisez https://.',
+    'server_probe_tls_error': 'La connexion sécurisée a échoué. Vérifiez le certificat et utilisez https://.',
     'server_probe_unreachable':
         'Cannot reach the server. Check the address and your connection.',
     'server_restore_default': 'Restore official default',
@@ -447,8 +434,7 @@ class AppMessagesFr {
     'sessions_status_live': 'live',
     'sessions_status_offline': 'offline',
     'sessions_terminate': 'Disconnect',
-    'sessions_terminate_confirm':
-        'Déconnecter ce compte Telegram ? Les tâches qui l\'utilisent s\'arrêteront.',
+    'sessions_terminate_confirm': 'Déconnecter ce compte Telegram ? Les tâches qui l\'utilisent s\'arrêteront.',
     'sessions_title': 'Telegram sessions',
     'settings_about': 'About',
     'settings_change_password': 'Change password',
@@ -496,8 +482,7 @@ class AppMessagesFr {
     'sys_subtitle':
         'État du serveur, topologie des services et contrat de configuration',
     'sys_title': 'Système',
-    'sys_unavailable':
-        'Ce serveur n\'expose pas l\'endpoint d\'état du système. Mettez à jour le serveur pour voir l\'état ici.',
+    'sys_unavailable': 'Ce serveur n\'expose pas l\'endpoint d\'état du système. Mettez à jour le serveur pour voir l\'état ici.',
     'tg_login_cancel': 'Cancel login',
     'tg_login_code': 'Verification code',
     'tg_login_code_hint': 'Code from the Telegram app',

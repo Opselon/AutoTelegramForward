@@ -24,8 +24,7 @@ class AppMessagesRu {
     'ai_empty': 'No AI configuration yet.',
     'ai_language': 'Target language',
     'ai_model': 'Model',
-    'ai_note':
-        'Ключи API настраиваются ботом или веб-панелью; мобильное приложение не хранит ключи провайдеров.',
+    'ai_note': 'Ключи API настраиваются ботом или веб-панелью; мобильное приложение не хранит ключи провайдеров.',
     'ai_prompt': 'Prompt',
     'ai_provider': 'Provider',
     'ai_title': 'AI rewriting',
@@ -125,8 +124,7 @@ class AppMessagesRu {
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
     'filters_title': 'Filters',
-    'incompatible_server':
-        'Этот сервер работает на более старой версии AutoTelegramForward. Обновите её до {version} или новее.',
+    'incompatible_server': 'Этот сервер работает на более старой версии AutoTelegramForward. Обновите её до {version} или новее.',
     'lang_label': 'Язык',
     'lang_native_en': 'English',
     'lang_native_es': 'Español',
@@ -189,15 +187,13 @@ class AppMessagesRu {
     'logs_policy_admin_required':
         'Открыть окно подробного сбора может только администратор.',
     'logs_policy_configured': 'Настроено: {levels}',
-    'logs_policy_counters':
-        'Выдано {emitted} · отсечено по уровню {by_level} · по частоте {by_rate}',
+    'logs_policy_counters': 'Выдано {emitted} · отсечено по уровню {by_level} · по частоте {by_rate}',
     'logs_policy_counters_scope': 'Счётчики относятся к {scope}',
     'logs_policy_data_age': 'Последняя запись {seconds} с назад',
     'logs_policy_diag_off': 'Окно подробного сбора закрыто',
     'logs_policy_diag_on':
         'Окно подробного сбора открыто — осталось {seconds} с',
-    'logs_policy_diagnostics_hint':
-        'Только для администраторов. Открывается на {seconds} с и закрывается сам.',
+    'logs_policy_diagnostics_hint': 'Только для администраторов. Открывается на {seconds} с и закрывается сам.',
     'logs_policy_diagnostics_title': 'Окно подробного сбора',
     'logs_policy_effective': 'Собирается: {levels}',
     'logs_policy_health_title': 'Состояние конвейера',
@@ -217,8 +213,7 @@ class AppMessagesRu {
     'logs_policy_stop': 'Закрыть окно',
     'logs_policy_stop_none': 'Окно подробного сбора не было открыто',
     'logs_policy_stopped': 'Окно подробного сбора закрыто',
-    'logs_policy_unavailable_hint':
-        'Этот сервер не сообщает политику журналов. Обновите сервер, чтобы использовать эту вкладку.',
+    'logs_policy_unavailable_hint': 'Этот сервер не сообщает политику журналов. Обновите сервер, чтобы использовать эту вкладку.',
     'logs_scope_corr_chip': 'корр:{id}',
     'logs_scope_service': 'Сервис',
     'logs_scope_task': 'Задача',
@@ -285,8 +280,7 @@ class AppMessagesRu {
     'rules_footer': 'Footer template',
     'rules_forward_mode': 'Режим пересылки',
     'rules_full_control': 'Полный контроль',
-    'rules_full_control_desc':
-        'Все настройки задачи, которые учитывает движок, проверяются на сервере.',
+    'rules_full_control_desc': 'Все настройки задачи, которые учитывает движок, проверяются на сервере.',
     'rules_full_control_open': 'Открыть',
     'rules_header': 'Header template',
     'rules_ignore_edits': 'Ignore Edits',
@@ -323,8 +317,7 @@ class AppMessagesRu {
     'rules_route_empty':
         'Каналов пока нет. Введите один или несколько через запятую.',
     'rules_route_fan_out': '{count} целей',
-    'rules_route_overlap_id':
-        '{id} является и источником, и целью. Задача не может пересылать сама себе.',
+    'rules_route_overlap_id': '{id} является и источником, и целью. Задача не может пересылать сама себе.',
     'rules_route_preview': '{sources} → {targets}',
     'rules_route_preview_label': 'Предпросмотр маршрута',
     'rules_route_remove': 'Удалить эту запись',
@@ -423,13 +416,11 @@ class AppMessagesRu {
     'rules_validation_failed':
         'Сервер отклонил форму. Проверьте выделенные поля.',
     'server_probe_bad_response': 'Сервер ответил, но неожиданным содержимым.',
-    'server_probe_no_version':
-        'Сервер не предоставляет эндпоинт версии. Проверьте адрес или обновите сервер.',
+    'server_probe_no_version': 'Сервер не предоставляет эндпоинт версии. Проверьте адрес или обновите сервер.',
     'server_probe_reachable': 'Server reachable and compatible',
     'server_probe_test': 'Test connection',
     'server_probe_testing': 'Testing connection…',
-    'server_probe_tls_error':
-        'Защищённое соединение не удалось. Проверьте сертификат и используйте https://.',
+    'server_probe_tls_error': 'Защищённое соединение не удалось. Проверьте сертификат и используйте https://.',
     'server_probe_unreachable':
         'Cannot reach the server. Check the address and your connection.',
     'server_restore_default': 'Restore official default',
@@ -441,8 +432,7 @@ class AppMessagesRu {
     'sessions_status_live': 'live',
     'sessions_status_offline': 'offline',
     'sessions_terminate': 'Disconnect',
-    'sessions_terminate_confirm':
-        'Отключить этот аккаунт Telegram? Задачи, использующие его, остановятся.',
+    'sessions_terminate_confirm': 'Отключить этот аккаунт Telegram? Задачи, использующие его, остановятся.',
     'sessions_title': 'Telegram sessions',
     'settings_about': 'About',
     'settings_change_password': 'Change password',
@@ -490,8 +480,7 @@ class AppMessagesRu {
     'sys_subtitle':
         'Готовность сервера, топология служб и контракт конфигурации',
     'sys_title': 'Система',
-    'sys_unavailable':
-        'Сервер не предоставляет эндпоинт состояния системы. Обновите сервер, чтобы видеть готовность здесь.',
+    'sys_unavailable': 'Сервер не предоставляет эндпоинт состояния системы. Обновите сервер, чтобы видеть готовность здесь.',
     'tg_login_cancel': 'Cancel login',
     'tg_login_code': 'Verification code',
     'tg_login_code_hint': 'Code from the Telegram app',

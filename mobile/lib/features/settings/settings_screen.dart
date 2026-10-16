@@ -67,20 +67,30 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          for (final locale in AppMessages.supportedLocales)
-            RadioListTile<String>(
-              dense: true,
-              title: Text(
-                t.get('lang_native_${locale.languageCode}'),
-                textDirection: TextDirection.ltr,
-              ),
-              subtitle: Text(locale.languageCode.toUpperCase()),
-              value: locale.languageCode,
-              groupValue: state.locale.languageCode,
-              onChanged: (v) {
-                if (v != null) state.setLocale(Locale(v));
-              },
+          // Since Flutter 3.32 a radio no longer carries its own groupValue /
+          // onChanged: one RadioGroup owns the selection for the whole subtree
+          // below it, so the group must be the ancestor of every option it
+          // manages (and only of them).
+          RadioGroup<String>(
+            groupValue: state.locale.languageCode,
+            onChanged: (v) {
+              if (v != null) state.setLocale(Locale(v));
+            },
+            child: Column(
+              children: [
+                for (final locale in AppMessages.supportedLocales)
+                  RadioListTile<String>(
+                    dense: true,
+                    title: Text(
+                      t.get('lang_native_${locale.languageCode}'),
+                      textDirection: TextDirection.ltr,
+                    ),
+                    subtitle: Text(locale.languageCode.toUpperCase()),
+                    value: locale.languageCode,
+                  ),
+              ],
             ),
+          ),
           const Divider(),
 
           // Theme
@@ -90,29 +100,27 @@ class SettingsScreen extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
-          RadioListTile<ThemeMode>(
-            title: Text(t.get('settings_theme_system')),
-            value: ThemeMode.system,
+          RadioGroup<ThemeMode>(
             groupValue: state.themeMode,
             onChanged: (v) {
               if (v != null) state.setThemeMode(v);
             },
-          ),
-          RadioListTile<ThemeMode>(
-            title: Text(t.get('settings_theme_light')),
-            value: ThemeMode.light,
-            groupValue: state.themeMode,
-            onChanged: (v) {
-              if (v != null) state.setThemeMode(v);
-            },
-          ),
-          RadioListTile<ThemeMode>(
-            title: Text(t.get('settings_theme_dark')),
-            value: ThemeMode.dark,
-            groupValue: state.themeMode,
-            onChanged: (v) {
-              if (v != null) state.setThemeMode(v);
-            },
+            child: Column(
+              children: [
+                RadioListTile<ThemeMode>(
+                  title: Text(t.get('settings_theme_system')),
+                  value: ThemeMode.system,
+                ),
+                RadioListTile<ThemeMode>(
+                  title: Text(t.get('settings_theme_light')),
+                  value: ThemeMode.light,
+                ),
+                RadioListTile<ThemeMode>(
+                  title: Text(t.get('settings_theme_dark')),
+                  value: ThemeMode.dark,
+                ),
+              ],
+            ),
           ),
           const Divider(),
 
@@ -165,22 +173,21 @@ class SettingsScreen extends StatelessWidget {
     final t = AppMessages.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Text(t.get('settings_logout')),
-            content: Text(t.get('settings_logout_confirm')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(t.get('action_cancel')),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(t.get('action_confirm')),
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: Text(t.get('settings_logout')),
+        content: Text(t.get('settings_logout_confirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t.get('action_cancel')),
           ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t.get('action_confirm')),
+          ),
+        ],
+      ),
     );
 
     if (confirmed == true && context.mounted) {

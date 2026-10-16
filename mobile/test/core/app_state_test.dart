@@ -32,8 +32,9 @@ void main() {
           userId: 99,
           username: 'bob',
           isAdmin: true,
-          expiresAtIso:
-              DateTime.now().add(const Duration(days: 2)).toIso8601String(),
+          expiresAtIso: DateTime.now()
+              .add(const Duration(days: 2))
+              .toIso8601String(),
         ),
       );
 
@@ -60,10 +61,9 @@ void main() {
           userId: 99,
           username: 'bob',
           isAdmin: false,
-          expiresAtIso:
-              DateTime.now()
-                  .subtract(const Duration(minutes: 5))
-                  .toIso8601String(),
+          expiresAtIso: DateTime.now()
+              .subtract(const Duration(minutes: 5))
+              .toIso8601String(),
         ),
       );
 
@@ -133,8 +133,9 @@ void main() {
           username: 'tester',
           password: 'SecretPassword123!',
           isAdmin: false,
-          expiresAtIso:
-              DateTime.now().add(const Duration(days: 5)).toIso8601String(),
+          expiresAtIso: DateTime.now()
+              .add(const Duration(days: 5))
+              .toIso8601String(),
         ),
       );
 

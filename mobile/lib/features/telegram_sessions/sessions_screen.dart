@@ -63,20 +63,17 @@ class _SessionsScreenState extends State<SessionsScreen> {
         return;
       }
       setState(
-        () =>
-            _error =
-                exc.error.message.isNotEmpty
-                    ? exc.error.message
-                    : t.get('state_error'),
+        () => _error = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : t.get('state_error'),
       );
     } catch (exc) {
       // Never swallow: a network failure must not look like "no data".
       if (!mounted) return;
       setState(
-        () =>
-            _error =
-                '${t.get('state_error')} '
-                '(${exc.toString().split('(').first.trim()})',
+        () => _error =
+            '${t.get('state_error')} '
+            '(${exc.toString().split('(').first.trim()})',
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -87,22 +84,21 @@ class _SessionsScreenState extends State<SessionsScreen> {
     final t = AppMessages.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Text(t.get('sessions_terminate')),
-            content: Text(t.get('sessions_terminate_confirm')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(t.get('action_cancel')),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(t.get('action_confirm')),
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: Text(t.get('sessions_terminate')),
+        content: Text(t.get('sessions_terminate_confirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t.get('action_cancel')),
           ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t.get('action_confirm')),
+          ),
+        ],
+      ),
     );
 
     if (confirmed != true || !mounted) return;
@@ -134,9 +130,8 @@ class _SessionsScreenState extends State<SessionsScreen> {
     if (linked == true) {
       if (!mounted) return;
       final t = AppMessages.of(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(t.get('tg_login_success'))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(t.get('tg_login_success'))));
       await _load();
     }
   }
@@ -177,81 +172,78 @@ class _SessionsScreenState extends State<SessionsScreen> {
                 child: Text(_error!, style: const TextStyle(color: Colors.red)),
               ),
             Expanded(
-              child:
-                  _sessions.isEmpty && !_loading
-                      ? ListView(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 64,
+              child: _sessions.isEmpty && !_loading
+                  ? ListView(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 64,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.phonelink_erase_rounded,
+                                size: 64,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                t.get('sessions_empty'),
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: Colors.grey),
+                              ),
+                              const SizedBox(height: 24),
+                              ElevatedButton.icon(
+                                onPressed: _addSession,
+                                icon: const Icon(Icons.add),
+                                label: Text(t.get('sessions_add')),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _sessions.length,
+                      itemBuilder: (context, index) {
+                        final s = _sessions[index];
+                        return Card(
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: s.isActive
+                                  ? Colors.green.withValues(alpha: 0.2)
+                                  : Colors.grey.withValues(alpha: 0.2),
+                              child: Icon(
+                                Icons.send_rounded,
+                                color: s.isActive ? Colors.green : Colors.grey,
+                                size: 20,
+                              ),
                             ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.phonelink_erase_rounded,
-                                  size: 64,
-                                  color: Colors.grey,
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  t.get('sessions_empty'),
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(color: Colors.grey),
-                                ),
-                                const SizedBox(height: 24),
-                                ElevatedButton.icon(
-                                  onPressed: _addSession,
-                                  icon: const Icon(Icons.add),
-                                  label: Text(t.get('sessions_add')),
-                                ),
-                              ],
+                            title: Text(
+                              s.displayName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${s.phone.isNotEmpty ? s.phone : s.id} • ${s.isActive ? t.get('sessions_active') : t.get('sessions_inactive')}',
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(
+                                Icons.link_off,
+                                color: Colors.red,
+                              ),
+                              tooltip: t.get('sessions_terminate'),
+                              onPressed: () => _terminate(s),
                             ),
                           ),
-                        ],
-                      )
-                      : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _sessions.length,
-                        itemBuilder: (context, index) {
-                          final s = _sessions[index];
-                          return Card(
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor:
-                                    s.isActive
-                                        ? Colors.green.withValues(alpha: 0.2)
-                                        : Colors.grey.withValues(alpha: 0.2),
-                                child: Icon(
-                                  Icons.send_rounded,
-                                  color:
-                                      s.isActive ? Colors.green : Colors.grey,
-                                  size: 20,
-                                ),
-                              ),
-                              title: Text(
-                                s.displayName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Text(
-                                '${s.phone.isNotEmpty ? s.phone : s.id} • ${s.isActive ? t.get('sessions_active') : t.get('sessions_inactive')}',
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(
-                                  Icons.link_off,
-                                  color: Colors.red,
-                                ),
-                                tooltip: t.get('sessions_terminate'),
-                                onPressed: () => _terminate(s),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),

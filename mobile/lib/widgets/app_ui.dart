@@ -55,7 +55,7 @@ class SectionCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (trailing != null) trailing!,
+                ?trailing,
               ],
             ),
             const SizedBox(height: AppSpacing.md),
@@ -268,14 +268,13 @@ class ReadinessHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final gradient =
-        ready
-            ? AppGradients.brand
-            : const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFF59E0B), Color(0xFFEF4444)],
-            );
+    final gradient = ready
+        ? AppGradients.brand
+        : const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFF59E0B), Color(0xFFEF4444)],
+          );
 
     return Container(
       decoration: AppGlass.panel(
@@ -653,7 +652,7 @@ class GradientHeader extends StatelessWidget {
               ],
             ),
           ),
-          if (trailing != null) trailing!,
+          ?trailing,
         ],
       ),
     );
@@ -678,12 +677,11 @@ class InlineBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = AppTheme.severityColor(severity);
-    final icon =
-        severity == 'error'
-            ? Icons.error_outline
-            : severity == 'warning'
-            ? Icons.warning_amber_rounded
-            : Icons.info_outline;
+    final icon = severity == 'error'
+        ? Icons.error_outline
+        : severity == 'warning'
+        ? Icons.warning_amber_rounded
+        : Icons.info_outline;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -700,9 +698,8 @@ class InlineBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
             ),
           ),
           if (onRetry != null)

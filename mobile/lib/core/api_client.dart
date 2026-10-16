@@ -35,14 +35,13 @@ class ApiException implements Exception {
 }
 
 /// Pluggable transport so unit tests never touch the network.
-typedef HttpTransport =
-    Future<http.Response> Function(
-      Uri url, {
-      required String method,
-      Map<String, String>? headers,
-      Object? body,
-      required Duration timeout,
-    });
+typedef HttpTransport = Future<http.Response> Function(
+  Uri url, {
+  required String method,
+  Map<String, String>? headers,
+  Object? body,
+  required Duration timeout,
+});
 
 Future<http.Response> _ioTransport(
   Uri url, {
@@ -118,8 +117,9 @@ int compareApiVersions(String a, String b) {
   if (left.pre.isEmpty && right.pre.isEmpty) return 0;
   if (left.pre.isEmpty) return 1;
   if (right.pre.isEmpty) return -1;
-  final width =
-      left.pre.length < right.pre.length ? left.pre.length : right.pre.length;
+  final width = left.pre.length < right.pre.length
+      ? left.pre.length
+      : right.pre.length;
   for (var i = 0; i < width; i++) {
     final l = left.pre[i], r = right.pre[i];
     if (l == r) continue;
@@ -253,14 +253,13 @@ class ApiClient {
       ).timeout(timeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final int status = response.statusCode;
-        final String kind =
-            status == 404
-                ? ErrorKind.notFound
-                : status == 429
-                ? ErrorKind.rateLimited
-                : status >= 500
-                ? ErrorKind.server
-                : ErrorKind.unknown;
+        final String kind = status == 404
+            ? ErrorKind.notFound
+            : status == 429
+            ? ErrorKind.rateLimited
+            : status >= 500
+            ? ErrorKind.server
+            : ErrorKind.unknown;
         return ProbeResult(
           ok: false,
           reachable: true,
@@ -291,8 +290,9 @@ class ApiClient {
           errorMessage: 'probe_invalid_json',
         );
       }
-      final apiVersion =
-          (json['api_version'] ?? json['apiVersion'] ?? '').toString().trim();
+      final apiVersion = (json['api_version'] ?? json['apiVersion'] ?? '')
+          .toString()
+          .trim();
       final productVersion =
           (json['product_version'] ?? json['productVersion'] ?? '')
               .toString()
@@ -309,10 +309,9 @@ class ApiClient {
           reachable: true,
           compatible: false,
           errorKind: ErrorKind.server,
-          errorMessage:
-              apiVersion.isEmpty
-                  ? 'probe_missing_api_version'
-                  : 'probe_missing_min_supported_client',
+          errorMessage: apiVersion.isEmpty
+              ? 'probe_missing_api_version'
+              : 'probe_missing_min_supported_client',
         );
       }
       final compatible =
@@ -381,13 +380,11 @@ class ApiClient {
 
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     final clean = path.startsWith('/') ? path.substring(1) : path;
-    final base =
-        baseUrl.endsWith('/')
-            ? baseUrl.substring(0, baseUrl.length - 1)
-            : baseUrl;
-    return Uri.parse(
-      '$base/$clean',
-    ).replace(queryParameters: query?.map((k, v) => MapEntry(k, '$v')));
+    final base = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
+    return Uri.parse('$base/$clean')
+        .replace(queryParameters: query?.map((k, v) => MapEntry(k, '$v')));
   }
 
   Map<String, String> get _authHeaders {
@@ -527,10 +524,9 @@ class ApiClient {
       body: body,
       retryable: retryable,
     );
-    final decoded =
-        response.body.isEmpty
-            ? <String, dynamic>{}
-            : jsonDecode(response.body) as Map<String, dynamic>;
+    final decoded = response.body.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(response.body) as Map<String, dynamic>;
     return fromJson(decoded);
   }
 

@@ -32,12 +32,11 @@ Future<void> showRuleSimulatorSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder:
-        (_) => RuleSimulatorSheet(
-          ruleId: ruleId,
-          ruleLabel: ruleLabel,
-          initialChatId: initialChatId,
-        ),
+    builder: (_) => RuleSimulatorSheet(
+      ruleId: ruleId,
+      ruleLabel: ruleLabel,
+      initialChatId: initialChatId,
+    ),
   );
 }
 
@@ -118,11 +117,10 @@ class _RuleSimulatorSheetState extends State<RuleSimulatorSheet> {
         return;
       }
       setState(
-        () =>
-            _error = t.get(
-              'rules_simulate_failed',
-              params: {'error': exc.error.message},
-            ),
+        () => _error = t.get(
+          'rules_simulate_failed',
+          params: {'error': exc.error.message},
+        ),
       );
     } catch (exc) {
       if (!mounted) return;
@@ -232,7 +230,7 @@ class _RuleSimulatorSheetState extends State<RuleSimulatorSheet> {
                     const SizedBox(height: AppSpacing.md),
                     DropdownButtonFormField<String>(
                       key: const ValueKey<String>('simulate_media'),
-                      value: _mediaType,
+                      initialValue: _mediaType,
                       isDense: true,
                       decoration: InputDecoration(
                         isDense: true,
@@ -246,8 +244,8 @@ class _RuleSimulatorSheetState extends State<RuleSimulatorSheet> {
                             child: Text(t.get(entry.$2)),
                           ),
                       ],
-                      onChanged:
-                          (v) => setState(() => _mediaType = v ?? 'none'),
+                      onChanged: (v) =>
+                          setState(() => _mediaType = v ?? 'none'),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     if (_error != null)
@@ -264,16 +262,13 @@ class _RuleSimulatorSheetState extends State<RuleSimulatorSheet> {
                     FilledButton.icon(
                       key: const ValueKey<String>('simulate_run'),
                       onPressed: _running ? null : _run,
-                      icon:
-                          _running
-                              ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                              : const Icon(Icons.science_outlined, size: 18),
+                      icon: _running
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.science_outlined, size: 18),
                       label: Text(t.get('rules_simulate_run')),
                     ),
                     if (_result != null) ...[

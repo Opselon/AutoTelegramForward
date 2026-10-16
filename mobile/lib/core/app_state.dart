@@ -118,10 +118,9 @@ class AppState extends ChangeNotifier {
         _userId = 0;
         _username = creds.username;
         _isAdmin = false;
-        _status =
-            creds.token.isNotEmpty
-                ? SessionStatus.expired
-                : SessionStatus.unauthenticated;
+        _status = creds.token.isNotEmpty
+            ? SessionStatus.expired
+            : SessionStatus.unauthenticated;
       }
     } else {
       _token = null;
@@ -213,10 +212,9 @@ class AppState extends ChangeNotifier {
   /// clear reason instead of an unexplained blank view.
   void markExpired() {
     _token = null;
-    _status =
-        _status == SessionStatus.authenticated
-            ? SessionStatus.expired
-            : SessionStatus.unauthenticated;
+    _status = _status == SessionStatus.authenticated
+        ? SessionStatus.expired
+        : SessionStatus.unauthenticated;
     notifyListeners();
   }
 

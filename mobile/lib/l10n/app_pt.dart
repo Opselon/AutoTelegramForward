@@ -24,8 +24,7 @@ class AppMessagesPt {
     'ai_empty': 'No AI configuration yet.',
     'ai_language': 'Target language',
     'ai_model': 'Model',
-    'ai_note':
-        'As chaves de API são configuradas pelo bot ou pelo painel web; a app móvel nunca guarda chaves de fornecedor.',
+    'ai_note': 'As chaves de API são configuradas pelo bot ou pelo painel web; a app móvel nunca guarda chaves de fornecedor.',
     'ai_prompt': 'Prompt',
     'ai_provider': 'Provider',
     'ai_title': 'AI rewriting',
@@ -38,8 +37,7 @@ class AppMessagesPt {
     'chats_members': '{n} membros',
     'chats_new_task': 'Nova tarefa a partir deste chat',
     'chats_new_task_hint': 'Depois escolha o outro lado da rota',
-    'chats_no_sessions':
-        'Ligue primeiro uma conta do Telegram: a lista de chats é lida a partir dela.',
+    'chats_no_sessions': 'Ligue primeiro uma conta do Telegram: a lista de chats é lida a partir dela.',
     'chats_picker_add': 'Adicionar {n}',
     'chats_picker_add_none': 'Adicionar',
     'chats_picker_clear': 'Limpar',
@@ -129,8 +127,7 @@ class AppMessagesPt {
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
     'filters_title': 'Filters',
-    'incompatible_server':
-        'Este servidor está a executar uma versão mais antiga do AutoTelegramForward. Atualize para {version} ou mais recente.',
+    'incompatible_server': 'Este servidor está a executar uma versão mais antiga do AutoTelegramForward. Atualize para {version} ou mais recente.',
     'lang_label': 'Idioma',
     'lang_native_en': 'English',
     'lang_native_es': 'Español',
@@ -194,8 +191,7 @@ class AppMessagesPt {
     'logs_policy_admin_required':
         'Apenas um administrador pode abrir uma janela detalhada.',
     'logs_policy_configured': 'Configurado: {levels}',
-    'logs_policy_counters':
-        'Emitidos {emitted} · suprimidos por nível {by_level} · por taxa {by_rate}',
+    'logs_policy_counters': 'Emitidos {emitted} · suprimidos por nível {by_level} · por taxa {by_rate}',
     'logs_policy_counters_scope': 'Os contadores são {scope}',
     'logs_policy_data_age': 'Registo mais recente há {seconds}s',
     'logs_policy_diag_off': 'Janela detalhada fechada',
@@ -221,8 +217,7 @@ class AppMessagesPt {
     'logs_policy_stop': 'Fechar janela',
     'logs_policy_stop_none': 'Não havia nenhuma janela detalhada aberta',
     'logs_policy_stopped': 'Janela detalhada fechada',
-    'logs_policy_unavailable_hint':
-        'Este servidor não reporta a sua política de logs. Atualize o servidor para usar este separador.',
+    'logs_policy_unavailable_hint': 'Este servidor não reporta a sua política de logs. Atualize o servidor para usar este separador.',
     'logs_scope_corr_chip': 'corr:{id}',
     'logs_scope_service': 'Serviço',
     'logs_scope_task': 'Tarefa',
@@ -291,8 +286,7 @@ class AppMessagesPt {
     'rules_footer': 'Footer template',
     'rules_forward_mode': 'Modo de Encaminhamento',
     'rules_full_control': 'Controle total',
-    'rules_full_control_desc':
-        'Todas as definições por tarefa que o motor respeita, validadas no servidor.',
+    'rules_full_control_desc': 'Todas as definições por tarefa que o motor respeita, validadas no servidor.',
     'rules_full_control_open': 'Abrir',
     'rules_header': 'Header template',
     'rules_ignore_edits': 'Ignore Edits',
@@ -329,8 +323,7 @@ class AppMessagesPt {
     'rules_route_empty':
         'Ainda não há canais. Digite um ou mais, separados por vírgulas.',
     'rules_route_fan_out': '{count} destinos',
-    'rules_route_overlap_id':
-        '{id} é origem e destino ao mesmo tempo. Uma tarefa não pode encaminhar para si mesma.',
+    'rules_route_overlap_id': '{id} é origem e destino ao mesmo tempo. Uma tarefa não pode encaminhar para si mesma.',
     'rules_route_preview': '{sources} → {targets}',
     'rules_route_preview_label': 'Pré-visualização da rota',
     'rules_route_remove': 'Remover esta entrada',
@@ -430,8 +423,7 @@ class AppMessagesPt {
         'O servidor rejeitou o formulário. Verifique os campos destacados.',
     'server_probe_bad_response':
         'O servidor respondeu, mas com algo inesperado.',
-    'server_probe_no_version':
-        'Este servidor não expõe um endpoint de versão. Verifique o endereço ou atualize o servidor.',
+    'server_probe_no_version': 'Este servidor não expõe um endpoint de versão. Verifique o endereço ou atualize o servidor.',
     'server_probe_reachable': 'Server reachable and compatible',
     'server_probe_test': 'Test connection',
     'server_probe_testing': 'Testing connection…',
@@ -494,11 +486,9 @@ class AppMessagesPt {
     'sys_ready': 'Pronto',
     'sys_services_online': '{online}/{total} serviços online',
     'sys_services_title': 'Microsserviços',
-    'sys_subtitle':
-        'Prontidão do servidor, topologia dos serviços e contrato de configuração',
+    'sys_subtitle': 'Prontidão do servidor, topologia dos serviços e contrato de configuração',
     'sys_title': 'Sistema',
-    'sys_unavailable':
-        'Este servidor não expõe o endpoint de estado do sistema. Atualize o servidor para ver aqui a prontidão.',
+    'sys_unavailable': 'Este servidor não expõe o endpoint de estado do sistema. Atualize o servidor para ver aqui a prontidão.',
     'tg_login_cancel': 'Cancel login',
     'tg_login_code': 'Verification code',
     'tg_login_code_hint': 'Code from the Telegram app',

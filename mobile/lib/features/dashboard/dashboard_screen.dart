@@ -103,20 +103,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return;
       }
       setState(
-        () =>
-            _error =
-                exc.error.message.isNotEmpty
-                    ? exc.error.message
-                    : t.get('state_error'),
+        () => _error = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : t.get('state_error'),
       );
     } catch (exc) {
       // Never swallow: a network failure must not look like "no data".
       if (!mounted) return;
       setState(
-        () =>
-            _error =
-                '${t.get('state_error')} '
-                '(${exc.toString().split('(').first.trim()})',
+        () => _error =
+            '${t.get('state_error')} '
+            '(${exc.toString().split('(').first.trim()})',
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -175,10 +172,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             GradientHeader(
               title: t.get('dash_title'),
-              subtitle:
-                  stats != null
-                      ? '${t.get('dash_total_rules')} • ${t.get('dash_sessions')}'
-                      : null,
+              subtitle: stats != null
+                  ? '${t.get('dash_total_rules')} • ${t.get('dash_sessions')}'
+                  : null,
               icon: Icons.insights_rounded,
             ),
             AppSpacing.gapLg,
@@ -187,14 +183,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             if (_setup != null) ...[
               ReadinessHero(
                 ready: _setup!.ready,
-                title:
-                    _setup!.ready ? t.get('sys_ready') : t.get('sys_not_ready'),
-                subtitle:
-                    _setup!.deployment.isEmpty
-                        ? t.get('sys_subtitle')
-                        : '${t.get('sys_deployment')}: ${_setup!.deployment}',
-                verdictLabel:
-                    _setup!.ready ? t.get('sys_ready') : t.get('sys_not_ready'),
+                title: _setup!.ready
+                    ? t.get('sys_ready')
+                    : t.get('sys_not_ready'),
+                subtitle: _setup!.deployment.isEmpty
+                    ? t.get('sys_subtitle')
+                    : '${t.get('sys_deployment')}: ${_setup!.deployment}',
+                verdictLabel: _setup!.ready
+                    ? t.get('sys_ready')
+                    : t.get('sys_not_ready'),
                 serviceSummary: t.get(
                   'sys_services_online',
                   params: {
@@ -202,22 +199,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     'total': '${_setup!.services.length}',
                   },
                 ),
-                footnote:
-                    _setup!.missingRequired.isEmpty
-                        ? null
-                        : t.get(
-                          'sys_missing_required',
-                          params: {
-                            'count': '${_setup!.missingRequired.length}',
-                          },
-                        ),
-                openLabel: t.get('sys_open'),
-                onOpen:
-                    () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const SystemStatusScreen(),
+                footnote: _setup!.missingRequired.isEmpty
+                    ? null
+                    : t.get(
+                        'sys_missing_required',
+                        params: {'count': '${_setup!.missingRequired.length}'},
                       ),
-                    ),
+                openLabel: t.get('sys_open'),
+                onOpen: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SystemStatusScreen(),
+                  ),
+                ),
               ),
               AppSpacing.gapLg,
             ],
@@ -255,8 +248,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   label: t.get('dash_failed'),
                   value: stats != null ? '$failed' : '—',
                   icon: Icons.error_outline,
-                  gradient:
-                      failed > 0 ? AppGradients.danger : AppGradients.gold,
+                  gradient: failed > 0
+                      ? AppGradients.danger
+                      : AppGradients.gold,
                 ),
               ],
             ),
@@ -274,30 +268,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ? 'info'
                         : (_diagnostics!.errorCount > 0 ? 'error' : 'warning'),
                   ),
-                  icon:
-                      _diagnostics!.isHealthy
-                          ? Icons.verified_outlined
-                          : Icons.report_problem_outlined,
+                  icon: _diagnostics!.isHealthy
+                      ? Icons.verified_outlined
+                      : Icons.report_problem_outlined,
                 ),
-                child:
-                    _diagnostics!.findings.isEmpty
-                        ? EmptyStateView(
-                          message: t.get('diag_all_ok'),
-                          icon: Icons.verified_outlined,
-                          color: AppTheme.primary,
-                        )
-                        : Column(
-                          children: [
-                            for (
-                              var i = 0;
-                              i < _diagnostics!.findings.length;
-                              i++
-                            ) ...[
-                              if (i > 0) const Divider(height: 1),
-                              _FindingRow(finding: _diagnostics!.findings[i]),
-                            ],
+                child: _diagnostics!.findings.isEmpty
+                    ? EmptyStateView(
+                        message: t.get('diag_all_ok'),
+                        icon: Icons.verified_outlined,
+                        color: AppTheme.primary,
+                      )
+                    : Column(
+                        children: [
+                          for (
+                            var i = 0;
+                            i < _diagnostics!.findings.length;
+                            i++
+                          ) ...[
+                            if (i > 0) const Divider(height: 1),
+                            _FindingRow(finding: _diagnostics!.findings[i]),
                           ],
-                        ),
+                        ],
+                      ),
               ),
             if (_diagnostics != null) AppSpacing.gapLg,
 
@@ -305,39 +297,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
             SectionCard(
               title: t.get('dash_health'),
               icon: Icons.hub_outlined,
-              child:
-                  _services.isEmpty && _loading
-                      ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(AppSpacing.lg),
-                          child: CircularProgressIndicator(),
-                        ),
-                      )
-                      : _services.isEmpty
-                      ? EmptyStateView(
-                        message: t.get('state_empty'),
-                        icon: Icons.cloud_off_outlined,
-                        color: AppTheme.warning,
-                      )
-                      : Column(
-                        children: [
-                          for (var i = 0; i < _services.length; i++) ...[
-                            if (i > 0) const Divider(height: 1),
-                            ServiceTile(
-                              name: _services[i].name,
-                              online: _services[i].online,
-                              detail: _services[i].detail,
-                              latencyMs: _services[i].latencyMs,
-                              onlineLabel: t.get('status_online'),
-                              offlineLabel: t.get('status_offline'),
-                              latencyLabel: t.get(
-                                'sys_latency',
-                                params: {'ms': '${_services[i].latencyMs}'},
-                              ),
-                            ),
-                          ],
-                        ],
+              child: _services.isEmpty && _loading
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(AppSpacing.lg),
+                        child: CircularProgressIndicator(),
                       ),
+                    )
+                  : _services.isEmpty
+                  ? EmptyStateView(
+                      message: t.get('state_empty'),
+                      icon: Icons.cloud_off_outlined,
+                      color: AppTheme.warning,
+                    )
+                  : Column(
+                      children: [
+                        for (var i = 0; i < _services.length; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          ServiceTile(
+                            name: _services[i].name,
+                            online: _services[i].online,
+                            detail: _services[i].detail,
+                            latencyMs: _services[i].latencyMs,
+                            onlineLabel: t.get('status_online'),
+                            offlineLabel: t.get('status_offline'),
+                            latencyLabel: t.get(
+                              'sys_latency',
+                              params: {'ms': '${_services[i].latencyMs}'},
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
             ),
             AppSpacing.gapLg,
 
@@ -345,47 +336,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
             SectionCard(
               title: t.get('dash_recent_errors'),
               icon: Icons.report_gmailerrorred_outlined,
-              child:
-                  _recentErrors.isEmpty
-                      ? EmptyStateView(
-                        message: t.get('logs_empty'),
-                        icon: Icons.sentiment_satisfied_alt,
-                        color: AppTheme.primary,
-                      )
-                      : Column(
-                        children: [
-                          for (var i = 0; i < _recentErrors.length; i++) ...[
-                            if (i > 0) const Divider(height: 1),
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.warning.withValues(
-                                    alpha: 0.14,
-                                  ),
-                                  borderRadius: AppRadii.allSm,
-                                ),
-                                child: const Icon(
-                                  Icons.warning_amber_rounded,
-                                  color: AppTheme.warning,
-                                  size: 18,
-                                ),
+              child: _recentErrors.isEmpty
+                  ? EmptyStateView(
+                      message: t.get('logs_empty'),
+                      icon: Icons.sentiment_satisfied_alt,
+                      color: AppTheme.primary,
+                    )
+                  : Column(
+                      children: [
+                        for (var i = 0; i < _recentErrors.length; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppTheme.warning.withValues(alpha: 0.14),
+                                borderRadius: AppRadii.allSm,
                               ),
-                              title: Text(
-                                _recentErrors[i].message,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                              subtitle: Text(
-                                '${_recentErrors[i].category} • ${_recentErrors[i].timestamp}',
-                                style: theme.textTheme.bodySmall,
+                              child: const Icon(
+                                Icons.warning_amber_rounded,
+                                color: AppTheme.warning,
+                                size: 18,
                               ),
                             ),
-                          ],
+                            title: Text(
+                              _recentErrors[i].message,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            subtitle: Text(
+                              '${_recentErrors[i].category} • ${_recentErrors[i].timestamp}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
                         ],
-                      ),
+                      ],
+                    ),
             ),
             AppSpacing.gapXl,
           ],
@@ -405,12 +393,11 @@ class _FindingRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = AppTheme.severityColor(finding.severity);
-    final icon =
-        finding.isError
-            ? Icons.error_outline
-            : finding.isWarning
-            ? Icons.warning_amber_rounded
-            : Icons.info_outline;
+    final icon = finding.isError
+        ? Icons.error_outline
+        : finding.isWarning
+        ? Icons.warning_amber_rounded
+        : Icons.info_outline;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),

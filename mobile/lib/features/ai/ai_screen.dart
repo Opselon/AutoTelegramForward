@@ -59,20 +59,17 @@ class _AiScreenState extends State<AiScreen> {
         return;
       }
       setState(
-        () =>
-            _error =
-                exc.error.message.isNotEmpty
-                    ? exc.error.message
-                    : t.get('state_error'),
+        () => _error = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : t.get('state_error'),
       );
     } catch (exc) {
       // Never swallow: a network failure must not look like "no data".
       if (!mounted) return;
       setState(
-        () =>
-            _error =
-                '${t.get('state_error')} '
-                '(${exc.toString().split('(').first.trim()})',
+        () => _error =
+            '${t.get('state_error')} '
+            '(${exc.toString().split('(').first.trim()})',
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -82,22 +79,21 @@ class _AiScreenState extends State<AiScreen> {
   Future<void> _delete(AiConfig config) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('Delete AI configuration?'),
-            content: Text('${config.provider} • ${config.model}'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Delete'),
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete AI configuration?'),
+        content: Text('${config.provider} • ${config.model}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
           ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
 
     if (confirmed != true || !mounted) return;
@@ -108,9 +104,8 @@ class _AiScreenState extends State<AiScreen> {
       await _load();
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(exc.error.message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
     } catch (exc) {
       // Deletion failed: tell the user instead of vanishing silently.
       if (!mounted) return;
@@ -149,9 +144,8 @@ class _AiScreenState extends State<AiScreen> {
       );
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(exc.error.message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
     } catch (exc) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -234,9 +228,8 @@ class _AiScreenState extends State<AiScreen> {
                     Text(
                       t.get('ai_empty'),
                       textAlign: TextAlign.center,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: Colors.grey),
                     ),
                   ],
                 ),

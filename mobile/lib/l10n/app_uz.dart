@@ -24,8 +24,7 @@ class AppMessagesUz {
     'ai_empty': 'No AI configuration yet.',
     'ai_language': 'Target language',
     'ai_model': 'Model',
-    'ai_note':
-        'API kalitlari bot yoki veb-panel orqali sozlanadi; mobil ilova provayder kalitlarini saqlamaydi.',
+    'ai_note': 'API kalitlari bot yoki veb-panel orqali sozlanadi; mobil ilova provayder kalitlarini saqlamaydi.',
     'ai_prompt': 'Prompt',
     'ai_provider': 'Provider',
     'ai_title': 'AI rewriting',
@@ -125,8 +124,7 @@ class AppMessagesUz {
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
     'filters_title': 'Filters',
-    'incompatible_server':
-        'Bu server AutoTelegramForward’ning eski versiyasini ishlatmoqda. Uni {version} yoki yangiroq versiyaga yangilang.',
+    'incompatible_server': 'Bu server AutoTelegramForward’ning eski versiyasini ishlatmoqda. Uni {version} yoki yangiroq versiyaga yangilang.',
     'lang_label': 'Til',
     'lang_native_en': 'English',
     'lang_native_es': 'Español',
@@ -189,14 +187,12 @@ class AppMessagesUz {
     'logs_policy_admin_required':
         'Batafsil oynani faqat administrator ocha oladi.',
     'logs_policy_configured': 'Sozlangan: {levels}',
-    'logs_policy_counters':
-        'Chiqarilgan {emitted} · daraja bo‘yicha to‘sildi {by_level} · chastota bo‘yicha {by_rate}',
+    'logs_policy_counters': 'Chiqarilgan {emitted} · daraja bo‘yicha to‘sildi {by_level} · chastota bo‘yicha {by_rate}',
     'logs_policy_counters_scope': 'Hisoblagichlar {scope} uchun',
     'logs_policy_data_age': 'Eng yangi yozuv {seconds} s oldin',
     'logs_policy_diag_off': 'Batafsil oyna yopilgan',
     'logs_policy_diag_on': 'Batafsil oyna ochiq — {seconds} s qoldi',
-    'logs_policy_diagnostics_hint':
-        'Faqat administratorlar uchun. {seconds} s ga ochiladi va o‘zi yopiladi.',
+    'logs_policy_diagnostics_hint': 'Faqat administratorlar uchun. {seconds} s ga ochiladi va o‘zi yopiladi.',
     'logs_policy_diagnostics_title': 'Batafsil to‘plash oynasi',
     'logs_policy_effective': 'To‘planmoqda: {levels}',
     'logs_policy_health_title': 'Konveyer holati',
@@ -216,8 +212,7 @@ class AppMessagesUz {
     'logs_policy_stop': 'Oynani yopish',
     'logs_policy_stop_none': 'Batafsil oyna ochilmagan edi',
     'logs_policy_stopped': 'Batafsil oyna yopildi',
-    'logs_policy_unavailable_hint':
-        'Bu server jurnal siyosatini xabar qilmaydi. Bu bo‘limdan foydalanish uchun serverni yangilang.',
+    'logs_policy_unavailable_hint': 'Bu server jurnal siyosatini xabar qilmaydi. Bu bo‘limdan foydalanish uchun serverni yangilang.',
     'logs_scope_corr_chip': 'korr:{id}',
     'logs_scope_service': 'Xizmat',
     'logs_scope_task': 'Vazifa',
@@ -263,8 +258,7 @@ class AppMessagesUz {
     'rules_cleanup_hint':
         'Emoji, havolalar, so‘zlar, almashtirishlar — avval vazifani saqlang',
     'rules_cleanup_open': 'Kontent tozalagich va vazifa qoidalari',
-    'rules_concurrent_edit':
-        'Bu vazifa boshqa joyda oʻzgartirilgan. Qayta yuklab, qayta urinib koʻring.',
+    'rules_concurrent_edit': 'Bu vazifa boshqa joyda oʻzgartirilgan. Qayta yuklab, qayta urinib koʻring.',
     'rules_content_mode': 'Kontent rejimi',
     'rules_create': 'Yangi vazifa',
     'rules_delay': 'Kechikish',
@@ -272,8 +266,7 @@ class AppMessagesUz {
     'rules_disabled': 'Disabled',
     'rules_duplicate_filters': 'Takroriy filtrlar',
     'rules_edit': 'Vazifani tahrirlash',
-    'rules_empty':
-        'Hozircha vazifa yoʻq. Yoʻnaltirishni boshlash uchun bittasini yarating.',
+    'rules_empty': 'Hozircha vazifa yoʻq. Yoʻnaltirishni boshlash uchun bittasini yarating.',
     'rules_enabled': 'Enabled',
     'rules_filter_mode': 'Filter mode',
     'rules_filters': 'Filtrlar',
@@ -304,8 +297,7 @@ class AppMessagesUz {
     'rules_proc_raw': 'Xom matnni qayta ishlash',
     'rules_remove_emojis': 'Strip Emojis',
     'rules_replace_add': 'Almashtirish qo\'shish',
-    'rules_replace_empty':
-        'Hozircha almashtirish yoʻq. Matnni qayta yozish uchun bittasini qoʻshing.',
+    'rules_replace_empty': 'Hozircha almashtirish yoʻq. Matnni qayta yozish uchun bittasini qoʻshing.',
     'rules_replace_find': 'Topiladigan matn',
     'rules_replace_find_required': 'Topiladigan matn talab qilinadi',
     'rules_replace_move_up': 'Yuqoriga',
@@ -322,8 +314,7 @@ class AppMessagesUz {
         '{reason} — bu yozuvni tahrirlash uchun chipni bosing.',
     'rules_route_duplicate_id':
         '{id} bir necha marta kiritilgan. Takrorini o‘chiring.',
-    'rules_route_empty':
-        'Hozircha kanal yo‘q. Bir yoki bir nechtasini vergul bilan ajratib kiriting.',
+    'rules_route_empty': 'Hozircha kanal yo‘q. Bir yoki bir nechtasini vergul bilan ajratib kiriting.',
     'rules_route_fan_out': '{count} manzil',
     'rules_route_overlap_id':
         '{id} ham manba, ham manzil. Vazifa o‘ziga yubora olmaydi.',
@@ -331,8 +322,7 @@ class AppMessagesUz {
     'rules_route_preview_label': 'Marshrut ko‘rinishi',
     'rules_route_remove': 'Bu yozuvni o‘chirish',
     'rules_route_sources': 'Manbalar (vergul bilan ajratilgan)',
-    'rules_route_sources_hint':
-        'IDlar, @foydalanuvchi nomlari yoki t.me havolalari, vergul bilan ajratilgan',
+    'rules_route_sources_hint': 'IDlar, @foydalanuvchi nomlari yoki t.me havolalari, vergul bilan ajratilgan',
     'rules_route_targets': 'Manzillar (vergul bilan ajratilgan)',
     'rules_route_targets_hint': 'Har bir xabar barcha manzillarga yuboriladi',
     'rules_sched_auto': 'Avto ebulon rejimi',
@@ -424,13 +414,11 @@ class AppMessagesUz {
         'Server formani rad etdi. Belgilangan maydonlarni tekshiring.',
     'server_probe_bad_response':
         'Server javob berdi, ammo javob kutilmagan edi.',
-    'server_probe_no_version':
-        'Bu serverda versiya manzili yoʻq. Manzilni tekshiring yoki serverni yangilang.',
+    'server_probe_no_version': 'Bu serverda versiya manzili yoʻq. Manzilni tekshiring yoki serverni yangilang.',
     'server_probe_reachable': 'Server reachable and compatible',
     'server_probe_test': 'Test connection',
     'server_probe_testing': 'Testing connection…',
-    'server_probe_tls_error':
-        'Xavfsiz ulanish muvaffaqiyatsiz. Sertifikatni tekshirib, https:// ishlating.',
+    'server_probe_tls_error': 'Xavfsiz ulanish muvaffaqiyatsiz. Sertifikatni tekshirib, https:// ishlating.',
     'server_probe_unreachable':
         'Cannot reach the server. Check the address and your connection.',
     'server_restore_default': 'Restore official default',
@@ -442,8 +430,7 @@ class AppMessagesUz {
     'sessions_status_live': 'live',
     'sessions_status_offline': 'offline',
     'sessions_terminate': 'Disconnect',
-    'sessions_terminate_confirm':
-        'Bu Telegram akkaunt uzilsinmi? Undan foydalanadigan vazifalar toʻxtaydi.',
+    'sessions_terminate_confirm': 'Bu Telegram akkaunt uzilsinmi? Undan foydalanadigan vazifalar toʻxtaydi.',
     'sessions_title': 'Telegram sessions',
     'settings_about': 'About',
     'settings_change_password': 'Change password',
@@ -491,8 +478,7 @@ class AppMessagesUz {
     'sys_subtitle':
         'Server tayyorligi, servislar tuzilishi va sozlash shartnomasi',
     'sys_title': 'Tizim',
-    'sys_unavailable':
-        'Bu serverda tizim holati manzili yoʻq. Tayyorlikni koʻrish uchun serverni yangilang.',
+    'sys_unavailable': 'Bu serverda tizim holati manzili yoʻq. Tayyorlikni koʻrish uchun serverni yangilang.',
     'tg_login_cancel': 'Cancel login',
     'tg_login_code': 'Verification code',
     'tg_login_code_hint': 'Code from the Telegram app',

@@ -49,17 +49,13 @@ Future<void> _pumpDialog(
         ],
         supportedLocales: AppMessages.supportedLocales,
         home: Builder(
-          builder:
-              (context) => Scaffold(
-                body: ElevatedButton(
-                  onPressed:
-                      () => showServerConnectionDialog(
-                        context,
-                        transport: transport,
-                      ),
-                  child: const Text('open'),
-                ),
-              ),
+          builder: (context) => Scaffold(
+            body: ElevatedButton(
+              onPressed: () =>
+                  showServerConnectionDialog(context, transport: transport),
+              child: const Text('open'),
+            ),
+          ),
         ),
       ),
     ),
@@ -69,14 +65,13 @@ Future<void> _pumpDialog(
   await tester.pumpAndSettle();
 }
 
-typedef HttpTransportForTest =
-    Future<http.Response> Function(
-      Uri url, {
-      required String method,
-      Map<String, String>? headers,
-      Object? body,
-      required Duration timeout,
-    });
+typedef HttpTransportForTest = Future<http.Response> Function(
+  Uri url, {
+  required String method,
+  Map<String, String>? headers,
+  Object? body,
+  required Duration timeout,
+});
 
 void main() {
   group('ServerConnectionDialog', () {
@@ -87,23 +82,24 @@ void main() {
       await _pumpDialog(
         tester,
         state,
-        transport: (
-          Uri url, {
-          required String method,
-          Map<String, String>? headers,
-          Object? body,
-          required Duration timeout,
-        }) async {
-          expect(headers?['authorization'], isNull);
-          return http.Response(
-            jsonEncode({
-              'product_version': '1.5.0',
-              'api_version': '1.5.0',
-              'min_supported_client': '1.0.0',
-            }),
-            200,
-          );
-        },
+        transport:
+            (
+              Uri url, {
+              required String method,
+              Map<String, String>? headers,
+              Object? body,
+              required Duration timeout,
+            }) async {
+              expect(headers?['authorization'], isNull);
+              return http.Response(
+                jsonEncode({
+                  'product_version': '1.5.0',
+                  'api_version': '1.5.0',
+                  'min_supported_client': '1.0.0',
+                }),
+                200,
+              );
+            },
       );
 
       expect(find.byKey(const Key('server_probe_button')), findsOneWidget);
@@ -121,15 +117,16 @@ void main() {
       await _pumpDialog(
         tester,
         state,
-        transport: (
-          Uri url, {
-          required String method,
-          Map<String, String>? headers,
-          Object? body,
-          required Duration timeout,
-        }) async {
-          throw http.ClientException('Connection refused', url);
-        },
+        transport:
+            (
+              Uri url, {
+              required String method,
+              Map<String, String>? headers,
+              Object? body,
+              required Duration timeout,
+            }) async {
+              throw http.ClientException('Connection refused', url);
+            },
       );
 
       await tester.tap(find.byKey(const Key('server_probe_button')));
@@ -146,22 +143,23 @@ void main() {
       await _pumpDialog(
         tester,
         state,
-        transport: (
-          Uri url, {
-          required String method,
-          Map<String, String>? headers,
-          Object? body,
-          required Duration timeout,
-        }) async {
-          return http.Response(
-            jsonEncode({
-              'product_version': '0.9.0',
-              'api_version': '0.9.0',
-              'min_supported_client': '1.0.0',
-            }),
-            200,
-          );
-        },
+        transport:
+            (
+              Uri url, {
+              required String method,
+              Map<String, String>? headers,
+              Object? body,
+              required Duration timeout,
+            }) async {
+              return http.Response(
+                jsonEncode({
+                  'product_version': '0.9.0',
+                  'api_version': '0.9.0',
+                  'min_supported_client': '1.0.0',
+                }),
+                200,
+              );
+            },
       );
 
       await tester.tap(find.byKey(const Key('server_probe_button')));
@@ -190,32 +188,31 @@ void main() {
             ],
             supportedLocales: AppMessages.supportedLocales,
             home: Builder(
-              builder:
-                  (context) => Scaffold(
-                    body: ElevatedButton(
-                      onPressed:
-                          () => showServerConnectionDialog(
-                            context,
-                            transport: (
-                              Uri url, {
-                              required String method,
-                              Map<String, String>? headers,
-                              Object? body,
-                              required Duration timeout,
-                            }) async {
-                              return http.Response(
-                                jsonEncode({
-                                  'product_version': '1.5.0',
-                                  'api_version': '1.5.0',
-                                  'min_supported_client': '1.0.0',
-                                }),
-                                200,
-                              );
-                            },
-                          ),
-                      child: const Text('open'),
-                    ),
+              builder: (context) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () => showServerConnectionDialog(
+                    context,
+                    transport:
+                        (
+                          Uri url, {
+                          required String method,
+                          Map<String, String>? headers,
+                          Object? body,
+                          required Duration timeout,
+                        }) async {
+                          return http.Response(
+                            jsonEncode({
+                              'product_version': '1.5.0',
+                              'api_version': '1.5.0',
+                              'min_supported_client': '1.0.0',
+                            }),
+                            200,
+                          );
+                        },
                   ),
+                  child: const Text('open'),
+                ),
+              ),
             ),
           ),
         ),

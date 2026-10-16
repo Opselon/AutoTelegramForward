@@ -72,8 +72,9 @@ class _ServerConnectionDialogState extends State<ServerConnectionDialog> {
     final result = await ApiClient.probeServer(
       raw,
       minSupportedApiVersion: state.env.minSupportedApiVersion,
-      clientVersion:
-          state.env.appVersion.isEmpty ? '1.0.0' : state.env.appVersion,
+      clientVersion: state.env.appVersion.isEmpty
+          ? '1.0.0'
+          : state.env.appVersion,
       transport: widget.transport,
     );
     if (!mounted) return;
@@ -218,9 +219,9 @@ class _ServerConnectionDialogState extends State<ServerConnectionDialog> {
                 hintText: 'https://atf.example.com',
                 errorText:
                     ServerUrl.tryParse(_ctrl.text) == null &&
-                            _ctrl.text.isNotEmpty
-                        ? t.get('login_server_invalid')
-                        : _saveError,
+                        _ctrl.text.isNotEmpty
+                    ? t.get('login_server_invalid')
+                    : _saveError,
               ),
               onChanged: (_) {
                 // Clear a stale probe verdict as soon as the URL is edited.
@@ -271,14 +272,13 @@ Future<bool> showServerConnectionDialog(
   final state = context.read<AppState>();
   final saved = await showDialog<bool>(
     context: context,
-    builder:
-        (_) => ChangeNotifierProvider<AppState>.value(
-          value: state,
-          child: ServerConnectionDialog(
-            initialUrl: state.serverUrl,
-            transport: transport,
-          ),
-        ),
+    builder: (_) => ChangeNotifierProvider<AppState>.value(
+      value: state,
+      child: ServerConnectionDialog(
+        initialUrl: state.serverUrl,
+        transport: transport,
+      ),
+    ),
   );
   return saved ?? false;
 }
