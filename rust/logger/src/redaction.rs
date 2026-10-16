@@ -202,6 +202,20 @@ pub fn redact(text: &str) -> String {
     if text.is_empty() {
         return String::new();
     }
+    redact_phones(&redact_credentials(text))
+}
+
+/// Every pass that detects a *credential*: bearer headers, `key=value` pairs,
+/// bot tokens, session blobs and long hex runs.
+///
+/// Deliberately excludes the phone pass, which is a free-text heuristic (a run
+/// of digits reads as a phone number in prose). Identifier columns are opaque
+/// lookup keys, so running that heuristic over them rewrites ordinary ids —
+/// `wire-probe-1792165042` came back as `wire-probe-1792[PHONE]` — and every
+/// lookup by the original value silently returned nothing. The Python engine
+/// stores ids verbatim, so masking a credential shape is hardening while
+/// mangling an ordinary id is a regression.
+fn redact_credentials(text: &str) -> String {
     let mut out = bearer()
         .replace_all(text, |c: &Captures<'_>| format!("{} {REPLACEMENT}", &c[1]))
         .into_owned();
@@ -222,7 +236,7 @@ pub fn redact(text: &str) -> String {
     out = long_hex()
         .replace_all(&out, NoExpand(REPLACEMENT))
         .into_owned();
-    redact_phones(&out)
+    out
 }
 
 /// Phone pass: keep the first four characters of a 10–15 digit number and label
@@ -388,11 +402,15 @@ pub fn truncate_chars(text: &str, max_bytes: usize) -> (&str, bool) {
 
 /// Redact an identifier column (`rule_id`, `correlation_id`) when the operator
 /// asked for it. `user_id` is numeric and never redacted.
+///
+/// Only credential-shaped values are masked: these columns are lookup keys, so
+/// (unlike free text) a digit run in them is an id, not a phone number. See
+/// [`redact_credentials`].
 pub fn redact_identifier(text: &str) -> String {
     if text.is_empty() {
         return String::new();
     }
-    redact(text)
+    redact_credentials(text)
 }
 
 #[cfg(test)]
@@ -707,6 +725,40 @@ mod tests {
         // ASCII-only input keeps working, and 16+ digits stay untouched.
         assert_eq!(redact("n 0912345678"), "n 0912[PHONE]");
         assert_eq!(redact("x1234567890123456"), "x1234567890123456");
+    }
+
+    /// Regression: a live write to the deployed engine stored
+    /// `wire-probe-1792165042` as `wire-probe-1792[PHONE]`, so `QueryLogs` by the
+    /// original correlation id returned zero rows. Identifier columns are lookup
+    /// keys — the free-text phone heuristic must never touch them.
+    #[test]
+    fn identifier_redaction_never_mangles_a_lookup_key() {
+        for id in [
+            "wire-probe-1792165042",
+            "550e8400-e29b-41d4-a716-446655440000",
+            "rule-42-0912345678",
+            "7f2a01dacc06641ee9c643ec4600fd23c82ce4dc",
+        ] {
+            assert_eq!(redact_identifier(id), id, "id {id} must round-trip intact");
+        }
+        assert_eq!(redact_identifier(""), "");
+        // Free text keeps the phone pass, so the fix did not weaken parity there.
+        assert_eq!(redact("wire-probe-1792165042"), "wire-probe-1792[PHONE]");
+    }
+
+    #[test]
+    fn identifier_redaction_still_masks_credentials() {
+        let bearer = redact_identifier("Bearer abcdefghijklmnop");
+        assert!(!bearer.contains("abcdefghijklmnop"), "got {bearer}");
+        assert!(bearer.contains(REPLACEMENT), "got {bearer}");
+
+        let token = redact_identifier("123456789:AAF-abcdefghijklmnopqrstuvwxyz012345");
+        assert!(token.contains(REPLACEMENT), "got {token}");
+        assert!(!token.contains("AAF-abcdefghijklmnop"), "got {token}");
+
+        let hex = redact_identifier(&"a".repeat(64));
+        assert!(hex.contains(REPLACEMENT), "got {hex}");
+        assert!(!hex.contains(&"a".repeat(64)), "got {hex}");
     }
 
     /// The structural pass must treat the same key names as credentials as the

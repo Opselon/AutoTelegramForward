@@ -729,6 +729,19 @@ mod tests {
         assert!(raw_ids.record.correlation_id.contains("abcdefghijklmnop"));
     }
 
+    /// Regression: identifier redaction rewrote ordinary lookup keys, so a live
+    /// `QueryLogs` by correlation id returned zero rows. Ordinary ids (including
+    /// digit runs) must reach storage verbatim; only credential shapes are masked.
+    #[test]
+    fn identifier_redaction_keeps_ordinary_ids_intact() {
+        let mut entry = raw("ERROR", "pipeline");
+        entry.correlation_id = "wire-probe-1792165042".to_string();
+        entry.rule_id = "rule-42-0912345678".to_string();
+        let prepared = prepare(&entry, limits(), true, &CollectPolicy::permissive(), 0).unwrap();
+        assert_eq!(prepared.record.correlation_id, "wire-probe-1792165042");
+        assert_eq!(prepared.record.rule_id, "rule-42-0912345678");
+    }
+
     #[test]
     fn dedupe_key_is_stable_and_field_sensitive() {
         let record = Record {

@@ -75,7 +75,7 @@ the authoritative list.
 | `--drain-timeout-ms <N>` | `ATF_LOGGER_DRAIN_TIMEOUT_MS` | 15000 | graceful shutdown budget |
 | `--purge-timeout-ms <N>` | `ATF_LOGGER_PURGE_TIMEOUT_MS` | 120000 | deadline for `PurgeLogs` |
 | `--max-message-bytes/-detail/-tag` | `ATF_LOGGER_MAX_*` | 1 MiB / 1 MiB / 4 KiB | truncation limits (counted, never silent) |
-| `--redact-identifiers` / `--no-redact-identifiers` | `ATF_LOGGER_REDACT_IDENTIFIERS` | on | also redact `rule_id`/`correlation_id` shapes |
+| `--redact-identifiers` / `--no-redact-identifiers` | `ATF_LOGGER_REDACT_IDENTIFIERS` | on | also redact *credential-shaped* `rule_id`/`correlation_id` values (bearer headers, bot tokens, long hex, session blobs). Ordinary ids — UUIDs, prefixed ids, anything with a digit run — are stored verbatim, because these columns are lookup keys and the Python engine stores them verbatim: masking a digit run once made every `QueryLogs` by correlation id return nothing |
 | `--dedupe-window-secs <N>` | `ATF_LOGGER_DEDUPE_WINDOW_SECS` | 0 (off) | suppress duplicate records; duplicates are counted, not silent |
 | `--retention` / `--no-retention` | `ATF_LOGGER_RETENTION` | on | retention worker |
 | `--retention-interval-secs <N>` | `ATF_LOGGER_RETENTION_INTERVAL_SECS` | 300 | cycle period |

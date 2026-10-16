@@ -324,6 +324,49 @@ async fn insert_query_stats_purge_over_real_grpc() {
     server.shutdown().await;
 }
 
+/// Regression from a live probe against the deployed engine: with identifier
+/// redaction on (the default) a correlation id containing a digit run was stored
+/// as `wire-probe-1792[PHONE]`, so the lookup below — the column's entire point —
+/// returned nothing while the write still reported success. The Python engine
+/// stores ids verbatim, and credential-shaped ids are still masked (see
+/// `redaction::tests::identifier_redaction_still_masks_credentials`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn correlation_ids_with_digit_runs_are_queryable() {
+    let mut server = start(Config::default()).await;
+    let correlation = "wire-probe-1792165042".to_string();
+    let response = log(
+        &mut server.client,
+        pb::LogEntry {
+            ts: 1_700_123_456,
+            correlation_id: correlation.clone(),
+            ..entry("ERROR", "digit-run correlation id")
+        },
+    )
+    .await;
+    assert!(response.success, "{response:?}");
+
+    let page = query(
+        &mut server.client,
+        pb::QueryLogsRequest {
+            correlation_id: correlation.clone(),
+            limit: 10,
+            ..Default::default()
+        },
+    )
+    .await;
+    assert_eq!(
+        page.logs.len(),
+        1,
+        "lookup by the original correlation id must find the row"
+    );
+    assert_eq!(
+        page.logs[0].correlation_id, correlation,
+        "the id must be stored verbatim, not redacted into a phone placeholder"
+    );
+
+    server.shutdown().await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn every_supported_event_field_round_trips() {
     let mut server = start(Config::default()).await;
