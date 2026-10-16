@@ -71,7 +71,9 @@ void main() {
     testWidgets('online and offline use different colours', (tester) async {
       await tester.pumpWidget(_host(StatusPill.online(true)));
       final up = tester.widget<Text>(find.text('ONLINE'));
-      expect(up.style?.color, AppTheme.primary);
+      // The healthy colour is the success hue; the brand hue means brand.
+      expect(up.style?.color, AppTheme.statusColor(true));
+      expect(AppTheme.statusColor(true), AppTheme.success);
 
       await tester.pumpWidget(_host(StatusPill.online(false)));
       final down = tester.widget<Text>(find.text('OFFLINE'));

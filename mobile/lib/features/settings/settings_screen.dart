@@ -1,10 +1,16 @@
-/// Settings screen: theme, language (EN / FA RTL), server switch, logout.
+/// Settings screen: theme, language (all ten shipped locales), server switch,
+/// logout.
+///
+/// The picker is generated from [AppMessages.supportedLocales] so a locale
+/// cannot exist in the catalogs yet be unreachable in the UI - which is exactly
+/// what happened when only English and Persian were listed here.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_state.dart';
+import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../../widgets/server_connection_dialog.dart';
 
@@ -43,22 +49,38 @@ class SettingsScreen extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
-          RadioListTile<String>(
-            title: const Text('English'),
-            value: 'en',
-            groupValue: state.locale.languageCode,
-            onChanged: (v) {
-              if (v != null) state.setLocale(Locale(v));
-            },
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.language_rounded, size: 16),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    t.get('settings_language_hint'),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
           ),
-          RadioListTile<String>(
-            title: const Text('فارسی (Persian)'),
-            value: 'fa',
-            groupValue: state.locale.languageCode,
-            onChanged: (v) {
-              if (v != null) state.setLocale(Locale(v));
-            },
-          ),
+          for (final locale in AppMessages.supportedLocales)
+            RadioListTile<String>(
+              dense: true,
+              title: Text(
+                t.get('lang_native_${locale.languageCode}'),
+                textDirection: TextDirection.ltr,
+              ),
+              subtitle: Text(locale.languageCode.toUpperCase()),
+              value: locale.languageCode,
+              groupValue: state.locale.languageCode,
+              onChanged: (v) {
+                if (v != null) state.setLocale(Locale(v));
+              },
+            ),
           const Divider(),
 
           // Theme

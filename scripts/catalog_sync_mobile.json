@@ -1,0 +1,254 @@
+{
+ "ai_note": {
+  "en": "API keys are configured by the bot or the web dashboard; the mobile app never stores provider keys.",
+  "fa": "کلیدهای API از طریق ربات یا داشبورد وب تنظیم می‌شوند؛ اپلیکیشن موبایل هیچ کلید ارائه‌دهنده‌ای ذخیره نمی‌کند.",
+  "pt": "As chaves de API são configuradas pelo bot ou pelo painel web; a app móvel nunca guarda chaves de fornecedor.",
+  "uz": "API kalitlari bot yoki veb-panel orqali sozlanadi; mobil ilova provayder kalitlarini saqlamaydi.",
+  "ru": "Ключи API настраиваются ботом или веб-панелью; мобильное приложение не хранит ключи провайдеров.",
+  "id": "Kunci API diatur oleh bot atau dasbor web; aplikasi seluler tidak menyimpan kunci penyedia.",
+  "es": "Las claves de API se configuran desde el bot o el panel web; la app móvil nunca guarda claves de proveedor.",
+  "fr": "Les clés d'API sont configurées par le bot ou le tableau de bord web ; l'application mobile ne stocke jamais les clés de fournisseur.",
+  "it": "Le chiavi API si configurano dal bot o dalla dashboard web; l'app mobile non salva mai le chiavi dei provider.",
+  "zh": "API 密钥由机器人或网页仪表板配置，移动端不保存服务商密钥。"
+ },
+ "logs_truncated_display": {
+  "en": "…display truncated; copying still gives the full export",
+  "fa": "…نمایش کوتاه شده است؛ کپی خروجی کامل را می‌دهد",
+  "pt": "…visualização truncada; copiar dá a exportação completa",
+  "uz": "…koʻrsatish qisqartirilgan; nusxalash toʻliq eksportni beradi",
+  "ru": "…показано не всё; копирование даёт полный экспорт",
+  "id": "…tampilan dipotong; menyalin tetap memberi ekspor penuh",
+  "es": "…vista truncada; al copiar obtienes la exportación completa",
+  "fr": "…affichage tronqué ; la copie donne toujours l'export complet",
+  "it": "…visualizzazione troncata; copiando ottieni l'esportazione completa",
+  "zh": "…显示已截断；复制仍可获得完整导出"
+ },
+ "rules_ai_pick_empty": {
+  "en": "No AI configurations yet. Create one on the AI screen.",
+  "fa": "هنوز تنظیم هوش مصنوعی وجود ندارد. یکی در صفحه هوش مصنوعی بسازید.",
+  "pt": "Ainda não há configurações de IA. Crie uma no ecrã de IA.",
+  "uz": "Hozircha AI sozlamalari yoʻq. AI ekranida yarating.",
+  "ru": "Конфигураций ИИ пока нет. Создайте на экране ИИ.",
+  "id": "Belum ada konfigurasi AI. Buat satu di layar AI.",
+  "es": "Aún no hay configuraciones de IA. Crea una en la pantalla de IA.",
+  "fr": "Aucune configuration d'IA pour l'instant. Créez-en une dans l'écran IA.",
+  "it": "Nessuna configurazione IA. Creane una nella schermata IA.",
+  "zh": "尚无 AI 配置。请在 AI 界面创建一个。"
+ },
+ "rules_concurrent_edit": {
+  "en": "This task was changed elsewhere. Reload and try again.",
+  "fa": "این تسک جای دیگری تغییر کرده است. دوباره بارگذاری کنید.",
+  "pt": "Esta tarefa foi alterada noutro sítio. Recarregue e tente de novo.",
+  "uz": "Bu vazifa boshqa joyda oʻzgartirilgan. Qayta yuklab, qayta urinib koʻring.",
+  "ru": "Задача изменена в другом месте. Перезагрузите и повторите.",
+  "id": "Tugas ini diubah di tempat lain. Muat ulang lalu coba lagi.",
+  "es": "Esta tarea cambió en otro lugar. Recarga e inténtalo de nuevo.",
+  "fr": "Cette tâche a été modifiée ailleurs. Rechargez et réessayez.",
+  "it": "Questa attività è stata modificata altrove. Ricarica e riprova.",
+  "zh": "此规则已在别处被修改。请重新加载后重试。"
+ },
+ "rules_empty": {
+  "en": "No tasks yet. Create one to start forwarding.",
+  "fa": "هنوز قانونی تعریف نشده است. یک قانون جدید ایجاد کنید.",
+  "pt": "Ainda não há tarefas. Crie uma para começar a reencaminhar.",
+  "uz": "Hozircha vazifa yoʻq. Yoʻnaltirishni boshlash uchun bittasini yarating.",
+  "ru": "Задач пока нет. Создайте её, чтобы начать пересылку.",
+  "id": "Belum ada tugas. Buat satu untuk mulai meneruskan.",
+  "es": "Aún no hay tareas. Crea una para empezar a reenviar.",
+  "fr": "Aucune tâche pour l'instant. Créez-en une pour commencer le transfert.",
+  "it": "Nessuna attività. Creane una per iniziare a inoltrare.",
+  "zh": "还没有规则。创建一条以开始转发。"
+ },
+ "rules_filters_crypto_sub": {
+  "en": "Signal detection, wallet cleanup, pair parsing",
+  "fa": "تشخیص سیگنال، پاک‌سازی کیف پول، تجزیه جفت",
+  "pt": "Deteção de sinais, limpeza de carteira, análise de pares",
+  "uz": "Signalni aniqlash, hamyonni tozalash, juftlikni tahlil qilish",
+  "ru": "Детекция сигналов, очистка кошелька, разбор пар",
+  "id": "Deteksi sinyal, pembersihan dompet, penguraian pasangan",
+  "es": "Detección de señales, limpieza de cartera, análisis de pares",
+  "fr": "Détection de signaux, nettoyage de portefeuille, analyse des paires",
+  "it": "Rilevamento segnali, pulizia wallet, analisi delle coppie",
+  "zh": "信号识别、钱包清理、交易对解析"
+ },
+ "rules_full_control_desc": {
+  "en": "Every per-task setting the engine honours, validated on the server.",
+  "fa": "همه تنظیمات هر تسک که موتور رعایت می‌کند، در سرور اعتبارسنجی می‌شود.",
+  "pt": "Todas as definições por tarefa que o motor respeita, validadas no servidor.",
+  "uz": "Dvigatel qoʻllaydigan har bir vazifa sozlamasi serverda tekshiriladi.",
+  "ru": "Все настройки задачи, которые учитывает движок, проверяются на сервере.",
+  "id": "Setiap pengaturan per tugas yang dipatuhi mesin, divalidasi di server.",
+  "es": "Cada ajuste por tarea que respeta el motor, validado en el servidor.",
+  "fr": "Chaque réglage par tâche que le moteur applique, validé côté serveur.",
+  "it": "Ogni impostazione per attività rispettata dal motore, validata sul server.",
+  "zh": "引擎遵循的每个任务设置，均在服务端校验。"
+ },
+ "rules_replace_empty": {
+  "en": "No replacements yet. Add one to rewrite message text.",
+  "fa": "هنوز جای‌گزینی نیست. برای بازنویسی متن پیام یکی اضافه کنید.",
+  "pt": "Ainda não há substituições. Adicione uma para reescrever o texto.",
+  "uz": "Hozircha almashtirish yoʻq. Matnni qayta yozish uchun bittasini qoʻshing.",
+  "ru": "Замен пока нет. Добавьте, чтобы переписывать текст сообщения.",
+  "id": "Belum ada penggantian. Tambahkan untuk menulis ulang teks pesan.",
+  "es": "Aún no hay reemplazos. Añade uno para reescribir el texto del mensaje.",
+  "fr": "Aucun remplacement. Ajoutez-en un pour réécrire le texte du message.",
+  "it": "Nessuna sostituzione. Aggiungine una per riscrivere il testo del messaggio.",
+  "zh": "暂无替换规则。添加一条以重写消息文本。"
+ },
+ "rules_settings_unavailable": {
+  "en": "This server does not expose per-task settings.",
+  "fa": "این سرور تنظیمات هر تسک را ارائه نمی‌دهد.",
+  "pt": "Este servidor não expõe definições por tarefa.",
+  "uz": "Bu server vazifa sozlamalarini taqdim etmaydi.",
+  "ru": "Этот сервер не предоставляет настройки задач.",
+  "id": "Server ini tidak menyediakan pengaturan per tugas.",
+  "es": "Este servidor no expone ajustes por tarea.",
+  "fr": "Ce serveur n'expose pas les réglages par tâche.",
+  "it": "Questo server non espone impostazioni per attività.",
+  "zh": "此服务器未提供按任务的设置。"
+ },
+ "rules_validation_failed": {
+  "en": "The server rejected the form. Check the highlighted fields.",
+  "fa": "سرور فرم را رد کرد. فیلدهای مشخص‌شده را بررسی کنید.",
+  "pt": "O servidor rejeitou o formulário. Verifique os campos destacados.",
+  "uz": "Server formani rad etdi. Belgilangan maydonlarni tekshiring.",
+  "ru": "Сервер отклонил форму. Проверьте выделенные поля.",
+  "id": "Server menolak formulir. Periksa kolom yang ditandai.",
+  "es": "El servidor rechazó el formulario. Revisa los campos marcados.",
+  "fr": "Le serveur a refusé le formulaire. Vérifiez les champs signalés.",
+  "it": "Il server ha rifiutato il modulo. Controlla i campi evidenziati.",
+  "zh": "服务器拒绝了表单。请检查高亮字段。"
+ },
+ "server_probe_bad_response": {
+  "en": "The server answered, but with something unexpected.",
+  "fa": "سرور پاسخ داد، اما پاسخ غیرمنتظره بود.",
+  "pt": "O servidor respondeu, mas com algo inesperado.",
+  "uz": "Server javob berdi, ammo javob kutilmagan edi.",
+  "ru": "Сервер ответил, но неожиданным содержимым.",
+  "id": "Server menjawab, tetapi isinya tidak terduga.",
+  "es": "El servidor respondió, pero con algo inesperado.",
+  "fr": "Le serveur a répondu, mais avec un contenu inattendu.",
+  "it": "Il server ha risposto, ma con contenuto inatteso.",
+  "zh": "服务器有响应，但返回了意外的内容。"
+ },
+ "server_probe_no_version": {
+  "en": "This server does not expose a version endpoint. Check the address or update the server.",
+  "fa": "این سرور مسیر نسخه را ارائه نمی‌دهد. آدرس را بررسی کنید یا سرور را به‌روز کنید.",
+  "pt": "Este servidor não expõe um endpoint de versão. Verifique o endereço ou atualize o servidor.",
+  "uz": "Bu serverda versiya manzili yoʻq. Manzilni tekshiring yoki serverni yangilang.",
+  "ru": "Сервер не предоставляет эндпоинт версии. Проверьте адрес или обновите сервер.",
+  "id": "Server ini tidak menyediakan endpoint versi. Periksa alamat atau perbarui server.",
+  "es": "Este servidor no expone un endpoint de versión. Revisa la dirección o actualiza el servidor.",
+  "fr": "Ce serveur n'expose pas d'endpoint de version. Vérifiez l'adresse ou mettez à jour le serveur.",
+  "it": "Questo server non espone un endpoint di versione. Controlla l'indirizzo o aggiorna il server.",
+  "zh": "此服务器未提供版本接口。请检查地址或更新服务器。"
+ },
+ "server_probe_tls_error": {
+  "en": "The secure connection failed. Check the server certificate and use https://.",
+  "fa": "اتصال امن برقرار نشد. گواهی سرور را بررسی کنید و از https:// استفاده کنید.",
+  "pt": "A ligação segura falhou. Verifique o certificado e use https://.",
+  "uz": "Xavfsiz ulanish muvaffaqiyatsiz. Sertifikatni tekshirib, https:// ishlating.",
+  "ru": "Защищённое соединение не удалось. Проверьте сертификат и используйте https://.",
+  "id": "Koneksi aman gagal. Periksa sertifikat server dan gunakan https://.",
+  "es": "La conexión segura falló. Revisa el certificado y usa https://.",
+  "fr": "La connexion sécurisée a échoué. Vérifiez le certificat et utilisez https://.",
+  "it": "Connessione sicura non riuscita. Controlla il certificato e usa https://.",
+  "zh": "安全连接失败。请检查服务器证书并使用 https://。"
+ },
+ "server_probe_unreachable": {
+  "en": "Cannot reach the server. Check the address and your network."
+ },
+ "sessions_empty": {
+  "en": "No Telegram account connected yet. Connect one to start.",
+  "fa": "هنوز اکانت تلگرامی متصل نشده است. یک اکانت متصل کنید.",
+  "pt": "Ainda não há conta Telegram ligada. Ligue uma para começar.",
+  "uz": "Hozircha Telegram akkaunt ulanmagan. Boshlash uchun ulang.",
+  "ru": "Аккаунт Telegram пока не подключён. Подключите, чтобы начать.",
+  "id": "Belum ada akun Telegram terhubung. Hubungkan satu untuk mulai.",
+  "es": "Aún no hay cuenta de Telegram conectada. Conecta una para empezar.",
+  "fr": "Aucun compte Telegram connecté. Connectez-en un pour commencer.",
+  "it": "Nessun account Telegram collegato. Collegane uno per iniziare.",
+  "zh": "尚未连接 Telegram 账户。连接一个以开始。"
+ },
+ "sessions_terminate_confirm": {
+  "en": "Disconnect this Telegram account? Forwarding tasks using it will stop.",
+  "fa": "این حساب تلگرام قطع شود؟ تسک‌هایی که از آن استفاده می‌کنند متوقف می‌شوند.",
+  "pt": "Desligar esta conta Telegram? As tarefas que a usam vão parar.",
+  "uz": "Bu Telegram akkaunt uzilsinmi? Undan foydalanadigan vazifalar toʻxtaydi.",
+  "ru": "Отключить этот аккаунт Telegram? Задачи, использующие его, остановятся.",
+  "id": "Putuskan akun Telegram ini? Tugas yang memakainya akan berhenti.",
+  "es": "¿Desconectar esta cuenta de Telegram? Las tareas que la usan se detendrán.",
+  "fr": "Déconnecter ce compte Telegram ? Les tâches qui l'utilisent s'arrêteront.",
+  "it": "Disconnettere questo account Telegram? Le attività che lo usano si fermeranno.",
+  "zh": "断开此 Telegram 账户？使用它的转发规则将停止运行。"
+ },
+ "tg_login_phone_invalid": {
+  "en": "Enter the phone number in international format, e.g. +12025550123.",
+  "fa": "شماره را با قالب بین‌المللی وارد کنید، مثلاً +12025550123.",
+  "pt": "Introduza o número em formato internacional, p. ex. +12025550123.",
+  "uz": "Raqamni xalqaro formatda kiriting, masalan +12025550123.",
+  "ru": "Введите номер в международном формате, напр. +12025550123.",
+  "id": "Masukkan nomor dalam format internasional, mis. +12025550123.",
+  "es": "Introduce el número en formato internacional, p. ej. +12025550123.",
+  "fr": "Saisissez le numéro au format international, p. ex. +12025550123.",
+  "it": "Inserisci il numero in formato internazionale, es. +12025550123.",
+  "zh": "请输入国际格式手机号，例如 +12025550123。"
+ },
+ "tg_login_state_awaiting_password": {
+  "en": "Enter your two-step verification password",
+  "fa": "رمز تأیید دو مرحله‌ای را وارد کنید",
+  "pt": "Introduza a palavra-passe de verificação em dois passos",
+  "uz": "Ikki bosqichli tasdiqlash parolini kiriting",
+  "ru": "Введите пароль двухэтапной проверки",
+  "id": "Masukkan kata sandi verifikasi dua langkah",
+  "es": "Introduce tu contraseña de verificación en dos pasos",
+  "fr": "Saisissez votre mot de passe de vérification en deux étapes",
+  "it": "Inserisci la password di verifica in due passaggi",
+  "zh": "请输入两步验证密码"
+ },
+ "diag_all_ok": {
+  "es": "No se encontraron problemas: todas las tareas están sanas.",
+  "pt": "Não foram encontrados problemas — todas as tarefas estão saudáveis."
+ },
+ "login_session_expired": {
+  "fr": "Votre session a expiré. Reconnectez-vous."
+ },
+ "login_too_many_attempts": {
+  "fa": "تلاش‌های ناموفق زیاد بود. ورود جدیدی شروع کنید."
+ },
+ "logs_export_csv_sub": {
+  "it": "Una riga per evento, pronta per il foglio di calcolo"
+ },
+ "logs_order_toggle_desc": {
+  "es": "Más recientes primero: toca para ver los más antiguos",
+  "fr": "Du plus récent au plus ancien — appuyez pour inverser",
+  "pt": "Mais recentes primeiro — toque para os mais antigos"
+ },
+ "rules_ai_ocr_sub": {
+  "es": "Reconocimiento óptico de caracteres con IA de visión"
+ },
+ "rules_replace_with_hint": {
+  "uz": "Mos kelgan matnni olib tashlash uchun boʻsh qoldiring"
+ },
+ "rules_settings_load_failed": {
+  "es": "No se pudieron cargar los ajustes de la tarea",
+  "fr": "Impossible de charger les réglages de la tâche",
+  "it": "Impossibile caricare le impostazioni dell'attività",
+  "pt": "Não foi possível carregar as definições da tarefa"
+ },
+ "tg_login_state_rate_limited": {
+  "fa": "تلاش‌های بیش از حد. {seconds} ثانیه صبر کنید."
+ },
+ "incompatible_server": {
+  "en": "This server is running an older AutoTelegramForward release. Update it to {version} or newer.",
+  "fa": "این سرور نسخه قدیمی‌تری از AutoTelegramForward را اجرا می‌کند. آن را به {version} یا جدیدتر به‌روز کنید.",
+  "pt": "Este servidor está a executar uma versão mais antiga do AutoTelegramForward. Atualize para {version} ou mais recente.",
+  "uz": "Bu server AutoTelegramForward’ning eski versiyasini ishlatmoqda. Uni {version} yoki yangiroq versiyaga yangilang.",
+  "ru": "Этот сервер работает на более старой версии AutoTelegramForward. Обновите её до {version} или новее.",
+  "id": "Server ini menjalankan rilis AutoTelegramForward yang lebih lama. Perbarui ke {version} atau lebih baru.",
+  "es": "Este servidor ejecuta una versión anterior de AutoTelegramForward. Actualízalo a {version} o superior.",
+  "fr": "Ce serveur exécute une version plus ancienne d'AutoTelegramForward. Mettez-la à jour vers {version} ou plus récente.",
+  "it": "Questo server esegue una versione precedente di AutoTelegramForward. Aggiornala a {version} o successiva.",
+  "zh": "此服务器运行的是较旧的 AutoTelegramForward 版本。请更新到 {version} 或更高版本。"
+ }
+}

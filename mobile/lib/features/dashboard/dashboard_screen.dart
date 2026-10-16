@@ -15,6 +15,7 @@ import '../../core/models.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../../widgets/app_ui.dart';
+import '../system/system_status_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -28,6 +29,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<ServiceHealth> _services = const [];
   List<LogEntry> _recentErrors = const [];
   DiagnosticsReport? _diagnostics;
+  SetupReport? _setup;
   bool _loading = false;
   String? _error;
 
@@ -63,11 +65,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final errorsFuture = client
           .queryLogs(limit: 5, level: 'error')
           .catchError((_) => <LogEntry>[]);
+      // The readiness report drives the hero. It is advisory: a server that
+      // predates /api/system/setup answers 404 and the hero simply reports the
+      // stack as unverified instead of failing the dashboard.
+      final setupFuture = client
+          .systemSetup()
+          .then<SetupReport?>((report) => report)
+          .catchError((_) => null);
 
       final results = await Future.wait([
         statsFuture,
         healthFuture,
         errorsFuture,
+        setupFuture,
       ]);
 
       if (!mounted) return;
@@ -75,6 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _stats = results[0] as SystemStats;
         _services = results[1] as List<ServiceHealth>;
         _recentErrors = results[2] as List<LogEntry>;
+        _setup = results[3] as SetupReport?;
       });
 
       // Preflight is advisory: an older server without /api/diagnostics must
@@ -171,6 +182,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: Icons.insights_rounded,
             ),
             AppSpacing.gapLg,
+
+            // Readiness first: "is this thing set up?" outranks any counter.
+            if (_setup != null) ...[
+              ReadinessHero(
+                ready: _setup!.ready,
+                title:
+                    _setup!.ready ? t.get('sys_ready') : t.get('sys_not_ready'),
+                subtitle:
+                    _setup!.deployment.isEmpty
+                        ? t.get('sys_subtitle')
+                        : '${t.get('sys_deployment')}: ${_setup!.deployment}',
+                verdictLabel:
+                    _setup!.ready ? t.get('sys_ready') : t.get('sys_not_ready'),
+                serviceSummary: t.get(
+                  'sys_services_online',
+                  params: {
+                    'online': '${_setup!.onlineServices}',
+                    'total': '${_setup!.services.length}',
+                  },
+                ),
+                footnote:
+                    _setup!.missingRequired.isEmpty
+                        ? null
+                        : t.get(
+                          'sys_missing_required',
+                          params: {
+                            'count': '${_setup!.missingRequired.length}',
+                          },
+                        ),
+                openLabel: t.get('sys_open'),
+                onOpen:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const SystemStatusScreen(),
+                      ),
+                    ),
+              ),
+              AppSpacing.gapLg,
+            ],
 
             // Metric grid
             GridView.count(
@@ -273,7 +323,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         children: [
                           for (var i = 0; i < _services.length; i++) ...[
                             if (i > 0) const Divider(height: 1),
-                            _ServiceRow(service: _services[i]),
+                            ServiceTile(
+                              name: _services[i].name,
+                              online: _services[i].online,
+                              detail: _services[i].detail,
+                              latencyMs: _services[i].latencyMs,
+                              onlineLabel: t.get('status_online'),
+                              offlineLabel: t.get('status_offline'),
+                              latencyLabel: t.get(
+                                'sys_latency',
+                                params: {'ms': '${_services[i].latencyMs}'},
+                              ),
+                            ),
                           ],
                         ],
                       ),
@@ -385,54 +446,6 @@ class _FindingRow extends StatelessWidget {
                     ),
                   ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One service row: status pill, name, probe detail and latency.
-class _ServiceRow extends StatelessWidget {
-  const _ServiceRow({required this.service});
-
-  final ServiceHealth service;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        children: [
-          StatusPill.online(
-            service.online,
-            label: service.online ? 'ONLINE' : 'OFFLINE',
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  service.name.toUpperCase(),
-                  style: theme.textTheme.titleSmall,
-                ),
-                if (service.detail.isNotEmpty)
-                  Text(
-                    service.detail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
-                  ),
-              ],
-            ),
-          ),
-          Text(
-            '${service.latencyMs} ms',
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],

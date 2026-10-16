@@ -168,36 +168,36 @@ void main() {
 
     // ---- the v18 log-control surface -------------------------------------
     test('log control and full control keys resolve in every locale', () {
+      // Every key the system surface renders: the System screen, the dashboard
+      // readiness hero and the settings language picker.
       const keys = <String>[
-        'logs_scope_task',
-        'logs_scope_service',
-        'logs_all_tasks',
-        'logs_search_hint',
-        'logs_order_toggle_desc',
-        'logs_page_size',
-        'logs_export_evidence',
-        'logs_export_json',
-        'logs_export_csv',
-        'logs_copy',
-        'logs_history_from',
-        'logs_newer',
-        'logs_older',
-        'logs_end_of_history',
-        'logs_scope_task_chip',
-        'logs_scope_corr_chip',
-        'logs_level_errors',
-        'logs_level_warnings',
-        'logs_level_info',
-        'logs_level_debug',
-        'rules_full_control',
-        'rules_full_control_desc',
-        'rules_logs_action',
-        'rules_logs_title',
-        'rules_settings_count',
-        'rules_settings_apply',
-        'rules_settings_min',
-        'rules_settings_max',
-        'rules_settings_invalid',
+        'sys_title',
+        'sys_subtitle',
+        'sys_ready',
+        'sys_not_ready',
+        'sys_deployment',
+        'sys_product_version',
+        'sys_api_version',
+        'sys_commit',
+        'sys_features',
+        'sys_services_title',
+        'sys_contract',
+        'sys_level_required',
+        'sys_level_recommended',
+        'sys_level_optional',
+        'sys_check_set',
+        'sys_check_unset',
+        'sys_missing_required',
+        'sys_next_steps',
+        'sys_latency',
+        'sys_probed_at',
+        'sys_open',
+        'sys_services_online',
+        'sys_unavailable',
+        'status_online',
+        'status_offline',
+        'settings_language_hint',
+        'lang_label',
       ];
       for (final locale in AppMessages.supportedLocales) {
         final msgs = AppMessages(locale);
@@ -220,11 +220,135 @@ void main() {
       );
       final en = AppMessages(const Locale('en'));
       for (final key in AppMessagesEn.knownKeys) {
+        // Language endonyms are the one legitimate RTL value in English: a user
+        // choosing Persian must see "فارسی", not a transliteration.
+        if (key.startsWith('lang_native_')) continue;
         expect(
           rtl.hasMatch(en.get(key)),
           isFalse,
           reason: 'English value for $key contains RTL characters',
         );
+      }
+    });
+  });
+
+  group('Locale resolution', () {
+    // Eight of the ten catalogs were unreachable from the UI: the settings
+    // picker listed only English and Persian, and the delegate only claimed to
+    // support those two - so choosing Italian silently rendered English.
+    test('the delegate supports every shipped locale', () {
+      for (final locale in AppMessages.supportedLocales) {
+        expect(
+          AppMessages.delegate.isSupported(locale),
+          isTrue,
+          reason: '${locale.languageCode} must be loadable',
+        );
+      }
+      expect(AppMessages.delegate.isSupported(const Locale('nl')), isFalse);
+    });
+
+    test('the picker has a native name for every supported locale', () {
+      final msgs = AppMessages(const Locale('en'));
+      for (final locale in AppMessages.supportedLocales) {
+        final label = msgs.get('lang_native_${locale.languageCode}');
+        expect(
+          label,
+          isNot('lang_native_${locale.languageCode}'),
+          reason: 'no endonym for ${locale.languageCode}',
+        );
+        expect(label.trim(), isNotEmpty);
+      }
+    });
+
+    test('every English key resolves to real text in all ten locales', () {
+      // The resolver asserts (debug) on a key no catalog defines, and a
+      // translation gap used to render the raw key. Walking the English catalog
+      // against every locale is the cross-locale completeness check that
+      // catches both.
+      for (final locale in AppMessages.supportedLocales) {
+        final msgs = AppMessages(locale);
+        for (final key in AppMessagesEn.knownKeys) {
+          final value = msgs.get(key);
+          expect(
+            value,
+            isNot(key),
+            reason: '${locale.languageCode} rendered the raw key for $key',
+          );
+          expect(
+            value.trim(),
+            isNotEmpty,
+            reason: '${locale.languageCode} left $key empty',
+          );
+        }
+      }
+    });
+
+    test('the new system surface resolves in all ten locales', () {
+      const keys = <String>[
+        'sys_title',
+        'sys_subtitle',
+        'sys_ready',
+        'sys_not_ready',
+        'sys_deployment',
+        'sys_product_version',
+        'sys_api_version',
+        'sys_commit',
+        'sys_features',
+        'sys_services_title',
+        'sys_contract',
+        'sys_level_required',
+        'sys_level_recommended',
+        'sys_level_optional',
+        'sys_check_set',
+        'sys_check_unset',
+        'sys_missing_required',
+        'sys_next_steps',
+        'sys_latency',
+        'sys_probed_at',
+        'sys_open',
+        'sys_services_online',
+        'sys_unavailable',
+        'status_online',
+        'status_offline',
+        'settings_language_hint',
+        'lang_label',
+      ];
+      for (final locale in AppMessages.supportedLocales) {
+        final msgs = AppMessages(locale);
+        for (final key in keys) {
+          expect(
+            msgs.get(key),
+            isNot(key),
+            reason: '${locale.languageCode} is missing $key',
+          );
+        }
+      }
+    });
+
+    test('placeholders interpolate in every locale', () {
+      const cases = <String, Map<String, String>>{
+        'sys_services_online': {'online': '3', 'total': '4'},
+        'sys_probed_at': {'time': '12:00'},
+        'sys_missing_required': {'count': '2'},
+        'sys_latency': {'ms': '17'},
+      };
+      for (final locale in AppMessages.supportedLocales) {
+        final msgs = AppMessages(locale);
+        cases.forEach((key, params) {
+          final value = msgs.get(key, params: params);
+          params.forEach((name, expected) {
+            expect(
+              value,
+              contains(expected),
+              reason: '${locale.languageCode} lost {$name} in $key',
+            );
+            expect(
+              value,
+              isNot(contains('{$name}')),
+              reason: '${locale.languageCode} left {$name} literal in $key',
+            );
+          });
+        });
       }
     });
   });

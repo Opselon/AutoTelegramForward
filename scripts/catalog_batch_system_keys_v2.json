@@ -1,0 +1,26 @@
+{
+ "sys_services_online": {
+  "en": "{online}/{total} services online",
+  "fa": "{online}/{total} سرویس فعال",
+  "pt": "{online}/{total} serviços online",
+  "uz": "{online}/{total} servis ishlayapti",
+  "ru": "{online}/{total} служб в сети",
+  "id": "{online}/{total} layanan online",
+  "es": "{online}/{total} servicios en línea",
+  "fr": "{online}/{total} services en ligne",
+  "it": "{online}/{total} servizi online",
+  "zh": "{online}/{total} 个服务在线"
+ },
+ "sys_unavailable": {
+  "en": "This server does not expose the system status endpoint. Update the server to see readiness here.",
+  "fa": "این سرور مسیر وضعیت سیستم را ارائه نمی‌دهد. سرور را به‌روز کنید تا آمادگی اینجا نمایش داده شود.",
+  "pt": "Este servidor não expõe o endpoint de estado do sistema. Atualize o servidor para ver aqui a prontidão.",
+  "uz": "Bu serverda tizim holati manzili yoʻq. Tayyorlikni koʻrish uchun serverni yangilang.",
+  "ru": "Сервер не предоставляет эндпоинт состояния системы. Обновите сервер, чтобы видеть готовность здесь.",
+  "id": "Server ini tidak menyediakan endpoint status sistem. Perbarui server untuk melihat kesiapan di sini.",
+  "es": "Este servidor no expone el endpoint de estado del sistema. Actualiza el servidor para ver aquí la preparación.",
+  "fr": "Ce serveur n'expose pas l'endpoint d'état du système. Mettez à jour le serveur pour voir l'état ici.",
+  "it": "Questo server non espone l'endpoint di stato del sistema. Aggiorna il server per vedere qui lo stato.",
+  "zh": "此服务器未提供系统状态接口。请更新服务器以在此查看就绪状态。"
+ }
+}

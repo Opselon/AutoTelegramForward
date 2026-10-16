@@ -910,3 +910,241 @@ textarea {
     backdrop-filter: none;
   }
 }
+
+/* Brand alignment with the mobile client and the `atf` CLI: one product, one
+   set of hexes. Sky -> indigo -> violet is the shared brand gradient. */
+:root {
+  --brand-gradient: linear-gradient(135deg, #38bdf8 0%, #6366f1 55%, #a855f7 100%);
+  --brand-danger-gradient: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+  --sky: #38bdf8;
+  --violet: #a855f7;
+}
+
+/* ---- System panel: readiness, topology, configuration contract ----------
+   Rendered by components/SystemPanel.tsx from GET /api/system/setup, the same
+   payload the mobile System screen and `atf setup` render. Colours come from
+   the tokens above so the web and mobile clients read as one product. */
+.syspanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+.syspanel-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  border-radius: var(--radius-lg);
+  background: var(--brand-gradient);
+  box-shadow: 0 10px 30px rgba(56, 189, 248, 0.18);
+  color: #fff;
+}
+.syspanel-hero--notready {
+  background: var(--brand-danger-gradient);
+  box-shadow: 0 10px 30px rgba(239, 68, 68, 0.2);
+}
+.syspanel-hero-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+.syspanel-verdict {
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.85;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.syspanel-hero-sub {
+  margin-top: var(--space-sm);
+  font-size: 0.82rem;
+  max-width: 60ch;
+  color: rgba(255, 255, 255, 0.88);
+}
+.syspanel-hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  margin-top: var(--space-md);
+  font-size: 0.78rem;
+}
+.syspanel-hero-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.92);
+}
+.syspanel-hero-stats strong {
+  font-variant-numeric: tabular-nums;
+}
+.syspanel-refresh {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.syspanel-warning,
+.syspanel-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+}
+.syspanel-warning {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: var(--warning);
+}
+.syspanel-empty {
+  background: var(--bg-card);
+  border: 1px dashed var(--border-color);
+  color: var(--text-muted);
+}
+.syspanel-warning code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+.syspanel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-md);
+}
+.syspanel-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  transition: transform var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+.syspanel-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-glow);
+}
+.syspanel-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.syspanel-card-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.syspanel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-inline-start: auto;
+}
+.syspanel-dot--up {
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+}
+.syspanel-dot--down {
+  background: var(--critical);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+}
+.syspanel-card-detail {
+  margin-top: var(--space-sm);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+.syspanel-card-foot {
+  margin-top: var(--space-sm);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.syspanel-section h4 {
+  margin: 0 0 var(--space-sm);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.syspanel-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.syspanel-chip {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.14);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
+}
+.syspanel-contract {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.syspanel-check {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border-inline-start: 3px solid transparent;
+}
+.syspanel-check.is-set {
+  border-inline-start-color: var(--success);
+  background: rgba(16, 185, 129, 0.05);
+}
+.syspanel-check.is-unset {
+  border-inline-start-color: var(--warning);
+  background: rgba(245, 158, 11, 0.06);
+}
+.syspanel-check-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  justify-content: space-between;
+}
+.syspanel-check-key {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.syspanel-check-badge {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.syspanel-check-reason {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.syspanel-check-hint {
+  font-size: 0.74rem;
+  color: var(--sky);
+  margin-top: 2px;
+}
+.syspanel-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.syspanel-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.syspanel-steps svg {
+  color: var(--sky);
+  margin-top: 2px;
+  flex-shrink: 0;
+}

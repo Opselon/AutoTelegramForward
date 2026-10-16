@@ -31,6 +31,12 @@ REPO = Path(__file__).resolve().parents[1]
 RTL_GRAPHEMES = set("یگچپژکیهؤئإأآ")
 PLACEHOLDER = re.compile(r"\{[a-zA-Z_][a-zA-Z0-9_]*\}")
 
+# The one legitimate RTL value in an English catalog: a language's own endonym.
+# A user picking Persian in a picker written in English must read "فارسی", so
+# these keys opt out of the cross-leak rule explicitly rather than relaxing it
+# for every key - anything else with RTL text in `en` is still a defect.
+RTL_EXEMPT_KEYS = frozenset({"lang_native_fa"})
+
 failures: list[str] = []
 
 
@@ -56,7 +62,11 @@ def check(name: str, lang: str, keys: dict[str, str], ref: dict[str, str]) -> No
             )
     # Cross-leak (reference language only — translations legitimately use it)
     if lang == "en":
-        leaked = [k for k in ref_keys if any(c in RTL_GRAPHEMES for c in (keys.get(k) or ""))]
+        leaked = [
+            k
+            for k in ref_keys - RTL_EXEMPT_KEYS
+            if any(c in RTL_GRAPHEMES for c in (keys.get(k) or ""))
+        ]
         if leaked:
             failures.append(
                 f"{name}/en: English strings contain Persian/Arabic text in {sorted(leaked)}"

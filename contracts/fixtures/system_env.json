@@ -1,0 +1,50 @@
+{
+  "checks": [
+    {
+      "hint": "ATF_CORE_GRPC=core:50051 (set by docker-compose.yml)",
+      "key": "ATF_CORE_GRPC",
+      "level": "required",
+      "reason": "core gRPC address (rules, sessions, pipeline stats)",
+      "set": true
+    },
+    {
+      "hint": "ATF_LOGGER_GRPC=logger:50052 (set by docker-compose.yml)",
+      "key": "ATF_LOGGER_GRPC",
+      "level": "required",
+      "reason": "logger gRPC address (log ingest and query)",
+      "set": true
+    },
+    {
+      "hint": "atf setup generates ATF_API_KEY automatically, then: atf system restart",
+      "key": "ATF_API_KEY",
+      "level": "recommended",
+      "reason": "pre-shared key for scripted/CLI clients",
+      "set": true
+    },
+    {
+      "hint": "ATF_WEB_HEALTH_URL=http://web:8088/healthz (set by docker-compose.yml)",
+      "key": "ATF_WEB_HEALTH_URL",
+      "level": "recommended",
+      "reason": "reachable web gateway health URL, probed by /api/health/services",
+      "set": true
+    },
+    {
+      "hint": "leave unset unless the port must change",
+      "key": "ATF_ADDR",
+      "level": "optional",
+      "reason": "listen address (defaults to :8080)",
+      "set": true
+    },
+    {
+      "hint": "not needed with docker compose",
+      "key": "ATF_BOT_TOKEN",
+      "level": "optional",
+      "reason": "only for bare-metal API deployments that exchange bot tokens themselves (compose puts the bot in core)",
+      "set": false
+    }
+  ],
+  "deployment": "docker-compose",
+  "missing_recommended": [],
+  "missing_required": [],
+  "ok": true
+}

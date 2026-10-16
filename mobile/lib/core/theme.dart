@@ -1,9 +1,12 @@
 /// Accessible, brand-aligned Material 3 theme and design tokens.
 ///
-/// Palette matches the React Web Dashboard:
-///   * Primary brand: emerald (`#059669` / `#10B981`)
+/// Palette matches the React Web Dashboard **and** the `atf` CLI: one product,
+/// one set of hexes.
+///   * Brand: indigo (`#6366F1`) on a sky -> indigo -> violet gradient
+///   * Success/healthy: emerald (`#10B981`), kept for status semantics only
 ///   * Surfaces: neutral slate (`#0F172A` dark, `#F8FAFC` light)
-///   * Accents: cyan (`#06B6D4`), amber warnings (`#F59E0B`), red errors (`#EF4444`)
+///   * Accents: sky (`#38BDF8`), violet (`#A855F7`), amber warnings
+///     (`#F59E0B`), red errors (`#EF4444`)
 ///
 /// The token classes ([AppSpacing], [AppRadii], [AppGradients], [AppShadows])
 /// exist so screens never hardcode a magic number: spacing, corner radius,
@@ -58,19 +61,25 @@ class AppGradients {
   static const LinearGradient brand = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF10B981), Color(0xFF06B6D4)],
+    colors: [Color(0xFF38BDF8), Color(0xFF6366F1), Color(0xFFA855F7)],
   );
 
   static const LinearGradient success = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF10B981), Color(0xFF059669)],
+    colors: [Color(0xFF10B981), Color(0xFF14B8A6)],
   );
 
   static const LinearGradient cyan = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF06B6D4), Color(0xFF3B82F6)],
+    colors: [Color(0xFF38BDF8), Color(0xFF06B6D4)],
+  );
+
+  static const LinearGradient violet = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFA855F7), Color(0xFF6366F1)],
   );
 
   static const LinearGradient danger = LinearGradient(
@@ -94,6 +103,50 @@ class AppGradients {
       base,
     ],
   );
+}
+
+/// Motion tokens: durations and easing shared by every animation, so screens
+/// feel like one app instead of a pile of independently tuned transitions.
+class AppMotion {
+  const AppMotion._();
+
+  static const Duration fast = Duration(milliseconds: 120);
+  static const Duration base = Duration(milliseconds: 200);
+  static const Duration slow = Duration(milliseconds: 320);
+
+  /// Decelerating curve: starts quickly and settles, which reads as responsive.
+  static const Curve ease = Cubic(0.22, 1, 0.36, 1);
+}
+
+/// Frosted-glass surface treatment for panels that must sit *over* the page
+/// background (hero cards, stat tiles) rather than next to it.
+class AppGlass {
+  const AppGlass._();
+
+  static const double opacity = 0.06;
+
+  static BoxDecoration panel({
+    required Brightness brightness,
+    Gradient? gradient,
+    Color? tint,
+    double radius = AppRadii.lg,
+    bool highlight = true,
+  }) {
+    final dark = brightness == Brightness.dark;
+    final base = tint ?? (dark ? AppTheme.darkSurface : AppTheme.lightSurface);
+    return BoxDecoration(
+      gradient: gradient,
+      color: gradient == null ? base.withValues(alpha: 0.72) : null,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color:
+            highlight
+                ? Colors.white.withValues(alpha: dark ? 0.10 : 0.6)
+                : Colors.transparent,
+      ),
+      boxShadow: AppShadows.dark(brightness),
+    );
+  }
 }
 
 /// Elevation presets, theme-aware (dark surfaces need glow, light needs shadow).
@@ -121,9 +174,15 @@ class AppShadows {
 class AppTheme {
   const AppTheme._();
 
-  static const Color primary = Color(0xFF10B981);
-  static const Color primaryDark = Color(0xFF059669);
-  static const Color accent = Color(0xFF06B6D4);
+  static const Color primary = Color(0xFF6366F1);
+  static const Color primaryDark = Color(0xFF4F46E5);
+  static const Color accent = Color(0xFFA855F7);
+  static const Color sky = Color(0xFF38BDF8);
+
+  /// Reserved for "everything is healthy" - the brand hue means *brand*, not
+  /// *success*, so status colours get their own names.
+  static const Color success = Color(0xFF10B981);
+  static const Color teal = Color(0xFF14B8A6);
   static const Color error = Color(0xFFEF4444);
   static const Color warning = Color(0xFFF59E0B);
   static const Color info = Color(0xFF3B82F6);
@@ -142,7 +201,7 @@ class AppTheme {
 
   /// The colour that represents a service/rule health state everywhere.
   static Color statusColor(bool healthy, {bool neutralWhenFalse = false}) {
-    if (healthy) return primary;
+    if (healthy) return success;
     return neutralWhenFalse ? const Color(0xFF94A3B8) : error;
   }
 
