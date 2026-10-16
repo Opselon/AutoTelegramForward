@@ -27,6 +27,61 @@ import '../../widgets/app_ui.dart';
 import '../../widgets/chat_id_list_field.dart';
 import '../chats/chat_picker_sheet.dart';
 
+/// One-line, plain-language description of the effective branding hop for a
+/// task: which route the message takes and which messages earn it.
+///
+/// Reads the per-task trigger policy (`metadata["branding_hop"]`, parsed into
+/// [BrandingHopConfig]) and nothing else, so what the operator reads here is
+/// the same blob the engine's `should_hop` decision consumes. A rule with no
+/// metadata, or with metadata the app cannot read, renders the unconditional
+/// case — the hop never disappears from the UI because of a malformed value.
+String brandingHopSummary(AppMessages t, BrandingHopConfig config) {
+  if (!config.hasTriggers) return t.get('rules_intermediate_summary_all');
+
+  final parts = <String>[];
+  if (config.originTitles.isNotEmpty) {
+    parts.add(
+      t.get(
+        'rules_intermediate_cond_origins',
+        params: {'names': config.originTitles.join(', ')},
+      ),
+    );
+  }
+  if (config.originIds.isNotEmpty) {
+    parts.add(
+      t.get(
+        'rules_intermediate_cond_ids',
+        params: {'count': '${config.originIds.length}'},
+      ),
+    );
+  }
+  if (config.keywords.isNotEmpty) {
+    parts.add(
+      t.get(
+        'rules_intermediate_cond_keywords',
+        params: {'count': '${config.keywords.length}'},
+      ),
+    );
+  }
+  if (config.requireForward) {
+    parts.add(t.get('rules_intermediate_cond_forward_only'));
+  }
+
+  final conditions = parts.join(' · ');
+  // Only worth naming the match mode when more than one condition is listed:
+  // with a single condition `any` and `all` decide the same thing.
+  final mode = t.get(
+    config.matchMode == 'all'
+        ? 'rules_intermediate_match_all'
+        : 'rules_intermediate_match_any',
+  );
+  final body = parts.length > 1 ? '$mode · $conditions' : conditions;
+  return t.get(
+    'rules_intermediate_summary_triggers',
+    params: {'conditions': body},
+  );
+}
+
 class RuleEditorScreen extends StatefulWidget {
   const RuleEditorScreen({
     super.key,
@@ -850,7 +905,21 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                 ),
               const SizedBox(height: 16),
 
-              // Intermediate VIP Channel
+              // Intermediate VIP Channel — the A → C → B branding hop. The
+              // title names the hop so the section cannot be mistaken for a
+              // plain relay, and the summary below the C field states the
+              // effective route the engine will take for this task.
+              Text(
+                t.get('rules_intermediate_title'),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                t.get('rules_intermediate_hint'),
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(t.get('rules_intermediate')),
@@ -859,10 +928,43 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
               ),
               if (_useVipRouting)
                 TextFormField(
+                  key: const ValueKey<String>('rule_intermediate_field'),
                   controller: _intermediateCtrl,
                   decoration: InputDecoration(
                     labelText: t.get('rules_intermediate_id'),
                     hintText: '-1000000000000',
+                  ),
+                ),
+              if (_useVipRouting)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.alt_route_rounded,
+                        size: 16,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          // Absent metadata renders the unconditional route;
+                          // a malformed blob degrades the same way instead of
+                          // throwing inside a build.
+                          brandingHopSummary(
+                            t,
+                            widget.rule?.brandingHop ??
+                                const BrandingHopConfig(),
+                          ),
+                          key: const ValueKey<String>(
+                            'rule_branding_hop_summary',
+                          ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               const SizedBox(height: 16),
