@@ -438,3 +438,75 @@ class TestQueueRecordsTheHop:
 
 async def _async(value):
     return value
+
+
+# --------------------------------------------------------------------------- #
+# Bot panel: the operator configures the hop from the same config the engine reads
+# --------------------------------------------------------------------------- #
+def _bot_ui(lang: str = "en"):
+    from core.infrastructure.telegram.i18n import I18n
+    from core.infrastructure.telegram.pro_bot_ui import ProBotUI, UiState
+
+    ui = ProBotUI.__new__(ProBotUI)
+    ui._states = {5094837833: UiState(lang=lang)}
+    ui._users = None
+    ui.i18n = I18n()
+    ui._t = ProBotUI._t.__get__(ui, ProBotUI)
+    ui._kbd = lambda rows: ProBotUI._kbd(ui, rows)
+    return ui
+
+
+def _menu_callbacks(kbd) -> List[str]:
+    return [str(b.callback_data or "") for row in kbd.inline_keyboard for b in row]
+
+
+class TestBotBrandingPanel:
+    def test_panel_exposes_the_branding_controls(self):
+        ui = _bot_ui("en")
+        rule = _rule(id="rule_brand_1234")
+        text, kbd = ui._render_smart_menu(rule)
+        callbacks = _menu_callbacks(kbd)
+
+        for prefix in ("rsmbo:", "rsmbk:", "rsmbr:", "rsmbf:"):
+            assert any(cb.startswith(prefix) for cb in callbacks), f"{prefix} button missing"
+        assert "Branding hop" in text
+        # Nothing configured yet: the hop applies to every message.
+        assert "every message" in text
+
+    def test_panel_reflects_the_stored_config(self):
+        ui = _bot_ui("en")
+        rule = _rule(id="rule_brand_5678")
+        branding.write_config(rule, {
+            "triggers_enabled": True, "origin_titles": ["Premium Deals"],
+            "keywords": ["promo"], "require_forward": True,
+        })
+        text, kbd = ui._render_smart_menu(rule)
+
+        assert "Premium Deals" in text and "promo" in text
+        assert "filtered" in text
+        callbacks = _menu_callbacks(kbd)
+        # The toggle buttons show the current state, so the operator can see it.
+        gate = [b.text for row in kbd.inline_keyboard for b in row if b.callback_data.startswith("rsmbr:")]
+        assert gate and "ON" in gate[0]
+
+    def test_every_callback_fits_the_telegram_budget(self):
+        """Callback data must stay under Telegram's 64-byte limit."""
+        ui = _bot_ui("en")
+        rule = _rule(id="rule_brand_1234")
+        _text, kbd = ui._render_smart_menu(rule)
+        for cb in _menu_callbacks(kbd):
+            assert len(cb.encode("utf-8")) <= 64, cb
+
+    @pytest.mark.parametrize("lang", ["en", "fa", "ru", "zh", "pt", "uz", "id", "es", "fr", "it"])
+    def test_panel_renders_in_every_locale_without_a_missing_key(self, lang):
+        ui = _bot_ui(lang)
+        rule = _rule(id="rule_brand_1234")
+        branding.write_config(rule, {"triggers_enabled": True, "origin_ids": ["-10055"]})
+        text, kbd = ui._render_smart_menu(rule)
+
+        assert "ui_smart_brand" not in text, "a catalog key leaked into the panel"
+        assert "ui_brand_" not in text
+        labels = [b.text for row in kbd.inline_keyboard for b in row]
+        assert all(label and not label.startswith("ui_") for label in labels)
+        # The panel is rendered from the catalog, not hardcoded English.
+        assert len(_menu_callbacks(kbd)) >= 8
