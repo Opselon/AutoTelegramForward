@@ -390,7 +390,9 @@ class LoginFlowManager:
             except Exception:
                 pass
             self._pending.pop(user_id, None)
-            logger.info("Session %s linked for %s", session.id, state.phone_number)
+            # The session row is identified by its id prefix: the account's
+            # phone number is personal data and never belongs in a log line.
+            logger.info("Session %s linked for user %s", session.id[:8], int(user_id))
             return f"login_success:{session.id}"
         except Exception as exc:
             logger.exception("Finalize login failed")

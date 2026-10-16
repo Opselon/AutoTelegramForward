@@ -40,6 +40,7 @@ from ...application.backup_service import (
     decrypt_bundle,
     deserialize_bundle,
     encrypt_bundle,
+    is_encrypted_bundle,
     serialize_bundle,
 )
 from ...application.repositories import ConcurrencyError
@@ -8687,7 +8688,7 @@ class ProBotUI:
             except OSError:
                 pass
 
-        if blob.startswith("enc:v1:"):
+        if is_encrypted_bundle(blob):
             # ask for the passphrase, keep the bundle in the FSM buffer
             st.buffer["migrate_blob"] = blob
             st.step = "migrate_import_passphrase"

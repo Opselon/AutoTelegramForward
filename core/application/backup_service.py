@@ -624,7 +624,19 @@ class BackupService:
 # Bundle serialization helpers — the wire format the API and the bot share.
 # --------------------------------------------------------------------------- #
 
-_BUNDLE_PREFIX = "enc:v1:"
+_BUNDLE_PREFIX = "enc:v2:"
+
+#: Version 1 (SHA-256 of the passphrase as the AES key) was shipped before the
+#: bundle got a real KDF. It is refused on read — see decrypt_bundle.
+_BUNDLE_PREFIX_V1 = "enc:v1:"
+
+#: Per-bundle random salt for the passphrase KDF, stored in the bundle header.
+_BUNDLE_SALT_BYTES = 16
+
+#: Iterations for PBKDF2-HMAC-SHA256. The passphrase protects a bundle that
+#: contains live Telegram credentials, so the KDF must cost a real offline
+#: attack; 600k is OWASP's current floor for PBKDF2-HMAC-SHA256.
+_BUNDLE_KDF_ITERATIONS = 600_000
 
 
 def serialize_bundle(doc: Dict[str, Any]) -> str:
@@ -642,45 +654,100 @@ def deserialize_bundle(text: str) -> Dict[str, Any]:
     return doc
 
 
+def _bundle_key(passphrase: str, salt: bytes, iterations: int = _BUNDLE_KDF_ITERATIONS) -> bytes:
+    """Derive the AES-256 bundle key from a user passphrase.
+
+    The passphrase is a human-chosen string, so it has to go through a real
+    key-derivation function: PBKDF2-HMAC-SHA256 with a per-bundle random salt
+    and an OWASP-sized iteration count. A single fast hash of the passphrase
+    (which is what v1 bundles used) turns "guess the passphrase" into a plain
+    hashing race for anyone who has the file.
+    """
+    import hashlib
+
+    if not passphrase:
+        raise ValueError("passphrase required")
+    return hashlib.pbkdf2_hmac(
+        "sha256", passphrase.encode("utf-8"), salt, iterations, dklen=32
+    )
+
+
+def is_encrypted_bundle(blob: str) -> bool:
+    """True when a bundle carries an encrypted payload.
+
+    Version-agnostic on purpose: callers use this to decide whether a
+    passphrase is required, and a bundle written by an older release must
+    still be recognised as encrypted (it is refused with an explanation by
+    decrypt_bundle, not silently treated as plain text).
+    """
+    return blob.startswith("enc:")
+
+
+def _bundle_parts(blob: str) -> tuple[int, bytes] | None:
+    """Split '<prefix>:<b64>' into (version, payload). None for a plain bundle."""
+    import base64
+
+    for version, prefix in ((2, _BUNDLE_PREFIX), (1, _BUNDLE_PREFIX_V1)):
+        if blob.startswith(prefix):
+            return version, base64.urlsafe_b64decode(
+                blob[len(prefix):].encode("ascii")
+            )
+    return None
+
+
 def encrypt_bundle(plaintext: str, passphrase: str) -> str:
     """Encrypt a serialized bundle with a user passphrase (AES-GCM).
 
     Returns a self-describing string so decrypt can tell an encrypted bundle
-    from a plain one: 'enc:v1:<b64(nonce+ciphertext)>'.
+    from a plain one: 'enc:v2:<b64(salt+nonce+ciphertext)>'. The salt is
+    random per bundle, so two exports of the same data with the same
+    passphrase do not share a key.
     """
     import base64
-    import hashlib
     import os
 
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-    if not passphrase:
-        raise ValueError("passphrase required")
-    key = hashlib.sha256(passphrase.encode("utf-8")).digest()
+    salt = os.urandom(_BUNDLE_SALT_BYTES)
+    key = _bundle_key(passphrase, salt)
     nonce = os.urandom(12)
     ct = AESGCM(key).encrypt(nonce, plaintext.encode("utf-8"), None)
-    return _BUNDLE_PREFIX + base64.urlsafe_b64encode(nonce + ct).decode("ascii")
+    return _BUNDLE_PREFIX + base64.urlsafe_b64encode(salt + nonce + ct).decode("ascii")
 
 
 def decrypt_bundle(blob: str, passphrase: str) -> str:
     """Reverse encrypt_bundle. Raises ValueError on a wrong/missing passphrase."""
     import base64
-    import hashlib
 
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-    if not blob.startswith(_BUNDLE_PREFIX):
+    parts = _bundle_parts(blob)
+    if parts is None:
         # plain bundle — a passphrase on an unencrypted bundle is a hard error
         # so nobody silently imports an unprotected bundle while expecting one
         if passphrase:
             raise ValueError("bundle is not encrypted but a passphrase was supplied")
         return blob
+    version, raw = parts
+    if version == 1:
+        # Fail closed rather than keep a fast hash in the code path: a v1
+        # bundle can still be migrated (filter the old instance's export for
+        # an unencrypted bundle and import that), but it cannot be read here.
+        raise ValueError(
+            "legacy v1 bundle: its key came from a single SHA-256 of the "
+            "passphrase, which is no longer supported. Re-export from the "
+            "current version, or import the old export without a passphrase."
+        )
     if not passphrase:
         raise ValueError("this bundle is passphrase-protected")
-    key = hashlib.sha256(passphrase.encode("utf-8")).digest()
-    raw = base64.urlsafe_b64decode(blob[len(_BUNDLE_PREFIX):].encode("ascii"))
-    nonce, ct = raw[:12], raw[12:]
+    salt, nonce, ct = (
+        raw[:_BUNDLE_SALT_BYTES],
+        raw[_BUNDLE_SALT_BYTES:_BUNDLE_SALT_BYTES + 12],
+        raw[_BUNDLE_SALT_BYTES + 12:],
+    )
+    if len(salt) != _BUNDLE_SALT_BYTES or len(nonce) != 12 or not ct:
+        raise ValueError("wrong passphrase or corrupted bundle")
     try:
-        return AESGCM(key).decrypt(nonce, ct, None).decode("utf-8")
+        return AESGCM(_bundle_key(passphrase, salt)).decrypt(nonce, ct, None).decode("utf-8")
     except Exception as exc:
         raise ValueError("wrong passphrase or corrupted bundle") from exc

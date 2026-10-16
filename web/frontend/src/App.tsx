@@ -386,7 +386,7 @@ export function App() {
       showToast('متن فایل بکاپ را وارد کنید یا فایل را انتخاب کنید')
       return
     }
-    const looksEncrypted = bundle.startsWith('enc:v1:')
+    const looksEncrypted = bundle.startsWith('enc:')
     if (looksEncrypted && !importPassphrase) {
       showToast('این فایل رمزگذاری شده است؛ رمز عبور را وارد کنید')
       return

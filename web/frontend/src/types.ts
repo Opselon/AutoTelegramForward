@@ -813,7 +813,7 @@ export interface BackupExportRequest {
 
 export interface BackupExportResponse {
   success: boolean
-  /** JSON snapshot, plain or `enc:v1:`-prefixed when a passphrase was given. */
+  /** JSON snapshot, plain or `enc:`-prefixed (any bundle version) when a passphrase was given. */
   bundle: string
   /** entity name -> row count, so the UI can preview what is inside. */
   counts: Record<string, number>
@@ -824,7 +824,7 @@ export interface BackupExportResponse {
 
 export interface BackupImportRequest {
   bundle: string
-  /** Required when the bundle is `enc:v1:`-prefixed. */
+  /** Required when the bundle is `enc:`-prefixed (any bundle version). */
   passphrase?: string
   /** Re-stamp every imported entity with this owner. 0 = keep source ids. */
   target_owner_user_id?: number

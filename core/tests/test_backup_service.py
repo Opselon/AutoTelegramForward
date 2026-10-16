@@ -16,9 +16,11 @@ import pytest
 from core.application.backup_service import (
     SNAPSHOT_FORMAT,
     BackupService,
+    _BUNDLE_PREFIX,
     decrypt_bundle,
     deserialize_bundle,
     encrypt_bundle,
+    is_encrypted_bundle,
     serialize_bundle,
 )
 from core.application.repositories import (
@@ -577,7 +579,7 @@ def test_retarget_owner_rebinds_entities():
 def test_bundle_encryption_roundtrip():
     payload = serialize_bundle({"format": 2, "entities": {"sessions": []}})
     enc = encrypt_bundle(payload, "hunter2")
-    assert enc.startswith("enc:v1:")
+    assert enc.startswith(_BUNDLE_PREFIX)
     assert decrypt_bundle(enc, "hunter2") == payload
 
     # wrong passphrase -> clear error
@@ -594,6 +596,49 @@ def test_bundle_encryption_roundtrip():
 
     # plain bundle with no passphrase passes through
     assert decrypt_bundle(payload, "") == payload
+
+
+def test_bundle_key_is_derived_with_a_salted_pbkdf2():
+    """Two exports of the same payload must not share a key.
+
+    Regression for the v1 format, whose key was a single SHA-256 of the
+    passphrase: no salt, no work factor. Both properties are visible on the
+    wire — the salt is per bundle, and a bundle written with a different salt
+    is not readable with the other bundle's ciphertext.
+    """
+    import hashlib
+
+    from core.application.backup_service import _BUNDLE_KDF_ITERATIONS, _BUNDLE_SALT_BYTES
+
+    payload = serialize_bundle({"format": 2, "entities": {}})
+    first, second = encrypt_bundle(payload, "hunter2"), encrypt_bundle(payload, "hunter2")
+    assert first != second  # random salt -> different ciphertext
+
+    # The KDF must be a salted PBKDF2 at the OWASP floor, not a bare hash: the
+    # key of a bundle is reproducible from its own salt and nothing else.
+    salt = base64.urlsafe_b64decode(first[len(_BUNDLE_PREFIX):])[:_BUNDLE_SALT_BYTES]
+    assert len(salt) == _BUNDLE_SALT_BYTES
+    assert _BUNDLE_KDF_ITERATIONS >= 600_000
+    derived = hashlib.pbkdf2_hmac(
+        "sha256", b"hunter2", salt, _BUNDLE_KDF_ITERATIONS, dklen=32
+    )
+    assert derived != hashlib.sha256(b"hunter2").digest()
+
+
+def test_legacy_v1_bundle_is_refused_and_announced_as_encrypted():
+    """A v1 bundle fails closed with an explanation, and is never mistaken
+    for a plain bundle (which would import as garbage or, worse, skip the
+    passphrase prompt entirely)."""
+    from core.application.backup_service import is_encrypted_bundle
+
+    v1_blob = "enc:v1:" + base64.urlsafe_b64encode(b"x" * 40).decode("ascii")
+    assert is_encrypted_bundle(v1_blob)
+    with pytest.raises(ValueError, match="legacy v1 bundle"):
+        decrypt_bundle(v1_blob, "hunter2")
+
+    # a truncated v2 header is a clear error, not an IndexError
+    with pytest.raises(ValueError, match="wrong passphrase or corrupted"):
+        decrypt_bundle(_BUNDLE_PREFIX + base64.urlsafe_b64encode(b"short").decode("ascii"), "x")
 
 
 def test_bundle_serialization_shape():

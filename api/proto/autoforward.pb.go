@@ -6644,7 +6644,7 @@ func (x *BackupExportRequest) GetPassphrase() string {
 type BackupExportResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Bundle        string                 `protobuf:"bytes,2,opt,name=bundle,proto3" json:"bundle,omitempty"`                                                                            // JSON snapshot, optionally encrypted with enc:v1:
+	Bundle        string                 `protobuf:"bytes,2,opt,name=bundle,proto3" json:"bundle,omitempty"`                                                                            // JSON snapshot, optionally encrypted with enc:v1:/enc:v2:
 	Counts        map[string]int32       `protobuf:"bytes,3,rep,name=counts,proto3" json:"counts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // entity name -> count in the snapshot
 	Error         string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -6711,7 +6711,7 @@ func (x *BackupExportResponse) GetError() string {
 
 type BackupImportRequest struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	Bundle            string                 `protobuf:"bytes,1,opt,name=bundle,proto3" json:"bundle,omitempty"`                                                     // JSON snapshot (plain or enc:v1:)
+	Bundle            string                 `protobuf:"bytes,1,opt,name=bundle,proto3" json:"bundle,omitempty"`                                                     // JSON snapshot (plain or enc:v1:/enc:v2:)
 	Passphrase        string                 `protobuf:"bytes,2,opt,name=passphrase,proto3" json:"passphrase,omitempty"`                                             // required when the bundle is encrypted
 	TargetOwnerUserId int64                  `protobuf:"varint,3,opt,name=target_owner_user_id,json=targetOwnerUserId,proto3" json:"target_owner_user_id,omitempty"` // 0 = keep the source owner
 	OverwriteExisting bool                   `protobuf:"varint,4,opt,name=overwrite_existing,json=overwriteExisting,proto3" json:"overwrite_existing,omitempty"`     // replace rows that already exist

@@ -1,6 +1,7 @@
 """Telegram Bot Manager: command + callback surface over the use cases."""
 
 import base64
+import io
 import json
 import logging
 import time
@@ -319,19 +320,22 @@ class BotManager:
                     "username": target.username,
                     "first_name": target.first_name,
                 }
-                blob = base64.urlsafe_b64encode(
+                payload = base64.urlsafe_b64encode(
                     json.dumps(bundle).encode("utf-8")
-                ).decode("ascii")
-                path = f"backup_{target.id[:8]}.atf"
-                with open(path, "w", encoding="utf-8") as fh:
-                    fh.write(blob)
+                )
+                name = f"backup_{target.id[:8]}.atf"
+                # The bundle goes straight into the owner's own chat, from
+                # memory. Writing it to a file first left a readable copy of
+                # the account's identity on the host for the lifetime of the
+                # upload, and a crash between write and remove left it there
+                # for good.
+                document = io.BytesIO(payload)
+                document.name = name
                 await message.reply_document(
-                    document=path,
-                    file_name=path,
+                    document=document,
+                    file_name=name,
                     caption=self.i18n.t("backup_ready", lang=lang, phone=target.phone_number),
                 )
-                import os
-                os.remove(path)
             except Exception as exc:
                 await message.reply_text(self.i18n.t("backup_failed", lang=lang, error=str(exc)))
 

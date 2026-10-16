@@ -23,7 +23,7 @@ from core.infrastructure.persistence.sqlite_repositories import (
     SqliteSessionRepository,
 )
 from core.infrastructure.security.crypto import CryptoService
-from core.application.backup_service import BackupService
+from core.application.backup_service import BackupService, is_encrypted_bundle
 from core.domain.entities import AIConfig, FilterRule, ForwardRule, TelegramSession
 from core.domain.value_objects import AIProviderType, ForwardMode, RoutingType
 from core.proto import pb, pb_grpc
@@ -175,8 +175,8 @@ def test_export_with_passphrase_is_aes_gcm(backup_stack):
     enc = asyncio.run(backup_stack["servicer"].BackupExport(
         pb.BackupExportRequest(owner_user_id=42, passphrase="s3cret"), ctx))
     assert enc.success, enc.error
-    assert enc.bundle.startswith("enc:v1:")
-    assert not plain.bundle.startswith("enc:v1:")
+    assert is_encrypted_bundle(enc.bundle)
+    assert not is_encrypted_bundle(plain.bundle)
 
     # wrong passphrase is rejected at import, not silently ignored
     bad = asyncio.run(backup_stack["servicer"].BackupImport(
