@@ -8,6 +8,7 @@ logs here via gRPC; the query/stats RPCs power the bot's /logs panel.
 import asyncio
 import json
 import logging
+import os
 import sys
 import threading
 import time
@@ -26,6 +27,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s logger
 logger = logging.getLogger("atf.logger")
 
 
+def _busy_timeout_ms() -> int:
+    """Bounded SQLite lock wait, in milliseconds (ATF_LOGGER_BUSY_TIMEOUT_MS).
+
+    An unparseable or negative value falls back to the default instead of
+    crashing the service: a typo in an env file must not take logging down.
+    """
+    try:
+        value = int(os.environ.get("ATF_LOGGER_BUSY_TIMEOUT_MS", "5000"))
+    except (TypeError, ValueError):
+        return 5000
+    return value if value >= 0 else 5000
+
+
 # --------------------------------------------------------------------------- #
 class LoggerDatabase:
     """SQLite store for debug logs, owned exclusively by this service."""
@@ -39,6 +53,18 @@ class LoggerDatabase:
         self._lock = threading.Lock()
         with self._lock:
             self._conn.execute("PRAGMA journal_mode=WAL")
+            # Durability/ack contract: insert() commits before this service
+            # answers success=true, and synchronous=FULL fsyncs that commit into
+            # the WAL. So success=true means "committed and durable", not
+            # "queued in memory". Written explicitly rather than relying on the
+            # SQLite default, so a future default change cannot silently weaken
+            # the acknowledgement every producer already trusts.
+            self._conn.execute("PRAGMA synchronous=FULL")
+            # SQLite's default busy_timeout is 0, which turns any write
+            # contention into an immediate "database is locked" failure — a log
+            # write lost for no reason. Waiting a bounded time is strictly
+            # better. Configurable so operators can match their storage.
+            self._conn.execute(f"PRAGMA busy_timeout={_busy_timeout_ms()}")
             self._conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS logs (
