@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Generated assets and the search index are crawlable.
+Allow: /assets/
+Allow: /search.json
+
+Sitemap: https://opselon.github.io/AutoTelegramForward/sitemap-index.xml
+Host: https://opselon.github.io/AutoTelegramForward/

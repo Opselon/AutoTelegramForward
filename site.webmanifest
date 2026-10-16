@@ -1,0 +1,21 @@
+{
+  "name": "AutoTelegramForward — Telegram Message Routing Platform",
+  "short_name": "ATF",
+  "description": "Self-hosted Telegram routing: M sources to N targets, per-task content rules, optional AI rewriting and durable ordered delivery.",
+  "start_url": "/AutoTelegramForward/",
+  "scope": "/AutoTelegramForward/",
+  "display": "standalone",
+  "background_color": "#0b1120",
+  "theme_color": "#0b1120",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["developer", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/AutoTelegramForward/assets/og-image.png",
+      "sizes": "1280x640",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
