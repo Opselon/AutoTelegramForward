@@ -116,6 +116,26 @@ with row-count and checksum verification — never an unbounded automatic
 migration during normal startup. Existing SQLite data is never silently
 discarded.
 
+### Acknowledgement semantics (measured on the Python engine)
+
+Read off `logger/main.py` and covered by tests in `logger/tests/test_logger.py`:
+
+* `insert()` commits **before** the RPC answers `success=true`, so the
+  producer's `sent` means *committed*, not *queued*.
+* `journal_mode=WAL` with `synchronous=FULL` (written explicitly now, not
+  inherited from a default) ⇒ that commit is fsynced into the WAL, so an
+  acknowledged record survives a power loss. This is what makes `sent`
+  trustworthy rather than aspirational.
+* `busy_timeout` is now **5000 ms** (`ATF_LOGGER_BUSY_TIMEOUT_MS`). It used to be
+  SQLite's default of **0**, which turns ordinary write contention into an
+  immediate `database is locked` failure — a log entry discarded for no reason.
+  An unparseable value falls back to the default instead of taking logging down.
+* `wal_checkpoint(PASSIVE)` runs only on the purge path, never on the ingest hot
+  path.
+* Write concurrency is **one connection behind one lock**; batching, not more
+  writers, is what raises SQLite throughput. The measured consequence is the
+  ~1,150 events/s ceiling in §5.
+
 ## 5. Measured baseline (Python Logger engine, before migration)
 
 Reproduce with:

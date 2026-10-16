@@ -375,3 +375,47 @@ async def test_purge_rpc_roundtrip(tmp_path):
     finally:
         await server.stop(grace=1)
         store.close()
+
+
+# --------------------------------------------------------------------------- #
+# Durability / acknowledgement contract. Producers treat `success=true` as
+# "stored", so the pragmas these guarantees rest on are asserted rather than
+# assumed — a default changing underneath us must fail a test, not lose logs.
+# --------------------------------------------------------------------------- #
+def test_durability_pragmas_are_explicit(db):
+    conn = db._conn
+    assert conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+    assert conn.execute("PRAGMA synchronous").fetchone()[0] == 2, "FULL expected"
+    assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+
+
+def test_busy_timeout_is_configurable(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATF_LOGGER_BUSY_TIMEOUT_MS", "1234")
+    store = LoggerDatabase(str(tmp_path / "busy.db"))
+    try:
+        assert store._conn.execute("PRAGMA busy_timeout").fetchone()[0] == 1234
+    finally:
+        store.close()
+
+
+def test_a_bad_busy_timeout_value_falls_back_instead_of_breaking_logging(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATF_LOGGER_BUSY_TIMEOUT_MS", "not-a-number")
+    store = LoggerDatabase(str(tmp_path / "busy2.db"))
+    try:
+        assert store._conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+    finally:
+        store.close()
+
+
+def test_an_insert_is_committed_before_it_returns(db):
+    """The producer's contract: once insert() returns, another connection sees it."""
+    import sqlite3
+
+    db.insert(ts=1234, level="ERROR", service="core", category="probe",
+              message="committed?", detail="")
+    other = sqlite3.connect(db._conn.execute("PRAGMA database_list").fetchone()[2])
+    try:
+        rows = other.execute("SELECT COUNT(*) FROM logs WHERE message = 'committed?'").fetchone()[0]
+    finally:
+        other.close()
+    assert rows == 1, "insert() returned but the row was not visible to a second connection"
