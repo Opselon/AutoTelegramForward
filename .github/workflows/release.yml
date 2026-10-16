@@ -359,7 +359,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.logger
+          file: Dockerfile.logger-rust
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -405,10 +405,11 @@ jobs:
               --exclude='.pytest_cache' --exclude='data/*.db*' \
               --exclude='*.log' --exclude='dist' --exclude='build' \
               --exclude='web/frontend/node_modules' --exclude='web/backend/target' \
-              -cf - atf.py core logger proto api web k8s scripts \
+              --exclude='rust/logger/target' \
+              -cf - atf.py core logger proto api web k8s scripts rust \
                      install.sh install.ps1 requirements.txt VERSION \
                      config.example.yaml docker-compose.yml \
-                     Dockerfile.core Dockerfile.logger Dockerfile.api Dockerfile.web \
+                     Dockerfile.core Dockerfile.logger-rust Dockerfile.api Dockerfile.web \
                      README.md docs \
               | tar -xf - -C "artifacts/${NAME}"
           tar -czf "artifacts/${NAME}.tar.gz" -C artifacts "${NAME}"

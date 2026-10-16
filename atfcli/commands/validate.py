@@ -66,7 +66,7 @@ REQUIRED_PATHS: tuple[str, ...] = (
     "Dockerfile.core",
     "Dockerfile.api",
     "Dockerfile.web",
-    "Dockerfile.logger",
+    "Dockerfile.logger-rust",
 )
 
 PLACEHOLDER = re.compile(

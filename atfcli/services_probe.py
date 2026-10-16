@@ -52,6 +52,30 @@ def _inspect(ctx, container: str, fmt: str) -> str:
     return res.stdout.strip() if res.ok else ""
 
 
+def _grpc_reachable(ctx, container: str, port: int) -> bool:
+    """Prove a gRPC port accepts connections from *inside* its own container.
+
+    It must not assume the service is written in Python: the logger is the Rust
+    `atf-logger` image (debian-slim, no python3) while the core is a Python
+    image. An image has either python3 or bash, so try both in turn and stop at
+    the first that succeeds (a missing interpreter fails fast, exit 126/127).
+    """
+    probes = (
+        ["python3", "-c", f"import socket;socket.create_connection(('127.0.0.1',{port}),2)"],
+        ["timeout", "2", "bash", "-c", f"</dev/tcp/127.0.0.1/{port}"],
+    )
+    for probe in probes:
+        res = ctx.repo.run(
+            ["docker", "exec", container, *probe],
+            check=False,
+            quiet=True,
+            timeout=15,
+        )
+        if res.ok:
+            return True
+    return False
+
+
 def probe(ctx, *, health_url: str = "") -> list[dict[str, Any]]:
     """One row per service: container state, health, endpoint, version, purpose."""
     rows: list[dict[str, Any]] = []
@@ -67,20 +91,7 @@ def probe(ctx, *, health_url: str = "") -> list[dict[str, Any]]:
         if service in GRPC_PORTS and running:
             port = GRPC_PORTS[service]
             endpoint = f"grpc :{port}"
-            inside = ctx.repo.run(
-                [
-                    "docker",
-                    "exec",
-                    container,
-                    "python3",
-                    "-c",
-                    f"import socket;socket.create_connection(('127.0.0.1',{port}),2)",
-                ],
-                check=False,
-                quiet=True,
-                timeout=15,
-            )
-            reachable = inside.ok
+            reachable = _grpc_reachable(ctx, container, port)
         elif service in HTTP_PORTS:
             port = HTTP_PORTS[service]
             endpoint = f"http :{port}"

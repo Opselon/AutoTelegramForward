@@ -1,17 +1,30 @@
 services:
+  # Production logging engine (Rust, rust/logger). Promoted over the legacy
+  # Python logger: the service name and the `logger:50052` address consumers use
+  # are unchanged, so core/api needed no client change. Owns its own store
+  # (logger-rust-data); the retired Python archive (atf-data/logger.db) is kept
+  # intact as a historical record and is never written to again.
   logger:
     build:
       context: .
-      dockerfile: Dockerfile.logger
+      dockerfile: Dockerfile.logger-rust
     container_name: atf-logger
     restart: unless-stopped
     environment:
-      ATF_LOGGER_PORT: 50052
-      ATF_LOGGER_DB_PATH: /app/data/logger.db
+      ATF_LOGGER_DB_PATH: /app/data/atf_logs_rust.db
+      # Bound to all interfaces so the container healthcheck and an operator's
+      # scrape both reach it; the crate's own default is loopback-only.
+      ATF_LOGGER_METRICS_LISTEN: 0.0.0.0:9109
     volumes:
-      - atf-data:/app/data
+      - logger-rust-data:/app/data
     networks:
       - atf-net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9109/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   core:
     build:
@@ -120,34 +133,6 @@ services:
       - caddy-config:/config
     networks:
       - atf-net
-
-  # Opt-in Rust logger engine:  docker compose --profile rust-logger up -d
-  # It is deliberately NOT part of the default `docker compose up` path, and it
-  # never shares the Python logger's archive volume: the two stores stay
-  # independent so the Rust engine can be promoted (or discarded) without either
-  # one being able to corrupt the other's data.
-  logger-rust:
-    profiles: ["rust-logger"]
-    build:
-      context: .
-      dockerfile: Dockerfile.logger-rust
-    container_name: atf-logger-rust
-    restart: unless-stopped
-    environment:
-      ATF_LOGGER_DB_PATH: /app/data/atf_logs_rust.db
-      # Bound to all interfaces so the container healthcheck and an operator's
-      # scrape both reach it; the crate's own default is loopback-only.
-      ATF_LOGGER_METRICS_LISTEN: 0.0.0.0:9109
-    volumes:
-      - logger-rust-data:/app/data
-    networks:
-      - atf-net
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9109/healthz"]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
 
 volumes:
   atf-data:

@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-16T14:04:49.732Z",
-  "commit": "a2df551",
-  "gitDate": "2026-10-16T14:04:33Z",
+  "generatedAt": "2026-10-16T16:41:49.385Z",
+  "commit": "b6ab6fd",
+  "gitDate": "2026-10-16T16:33:22Z",
   "granularity": {
     "python": "module (file)",
     "go": "package (directory)",
@@ -21,9 +21,9 @@
       "role": "Forwarding engine",
       "tech": "Python 3 · Pyrogram · gRPC",
       "blurb": "Domain model, rule engine and the durable delivery pipeline. Owns the Telegram sessions and the database.",
-      "files": 115,
-      "sourceFiles": 114,
-      "loc": 43368,
+      "files": 116,
+      "sourceFiles": 115,
+      "loc": 43749,
       "langs": [
         "python"
       ],
@@ -31,15 +31,15 @@
         {
           "id": "infrastructure",
           "files": 38,
-          "loc": 21300,
+          "loc": 21445,
           "langs": [
             "python"
           ]
         },
         {
           "id": "tests",
-          "files": 55,
-          "loc": 11934,
+          "files": 56,
+          "loc": 12124,
           "langs": [
             "python"
           ]
@@ -55,7 +55,7 @@
         {
           "id": "proto",
           "files": 3,
-          "loc": 2920,
+          "loc": 2966,
           "langs": [
             "python"
           ]
@@ -86,9 +86,9 @@
       "role": "Control plane",
       "tech": "Go · net/http · gRPC client",
       "blurb": "Stateless REST control plane. Authenticates clients, applies tenant scoping, and speaks gRPC to the core and the logger.",
-      "files": 36,
-      "sourceFiles": 34,
-      "loc": 19009,
+      "files": 37,
+      "sourceFiles": 35,
+      "loc": 19616,
       "langs": [
         "go"
       ],
@@ -96,15 +96,15 @@
         {
           "id": "proto",
           "files": 2,
-          "loc": 10475,
+          "loc": 10738,
           "langs": [
             "go"
           ]
         },
         {
           "id": "internal",
-          "files": 31,
-          "loc": 8391,
+          "files": 32,
+          "loc": 8734,
           "langs": [
             "go"
           ]
@@ -112,7 +112,7 @@
         {
           "id": "(root)",
           "files": 1,
-          "loc": 143,
+          "loc": 144,
           "langs": [
             "go"
           ]
@@ -125,27 +125,27 @@
       "root": "logger",
       "color": "#f472b6",
       "role": "Observability",
-      "tech": "Python · gRPC · SQLite",
-      "blurb": "Central log store with field-aware secret redaction, correlation-id propagation and a bounded diagnostic window.",
-      "files": 9,
-      "sourceFiles": 9,
-      "loc": 1243,
+      "tech": "Rust engine · gRPC · SQLite",
+      "blurb": "Central log store — the Rust engine in `rust/logger` — with field-aware secret redaction, correlation-id propagation and a bounded diagnostic window. `logger/` keeps the Python producer adapter the core uses.",
+      "files": 4,
+      "sourceFiles": 4,
+      "loc": 533,
       "langs": [
         "python"
       ],
       "areas": [
         {
           "id": "(root)",
-          "files": 4,
-          "loc": 676,
+          "files": 2,
+          "loc": 315,
           "langs": [
             "python"
           ]
         },
         {
           "id": "tests",
-          "files": 5,
-          "loc": 567,
+          "files": 2,
+          "loc": 218,
           "langs": [
             "python"
           ]
@@ -226,17 +226,17 @@
       "role": "Client",
       "tech": "Dart · Flutter",
       "blurb": "Native client with its own 10-locale catalog and the same REST contract as the dashboard.",
-      "files": 38,
-      "sourceFiles": 38,
-      "loc": 14356,
+      "files": 43,
+      "sourceFiles": 43,
+      "loc": 19344,
       "langs": [
         "dart"
       ],
       "areas": [
         {
           "id": "features",
-          "files": 14,
-          "loc": 6042,
+          "files": 19,
+          "loc": 9101,
           "langs": [
             "dart"
           ]
@@ -244,7 +244,7 @@
         {
           "id": "l10n",
           "files": 10,
-          "loc": 3852,
+          "loc": 5409,
           "langs": [
             "dart"
           ]
@@ -252,7 +252,7 @@
         {
           "id": "core",
           "files": 8,
-          "loc": 3257,
+          "loc": 3629,
           "langs": [
             "dart"
           ]
@@ -285,7 +285,7 @@
       "blurb": "Install, validate, diagnose and upgrade the stack from one command surface.",
       "files": 36,
       "sourceFiles": 36,
-      "loc": 5778,
+      "loc": 5788,
       "langs": [
         "python"
       ],
@@ -293,7 +293,7 @@
         {
           "id": "commands",
           "files": 26,
-          "loc": 4015,
+          "loc": 4019,
           "langs": [
             "python"
           ]
@@ -301,7 +301,7 @@
         {
           "id": "(root)",
           "files": 10,
-          "loc": 1763,
+          "loc": 1769,
           "langs": [
             "python"
           ]
@@ -318,7 +318,7 @@
       "blurb": "The gRPC service definitions, the generated Go stubs and the cross-language JSON fixtures that pin the wire format.",
       "files": 1,
       "sourceFiles": 1,
-      "loc": 816,
+      "loc": 839,
       "langs": [
         "proto"
       ],
@@ -326,7 +326,7 @@
         {
           "id": "(root)",
           "files": 1,
-          "loc": 816,
+          "loc": 839,
           "langs": [
             "proto"
           ]
@@ -394,33 +394,33 @@
     }
   ],
   "totals": {
-    "files": 328,
-    "sourceFiles": 308,
-    "loc": 106380,
-    "nodes": 280,
-    "edges": 839,
+    "files": 330,
+    "sourceFiles": 310,
+    "loc": 111749,
+    "nodes": 281,
+    "edges": 873,
     "generatedFiles": 2,
-    "testFiles": 77,
+    "testFiles": 76,
     "subsystems": 9
   },
   "languages": [
     {
       "lang": "python",
-      "files": 160,
-      "loc": 51370,
-      "bytes": 2709629
+      "files": 156,
+      "loc": 51121,
+      "bytes": 2699995
     },
     {
       "lang": "go",
-      "files": 34,
-      "loc": 19009,
-      "bytes": 790418
+      "files": 35,
+      "loc": 19616,
+      "bytes": 817209
     },
     {
       "lang": "dart",
-      "files": 38,
-      "loc": 14356,
-      "bytes": 607599
+      "files": 43,
+      "loc": 19344,
+      "bytes": 833926
     },
     {
       "lang": "typescript",
@@ -437,8 +437,8 @@
     {
       "lang": "proto",
       "files": 1,
-      "loc": 816,
-      "bytes": 34135
+      "loc": 839,
+      "bytes": 35867
     },
     {
       "lang": "rust",
@@ -904,7 +904,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 4,
+      "fanIn": 5,
       "fanOut": 0,
       "isEntry": false
     },
@@ -958,13 +958,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1579,
+      "loc": 1724,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 6,
       "fanOut": 9,
       "isEntry": false
     },
@@ -1564,7 +1564,7 @@
         "proto"
       ],
       "isTest": false,
-      "fanIn": 15,
+      "fanIn": 14,
       "fanOut": 2,
       "isEntry": false
     },
@@ -1578,7 +1578,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 289,
+      "loc": 295,
       "generated": false,
       "areas": [
         "proto"
@@ -1598,7 +1598,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 2623,
+      "loc": 2663,
       "generated": false,
       "areas": [
         "proto"
@@ -2169,26 +2169,6 @@
       "isEntry": false
     },
     {
-      "id": "core/tests/test_logger_ingest_redaction.py",
-      "label": "test_logger_ingest_redaction",
-      "path": "core/tests/test_logger_ingest_redaction.py",
-      "subsystem": "core",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 1,
-      "loc": 43,
-      "generated": false,
-      "areas": [
-        "tests"
-      ],
-      "isTest": true,
-      "fanIn": 0,
-      "fanOut": 0,
-      "isEntry": false
-    },
-    {
       "id": "core/tests/test_multilingual_chat_picker_and_dialog_fetch.py",
       "label": "test_multilingual_chat_picker_and_dialog_fetch",
       "path": "core/tests/test_multilingual_chat_picker_and_dialog_fetch.py",
@@ -2306,6 +2286,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_pro_ui_callbacks.py",
+      "label": "test_pro_ui_callbacks",
+      "path": "core/tests/test_pro_ui_callbacks.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 26,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -2446,6 +2446,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_session_chat_list.py",
+      "label": "test_session_chat_list",
+      "path": "core/tests/test_session_chat_list.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 207,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -2756,9 +2776,9 @@
       "granularity": "package",
       "granularityLabel": "package (directory)",
       "lang": "go",
-      "files": 20,
-      "testFiles": 11,
-      "loc": 6752,
+      "files": 21,
+      "testFiles": 12,
+      "loc": 7095,
       "generated": false,
       "areas": [
         "internal"
@@ -2818,7 +2838,7 @@
       "lang": "go",
       "files": 1,
       "testFiles": 0,
-      "loc": 143,
+      "loc": 144,
       "generated": false,
       "areas": [
         "(root)"
@@ -2838,7 +2858,7 @@
       "lang": "go",
       "files": 2,
       "testFiles": 0,
-      "loc": 10475,
+      "loc": 10738,
       "generated": true,
       "areas": [
         "(root)"
@@ -2889,46 +2909,6 @@
       "isEntry": false
     },
     {
-      "id": "logger/main.py",
-      "label": "main",
-      "path": "logger/main.py",
-      "subsystem": "logger",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 0,
-      "loc": 325,
-      "generated": false,
-      "areas": [
-        "(root)"
-      ],
-      "isTest": false,
-      "fanIn": 2,
-      "fanOut": 2,
-      "isEntry": true
-    },
-    {
-      "id": "logger/redaction.py",
-      "label": "redaction",
-      "path": "logger/redaction.py",
-      "subsystem": "logger",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 0,
-      "loc": 36,
-      "generated": false,
-      "areas": [
-        "(root)"
-      ],
-      "isTest": false,
-      "fanIn": 1,
-      "fanOut": 0,
-      "isEntry": false
-    },
-    {
       "id": "logger/tests/__init__.py",
       "label": "__init__",
       "path": "logger/tests/__init__.py",
@@ -2939,26 +2919,6 @@
       "files": 1,
       "testFiles": 1,
       "loc": 0,
-      "generated": false,
-      "areas": [
-        "tests"
-      ],
-      "isTest": true,
-      "fanIn": 0,
-      "fanOut": 0,
-      "isEntry": false
-    },
-    {
-      "id": "logger/tests/conftest.py",
-      "label": "conftest",
-      "path": "logger/tests/conftest.py",
-      "subsystem": "logger",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 1,
-      "loc": 11,
       "generated": false,
       "areas": [
         "tests"
@@ -2986,46 +2946,6 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 2,
-      "isEntry": false
-    },
-    {
-      "id": "logger/tests/test_logger.py",
-      "label": "test_logger",
-      "path": "logger/tests/test_logger.py",
-      "subsystem": "logger",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 1,
-      "loc": 312,
-      "generated": false,
-      "areas": [
-        "tests"
-      ],
-      "isTest": true,
-      "fanIn": 0,
-      "fanOut": 2,
-      "isEntry": false
-    },
-    {
-      "id": "logger/tests/test_pro_ui.py",
-      "label": "test_pro_ui",
-      "path": "logger/tests/test_pro_ui.py",
-      "subsystem": "logger",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 1,
-      "loc": 26,
-      "generated": false,
-      "areas": [
-        "tests"
-      ],
-      "isTest": true,
-      "fanIn": 0,
-      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -3338,13 +3258,13 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 994,
+      "loc": 1101,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 13,
+      "fanIn": 18,
       "fanOut": 3,
       "isEntry": false
     },
@@ -3364,7 +3284,7 @@
         "lib"
       ],
       "isTest": false,
-      "fanIn": 14,
+      "fanIn": 19,
       "fanOut": 4,
       "isEntry": false
     },
@@ -3398,13 +3318,13 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1228,
+      "loc": 1493,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 13,
+      "fanIn": 18,
       "fanOut": 1,
       "isEntry": false
     },
@@ -3424,7 +3344,7 @@
         "lib"
       ],
       "isTest": false,
-      "fanIn": 3,
+      "fanIn": 4,
       "fanOut": 0,
       "isEntry": false
     },
@@ -3484,7 +3404,7 @@
         "lib"
       ],
       "isTest": false,
-      "fanIn": 8,
+      "fanIn": 13,
       "fanOut": 0,
       "isEntry": false
     },
@@ -3549,6 +3469,46 @@
       "isEntry": false
     },
     {
+      "id": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "label": "chat_picker_sheet",
+      "path": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 520,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/chats/chats_screen.dart",
+      "label": "chats_screen",
+      "path": "mobile/lib/features/chats/chats_screen.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 593,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 8,
+      "isEntry": false
+    },
+    {
       "id": "mobile/lib/features/dashboard/dashboard_screen.dart",
       "label": "dashboard_screen",
       "path": "mobile/lib/features/dashboard/dashboard_screen.dart",
@@ -3566,6 +3526,26 @@
       "isTest": false,
       "fanIn": 1,
       "fanOut": 7,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/delivery/delivery_screen.dart",
+      "label": "delivery_screen",
+      "path": "mobile/lib/features/delivery/delivery_screen.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 622,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -3598,14 +3578,34 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 155,
+      "loc": 169,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 9,
+      "fanOut": 11,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/logs/log_policy_tab.dart",
+      "label": "log_policy_tab",
+      "path": "mobile/lib/features/logs/log_policy_tab.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 553,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -3618,14 +3618,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1013,
+      "loc": 1026,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 2,
-      "fanOut": 5,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -3638,14 +3638,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1231,
+      "loc": 1359,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 1,
-      "fanOut": 9,
+      "fanIn": 2,
+      "fanOut": 11,
       "isEntry": false
     },
     {
@@ -3658,7 +3658,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 587,
+      "loc": 862,
       "generated": false,
       "areas": [
         "lib"
@@ -3666,6 +3666,26 @@
       "isTest": false,
       "fanIn": 2,
       "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/rules/rule_simulator_sheet.dart",
+      "label": "rule_simulator_sheet",
+      "path": "mobile/lib/features/rules/rule_simulator_sheet.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 341,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -3778,7 +3798,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 371,
+      "loc": 528,
       "generated": false,
       "areas": [
         "lib"
@@ -3798,7 +3818,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 368,
+      "loc": 526,
       "generated": false,
       "areas": [
         "lib"
@@ -3818,7 +3838,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 374,
+      "loc": 532,
       "generated": false,
       "areas": [
         "lib"
@@ -3838,7 +3858,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 369,
+      "loc": 526,
       "generated": false,
       "areas": [
         "lib"
@@ -3858,7 +3878,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 373,
+      "loc": 533,
       "generated": false,
       "areas": [
         "lib"
@@ -3878,13 +3898,13 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 538,
+      "loc": 692,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 15,
+      "fanIn": 20,
       "fanOut": 10,
       "isEntry": false
     },
@@ -3898,7 +3918,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 375,
+      "loc": 533,
       "generated": false,
       "areas": [
         "lib"
@@ -3918,7 +3938,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 367,
+      "loc": 525,
       "generated": false,
       "areas": [
         "lib"
@@ -3938,7 +3958,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 372,
+      "loc": 527,
       "generated": false,
       "areas": [
         "lib"
@@ -3958,7 +3978,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 345,
+      "loc": 487,
       "generated": false,
       "areas": [
         "lib"
@@ -4004,7 +4024,7 @@
         "lib"
       ],
       "isTest": false,
-      "fanIn": 3,
+      "fanIn": 6,
       "fanOut": 1,
       "isEntry": false
     },
@@ -4618,7 +4638,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 33,
+      "loc": 37,
       "generated": false,
       "areas": [
         "atfcli"
@@ -4758,7 +4778,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 130,
+      "loc": 136,
       "generated": false,
       "areas": [
         "atfcli"
@@ -4798,7 +4818,7 @@
       "lang": "proto",
       "files": 1,
       "testFiles": 0,
-      "loc": 816,
+      "loc": 839,
       "generated": false,
       "areas": [
         "proto"
@@ -6038,14 +6058,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 981,
+      "loc": 1051,
       "generated": false,
       "areas": [
         "(root)"
       ],
       "isTest": false,
       "fanIn": 0,
-      "fanOut": 3,
+      "fanOut": 2,
       "isEntry": true
     }
   ],
@@ -7566,6 +7586,11 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_pro_ui_callbacks.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_protected_content_bypass.py",
       "target": "core/domain/entities.py",
       "kind": "import"
@@ -7718,6 +7743,21 @@
     {
       "source": "core/tests/test_secure_control_plane.py",
       "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_session_chat_list.py",
+      "target": "core/infrastructure/grpc_server/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_session_chat_list.py",
+      "target": "core/infrastructure/grpc_server/servicers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_session_chat_list.py",
+      "target": "core/proto/__init__.py",
       "kind": "import"
     },
     {
@@ -8141,16 +8181,6 @@
       "kind": "import"
     },
     {
-      "source": "logger/main.py",
-      "target": "core/proto/__init__.py",
-      "kind": "import"
-    },
-    {
-      "source": "logger/main.py",
-      "target": "logger/redaction.py",
-      "kind": "import"
-    },
-    {
       "source": "logger/tests/test_log_client.py",
       "target": "logger/log_client.py",
       "kind": "import"
@@ -8158,21 +8188,6 @@
     {
       "source": "logger/tests/test_log_client.py",
       "target": "core/application/log_policy.py",
-      "kind": "import"
-    },
-    {
-      "source": "logger/tests/test_logger.py",
-      "target": "logger/main.py",
-      "kind": "import"
-    },
-    {
-      "source": "logger/tests/test_logger.py",
-      "target": "core/proto/__init__.py",
-      "kind": "import"
-    },
-    {
-      "source": "logger/tests/test_pro_ui.py",
-      "target": "core/infrastructure/telegram/pro_bot_ui.py",
       "kind": "import"
     },
     {
@@ -8431,6 +8446,81 @@
       "kind": "import"
     },
     {
+      "source": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "target": "mobile/lib/core/app_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "target": "mobile/lib/core/route_input.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "target": "mobile/lib/core/theme.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chats_screen.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chats_screen.dart",
+      "target": "mobile/lib/core/app_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chats_screen.dart",
+      "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chats_screen.dart",
+      "target": "mobile/lib/core/theme.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chats_screen.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chats_screen.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chats_screen.dart",
+      "target": "mobile/lib/features/rules/rule_editor_screen.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chats_screen.dart",
+      "target": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "kind": "import"
+    },
+    {
       "source": "mobile/lib/features/dashboard/dashboard_screen.dart",
       "target": "mobile/lib/core/api_client.dart",
       "kind": "import"
@@ -8463,6 +8553,36 @@
     {
       "source": "mobile/lib/features/dashboard/dashboard_screen.dart",
       "target": "mobile/lib/features/system/system_status_screen.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/delivery/delivery_screen.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/delivery/delivery_screen.dart",
+      "target": "mobile/lib/core/app_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/delivery/delivery_screen.dart",
+      "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/delivery/delivery_screen.dart",
+      "target": "mobile/lib/core/theme.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/delivery/delivery_screen.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/delivery/delivery_screen.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
       "kind": "import"
     },
     {
@@ -8502,7 +8622,17 @@
     },
     {
       "source": "mobile/lib/features/home/home_screen.dart",
+      "target": "mobile/lib/features/chats/chats_screen.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/home/home_screen.dart",
       "target": "mobile/lib/features/dashboard/dashboard_screen.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/home/home_screen.dart",
+      "target": "mobile/lib/features/delivery/delivery_screen.dart",
       "kind": "import"
     },
     {
@@ -8531,6 +8661,31 @@
       "kind": "import"
     },
     {
+      "source": "mobile/lib/features/logs/log_policy_tab.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/log_policy_tab.dart",
+      "target": "mobile/lib/core/app_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/log_policy_tab.dart",
+      "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/log_policy_tab.dart",
+      "target": "mobile/lib/core/theme.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/log_policy_tab.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
       "source": "mobile/lib/features/logs/logs_screen.dart",
       "target": "mobile/lib/core/api_client.dart",
       "kind": "import"
@@ -8556,8 +8711,18 @@
       "kind": "import"
     },
     {
+      "source": "mobile/lib/features/logs/logs_screen.dart",
+      "target": "mobile/lib/features/logs/log_policy_tab.dart",
+      "kind": "import"
+    },
+    {
       "source": "mobile/lib/features/rules/rule_editor_screen.dart",
       "target": "mobile/lib/features/rules/rule_settings_sheet.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rule_editor_screen.dart",
+      "target": "mobile/lib/features/rules/rule_simulator_sheet.dart",
       "kind": "import"
     },
     {
@@ -8601,6 +8766,11 @@
       "kind": "import"
     },
     {
+      "source": "mobile/lib/features/rules/rule_editor_screen.dart",
+      "target": "mobile/lib/features/chats/chat_picker_sheet.dart",
+      "kind": "import"
+    },
+    {
       "source": "mobile/lib/features/rules/rule_settings_sheet.dart",
       "target": "mobile/lib/core/api_client.dart",
       "kind": "import"
@@ -8617,6 +8787,31 @@
     },
     {
       "source": "mobile/lib/features/rules/rule_settings_sheet.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rule_simulator_sheet.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rule_simulator_sheet.dart",
+      "target": "mobile/lib/core/app_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rule_simulator_sheet.dart",
+      "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rule_simulator_sheet.dart",
+      "target": "mobile/lib/core/theme.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rule_simulator_sheet.dart",
       "target": "mobile/lib/l10n/app_messages.dart",
       "kind": "import"
     },
@@ -10237,11 +10432,6 @@
     },
     {
       "source": "atf.py",
-      "target": "logger/main.py",
-      "kind": "import"
-    },
-    {
-      "source": "atf.py",
       "target": "atfcli/cli.py",
       "kind": "import"
     }
@@ -10298,6 +10488,16 @@
       "score": 54
     },
     {
+      "id": "mobile/lib/l10n/app_messages.dart",
+      "label": "app_messages",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "loc": 692,
+      "fanIn": 20,
+      "fanOut": 10,
+      "score": 50
+    },
+    {
       "id": "core/infrastructure/persistence/database.py",
       "label": "database",
       "subsystem": "core",
@@ -10348,6 +10548,16 @@
       "score": 46
     },
     {
+      "id": "mobile/lib/core/app_state.dart",
+      "label": "app_state",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "loc": 200,
+      "fanIn": 19,
+      "fanOut": 4,
+      "score": 42
+    },
+    {
       "id": "core/main.py",
       "label": "main",
       "subsystem": "core",
@@ -10355,16 +10565,6 @@
       "loc": 560,
       "fanIn": 3,
       "fanOut": 34,
-      "score": 40
-    },
-    {
-      "id": "mobile/lib/l10n/app_messages.dart",
-      "label": "app_messages",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "loc": 538,
-      "fanIn": 15,
-      "fanOut": 10,
       "score": 40
     },
     {
@@ -10378,6 +10578,26 @@
       "score": 40
     },
     {
+      "id": "mobile/lib/core/api_client.dart",
+      "label": "api_client",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "loc": 1101,
+      "fanIn": 18,
+      "fanOut": 3,
+      "score": 39
+    },
+    {
+      "id": "mobile/lib/core/models.dart",
+      "label": "models",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "loc": 1493,
+      "fanIn": 18,
+      "fanOut": 1,
+      "score": 37
+    },
+    {
       "id": "core/domain/services.py",
       "label": "services",
       "subsystem": "core",
@@ -10388,16 +10608,6 @@
       "score": 36
     },
     {
-      "id": "mobile/lib/core/app_state.dart",
-      "label": "app_state",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "loc": 200,
-      "fanIn": 14,
-      "fanOut": 4,
-      "score": 32
-    },
-    {
       "id": "core/infrastructure/telegram/i18n.py",
       "label": "i18n",
       "subsystem": "core",
@@ -10405,16 +10615,6 @@
       "loc": 38,
       "fanIn": 16,
       "fanOut": 0,
-      "score": 32
-    },
-    {
-      "id": "core/proto/__init__.py",
-      "label": "__init__",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 8,
-      "fanIn": 15,
-      "fanOut": 2,
       "score": 32
     },
     {
@@ -10428,14 +10628,14 @@
       "score": 30
     },
     {
-      "id": "mobile/lib/core/api_client.dart",
-      "label": "api_client",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "loc": 994,
-      "fanIn": 13,
-      "fanOut": 3,
-      "score": 29
+      "id": "core/proto/__init__.py",
+      "label": "__init__",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 8,
+      "fanIn": 14,
+      "fanOut": 2,
+      "score": 30
     },
     {
       "id": "core/application/pipeline.py",
@@ -10458,16 +10658,6 @@
       "score": 29
     },
     {
-      "id": "mobile/lib/core/models.dart",
-      "label": "models",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "loc": 1228,
-      "fanIn": 13,
-      "fanOut": 1,
-      "score": 27
-    },
-    {
       "id": "website/src/components/Callout.astro",
       "label": "Callout",
       "subsystem": "website",
@@ -10478,14 +10668,14 @@
       "score": 27
     },
     {
-      "id": "core/infrastructure/telegram/durable_queue.py",
-      "label": "durable_queue",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 975,
-      "fanIn": 9,
-      "fanOut": 6,
-      "score": 24
+      "id": "mobile/lib/core/theme.dart",
+      "label": "theme",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "loc": 435,
+      "fanIn": 13,
+      "fanOut": 0,
+      "score": 26
     }
   ],
   "largest": [
@@ -10504,8 +10694,8 @@
       "label": "handlers",
       "subsystem": "api",
       "lang": "go",
-      "files": 20,
-      "loc": 6752,
+      "files": 21,
+      "loc": 7095,
       "fanIn": 1,
       "fanOut": 4
     },
@@ -10525,7 +10715,7 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 2623,
+      "loc": 2663,
       "fanIn": 3,
       "fanOut": 2
     },
@@ -10540,6 +10730,16 @@
       "fanOut": 3
     },
     {
+      "id": "core/infrastructure/grpc_server/servicers.py",
+      "label": "servicers",
+      "subsystem": "core",
+      "lang": "python",
+      "files": 1,
+      "loc": 1724,
+      "fanIn": 6,
+      "fanOut": 9
+    },
+    {
       "id": "core/infrastructure/persistence/sqlite_repositories.py",
       "label": "sqlite_repositories",
       "subsystem": "core",
@@ -10550,14 +10750,14 @@
       "fanOut": 7
     },
     {
-      "id": "core/infrastructure/grpc_server/servicers.py",
-      "label": "servicers",
-      "subsystem": "core",
-      "lang": "python",
+      "id": "mobile/lib/core/models.dart",
+      "label": "models",
+      "subsystem": "mobile",
+      "lang": "dart",
       "files": 1,
-      "loc": 1579,
-      "fanIn": 5,
-      "fanOut": 9
+      "loc": 1493,
+      "fanIn": 18,
+      "fanOut": 1
     },
     {
       "id": "core/domain/entities.py",
@@ -10575,19 +10775,9 @@
       "subsystem": "mobile",
       "lang": "dart",
       "files": 1,
-      "loc": 1231,
-      "fanIn": 1,
-      "fanOut": 9
-    },
-    {
-      "id": "mobile/lib/core/models.dart",
-      "label": "models",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "files": 1,
-      "loc": 1228,
-      "fanIn": 13,
-      "fanOut": 1
+      "loc": 1359,
+      "fanIn": 2,
+      "fanOut": 11
     },
     {
       "id": "core/infrastructure/persistence/postgres_repositories.py",
@@ -10600,6 +10790,16 @@
       "fanOut": 4
     },
     {
+      "id": "mobile/lib/core/api_client.dart",
+      "label": "api_client",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "files": 1,
+      "loc": 1101,
+      "fanIn": 18,
+      "fanOut": 3
+    },
+    {
       "id": "core/domain/services.py",
       "label": "services",
       "subsystem": "core",
@@ -10607,6 +10807,16 @@
       "files": 1,
       "loc": 1061,
       "fanIn": 17,
+      "fanOut": 2
+    },
+    {
+      "id": "atf.py",
+      "label": "atf",
+      "subsystem": "root",
+      "lang": "python",
+      "files": 1,
+      "loc": 1051,
+      "fanIn": 0,
       "fanOut": 2
     },
     {
@@ -10625,19 +10835,9 @@
       "subsystem": "mobile",
       "lang": "dart",
       "files": 1,
-      "loc": 1013,
+      "loc": 1026,
       "fanIn": 2,
-      "fanOut": 5
-    },
-    {
-      "id": "mobile/lib/core/api_client.dart",
-      "label": "api_client",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "files": 1,
-      "loc": 994,
-      "fanIn": 13,
-      "fanOut": 3
+      "fanOut": 6
     },
     {
       "id": "website/src/data/features.ts",
@@ -10648,16 +10848,6 @@
       "loc": 987,
       "fanIn": 6,
       "fanOut": 0
-    },
-    {
-      "id": "atf.py",
-      "label": "atf",
-      "subsystem": "root",
-      "lang": "python",
-      "files": 1,
-      "loc": 981,
-      "fanIn": 0,
-      "fanOut": 3
     },
     {
       "id": "core/infrastructure/telegram/durable_queue.py",
@@ -10693,23 +10883,18 @@
       "count": 13
     },
     {
-      "from": "logger",
-      "to": "core",
-      "count": 5
-    },
-    {
       "from": "core",
       "to": "logger",
       "count": 4
     },
     {
-      "from": "atf.py",
+      "from": "logger",
       "to": "core",
-      "count": 1
+      "count": 2
     },
     {
       "from": "atf.py",
-      "to": "logger",
+      "to": "core",
       "count": 1
     },
     {
@@ -10887,7 +11072,7 @@
     {
       "label": "Two separate databases",
       "claim": "The logger never opens the engine database — the log store is its own file.",
-      "scope": "logger"
+      "scope": "logger , rust/logger/src"
     },
     {
       "label": "The engine opens no HTTP port",
@@ -11017,7 +11202,7 @@
       "role": "Eleven servicers exposing the engine to the control plane",
       "color": "#34d399",
       "files": 7,
-      "loc": 5178,
+      "loc": 5369,
       "langs": [
         "python"
       ],
@@ -11055,19 +11240,19 @@
       "label": "Logger service",
       "kind": "service",
       "tier": 4,
-      "tech": "Python gRPC :50052",
+      "tech": "Rust gRPC :50052",
       "role": "Central log intake, redaction, query and stats",
       "color": "#f472b6",
-      "files": 9,
-      "loc": 1243,
+      "files": 4,
+      "loc": 533,
       "langs": [
         "python"
       ],
       "evidence": [
-        "logger/log_client.py",
-        "logger/main.py",
-        "logger/tests/test_log_client.py",
-        "logger/tests/test_logger.py"
+        "rust/logger/src/config/mod.rs",
+        "rust/logger/src/lib.rs",
+        "rust/logger/src/main.rs",
+        "logger/log_client.py"
       ],
       "external": false
     },
@@ -11076,15 +11261,16 @@
       "label": "Log store",
       "kind": "store",
       "tier": 5,
-      "tech": "SQLite (separate file)",
+      "tech": "SQLite (Rust-owned file)",
       "role": "Append-only log history with a bounded diagnostic window",
       "color": "#fb7185",
       "files": 0,
       "loc": 0,
       "langs": [],
       "evidence": [
-        "logger/main.py",
-        "logger/tests/test_logger.py"
+        "rust/logger/src/config/mod.rs",
+        "rust/logger/src/health.rs",
+        "rust/logger/src/lib.rs"
       ],
       "external": false
     },
@@ -11096,8 +11282,8 @@
       "tech": "Go net/http :8080",
       "role": "Auth, tenant scoping, rules, delivery, logs, diagnostics",
       "color": "#34d399",
-      "files": 21,
-      "loc": 6895,
+      "files": 22,
+      "loc": 7239,
       "langs": [
         "go"
       ],
@@ -11178,16 +11364,16 @@
       "tech": "Flutter · Dart",
       "role": "Same contract, native surfaces, 10 locales",
       "color": "#a78bfa",
-      "files": 38,
-      "loc": 14356,
+      "files": 43,
+      "loc": 19344,
       "langs": [
         "dart"
       ],
       "evidence": [
         "mobile/lib/app.dart",
         "mobile/lib/core/theme.dart",
-        "mobile/lib/features/system/system_status_screen.dart",
-        "mobile/lib/features/rules/rule_editor_screen.dart"
+        "mobile/lib/features/chats/chat_picker_sheet.dart",
+        "mobile/lib/core/models.dart"
       ],
       "external": false
     },
@@ -11200,7 +11386,7 @@
       "role": "Install, validate, diagnose, upgrade",
       "color": "#22d3ee",
       "files": 37,
-      "loc": 6759,
+      "loc": 6839,
       "langs": [
         "python"
       ],
@@ -11293,7 +11479,7 @@
       "kind": "event",
       "label": "Commands in",
       "protocol": "in-process",
-      "metric": "61 RPCs"
+      "metric": "62 RPCs"
     },
     {
       "source": "core-grpc",
@@ -11341,7 +11527,7 @@
       "kind": "grpc",
       "label": "Control calls",
       "protocol": "gRPC",
-      "metric": "61 RPCs"
+      "metric": "62 RPCs"
     },
     {
       "source": "api-rest",
@@ -11611,19 +11797,19 @@
     {
       "name": "logger",
       "container": "atf-logger",
-      "dockerfile": "Dockerfile.logger",
+      "dockerfile": "Dockerfile.logger-rust",
       "image": null,
       "dependsOn": [],
       "networks": [
         "atf-net"
       ],
       "envKeys": [
-        "ATF_LOGGER_PORT",
-        "ATF_LOGGER_DB_PATH"
+        "ATF_LOGGER_DB_PATH",
+        "ATF_LOGGER_METRICS_LISTEN"
       ],
       "ports": [],
       "profile": null,
-      "healthcheck": false
+      "healthcheck": true
     },
     {
       "name": "core",
@@ -11734,9 +11920,10 @@
           "BackupSession",
           "RestoreSession",
           "TerminateSession",
-          "ResolveChat"
+          "ResolveChat",
+          "ListChats"
         ],
-        "count": 8,
+        "count": 9,
         "domain": "Session"
       },
       {
@@ -11863,8 +12050,8 @@
         "domain": "Admin"
       }
     ],
-    "rpcCount": 61,
-    "messageCount": 109,
+    "rpcCount": 62,
+    "messageCount": 112,
     "path": "proto/autoforward.proto"
   },
   "pipeline": {
@@ -11872,6 +12059,10 @@
       {
         "tag": "DIALOG_FETCH",
         "count": 14
+      },
+      {
+        "tag": "CHAT_LIST",
+        "count": 8
       },
       {
         "tag": "FILTER",
@@ -12074,6 +12265,6 @@
         "count": 1
       }
     ],
-    "total": 102
+    "total": 110
   }
 }

@@ -64,9 +64,9 @@ const SUBSYSTEMS = [
     root: 'logger',
     color: '#f472b6',
     role: 'Observability',
-    tech: 'Python · gRPC · SQLite',
+    tech: 'Rust engine · gRPC · SQLite',
     blurb:
-      'Central log store with field-aware secret redaction, correlation-id propagation and a bounded diagnostic window.',
+      'Central log store — the Rust engine in `rust/logger` — with field-aware secret redaction, correlation-id propagation and a bounded diagnostic window. `logger/` keeps the Python producer adapter the core uses.',
   },
   {
     id: 'web-backend',
@@ -826,6 +826,7 @@ absence('No label chosen by a language branch', 'A localised label is never pick
 ]);
 absence('Two separate databases', 'The logger never opens the engine database — the log store is its own file.', [
   { rel: 'logger', re: /atf\.db|ATF_DB_PATH/ },
+  { rel: 'rust/logger/src', re: /atf\.db|ATF_DB_PATH/ },
 ]);
 absence('The engine opens no HTTP port', 'The engine is reachable only over gRPC; there is no HTTP server inside the core.', [
   { rel: 'core', re: /uvicorn|FastAPI|aiohttp\.web/ },
@@ -1002,22 +1003,22 @@ const componentSpecs = [
     label: 'Logger service',
     kind: 'service',
     tier: 4,
-    tech: 'Python gRPC :50052',
+    tech: 'Rust gRPC :50052',
     role: 'Central log intake, redaction, query and stats',
     color: '#f472b6',
-    areas: ['logger'],
-    probes: [{ rel: 'logger', re: /grpc|LogClient|log_policy/ }],
+    areas: ['rust/logger/src', 'logger'],
+    probes: [{ rel: 'rust/logger/src', re: /grpc|Servicer|transport/ }],
   },
   {
     id: 'logger-store',
     label: 'Log store',
     kind: 'store',
     tier: 5,
-    tech: 'SQLite (separate file)',
+    tech: 'SQLite (Rust-owned file)',
     role: 'Append-only log history with a bounded diagnostic window',
     color: '#fb7185',
-    areas: [],
-    probes: [{ rel: 'logger', re: /logger\.db|DB_PATH|sqlite/i }],
+    areas: ['rust/logger/src'],
+    probes: [{ rel: 'rust/logger/src', re: /sqlite|db_path|DB_PATH/i }],
   },
   {
     id: 'api-rest',
