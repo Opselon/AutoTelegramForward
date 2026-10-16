@@ -31,6 +31,7 @@ from core.application.branding_hop import post_to_channel
 from core.application.pipeline import DurableMessagePipeline
 from core.domain.entities import DeliveryJob, ForwardRule, MessagePayload
 from core.domain.services import FilterEngine, RoutingPolicy
+from core.application.pipeline import PipelineStage
 from core.domain.value_objects import ContentMode, ForwardMode
 from core.infrastructure.telegram.durable_queue import DurableQueueManager
 
@@ -129,8 +130,11 @@ class FakeProcessedRepo:
 
 
 class FakeMapRepo:
+    def __init__(self, already_seen: bool = False) -> None:
+        self.seen = already_seen
+
     async def was_content_forwarded(self, *args, **kwargs) -> bool:  # noqa: D102
-        return False
+        return self.seen
 
     async def record_content_hash(self, *args, **kwargs) -> None:  # noqa: D102
         return None
@@ -241,12 +245,13 @@ def _performer(client: FakeClient):
     return MessageDispatcher(pool=FakePool(client), use_case=use_case)
 
 
-def _pipeline(rule: ForwardRule, client: FakeClient, queue: Optional[FakeQueue] = None, **kw):
+def _pipeline(rule: ForwardRule, client: FakeClient, queue: Optional[FakeQueue] = None,
+              seen: bool = False, **kw):
     pipeline = DurableMessagePipeline(
         rule_repo=FakeRuleRepo(rule),
         filter_repo=FakeFilterRepo(),
         queue_manager=queue if queue is not None else FakeQueue(),
-        msg_map_repo=FakeMapRepo(),
+        msg_map_repo=FakeMapRepo(already_seen=seen),
         processed_repo=FakeProcessedRepo(),
         filter_engine=FilterEngine(),
         routing_policy=RoutingPolicy(),
@@ -455,6 +460,66 @@ class TestHopKeepsTheDeliverable:
         assert len(client.c_posts) == 1
         posted = client.c_posts[0]["kwargs"].get("caption") or ""
         assert len(posted) <= 1024
+
+
+# --------------------------------------------------------------------------- #
+# The other gates: a message that is not delivered is not branded either
+# --------------------------------------------------------------------------- #
+class TestGatesRunBeforeTheHop:
+    @pytest.mark.asyncio
+    async def test_blacklisted_message_is_never_posted_into_c(self):
+        client = _client()
+        queue = FakeQueue()
+        rule = _rule()
+        rule.blacklist_words = ["casino"]
+
+        ctx = await _run(_pipeline(rule, client, queue), MessagePayload(
+            chat_id="-1001234", message_id=30, text="Big casino news today"))
+
+        blocked = [r for r in ctx.stage_results
+                   if r.stage == PipelineStage.FILTER and not r.success]
+        assert blocked and "blacklist" in (blocked[0].reason or ""), "the filter must have stopped it"
+        assert client.c_posts == [], "a blocked message must not appear in our channel"
+        assert queue.calls == []
+
+    @pytest.mark.asyncio
+    async def test_whitelist_miss_is_never_posted_into_c(self):
+        client = _client()
+        queue = FakeQueue()
+        rule = _rule()
+        rule.whitelist_words = ["urgent"]
+        rule.content_policy_enabled = True
+
+        await _run(_pipeline(rule, client, queue), MessagePayload(
+            chat_id="-1001234", message_id=31, text="ordinary market update"))
+
+        assert client.c_posts == []
+        assert queue.calls == []
+
+    @pytest.mark.asyncio
+    async def test_a_duplicate_is_not_posted_into_c_twice(self):
+        client = _client()
+        queue = FakeQueue()
+        rule = _rule()
+        rule.duplicate_filters = True
+
+        await _run(_pipeline(rule, client, queue, seen=True), MessagePayload(
+            chat_id="-1001234", message_id=32, text="hello world"))
+
+        assert client.c_posts == [], "dedupe happened first, so C never saw it"
+        assert queue.calls == []
+
+    @pytest.mark.asyncio
+    async def test_a_paused_rule_posts_nothing_into_c(self):
+        client = _client()
+        queue = FakeQueue()
+        rule = _rule(is_paused=True)
+
+        await _run(_pipeline(rule, client, queue), MessagePayload(
+            chat_id="-1001234", message_id=33, text="hello world"))
+
+        assert client.c_posts == []
+        assert queue.calls == []
 
 
 # --------------------------------------------------------------------------- #
@@ -673,6 +738,28 @@ class TestHopsTriggersAndFallbacks:
 
         assert client.c_posts == []
         assert queue.calls and queue.calls[0]["branding"] is None
+
+
+    @pytest.mark.asyncio
+    async def test_a_keyword_reply_is_not_posted_into_c(self):
+        """A reply is our own plain text — it has no forward header to brand."""
+        client = _client()
+        queue = FakeQueue()
+        rule = _rule(target_chat_ids=[B_TARGET, C_CHANNEL])
+        rule.keyword_confirmation = True
+        rule.keyword_reply = "thanks for reading"
+        rule.whitelist = ["urgent"]
+        rule.metadata["paid_addons"] = {"keyword_reply": True}
+
+        await _run(_pipeline(rule, client, queue), MessagePayload(
+            chat_id="-1001234", message_id=40, text="urgent market update"))
+
+        replies = [c for c in queue.calls if c["job_kind"] == "keyword_reply"]
+        assert [c["target"] for c in replies] == [B_TARGET], \
+            "the reply follows the forward's destinations minus C"
+        forwards = [c for c in queue.calls if c["job_kind"] == "forward"]
+        assert [c["target"] for c in forwards] == [B_TARGET]
+        assert len(client.c_posts) == 1, "only the hop post lands in C, never the reply"
 
 
 # --------------------------------------------------------------------------- #
