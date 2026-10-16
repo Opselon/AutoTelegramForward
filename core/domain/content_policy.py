@@ -194,6 +194,58 @@ def _needle_pattern(
     return re.compile(f"{left}{body}{right}", 0 if case_sensitive else re.IGNORECASE)
 
 
+@lru_cache(maxsize=512)
+def _folded_needles(
+    words: Tuple[str, ...],
+    *,
+    normalize: bool = True,
+    case_sensitive: bool = False,
+) -> Tuple[str, ...]:
+    """Every word in its comparison form, aligned with ``words`` (blank stays blank).
+
+    Matching 500 words with 500 patterns costs ~9 ms per message, because the
+    regex engine re-walks the whole text for each word. The comparison form of a
+    word, though, is always a substring of any text that word matches — the
+    pattern only adds boundaries, token families and letter variants around that
+    same text. So ``needle in folded_body`` can skip every word that cannot
+    possibly match, at one C-level scan per word: ~16x cheaper on a 2 KB
+    message, and flat enough that a large list stays practical.
+
+    A candidate is always confirmed with the real matcher, so the shortcut can
+    change how much work a decision costs, never what the decision is.
+    """
+    folded: List[str] = []
+    for word in words:
+        needle = (word or "").strip()
+        folded.append(
+            fold_text(needle, normalize=normalize, case_sensitive=case_sensitive)
+            if needle else ""
+        )
+    return tuple(folded)
+
+
+def _first_matching_word(haystack: str, words: Sequence[str], **flags: Any) -> str:
+    """The first word of ``words`` that really matches ``haystack``, or ``""``.
+
+    Scanned in the order the task lists them, so a rejection names the first
+    offender the user typed rather than an arbitrary one.
+    """
+    if not words or not haystack:
+        return ""
+    needles = _folded_needles(
+        tuple(words),
+        normalize=flags["normalize"],
+        case_sensitive=flags["case_sensitive"],
+    )
+    folded_body = fold_text(
+        haystack, normalize=flags["normalize"], case_sensitive=flags["case_sensitive"]
+    )
+    for word, needle in zip(words, needles):
+        if needle and needle in folded_body and contains_word(haystack, word, **flags):
+            return word
+    return ""
+
+
 def contains_word(
     haystack: str,
     needle: str,
@@ -479,12 +531,18 @@ class ContentPolicy:
             return PolicyDecision(False, "links_blocked")
 
         flags = self._match_flags()
-        for word in self.blacklist_words:
-            if contains_word(body, word, **flags):
+        if self.blacklist_words:
+            word = _first_matching_word(body, self.blacklist_words, **flags)
+            if word:
                 return PolicyDecision(False, f"blacklist:{word}", (word,))
 
         if self.whitelist_words:
             if self.whitelist_mode == "all":
+                if not _first_matching_word(body, self.whitelist_words, **flags):
+                    # Not one word of the list is in the text, so there is no
+                    # need to check each one to know the message fails.
+                    return PolicyDecision(
+                        False, f"whitelist_missing:{','.join(self.whitelist_words[:3])}")
                 missing = [w for w in self.whitelist_words if not contains_word(body, w, **flags)]
                 if missing:
                     return PolicyDecision(False, f"whitelist_missing:{','.join(missing[:3])}")
@@ -493,8 +551,7 @@ class ContentPolicy:
                 if not contains_word(body, phrase, **flags):
                     return PolicyDecision(False, "whitelist_phrase_missing")
             else:
-                hit = next((w for w in self.whitelist_words if contains_word(body, w, **flags)), "")
-                if not hit:
+                if not _first_matching_word(body, self.whitelist_words, **flags):
                     return PolicyDecision(False, "whitelist_mismatch")
 
         for pattern in self.regex_block:

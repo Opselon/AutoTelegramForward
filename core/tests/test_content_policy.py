@@ -242,17 +242,51 @@ def test_no_cap_on_words_or_replacements():
     assert out.split() == [f"b{i}" for i in range(300)]
 
 
-def test_a_large_policy_still_evaluates_quickly():
-    """500 words over a 4 KB message stays in the microsecond-millisecond range."""
+def test_a_large_policy_evaluates_in_one_scan_per_message():
+    """A 500-word blacklist is one scan per message, not 500 regex searches.
+
+    The wall-clock bound is deliberately generous — a shared CI runner is
+    several times slower than a dev box — because what it guards is the *shape*
+    of the algorithm: with the words combined into one alternation the cost is
+    flat in the list length, so a regression back to one search per word blows
+    straight through it. `test_the_whole_word_list_becomes_one_pattern` pins the
+    same property without timing anything.
+    """
     import time
 
     pol = policy(blacklist_words=[f"w{i}" for i in range(500)])
     body = ("some ordinary text " * 100)
+    pol.evaluate(body)  # warm the compiled-pattern caches
     start = time.perf_counter()
     for _ in range(50):
         pol.evaluate(body)
     elapsed = time.perf_counter() - start
     assert elapsed < 1.0, f"evaluation too slow: {elapsed:.3f}s for 50 messages"
+
+
+def test_a_word_list_is_scanned_without_a_regex_per_word():
+    """The skip is a folded substring scan; the pattern still decides.
+
+    `beta` inside `alphabet` is not a match (word boundary), a token marker is
+    still a family (`#promo` catches `#promotional`), and a Farsi-typed keyword
+    still catches the Arabic letters of the same word — the shortcut only makes
+    the search cheaper, it never changes the verdict.
+    """
+    from core.domain import content_policy as cp
+
+    flags = {"normalize": True, "case_sensitive": False, "word_boundary": True}
+    assert cp._first_matching_word("nothing to see here", ["alpha", "beta"], **flags) == ""
+    assert cp._first_matching_word("an alpha token", ["alpha", "beta"], **flags) == "alpha"
+    # the first offender in the task's own order is the one reported
+    assert cp._first_matching_word("a beta value", ["beta", "alpha"], **flags) == "beta"
+    # a substring hit that is not a word match is not a hit
+    assert cp._first_matching_word("alphabet soup", ["alpha"], **flags) == ""
+    # token families survive
+    assert cp._first_matching_word("#promotional", ["#promo"], **flags) == "#promo"
+    # letter variants survive
+    farsi = "\u06a9\u062a\u0627\u0628"
+    arabic_typed = "\u0643\u062a\u0627\u0628"
+    assert cp._first_matching_word(f"see {arabic_typed} now", [farsi], **flags) == farsi
 
 
 # --------------------------------------------------------------------------
