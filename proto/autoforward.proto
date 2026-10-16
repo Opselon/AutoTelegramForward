@@ -507,6 +507,31 @@ message SystemStatsResponse {
   string version = 10;
 }
 
+// Producer-side log collection policy, as the process that ENFORCES it sees it.
+//
+// The policy lives per producer, so the Go API cannot infer Core's answer from
+// its own: Core decides which levels leave the process, from its own environment.
+// Reporting it over this internal RPC is what lets the control plane show an
+// operator the real collection state instead of an unavailable placeholder.
+// `available=false` with a `reason` is the honest answer whenever the policy is
+// not attached — never a plausible-looking zero.
+message LogPolicyRequest {}
+
+message LogPolicyResponse {
+  bool available = 1;
+  string reason = 2;
+  repeated string configured_levels = 3;
+  repeated string effective_levels = 4;
+  bool diagnostic_active = 5;
+  int64 diagnostic_until = 6;
+  double verbose_rate_per_second = 7;
+  int64 emitted = 8;
+  int64 emitted_security = 9;
+  int64 suppressed_level = 10;
+  int64 suppressed_rate = 11;
+  int64 diagnostic_activations = 12;
+}
+
 // -----------------------------------------------------------------------------
 // Logging Service (debug log store)
 // -----------------------------------------------------------------------------
@@ -772,6 +797,9 @@ service AIControlService {
 
 service SystemStatusControlService {
   rpc GetSystemStats(SystemStatsRequest) returns (SystemStatsResponse);
+  // Additive (no existing field or RPC changed): lets the control plane report
+  // Core's producer-side collection policy instead of leaving it unavailable.
+  rpc GetLogPolicy(LogPolicyRequest) returns (LogPolicyResponse);
 }
 
 // -----------------------------------------------------------------------------

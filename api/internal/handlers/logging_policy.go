@@ -14,9 +14,12 @@ import (
 // The policy is enforced *per producer*, so there is no single "the policy" to
 // report. These handlers therefore answer in scopes and label each one: a number
 // this process reports is what this process decided, never a system total. Where
-// a scope cannot be read (atf-core has no policy RPC yet), it is reported as
-// unavailable with the reason, because inventing a zero there would read as
-// "nothing was suppressed", which is the opposite of the truth.
+// a scope cannot be read, it is reported as unavailable with the reason, because
+// inventing a zero there would read as "nothing was suppressed", which is the
+// opposite of the truth. Both producers are read from their own process: this
+// API's own policy in-band, and atf-core's over GetLogPolicy, so what is shown
+// is what the process is enforcing rather than what this API assumes it was
+// configured with.
 //
 // Mutations are admin-only and bounded, and every one of them writes durable
 // audit evidence through the same policy it is changing.
@@ -69,15 +72,12 @@ func (h *Handlers) LogPolicy(w http.ResponseWriter, r *http.Request) {
 	scopes := map[string]policyScope{
 		"api": h.apiPolicyScope(now),
 		// atf-core enforces the same policy in Python, in its own process, from
-		// its own environment. Nothing here can read it yet, and a plausible
+		// its own environment. Only that process knows what it is actually
+		// collecting, so the answer is read from it over GetLogPolicy rather
+		// than estimated. Where the channel, the RPC, or the attached policy is
+		// missing, the scope stays unavailable with the reason — a plausible
 		// looking zero would be a lie an operator would act on.
-		"core": {
-			Available:  false,
-			Scope:      "atf-core producer policy",
-			Process:    "atf-core",
-			Reason:     "atf-core does not expose its producer policy over an internal RPC yet; configure it with ATF_LOG_LEVELS/ATF_LOG_DIAGNOSTIC_SECONDS/ATF_LOG_VERBOSE_RATE and restart it",
-			ObservedAt: now.Format(time.RFC3339),
-		},
+		"core": h.corePolicyScope(r, now),
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"generated_at": now.Format(time.RFC3339),
@@ -87,6 +87,61 @@ func (h *Handlers) LogPolicy(w http.ResponseWriter, r *http.Request) {
 			"collection is not retention: suppressing a category does not delete, or stop deleting, stored records",
 		},
 	})
+}
+
+// corePolicyScope asks atf-core itself what it is collecting, over the
+// GetLogPolicy RPC added for exactly this purpose. Every failure mode keeps the
+// scope unavailable with a reason: a channel that is down, an older core that
+// predates the RPC, or a core running without a policy are all different
+// situations an operator must be able to tell apart, and none of them is "zero".
+func (h *Handlers) corePolicyScope(r *http.Request, now time.Time) policyScope {
+	scope := policyScope{
+		Scope:      "atf-core producer policy",
+		Process:    "atf-core",
+		ObservedAt: now.Format(time.RFC3339),
+	}
+	if h.c == nil || h.c.System == nil {
+		scope.Available = false
+		scope.Reason = "no atf-core gRPC client configured"
+		return scope
+	}
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.System.GetLogPolicy(ctx, &pb.LogPolicyRequest{})
+	if err != nil {
+		scope.Available = false
+		scope.Reason = "atf-core policy query failed: " + err.Error()
+		return scope
+	}
+	scope.Scope = "atf-core producer policy (queried live from the core process)"
+	if !resp.Available {
+		scope.Available = false
+		scope.Reason = resp.Reason
+		if len(scope.Reason) == 0 {
+			scope.Reason = "atf-core reports no collection policy attached"
+		}
+		return scope
+	}
+	scope.Available = true
+	scope.ConfiguredLevels = resp.ConfiguredLevels
+	scope.EffectiveLevels = resp.EffectiveLevels
+	scope.DiagnosticActive = resp.DiagnosticActive
+	scope.DiagnosticUntil = resp.DiagnosticUntil
+	scope.VerboseRatePerSecond = resp.VerboseRatePerSecond
+	scope.CounterScope = "process-local to atf-core since its last start"
+	if scope.DiagnosticActive && scope.DiagnosticUntil > 0 {
+		if remaining := scope.DiagnosticUntil - now.Unix(); remaining > 0 {
+			scope.DiagnosticRemainingS = remaining
+		}
+	}
+	scope.Counters = &policyCounters{
+		Emitted:              resp.Emitted,
+		EmittedSecurity:      resp.EmittedSecurity,
+		SuppressedLevel:      resp.SuppressedLevel,
+		SuppressedRate:       resp.SuppressedRate,
+		DiagnosticActivation: resp.DiagnosticActivations,
+	}
+	return scope
 }
 
 func (h *Handlers) apiPolicyScope(now time.Time) policyScope {
@@ -173,12 +228,53 @@ func (h *Handlers) LoggingHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	services = append(services, entry)
 
-	services = append(services, map[string]any{
+	// atf-core answers for itself. Until GetLogPolicy existed this line read
+	// "unknown: core exposes no logging telemetry yet", which told an operator
+	// nothing they could act on; a failed probe and a core that is up but has
+	// no policy attached are now distinguishable states.
+	coreStatus := "unknown"
+	coreDetail := "no atf-core gRPC client configured"
+	var coreCounters *policyCounters
+	var coreDiagActive bool
+	if h.c != nil && h.c.System != nil {
+		ctx, cancel := withTimeout(r)
+		resp, err := h.c.System.GetLogPolicy(ctx, &pb.LogPolicyRequest{})
+		cancel()
+		switch {
+		case err != nil:
+			coreStatus = "unavailable"
+			coreDetail = "core policy query failed: " + err.Error()
+		case !resp.Available:
+			coreStatus = "degraded"
+			coreDetail = resp.Reason
+			if coreDetail == "" {
+				coreDetail = "core reports no collection policy attached"
+			}
+		default:
+			coreStatus = "healthy"
+			coreDetail = "producer policy readable over GetLogPolicy"
+			coreDiagActive = resp.DiagnosticActive
+			coreCounters = &policyCounters{
+				Emitted:              resp.Emitted,
+				EmittedSecurity:      resp.EmittedSecurity,
+				SuppressedLevel:      resp.SuppressedLevel,
+				SuppressedRate:       resp.SuppressedRate,
+				DiagnosticActivation: resp.DiagnosticActivations,
+			}
+		}
+	}
+	coreEntry := map[string]any{
 		"service":     "atf-core",
-		"status":      "unknown",
-		"detail":      "core exposes no logging telemetry yet; its counters are not readable from here",
+		"status":      coreStatus,
+		"detail":      coreDetail,
 		"observed_at": now.Format(time.RFC3339),
-	})
+	}
+	if coreCounters != nil {
+		coreEntry["counters"] = coreCounters
+		coreEntry["counter_scope"] = "process-local to atf-core since its last start"
+		coreEntry["diagnostic_active"] = coreDiagActive
+	}
+	services = append(services, coreEntry)
 
 	overall := "healthy"
 	for _, svc := range services {

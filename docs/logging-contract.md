@@ -145,11 +145,14 @@ number it reports is what *that* process decided, never a system total.
 
 Four properties the routes are built around, each with a test:
 
-1. **A scope that cannot be read is reported unavailable, not zero.** `atf-core`
-   enforces the same policy in its own process and exposes no RPC for it yet, so
-   it is returned with `available: false` and a reason. Reporting `0 suppressed`
-   there would read as "nothing was suppressed" — the opposite of the truth, and
-   the kind of number an operator would act on.
+1. **A scope that cannot be read is reported unavailable, not zero.**
+   `atf-core` enforces its own policy in its own process, so the API asks it over
+   the internal `GetLogPolicy` RPC instead of assuming. Every way that read can
+   fail — no client, channel down, an older core without the RPC, or a core
+   running without a policy — keeps the scope `available: false` with a distinct
+   reason. Reporting `0 suppressed` there would read as "nothing was suppressed"
+   — the opposite of the truth, and the kind of number an operator would act on.
+   Pinned by `TestLogPolicy_UnreadableCoreScopeIsNeverZeroFilled`.
 2. **A start always yields exactly one window.** It replaces an active one and
    says so (`replaced_active`), and a second start within 5 s is refused with
    `409` + `Retry-After`, so a double-clicked button cannot hold collection open

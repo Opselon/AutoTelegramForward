@@ -1792,6 +1792,11 @@ class SystemStatusControlServiceStub:
                 request_serializer=autoforward__pb2.SystemStatsRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.SystemStatsResponse.FromString,
                 _registered_method=True)
+        self.GetLogPolicy = channel.unary_unary(
+                '/autoforward.SystemStatusControlService/GetLogPolicy',
+                request_serializer=autoforward__pb2.LogPolicyRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.LogPolicyResponse.FromString,
+                _registered_method=True)
 
 
 class SystemStatusControlServiceServicer:
@@ -1803,6 +1808,14 @@ class SystemStatusControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetLogPolicy(self, request, context):
+        """Additive (no existing field or RPC changed): lets the control plane report
+        Core's producer-side collection policy instead of leaving it unavailable.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SystemStatusControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -1810,6 +1823,11 @@ def add_SystemStatusControlServiceServicer_to_server(servicer, server):
                     servicer.GetSystemStats,
                     request_deserializer=autoforward__pb2.SystemStatsRequest.FromString,
                     response_serializer=autoforward__pb2.SystemStatsResponse.SerializeToString,
+            ),
+            'GetLogPolicy': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetLogPolicy,
+                    request_deserializer=autoforward__pb2.LogPolicyRequest.FromString,
+                    response_serializer=autoforward__pb2.LogPolicyResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -1839,6 +1857,33 @@ class SystemStatusControlService:
             '/autoforward.SystemStatusControlService/GetSystemStats',
             autoforward__pb2.SystemStatsRequest.SerializeToString,
             autoforward__pb2.SystemStatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetLogPolicy(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.SystemStatusControlService/GetLogPolicy',
+            autoforward__pb2.LogPolicyRequest.SerializeToString,
+            autoforward__pb2.LogPolicyResponse.FromString,
             options,
             channel_credentials,
             insecure,

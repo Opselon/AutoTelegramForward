@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.config import Config  # noqa: E402
+from core.application.log_policy import LogPolicy  # noqa: E402
 from core.application.use_cases import (  # noqa: E402
     AIConfigUseCases,
     FilterRuleUseCases,
@@ -321,6 +322,11 @@ def build_container(cfg: Config) -> dict:
         "settings": settings_repo,
         # The raw pool (or its deferred coroutine) — awaited by _resolve_pg_pool.
         "pg_pool_holder": pg_pool,
+        # The producer-side collection policy is process state, not a connection:
+        # build it here so BOTH the log client that enforces it and the control
+        # plane that reports it (over GetLogPolicy) share one instance. Two
+        # instances would let the API read a policy the process is not applying.
+        "log_policy": LogPolicy.from_env(),
     }
 
 
@@ -376,6 +382,9 @@ async def serve_grpc(container: dict, cfg: Config):
         servicers.SystemStatusControlServicer(
             container["sessions"], container["rules"],
             container["pipeline"], "", cfg.version,
+            # Same instance the log client enforces, so the control plane
+            # reports the policy this process is really applying.
+            log_policy=container.get("log_policy"),
         ),
         server,
     )
@@ -504,11 +513,12 @@ async def main() -> None:
     # Non-blocking debug-log feed to the Logger microservice.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from core.observability.log_client import LogClient, CentralLogHandler  # noqa: E402
-    from core.application.log_policy import LogPolicy  # noqa: E402
     # The client is the door every event leaves through (audit choke point, the
     # info/warn/error helpers and the stdlib bridge), so the collection policy is
-    # attached there once instead of at each call site.
-    log_client = LogClient(cfg.logger_addr, policy=LogPolicy.from_env())
+    # attached there once instead of at each call site. Reuse the instance built
+    # with the container: the control plane reports that same object, and two
+    # instances would let it describe a policy this process is not applying.
+    log_client = LogClient(cfg.logger_addr, policy=container["log_policy"])
     try:
         await log_client.start()
     except Exception as exc:

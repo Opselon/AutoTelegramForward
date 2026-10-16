@@ -4110,6 +4110,182 @@ func (x *SystemStatsResponse) GetVersion() string {
 	return ""
 }
 
+// Producer-side log collection policy, as the process that ENFORCES it sees it.
+//
+// The policy lives per producer, so the Go API cannot infer Core's answer from
+// its own: Core decides which levels leave the process, from its own environment.
+// Reporting it over this internal RPC is what lets the control plane show an
+// operator the real collection state instead of an unavailable placeholder.
+// `available=false` with a `reason` is the honest answer whenever the policy is
+// not attached — never a plausible-looking zero.
+type LogPolicyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogPolicyRequest) Reset() {
+	*x = LogPolicyRequest{}
+	mi := &file_autoforward_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogPolicyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogPolicyRequest) ProtoMessage() {}
+
+func (x *LogPolicyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogPolicyRequest.ProtoReflect.Descriptor instead.
+func (*LogPolicyRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{54}
+}
+
+type LogPolicyResponse struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Available             bool                   `protobuf:"varint,1,opt,name=available,proto3" json:"available,omitempty"`
+	Reason                string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	ConfiguredLevels      []string               `protobuf:"bytes,3,rep,name=configured_levels,json=configuredLevels,proto3" json:"configured_levels,omitempty"`
+	EffectiveLevels       []string               `protobuf:"bytes,4,rep,name=effective_levels,json=effectiveLevels,proto3" json:"effective_levels,omitempty"`
+	DiagnosticActive      bool                   `protobuf:"varint,5,opt,name=diagnostic_active,json=diagnosticActive,proto3" json:"diagnostic_active,omitempty"`
+	DiagnosticUntil       int64                  `protobuf:"varint,6,opt,name=diagnostic_until,json=diagnosticUntil,proto3" json:"diagnostic_until,omitempty"`
+	VerboseRatePerSecond  float64                `protobuf:"fixed64,7,opt,name=verbose_rate_per_second,json=verboseRatePerSecond,proto3" json:"verbose_rate_per_second,omitempty"`
+	Emitted               int64                  `protobuf:"varint,8,opt,name=emitted,proto3" json:"emitted,omitempty"`
+	EmittedSecurity       int64                  `protobuf:"varint,9,opt,name=emitted_security,json=emittedSecurity,proto3" json:"emitted_security,omitempty"`
+	SuppressedLevel       int64                  `protobuf:"varint,10,opt,name=suppressed_level,json=suppressedLevel,proto3" json:"suppressed_level,omitempty"`
+	SuppressedRate        int64                  `protobuf:"varint,11,opt,name=suppressed_rate,json=suppressedRate,proto3" json:"suppressed_rate,omitempty"`
+	DiagnosticActivations int64                  `protobuf:"varint,12,opt,name=diagnostic_activations,json=diagnosticActivations,proto3" json:"diagnostic_activations,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *LogPolicyResponse) Reset() {
+	*x = LogPolicyResponse{}
+	mi := &file_autoforward_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogPolicyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogPolicyResponse) ProtoMessage() {}
+
+func (x *LogPolicyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogPolicyResponse.ProtoReflect.Descriptor instead.
+func (*LogPolicyResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *LogPolicyResponse) GetAvailable() bool {
+	if x != nil {
+		return x.Available
+	}
+	return false
+}
+
+func (x *LogPolicyResponse) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *LogPolicyResponse) GetConfiguredLevels() []string {
+	if x != nil {
+		return x.ConfiguredLevels
+	}
+	return nil
+}
+
+func (x *LogPolicyResponse) GetEffectiveLevels() []string {
+	if x != nil {
+		return x.EffectiveLevels
+	}
+	return nil
+}
+
+func (x *LogPolicyResponse) GetDiagnosticActive() bool {
+	if x != nil {
+		return x.DiagnosticActive
+	}
+	return false
+}
+
+func (x *LogPolicyResponse) GetDiagnosticUntil() int64 {
+	if x != nil {
+		return x.DiagnosticUntil
+	}
+	return 0
+}
+
+func (x *LogPolicyResponse) GetVerboseRatePerSecond() float64 {
+	if x != nil {
+		return x.VerboseRatePerSecond
+	}
+	return 0
+}
+
+func (x *LogPolicyResponse) GetEmitted() int64 {
+	if x != nil {
+		return x.Emitted
+	}
+	return 0
+}
+
+func (x *LogPolicyResponse) GetEmittedSecurity() int64 {
+	if x != nil {
+		return x.EmittedSecurity
+	}
+	return 0
+}
+
+func (x *LogPolicyResponse) GetSuppressedLevel() int64 {
+	if x != nil {
+		return x.SuppressedLevel
+	}
+	return 0
+}
+
+func (x *LogPolicyResponse) GetSuppressedRate() int64 {
+	if x != nil {
+		return x.SuppressedRate
+	}
+	return 0
+}
+
+func (x *LogPolicyResponse) GetDiagnosticActivations() int64 {
+	if x != nil {
+		return x.DiagnosticActivations
+	}
+	return 0
+}
+
 type LogEntry struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Ts       int64                  `protobuf:"varint,1,opt,name=ts,proto3" json:"ts,omitempty"`
@@ -4129,7 +4305,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_autoforward_proto_msgTypes[54]
+	mi := &file_autoforward_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4141,7 +4317,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[54]
+	mi := &file_autoforward_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4154,7 +4330,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{54}
+	return file_autoforward_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *LogEntry) GetTs() int64 {
@@ -4229,7 +4405,7 @@ type LogRequest struct {
 
 func (x *LogRequest) Reset() {
 	*x = LogRequest{}
-	mi := &file_autoforward_proto_msgTypes[55]
+	mi := &file_autoforward_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4241,7 +4417,7 @@ func (x *LogRequest) String() string {
 func (*LogRequest) ProtoMessage() {}
 
 func (x *LogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[55]
+	mi := &file_autoforward_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4254,7 +4430,7 @@ func (x *LogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogRequest.ProtoReflect.Descriptor instead.
 func (*LogRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{55}
+	return file_autoforward_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *LogRequest) GetEntry() *LogEntry {
@@ -4287,7 +4463,7 @@ type QueryLogsRequest struct {
 
 func (x *QueryLogsRequest) Reset() {
 	*x = QueryLogsRequest{}
-	mi := &file_autoforward_proto_msgTypes[56]
+	mi := &file_autoforward_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4299,7 +4475,7 @@ func (x *QueryLogsRequest) String() string {
 func (*QueryLogsRequest) ProtoMessage() {}
 
 func (x *QueryLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[56]
+	mi := &file_autoforward_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4312,7 +4488,7 @@ func (x *QueryLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryLogsRequest.ProtoReflect.Descriptor instead.
 func (*QueryLogsRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{56}
+	return file_autoforward_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *QueryLogsRequest) GetLevel() string {
@@ -4421,7 +4597,7 @@ type PurgeLogsRequest struct {
 
 func (x *PurgeLogsRequest) Reset() {
 	*x = PurgeLogsRequest{}
-	mi := &file_autoforward_proto_msgTypes[57]
+	mi := &file_autoforward_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4433,7 +4609,7 @@ func (x *PurgeLogsRequest) String() string {
 func (*PurgeLogsRequest) ProtoMessage() {}
 
 func (x *PurgeLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[57]
+	mi := &file_autoforward_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4446,7 +4622,7 @@ func (x *PurgeLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurgeLogsRequest.ProtoReflect.Descriptor instead.
 func (*PurgeLogsRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{57}
+	return file_autoforward_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *PurgeLogsRequest) GetLevel() string {
@@ -4496,7 +4672,7 @@ type PurgeLogsResponse struct {
 
 func (x *PurgeLogsResponse) Reset() {
 	*x = PurgeLogsResponse{}
-	mi := &file_autoforward_proto_msgTypes[58]
+	mi := &file_autoforward_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4508,7 +4684,7 @@ func (x *PurgeLogsResponse) String() string {
 func (*PurgeLogsResponse) ProtoMessage() {}
 
 func (x *PurgeLogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[58]
+	mi := &file_autoforward_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4521,7 +4697,7 @@ func (x *PurgeLogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurgeLogsResponse.ProtoReflect.Descriptor instead.
 func (*PurgeLogsResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{58}
+	return file_autoforward_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *PurgeLogsResponse) GetSuccess() bool {
@@ -4565,7 +4741,7 @@ type QueryLogsResponse struct {
 
 func (x *QueryLogsResponse) Reset() {
 	*x = QueryLogsResponse{}
-	mi := &file_autoforward_proto_msgTypes[59]
+	mi := &file_autoforward_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4577,7 +4753,7 @@ func (x *QueryLogsResponse) String() string {
 func (*QueryLogsResponse) ProtoMessage() {}
 
 func (x *QueryLogsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[59]
+	mi := &file_autoforward_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4590,7 +4766,7 @@ func (x *QueryLogsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryLogsResponse.ProtoReflect.Descriptor instead.
 func (*QueryLogsResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{59}
+	return file_autoforward_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *QueryLogsResponse) GetLogs() []*LogEntry {
@@ -4624,7 +4800,7 @@ type LogStatsRequest struct {
 
 func (x *LogStatsRequest) Reset() {
 	*x = LogStatsRequest{}
-	mi := &file_autoforward_proto_msgTypes[60]
+	mi := &file_autoforward_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4636,7 +4812,7 @@ func (x *LogStatsRequest) String() string {
 func (*LogStatsRequest) ProtoMessage() {}
 
 func (x *LogStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[60]
+	mi := &file_autoforward_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4649,7 +4825,7 @@ func (x *LogStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogStatsRequest.ProtoReflect.Descriptor instead.
 func (*LogStatsRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{60}
+	return file_autoforward_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *LogStatsRequest) GetRuleId() string {
@@ -4681,7 +4857,7 @@ type LogStatsResponse struct {
 
 func (x *LogStatsResponse) Reset() {
 	*x = LogStatsResponse{}
-	mi := &file_autoforward_proto_msgTypes[61]
+	mi := &file_autoforward_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4693,7 +4869,7 @@ func (x *LogStatsResponse) String() string {
 func (*LogStatsResponse) ProtoMessage() {}
 
 func (x *LogStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[61]
+	mi := &file_autoforward_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4706,7 +4882,7 @@ func (x *LogStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogStatsResponse.ProtoReflect.Descriptor instead.
 func (*LogStatsResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{61}
+	return file_autoforward_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *LogStatsResponse) GetTotal() int64 {
@@ -4776,7 +4952,7 @@ type TestRuleRequest struct {
 
 func (x *TestRuleRequest) Reset() {
 	*x = TestRuleRequest{}
-	mi := &file_autoforward_proto_msgTypes[62]
+	mi := &file_autoforward_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4788,7 +4964,7 @@ func (x *TestRuleRequest) String() string {
 func (*TestRuleRequest) ProtoMessage() {}
 
 func (x *TestRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[62]
+	mi := &file_autoforward_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4801,7 +4977,7 @@ func (x *TestRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestRuleRequest.ProtoReflect.Descriptor instead.
 func (*TestRuleRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{62}
+	return file_autoforward_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *TestRuleRequest) GetRuleId() string {
@@ -4898,7 +5074,7 @@ type TestRuleResponse struct {
 
 func (x *TestRuleResponse) Reset() {
 	*x = TestRuleResponse{}
-	mi := &file_autoforward_proto_msgTypes[63]
+	mi := &file_autoforward_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4910,7 +5086,7 @@ func (x *TestRuleResponse) String() string {
 func (*TestRuleResponse) ProtoMessage() {}
 
 func (x *TestRuleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[63]
+	mi := &file_autoforward_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4923,7 +5099,7 @@ func (x *TestRuleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestRuleResponse.ProtoReflect.Descriptor instead.
 func (*TestRuleResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{63}
+	return file_autoforward_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *TestRuleResponse) GetMatched() bool {
@@ -5050,7 +5226,7 @@ type ListDeadLetterRequest struct {
 
 func (x *ListDeadLetterRequest) Reset() {
 	*x = ListDeadLetterRequest{}
-	mi := &file_autoforward_proto_msgTypes[64]
+	mi := &file_autoforward_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5062,7 +5238,7 @@ func (x *ListDeadLetterRequest) String() string {
 func (*ListDeadLetterRequest) ProtoMessage() {}
 
 func (x *ListDeadLetterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[64]
+	mi := &file_autoforward_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5075,7 +5251,7 @@ func (x *ListDeadLetterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDeadLetterRequest.ProtoReflect.Descriptor instead.
 func (*ListDeadLetterRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{64}
+	return file_autoforward_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ListDeadLetterRequest) GetRuleId() string {
@@ -5123,7 +5299,7 @@ type DeadLetterEntry struct {
 
 func (x *DeadLetterEntry) Reset() {
 	*x = DeadLetterEntry{}
-	mi := &file_autoforward_proto_msgTypes[65]
+	mi := &file_autoforward_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5135,7 +5311,7 @@ func (x *DeadLetterEntry) String() string {
 func (*DeadLetterEntry) ProtoMessage() {}
 
 func (x *DeadLetterEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[65]
+	mi := &file_autoforward_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5148,7 +5324,7 @@ func (x *DeadLetterEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeadLetterEntry.ProtoReflect.Descriptor instead.
 func (*DeadLetterEntry) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{65}
+	return file_autoforward_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *DeadLetterEntry) GetId() string {
@@ -5224,7 +5400,7 @@ type ListDeadLetterResponse struct {
 
 func (x *ListDeadLetterResponse) Reset() {
 	*x = ListDeadLetterResponse{}
-	mi := &file_autoforward_proto_msgTypes[66]
+	mi := &file_autoforward_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5236,7 +5412,7 @@ func (x *ListDeadLetterResponse) String() string {
 func (*ListDeadLetterResponse) ProtoMessage() {}
 
 func (x *ListDeadLetterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[66]
+	mi := &file_autoforward_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5249,7 +5425,7 @@ func (x *ListDeadLetterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDeadLetterResponse.ProtoReflect.Descriptor instead.
 func (*ListDeadLetterResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{66}
+	return file_autoforward_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *ListDeadLetterResponse) GetEntries() []*DeadLetterEntry {
@@ -5276,7 +5452,7 @@ type ReplayDeadLetterRequest struct {
 
 func (x *ReplayDeadLetterRequest) Reset() {
 	*x = ReplayDeadLetterRequest{}
-	mi := &file_autoforward_proto_msgTypes[67]
+	mi := &file_autoforward_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5288,7 +5464,7 @@ func (x *ReplayDeadLetterRequest) String() string {
 func (*ReplayDeadLetterRequest) ProtoMessage() {}
 
 func (x *ReplayDeadLetterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[67]
+	mi := &file_autoforward_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5301,7 +5477,7 @@ func (x *ReplayDeadLetterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplayDeadLetterRequest.ProtoReflect.Descriptor instead.
 func (*ReplayDeadLetterRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{67}
+	return file_autoforward_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *ReplayDeadLetterRequest) GetId() string {
@@ -5329,7 +5505,7 @@ type PurgeDeadLetterRequest struct {
 
 func (x *PurgeDeadLetterRequest) Reset() {
 	*x = PurgeDeadLetterRequest{}
-	mi := &file_autoforward_proto_msgTypes[68]
+	mi := &file_autoforward_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5341,7 +5517,7 @@ func (x *PurgeDeadLetterRequest) String() string {
 func (*PurgeDeadLetterRequest) ProtoMessage() {}
 
 func (x *PurgeDeadLetterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[68]
+	mi := &file_autoforward_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5354,7 +5530,7 @@ func (x *PurgeDeadLetterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurgeDeadLetterRequest.ProtoReflect.Descriptor instead.
 func (*PurgeDeadLetterRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{68}
+	return file_autoforward_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *PurgeDeadLetterRequest) GetRuleId() string {
@@ -5387,7 +5563,7 @@ type DeliveryStatsRequest struct {
 
 func (x *DeliveryStatsRequest) Reset() {
 	*x = DeliveryStatsRequest{}
-	mi := &file_autoforward_proto_msgTypes[69]
+	mi := &file_autoforward_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5399,7 +5575,7 @@ func (x *DeliveryStatsRequest) String() string {
 func (*DeliveryStatsRequest) ProtoMessage() {}
 
 func (x *DeliveryStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[69]
+	mi := &file_autoforward_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5412,7 +5588,7 @@ func (x *DeliveryStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeliveryStatsRequest.ProtoReflect.Descriptor instead.
 func (*DeliveryStatsRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{69}
+	return file_autoforward_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *DeliveryStatsRequest) GetOwnerUserId() int64 {
@@ -5440,7 +5616,7 @@ type DeliveryStatsResponse struct {
 
 func (x *DeliveryStatsResponse) Reset() {
 	*x = DeliveryStatsResponse{}
-	mi := &file_autoforward_proto_msgTypes[70]
+	mi := &file_autoforward_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5452,7 +5628,7 @@ func (x *DeliveryStatsResponse) String() string {
 func (*DeliveryStatsResponse) ProtoMessage() {}
 
 func (x *DeliveryStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[70]
+	mi := &file_autoforward_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5465,7 +5641,7 @@ func (x *DeliveryStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeliveryStatsResponse.ProtoReflect.Descriptor instead.
 func (*DeliveryStatsResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{70}
+	return file_autoforward_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *DeliveryStatsResponse) GetProcessedTotal() int64 {
@@ -5555,7 +5731,7 @@ type RuleLiveStat struct {
 
 func (x *RuleLiveStat) Reset() {
 	*x = RuleLiveStat{}
-	mi := &file_autoforward_proto_msgTypes[71]
+	mi := &file_autoforward_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5567,7 +5743,7 @@ func (x *RuleLiveStat) String() string {
 func (*RuleLiveStat) ProtoMessage() {}
 
 func (x *RuleLiveStat) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[71]
+	mi := &file_autoforward_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5580,7 +5756,7 @@ func (x *RuleLiveStat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuleLiveStat.ProtoReflect.Descriptor instead.
 func (*RuleLiveStat) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{71}
+	return file_autoforward_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *RuleLiveStat) GetRuleId() string {
@@ -5661,7 +5837,7 @@ type RecentError struct {
 
 func (x *RecentError) Reset() {
 	*x = RecentError{}
-	mi := &file_autoforward_proto_msgTypes[72]
+	mi := &file_autoforward_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5673,7 +5849,7 @@ func (x *RecentError) String() string {
 func (*RecentError) ProtoMessage() {}
 
 func (x *RecentError) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[72]
+	mi := &file_autoforward_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5686,7 +5862,7 @@ func (x *RecentError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecentError.ProtoReflect.Descriptor instead.
 func (*RecentError) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{72}
+	return file_autoforward_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *RecentError) GetTs() int64 {
@@ -5749,7 +5925,7 @@ type PauseRuleRequest struct {
 
 func (x *PauseRuleRequest) Reset() {
 	*x = PauseRuleRequest{}
-	mi := &file_autoforward_proto_msgTypes[73]
+	mi := &file_autoforward_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5761,7 +5937,7 @@ func (x *PauseRuleRequest) String() string {
 func (*PauseRuleRequest) ProtoMessage() {}
 
 func (x *PauseRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[73]
+	mi := &file_autoforward_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5774,7 +5950,7 @@ func (x *PauseRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PauseRuleRequest.ProtoReflect.Descriptor instead.
 func (*PauseRuleRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{73}
+	return file_autoforward_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *PauseRuleRequest) GetRuleId() string {
@@ -5809,7 +5985,7 @@ type RuleActionResponse struct {
 
 func (x *RuleActionResponse) Reset() {
 	*x = RuleActionResponse{}
-	mi := &file_autoforward_proto_msgTypes[74]
+	mi := &file_autoforward_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5821,7 +5997,7 @@ func (x *RuleActionResponse) String() string {
 func (*RuleActionResponse) ProtoMessage() {}
 
 func (x *RuleActionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[74]
+	mi := &file_autoforward_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5834,7 +6010,7 @@ func (x *RuleActionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuleActionResponse.ProtoReflect.Descriptor instead.
 func (*RuleActionResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{74}
+	return file_autoforward_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *RuleActionResponse) GetSuccess() bool {
@@ -5880,7 +6056,7 @@ type QueryAuditEventsRequest struct {
 
 func (x *QueryAuditEventsRequest) Reset() {
 	*x = QueryAuditEventsRequest{}
-	mi := &file_autoforward_proto_msgTypes[75]
+	mi := &file_autoforward_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5892,7 +6068,7 @@ func (x *QueryAuditEventsRequest) String() string {
 func (*QueryAuditEventsRequest) ProtoMessage() {}
 
 func (x *QueryAuditEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[75]
+	mi := &file_autoforward_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5905,7 +6081,7 @@ func (x *QueryAuditEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryAuditEventsRequest.ProtoReflect.Descriptor instead.
 func (*QueryAuditEventsRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{75}
+	return file_autoforward_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *QueryAuditEventsRequest) GetCorrelationId() string {
@@ -6026,7 +6202,7 @@ type AuditEventEntry struct {
 
 func (x *AuditEventEntry) Reset() {
 	*x = AuditEventEntry{}
-	mi := &file_autoforward_proto_msgTypes[76]
+	mi := &file_autoforward_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6038,7 +6214,7 @@ func (x *AuditEventEntry) String() string {
 func (*AuditEventEntry) ProtoMessage() {}
 
 func (x *AuditEventEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[76]
+	mi := &file_autoforward_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6051,7 +6227,7 @@ func (x *AuditEventEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditEventEntry.ProtoReflect.Descriptor instead.
 func (*AuditEventEntry) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{76}
+	return file_autoforward_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *AuditEventEntry) GetEventId() string {
@@ -6246,7 +6422,7 @@ type QueryAuditEventsResponse struct {
 
 func (x *QueryAuditEventsResponse) Reset() {
 	*x = QueryAuditEventsResponse{}
-	mi := &file_autoforward_proto_msgTypes[77]
+	mi := &file_autoforward_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6258,7 +6434,7 @@ func (x *QueryAuditEventsResponse) String() string {
 func (*QueryAuditEventsResponse) ProtoMessage() {}
 
 func (x *QueryAuditEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[77]
+	mi := &file_autoforward_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6271,7 +6447,7 @@ func (x *QueryAuditEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryAuditEventsResponse.ProtoReflect.Descriptor instead.
 func (*QueryAuditEventsResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{77}
+	return file_autoforward_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *QueryAuditEventsResponse) GetEvents() []*AuditEventEntry {
@@ -6298,7 +6474,7 @@ type BackupExportRequest struct {
 
 func (x *BackupExportRequest) Reset() {
 	*x = BackupExportRequest{}
-	mi := &file_autoforward_proto_msgTypes[78]
+	mi := &file_autoforward_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6310,7 +6486,7 @@ func (x *BackupExportRequest) String() string {
 func (*BackupExportRequest) ProtoMessage() {}
 
 func (x *BackupExportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[78]
+	mi := &file_autoforward_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6323,7 +6499,7 @@ func (x *BackupExportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupExportRequest.ProtoReflect.Descriptor instead.
 func (*BackupExportRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{78}
+	return file_autoforward_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *BackupExportRequest) GetOwnerUserId() int64 {
@@ -6352,7 +6528,7 @@ type BackupExportResponse struct {
 
 func (x *BackupExportResponse) Reset() {
 	*x = BackupExportResponse{}
-	mi := &file_autoforward_proto_msgTypes[79]
+	mi := &file_autoforward_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6364,7 +6540,7 @@ func (x *BackupExportResponse) String() string {
 func (*BackupExportResponse) ProtoMessage() {}
 
 func (x *BackupExportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[79]
+	mi := &file_autoforward_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6377,7 +6553,7 @@ func (x *BackupExportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupExportResponse.ProtoReflect.Descriptor instead.
 func (*BackupExportResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{79}
+	return file_autoforward_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *BackupExportResponse) GetSuccess() bool {
@@ -6420,7 +6596,7 @@ type BackupImportRequest struct {
 
 func (x *BackupImportRequest) Reset() {
 	*x = BackupImportRequest{}
-	mi := &file_autoforward_proto_msgTypes[80]
+	mi := &file_autoforward_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6432,7 +6608,7 @@ func (x *BackupImportRequest) String() string {
 func (*BackupImportRequest) ProtoMessage() {}
 
 func (x *BackupImportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[80]
+	mi := &file_autoforward_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6445,7 +6621,7 @@ func (x *BackupImportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupImportRequest.ProtoReflect.Descriptor instead.
 func (*BackupImportRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{80}
+	return file_autoforward_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *BackupImportRequest) GetBundle() string {
@@ -6488,7 +6664,7 @@ type BackupImportResponse struct {
 
 func (x *BackupImportResponse) Reset() {
 	*x = BackupImportResponse{}
-	mi := &file_autoforward_proto_msgTypes[81]
+	mi := &file_autoforward_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6500,7 +6676,7 @@ func (x *BackupImportResponse) String() string {
 func (*BackupImportResponse) ProtoMessage() {}
 
 func (x *BackupImportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[81]
+	mi := &file_autoforward_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6513,7 +6689,7 @@ func (x *BackupImportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupImportResponse.ProtoReflect.Descriptor instead.
 func (*BackupImportResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{81}
+	return file_autoforward_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *BackupImportResponse) GetSuccess() bool {
@@ -6548,7 +6724,7 @@ type EntityImportStats struct {
 
 func (x *EntityImportStats) Reset() {
 	*x = EntityImportStats{}
-	mi := &file_autoforward_proto_msgTypes[82]
+	mi := &file_autoforward_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6560,7 +6736,7 @@ func (x *EntityImportStats) String() string {
 func (*EntityImportStats) ProtoMessage() {}
 
 func (x *EntityImportStats) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[82]
+	mi := &file_autoforward_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6573,7 +6749,7 @@ func (x *EntityImportStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EntityImportStats.ProtoReflect.Descriptor instead.
 func (*EntityImportStats) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{82}
+	return file_autoforward_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *EntityImportStats) GetImported() int32 {
@@ -6611,7 +6787,7 @@ type WebAccount struct {
 
 func (x *WebAccount) Reset() {
 	*x = WebAccount{}
-	mi := &file_autoforward_proto_msgTypes[83]
+	mi := &file_autoforward_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6623,7 +6799,7 @@ func (x *WebAccount) String() string {
 func (*WebAccount) ProtoMessage() {}
 
 func (x *WebAccount) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[83]
+	mi := &file_autoforward_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6636,7 +6812,7 @@ func (x *WebAccount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebAccount.ProtoReflect.Descriptor instead.
 func (*WebAccount) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{83}
+	return file_autoforward_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *WebAccount) GetUserId() int64 {
@@ -6694,7 +6870,7 @@ type RegisterAccountRequest struct {
 
 func (x *RegisterAccountRequest) Reset() {
 	*x = RegisterAccountRequest{}
-	mi := &file_autoforward_proto_msgTypes[84]
+	mi := &file_autoforward_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6706,7 +6882,7 @@ func (x *RegisterAccountRequest) String() string {
 func (*RegisterAccountRequest) ProtoMessage() {}
 
 func (x *RegisterAccountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[84]
+	mi := &file_autoforward_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6719,7 +6895,7 @@ func (x *RegisterAccountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterAccountRequest.ProtoReflect.Descriptor instead.
 func (*RegisterAccountRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{84}
+	return file_autoforward_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *RegisterAccountRequest) GetUserId() int64 {
@@ -6769,7 +6945,7 @@ type RegisterAccountResponse struct {
 
 func (x *RegisterAccountResponse) Reset() {
 	*x = RegisterAccountResponse{}
-	mi := &file_autoforward_proto_msgTypes[85]
+	mi := &file_autoforward_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6781,7 +6957,7 @@ func (x *RegisterAccountResponse) String() string {
 func (*RegisterAccountResponse) ProtoMessage() {}
 
 func (x *RegisterAccountResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[85]
+	mi := &file_autoforward_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6794,7 +6970,7 @@ func (x *RegisterAccountResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterAccountResponse.ProtoReflect.Descriptor instead.
 func (*RegisterAccountResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{85}
+	return file_autoforward_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *RegisterAccountResponse) GetSuccess() bool {
@@ -6836,7 +7012,7 @@ type LoginAccountRequest struct {
 
 func (x *LoginAccountRequest) Reset() {
 	*x = LoginAccountRequest{}
-	mi := &file_autoforward_proto_msgTypes[86]
+	mi := &file_autoforward_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6848,7 +7024,7 @@ func (x *LoginAccountRequest) String() string {
 func (*LoginAccountRequest) ProtoMessage() {}
 
 func (x *LoginAccountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[86]
+	mi := &file_autoforward_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6861,7 +7037,7 @@ func (x *LoginAccountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginAccountRequest.ProtoReflect.Descriptor instead.
 func (*LoginAccountRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{86}
+	return file_autoforward_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *LoginAccountRequest) GetUsername() string {
@@ -6899,7 +7075,7 @@ type LoginAccountResponse struct {
 
 func (x *LoginAccountResponse) Reset() {
 	*x = LoginAccountResponse{}
-	mi := &file_autoforward_proto_msgTypes[87]
+	mi := &file_autoforward_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6911,7 +7087,7 @@ func (x *LoginAccountResponse) String() string {
 func (*LoginAccountResponse) ProtoMessage() {}
 
 func (x *LoginAccountResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[87]
+	mi := &file_autoforward_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6924,7 +7100,7 @@ func (x *LoginAccountResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginAccountResponse.ProtoReflect.Descriptor instead.
 func (*LoginAccountResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{87}
+	return file_autoforward_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *LoginAccountResponse) GetSuccess() bool {
@@ -6978,7 +7154,7 @@ type ValidateTokenRequest struct {
 
 func (x *ValidateTokenRequest) Reset() {
 	*x = ValidateTokenRequest{}
-	mi := &file_autoforward_proto_msgTypes[88]
+	mi := &file_autoforward_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6990,7 +7166,7 @@ func (x *ValidateTokenRequest) String() string {
 func (*ValidateTokenRequest) ProtoMessage() {}
 
 func (x *ValidateTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[88]
+	mi := &file_autoforward_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7003,7 +7179,7 @@ func (x *ValidateTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateTokenRequest.ProtoReflect.Descriptor instead.
 func (*ValidateTokenRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{88}
+	return file_autoforward_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *ValidateTokenRequest) GetToken() string {
@@ -7026,7 +7202,7 @@ type ValidateTokenResponse struct {
 
 func (x *ValidateTokenResponse) Reset() {
 	*x = ValidateTokenResponse{}
-	mi := &file_autoforward_proto_msgTypes[89]
+	mi := &file_autoforward_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7038,7 +7214,7 @@ func (x *ValidateTokenResponse) String() string {
 func (*ValidateTokenResponse) ProtoMessage() {}
 
 func (x *ValidateTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[89]
+	mi := &file_autoforward_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7051,7 +7227,7 @@ func (x *ValidateTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateTokenResponse.ProtoReflect.Descriptor instead.
 func (*ValidateTokenResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{89}
+	return file_autoforward_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *ValidateTokenResponse) GetValid() bool {
@@ -7098,7 +7274,7 @@ type IssueWebTokenRequest struct {
 
 func (x *IssueWebTokenRequest) Reset() {
 	*x = IssueWebTokenRequest{}
-	mi := &file_autoforward_proto_msgTypes[90]
+	mi := &file_autoforward_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7110,7 +7286,7 @@ func (x *IssueWebTokenRequest) String() string {
 func (*IssueWebTokenRequest) ProtoMessage() {}
 
 func (x *IssueWebTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[90]
+	mi := &file_autoforward_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7123,7 +7299,7 @@ func (x *IssueWebTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueWebTokenRequest.ProtoReflect.Descriptor instead.
 func (*IssueWebTokenRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{90}
+	return file_autoforward_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *IssueWebTokenRequest) GetUserId() int64 {
@@ -7144,7 +7320,7 @@ type ChangePasswordRequest struct {
 
 func (x *ChangePasswordRequest) Reset() {
 	*x = ChangePasswordRequest{}
-	mi := &file_autoforward_proto_msgTypes[91]
+	mi := &file_autoforward_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7156,7 +7332,7 @@ func (x *ChangePasswordRequest) String() string {
 func (*ChangePasswordRequest) ProtoMessage() {}
 
 func (x *ChangePasswordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[91]
+	mi := &file_autoforward_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7169,7 +7345,7 @@ func (x *ChangePasswordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangePasswordRequest.ProtoReflect.Descriptor instead.
 func (*ChangePasswordRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{91}
+	return file_autoforward_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *ChangePasswordRequest) GetUserId() int64 {
@@ -7203,7 +7379,7 @@ type GetAccountRequest struct {
 
 func (x *GetAccountRequest) Reset() {
 	*x = GetAccountRequest{}
-	mi := &file_autoforward_proto_msgTypes[92]
+	mi := &file_autoforward_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7215,7 +7391,7 @@ func (x *GetAccountRequest) String() string {
 func (*GetAccountRequest) ProtoMessage() {}
 
 func (x *GetAccountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[92]
+	mi := &file_autoforward_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7228,7 +7404,7 @@ func (x *GetAccountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAccountRequest.ProtoReflect.Descriptor instead.
 func (*GetAccountRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{92}
+	return file_autoforward_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *GetAccountRequest) GetUserId() int64 {
@@ -7253,7 +7429,7 @@ type AdminOverviewRequest struct {
 
 func (x *AdminOverviewRequest) Reset() {
 	*x = AdminOverviewRequest{}
-	mi := &file_autoforward_proto_msgTypes[93]
+	mi := &file_autoforward_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7265,7 +7441,7 @@ func (x *AdminOverviewRequest) String() string {
 func (*AdminOverviewRequest) ProtoMessage() {}
 
 func (x *AdminOverviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[93]
+	mi := &file_autoforward_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7278,7 +7454,7 @@ func (x *AdminOverviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminOverviewRequest.ProtoReflect.Descriptor instead.
 func (*AdminOverviewRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{93}
+	return file_autoforward_proto_rawDescGZIP(), []int{95}
 }
 
 type AdminOverviewResponse struct {
@@ -7296,7 +7472,7 @@ type AdminOverviewResponse struct {
 
 func (x *AdminOverviewResponse) Reset() {
 	*x = AdminOverviewResponse{}
-	mi := &file_autoforward_proto_msgTypes[94]
+	mi := &file_autoforward_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7308,7 +7484,7 @@ func (x *AdminOverviewResponse) String() string {
 func (*AdminOverviewResponse) ProtoMessage() {}
 
 func (x *AdminOverviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[94]
+	mi := &file_autoforward_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7321,7 +7497,7 @@ func (x *AdminOverviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminOverviewResponse.ProtoReflect.Descriptor instead.
 func (*AdminOverviewResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{94}
+	return file_autoforward_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *AdminOverviewResponse) GetCoreOnline() bool {
@@ -7388,7 +7564,7 @@ type AdminUser struct {
 
 func (x *AdminUser) Reset() {
 	*x = AdminUser{}
-	mi := &file_autoforward_proto_msgTypes[95]
+	mi := &file_autoforward_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7400,7 +7576,7 @@ func (x *AdminUser) String() string {
 func (*AdminUser) ProtoMessage() {}
 
 func (x *AdminUser) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[95]
+	mi := &file_autoforward_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7413,7 +7589,7 @@ func (x *AdminUser) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminUser.ProtoReflect.Descriptor instead.
 func (*AdminUser) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{95}
+	return file_autoforward_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *AdminUser) GetUserId() int64 {
@@ -7475,7 +7651,7 @@ type AdminListUsersRequest struct {
 
 func (x *AdminListUsersRequest) Reset() {
 	*x = AdminListUsersRequest{}
-	mi := &file_autoforward_proto_msgTypes[96]
+	mi := &file_autoforward_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7487,7 +7663,7 @@ func (x *AdminListUsersRequest) String() string {
 func (*AdminListUsersRequest) ProtoMessage() {}
 
 func (x *AdminListUsersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[96]
+	mi := &file_autoforward_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7500,7 +7676,7 @@ func (x *AdminListUsersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListUsersRequest.ProtoReflect.Descriptor instead.
 func (*AdminListUsersRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{96}
+	return file_autoforward_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *AdminListUsersRequest) GetLimit() int32 {
@@ -7527,7 +7703,7 @@ type AdminListUsersResponse struct {
 
 func (x *AdminListUsersResponse) Reset() {
 	*x = AdminListUsersResponse{}
-	mi := &file_autoforward_proto_msgTypes[97]
+	mi := &file_autoforward_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7539,7 +7715,7 @@ func (x *AdminListUsersResponse) String() string {
 func (*AdminListUsersResponse) ProtoMessage() {}
 
 func (x *AdminListUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[97]
+	mi := &file_autoforward_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7552,7 +7728,7 @@ func (x *AdminListUsersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListUsersResponse.ProtoReflect.Descriptor instead.
 func (*AdminListUsersResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{97}
+	return file_autoforward_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *AdminListUsersResponse) GetUsers() []*AdminUser {
@@ -7579,7 +7755,7 @@ type AdminSetUserStatusRequest struct {
 
 func (x *AdminSetUserStatusRequest) Reset() {
 	*x = AdminSetUserStatusRequest{}
-	mi := &file_autoforward_proto_msgTypes[98]
+	mi := &file_autoforward_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7591,7 +7767,7 @@ func (x *AdminSetUserStatusRequest) String() string {
 func (*AdminSetUserStatusRequest) ProtoMessage() {}
 
 func (x *AdminSetUserStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[98]
+	mi := &file_autoforward_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7604,7 +7780,7 @@ func (x *AdminSetUserStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminSetUserStatusRequest.ProtoReflect.Descriptor instead.
 func (*AdminSetUserStatusRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{98}
+	return file_autoforward_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *AdminSetUserStatusRequest) GetUserId() int64 {
@@ -7632,7 +7808,7 @@ type AdminBroadcastRequest struct {
 
 func (x *AdminBroadcastRequest) Reset() {
 	*x = AdminBroadcastRequest{}
-	mi := &file_autoforward_proto_msgTypes[99]
+	mi := &file_autoforward_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7644,7 +7820,7 @@ func (x *AdminBroadcastRequest) String() string {
 func (*AdminBroadcastRequest) ProtoMessage() {}
 
 func (x *AdminBroadcastRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[99]
+	mi := &file_autoforward_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7657,7 +7833,7 @@ func (x *AdminBroadcastRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminBroadcastRequest.ProtoReflect.Descriptor instead.
 func (*AdminBroadcastRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{99}
+	return file_autoforward_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *AdminBroadcastRequest) GetInitiatorUserId() int64 {
@@ -7693,7 +7869,7 @@ type AdminBroadcastResponse struct {
 
 func (x *AdminBroadcastResponse) Reset() {
 	*x = AdminBroadcastResponse{}
-	mi := &file_autoforward_proto_msgTypes[100]
+	mi := &file_autoforward_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7705,7 +7881,7 @@ func (x *AdminBroadcastResponse) String() string {
 func (*AdminBroadcastResponse) ProtoMessage() {}
 
 func (x *AdminBroadcastResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[100]
+	mi := &file_autoforward_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7718,7 +7894,7 @@ func (x *AdminBroadcastResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminBroadcastResponse.ProtoReflect.Descriptor instead.
 func (*AdminBroadcastResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{100}
+	return file_autoforward_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *AdminBroadcastResponse) GetSuccess() bool {
@@ -7757,7 +7933,7 @@ type AdminGetSettingsRequest struct {
 
 func (x *AdminGetSettingsRequest) Reset() {
 	*x = AdminGetSettingsRequest{}
-	mi := &file_autoforward_proto_msgTypes[101]
+	mi := &file_autoforward_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7769,7 +7945,7 @@ func (x *AdminGetSettingsRequest) String() string {
 func (*AdminGetSettingsRequest) ProtoMessage() {}
 
 func (x *AdminGetSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[101]
+	mi := &file_autoforward_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7782,7 +7958,7 @@ func (x *AdminGetSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminGetSettingsRequest.ProtoReflect.Descriptor instead.
 func (*AdminGetSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{101}
+	return file_autoforward_proto_rawDescGZIP(), []int{103}
 }
 
 type AdminSettingsResponse struct {
@@ -7797,7 +7973,7 @@ type AdminSettingsResponse struct {
 
 func (x *AdminSettingsResponse) Reset() {
 	*x = AdminSettingsResponse{}
-	mi := &file_autoforward_proto_msgTypes[102]
+	mi := &file_autoforward_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7809,7 +7985,7 @@ func (x *AdminSettingsResponse) String() string {
 func (*AdminSettingsResponse) ProtoMessage() {}
 
 func (x *AdminSettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[102]
+	mi := &file_autoforward_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7822,7 +7998,7 @@ func (x *AdminSettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminSettingsResponse.ProtoReflect.Descriptor instead.
 func (*AdminSettingsResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{102}
+	return file_autoforward_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *AdminSettingsResponse) GetForceSubEnabled() bool {
@@ -7865,7 +8041,7 @@ type AdminSaveSettingsRequest struct {
 
 func (x *AdminSaveSettingsRequest) Reset() {
 	*x = AdminSaveSettingsRequest{}
-	mi := &file_autoforward_proto_msgTypes[103]
+	mi := &file_autoforward_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7877,7 +8053,7 @@ func (x *AdminSaveSettingsRequest) String() string {
 func (*AdminSaveSettingsRequest) ProtoMessage() {}
 
 func (x *AdminSaveSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[103]
+	mi := &file_autoforward_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7890,7 +8066,7 @@ func (x *AdminSaveSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminSaveSettingsRequest.ProtoReflect.Descriptor instead.
 func (*AdminSaveSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{103}
+	return file_autoforward_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *AdminSaveSettingsRequest) GetForceSubEnabled() bool {
@@ -7933,7 +8109,7 @@ type AdminAdministrator struct {
 
 func (x *AdminAdministrator) Reset() {
 	*x = AdminAdministrator{}
-	mi := &file_autoforward_proto_msgTypes[104]
+	mi := &file_autoforward_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7945,7 +8121,7 @@ func (x *AdminAdministrator) String() string {
 func (*AdminAdministrator) ProtoMessage() {}
 
 func (x *AdminAdministrator) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[104]
+	mi := &file_autoforward_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7958,7 +8134,7 @@ func (x *AdminAdministrator) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminAdministrator.ProtoReflect.Descriptor instead.
 func (*AdminAdministrator) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{104}
+	return file_autoforward_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *AdminAdministrator) GetUserId() int64 {
@@ -7997,7 +8173,7 @@ type AdminListAdminsRequest struct {
 
 func (x *AdminListAdminsRequest) Reset() {
 	*x = AdminListAdminsRequest{}
-	mi := &file_autoforward_proto_msgTypes[105]
+	mi := &file_autoforward_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8009,7 +8185,7 @@ func (x *AdminListAdminsRequest) String() string {
 func (*AdminListAdminsRequest) ProtoMessage() {}
 
 func (x *AdminListAdminsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[105]
+	mi := &file_autoforward_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8022,7 +8198,7 @@ func (x *AdminListAdminsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListAdminsRequest.ProtoReflect.Descriptor instead.
 func (*AdminListAdminsRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{105}
+	return file_autoforward_proto_rawDescGZIP(), []int{107}
 }
 
 type AdminListAdminsResponse struct {
@@ -8034,7 +8210,7 @@ type AdminListAdminsResponse struct {
 
 func (x *AdminListAdminsResponse) Reset() {
 	*x = AdminListAdminsResponse{}
-	mi := &file_autoforward_proto_msgTypes[106]
+	mi := &file_autoforward_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8046,7 +8222,7 @@ func (x *AdminListAdminsResponse) String() string {
 func (*AdminListAdminsResponse) ProtoMessage() {}
 
 func (x *AdminListAdminsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[106]
+	mi := &file_autoforward_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8059,7 +8235,7 @@ func (x *AdminListAdminsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminListAdminsResponse.ProtoReflect.Descriptor instead.
 func (*AdminListAdminsResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{106}
+	return file_autoforward_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *AdminListAdminsResponse) GetAdmins() []*AdminAdministrator {
@@ -8079,7 +8255,7 @@ type AdminAddAdminRequest struct {
 
 func (x *AdminAddAdminRequest) Reset() {
 	*x = AdminAddAdminRequest{}
-	mi := &file_autoforward_proto_msgTypes[107]
+	mi := &file_autoforward_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8091,7 +8267,7 @@ func (x *AdminAddAdminRequest) String() string {
 func (*AdminAddAdminRequest) ProtoMessage() {}
 
 func (x *AdminAddAdminRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[107]
+	mi := &file_autoforward_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8104,7 +8280,7 @@ func (x *AdminAddAdminRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminAddAdminRequest.ProtoReflect.Descriptor instead.
 func (*AdminAddAdminRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{107}
+	return file_autoforward_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *AdminAddAdminRequest) GetUserId() int64 {
@@ -8131,7 +8307,7 @@ type AdminRemoveAdminRequest struct {
 
 func (x *AdminRemoveAdminRequest) Reset() {
 	*x = AdminRemoveAdminRequest{}
-	mi := &file_autoforward_proto_msgTypes[108]
+	mi := &file_autoforward_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8143,7 +8319,7 @@ func (x *AdminRemoveAdminRequest) String() string {
 func (*AdminRemoveAdminRequest) ProtoMessage() {}
 
 func (x *AdminRemoveAdminRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[108]
+	mi := &file_autoforward_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8156,7 +8332,7 @@ func (x *AdminRemoveAdminRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminRemoveAdminRequest.ProtoReflect.Descriptor instead.
 func (*AdminRemoveAdminRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{108}
+	return file_autoforward_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *AdminRemoveAdminRequest) GetUserId() int64 {
@@ -8182,7 +8358,7 @@ type ClientSettingsRequest struct {
 
 func (x *ClientSettingsRequest) Reset() {
 	*x = ClientSettingsRequest{}
-	mi := &file_autoforward_proto_msgTypes[109]
+	mi := &file_autoforward_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8194,7 +8370,7 @@ func (x *ClientSettingsRequest) String() string {
 func (*ClientSettingsRequest) ProtoMessage() {}
 
 func (x *ClientSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[109]
+	mi := &file_autoforward_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8207,7 +8383,7 @@ func (x *ClientSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientSettingsRequest.ProtoReflect.Descriptor instead.
 func (*ClientSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{109}
+	return file_autoforward_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *ClientSettingsRequest) GetUserId() int64 {
@@ -8232,7 +8408,7 @@ type ClientSettingsResponse struct {
 
 func (x *ClientSettingsResponse) Reset() {
 	*x = ClientSettingsResponse{}
-	mi := &file_autoforward_proto_msgTypes[110]
+	mi := &file_autoforward_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8244,7 +8420,7 @@ func (x *ClientSettingsResponse) String() string {
 func (*ClientSettingsResponse) ProtoMessage() {}
 
 func (x *ClientSettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[110]
+	mi := &file_autoforward_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8257,7 +8433,7 @@ func (x *ClientSettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientSettingsResponse.ProtoReflect.Descriptor instead.
 func (*ClientSettingsResponse) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{110}
+	return file_autoforward_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *ClientSettingsResponse) GetUserId() int64 {
@@ -8320,7 +8496,7 @@ type ClientSaveCredentialsRequest struct {
 
 func (x *ClientSaveCredentialsRequest) Reset() {
 	*x = ClientSaveCredentialsRequest{}
-	mi := &file_autoforward_proto_msgTypes[111]
+	mi := &file_autoforward_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8332,7 +8508,7 @@ func (x *ClientSaveCredentialsRequest) String() string {
 func (*ClientSaveCredentialsRequest) ProtoMessage() {}
 
 func (x *ClientSaveCredentialsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_autoforward_proto_msgTypes[111]
+	mi := &file_autoforward_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8345,7 +8521,7 @@ func (x *ClientSaveCredentialsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientSaveCredentialsRequest.ProtoReflect.Descriptor instead.
 func (*ClientSaveCredentialsRequest) Descriptor() ([]byte, []int) {
-	return file_autoforward_proto_rawDescGZIP(), []int{111}
+	return file_autoforward_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *ClientSaveCredentialsRequest) GetUserId() int64 {
@@ -8718,7 +8894,22 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x18total_messages_rewritten\x18\b \x01(\x03R\x16totalMessagesRewritten\x12!\n" +
 	"\fbot_username\x18\t \x01(\tR\vbotUsername\x12\x18\n" +
 	"\aversion\x18\n" +
-	" \x01(\tR\aversion\"\xf1\x01\n" +
+	" \x01(\tR\aversion\"\x12\n" +
+	"\x10LogPolicyRequest\"\x80\x04\n" +
+	"\x11LogPolicyResponse\x12\x1c\n" +
+	"\tavailable\x18\x01 \x01(\bR\tavailable\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x12+\n" +
+	"\x11configured_levels\x18\x03 \x03(\tR\x10configuredLevels\x12)\n" +
+	"\x10effective_levels\x18\x04 \x03(\tR\x0feffectiveLevels\x12+\n" +
+	"\x11diagnostic_active\x18\x05 \x01(\bR\x10diagnosticActive\x12)\n" +
+	"\x10diagnostic_until\x18\x06 \x01(\x03R\x0fdiagnosticUntil\x125\n" +
+	"\x17verbose_rate_per_second\x18\a \x01(\x01R\x14verboseRatePerSecond\x12\x18\n" +
+	"\aemitted\x18\b \x01(\x03R\aemitted\x12)\n" +
+	"\x10emitted_security\x18\t \x01(\x03R\x0femittedSecurity\x12)\n" +
+	"\x10suppressed_level\x18\n" +
+	" \x01(\x03R\x0fsuppressedLevel\x12'\n" +
+	"\x0fsuppressed_rate\x18\v \x01(\x03R\x0esuppressedRate\x125\n" +
+	"\x16diagnostic_activations\x18\f \x01(\x03R\x15diagnosticActivations\"\xf1\x01\n" +
 	"\bLogEntry\x12\x0e\n" +
 	"\x02ts\x18\x01 \x01(\x03R\x02ts\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x12\x18\n" +
@@ -9168,9 +9359,10 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x12SavePromptTemplate\x12&.autoforward.SavePromptTemplateRequest\x1a\x1b.autoforward.PromptTemplate\x12]\n" +
 	"\x14DeletePromptTemplate\x12(.autoforward.DeletePromptTemplateRequest\x1a\x1b.autoforward.StatusResponse\x12M\n" +
 	"\n" +
-	"TestPrompt\x12\x1e.autoforward.TestPromptRequest\x1a\x1f.autoforward.TestPromptResponse2q\n" +
+	"TestPrompt\x12\x1e.autoforward.TestPromptRequest\x1a\x1f.autoforward.TestPromptResponse2\xc0\x01\n" +
 	"\x1aSystemStatusControlService\x12S\n" +
-	"\x0eGetSystemStats\x12\x1f.autoforward.SystemStatsRequest\x1a .autoforward.SystemStatsResponse2v\n" +
+	"\x0eGetSystemStats\x12\x1f.autoforward.SystemStatsRequest\x1a .autoforward.SystemStatsResponse\x12M\n" +
+	"\fGetLogPolicy\x12\x1d.autoforward.LogPolicyRequest\x1a\x1e.autoforward.LogPolicyResponse2v\n" +
 	"\x13AuditControlService\x12_\n" +
 	"\x10QueryAuditEvents\x12$.autoforward.QueryAuditEventsRequest\x1a%.autoforward.QueryAuditEventsResponse2\xb1\x02\n" +
 	"\x11LogControlService\x12;\n" +
@@ -9216,7 +9408,7 @@ func file_autoforward_proto_rawDescGZIP() []byte {
 }
 
 var file_autoforward_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_autoforward_proto_msgTypes = make([]protoimpl.MessageInfo, 118)
+var file_autoforward_proto_msgTypes = make([]protoimpl.MessageInfo, 120)
 var file_autoforward_proto_goTypes = []any{
 	(RoutingType)(0),                     // 0: autoforward.RoutingType
 	(ForwardMode)(0),                     // 1: autoforward.ForwardMode
@@ -9274,70 +9466,72 @@ var file_autoforward_proto_goTypes = []any{
 	(*TestPromptResponse)(nil),           // 53: autoforward.TestPromptResponse
 	(*SystemStatsRequest)(nil),           // 54: autoforward.SystemStatsRequest
 	(*SystemStatsResponse)(nil),          // 55: autoforward.SystemStatsResponse
-	(*LogEntry)(nil),                     // 56: autoforward.LogEntry
-	(*LogRequest)(nil),                   // 57: autoforward.LogRequest
-	(*QueryLogsRequest)(nil),             // 58: autoforward.QueryLogsRequest
-	(*PurgeLogsRequest)(nil),             // 59: autoforward.PurgeLogsRequest
-	(*PurgeLogsResponse)(nil),            // 60: autoforward.PurgeLogsResponse
-	(*QueryLogsResponse)(nil),            // 61: autoforward.QueryLogsResponse
-	(*LogStatsRequest)(nil),              // 62: autoforward.LogStatsRequest
-	(*LogStatsResponse)(nil),             // 63: autoforward.LogStatsResponse
-	(*TestRuleRequest)(nil),              // 64: autoforward.TestRuleRequest
-	(*TestRuleResponse)(nil),             // 65: autoforward.TestRuleResponse
-	(*ListDeadLetterRequest)(nil),        // 66: autoforward.ListDeadLetterRequest
-	(*DeadLetterEntry)(nil),              // 67: autoforward.DeadLetterEntry
-	(*ListDeadLetterResponse)(nil),       // 68: autoforward.ListDeadLetterResponse
-	(*ReplayDeadLetterRequest)(nil),      // 69: autoforward.ReplayDeadLetterRequest
-	(*PurgeDeadLetterRequest)(nil),       // 70: autoforward.PurgeDeadLetterRequest
-	(*DeliveryStatsRequest)(nil),         // 71: autoforward.DeliveryStatsRequest
-	(*DeliveryStatsResponse)(nil),        // 72: autoforward.DeliveryStatsResponse
-	(*RuleLiveStat)(nil),                 // 73: autoforward.RuleLiveStat
-	(*RecentError)(nil),                  // 74: autoforward.RecentError
-	(*PauseRuleRequest)(nil),             // 75: autoforward.PauseRuleRequest
-	(*RuleActionResponse)(nil),           // 76: autoforward.RuleActionResponse
-	(*QueryAuditEventsRequest)(nil),      // 77: autoforward.QueryAuditEventsRequest
-	(*AuditEventEntry)(nil),              // 78: autoforward.AuditEventEntry
-	(*QueryAuditEventsResponse)(nil),     // 79: autoforward.QueryAuditEventsResponse
-	(*BackupExportRequest)(nil),          // 80: autoforward.BackupExportRequest
-	(*BackupExportResponse)(nil),         // 81: autoforward.BackupExportResponse
-	(*BackupImportRequest)(nil),          // 82: autoforward.BackupImportRequest
-	(*BackupImportResponse)(nil),         // 83: autoforward.BackupImportResponse
-	(*EntityImportStats)(nil),            // 84: autoforward.EntityImportStats
-	(*WebAccount)(nil),                   // 85: autoforward.WebAccount
-	(*RegisterAccountRequest)(nil),       // 86: autoforward.RegisterAccountRequest
-	(*RegisterAccountResponse)(nil),      // 87: autoforward.RegisterAccountResponse
-	(*LoginAccountRequest)(nil),          // 88: autoforward.LoginAccountRequest
-	(*LoginAccountResponse)(nil),         // 89: autoforward.LoginAccountResponse
-	(*ValidateTokenRequest)(nil),         // 90: autoforward.ValidateTokenRequest
-	(*ValidateTokenResponse)(nil),        // 91: autoforward.ValidateTokenResponse
-	(*IssueWebTokenRequest)(nil),         // 92: autoforward.IssueWebTokenRequest
-	(*ChangePasswordRequest)(nil),        // 93: autoforward.ChangePasswordRequest
-	(*GetAccountRequest)(nil),            // 94: autoforward.GetAccountRequest
-	(*AdminOverviewRequest)(nil),         // 95: autoforward.AdminOverviewRequest
-	(*AdminOverviewResponse)(nil),        // 96: autoforward.AdminOverviewResponse
-	(*AdminUser)(nil),                    // 97: autoforward.AdminUser
-	(*AdminListUsersRequest)(nil),        // 98: autoforward.AdminListUsersRequest
-	(*AdminListUsersResponse)(nil),       // 99: autoforward.AdminListUsersResponse
-	(*AdminSetUserStatusRequest)(nil),    // 100: autoforward.AdminSetUserStatusRequest
-	(*AdminBroadcastRequest)(nil),        // 101: autoforward.AdminBroadcastRequest
-	(*AdminBroadcastResponse)(nil),       // 102: autoforward.AdminBroadcastResponse
-	(*AdminGetSettingsRequest)(nil),      // 103: autoforward.AdminGetSettingsRequest
-	(*AdminSettingsResponse)(nil),        // 104: autoforward.AdminSettingsResponse
-	(*AdminSaveSettingsRequest)(nil),     // 105: autoforward.AdminSaveSettingsRequest
-	(*AdminAdministrator)(nil),           // 106: autoforward.AdminAdministrator
-	(*AdminListAdminsRequest)(nil),       // 107: autoforward.AdminListAdminsRequest
-	(*AdminListAdminsResponse)(nil),      // 108: autoforward.AdminListAdminsResponse
-	(*AdminAddAdminRequest)(nil),         // 109: autoforward.AdminAddAdminRequest
-	(*AdminRemoveAdminRequest)(nil),      // 110: autoforward.AdminRemoveAdminRequest
-	(*ClientSettingsRequest)(nil),        // 111: autoforward.ClientSettingsRequest
-	(*ClientSettingsResponse)(nil),       // 112: autoforward.ClientSettingsResponse
-	(*ClientSaveCredentialsRequest)(nil), // 113: autoforward.ClientSaveCredentialsRequest
-	nil,                                  // 114: autoforward.LogStatsResponse.ByLevelEntry
-	nil,                                  // 115: autoforward.LogStatsResponse.ByCategoryEntry
-	nil,                                  // 116: autoforward.LogStatsResponse.ByRuleEntry
-	nil,                                  // 117: autoforward.LogStatsResponse.ByServiceEntry
-	nil,                                  // 118: autoforward.BackupExportResponse.CountsEntry
-	nil,                                  // 119: autoforward.BackupImportResponse.StatsEntry
+	(*LogPolicyRequest)(nil),             // 56: autoforward.LogPolicyRequest
+	(*LogPolicyResponse)(nil),            // 57: autoforward.LogPolicyResponse
+	(*LogEntry)(nil),                     // 58: autoforward.LogEntry
+	(*LogRequest)(nil),                   // 59: autoforward.LogRequest
+	(*QueryLogsRequest)(nil),             // 60: autoforward.QueryLogsRequest
+	(*PurgeLogsRequest)(nil),             // 61: autoforward.PurgeLogsRequest
+	(*PurgeLogsResponse)(nil),            // 62: autoforward.PurgeLogsResponse
+	(*QueryLogsResponse)(nil),            // 63: autoforward.QueryLogsResponse
+	(*LogStatsRequest)(nil),              // 64: autoforward.LogStatsRequest
+	(*LogStatsResponse)(nil),             // 65: autoforward.LogStatsResponse
+	(*TestRuleRequest)(nil),              // 66: autoforward.TestRuleRequest
+	(*TestRuleResponse)(nil),             // 67: autoforward.TestRuleResponse
+	(*ListDeadLetterRequest)(nil),        // 68: autoforward.ListDeadLetterRequest
+	(*DeadLetterEntry)(nil),              // 69: autoforward.DeadLetterEntry
+	(*ListDeadLetterResponse)(nil),       // 70: autoforward.ListDeadLetterResponse
+	(*ReplayDeadLetterRequest)(nil),      // 71: autoforward.ReplayDeadLetterRequest
+	(*PurgeDeadLetterRequest)(nil),       // 72: autoforward.PurgeDeadLetterRequest
+	(*DeliveryStatsRequest)(nil),         // 73: autoforward.DeliveryStatsRequest
+	(*DeliveryStatsResponse)(nil),        // 74: autoforward.DeliveryStatsResponse
+	(*RuleLiveStat)(nil),                 // 75: autoforward.RuleLiveStat
+	(*RecentError)(nil),                  // 76: autoforward.RecentError
+	(*PauseRuleRequest)(nil),             // 77: autoforward.PauseRuleRequest
+	(*RuleActionResponse)(nil),           // 78: autoforward.RuleActionResponse
+	(*QueryAuditEventsRequest)(nil),      // 79: autoforward.QueryAuditEventsRequest
+	(*AuditEventEntry)(nil),              // 80: autoforward.AuditEventEntry
+	(*QueryAuditEventsResponse)(nil),     // 81: autoforward.QueryAuditEventsResponse
+	(*BackupExportRequest)(nil),          // 82: autoforward.BackupExportRequest
+	(*BackupExportResponse)(nil),         // 83: autoforward.BackupExportResponse
+	(*BackupImportRequest)(nil),          // 84: autoforward.BackupImportRequest
+	(*BackupImportResponse)(nil),         // 85: autoforward.BackupImportResponse
+	(*EntityImportStats)(nil),            // 86: autoforward.EntityImportStats
+	(*WebAccount)(nil),                   // 87: autoforward.WebAccount
+	(*RegisterAccountRequest)(nil),       // 88: autoforward.RegisterAccountRequest
+	(*RegisterAccountResponse)(nil),      // 89: autoforward.RegisterAccountResponse
+	(*LoginAccountRequest)(nil),          // 90: autoforward.LoginAccountRequest
+	(*LoginAccountResponse)(nil),         // 91: autoforward.LoginAccountResponse
+	(*ValidateTokenRequest)(nil),         // 92: autoforward.ValidateTokenRequest
+	(*ValidateTokenResponse)(nil),        // 93: autoforward.ValidateTokenResponse
+	(*IssueWebTokenRequest)(nil),         // 94: autoforward.IssueWebTokenRequest
+	(*ChangePasswordRequest)(nil),        // 95: autoforward.ChangePasswordRequest
+	(*GetAccountRequest)(nil),            // 96: autoforward.GetAccountRequest
+	(*AdminOverviewRequest)(nil),         // 97: autoforward.AdminOverviewRequest
+	(*AdminOverviewResponse)(nil),        // 98: autoforward.AdminOverviewResponse
+	(*AdminUser)(nil),                    // 99: autoforward.AdminUser
+	(*AdminListUsersRequest)(nil),        // 100: autoforward.AdminListUsersRequest
+	(*AdminListUsersResponse)(nil),       // 101: autoforward.AdminListUsersResponse
+	(*AdminSetUserStatusRequest)(nil),    // 102: autoforward.AdminSetUserStatusRequest
+	(*AdminBroadcastRequest)(nil),        // 103: autoforward.AdminBroadcastRequest
+	(*AdminBroadcastResponse)(nil),       // 104: autoforward.AdminBroadcastResponse
+	(*AdminGetSettingsRequest)(nil),      // 105: autoforward.AdminGetSettingsRequest
+	(*AdminSettingsResponse)(nil),        // 106: autoforward.AdminSettingsResponse
+	(*AdminSaveSettingsRequest)(nil),     // 107: autoforward.AdminSaveSettingsRequest
+	(*AdminAdministrator)(nil),           // 108: autoforward.AdminAdministrator
+	(*AdminListAdminsRequest)(nil),       // 109: autoforward.AdminListAdminsRequest
+	(*AdminListAdminsResponse)(nil),      // 110: autoforward.AdminListAdminsResponse
+	(*AdminAddAdminRequest)(nil),         // 111: autoforward.AdminAddAdminRequest
+	(*AdminRemoveAdminRequest)(nil),      // 112: autoforward.AdminRemoveAdminRequest
+	(*ClientSettingsRequest)(nil),        // 113: autoforward.ClientSettingsRequest
+	(*ClientSettingsResponse)(nil),       // 114: autoforward.ClientSettingsResponse
+	(*ClientSaveCredentialsRequest)(nil), // 115: autoforward.ClientSaveCredentialsRequest
+	nil,                                  // 116: autoforward.LogStatsResponse.ByLevelEntry
+	nil,                                  // 117: autoforward.LogStatsResponse.ByCategoryEntry
+	nil,                                  // 118: autoforward.LogStatsResponse.ByRuleEntry
+	nil,                                  // 119: autoforward.LogStatsResponse.ByServiceEntry
+	nil,                                  // 120: autoforward.BackupExportResponse.CountsEntry
+	nil,                                  // 121: autoforward.BackupImportResponse.StatsEntry
 }
 var file_autoforward_proto_depIdxs = []int32{
 	3,   // 0: autoforward.ListSessionsResponse.sessions:type_name -> autoforward.SessionInfo
@@ -9356,23 +9550,23 @@ var file_autoforward_proto_depIdxs = []int32{
 	39,  // 13: autoforward.ListAIConfigsResponse.configs:type_name -> autoforward.AIConfig
 	47,  // 14: autoforward.ListPromptTemplatesResponse.templates:type_name -> autoforward.PromptTemplate
 	47,  // 15: autoforward.SavePromptTemplateRequest.template:type_name -> autoforward.PromptTemplate
-	56,  // 16: autoforward.LogRequest.entry:type_name -> autoforward.LogEntry
-	56,  // 17: autoforward.QueryLogsResponse.logs:type_name -> autoforward.LogEntry
-	114, // 18: autoforward.LogStatsResponse.by_level:type_name -> autoforward.LogStatsResponse.ByLevelEntry
-	115, // 19: autoforward.LogStatsResponse.by_category:type_name -> autoforward.LogStatsResponse.ByCategoryEntry
-	116, // 20: autoforward.LogStatsResponse.by_rule:type_name -> autoforward.LogStatsResponse.ByRuleEntry
-	117, // 21: autoforward.LogStatsResponse.by_service:type_name -> autoforward.LogStatsResponse.ByServiceEntry
-	67,  // 22: autoforward.ListDeadLetterResponse.entries:type_name -> autoforward.DeadLetterEntry
-	73,  // 23: autoforward.DeliveryStatsResponse.rules:type_name -> autoforward.RuleLiveStat
-	74,  // 24: autoforward.DeliveryStatsResponse.errors:type_name -> autoforward.RecentError
-	78,  // 25: autoforward.QueryAuditEventsResponse.events:type_name -> autoforward.AuditEventEntry
-	118, // 26: autoforward.BackupExportResponse.counts:type_name -> autoforward.BackupExportResponse.CountsEntry
-	119, // 27: autoforward.BackupImportResponse.stats:type_name -> autoforward.BackupImportResponse.StatsEntry
-	85,  // 28: autoforward.RegisterAccountResponse.account:type_name -> autoforward.WebAccount
-	85,  // 29: autoforward.LoginAccountResponse.account:type_name -> autoforward.WebAccount
-	97,  // 30: autoforward.AdminListUsersResponse.users:type_name -> autoforward.AdminUser
-	106, // 31: autoforward.AdminListAdminsResponse.admins:type_name -> autoforward.AdminAdministrator
-	84,  // 32: autoforward.BackupImportResponse.StatsEntry.value:type_name -> autoforward.EntityImportStats
+	58,  // 16: autoforward.LogRequest.entry:type_name -> autoforward.LogEntry
+	58,  // 17: autoforward.QueryLogsResponse.logs:type_name -> autoforward.LogEntry
+	116, // 18: autoforward.LogStatsResponse.by_level:type_name -> autoforward.LogStatsResponse.ByLevelEntry
+	117, // 19: autoforward.LogStatsResponse.by_category:type_name -> autoforward.LogStatsResponse.ByCategoryEntry
+	118, // 20: autoforward.LogStatsResponse.by_rule:type_name -> autoforward.LogStatsResponse.ByRuleEntry
+	119, // 21: autoforward.LogStatsResponse.by_service:type_name -> autoforward.LogStatsResponse.ByServiceEntry
+	69,  // 22: autoforward.ListDeadLetterResponse.entries:type_name -> autoforward.DeadLetterEntry
+	75,  // 23: autoforward.DeliveryStatsResponse.rules:type_name -> autoforward.RuleLiveStat
+	76,  // 24: autoforward.DeliveryStatsResponse.errors:type_name -> autoforward.RecentError
+	80,  // 25: autoforward.QueryAuditEventsResponse.events:type_name -> autoforward.AuditEventEntry
+	120, // 26: autoforward.BackupExportResponse.counts:type_name -> autoforward.BackupExportResponse.CountsEntry
+	121, // 27: autoforward.BackupImportResponse.stats:type_name -> autoforward.BackupImportResponse.StatsEntry
+	87,  // 28: autoforward.RegisterAccountResponse.account:type_name -> autoforward.WebAccount
+	87,  // 29: autoforward.LoginAccountResponse.account:type_name -> autoforward.WebAccount
+	99,  // 30: autoforward.AdminListUsersResponse.users:type_name -> autoforward.AdminUser
+	108, // 31: autoforward.AdminListAdminsResponse.admins:type_name -> autoforward.AdminAdministrator
+	86,  // 32: autoforward.BackupImportResponse.StatsEntry.value:type_name -> autoforward.EntityImportStats
 	4,   // 33: autoforward.SessionControlService.ListSessions:input_type -> autoforward.ListSessionsRequest
 	6,   // 34: autoforward.SessionControlService.StartLogin:input_type -> autoforward.StartLoginRequest
 	8,   // 35: autoforward.SessionControlService.SubmitCode:input_type -> autoforward.SubmitCodeRequest
@@ -9387,16 +9581,16 @@ var file_autoforward_proto_depIdxs = []int32{
 	18,  // 44: autoforward.ForwardRuleControlService.CreateRule:input_type -> autoforward.CreateRuleRequest
 	24,  // 45: autoforward.ForwardRuleControlService.UpdateRule:input_type -> autoforward.UpdateRuleRequest
 	29,  // 46: autoforward.ForwardRuleControlService.DeleteRule:input_type -> autoforward.DeleteRuleRequest
-	64,  // 47: autoforward.ForwardRuleControlService.TestRule:input_type -> autoforward.TestRuleRequest
-	75,  // 48: autoforward.ForwardRuleControlService.PauseRule:input_type -> autoforward.PauseRuleRequest
-	75,  // 49: autoforward.ForwardRuleControlService.ResumeRule:input_type -> autoforward.PauseRuleRequest
+	66,  // 47: autoforward.ForwardRuleControlService.TestRule:input_type -> autoforward.TestRuleRequest
+	77,  // 48: autoforward.ForwardRuleControlService.PauseRule:input_type -> autoforward.PauseRuleRequest
+	77,  // 49: autoforward.ForwardRuleControlService.ResumeRule:input_type -> autoforward.PauseRuleRequest
 	25,  // 50: autoforward.ForwardRuleControlService.GetRuleSettings:input_type -> autoforward.RuleSettingsRequest
 	27,  // 51: autoforward.ForwardRuleControlService.UpdateRuleSettings:input_type -> autoforward.UpdateRuleSettingsRequest
 	28,  // 52: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:input_type -> autoforward.RuleSettingsSchemaRequest
-	71,  // 53: autoforward.DeliveryControlService.GetDeliveryStats:input_type -> autoforward.DeliveryStatsRequest
-	66,  // 54: autoforward.DeliveryControlService.ListDeadLetter:input_type -> autoforward.ListDeadLetterRequest
-	69,  // 55: autoforward.DeliveryControlService.ReplayDeadLetter:input_type -> autoforward.ReplayDeadLetterRequest
-	70,  // 56: autoforward.DeliveryControlService.PurgeDeadLetter:input_type -> autoforward.PurgeDeadLetterRequest
+	73,  // 53: autoforward.DeliveryControlService.GetDeliveryStats:input_type -> autoforward.DeliveryStatsRequest
+	68,  // 54: autoforward.DeliveryControlService.ListDeadLetter:input_type -> autoforward.ListDeadLetterRequest
+	71,  // 55: autoforward.DeliveryControlService.ReplayDeadLetter:input_type -> autoforward.ReplayDeadLetterRequest
+	72,  // 56: autoforward.DeliveryControlService.PurgeDeadLetter:input_type -> autoforward.PurgeDeadLetterRequest
 	37,  // 57: autoforward.FilterControlService.ListFilters:input_type -> autoforward.ListFiltersRequest
 	34,  // 58: autoforward.FilterControlService.CreateFilter:input_type -> autoforward.CreateFilterRequest
 	35,  // 59: autoforward.FilterControlService.UpdateFilter:input_type -> autoforward.UpdateFilterRequest
@@ -9411,94 +9605,96 @@ var file_autoforward_proto_depIdxs = []int32{
 	51,  // 68: autoforward.AIControlService.DeletePromptTemplate:input_type -> autoforward.DeletePromptTemplateRequest
 	52,  // 69: autoforward.AIControlService.TestPrompt:input_type -> autoforward.TestPromptRequest
 	54,  // 70: autoforward.SystemStatusControlService.GetSystemStats:input_type -> autoforward.SystemStatsRequest
-	77,  // 71: autoforward.AuditControlService.QueryAuditEvents:input_type -> autoforward.QueryAuditEventsRequest
-	57,  // 72: autoforward.LogControlService.Log:input_type -> autoforward.LogRequest
-	58,  // 73: autoforward.LogControlService.QueryLogs:input_type -> autoforward.QueryLogsRequest
-	62,  // 74: autoforward.LogControlService.LogStats:input_type -> autoforward.LogStatsRequest
-	59,  // 75: autoforward.LogControlService.PurgeLogs:input_type -> autoforward.PurgeLogsRequest
-	80,  // 76: autoforward.BackupControlService.BackupExport:input_type -> autoforward.BackupExportRequest
-	82,  // 77: autoforward.BackupControlService.BackupImport:input_type -> autoforward.BackupImportRequest
-	86,  // 78: autoforward.AccountControlService.RegisterAccount:input_type -> autoforward.RegisterAccountRequest
-	88,  // 79: autoforward.AccountControlService.LoginAccount:input_type -> autoforward.LoginAccountRequest
-	90,  // 80: autoforward.AccountControlService.ValidateToken:input_type -> autoforward.ValidateTokenRequest
-	92,  // 81: autoforward.AccountControlService.IssueWebToken:input_type -> autoforward.IssueWebTokenRequest
-	93,  // 82: autoforward.AccountControlService.ChangePassword:input_type -> autoforward.ChangePasswordRequest
-	94,  // 83: autoforward.AccountControlService.GetAccount:input_type -> autoforward.GetAccountRequest
-	95,  // 84: autoforward.AdminControlService.GetOverview:input_type -> autoforward.AdminOverviewRequest
-	98,  // 85: autoforward.AdminControlService.ListUsers:input_type -> autoforward.AdminListUsersRequest
-	100, // 86: autoforward.AdminControlService.SetUserStatus:input_type -> autoforward.AdminSetUserStatusRequest
-	101, // 87: autoforward.AdminControlService.Broadcast:input_type -> autoforward.AdminBroadcastRequest
-	103, // 88: autoforward.AdminControlService.GetSettings:input_type -> autoforward.AdminGetSettingsRequest
-	105, // 89: autoforward.AdminControlService.SaveSettings:input_type -> autoforward.AdminSaveSettingsRequest
-	107, // 90: autoforward.AdminControlService.ListAdmins:input_type -> autoforward.AdminListAdminsRequest
-	109, // 91: autoforward.AdminControlService.AddAdmin:input_type -> autoforward.AdminAddAdminRequest
-	110, // 92: autoforward.AdminControlService.RemoveAdmin:input_type -> autoforward.AdminRemoveAdminRequest
-	111, // 93: autoforward.AdminControlService.GetClientSettings:input_type -> autoforward.ClientSettingsRequest
-	113, // 94: autoforward.AdminControlService.SaveClientCredentials:input_type -> autoforward.ClientSaveCredentialsRequest
-	5,   // 95: autoforward.SessionControlService.ListSessions:output_type -> autoforward.ListSessionsResponse
-	7,   // 96: autoforward.SessionControlService.StartLogin:output_type -> autoforward.StartLoginResponse
-	9,   // 97: autoforward.SessionControlService.SubmitCode:output_type -> autoforward.SubmitCodeResponse
-	11,  // 98: autoforward.SessionControlService.SubmitPassword:output_type -> autoforward.SubmitPasswordResponse
-	13,  // 99: autoforward.SessionControlService.BackupSession:output_type -> autoforward.BackupSessionResponse
-	15,  // 100: autoforward.SessionControlService.RestoreSession:output_type -> autoforward.RestoreSessionResponse
-	2,   // 101: autoforward.SessionControlService.TerminateSession:output_type -> autoforward.StatusResponse
-	20,  // 102: autoforward.SessionControlService.ResolveChat:output_type -> autoforward.ResolveChatResponse
-	23,  // 103: autoforward.SessionControlService.ListChats:output_type -> autoforward.ListChatsResponse
-	32,  // 104: autoforward.ForwardRuleControlService.ListRules:output_type -> autoforward.ListRulesResponse
-	17,  // 105: autoforward.ForwardRuleControlService.GetRule:output_type -> autoforward.ForwardRule
-	17,  // 106: autoforward.ForwardRuleControlService.CreateRule:output_type -> autoforward.ForwardRule
-	17,  // 107: autoforward.ForwardRuleControlService.UpdateRule:output_type -> autoforward.ForwardRule
-	2,   // 108: autoforward.ForwardRuleControlService.DeleteRule:output_type -> autoforward.StatusResponse
-	65,  // 109: autoforward.ForwardRuleControlService.TestRule:output_type -> autoforward.TestRuleResponse
-	76,  // 110: autoforward.ForwardRuleControlService.PauseRule:output_type -> autoforward.RuleActionResponse
-	76,  // 111: autoforward.ForwardRuleControlService.ResumeRule:output_type -> autoforward.RuleActionResponse
-	26,  // 112: autoforward.ForwardRuleControlService.GetRuleSettings:output_type -> autoforward.RuleSettingsResponse
-	26,  // 113: autoforward.ForwardRuleControlService.UpdateRuleSettings:output_type -> autoforward.RuleSettingsResponse
-	26,  // 114: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:output_type -> autoforward.RuleSettingsResponse
-	72,  // 115: autoforward.DeliveryControlService.GetDeliveryStats:output_type -> autoforward.DeliveryStatsResponse
-	68,  // 116: autoforward.DeliveryControlService.ListDeadLetter:output_type -> autoforward.ListDeadLetterResponse
-	76,  // 117: autoforward.DeliveryControlService.ReplayDeadLetter:output_type -> autoforward.RuleActionResponse
-	76,  // 118: autoforward.DeliveryControlService.PurgeDeadLetter:output_type -> autoforward.RuleActionResponse
-	38,  // 119: autoforward.FilterControlService.ListFilters:output_type -> autoforward.ListFiltersResponse
-	33,  // 120: autoforward.FilterControlService.CreateFilter:output_type -> autoforward.FilterRule
-	33,  // 121: autoforward.FilterControlService.UpdateFilter:output_type -> autoforward.FilterRule
-	2,   // 122: autoforward.FilterControlService.DeleteFilter:output_type -> autoforward.StatusResponse
-	44,  // 123: autoforward.AIControlService.ListAIConfigs:output_type -> autoforward.ListAIConfigsResponse
-	39,  // 124: autoforward.AIControlService.CreateAIConfig:output_type -> autoforward.AIConfig
-	39,  // 125: autoforward.AIControlService.UpdateAIConfig:output_type -> autoforward.AIConfig
-	2,   // 126: autoforward.AIControlService.DeleteAIConfig:output_type -> autoforward.StatusResponse
-	46,  // 127: autoforward.AIControlService.TestAIRewrite:output_type -> autoforward.TestAIRewriteResponse
-	49,  // 128: autoforward.AIControlService.ListPromptTemplates:output_type -> autoforward.ListPromptTemplatesResponse
-	47,  // 129: autoforward.AIControlService.SavePromptTemplate:output_type -> autoforward.PromptTemplate
-	2,   // 130: autoforward.AIControlService.DeletePromptTemplate:output_type -> autoforward.StatusResponse
-	53,  // 131: autoforward.AIControlService.TestPrompt:output_type -> autoforward.TestPromptResponse
-	55,  // 132: autoforward.SystemStatusControlService.GetSystemStats:output_type -> autoforward.SystemStatsResponse
-	79,  // 133: autoforward.AuditControlService.QueryAuditEvents:output_type -> autoforward.QueryAuditEventsResponse
-	2,   // 134: autoforward.LogControlService.Log:output_type -> autoforward.StatusResponse
-	61,  // 135: autoforward.LogControlService.QueryLogs:output_type -> autoforward.QueryLogsResponse
-	63,  // 136: autoforward.LogControlService.LogStats:output_type -> autoforward.LogStatsResponse
-	60,  // 137: autoforward.LogControlService.PurgeLogs:output_type -> autoforward.PurgeLogsResponse
-	81,  // 138: autoforward.BackupControlService.BackupExport:output_type -> autoforward.BackupExportResponse
-	83,  // 139: autoforward.BackupControlService.BackupImport:output_type -> autoforward.BackupImportResponse
-	87,  // 140: autoforward.AccountControlService.RegisterAccount:output_type -> autoforward.RegisterAccountResponse
-	89,  // 141: autoforward.AccountControlService.LoginAccount:output_type -> autoforward.LoginAccountResponse
-	91,  // 142: autoforward.AccountControlService.ValidateToken:output_type -> autoforward.ValidateTokenResponse
-	89,  // 143: autoforward.AccountControlService.IssueWebToken:output_type -> autoforward.LoginAccountResponse
-	2,   // 144: autoforward.AccountControlService.ChangePassword:output_type -> autoforward.StatusResponse
-	85,  // 145: autoforward.AccountControlService.GetAccount:output_type -> autoforward.WebAccount
-	96,  // 146: autoforward.AdminControlService.GetOverview:output_type -> autoforward.AdminOverviewResponse
-	99,  // 147: autoforward.AdminControlService.ListUsers:output_type -> autoforward.AdminListUsersResponse
-	2,   // 148: autoforward.AdminControlService.SetUserStatus:output_type -> autoforward.StatusResponse
-	102, // 149: autoforward.AdminControlService.Broadcast:output_type -> autoforward.AdminBroadcastResponse
-	104, // 150: autoforward.AdminControlService.GetSettings:output_type -> autoforward.AdminSettingsResponse
-	2,   // 151: autoforward.AdminControlService.SaveSettings:output_type -> autoforward.StatusResponse
-	108, // 152: autoforward.AdminControlService.ListAdmins:output_type -> autoforward.AdminListAdminsResponse
-	2,   // 153: autoforward.AdminControlService.AddAdmin:output_type -> autoforward.StatusResponse
-	2,   // 154: autoforward.AdminControlService.RemoveAdmin:output_type -> autoforward.StatusResponse
-	112, // 155: autoforward.AdminControlService.GetClientSettings:output_type -> autoforward.ClientSettingsResponse
-	2,   // 156: autoforward.AdminControlService.SaveClientCredentials:output_type -> autoforward.StatusResponse
-	95,  // [95:157] is the sub-list for method output_type
-	33,  // [33:95] is the sub-list for method input_type
+	56,  // 71: autoforward.SystemStatusControlService.GetLogPolicy:input_type -> autoforward.LogPolicyRequest
+	79,  // 72: autoforward.AuditControlService.QueryAuditEvents:input_type -> autoforward.QueryAuditEventsRequest
+	59,  // 73: autoforward.LogControlService.Log:input_type -> autoforward.LogRequest
+	60,  // 74: autoforward.LogControlService.QueryLogs:input_type -> autoforward.QueryLogsRequest
+	64,  // 75: autoforward.LogControlService.LogStats:input_type -> autoforward.LogStatsRequest
+	61,  // 76: autoforward.LogControlService.PurgeLogs:input_type -> autoforward.PurgeLogsRequest
+	82,  // 77: autoforward.BackupControlService.BackupExport:input_type -> autoforward.BackupExportRequest
+	84,  // 78: autoforward.BackupControlService.BackupImport:input_type -> autoforward.BackupImportRequest
+	88,  // 79: autoforward.AccountControlService.RegisterAccount:input_type -> autoforward.RegisterAccountRequest
+	90,  // 80: autoforward.AccountControlService.LoginAccount:input_type -> autoforward.LoginAccountRequest
+	92,  // 81: autoforward.AccountControlService.ValidateToken:input_type -> autoforward.ValidateTokenRequest
+	94,  // 82: autoforward.AccountControlService.IssueWebToken:input_type -> autoforward.IssueWebTokenRequest
+	95,  // 83: autoforward.AccountControlService.ChangePassword:input_type -> autoforward.ChangePasswordRequest
+	96,  // 84: autoforward.AccountControlService.GetAccount:input_type -> autoforward.GetAccountRequest
+	97,  // 85: autoforward.AdminControlService.GetOverview:input_type -> autoforward.AdminOverviewRequest
+	100, // 86: autoforward.AdminControlService.ListUsers:input_type -> autoforward.AdminListUsersRequest
+	102, // 87: autoforward.AdminControlService.SetUserStatus:input_type -> autoforward.AdminSetUserStatusRequest
+	103, // 88: autoforward.AdminControlService.Broadcast:input_type -> autoforward.AdminBroadcastRequest
+	105, // 89: autoforward.AdminControlService.GetSettings:input_type -> autoforward.AdminGetSettingsRequest
+	107, // 90: autoforward.AdminControlService.SaveSettings:input_type -> autoforward.AdminSaveSettingsRequest
+	109, // 91: autoforward.AdminControlService.ListAdmins:input_type -> autoforward.AdminListAdminsRequest
+	111, // 92: autoforward.AdminControlService.AddAdmin:input_type -> autoforward.AdminAddAdminRequest
+	112, // 93: autoforward.AdminControlService.RemoveAdmin:input_type -> autoforward.AdminRemoveAdminRequest
+	113, // 94: autoforward.AdminControlService.GetClientSettings:input_type -> autoforward.ClientSettingsRequest
+	115, // 95: autoforward.AdminControlService.SaveClientCredentials:input_type -> autoforward.ClientSaveCredentialsRequest
+	5,   // 96: autoforward.SessionControlService.ListSessions:output_type -> autoforward.ListSessionsResponse
+	7,   // 97: autoforward.SessionControlService.StartLogin:output_type -> autoforward.StartLoginResponse
+	9,   // 98: autoforward.SessionControlService.SubmitCode:output_type -> autoforward.SubmitCodeResponse
+	11,  // 99: autoforward.SessionControlService.SubmitPassword:output_type -> autoforward.SubmitPasswordResponse
+	13,  // 100: autoforward.SessionControlService.BackupSession:output_type -> autoforward.BackupSessionResponse
+	15,  // 101: autoforward.SessionControlService.RestoreSession:output_type -> autoforward.RestoreSessionResponse
+	2,   // 102: autoforward.SessionControlService.TerminateSession:output_type -> autoforward.StatusResponse
+	20,  // 103: autoforward.SessionControlService.ResolveChat:output_type -> autoforward.ResolveChatResponse
+	23,  // 104: autoforward.SessionControlService.ListChats:output_type -> autoforward.ListChatsResponse
+	32,  // 105: autoforward.ForwardRuleControlService.ListRules:output_type -> autoforward.ListRulesResponse
+	17,  // 106: autoforward.ForwardRuleControlService.GetRule:output_type -> autoforward.ForwardRule
+	17,  // 107: autoforward.ForwardRuleControlService.CreateRule:output_type -> autoforward.ForwardRule
+	17,  // 108: autoforward.ForwardRuleControlService.UpdateRule:output_type -> autoforward.ForwardRule
+	2,   // 109: autoforward.ForwardRuleControlService.DeleteRule:output_type -> autoforward.StatusResponse
+	67,  // 110: autoforward.ForwardRuleControlService.TestRule:output_type -> autoforward.TestRuleResponse
+	78,  // 111: autoforward.ForwardRuleControlService.PauseRule:output_type -> autoforward.RuleActionResponse
+	78,  // 112: autoforward.ForwardRuleControlService.ResumeRule:output_type -> autoforward.RuleActionResponse
+	26,  // 113: autoforward.ForwardRuleControlService.GetRuleSettings:output_type -> autoforward.RuleSettingsResponse
+	26,  // 114: autoforward.ForwardRuleControlService.UpdateRuleSettings:output_type -> autoforward.RuleSettingsResponse
+	26,  // 115: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:output_type -> autoforward.RuleSettingsResponse
+	74,  // 116: autoforward.DeliveryControlService.GetDeliveryStats:output_type -> autoforward.DeliveryStatsResponse
+	70,  // 117: autoforward.DeliveryControlService.ListDeadLetter:output_type -> autoforward.ListDeadLetterResponse
+	78,  // 118: autoforward.DeliveryControlService.ReplayDeadLetter:output_type -> autoforward.RuleActionResponse
+	78,  // 119: autoforward.DeliveryControlService.PurgeDeadLetter:output_type -> autoforward.RuleActionResponse
+	38,  // 120: autoforward.FilterControlService.ListFilters:output_type -> autoforward.ListFiltersResponse
+	33,  // 121: autoforward.FilterControlService.CreateFilter:output_type -> autoforward.FilterRule
+	33,  // 122: autoforward.FilterControlService.UpdateFilter:output_type -> autoforward.FilterRule
+	2,   // 123: autoforward.FilterControlService.DeleteFilter:output_type -> autoforward.StatusResponse
+	44,  // 124: autoforward.AIControlService.ListAIConfigs:output_type -> autoforward.ListAIConfigsResponse
+	39,  // 125: autoforward.AIControlService.CreateAIConfig:output_type -> autoforward.AIConfig
+	39,  // 126: autoforward.AIControlService.UpdateAIConfig:output_type -> autoforward.AIConfig
+	2,   // 127: autoforward.AIControlService.DeleteAIConfig:output_type -> autoforward.StatusResponse
+	46,  // 128: autoforward.AIControlService.TestAIRewrite:output_type -> autoforward.TestAIRewriteResponse
+	49,  // 129: autoforward.AIControlService.ListPromptTemplates:output_type -> autoforward.ListPromptTemplatesResponse
+	47,  // 130: autoforward.AIControlService.SavePromptTemplate:output_type -> autoforward.PromptTemplate
+	2,   // 131: autoforward.AIControlService.DeletePromptTemplate:output_type -> autoforward.StatusResponse
+	53,  // 132: autoforward.AIControlService.TestPrompt:output_type -> autoforward.TestPromptResponse
+	55,  // 133: autoforward.SystemStatusControlService.GetSystemStats:output_type -> autoforward.SystemStatsResponse
+	57,  // 134: autoforward.SystemStatusControlService.GetLogPolicy:output_type -> autoforward.LogPolicyResponse
+	81,  // 135: autoforward.AuditControlService.QueryAuditEvents:output_type -> autoforward.QueryAuditEventsResponse
+	2,   // 136: autoforward.LogControlService.Log:output_type -> autoforward.StatusResponse
+	63,  // 137: autoforward.LogControlService.QueryLogs:output_type -> autoforward.QueryLogsResponse
+	65,  // 138: autoforward.LogControlService.LogStats:output_type -> autoforward.LogStatsResponse
+	62,  // 139: autoforward.LogControlService.PurgeLogs:output_type -> autoforward.PurgeLogsResponse
+	83,  // 140: autoforward.BackupControlService.BackupExport:output_type -> autoforward.BackupExportResponse
+	85,  // 141: autoforward.BackupControlService.BackupImport:output_type -> autoforward.BackupImportResponse
+	89,  // 142: autoforward.AccountControlService.RegisterAccount:output_type -> autoforward.RegisterAccountResponse
+	91,  // 143: autoforward.AccountControlService.LoginAccount:output_type -> autoforward.LoginAccountResponse
+	93,  // 144: autoforward.AccountControlService.ValidateToken:output_type -> autoforward.ValidateTokenResponse
+	91,  // 145: autoforward.AccountControlService.IssueWebToken:output_type -> autoforward.LoginAccountResponse
+	2,   // 146: autoforward.AccountControlService.ChangePassword:output_type -> autoforward.StatusResponse
+	87,  // 147: autoforward.AccountControlService.GetAccount:output_type -> autoforward.WebAccount
+	98,  // 148: autoforward.AdminControlService.GetOverview:output_type -> autoforward.AdminOverviewResponse
+	101, // 149: autoforward.AdminControlService.ListUsers:output_type -> autoforward.AdminListUsersResponse
+	2,   // 150: autoforward.AdminControlService.SetUserStatus:output_type -> autoforward.StatusResponse
+	104, // 151: autoforward.AdminControlService.Broadcast:output_type -> autoforward.AdminBroadcastResponse
+	106, // 152: autoforward.AdminControlService.GetSettings:output_type -> autoforward.AdminSettingsResponse
+	2,   // 153: autoforward.AdminControlService.SaveSettings:output_type -> autoforward.StatusResponse
+	110, // 154: autoforward.AdminControlService.ListAdmins:output_type -> autoforward.AdminListAdminsResponse
+	2,   // 155: autoforward.AdminControlService.AddAdmin:output_type -> autoforward.StatusResponse
+	2,   // 156: autoforward.AdminControlService.RemoveAdmin:output_type -> autoforward.StatusResponse
+	114, // 157: autoforward.AdminControlService.GetClientSettings:output_type -> autoforward.ClientSettingsResponse
+	2,   // 158: autoforward.AdminControlService.SaveClientCredentials:output_type -> autoforward.StatusResponse
+	96,  // [96:159] is the sub-list for method output_type
+	33,  // [33:96] is the sub-list for method input_type
 	33,  // [33:33] is the sub-list for extension type_name
 	33,  // [33:33] is the sub-list for extension extendee
 	0,   // [0:33] is the sub-list for field type_name
@@ -9515,7 +9711,7 @@ func file_autoforward_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_autoforward_proto_rawDesc), len(file_autoforward_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   118,
+			NumMessages:   120,
 			NumExtensions: 0,
 			NumServices:   11,
 		},
