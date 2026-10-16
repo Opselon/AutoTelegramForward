@@ -43,8 +43,12 @@ mono_crash.*
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
-[Rr]elease/
-[Rr]eleases/
+# NOTE: anchored on purpose — an unanchored directory pattern matches at ANY depth, so
+# `[Rr]eleases]/` silently excluded website/src/pages/releases/ from Git, and no
+# `!negation` can undo it because Git never descends into an excluded directory. These
+# name Visual Studio output next to its solution, so they belong at the repo root.
+/[Rr]elease/
+/[Rr]eleases]/
 x64/
 x86/
 [Ww][Ii][Nn]32/
