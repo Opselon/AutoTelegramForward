@@ -413,11 +413,15 @@ cd "$TARGET" || die "cannot cd into $TARGET"
 printf '\n%s\n' "${C_BOLD}${C_GREEN}Environment ready.${C_RESET}"
 info "Location : $TARGET"
 info "Python   : $(command -v "$PY" 2>/dev/null || echo "$PY")"
-info "Next     : ${C_BOLD}python atf.py start${C_RESET}  (after setup)"
+info "Next     : ${C_BOLD}atf start${C_RESET}  (after setup)"
 printf '%s\n' "${C_DIM}---------------------------------------------------------------------------${C_RESET}"
-printf '%s\n' "${C_BOLD}Setup now — you only need your Telegram bot token (get one from @BotFather).${C_RESET}"
-printf '%s\n\n' "${C_DIM}Everything else is automatic: virtualenv, dependencies, config.yaml, master key.${C_RESET}"
+printf '%s\n' "${C_BOLD}Setup now — have your Telegram bot token ready (get one from @BotFather).${C_RESET}"
+printf '%s\n\n' "${C_DIM}The wizard detects this machine, creates the virtualenv, asks only what it must, then builds and verifies every service.${C_RESET}"
 
-# Hand off to the project's own setup flow. exec keeps stdin/stdout attached so
-# the interactive bot-token prompt works even under `curl ... | bash`.
-exec "$PY" atf.py setup
+# Hand off to scripts/bootstrap.py: it installs the CLI (venv + `atf` on PATH)
+# and runs `atf setup`, which picks docker mode when docker is usable and offers
+# source mode when it is not. exec keeps stdin/stdout attached so prompts work
+# even under `curl ... | bash`, and ATF_BOOTSTRAP_ARGS lets the wizard run in
+# --check mode.
+# shellcheck disable=SC2086
+exec "$PY" scripts/bootstrap.py ${ATF_BOOTSTRAP_ARGS:-}

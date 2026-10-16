@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 from typing import Any, Iterable, Sequence
@@ -33,6 +34,14 @@ _CODES = {
     "cyan": "\033[36m",
     "grey": "\033[90m",
 }
+
+
+_ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+
+
+def strip_ansi(text: str) -> str:
+    """Visible text, with ANSI escapes removed — used for width maths."""
+    return _ANSI_RE.sub("", str(text))
 
 
 def _supports_color(stream) -> bool:
@@ -204,9 +213,12 @@ class Console:
             self._write(self.paint(f"  {empty}", "grey"))
             return
         cells = [[("" if c is None else str(c)) for c in row] for row in rows]
+        # Widths are measured on the *visible* text: cells may already carry
+        # colour escapes (see ui.table_with_marks), and counting those bytes
+        # would misalign every column after the first coloured one.
         widths = [
             min(
-                max([len(str(headers[i]))] + [len(r[i]) for r in cells]),
+                max([len(strip_ansi(headers[i]))] + [len(strip_ansi(r[i])) for r in cells]),
                 max_width or 60,
             )
             for i in range(len(headers))
@@ -215,10 +227,12 @@ class Console:
         def fmt(row: Sequence[str]) -> str:
             out = []
             for i, cell in enumerate(row):
-                clipped = cell
-                if len(clipped) > widths[i]:
-                    clipped = clipped[: max(1, widths[i] - 1)] + "…"
-                out.append(clipped.ljust(widths[i]))
+                visible = len(strip_ansi(cell))
+                if visible > widths[i]:
+                    # Too long: drop the colour and clip the plain text.
+                    cell = strip_ansi(cell)[: max(1, widths[i] - 1)] + "…"
+                    visible = len(cell)
+                out.append(cell + " " * max(0, widths[i] - visible))
             return "  ".join(out).rstrip()
 
         self._write("  " + self.paint(fmt(list(headers)), "bold"))

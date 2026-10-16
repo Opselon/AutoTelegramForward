@@ -31,6 +31,7 @@ from .errors import AtfError, EXIT_FAILURE, EXIT_OK
 COMMAND_MODULES: tuple[str, ...] = (
     "auth",
     "setup",
+    "platform",
     "doctor",
     "validate",
     "status",

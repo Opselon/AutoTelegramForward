@@ -10,6 +10,11 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.error
+import urllib.request
+
+import json
+import os
 import re
 import sqlite3
 import stat
@@ -24,7 +29,6 @@ from .doctor import (
     check_api,
     check_certificate,
     check_containers,
-    check_database,
     check_services,
 )
 
@@ -452,8 +456,90 @@ def check_ports_ownership(ctx, report: Report, **_) -> None:
         report.add("ports", "ok", f"{len(ours)} container(s), no foreign listeners on ATF ports")
 
 
+#: Where the API can be reached when no --url is given. 8080 is the gateway,
+#: 8088 the web container (which proxies /api), both on the loopback interface.
+LOCAL_API_BASES: tuple[str, ...] = ("http://127.0.0.1:8080", "http://127.0.0.1:8088")
+
+
+def _api_bases(ctx) -> list[str]:
+    args = getattr(ctx, "args", None)
+    configured = (getattr(args, "url", "") or os.environ.get("ATF_CLI_URL", "") or "").strip()
+    bases = [configured.rstrip("/")] if configured else []
+    return bases + [base for base in LOCAL_API_BASES if base not in bases]
+
+
+def check_container_env_contract(ctx, report: Report, **_) -> None:
+    """Ask the running API which configuration it actually received.
+
+    The host `.env` and the container's environment can disagree — that is the
+    classic "I set ATF_BOT_TOKEN and the bot still says unconfigured" bug, and a
+    check that only reads the file on disk cannot see it. The endpoint is behind
+    the same auth as the rest of /api, so this needs a credential; without one it
+    reports a warning instead of a false failure.
+    """
+    client = ctx.api_or_none
+    if client is None:
+        report.add(
+            "container-env",
+            "warn",
+            "no credential — cannot ask the container which configuration it received",
+            fix="atf auth login  (or export ATF_TOKEN)",
+        )
+        return
+
+    host_env = _env_values(ctx)
+    try:
+        payload = client.get("/api/system/env")
+    except AtfError as exc:
+        report.add(
+            "container-env",
+            "warn",
+            f"{client.url}: /api/system/env unavailable ({exc.message})",
+            fix="atf system restart  # rebuild the api image to pick up this endpoint",
+        )
+        return
+    if not isinstance(payload, dict):
+        report.add("container-env", "warn", f"{client.url}: unexpected response from /api/system/env")
+        return
+
+    checks = payload.get("checks") or []
+    missing_container = [str(key) for key in (payload.get("missing_required") or [])]
+    # A key the host file sets but the container never received means the
+    # container predates the change: restarting is the fix, not editing .env.
+    stale = [key for key in missing_container if key in host_env]
+    if stale:
+        report.add(
+            "container-env",
+            "fail",
+            f"{client.url}: container is missing {', '.join(stale)} although .env sets it "
+            "(the container predates the change)",
+            fix="atf system restart  # recreates containers with the current .env",
+        )
+        return
+    unset_anywhere = [key for key in missing_container if key not in host_env]
+    if unset_anywhere:
+        report.add(
+            "container-env",
+            "warn",
+            f"{client.url}: not configured yet: {', '.join(unset_anywhere)}",
+            fix="atf setup --check  (then set the keys it reports)",
+        )
+        return
+    report.add("container-env", "ok", f"{client.url}: container received all {len(checks)} configuration inputs")
+
+
+def _fetch_json(url: str, timeout: float = 4.0) -> dict | None:
+    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - fixed local URL
+            payload = json.loads(response.read().decode("utf-8", "replace") or "{}")
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def check_runtime(ctx, report: Report, **_) -> None:
-    for check in (check_containers, check_aliases, check_api, check_services, check_certificate):
+    for check in (check_containers, check_aliases, check_api, check_services, check_certificate, check_container_env_contract):
         try:
             check(ctx, report, fix=False)
         except AtfError as exc:

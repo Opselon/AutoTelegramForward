@@ -215,8 +215,12 @@ class RepoContext:
         input_text: str | None = None,
     ) -> CommandResult:
         argv = [str(a) for a in argv]
-        if self.dry_run and argv and argv[0] != "docker":
+        if self.dry_run:
+            # --dry-run means *nothing* is executed: a real side effect behind a
+            # "dry run" banner is worse than no dry run at all. Callers that
+            # need a value here get an empty success result.
             self.out.debug(f"[dry-run] {' '.join(argv)}")
+            return CommandResult(argv=argv, returncode=0, stdout="", stderr="", duration=0.0)
         started = time.time()
         proc = subprocess.run(
             argv,
@@ -254,6 +258,9 @@ class RepoContext:
         """Run a command with the terminal attached (builds, deploys, tests)."""
         argv = [str(a) for a in argv]
         self.out.debug(f"$ {' '.join(argv)}")
+        if self.dry_run:
+            self.out.debug(f"[dry-run] {' '.join(argv)}")
+            return 0
         proc = subprocess.run(
             argv,
             cwd=str(cwd or self.root),

@@ -155,6 +155,14 @@ try {
 Write-Info "Ready: $(git log -1 --format='%h %s' 2>$null)"
 
 # ------------------------------------------------------------- 4. setup -----
-Write-Step "4/4  Setup (asks only for your bot token) ..."
+Write-Step "4/4  Setup (detects this machine, then asks only what it must) ..."
 Write-Host ""
-& $py atf.py setup
+# scripts/bootstrap.py creates the venv, installs dependencies and puts the CLI
+# in place, then runs the wizard — which uses Docker Desktop when it is
+# available and falls back to source mode when it is not.
+$bootstrap = Join-Path $PWD "scripts\bootstrap.py"
+if (Test-Path $bootstrap) {
+  & $py $bootstrap
+} else {
+  & $py atf.py setup
+}
