@@ -21,6 +21,11 @@ const GROUP_LABELS: Record<string, string> = {
   audience: 'Audience Filters',
   ai: 'AI',
   automation: 'Automation',
+  // A → C → B: the task delivers through one of our own channels (C) so the
+  // final target's forward header names C. The server lists these under its
+  // `branding` group; without this label the panel would fall back to the raw
+  // group key ("Branding").
+  branding: 'Branding hop (A → C → B)',
 }
 
 function groupLabel(group: string): string {
