@@ -86,14 +86,18 @@ def test_filter_engine_emoji_and_text_transforms():
     assert result == "🔝 HEADER\n\nMain announcement here\n\n🔻 FOOTER"
 
     # 4. Links replacement / removal
+    #    Both assertions pin the whole output string. Asserting that a link or
+    #    its replacement is *contained* in the result cannot tell a correct
+    #    rewrite from a mangled one (a leftover half-URL still "contains" the
+    #    text), and a URL compared by substring is not a URL comparison.
     link_text = "Check out https://google.com and https://t.me/example for details"
     no_links = fe.remove_links(link_text)
-    assert "https://google.com" not in no_links
-    assert "https://t.me/example" not in no_links
+    assert no_links == "Check out and for details"
 
     replaced_links = fe.replace_links(link_text, "https://mychannel.ir")
-    assert "https://google.com" not in replaced_links
-    assert "https://mychannel.ir" in replaced_links
+    assert replaced_links == (
+        "Check out https://mychannel.ir and https://mychannel.ir for details"
+    )
 
 
 @pytest.mark.asyncio

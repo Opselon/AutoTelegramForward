@@ -196,19 +196,58 @@ def valid_int(value: str, *, minimum: int = 1, maximum: int | None = None, label
     return None
 
 
+def _listening_ports() -> set[int] | None:
+    """Local TCP ports with a listener, from the kernel's own tables.
+
+    Returns None when the tables are unreadable (non-Linux), so the caller can
+    fall back to a probe.
+    """
+    ports: set[int] = set()
+    readable = False
+    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            with open(table, encoding="ascii", errors="replace") as fh:
+                rows = fh.read().splitlines()[1:]
+        except OSError:
+            continue
+        readable = True
+        for row in rows:
+            fields = row.split()
+            if len(fields) < 4 or fields[3] != "0A":  # 0A == TCP_LISTEN
+                continue
+            try:
+                ports.add(int(fields[1].rsplit(":", 1)[1], 16))
+            except (IndexError, ValueError):
+                continue
+    return ports if readable else None
+
+
+def _port_available(port: int) -> bool:
+    """True when nothing on this host already listens on ``port``.
+
+    Asked of the kernel rather than by binding a probe socket: a probe has to
+    pick an interface, and binding the wildcard address would publish a
+    listening socket on every interface for the duration of the check.
+    """
+    ports = _listening_ports()
+    if ports is not None:
+        return port not in ports
+    import socket
+
+    # No kernel table (macOS/Windows): ask the loopback address directly. A
+    # connect probe reaches anything bound to 0.0.0.0 and never listens.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.2)
+        return probe.connect_ex(("127.0.0.1", port)) != 0
+
+
 def valid_port(value: str) -> str | None:
     problem = valid_int(value, minimum=1, maximum=65535, label="port")
     if problem:
         return problem
     port = int(value)
-    import socket
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            sock.bind(("0.0.0.0", port))
-        except OSError:
-            return f"port {port} is already in use — pick another"
+    if not _port_available(port):
+        return f"port {port} is already in use — pick another"
     return None
 
 

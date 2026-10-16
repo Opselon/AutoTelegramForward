@@ -11,6 +11,8 @@ import logging
 import time
 from typing import Callable, Dict, Optional
 
+from core.infrastructure.telegram.identity_redaction import mask_label
+
 logger = logging.getLogger("atf.boot")
 
 #: hard cap on parallel client starts (Telegram throttles aggressive logins)
@@ -113,7 +115,9 @@ class SessionBootManager:
                 except Exception as exc:
                     logger.warning("catch-up failed for %s: %s", session_id[:8], exc)
 
-            label = getattr(me, "username", "") or getattr(me, "first_name", "") or session.phone_number
+            label = mask_label(
+                getattr(me, "username", None), getattr(me, "first_name", None)
+            )
             self._emit(f"session live: {label} (rules bound: {bound})")
             logger.info("session %s live as @%s", session_id[:8], label)
             return status

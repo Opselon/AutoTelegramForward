@@ -832,7 +832,11 @@ func (h *Handlers) resolveTargetChats(ctx context.Context, sessionID string, rul
 // reads a rule back and re-sends it (GET -> PATCH) sets both the list and its
 // mirror to the same id, which is the documented shape and not a duplicate.
 func (h *Handlers) resolveEndpointChats(ctx context.Context, sessionID, legacy string, repeated []string, ownerID int64, emptyCode, duplicateCode string) ([]string, string) {
-	raw := make([]string, 0, len(repeated)+1)
+	// Capacity is only a hint; it is deliberately not `len(repeated)+1`, whose
+	// size computation is unbounded input arithmetic (and overflows for a
+	// request large enough to matter). append grows the slice anyway, so the
+	// extra element costs one reallocation at most.
+	raw := make([]string, 0, len(repeated))
 	if strings.TrimSpace(legacy) != "" {
 		raw = append(raw, legacy)
 	}
@@ -1868,15 +1872,45 @@ func (h *Handlers) DeliveryStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Paging bounds for the dead-letter feed. The request field is int32, so the
+// query value is parsed at 32-bit width and clamped instead of being narrowed
+// from an architecture-dependent int, which wraps negative when a client sends
+// a value above 2^31-1.
+const (
+	defaultDeadLetterLimit int32 = 50
+	maxDeadLetterLimit     int32 = 500
+)
+
+// queryIntOrDefault is the paging flavour of boundedQueryInt: a list endpoint
+// treats an absent, malformed or non-positive value as "use the default"
+// instead of erroring, and clamps anything above the cap to the cap. Like
+// boundedQueryInt, the parse happens at 32-bit width with a clamp before the
+// narrowing conversion, so no architecture-dependent int is ever truncated.
+func queryIntOrDefault(raw string, lo, hi, def int32) int32 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil {
+		return def
+	}
+	switch {
+	case v < int64(lo):
+		return def
+	case v > int64(hi):
+		return hi
+	default:
+		return int32(v)
+	}
+}
+
 func (h *Handlers) ListDeadLetter(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	limit := 50
-	if n := r.URL.Query().Get("limit"); n != "" {
-		if v, err := strconv.Atoi(n); err == nil && v > 0 {
-			limit = v
-		}
-	}
+	limit := queryIntOrDefault(
+		r.URL.Query().Get("limit"), 1, maxDeadLetterLimit, defaultDeadLetterLimit,
+	)
 	var since int64
 	if n := r.URL.Query().Get("since"); n != "" {
 		if v, err := strconv.ParseInt(n, 10, 64); err == nil {
@@ -1885,7 +1919,7 @@ func (h *Handlers) ListDeadLetter(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.c.Delivery.ListDeadLetter(ctx, &pb.ListDeadLetterRequest{
 		RuleId:      r.URL.Query().Get("rule_id"),
-		Limit:       int32(limit),
+		Limit:       limit,
 		Since:       since,
 		OwnerUserId: identity(r).UserID,
 	})

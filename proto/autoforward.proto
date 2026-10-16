@@ -930,13 +930,13 @@ message BackupExportRequest {
 
 message BackupExportResponse {
   bool success = 1;
-  string bundle = 2;         // JSON snapshot, optionally encrypted with enc:v1:
+  string bundle = 2;         // JSON snapshot, optionally encrypted with enc:v1:/enc:v2:
   map<string, int32> counts = 3;  // entity name -> count in the snapshot
   string error = 4;
 }
 
 message BackupImportRequest {
-  string bundle = 1;                 // JSON snapshot (plain or enc:v1:)
+  string bundle = 1;                 // JSON snapshot (plain or enc:v1:/enc:v2:)
   string passphrase = 2;             // required when the bundle is encrypted
   int64 target_owner_user_id = 3;    // 0 = keep the source owner
   bool overwrite_existing = 4;       // replace rows that already exist

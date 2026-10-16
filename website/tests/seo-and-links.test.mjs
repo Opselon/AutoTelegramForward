@@ -136,10 +136,42 @@ const distHas = (href) => {
 
 let linkCount = 0;
 
+// Script bodies carry inline JSON and template literals that resolve to link
+// strings at runtime; every one of them would be checked as a real link. They
+// are skipped by scanning tag boundaries rather than by pattern-matching the
+// markup away: `<script>` bodies may contain nested markup, comments, or an end
+// tag written as `</script >`, and a regexp strip silently leaves those behind
+// (letting script text through as links again). Only element boundaries are
+// recognised here, so nothing is "sanitised" by this pass — the remaining text
+// is scanned for links exactly as before.
+const withoutScriptBodies = (html) => {
+  const lower = html.toLowerCase();
+  let out = '';
+  let cursor = 0;
+
+  for (;;) {
+    const open = lower.indexOf('<script', cursor);
+    if (open === -1) return out + html.slice(cursor);
+
+    // "<scripted" is not a script element: step past it and keep scanning.
+    const after = lower[open + '<script'.length];
+    if (after !== undefined && after !== '>' && after !== '/' && !/\s/.test(after)) {
+      out += html.slice(cursor, open + '<script'.length);
+      cursor = open + '<script'.length;
+      continue;
+    }
+
+    out += html.slice(cursor, open);
+    const close = lower.indexOf('</script', open + '<script'.length);
+    if (close === -1) return out; // unterminated element: drop the tail
+    const end = lower.indexOf('>', close);
+    cursor = end === -1 ? html.length : end + 1;
+  }
+};
+
 for (const file of htmlFiles) {
   const relPath = path.relative(distDir, file);
-  // Script bodies contain template literals (`${...}`) that are not links.
-  const content = fs.readFileSync(file, 'utf8').replace(/<script[\s\S]*?<\/script>/gi, '');
+  const content = withoutScriptBodies(fs.readFileSync(file, 'utf8'));
 
   for (const match of content.matchAll(/(?:href|src)="([^"]+)"/g)) {
     const raw = match[1];

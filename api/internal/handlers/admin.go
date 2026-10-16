@@ -21,37 +21,40 @@ func (h *Handlers) AdminOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"core_online":     resp.CoreOnline,
-		"uptime_seconds":  resp.UptimeSeconds,
-		"total_users":     resp.TotalUsers,
-		"active_rules":    resp.ActiveRules,
-		"queue_pending":   resp.QueuePending,
-		"recent_errors":   resp.RecentErrors,
-		"system_status":   resp.SystemStatus,
+		"core_online":    resp.CoreOnline,
+		"uptime_seconds": resp.UptimeSeconds,
+		"total_users":    resp.TotalUsers,
+		"active_rules":   resp.ActiveRules,
+		"queue_pending":  resp.QueuePending,
+		"recent_errors":  resp.RecentErrors,
+		"system_status":  resp.SystemStatus,
 	})
 }
+
+// Paging bounds for the admin user list. Both request fields are int32, so the
+// query values are parsed at 32-bit width and clamped. `strconv.Atoi` + int32()
+// was correct only by accident: Atoi yields an architecture-dependent int, and
+// a reader (or an analyzer) cannot see the bound without following the branches.
+const (
+	defaultAdminPageLimit int32 = 50
+	// maxAdminPageLimit caps one page of users; the reply is assembled in full
+	// before it is written, so an unbounded limit is a memory amplifier.
+	maxAdminPageLimit  int32 = 500
+	maxAdminPageOffset int32 = maxChatOffset
+)
 
 // AdminListUsers handles GET /admin/users
 func (h *Handlers) AdminListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
 
-	limit := 50
-	offset := 0
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if val, err := strconv.Atoi(l); err == nil && val > 0 {
-			limit = val
-		}
-	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
-			offset = val
-		}
-	}
+	q := r.URL.Query()
+	limit := queryIntOrDefault(q.Get("limit"), 1, maxAdminPageLimit, defaultAdminPageLimit)
+	offset := queryIntOrDefault(q.Get("offset"), 0, maxAdminPageOffset, 0)
 
 	resp, err := h.c.Admin.ListUsers(ctx, &pb.AdminListUsersRequest{
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
 		grpcError(w, err)
