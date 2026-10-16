@@ -1,0 +1,37 @@
+# Overlay: attach Core and the API to the self-hosted 9router AI gateway.
+#
+# This file exists SEPARATELY because the 9router stack owns its network. An
+# `external: true` network cannot live in the base compose file: `docker
+# compose up` then fails outright on every host without that stack —
+# "network 9router_default declared as external, but could not be found" —
+# which breaks fresh installs, forks, and the release pipeline's clean-install
+# smoke test.
+#
+# Use it only where the AI gateway actually runs:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.9router.yml up -d
+#
+# If the sibling stack is not up yet, create its network first:
+#
+#   docker network create 9router_default
+#
+# Both Core and the API need it: Core calls the provider to rewrite message
+# text, and the API's preflight diagnostics probe runs inside the API container
+# and must resolve `9router` or it reports every AI config as unreachable
+# (`lookup 9router on 127.0.0.11:53: server misbehaving`) even when rewrites
+# succeed.
+services:
+  core:
+    networks:
+      - atf-net
+      - ai-net
+
+  api:
+    networks:
+      - atf-net
+      - ai-net
+
+networks:
+  ai-net:
+    external: true
+    name: 9router_default

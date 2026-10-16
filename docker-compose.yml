@@ -54,11 +54,6 @@ services:
       - atf-data:/app/data
     networks:
       - atf-net
-      # The AI rewrite provider (9router) runs as a sibling stack, published on
-      # its own bridge network. Without this the core cannot resolve/connect to
-      # `9router` and every AI rewrite fails with PROVIDER_ERROR (seen as
-      # "AI rewrite does nothing"), so the AI base_url is http://9router:20128/v1.
-      - ai-net
     # Core has no HTTP surface, so liveness is its gRPC listener. Probing it in
     # Python keeps the check inside the image (no curl/wget needed) and turns a
     # wedged process — which still counts as "running" to Docker — into an
@@ -92,11 +87,6 @@ services:
       - "8080:8080"
     networks:
       - atf-net
-      # Same reason as `core`: the preflight diagnostics probe runs inside THIS
-      # container, so if the api cannot resolve `9router` the AI endpoint check
-      # fails with `lookup 9router on 127.0.0.11:53: server misbehaving` and
-      # reports every AI config as unreachable even though rewrites succeed.
-      - ai-net
     # Without this the api had no health signal at all: a hung handler or a
     # dead gRPC client still showed as "Up". /healthz is the handler's own
     # readiness route and needs no extra tooling beyond the image's wget.
@@ -162,8 +152,15 @@ volumes:
 networks:
   atf-net:
     driver: bridge
-  # Pre-existing network of the self-hosted 9router AI gateway. Marked external
-  # because it is owned by that stack, not by this compose project.
-  ai-net:
-    external: true
-    name: 9router_default
+
+# The self-hosted 9router AI gateway is an OPTIONAL sibling stack that owns its
+# own bridge network. Attaching to it cannot live in this file: an
+# `external: true` network makes `docker compose up` fail outright
+# ("network 9router_default declared as external, but could not be found") on
+# every host that does not run that stack — a fresh install, a CI smoke test, a
+# fork. Bring it in explicitly when the AI gateway is present:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.9router.yml up -d
+#
+# Without the overlay the stack is fully functional; only AI rewrite calls that
+# address `http://9router:20128/v1` would fail to resolve.
