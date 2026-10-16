@@ -35,6 +35,7 @@ from ..domain.services import (
     RoutingPolicy,
     TransformationService,
 )
+from .log_policy import LogPolicy
 from ..domain.value_objects import (
     AIFallbackPolicy,
     ContentMode,
@@ -268,6 +269,7 @@ class DurableMessagePipeline:
         pool: Optional[Any] = None,
         log_client: Optional[Any] = None,
         audit_repo: Optional[Any] = None,
+        log_policy: Optional["LogPolicy"] = None,
     ) -> None:
         self._rules = rule_repo
         self._filters = filter_repo
@@ -284,6 +286,11 @@ class DurableMessagePipeline:
         self._log_client = log_client
         self._audit_repo = audit_repo
         self.metrics = PipelineMetrics()
+        # Which lifecycle events may leave this process, and how often. The
+        # Logger has no server-side filter yet, so the documented severity
+        # defaults (INFO/SUCCESS/DEBUG off, WARN and above on) are enforced here
+        # — otherwise every successfully forwarded message writes an INFO row.
+        self.log_policy = log_policy if log_policy is not None else LogPolicy.from_env()
 
     # -----------------------------------------------------------------
     # Main Entry Point
@@ -296,6 +303,20 @@ class DurableMessagePipeline:
         message content (mission §12 minimum-necessary principle)."""
         if self._log_client is None:
             return
+        # End-to-end latency belongs on every event: reconstructing one failed
+        # forwarding operation means knowing both what happened and how long the
+        # pipeline took to decide it. Callers may override it.
+        kw.setdefault("duration_ms", int((time.time() - ctx.created_at) * 1000))
+        # Policy applies to the LOG emission only. The durable audit write below is
+        # evidence, not verbosity: suppressing a noisy category must never erase
+        # the audit trail, so the two do not share a gate — and a suppressed event
+        # must NOT return early here, or the audit record would vanish with it.
+        try:
+            emit_log = self.log_policy.allow(
+                severity, event_type=event_type, reason_code=reason_code
+            )
+        except Exception:
+            emit_log = True  # a policy bug must never silence a lifecycle event
         try:
             from core.infrastructure.persistence.audit_events import AuditEvent
             evt = AuditEvent(
@@ -304,19 +325,19 @@ class DurableMessagePipeline:
                 correlation_id=ctx.correlation_id, rule_id=rule_id,
                 feature_id=feature_id, **kw,
             )
-            detail = evt.to_dict()
-            self._log_client.log(
-                severity if severity != "WARN" else "WARN",
-                "core", "audit",
-                f"{event_type} outcome={outcome}" + (f" reason={reason_code}" if reason_code else ""),
-                detail,
-                # v18: the ids travel as columns too, so "this task's history"
-                # and "this message's trail" are index lookups rather than
-                # free-text scans over the detail blob.
-                rule_id=rule_id or "",
-                user_id=int(kw.get("owner_user_id", 0) or kw.get("user_id", 0) or 0),
-                correlation_id=ctx.correlation_id or "",
-            )
+            if emit_log:
+                self._log_client.log(
+                    severity if severity != "WARN" else "WARN",
+                    "core", "audit",
+                    f"{event_type} outcome={outcome}" + (f" reason={reason_code}" if reason_code else ""),
+                    evt.to_dict(),
+                    # v18: the ids travel as columns too, so "this task's history"
+                    # and "this message's trail" are index lookups rather than
+                    # free-text scans over the detail blob.
+                    rule_id=rule_id or "",
+                    user_id=int(kw.get("owner_user_id", 0) or kw.get("user_id", 0) or 0),
+                    correlation_id=ctx.correlation_id or "",
+                )
         except Exception:
             pass  # never break the forwarding path for observability
         # Durable audit write (PostgreSQL audit_events) when available — also
