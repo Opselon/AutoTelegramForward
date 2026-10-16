@@ -38,10 +38,20 @@ pub const PHONE_SUFFIX: &str = "[PHONE]";
 pub const MAX_DETAIL_DEPTH: usize = 12;
 
 /// Key-name alternation, copied verbatim from `logger/redaction.py`.
-const SECRET_KEYS: &str = r"bot_?token|api_?hash|api_?id|session_?string|auth_?key|\
-passwo?rd|passwd|phone_?code|login_?code|2fa|two_?factor|secret|\
-access_?token|refresh_?token|bearer|authorization|api_?key|\
-cookie|x-?api-?key|x-?auth-?token";
+///
+/// Split across `concat!` arguments on purpose. A raw string literal does *not*
+/// continue over a trailing backslash: the previous `r"…|\` + newline form kept
+/// the backslash and the newline *inside* the pattern, so every alternative that
+/// followed a line break matched `<newline>key` instead of `key`. `passwo?rd`,
+/// `access_?token` and `cookie` therefore never matched anything — a key named
+/// `password` was not secret at all, and neither the field-aware pass nor the
+/// text pass redacted it.
+const SECRET_KEYS: &str = concat!(
+    r"bot_?token|api_?hash|api_?id|session_?string|auth_?key|",
+    r"passwo?rd|passwd|phone_?code|login_?code|2fa|two_?factor|secret|",
+    r"access_?token|refresh_?token|bearer|authorization|api_?key|",
+    r"cookie|x-?api-?key|x-?auth-?token",
+);
 
 fn bearer() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
@@ -66,8 +76,10 @@ fn kv_unquoted() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
         // token=abc123, api_key: sk-xyz
-        Regex::new(&format!(r#"(?i)\b((?:{SECRET_KEYS})\s*[=:]\s*)([^\s;,&"']+)"#))
-            .expect("static unquoted-kv regex")
+        Regex::new(&format!(
+            r#"(?i)\b((?:{SECRET_KEYS})\s*[=:]\s*)([^\s;,&"']+)"#
+        ))
+        .expect("static unquoted-kv regex")
     })
 }
 
@@ -99,10 +111,25 @@ fn phone_candidate() -> &'static Regex {
     R.get_or_init(|| Regex::new(r"\+?\d{10,15}").expect("static phone regex"))
 }
 
+/// Key names the *field-aware* layer treats as credentials on top of the Python
+/// alternation.
+///
+/// `redact_strong` already treats a bare `token` as a credential keyword (see
+/// [`auth_header`], and the `token=<jwt>` case in this module's tests), so a
+/// structured detail keyed `token` must not survive the structural pass either:
+/// without this, `{"nested": {"token": "abc12345"}}` reached storage intact while
+/// the text form `token=abc12345` was redacted. `redact` — the parity-pinned
+/// port — is deliberately left alone, because the fixture pins a bare
+/// `token <jwt>` as *not* redacted by the Python module (case `multiline`).
+const ENGINE_SECRET_KEYS: &str = r"token";
+
 /// Key-name matcher for the field-aware layer: a *whole* key must be secret.
 fn secret_key() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(&format!(r"(?i)^(?:{SECRET_KEYS})$")).expect("static secret-key regex"))
+    R.get_or_init(|| {
+        Regex::new(&format!(r"(?i)^(?:{SECRET_KEYS}|{ENGINE_SECRET_KEYS})$"))
+            .expect("static secret-key regex")
+    })
 }
 
 /// Header-shaped credentials, scheme included.
@@ -119,7 +146,10 @@ fn auth_header() -> &'static Regex {
     R.get_or_init(|| {
         Regex::new(concat!(
             r"(?i)\b((?:proxy-)?authorization|x-auth-token|x-api-key|token|bearer)\b",
-            r"\s*([=:]\s*)(?:(?:basic|digest|bearer|token)\s+)?([A-Za-z0-9+/=_\-\.]{4,})",
+            // Optional quotes, so the JSON spelling of the same pair
+            // (`"token": "abc12345"`) is covered as well: a *malformed* detail blob
+            // falls back to this text pass, and it must not leak there either.
+            r#"["']?\s*([=:]\s*)["']?(?:(?:basic|digest|bearer|token)\s+)?([A-Za-z0-9+/=_\-\.]{4,})"#,
         ))
         .expect("static auth-header regex")
     })
@@ -176,10 +206,9 @@ pub fn redact(text: &str) -> String {
         .replace_all(text, |c: &Captures<'_>| format!("{} {REPLACEMENT}", &c[1]))
         .into_owned();
     out = kv_quoted()
-        .replace_all(
-            &out,
-            |c: &Captures<'_>| format!("{}{REPLACEMENT}{}", &c[1], &c[2]),
-        )
+        .replace_all(&out, |c: &Captures<'_>| {
+            format!("{}{REPLACEMENT}{}", &c[1], &c[2])
+        })
         .into_owned();
     out = kv_unquoted()
         .replace_all(&out, |c: &Captures<'_>| format!("{}{REPLACEMENT}", &c[1]))
@@ -201,7 +230,12 @@ pub fn redact(text: &str) -> String {
 /// Python engine's backtracking behaviour (its lookahead fails for every
 /// substring of a longer run).
 fn redact_phones(text: &str) -> String {
-    if !text.contains(|c: char| c.is_ascii_digit()) {
+    // `\d` is Unicode-aware in both engines, so the fast path must not test ASCII
+    // alone: `۹۸۷۶۵۴۳۲۱۰` (Arabic-Indic digits) is a phone number to the
+    // reference implementation (parity fixture case `unicode_digits_phone`).
+    // `is_numeric` is a superset of `\d` (`\p{Nd}`), and over-triggering the scan
+    // is harmless — under-triggering skipped the redaction entirely.
+    if !text.chars().any(|c: char| c.is_numeric()) {
         return text.to_string();
     }
     let bytes = text.as_bytes();
@@ -379,7 +413,7 @@ mod tests {
     #[test]
     fn key_value_pairs_are_redacted() {
         assert_eq!(redact("password=hunter2"), "password=[REDACTED]");
-        assert_eq!(redact("password: hunter2"), "password=[REDACTED]");
+        assert_eq!(redact("password: hunter2"), "password: [REDACTED]");
         assert_eq!(
             redact(r#"{"password": "hunter2"}"#),
             r#"{"password": "[REDACTED]"}"#
@@ -394,10 +428,13 @@ mod tests {
 
     #[test]
     fn bearer_tokens_are_redacted_and_scoped() {
-        // The `Bearer` keyword survives so the operator can see what the secret was.
+        // Parity fixture `bearer_jwt`/`bearer_lowercase`: the bearer pass keeps the
+        // scheme word, and the key/value pass then consumes it as the value of
+        // `authorization`, exactly as `logger/redaction.py` does — so the header
+        // collapses to two replacement tokens.
         assert_eq!(
             redact("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload"),
-            "Authorization: Bearer [REDACTED]"
+            "Authorization: [REDACTED] [REDACTED]"
         );
         // Too short to be a credential: left alone (same as Python).
         assert_eq!(redact("Bearer short"), "Bearer short");
@@ -422,7 +459,10 @@ mod tests {
         // Basic header and leaves the credential; the ingest path must not.
         let credential = "dXNlcjpwYXNzd29yZA==";
         let input = format!("Authorization: basic {credential}");
-        assert!(redact(&input).contains(credential), "fixture expectations rely on this");
+        assert!(
+            redact(&input).contains(credential),
+            "fixture expectations rely on this"
+        );
         assert_eq!(redact_strong(&input), "Authorization: [REDACTED]");
         assert!(!redact_detail(&input, 4096).text.contains(credential));
         // …and the same rule catches a bare `token=` pair, which the Python key
@@ -447,7 +487,10 @@ mod tests {
         let out = redact(input);
         assert!(out.contains("éèê"));
         assert!(out.contains("日本語"));
-        assert!(!out.contains("secret"));
+        // Parity fixture case `unicode_text`: the reference leaves this line
+        // untouched — a `key=value` pair is required, not a bare word. The
+        // redaction half of this test is `unicode_input_is_still_redacted`.
+        assert_eq!(out.as_str(), input);
     }
 
     #[test]
@@ -531,5 +574,161 @@ mod tests {
         }
         let out = redact_value(&value, 0);
         assert!(!render(&out).contains("abcdefghijklmnop"));
+    }
+    /// Parity contract: `tests/fixtures/redaction_parity.json` was generated by
+    /// running `logger/redaction.py`, so it — not this file's prose — is what
+    /// "parity" means. `redact` must match it byte for byte, and the ingest path
+    /// (`redact_strong`, `redact_detail`) must additionally leak none of the
+    /// secrets the fixture lists.
+    #[test]
+    fn parity_fixture_pins_redact_and_leaks_nothing() {
+        const FIXTURE: &str = include_str!("../tests/fixtures/redaction_parity.json");
+        let fixture: Value = serde_json::from_str(FIXTURE).expect("fixture is valid json");
+        let cases = fixture["cases"].as_array().expect("cases array");
+        assert!(cases.len() > 40, "fixture looks truncated: {}", cases.len());
+        for case in cases {
+            let name = case["name"].as_str().unwrap_or("<unnamed>");
+            let input = case["input"].as_str().expect("input");
+            let expected = case["expected"].as_str().expect("expected");
+            assert_eq!(
+                redact(input),
+                expected,
+                "redact parity broke for case {name}"
+            );
+            for secret in case["secrets"].as_array().expect("secrets array") {
+                let value = secret["value"].as_str().expect("secret value");
+                if value.is_empty() {
+                    continue;
+                }
+                assert!(
+                    !redact_strong(input).contains(value),
+                    "case {name}: redact_strong leaked a secret"
+                );
+                assert!(
+                    !redact_detail(input, 4096).text.contains(value),
+                    "case {name}: redact_detail leaked a secret"
+                );
+            }
+        }
+    }
+
+    /// Regression for the `SECRET_KEYS` line-continuation defect: `passwo?rd`,
+    /// `access_?token` and `cookie` followed a line break in the old literal, so
+    /// the alternatives only matched `<newline>key` and none of these inputs were
+    /// redacted at all.
+    #[test]
+    fn previously_broken_key_spellings_are_redacted() {
+        for (input, expected) in [
+            ("password=hunter2", "password=[REDACTED]"),
+            ("password: hunter2", "password: [REDACTED]"),
+            (
+                r#"{"password": "hunter2"}"#,
+                r#"{"password": "[REDACTED]"}"#,
+            ),
+            ("access_token=abc12345", "access_token=[REDACTED]"),
+            ("accessToken=abc12345", "accessToken=[REDACTED]"),
+            ("cookie=abc12345; ok=1", "cookie=[REDACTED]; ok=1"),
+        ] {
+            assert_eq!(redact(input), expected, "input {input}");
+        }
+        for key in [
+            "password",
+            "access_token",
+            "accessToken",
+            "cookie",
+            "passwd",
+        ] {
+            assert!(is_secret_key(key), "{key} must count as a secret key");
+        }
+    }
+
+    /// A container under a secret key is replaced whole — the "cannot see it with
+    /// a regex" hole the field-aware layer exists for.
+    #[test]
+    fn containers_under_secret_keys_are_replaced_wholesale() {
+        let detail = r#"{"api_key":{"inner":{"deeper":["leaf-one","leaf-two"]}},"note":"ok"}"#;
+        let out = redact_detail(detail, 4096);
+        assert!(out.structured, "{}", out.text);
+        for marker in ["inner", "deeper", "leaf-one", "leaf-two"] {
+            assert!(!out.text.contains(marker), "{marker} leaked: {}", out.text);
+        }
+        assert!(
+            out.text.contains(r#""api_key":"[REDACTED]""#),
+            "{}",
+            out.text
+        );
+        assert!(out.text.contains(r#""note":"ok""#), "{}", out.text);
+        // Through a secret key nested below a non-secret one.
+        let nested = r#"{"data":{"password":{"a":"deep-value"}}}"#;
+        let out = redact_detail(nested, 4096);
+        assert!(!out.text.contains("deep-value"), "{}", out.text);
+    }
+
+    /// Malformed JSON must fall back to the text pass for *every* spelling of a
+    /// secret pair, not only the quoted one.
+    #[test]
+    fn malformed_json_falls_back_to_text_redaction() {
+        for (input, secret) in [
+            (r#"{"password": "hunter2", broken"#, "hunter2"),
+            (r#"{"api_key": "abc12345", broken"#, "abc12345"),
+            (r#"{"session_string": "abc12345","#, "abc12345"),
+            ("password=hunter2 broken {", "hunter2"),
+            ("api_key: abc12345 {{{", "abc12345"),
+        ] {
+            let out = redact_detail(input, 4096);
+            assert!(!out.structured, "must not claim structured: {input}");
+            assert!(
+                !out.text.contains(secret),
+                "leaked in fallback: {}",
+                out.text
+            );
+        }
+    }
+
+    /// The unicode half of the original test: a real pair in a unicode line is
+    /// redacted and the surrounding text survives byte for byte (fixture case
+    /// `unicode_and_secret`).
+    #[test]
+    fn unicode_input_is_still_redacted() {
+        let input = "پیام: api_hash=deadbeef01 éèê 日本語";
+        let out = redact(input);
+        assert!(out.contains("éèê"));
+        assert!(out.contains("日本語"));
+        assert!(!out.contains("deadbeef01"));
+        assert_eq!(out, "پیام: api_hash=[REDACTED] éèê 日本語");
+    }
+
+    /// A unicode digit run is a phone number to the reference (fixture case
+    /// `unicode_digits_phone`); the fast path in [`redact_phones`] may not test
+    /// ASCII digits only, or such a run is never scanned.
+    #[test]
+    fn unicode_digit_runs_are_still_phone_redacted() {
+        assert_eq!(redact("۹۸۷۶۵۴۳۲۱۰"), "۹۸۷۶[PHONE]");
+        // ASCII-only input keeps working, and 16+ digits stay untouched.
+        assert_eq!(redact("n 0912345678"), "n 0912[PHONE]");
+        assert_eq!(redact("x1234567890123456"), "x1234567890123456");
+    }
+
+    /// The structural pass must treat the same key names as credentials as the
+    /// engine's header rule does, otherwise a JSON detail leaks where the text
+    /// form does not: `{"nested": {"token": "abc12345"}}` is the shape the
+    /// transport round trip stores.
+    #[test]
+    fn engine_token_key_is_secret_in_structured_detail() {
+        assert!(is_secret_key("token"));
+        assert!(is_secret_key("Token"));
+        assert!(!is_secret_key("tokens"));
+        assert!(!is_secret_key("token_count"));
+        let detail = r#"{"nested":{"token":"abc12345"},"note":"ok"}"#;
+        let out = redact_detail(detail, 4096);
+        assert!(out.structured, "{}", out.text);
+        assert!(!out.text.contains("abc12345"), "{}", out.text);
+        assert!(out.text.contains(r#""note":"ok""#), "{}", out.text);
+        // The malformed spelling of the same pair falls back to the text pass,
+        // which has to catch the quoted key as well.
+        let broken = r#"{"nested": {"token": "abc12345"}, broken"#;
+        let out = redact_detail(broken, 4096);
+        assert!(!out.structured);
+        assert!(!out.text.contains("abc12345"), "{}", out.text);
     }
 }
