@@ -1,0 +1,303 @@
+{
+ "tool": "scripts/bench/logger_legacy_bench.py",
+ "engine_kind": "python (retired; rollback image)",
+ "generated_at": "2026-10-16T17:35:10Z",
+ "host": {
+  "sysname": "Linux",
+  "machine": "x86_64",
+  "cpus": 2,
+  "python": "3.14.7"
+ },
+ "engine_image": {
+  "name": "autotelegramforward-logger-python:legacy-rollback",
+  "id": "sha256:02aa6b2aea7fcd58fdcc58dd7af894d32f2213120e06c916733e06a4d77006dc"
+ },
+ "client_image": {
+  "name": "autotelegramforward-core:latest",
+  "id": "sha256:827301cc3b996b797e1c9a0cc0fce42ddebbabcd0a848d48b3a7203aa1448715"
+ },
+ "config": {
+  "seconds": 5.0,
+  "producers": 4,
+  "profile": "small",
+  "query_iterations": 20,
+  "max_inflight": 64,
+  "client_processes": 1,
+  "ts_unit": "s",
+  "rates": [
+   1000,
+   10000
+  ],
+  "engine_env": "defaults (no batching/ack-mode knobs exist)"
+ },
+ "runs": [
+  {
+   "target_rate": 1000,
+   "attempt": 1,
+   "engine_command": [
+    "docker",
+    "run",
+    "-d",
+    "--rm",
+    "--name",
+    "atf-legacy-engine-550989-1792172110",
+    "--network",
+    "atf-legacy-bench-550989-1792172110",
+    "--network-alias",
+    "atf-legacy-engine-550989-1792172110",
+    "-e",
+    "ATF_LOGGER_DB_PATH=/app/data/bench.db",
+    "-e",
+    "ATF_LOGGER_HOST=0.0.0.0",
+    "-e",
+    "ATF_LOGGER_PORT=50052",
+    "-e",
+    "ATF_LOGGER_BUSY_TIMEOUT_MS=5000",
+    "-v",
+    "/root/.hermes/cache/scratch/legacy-run-1000-1-550989-1792172110/data:/app/data",
+    "autotelegramforward-logger-python:legacy-rollback"
+   ],
+   "client_command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "atf-legacy-client-550989-1792172110",
+    "--network",
+    "atf-legacy-bench-550989-1792172110",
+    "-v",
+    "/root/atf-master-deploy/scripts/bench/logger_rust_bench.py:/bench/logger_rust_bench.py:ro",
+    "autotelegramforward-core:latest",
+    "python3",
+    "/bench/logger_rust_bench.py",
+    "--client",
+    "--target-addr",
+    "atf-legacy-engine-550989-1792172110:50052",
+    "--rate",
+    "1000",
+    "--seconds",
+    "5.0",
+    "--producers",
+    "4",
+    "--profile",
+    "small",
+    "--query-iterations",
+    "20",
+    "--seed",
+    "20261016",
+    "--max-inflight",
+    "64",
+    "--ts-unit",
+    "s",
+    "--client-processes",
+    "1"
+   ],
+   "engine_container": "f5dbfdcf527a4e941aab403de64dae9eda30b3d5c7c82cb64263c8ce9180e452",
+   "engine_env": {
+    "ATF_LOGGER_DB_PATH": "/app/data/bench.db",
+    "ATF_LOGGER_HOST": "0.0.0.0",
+    "ATF_LOGGER_PORT": "50052",
+    "ATF_LOGGER_BUSY_TIMEOUT_MS": "5000"
+   },
+   "engine_logs_tail": "",
+   "ingest": {
+    "offered": 5000,
+    "accepted": 5000,
+    "rejected": 0,
+    "pending_at_stop": 0,
+    "errors": {},
+    "blocked_ms": 4.5,
+    "offered_per_sec": 999.8,
+    "accepted_per_sec": 999.8,
+    "latency_ms": {
+     "p50": 2.028,
+     "p95": 20.558,
+     "p99": 36.225,
+     "max": 45.211,
+     "mean": 4.48
+    },
+    "duration_s": 5.0
+   },
+   "query": {
+    "recent_50": {
+     "p50": 0.487,
+     "p95": 0.584,
+     "p99": 2.138,
+     "max": 2.138,
+     "mean": 0.575
+    },
+    "errors_only": {
+     "p50": 0.892,
+     "p95": 1.018,
+     "p99": 1.254,
+     "max": 1.254,
+     "mean": 0.916
+    },
+    "search_corr": {
+     "p50": 1.445,
+     "p95": 1.518,
+     "p99": 1.524,
+     "max": 1.524,
+     "mean": 1.455
+    },
+    "rule_history": {
+     "p50": 0.342,
+     "p95": 0.451,
+     "p99": 0.531,
+     "max": 0.531,
+     "mean": 0.357
+    },
+    "deep_page": {
+     "p50": 0.51,
+     "p95": 0.597,
+     "p99": 0.635,
+     "max": 0.635,
+     "mean": 0.517
+    },
+    "stats": {
+     "p50": 1.317,
+     "p95": 1.701,
+     "p99": 1.789,
+     "max": 1.789,
+     "mean": 1.365
+    }
+   },
+   "client_exit_code": 0,
+   "persisted_rows": 5000
+  },
+  {
+   "target_rate": 10000,
+   "attempt": 1,
+   "engine_command": [
+    "docker",
+    "run",
+    "-d",
+    "--rm",
+    "--name",
+    "atf-legacy-engine-550989-1792172110",
+    "--network",
+    "atf-legacy-bench-550989-1792172110",
+    "--network-alias",
+    "atf-legacy-engine-550989-1792172110",
+    "-e",
+    "ATF_LOGGER_DB_PATH=/app/data/bench.db",
+    "-e",
+    "ATF_LOGGER_HOST=0.0.0.0",
+    "-e",
+    "ATF_LOGGER_PORT=50052",
+    "-e",
+    "ATF_LOGGER_BUSY_TIMEOUT_MS=5000",
+    "-v",
+    "/root/.hermes/cache/scratch/legacy-run-10000-1-550989-1792172110/data:/app/data",
+    "autotelegramforward-logger-python:legacy-rollback"
+   ],
+   "client_command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "atf-legacy-client-550989-1792172110",
+    "--network",
+    "atf-legacy-bench-550989-1792172110",
+    "-v",
+    "/root/atf-master-deploy/scripts/bench/logger_rust_bench.py:/bench/logger_rust_bench.py:ro",
+    "autotelegramforward-core:latest",
+    "python3",
+    "/bench/logger_rust_bench.py",
+    "--client",
+    "--target-addr",
+    "atf-legacy-engine-550989-1792172110:50052",
+    "--rate",
+    "10000",
+    "--seconds",
+    "5.0",
+    "--producers",
+    "4",
+    "--profile",
+    "small",
+    "--query-iterations",
+    "20",
+    "--seed",
+    "20261016",
+    "--max-inflight",
+    "64",
+    "--ts-unit",
+    "s",
+    "--client-processes",
+    "1"
+   ],
+   "engine_container": "3155777c2e0f6ad391413b1c1e8d4ad5739d9fdb3e0d444135ad2b42adc5aec5",
+   "engine_env": {
+    "ATF_LOGGER_DB_PATH": "/app/data/bench.db",
+    "ATF_LOGGER_HOST": "0.0.0.0",
+    "ATF_LOGGER_PORT": "50052",
+    "ATF_LOGGER_BUSY_TIMEOUT_MS": "5000"
+   },
+   "engine_logs_tail": "",
+   "ingest": {
+    "offered": 7538,
+    "accepted": 7538,
+    "rejected": 0,
+    "pending_at_stop": 254,
+    "errors": {},
+    "blocked_ms": 19755.2,
+    "offered_per_sec": 1506.9,
+    "accepted_per_sec": 1506.9,
+    "latency_ms": {
+     "p50": 154.523,
+     "p95": 289.112,
+     "p99": 295.491,
+     "max": 302.192,
+     "mean": 171.688
+    },
+    "duration_s": 5.0
+   },
+   "query": {
+    "recent_50": {
+     "p50": 0.518,
+     "p95": 0.682,
+     "p99": 1.89,
+     "max": 1.89,
+     "mean": 0.586
+    },
+    "errors_only": {
+     "p50": 1.137,
+     "p95": 1.24,
+     "p99": 1.709,
+     "max": 1.709,
+     "mean": 1.175
+    },
+    "search_corr": {
+     "p50": 2.177,
+     "p95": 2.385,
+     "p99": 2.41,
+     "max": 2.41,
+     "mean": 2.199
+    },
+    "rule_history": {
+     "p50": 0.489,
+     "p95": 0.618,
+     "p99": 0.736,
+     "max": 0.736,
+     "mean": 0.51
+    },
+    "deep_page": {
+     "p50": 0.616,
+     "p95": 0.719,
+     "p99": 1.533,
+     "max": 1.533,
+     "mean": 0.659
+    },
+    "stats": {
+     "p50": 1.659,
+     "p95": 2.397,
+     "p99": 2.642,
+     "max": 2.642,
+     "mean": 1.79
+    }
+   },
+   "client_exit_code": 0,
+   "persisted_rows": 7538
+  }
+ ]
+}
