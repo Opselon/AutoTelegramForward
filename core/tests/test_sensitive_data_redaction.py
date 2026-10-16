@@ -205,16 +205,17 @@ def test_valid_port_probes_without_binding_a_wildcard_address():
     assert ui.valid_port("70000") is not None
     assert ui.valid_port("not-a-port") is not None
 
-    # a port with a listener behind it is rejected...
+    # a port with a listener behind it is rejected. The listener is bound to
+    # loopback on purpose: a regression test for "do not publish a wildcard
+    # listener" has no business publishing one itself, and the kernel's table
+    # reports a loopback listener exactly like any other.
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listener.bind(("0.0.0.0", 0))
+    listener.bind(("127.0.0.1", 0))
     listener.listen(1)
     busy = listener.getsockname()[1]
     try:
         assert ui.valid_port(str(busy)) is not None
-        # ... and the check itself reported it from the kernel's table when it
-        # can (Linux), which is what keeps the probe socket-free
         assert 0 < busy < 65536
     finally:
         listener.close()
