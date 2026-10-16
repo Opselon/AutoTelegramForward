@@ -12,6 +12,7 @@ import 'package:autoforward_mobile/l10n/app_ru.dart';
 import 'package:autoforward_mobile/l10n/app_uz.dart';
 import 'package:autoforward_mobile/l10n/app_zh.dart';
 import 'package:autoforward_mobile/l10n/app_messages.dart';
+import 'package:autoforward_mobile/features/rules/rule_settings_sheet.dart';
 
 void main() {
   group('Localization dictionaries', () {
@@ -209,6 +210,93 @@ void main() {
           );
         }
       }
+    });
+
+    // ---- the branding hop (A → C → B) ------------------------------------
+    // The editor's section title, its route summary and the settings-sheet
+    // group header are catalog-driven, so all three must resolve to real text
+    // in every shipped locale — a group header that fell back to the raw
+    // server identifier would be the classic untranslated surface.
+    test('the branding-hop surface resolves in all ten locales', () {
+      const keys = <String>[
+        'rules_intermediate_title',
+        'rules_intermediate_hint',
+        'rules_intermediate_summary_all',
+        'rules_intermediate_summary_triggers',
+        'rules_intermediate_cond_origins',
+        'rules_intermediate_cond_ids',
+        'rules_intermediate_cond_keywords',
+        'rules_intermediate_cond_forward_only',
+        'rules_intermediate_match_any',
+        'rules_intermediate_match_all',
+        'rules_settings_group_branding',
+      ];
+      for (final locale in AppMessages.supportedLocales) {
+        final msgs = AppMessages(locale);
+        for (final key in keys) {
+          final value = msgs.get(key);
+          expect(
+            value,
+            isNot(key),
+            reason: '${locale.languageCode} rendered the raw key for $key',
+          );
+          expect(
+            value.trim(),
+            isNotEmpty,
+            reason: '${locale.languageCode} left $key empty',
+          );
+        }
+      }
+      // The hop stays readable: every locale keeps the A → C → B shape.
+      for (final locale in AppMessages.supportedLocales) {
+        expect(
+          AppMessages(locale).get('rules_intermediate_summary_all'),
+          startsWith('A → C → B'),
+          reason: '${locale.languageCode} lost the readable route',
+        );
+      }
+    });
+
+    // The settings sheet groups settings by the server's registry group name.
+    // Those names are identifiers (`branding`), so a translated group must use
+    // its catalog label and an unknown group must never render as a raw key.
+    test('settings group headers are translated, never raw identifiers', () {
+      const groups = ['branding'];
+      final labels = <String, String>{};
+      for (final locale in AppMessages.supportedLocales) {
+        final msgs = AppMessages(locale);
+        for (final group in groups) {
+          final label = ruleSettingsGroupTitle(msgs, group);
+          expect(label, isNot(contains('rules_settings_group_')));
+          expect(label.trim(), isNotEmpty);
+          expect(label, isNot('BRANDING'), reason: 'raw identifier leaked');
+          labels[locale.languageCode] = label;
+        }
+      }
+      // English is the reference: no locale falls back to it, and English is
+      // itself the authored label rather than a title-cased identifier.
+      expect(labels['en'], 'Branding hop (A → C → B)');
+      for (final code in const [
+        'fa',
+        'ru',
+        'zh',
+        'es',
+        'fr',
+        'it',
+        'pt',
+        'uz',
+        'id',
+      ]) {
+        expect(
+          labels[code],
+          isNot(labels['en']),
+          reason: '$code kept the English branding label',
+        );
+      }
+      // A group no catalog names is title-cased, not rendered as its raw key.
+      final en = AppMessages(const Locale('en'));
+      expect(ruleSettingsGroupTitle(en, 'content_cleanup'), 'CONTENT CLEANUP');
+      expect(ruleSettingsGroupTitle(en, ''), 'GENERAL');
     });
 
     // English must never carry right-to-left characters: it is the fallback for

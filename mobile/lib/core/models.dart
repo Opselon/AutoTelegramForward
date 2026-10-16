@@ -165,6 +165,104 @@ class TelegramSession {
 
 /// ---- Forwarding rules ---------------------------------------------------
 
+/// Trigger policy for the branding hop (A → C → B), read from the rule
+/// metadata key `branding_hop`.
+///
+/// The hop itself is two first-class rule fields — `use_intermediate` and
+/// `intermediate_channel_id`, modelled as [ForwardRule.useVipRouting] and
+/// [ForwardRule.intermediateChannelId]. This class only describes *which*
+/// messages earn the hop, mirroring `core/domain/branding.py` on the server so
+/// the app can describe the effective route without re-implementing the
+/// decision.
+///
+/// It is deliberately read-only on the client: the metadata blob has exactly
+/// one server-side writer, so parsing it here can never disagree with a write
+/// path, and it is never re-serialised (see [ForwardRule.toCreateJson]).
+@immutable
+class BrandingHopConfig {
+  const BrandingHopConfig({
+    this.triggersEnabled = false,
+    this.originIds = const [],
+    this.originTitles = const [],
+    this.keywords = const [],
+    this.matchMode = 'any',
+    this.requireForward = false,
+    this.forceForward = true,
+  });
+
+  /// Off (the server default) means the hop is unconditional.
+  final bool triggersEnabled;
+
+  /// Forward-origin chat ids / @usernames that qualify a message.
+  final List<String> originIds;
+
+  /// Forward-origin channel *names* (Telegram's `Forwarded from <channel>`
+  /// header), not text inside the message body.
+  final List<String> originTitles;
+
+  /// Words that qualify a message by its text.
+  final List<String> keywords;
+
+  /// `any` (one trigger is enough) or `all` (every configured trigger must
+  /// match). Anything else normalises to `any`.
+  final String matchMode;
+
+  /// A gate, not a check: when set, a message that is not itself a forward is
+  /// refused regardless of [matchMode].
+  final bool requireForward;
+
+  /// Send the final step as a native forward of C, which is what makes the
+  /// target's header name C. Defaults to true server-side.
+  final bool forceForward;
+
+  /// True only when the triggers actually narrow the hop down. Switched-off
+  /// triggers, or switched-on triggers with nothing configured, both mean
+  /// "every matched message hops".
+  bool get hasTriggers =>
+      triggersEnabled &&
+      (originIds.isNotEmpty ||
+          originTitles.isNotEmpty ||
+          keywords.isNotEmpty ||
+          requireForward);
+
+  /// Parses the `branding_hop` metadata value defensively.
+  ///
+  /// Absent, non-map and malformed input all degrade to the unconditional
+  /// configuration: a rule the app cannot read must render as "every message"
+  /// rather than throwing in a build.
+  factory BrandingHopConfig.fromValue(Object? raw) {
+    if (raw is! Map) return const BrandingHopConfig();
+    final mode = raw['match_mode']?.toString().trim().toLowerCase();
+    return BrandingHopConfig(
+      triggersEnabled: raw['triggers_enabled'] == true,
+      originIds: _stringList(raw['origin_ids']),
+      originTitles: _stringList(raw['origin_titles']),
+      keywords: _stringList(raw['keywords']),
+      matchMode: mode == 'all' ? 'all' : 'any',
+      requireForward: raw['require_forward'] == true,
+      forceForward: raw['force_forward'] is bool
+          ? raw['force_forward'] as bool
+          : true,
+    );
+  }
+
+  /// Mirrors `_as_str_list` in `core/domain/branding.py`: scalars only,
+  /// trimmed, empties dropped, de-duplicated. Nested maps/lists are junk from a
+  /// hand-edited blob and are skipped instead of stringified.
+  static List<String> _stringList(Object? raw) {
+    final items = raw is List
+        ? raw
+        : (raw is String ? <Object?>[raw] : const <Object?>[]);
+    final seen = <String>{};
+    for (final item in items) {
+      if (item is Map || item is Iterable) continue;
+      final text = item?.toString().trim() ?? '';
+      if (text.isEmpty || !seen.add(text)) continue;
+    }
+    return List<String>.unmodifiable(seen);
+  }
+}
+
 @immutable
 class ForwardRule {
   const ForwardRule({
@@ -178,6 +276,7 @@ class ForwardRule {
     this.targetChatTitle = '',
     this.sessionId = '',
     this.intermediateChannelId = '',
+    this.brandingHop = const BrandingHopConfig(),
     this.filters = const [],
     this.filterMode = 'all',
     this.mediaMode = 'all',
@@ -302,6 +401,11 @@ class ForwardRule {
   final String intermediateChannelId;
   final bool useVipRouting;
 
+  /// Which messages earn the hop (rule metadata key `branding_hop`). Read-only:
+  /// it is parsed for display and never written back, so editing a task cannot
+  /// invent a second writer for the same value.
+  final BrandingHopConfig brandingHop;
+
   final List<String> filters;
   final String filterMode;
   final String mediaMode;
@@ -381,6 +485,7 @@ class ForwardRule {
     bool? showForwardHeader,
     bool? syncReplies,
     bool? syncEdits,
+    BrandingHopConfig? brandingHop,
   }) => ForwardRule(
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
@@ -396,6 +501,7 @@ class ForwardRule {
     targetChatIds: targetChatIds ?? this.targetChatIds,
     intermediateChannelId: intermediateChannelId ?? this.intermediateChannelId,
     useVipRouting: useVipRouting ?? this.useVipRouting,
+    brandingHop: brandingHop ?? this.brandingHop,
     filters: filters ?? this.filters,
     filterMode: filterMode ?? this.filterMode,
     mediaMode: mediaMode ?? this.mediaMode,
@@ -578,6 +684,9 @@ class ForwardRule {
       targetChatIds: targets,
       intermediateChannelId: json['intermediate_channel_id']?.toString() ?? '',
       useVipRouting: json['use_vip_routing'] as bool? ?? false,
+      // The trigger policy lives in the raw metadata blob, which only the
+      // server writes; parse it defensively and never send it back.
+      brandingHop: BrandingHopConfig.fromValue(meta['branding_hop']),
       name: (json['name'] as String?) ?? (meta['name'] as String? ?? ''),
       topicId:
           (json['topic_id'] as num?)?.toInt() ??

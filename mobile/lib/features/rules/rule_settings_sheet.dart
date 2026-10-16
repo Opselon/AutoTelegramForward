@@ -543,7 +543,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
           Padding(
             padding: const EdgeInsets.only(top: 6, bottom: 6),
             child: Text(
-              _groupTitle(t, group),
+              ruleSettingsGroupTitle(t, group),
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -559,18 +559,6 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         ],
       ],
     );
-  }
-
-  /// Group names come from the server registry (e.g. `content_cleanup`); they
-  /// are identifiers, not catalog keys, so they are title-cased rather than
-  /// translated — a new server-side group must not render as a raw key.
-  static String _groupTitle(AppMessages t, String group) {
-    if (group.isEmpty) return 'GENERAL';
-    final words = group.split(RegExp(r'[_\s-]+'));
-    return words
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ')
-        .toUpperCase();
   }
 
   Widget _field(RuleSettingSpec spec) {
@@ -959,3 +947,27 @@ class _PairEditorState extends State<_PairEditor> {
     );
   }
 }
+
+/// Header for one settings group in the sheet.
+///
+/// Group names come from the server registry (`general`, `cleanup`, `media`,
+/// `branding`, …) and are identifiers, not catalog keys. A group that ships an
+/// authored translation uses it; every other group — including one a newer
+/// server adds — is title-cased, so a new server-side group can never render as
+/// a raw identifier.
+String ruleSettingsGroupTitle(AppMessages t, String group) {
+  final key = _groupLabelKeys[group];
+  if (key != null) return t.get(key);
+  if (group.isEmpty) return 'GENERAL';
+  final words = group.split(RegExp(r'[_\s-]+'));
+  return words
+      .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+      .join(' ')
+      .toUpperCase();
+}
+
+/// Registry group -> catalog key for the groups with an authored label. The
+/// keys exist in every one of the ten catalogs (the parity audit enforces it).
+const Map<String, String> _groupLabelKeys = {
+  'branding': 'rules_settings_group_branding',
+};

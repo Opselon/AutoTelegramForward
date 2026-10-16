@@ -317,4 +317,113 @@ void main() {
     expect(_chip('-1001111111111'), findsOneWidget);
     expect(_fieldText(tester, 'rule_sources_field'), '-1001111111111');
   });
+
+  // ---- branding hop (A → C → B) ----------------------------------------
+  // The editor states the effective route below the C-channel field, read from
+  // the rule metadata the server owns. A rule with no trigger policy, or with a
+  // blob the app cannot read, must render the unconditional route rather than
+  // throw or show a raw key.
+
+  /// A task that already routes through C, with an optional branding blob.
+  ForwardRule hopRule(Object? brandingHop) =>
+      ForwardRule.fromJson(<String, dynamic>{
+        'id': 'r-brand-1111-2222',
+        'source_chat_id': '-1001111111111',
+        'target_chat_id': '-1003333333333',
+        'session_id': 's-1',
+        'intermediate_channel_id': '-1009999999999',
+        'use_vip_routing': true,
+        'is_enabled': true,
+        if (brandingHop != null)
+          'metadata': <String, dynamic>{'branding_hop': brandingHop},
+      });
+
+  String summaryOf(WidgetTester tester) => tester
+      .widget<Text>(
+        find.byKey(const ValueKey<String>('rule_branding_hop_summary')),
+      )
+      .data!;
+
+  testWidgets('the hop section is titled and states the unconditional route', (
+    tester,
+  ) async {
+    final log = <_Sent>[];
+    await _pumpEditor(tester, _state(log), rule: hopRule(null));
+
+    expect(find.text('Branding hop (A → C → B)'), findsOneWidget);
+    expect(summaryOf(tester), 'A → C → B · every message');
+    // The C channel is prefilled from the stored rule, so the user sees the
+    // hop they are about to keep.
+    expect(_fieldText(tester, 'rule_intermediate_field'), '-1009999999999');
+  });
+
+  testWidgets('configured triggers are described in the summary', (
+    tester,
+  ) async {
+    final log = <_Sent>[];
+    await _pumpEditor(
+      tester,
+      _state(log),
+      rule: hopRule(const <String, Object?>{
+        'triggers_enabled': true,
+        'origin_titles': <Object?>['Sadaf News'],
+        'keywords': <Object?>['tariff', 'rate'],
+        'match_mode': 'any',
+        'require_forward': true,
+        'force_forward': true,
+      }),
+    );
+
+    expect(
+      summaryOf(tester),
+      'A → C → B · any trigger · forwarded from Sadaf News · '
+      '2 keyword(s) · forwarded messages only',
+    );
+  });
+
+  testWidgets('a torn branding blob renders the unconditional route', (
+    tester,
+  ) async {
+    final log = <_Sent>[];
+    await _pumpEditor(tester, _state(log), rule: hopRule('not-a-map'));
+
+    expect(summaryOf(tester), 'A → C → B · every message');
+  });
+
+  testWidgets('the hop summary is absent while routing via C is off', (
+    tester,
+  ) async {
+    final log = <_Sent>[];
+    final plain = ForwardRule.fromJson(const {
+      'id': 'r-plain-1111-2222',
+      'source_chat_id': '-1001111111111',
+      'target_chat_id': '-1003333333333',
+      'session_id': 's-1',
+      'is_enabled': true,
+    });
+    await _pumpEditor(tester, _state(log), rule: plain);
+
+    expect(
+      find.byKey(const ValueKey<String>('rule_branding_hop_summary')),
+      findsNothing,
+    );
+
+    // Switching it on shows the summary for the route being configured, and the
+    // save still carries the two first-class hop fields — there is no second
+    // write path for them.
+    await tester.ensureVisible(find.text('Intermediate (VIP) channel'));
+    await tester.tap(find.text('Intermediate (VIP) channel'));
+    await tester.pump();
+    expect(summaryOf(tester), 'A → C → B · every message');
+
+    await tester.enterText(_field('rule_intermediate_field'), '-1009999999999');
+    await tester.pump();
+    await _tapSave(tester);
+
+    final body = _writes(log).last.body! as Map<String, dynamic>;
+    expect(body['use_vip_routing'], isTrue);
+    expect(body['intermediate_channel_id'], '-1009999999999');
+    // The trigger policy is server-owned metadata: the client never sends it.
+    expect(body.containsKey('metadata'), isFalse);
+  });
 }
