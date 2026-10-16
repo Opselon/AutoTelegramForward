@@ -2025,9 +2025,13 @@ class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):
         try:
             policy.reconfigure(
                 levels=list(request.levels) if request.levels else None,
+                # Presence, not truthiness: an explicit 0 removes the ceiling,
+                # while omitting the field leaves whatever ceiling is in force.
+                # Reading 0 as "not mentioned" is what made "unlimited" an
+                # impossible request for an operator to make.
                 verbose_rate_per_second=(
                     float(request.verbose_rate_per_second)
-                    if request.verbose_rate_per_second
+                    if request.HasField("verbose_rate_per_second")
                     else None
                 ),
                 diagnostic_seconds=int(request.diagnostic_seconds or 0) or None,

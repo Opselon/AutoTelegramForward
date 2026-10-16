@@ -229,9 +229,15 @@ func (h *Handlers) LogPolicyUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Every field carries an explicit value taken from the enforced policy, so
+	// the request describes the complete state the caller wants — not a patch
+	// whose omitted fields would let a second writer's change be reverted. The
+	// rate is a pointer on the wire precisely so an explicit 0 ("no ceiling")
+	// stays distinguishable from "leave it alone".
+	currentRate := current.VerboseRatePerSecond
 	desired := &pb.SetLogPolicyRequest{
 		Levels:               current.ConfiguredLevels,
-		VerboseRatePerSecond: current.VerboseRatePerSecond,
+		VerboseRatePerSecond: &currentRate,
 		Actor:                strconv.FormatInt(actor, 10),
 		CorrelationId:        middleware.CorrelationIDFromContext(r.Context()),
 	}
@@ -239,7 +245,8 @@ func (h *Handlers) LogPolicyUpdate(w http.ResponseWriter, r *http.Request) {
 		desired.Levels = *body.Levels
 	}
 	if body.VerboseRatePerSecond != nil {
-		desired.VerboseRatePerSecond = *body.VerboseRatePerSecond
+		rate := *body.VerboseRatePerSecond
+		desired.VerboseRatePerSecond = &rate
 	}
 	if body.DiagnosticSeconds != nil {
 		desired.DiagnosticSeconds = int32(*body.DiagnosticSeconds)

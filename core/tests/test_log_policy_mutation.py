@@ -471,3 +471,85 @@ def test_the_saved_row_is_the_policy_and_nothing_else(tmp_path):
         assert set(state) == {"configured_levels", "verbose_rate_per_second", "diagnostic_until"}
     finally:
         db.close()
+
+
+# --------------------------------------------------------------------------- #
+# An explicit zero rate is a request, not a silence: "no ceiling" must be
+# expressible end to end. Before the proto field became presence-aware, a 0 was
+# read as "the field was not mentioned" and silently turned into "unchanged" —
+# so the one value that means "unlimited" was the one value an operator could
+# never successfully ask for.
+# --------------------------------------------------------------------------- #
+
+
+def test_an_explicit_zero_rate_removes_the_ceiling():
+    policy = LogPolicy(levels=["WARN"], verbose_rate_per_second=5)
+    store = _CountingStore()
+
+    resp = _run(
+        _servicer(policy, store=store).SetLogPolicy(
+            pb.SetLogPolicyRequest(levels=["WARN"], verbose_rate_per_second=0),
+            None,
+        )
+    )
+
+    assert resp.applied is True and resp.persisted is True
+    assert resp.verbose_rate_per_second == 0
+    assert policy.snapshot()["verbose_rate_per_second"] == 0
+    assert store.saves == 1
+
+
+def test_an_omitted_rate_leaves_the_ceiling_untouched():
+    # The mirror image: the rate is the only field whose zero value is a
+    # legitimate setting rather than an absence, so "not mentioned" must not
+    # be read as "no ceiling" any more than it may be read as "unchanged".
+    policy = LogPolicy(levels=["WARN"], verbose_rate_per_second=7)
+
+    resp = _run(
+        _servicer(policy).SetLogPolicy(
+            pb.SetLogPolicyRequest(levels=["ERROR"]),
+            None,
+        )
+    )
+
+    assert resp.applied is True
+    assert resp.verbose_rate_per_second == 7, "a levels-only change must not touch the ceiling"
+    assert policy.snapshot()["verbose_rate_per_second"] == 7
+
+
+def test_an_explicit_zero_rate_actually_unlimits_verbose_events():
+    # 0 must mean what the dashboard's field label says it means, not merely be
+    # stored: a verbose event must pass where the previous ceiling stopped it.
+    policy = LogPolicy(levels=["INFO"], verbose_rate_per_second=1)
+
+    assert policy.allow("INFO", "forward.progress") is True
+    assert policy.allow("INFO", "forward.progress") is False, "the old ceiling was real"
+
+    _run(
+        _servicer(policy).SetLogPolicy(
+            pb.SetLogPolicyRequest(levels=["INFO"], verbose_rate_per_second=0),
+            None,
+        )
+    )
+    policy._counters["suppressed_rate"] = 0
+
+    for _ in range(50):
+        assert policy.allow("INFO", "forward.progress") is True, "the ceiling is gone"
+
+
+def test_a_rate_floor_is_still_validated_before_anything_is_mutated():
+    # The presence fix must not widen the accepted range: a negative ceiling is
+    # still a bad request, and a rejected one still changes nothing. A value
+    # that is *stated* must be validated even when it is 0, which is why the
+    # check runs on what the caller sent, not on what was already in force.
+    policy = LogPolicy(levels=["WARN"], verbose_rate_per_second=5)
+
+    resp = _run(
+        _servicer(policy).SetLogPolicy(
+            pb.SetLogPolicyRequest(levels=["WARN"], verbose_rate_per_second=-1),
+            None,
+        )
+    )
+    assert resp.applied is False, "a negative ceiling must be refused, not clamped"
+    assert resp.reason
+    assert policy.snapshot()["verbose_rate_per_second"] == 5

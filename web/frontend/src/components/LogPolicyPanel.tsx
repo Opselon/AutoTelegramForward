@@ -279,13 +279,36 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
           <button
             className="btn btn-primary"
             disabled={saving || !core?.available || levels.length === 0}
-            onClick={() =>
+            onClick={() => {
+              // Both fields are always stated: an explicit 0 for the ceiling is
+              // the operator asking for no limit, so it must reach the API as
+              // 0 rather than as an absent field or a silent default.
+              const parsedRate = Number(rate)
+              const parsedSeconds = Number(seconds)
+              if (!Number.isFinite(parsedRate) || parsedRate < 0) {
+                setError(
+                  t(
+                    'سقف نرخ باید عددی نامنفی باشد (۰ = بدون محدودیت)',
+                    'The rate ceiling must be a non-negative number (0 = unlimited)',
+                  ),
+                )
+                return
+              }
+              if (!Number.isFinite(parsedSeconds) || parsedSeconds < 1 || parsedSeconds > 3600) {
+                setError(
+                  t(
+                    'پنجره تشخیصی باید بین ۱ تا ۳۶۰۰ ثانیه باشد',
+                    'The diagnostic window must be between 1 and 3600 seconds',
+                  ),
+                )
+                return
+              }
               void apply({
                 levels,
-                verbose_rate_per_second: Number(rate) || 0,
-                diagnostic_seconds: Number(seconds) || 0,
+                verbose_rate_per_second: parsedRate,
+                diagnostic_seconds: parsedSeconds,
               })
-            }
+            }}
           >
             {t('اعمال سطح‌ها و نرخ', 'Apply levels and rate')}
           </button>
