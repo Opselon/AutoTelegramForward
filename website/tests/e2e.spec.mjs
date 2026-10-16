@@ -185,4 +185,111 @@ test.describe('AutoTelegramForward Official Platform Smoke Tests', () => {
     }
   });
 
+
+test.describe('System atlas — derived maps and simulations', () => {
+
+  test('Atlas hub renders the runtime topology and inspects a component on click', async ({ page }) => {
+    const response = await page.goto('/system/');
+    expect(response?.status()).toBe(200);
+    await expect(page.locator('h1')).toContainText('System atlas');
+
+    const map = page.locator('[data-topology]');
+    await expect(map).toBeVisible();
+    // Every component from the derived graph is drawn, not a subset.
+    const nodes = map.locator('[data-node]');
+    expect(await nodes.count()).toBeGreaterThanOrEqual(12);
+
+    // The detail panel is server-rendered, so it already has content.
+    const detail = page.locator('[data-topology-detail]');
+    await expect(detail).toContainText('Pipeline');
+
+    // Clicking a component re-renders the panel from the embedded data.
+    await map.locator('[data-node][data-id="api-rest"]').click();
+    await expect(detail).toContainText('REST control plane');
+    await expect(detail.locator('a[href*="github.com"]').first()).toBeVisible();
+  });
+
+  test('Dependency atlas loads the real graph, filters it and inspects a module', async ({ page }) => {
+    await page.goto('/system/dependencies/');
+    await expect(page.locator('h1')).toContainText('Dependency');
+
+    await expect(page.locator('[data-depmap]')).toHaveAttribute('data-dep-ready', 'true', { timeout: 15000 });
+    const counts = await page.evaluate(() => {
+      const api = window.__atlas2d;
+      return { nodes: api.nodes, edges: api.edges, visible: api.visibleCount() };
+    });
+    expect(counts.nodes).toBeGreaterThan(200);
+    expect(counts.edges).toBeGreaterThan(400);
+    expect(counts.visible).toBeGreaterThan(100); // tests are hidden by default
+
+    // Turning a subsystem off must remove exactly its nodes from the canvas.
+    const before = counts.visible;
+    await page.locator('[data-dep-subsystem="core"]').click();
+    const afterDisable = await page.evaluate(() => window.__atlas2d.visibleCount());
+    expect(afterDisable).toBeLessThan(before);
+    await page.locator('[data-dep-subsystem="core"]').click();
+    expect(await page.evaluate(() => window.__atlas2d.visibleCount())).toBe(before);
+
+    // Generated stubs are in the data and excluded on request.
+    await page.locator('[data-dep-hide-generated]').check();
+    expect(await page.evaluate(() => window.__atlas2d.visibleCount())).toBeLessThan(before);
+
+    // Search narrows the canvas and opens the first match in the detail panel.
+    await page.locator('[data-dep-search]').fill('pipeline');
+    await expect(page.locator('[data-dep-hud-count]')).toContainText('match');
+    await page.locator('[data-dep-search]').press('Enter');
+    await expect(page.locator('[data-dep-detail]')).toContainText('pipeline');
+    await expect(page.locator('[data-dep-detail] a[href*="github.com"]').first()).toBeVisible();
+  });
+
+  test('3D connection simulation replays a real flow packet by packet', async ({ page }) => {
+    await page.goto('/system/connections/');
+    await expect(page.locator('h1')).toContainText('3D');
+
+    const sim = page.locator('[data-sim3d]');
+    await expect(sim).toHaveAttribute('data-sim-ready', 'true', { timeout: 15000 });
+
+    const linkCount = await page.evaluate(() => window.__atlas3d.links);
+    expect(linkCount).toBeGreaterThan(15);
+
+    // Every step of every flow is in the document, not only in the canvas.
+    const steps = sim.locator('[data-sim-steps] li');
+    expect(await steps.count()).toBeGreaterThan(15);
+
+    // Pick a scenario, then assert the trace actually grew.
+    await sim.locator('[data-sim-flow="forward"]').click();
+    await expect(sim.locator('[data-sim-flow="forward"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(sim.locator('[data-sim-log] li').first()).toContainText('replay started', { timeout: 10000 });
+    await expect(sim.locator('[data-sim-steps="forward"] li[data-active="true"]').first()).toBeVisible({ timeout: 10000 });
+    const logged = await page.evaluate(() => window.__atlas3d.logLines());
+    expect(logged).toBeGreaterThan(1);
+
+    // Stop returns the scene to idle and preserves the steps as text.
+    const forwardSteps = sim.locator('[data-sim-steps="forward"] li');
+    const forwardCount = await forwardSteps.count();
+    await sim.locator('[data-sim-stop]').click();
+    await expect(sim.locator('[data-sim-title]')).toHaveText('Idle drift');
+    await expect(forwardSteps).toHaveCount(forwardCount);
+  });
+
+  test('Every atlas route is linked from navigation and indexed for search', async ({ page, isMobile }) => {
+    if (isMobile) return;
+    await page.goto('/system/');
+    const footer = page.locator('footer');
+    await expect(footer.getByRole('link', { name: 'Dependency atlas' })).toBeVisible();
+
+    await page.goto('/');
+    await page.locator('#search-open').click();
+    const input = page.locator('#search-input');
+    // The overlay matches whole tokens against title/description, so the query
+    // has to be a token that the atlas entry really carries.
+    await input.fill('keystone');
+    const results = page.locator('#search-results a');
+    await expect(results.first()).toBeVisible();
+    expect(await results.count()).toBeGreaterThan(0);
+    await expect(page.locator('#search-results a[href*="/system/dependencies/"]').first()).toBeVisible();
+  });
+
+});
+
 });

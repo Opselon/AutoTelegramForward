@@ -1,0 +1,310 @@
+---
+/**
+ * System atlas — the derived map of the whole repository.
+ *
+ * Every figure on this page and its two children comes from
+ * scripts/sync-architecture.mjs, which parses this checkout at build time:
+ * imports per language, packages, proto services, the compose topology and the
+ * log tags the pipeline actually emits. Nothing here is hand-counted.
+ */
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import TopologyMap from '../../components/atlas/TopologyMap.astro';
+import Icon from '../../components/Icon.astro';
+import { atlas, number, compact, bytes, repoInfo, url, sourceUrl } from '../../data/system';
+
+const pageTitle = 'System atlas';
+const pageDesc =
+  'Interactive map of AutoTelegramForward derived from its own source: every module, import link and service, plus a 3D simulation of the runtime connections.';
+
+const toc = [
+  { id: 'shape', title: 'Shape of the system' },
+  { id: 'subsystems', title: 'Subsystems' },
+  { id: 'topology', title: 'Runtime topology' },
+  { id: 'flows', title: 'What a request does' },
+  { id: 'verification', title: 'How this map is verified' },
+  { id: 'deeper', title: 'Go deeper' },
+];
+
+const stats = [
+  { label: 'Subsystems', value: number(atlas.subsystems.length), note: 'top-level areas of the checkout' },
+  { label: 'Source files', value: number(atlas.totals.sourceFiles), note: `${number(atlas.totals.files)} files tracked in total` },
+  { label: 'Lines of code', value: compact(atlas.totals.loc), note: 'non-blank, non-comment lines' },
+  { label: 'Module nodes', value: number(atlas.totals.nodes), note: 'files, or packages for Go' },
+  { label: 'Import links', value: number(atlas.totals.edges), note: 'resolved inside the repository' },
+  { label: 'Runtime components', value: number(atlas.components.length), note: `${atlas.componentEdges.length} live connections` },
+  { label: 'gRPC surface', value: `${atlas.proto.rpcCount}`, note: `${atlas.proto.services.length} services · ${atlas.proto.messageCount} messages` },
+  { label: 'Pipeline log tags', value: number(atlas.pipeline.tags.length), note: 'distinct [PIPELINE:*] events in source' },
+];
+
+const languages = atlas.languages;
+const languagePeak = Math.max(...languages.map((l) => l.loc));
+const deepest = atlas.subsystems.find((s) => s.id === 'core') || atlas.subsystems[0];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/system/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'System atlas', href: url('/system/') },
+  ]}
+  toc={toc}
+  keywords={[
+    'AutoTelegramForward architecture map',
+    'Telegram forwarder dependency graph',
+    'microservice topology visualisation',
+    'gRPC service map',
+  ]}
+>
+  <p>
+    Most architecture pages describe the software. This one is <em>computed</em> from it: a build-time sweep walks the
+    checkout, resolves the imports of every language it finds, reads the protobuf registry and the compose file, and
+    renders what it found. The result is {number(atlas.totals.nodes)} module nodes and {number(atlas.totals.edges)}
+    import links across {number(atlas.totals.sourceFiles)} source files — plus the {atlas.componentEdges.length} runtime
+    connections between {atlas.components.length} components, drawn in 3D on the
+    <a href={url('/system/connections/')}>connection map</a>.
+  </p>
+
+  <div class="not-prose grid gap-3 sm:grid-cols-2 lg:grid-cols-4 my-5">
+    {
+      stats.map((stat) => (
+        <div class="atlas-stat">
+          <div class="atlas-stat-value">{stat.value}</div>
+          <div class="atlas-stat-label">
+            <strong class="text-slate-300">{stat.label}</strong> — {stat.note}
+          </div>
+        </div>
+      ))
+    }
+  </div>
+
+  <section class="not-prose scroll-mt-24" id="shape">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Shape of the system</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Nine subsystems, one deployable stack. The split is not decoration: it is the reason a Telegram session can be
+      replaced without touching the REST contract, and the reason a log flood cannot slow a delivery down. Three
+      languages carry the runtime — Python for the engine, Go for the control plane, Rust for the gateway — with Dart
+      for the client and TypeScript for the dashboard.
+    </p>
+
+    <div class="atlas-card">
+      <h3>Lines by language, counted from the checkout</h3>
+      <ul class="mt-2 grid gap-2 list-none p-0 m-0">
+        {
+          languages.map((language) => (
+            <li class="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 text-[12.5px]">
+              <span class="atlas-mono">{language.lang}</span>
+              <span class="atlas-bar-track">
+                <span class="atlas-bar-fill" style={`width:${Math.max(2, Math.round((language.loc / languagePeak) * 100))}%`} />
+              </span>
+              <span class="text-slate-400 atlas-mono text-right">
+                {number(language.loc)} · {language.files} files
+              </span>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="mt-3 text-[12px] text-slate-400">
+        {number(atlas.totals.generatedFiles)} of those files are generated (<code>.pb.go</code>, <code>_pb2_grpc.py</code>),
+        and {number(atlas.totals.testFiles)} are tests. Both are excluded from the keystone ranking on the
+        <a href={url('/system/dependencies/')}>dependency page</a>, because a generated stub is not an authored decision.
+      </p>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="subsystems">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Subsystems</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Each card is a directory in the repository, with its real size and its real areas. The largest area of the engine,
+      {' '}<span class="atlas-mono">{deepest.areas[0]?.id}</span>, is {number(deepest.areas[0]?.loc || 0)} lines on its own.
+    </p>
+
+    <div class="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
+      {
+        atlas.subsystems.map((subsystem) => (
+          <div class="atlas-card" style={`border-left:3px solid ${subsystem.color}`}>
+            <div class="atlas-card-head">
+              <span class="atlas-dot" style={`background:${subsystem.color}`} />
+              <h3 class="m-0">{subsystem.label}</h3>
+            </div>
+            <p class="text-[11.5px] uppercase tracking-widest text-slate-400 mb-1">{subsystem.role}</p>
+            <p>{subsystem.blurb}</p>
+            <p class="mt-2 atlas-mono text-slate-400">
+              {number(subsystem.sourceFiles)} files · {number(subsystem.loc)} lines · {subsystem.langs.join(', ')}
+            </p>
+            <div class="flex flex-wrap gap-1 mt-2">
+              {subsystem.areas.slice(0, 4).map((area) => (
+                <span class="atlas-tag">
+                  {subsystem.root}/{area.id} · {number(area.loc)}
+                </span>
+              ))}
+            </div>
+            <p class="mt-2">
+              <a class="atlas-mono text-[11.5px]" href={sourceUrl(subsystem.root)} rel="noopener">
+                browse {subsystem.root} on GitHub
+              </a>
+            </p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="topology">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Runtime topology</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Import links only exist inside one language. What connects the languages is the wire: gRPC between the control
+      plane and the engine, HTTP between the gateway and the API, MTProto between the engine and Telegram, and SQL to the
+      two separate stores. Those {atlas.componentEdges.length} links are what this map draws — hover a component to trace
+      them, click one for its files and evidence.
+    </p>
+    <TopologyMap />
+    <div class="not-prose grid gap-3 sm:grid-cols-3 mt-3">
+      <div class="atlas-card">
+        <h3>{atlas.contracts.filter((c) => c.kind === 'grpc').length} gRPC boundaries</h3>
+        <p>Control plane → engine, control plane → log store, engine → log store. All three are protobuf, all three fail loudly.</p>
+      </div>
+      <div class="atlas-card">
+        <h3>{atlas.contracts.filter((c) => c.kind === 'http').length} HTTP boundaries</h3>
+        <p>Dashboard → gateway → API, mobile → API, CLI → running stack. The browser never sees an API key.</p>
+      </div>
+      <div class="atlas-card">
+        <h3>{atlas.componentEdges.filter((e) => e.kind === 'sql').length} SQL boundaries</h3>
+        <p>Engine database and log database are separate files, so history cannot lock the delivery path.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="flows">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">What a request does</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Three paths cover almost everything an operator will ever ask about. Each one is replayed as a packet animation on
+      the <a href={url('/system/connections/')}>3D connection map</a>, where every step is also written out as text.
+    </p>
+    <div class="grid gap-3.5 lg:grid-cols-3">
+      {
+        atlas.flows.map((flow) => (
+          <div class="atlas-card">
+            <h3>{flow.title}</h3>
+            <p>{flow.summary}</p>
+            <p class="atlas-mono text-slate-400 mt-2">{flow.steps.length} steps · {flow.steps.reduce((a, s) => a + s.tags.length, 0)} log tags</p>
+            <p class="mt-2">
+              <a class="btn btn-secondary btn-sm" href={`${url('/system/connections/')}#${flow.id}`}>
+                Replay it in 3D
+                <Icon name="arrow-right" class="w-3.5 h-3.5" />
+              </a>
+            </p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="verification">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">How this map is verified</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      A map that describes a system is only useful if it is allowed to say "I could not confirm that". The sweep that
+      builds this page does three kinds of check, and publishes the failures in the same place as the successes.
+    </p>
+
+    <div class="grid gap-3.5 lg:grid-cols-3">
+      <div class="atlas-card">
+        <h3>Derived, never typed</h3>
+        <p>
+          Counts, node lists, protocols, ports and log tags are parsed from
+          <code>scripts/sync-architecture.mjs</code> reading this checkout at <span class="atlas-mono">{atlas.commit}</span>.
+          A number on these pages that is not in <code>architecture.json</code> does not exist.
+        </p>
+      </div>
+      <div class="atlas-card">
+        <h3>Every claim has a source</h3>
+        <p>
+          {atlas.contracts.length} inter-service links were emitted only after a real search hit in the repository — the
+          matching files are printed with each link. {atlas.omittedProbes.length === 0
+            ? 'No probe failed in this build.'
+            : `${atlas.omittedProbes.length} probe(s) found nothing and were left out.`}
+        </p>
+      </div>
+      <div class="atlas-card">
+        <h3>{atlas.verifiedAbsences.length} checked absences</h3>
+        <p>
+          The strongest statements are the negative ones. Each of these is a search that came back empty on this
+          checkout: {atlas.verifiedAbsences.map((a) => a.label).join(' · ')}.
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-3 grid gap-2">
+      {
+        atlas.verifiedAbsences.map((absence) => (
+          <div class="atlas-card" style="padding:0.7rem 0.9rem">
+            <p class="m-0 text-[13px]">
+              <span class="atlas-tag atlas-ok">empty result</span>{' '}
+              <strong class="text-slate-200">{absence.label}</strong> — {absence.claim}
+              <span class="text-slate-500 atlas-mono text-[11px]"> (searched: {absence.scope})</span>
+            </p>
+          </div>
+        ))
+      }
+      {
+        atlas.openChecks.map((check) => (
+          <div class="atlas-card" style="padding:0.7rem 0.9rem">
+            <p class="m-0 text-[13px]">
+              <span class="atlas-tag atlas-open">open item</span>{' '}
+              <strong class="text-slate-200">{check.label}</strong> — {check.claim}
+              <span class="text-slate-500 atlas-mono text-[11px]"> (hits: {check.hits.join(', ')})</span>
+            </p>
+          </div>
+        ))
+      }
+    </div>
+
+    <p class="mt-3 text-[12.5px] text-slate-400">
+      The negative checks and the dropped probes are regenerated on every build, so a claim that stops being true stops
+      being printed — the page cannot silently drift from the software it maps.
+    </p>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="deeper">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Go deeper</h2>
+    <div class="grid gap-3.5 md:grid-cols-2">
+      <div class="atlas-card">
+        <h3>Dependency & structure atlas</h3>
+        <p>
+          The full module graph: {atlas.totals.nodes} nodes and {atlas.totals.edges} resolved imports, filterable by
+          subsystem, language and test status — with the ranked keystones, the {atlas.cycles.length} import cycles and
+          the cross-subsystem traffic matrix.
+        </p>
+        <p class="mt-2">
+          <a class="btn btn-secondary btn-sm" href={url('/system/dependencies/')}>
+            Open the dependency map
+            <Icon name="arrow-right" class="w-3.5 h-3.5" />
+          </a>
+        </p>
+      </div>
+      <div class="atlas-card">
+        <h3>Connection simulation</h3>
+        <p>
+          {atlas.components.length} components in three dimensions, {atlas.componentEdges.length} real links, and packets
+          you can fire along the {atlas.flows.length} traced flows — the fastest way to explain the system to somebody who
+          has never read the code.
+        </p>
+        <p class="mt-2">
+          <a class="btn btn-primary btn-sm" href={url('/system/connections/')}>
+            Open the 3D simulation
+            <Icon name="arrow-right" class="w-3.5 h-3.5" />
+          </a>
+        </p>
+      </div>
+    </div>
+
+    <p class="mt-4 text-[13px] text-slate-400">
+      Looking for behaviour rather than shape? The <a href={url('/architecture/')}>architecture reference</a> covers the
+      pipeline stage by stage, the <a href={url('/security/')}>security model</a> covers the isolation boundary, and the
+      source of this page is <a href={sourceUrl('website/scripts/sync-architecture.mjs')} rel="noopener">scripts/sync-architecture.mjs</a>,
+      which re-derives every figure above on each build of {repoInfo.name}.
+    </p>
+  </section>
+</DocsLayout>

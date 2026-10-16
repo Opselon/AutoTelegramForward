@@ -1,0 +1,302 @@
+---
+/**
+ * Component topology — a server-rendered SVG of the runtime components and the
+ * links between them. The graph is derived (scripts/sync-architecture.mjs), the
+ * SVG is real HTML so it is indexable and readable without JavaScript, and the
+ * only client work is highlight-on-hover plus the detail panel.
+ */
+import { atlas, componentById, componentKindLabel, edgeKindColor, sourceUrl } from '../../data/system';
+
+const NODE_W = 152;
+const NODE_H = 56;
+const COL_GAP = 26;
+const ROW_GAP = 20;
+const PAD = 24;
+
+const tiers = [...new Set(atlas.components.map((c) => c.tier))].sort((a, b) => a - b);
+const columnIndex = new Map(tiers.map((t, index) => [t, index]));
+const columns = tiers.map((t) => atlas.components.filter((c) => c.tier === t));
+const tallest = Math.max(...columns.map((c) => c.length));
+
+const width = PAD * 2 + tiers.length * NODE_W + (tiers.length - 1) * COL_GAP;
+const height = PAD * 2 + tallest * NODE_H + (tallest - 1) * ROW_GAP;
+
+const pos = new Map<string, { x: number; y: number }>();
+columns.forEach((column, columnIdx) => {
+  const stackHeight = column.length * NODE_H + (column.length - 1) * ROW_GAP;
+  const top = (height - stackHeight) / 2;
+  column.forEach((component, rowIdx) => {
+    pos.set(component.id, {
+      x: PAD + columnIdx * (NODE_W + COL_GAP),
+      y: top + rowIdx * (NODE_H + ROW_GAP),
+    });
+  });
+});
+
+const linkPath = (source: string, target: string) => {
+  const a = pos.get(source);
+  const b = pos.get(target);
+  if (!a || !b) return '';
+  const forward = b.x >= a.x;
+  const x1 = forward ? a.x + NODE_W : a.x;
+  const x2 = forward ? b.x : b.x + NODE_W;
+  const y1 = a.y + NODE_H / 2;
+  const y2 = b.y + NODE_H / 2;
+  const dx = Math.max(38, Math.abs(x2 - x1) * 0.45) * (forward ? 1 : -1);
+  const selfColumn = x1 === x2;
+  if (selfColumn) {
+    const bulge = 58;
+    return `M ${x1} ${y1} C ${x1 - bulge} ${y1}, ${x2 - bulge} ${y2}, ${x2} ${y2}`;
+  }
+  return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+};
+
+const links = atlas.componentEdges
+  .map((edge) => ({ ...edge, d: linkPath(edge.source, edge.target) }))
+  .filter((l) => l.d);
+
+const kinds = [...new Set(atlas.componentEdges.map((e) => e.kind))];
+
+// The panel starts with a real component rendered server-side; the script only
+// replaces it. A map whose detail area is empty until JavaScript runs has no
+// content for a crawler and nothing for a reader whose JS failed.
+const payload = {
+  components: atlas.components.map((c) => ({
+    id: c.id,
+    label: c.label,
+    kind: c.kind,
+    kindLabel: componentKindLabel[c.kind] || c.kind,
+    tech: c.tech,
+    role: c.role,
+    color: c.color,
+    files: c.files,
+    loc: c.loc,
+    langs: c.langs,
+    evidence: c.evidence.map((e) => ({ path: e, url: sourceUrl(e) })),
+    incoming: atlas.componentEdges
+      .filter((e) => e.target === c.id)
+      .map((e) => ({ ...e, from: componentById.get(e.source)?.label || e.source })),
+    outgoing: atlas.componentEdges
+      .filter((e) => e.source === c.id)
+      .map((e) => ({ ...e, to: componentById.get(e.target)?.label || e.target })),
+  })),
+};
+const initial = atlas.components.find((c) => c.id === 'core-pipeline') || atlas.components[0];
+---
+
+<div class="not-prose atlas-shell" data-topology>
+  <div class="atlas-bar">
+    <span class="atlas-bar-label">Runtime topology</span>
+    <span class="atlas-tag">{atlas.components.length} components</span>
+    <span class="atlas-tag">{atlas.componentEdges.length} links</span>
+    <span class="atlas-tag">{kinds.length} protocols</span>
+    <span class="ml-auto text-[11.5px] text-slate-400">hover a node to trace its links · click for detail</span>
+  </div>
+
+  <div class="overflow-x-auto">
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      width={width}
+      height={height}
+      role="img"
+      aria-label={`Component topology: ${atlas.components.length} components connected by ${atlas.componentEdges.length} links`}
+      style="min-width: 900px"
+      class="block"
+    >
+      <defs>
+        <marker id="atlas-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
+        </marker>
+      </defs>
+
+      <g class="atlas-edges">
+        {
+          links.map((link) => (
+            <path
+              d={link.d}
+              fill="none"
+              stroke={edgeKindColor[link.kind] || '#64748b'}
+              stroke-width="1.4"
+              stroke-opacity="0.5"
+              marker-end="url(#atlas-arrow)"
+              color={edgeKindColor[link.kind] || '#64748b'}
+              data-edge
+              data-source={link.source}
+              data-target={link.target}
+            />
+          ))
+        }
+      </g>
+
+      <g class="atlas-nodes">
+        {
+          atlas.components.map((component) => {
+            const p = pos.get(component.id)!;
+            return (
+              <g
+                class="atlas-node"
+                data-node
+                data-id={component.id}
+                transform={`translate(${p.x} ${p.y})`}
+                tabindex="0"
+                role="button"
+                aria-label={`${component.label} — ${componentKindLabel[component.kind] || component.kind}. ${component.files} files, ${component.loc} lines.`}
+              >
+                <rect
+                  width={NODE_W}
+                  height={NODE_H}
+                  rx="10"
+                  fill="#0f172a"
+                  stroke={component.color}
+                  stroke-width="1.4"
+                  stroke-opacity="0.85"
+                />
+                <rect width="4" height={NODE_H} rx="2" fill={component.color} />
+                <text x="16" y="23" fill="#e8eefb" font-size="12.5" font-weight="700" font-family="Inter, sans-serif">
+                  {component.label.length > 22 ? `${component.label.slice(0, 21)}…` : component.label}
+                </text>
+                <text x="16" y="40" fill="#9db0cd" font-size="10.5" font-family="'JetBrains Mono', monospace">
+                  {component.files > 0 ? `${component.files} files · ${component.loc} loc` : componentKindLabel[component.kind] || component.kind}
+                </text>
+              </g>
+            );
+          })
+        }
+      </g>
+    </svg>
+  </div>
+
+  <div class="atlas-legend">
+    {
+      kinds.map((kind) => (
+        <span class="atlas-legend-item">
+          <span class="atlas-dot" style={`background:${edgeKindColor[kind] || '#64748b'}`} />
+          {kind}
+        </span>
+      ))
+    }
+  </div>
+
+  <div class="atlas-detail" data-topology-detail aria-live="polite">
+    <h3>
+      <span class="atlas-dot" style={`background:${initial.color}`} /> {initial.label}
+      <span class="text-slate-400 font-normal">· {componentKindLabel[initial.kind] || initial.kind}</span>
+    </h3>
+    <p>{initial.role}</p>
+    <p class="mt-1">
+      <span class="atlas-mono">{initial.tech}</span>
+      <span class="text-slate-400"> · {initial.files} source files · {initial.loc.toLocaleString('en-US')} lines</span>
+    </p>
+  </div>
+
+  <script type="application/json" data-topology-data set:html={JSON.stringify(payload)} />
+</div>
+
+<script>
+  // Progressive enhancement only: the SVG above is complete without this.
+  interface EdgeInfo {
+    kind: string;
+    label: string;
+    protocol: string;
+    metric: string;
+    from?: string;
+    to?: string;
+  }
+  interface NodeInfo {
+    id: string;
+    label: string;
+    kind: string;
+    kindLabel: string;
+    tech: string;
+    role: string;
+    color: string;
+    files: number;
+    loc: number;
+    langs: string[];
+    evidence: Array<{ path: string; url: string }>;
+    incoming: EdgeInfo[];
+    outgoing: EdgeInfo[];
+  }
+
+  const root = document.querySelector<HTMLElement>('[data-topology]');
+  if (root) {
+    const data = JSON.parse(
+      root.querySelector<HTMLScriptElement>('[data-topology-data]')?.textContent || '{"components":[]}',
+    ) as { components: NodeInfo[] };
+    const byId = new Map(data.components.map((c) => [c.id, c]));
+    const detail = root.querySelector<HTMLElement>('[data-topology-detail]');
+    const nodeEls = [...root.querySelectorAll<SVGGElement>('[data-node]')];
+    const edgeEls = [...root.querySelectorAll<SVGPathElement>('[data-edge]')];
+    const esc = (value: string) =>
+      value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const linksFor = (component: NodeInfo) =>
+      [
+        ...component.outgoing.map((e) => `→ ${esc(e.to || '')} <span class="atlas-tag">${esc(e.protocol)}</span> ${esc(e.label)} (${esc(e.metric)})`),
+        ...component.incoming.map((e) => `← ${esc(e.from || '')} <span class="atlas-tag">${esc(e.protocol)}</span> ${esc(e.label)}`),
+      ]
+        .map((line) => `<li>${line}</li>`)
+        .join('');
+
+    const render = (id: string) => {
+      const component = byId.get(id);
+      if (!component || !detail) return;
+      detail.innerHTML = `
+        <h3><span class="atlas-dot" style="background:${component.color}"></span> ${esc(component.label)}
+          <span class="text-slate-400 font-normal">· ${esc(component.kindLabel)}</span></h3>
+        <p>${esc(component.role)}</p>
+        <p class="mt-1"><span class="atlas-mono">${esc(component.tech)}</span>
+          <span class="text-slate-400"> · ${component.files} source files · ${component.loc.toLocaleString('en-US')} lines${
+            component.langs.length ? ` · ${esc(component.langs.join(', '))}` : ''
+          }</span></p>
+        ${component.evidence.length ? `<p class="mt-1 text-slate-400 text-[12px]">Derived from:
+          ${component.evidence.map((e) => `<a class="atlas-mono" href="${e.url}" rel="noopener">${esc(e.path)}</a>`).join(', ')}</p>` : ''}
+        <ul class="atlas-log mt-2">${linksFor(component) || '<li class="atlas-log-empty">No runtime links.</li>'}</ul>`;
+    };
+
+    const highlight = (id: string | null) => {
+      for (const el of nodeEls) {
+        const isSelf = el.dataset.id === id;
+        el.classList.toggle('is-dim', Boolean(id) && !isSelf);
+        el.classList.toggle('is-active', isSelf);
+        const rect = el.querySelector('rect');
+        if (rect) rect.setAttribute('stroke-width', isSelf ? '2.6' : '1.4');
+      }
+      for (const el of edgeEls) {
+        const touched = !id || el.dataset.source === id || el.dataset.target === id;
+        el.setAttribute('stroke-opacity', touched ? '0.95' : '0.14');
+        el.setAttribute('stroke-width', touched && id ? '2.2' : '1.4');
+      }
+    };
+
+    for (const el of nodeEls) {
+      const id = el.dataset.id!;
+      el.addEventListener('pointerenter', () => highlight(id));
+      el.addEventListener('focus', () => highlight(id));
+      el.addEventListener('pointerleave', () => highlight(null));
+      el.addEventListener('blur', () => highlight(null));
+      el.addEventListener('click', () => render(id));
+      el.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          render(id);
+        }
+      });
+    }
+  }
+</script>
+
+<style>
+  [data-node] {
+    cursor: pointer;
+  }
+  [data-node] rect {
+    transition: stroke-width 0.15s ease, opacity 0.15s ease;
+  }
+  [data-node].is-dim rect {
+    opacity: 0.45;
+  }
+  [data-edge] {
+    transition: stroke-opacity 0.15s ease, stroke-width 0.15s ease;
+  }
+</style>

@@ -1,0 +1,788 @@
+---
+/**
+ * 3D connection simulation.
+ *
+ * The scene is the derived component graph: nodes are the runtime components,
+ * edges are the real links between them (protocol labelled), and the packet
+ * animations replay the flows that the build already extracted from the
+ * source — the same steps rendered as text below the canvas, which is what a
+ * crawler, a screen reader and a reader with JavaScript off actually get.
+ *
+ * No 3D library: a perspective projection on a 2D canvas keeps the page under
+ * a few kilobytes of script and keeps the interaction (orbit, zoom, focus)
+ * under our control.
+ */
+import { atlas, graphUrl, edgeKindColor, componentKindLabel } from '../../data/system';
+
+const kinds = [...new Set(atlas.componentEdges.map((e) => e.kind))];
+const defaultFlow = atlas.flows[0];
+---
+
+<div class="not-prose atlas-shell" data-sim3d data-graph-url={graphUrl}>
+  <div class="atlas-bar">
+    <span class="atlas-bar-label">Scenario</span>
+    {
+      atlas.flows.map((flow) => (
+        <button type="button" class="atlas-btn" data-sim-flow={flow.id} aria-pressed="false">
+          {flow.title}
+        </button>
+      ))
+    }
+    <button type="button" class="atlas-btn" data-sim-flow="idle" aria-pressed="true">Idle drift</button>
+    <button type="button" class="atlas-btn" data-sim-stop hidden>Stop</button>
+  </div>
+
+  <div class="atlas-bar">
+    <span class="atlas-bar-label">View</span>
+    <button type="button" class="atlas-btn" data-sim-spin aria-pressed="true">Auto-orbit</button>
+    <button type="button" class="atlas-btn" data-sim-labels aria-pressed="true">Labels</button>
+    <button type="button" class="atlas-btn" data-sim-zoom="in" aria-label="Zoom in">+</button>
+    <button type="button" class="atlas-btn" data-sim-zoom="out" aria-label="Zoom out">−</button>
+    <button type="button" class="atlas-btn" data-sim-reset>Reset</button>
+    <label class="atlas-check">
+      Speed
+      <input type="range" min="0.4" max="2.2" step="0.2" value="1" data-sim-speed aria-label="Simulation speed" />
+    </label>
+    <span class="ml-auto text-[11.5px] text-slate-400">drag to orbit · scroll to zoom · click a node to focus</span>
+  </div>
+
+  <div class="atlas-canvas-wrap">
+    <canvas
+      class="atlas-canvas"
+      data-sim-canvas
+      tabindex="0"
+      role="img"
+      aria-label={`Three-dimensional map of ${atlas.components.length} components connected by ${atlas.componentEdges.length} links. The same connections are listed as text below.`}
+    ></canvas>
+    <div class="atlas-hud" data-sim-hud>
+      <span data-sim-hud-nodes>{atlas.components.length} components · {atlas.componentEdges.length} links</span>
+      <span data-sim-hud-focus class="atlas-hud-focus" hidden></span>
+    </div>
+  </div>
+
+  <div class="atlas-legend">
+    {
+      kinds.map((kind) => (
+        <span class="atlas-legend-item">
+          <span class="atlas-dot" style={`background:${edgeKindColor[kind] || '#64748b'}`} />
+          {kind}
+        </span>
+      ))
+    }
+    <span class="atlas-legend-item">
+      <span class="atlas-dot" style="background:#38bdf8;box-shadow:0 0 6px #38bdf8" />
+      live packet
+    </span>
+  </div>
+
+  <div class="atlas-detail">
+    <h3 data-sim-title>{defaultFlow.title}</h3>
+    <p data-sim-summary>{defaultFlow.summary}</p>
+
+    <div class="grid gap-3 mt-3 lg:grid-cols-2">
+      <div>
+        {
+          atlas.flows.map((flow) => (
+            <ol class="atlas-steps" data-sim-steps={flow.id} hidden={flow.id !== defaultFlow.id}>
+              {flow.steps.map((step, index) => (
+                <li class="atlas-step" data-step-index={index} data-step-at={step.at}>
+                  <span class="atlas-step-index">{index + 1}</span>
+                  <span>
+                    <p class="atlas-step-title">
+                      {step.action} <span class="atlas-mono text-slate-400">@ {step.at}</span>
+                    </p>
+                    <p class="atlas-step-detail">{step.detail}</p>
+                    {step.tags.length > 0 && (
+                      <span class="flex flex-wrap gap-1 mt-1">
+                        {step.tags.map((tag) => (
+                          <span class="atlas-tag">PIPELINE:{tag}</span>
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ))
+        }
+      </div>
+      <div>
+        <p class="m-0 mb-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">Trace</p>
+        <ul class="atlas-log" data-sim-log aria-live="polite" aria-relevant="additions">
+          <li class="atlas-log-empty">Pick a scenario to replay a real request path.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script type="application/json" data-sim-data set:html={JSON.stringify({ componentKindLabel, edgeKindColor })} />
+</div>
+
+<script>
+  interface SimComponent {
+    id: string;
+    label: string;
+    kind: string;
+    tech: string;
+    role: string;
+    color: string;
+    files: number;
+    loc: number;
+    tier: number;
+  }
+  interface SimEdge {
+    source: string;
+    target: string;
+    kind: string;
+    label: string;
+    protocol: string;
+    metric: string;
+  }
+  interface SimFlow {
+    id: string;
+    title: string;
+    summary: string;
+    steps: Array<{ at: string; action: string; detail: string; tags: string[] }>;
+  }
+  interface SimGraph {
+    components: SimComponent[];
+    componentEdges: SimEdge[];
+    flows: SimFlow[];
+  }
+
+  const root = document.querySelector<HTMLElement>('[data-sim3d]');
+  if (root) {
+    const canvas = root.querySelector<HTMLCanvasElement>('[data-sim-canvas]')!;
+    const ctx = canvas.getContext('2d')!;
+    const graphUrlFromDom = root.dataset.graphUrl!;
+    const labels = JSON.parse(
+      root.querySelector<HTMLScriptElement>('[data-sim-data]')?.textContent || '{"componentKindLabel":{},"edgeKindColor":{}}',
+    ) as { componentKindLabel: Record<string, string>; edgeKindColor: Record<string, string> };
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const readVar = (name: string, fallback: string) =>
+      getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+    let palette = {
+      canvas: readVar('--atlas-canvas', '#060b16'),
+      grid: readVar('--atlas-grid', 'rgba(148,163,184,0.09)'),
+      edge: readVar('--atlas-edge', 'rgba(148,163,184,0.28)'),
+      label: readVar('--atlas-label', '#dbe6f4'),
+      labelDim: readVar('--atlas-label-dim', '#93a4bd'),
+    };
+
+    let seed = 20261016;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+
+    interface P3 {
+      x: number;
+      y: number;
+      z: number;
+    }
+    interface SceneNode extends SimComponent, P3 {
+      pulse: number;
+    }
+    let nodes: SceneNode[] = [];
+    let edges: SimEdge[] = [];
+    let flows: SimFlow[] = [];
+    const nodeById = new Map<string, number>();
+
+    const buildScene = (graph: SimGraph) => {
+      edges = graph.componentEdges;
+      flows = graph.flows;
+      const tierMin = Math.min(...graph.components.map((c) => c.tier));
+      nodes = graph.components.map((component) => {
+        const tier = component.tier;
+        return {
+          ...component,
+          x: (tier - tierMin - 3.5) * 26 + (rand() - 0.5) * 12,
+          y: (rand() - 0.5) * 34,
+          z: (rand() - 0.5) * 34,
+          pulse: 0,
+        };
+      });
+      nodeById.clear();
+      nodes.forEach((node, index) => nodeById.set(node.id, index));
+
+      // Relax in three dimensions: repel everything, spring the real links,
+      // and keep each node near its tier plane so the left-to-right story of
+      // the architecture survives the simulation.
+      const rest = 44;
+      for (let iteration = 0; iteration < 320; iteration++) {
+        const force: P3[] = nodes.map(() => ({ x: 0, y: 0, z: 0 }));
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const a = nodes[i];
+            const b = nodes[j];
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            let dz = b.z - a.z;
+            let dist = Math.hypot(dx, dy, dz) || 0.01;
+            const push = (rest * rest) / (dist * dist);
+            dx /= dist;
+            dy /= dist;
+            dz /= dist;
+            force[i].x -= dx * push;
+            force[i].y -= dy * push;
+            force[i].z -= dz * push;
+            force[j].x += dx * push;
+            force[j].y += dy * push;
+            force[j].z += dz * push;
+          }
+        }
+        for (const edge of edges) {
+          const a = nodes[nodeById.get(edge.source) ?? -1];
+          const b = nodes[nodeById.get(edge.target) ?? -1];
+          if (!a || !b) continue;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dz = b.z - a.z;
+          const dist = Math.hypot(dx, dy, dz) || 0.01;
+          const pull = (dist - rest) * 0.035;
+          const i = nodeById.get(edge.source)!;
+          const j = nodeById.get(edge.target)!;
+          force[i].x += (dx / dist) * pull;
+          force[i].y += (dy / dist) * pull;
+          force[i].z += (dz / dist) * pull;
+          force[j].x -= (dx / dist) * pull;
+          force[j].y -= (dy / dist) * pull;
+          force[j].z -= (dz / dist) * pull;
+        }
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          const targetX = (node.tier - tierMin - 3.5) * 30;
+          force[i].x += (targetX - node.x) * 0.045;
+          node.x += Math.max(-3, Math.min(3, force[i].x));
+          node.y += Math.max(-3, Math.min(3, force[i].y));
+          node.z += Math.max(-3, Math.min(3, force[i].z));
+        }
+      }
+      const cx = nodes.reduce((a, n) => a + n.x, 0) / nodes.length;
+      const cy = nodes.reduce((a, n) => a + n.y, 0) / nodes.length;
+      const cz = nodes.reduce((a, n) => a + n.z, 0) / nodes.length;
+      for (const node of nodes) {
+        node.x -= cx;
+        node.y -= cy;
+        node.z -= cz;
+      }
+      const extent = Math.max(...nodes.map((n) => Math.hypot(n.x, n.y, n.z))) || 1;
+      const scale = 46 / extent;
+      for (const node of nodes) {
+        node.x *= scale;
+        node.y *= scale;
+        node.z *= scale;
+      }
+    };
+
+    // ------------------------------------------------------------------ view
+    let yaw = 0.5;
+    let pitch = -0.42;
+    let zoom = 1;
+    let autoOrbit = !reducedMotion;
+    let showLabels = true;
+    let focused: string | null = null;
+    let hovered: number | null = null;
+    let width = 0;
+    let height = 0;
+
+    const project = (p: P3) => {
+      const cosY = Math.cos(yaw);
+      const sinY = Math.sin(yaw);
+      const cosP = Math.cos(pitch);
+      const sinP = Math.sin(pitch);
+      const x1 = p.x * cosY - p.z * sinY;
+      const z1 = p.x * sinY + p.z * cosY;
+      const y1 = p.y * cosP - z1 * sinP;
+      const z2 = p.y * sinP + z1 * cosP;
+      const focal = 320;
+      const depth = z2 + 300;
+      const k = (focal / Math.max(60, depth)) * zoom * (height / 480);
+      return { x: width / 2 + x1 * k, y: height / 2 + y1 * k, k, depth: z2 };
+    };
+
+    const radiusOf = (node: SimComponent) => 3.2 + Math.min(9, Math.sqrt(Math.max(1, node.loc)) / 6);
+
+    // ---------------------------------------------------------------- packets
+    interface Packet {
+      edge: number;
+      t: number;
+      speed: number;
+      color: string;
+      from: string;
+      to: string;
+    }
+    let packets: Packet[] = [];
+
+    const draw = () => {
+      const ctxSafe = ctx;
+      ctxSafe.save();
+      const bg = ctxSafe.createRadialGradient(width / 2, height * 0.45, 10, width / 2, height * 0.5, Math.max(width, height) * 0.75);
+      bg.addColorStop(0, palette.canvas);
+      bg.addColorStop(1, palette.canvas);
+      ctxSafe.fillStyle = bg;
+      ctxSafe.fillRect(0, 0, width, height);
+
+      // A faint floor grid gives the eye a horizon to judge rotation against.
+      ctxSafe.strokeStyle = palette.grid;
+      ctxSafe.lineWidth = 1;
+      for (let ring = 1; ring <= 3; ring++) {
+        ctxSafe.beginPath();
+        for (let step = 0; step <= 48; step++) {
+          const angle = (step / 48) * Math.PI * 2;
+          const p = project({ x: Math.cos(angle) * ring * 26, y: 96, z: Math.sin(angle) * ring * 26 });
+          if (step === 0) ctxSafe.moveTo(p.x, p.y);
+          else ctxSafe.lineTo(p.x, p.y);
+        }
+        ctxSafe.stroke();
+      }
+
+      // ------------------------------------------------------------- edges
+      const projected = nodes.map((node) => ({ node, p: project(node) }));
+      const activeEdge = focusEdgeIndex;
+      edges.forEach((edge, index) => {
+        const a = projected[nodeById.get(edge.source) ?? -1];
+        const b = projected[nodeById.get(edge.target) ?? -1];
+        if (!a || !b) return;
+        const dim = focused ? edge.source !== focused && edge.target !== focused : false;
+        const color = labels.edgeKindColor[edge.kind] || '#64748b';
+        const depth = (a.p.depth + b.p.depth) / 2;
+        const near = 1 - Math.min(1, Math.max(0, (depth + 90) / 220));
+        ctxSafe.beginPath();
+        ctxSafe.moveTo(a.p.x, a.p.y);
+        ctxSafe.lineTo(b.p.x, b.p.y);
+        ctxSafe.strokeStyle = index === activeEdge ? '#ffffff' : color;
+        ctxSafe.globalAlpha = dim ? 0.08 : Math.max(0.14, 0.24 + near * 0.5);
+        ctxSafe.lineWidth = (index === activeEdge ? 2.4 : 1) * (0.6 + near * 0.9);
+        ctxSafe.stroke();
+        ctxSafe.globalAlpha = 1;
+      });
+
+      // ------------------------------------------------------------- nodes
+      const ordered = [...projected].sort((a, b) => a.p.depth - b.p.depth);
+      for (const { node, p } of ordered) {
+        const isFocused = focused === node.id || (hovered !== null && nodes[hovered].id === node.id);
+        const dim = focused && focused !== node.id && !edges.some(
+          (e) => (e.source === focused && e.target === node.id) || (e.target === focused && e.source === node.id),
+        );
+        const radius = radiusOf(node) * p.k * 0.42 + (isFocused ? 2.5 : 0);
+        const alpha = dim ? 0.25 : 1;
+        if (node.pulse > 0) {
+          ctxSafe.beginPath();
+          ctxSafe.arc(p.x, p.y, radius + 10 * node.pulse, 0, Math.PI * 2);
+          ctxSafe.strokeStyle = node.color;
+          ctxSafe.globalAlpha = node.pulse * 0.55;
+          ctxSafe.lineWidth = 2;
+          ctxSafe.stroke();
+          ctxSafe.globalAlpha = 1;
+        }
+        const grad = ctxSafe.createRadialGradient(p.x - radius * 0.3, p.y - radius * 0.35, radius * 0.15, p.x, p.y, radius);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.35, node.color);
+        grad.addColorStop(1, node.color);
+        ctxSafe.beginPath();
+        ctxSafe.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctxSafe.fillStyle = grad;
+        ctxSafe.globalAlpha = alpha;
+        ctxSafe.fill();
+        ctxSafe.strokeStyle = isFocused ? '#ffffff' : 'rgba(8,12,20,0.55)';
+        ctxSafe.lineWidth = isFocused ? 2 : 1;
+        ctxSafe.stroke();
+        ctxSafe.globalAlpha = 1;
+
+        const labelVisible = showLabels && (p.k > 0.5 || isFocused);
+        if (labelVisible) {
+          ctxSafe.font = `${isFocused ? '600 ' : ''}11px Inter, system-ui, sans-serif`;
+          ctxSafe.textAlign = 'center';
+          ctxSafe.fillStyle = isFocused ? palette.label : palette.labelDim;
+          ctxSafe.globalAlpha = alpha * (isFocused ? 1 : 0.85);
+          ctxSafe.fillText(node.label, p.x, p.y + radius + 12);
+          ctxSafe.globalAlpha = 1;
+        }
+      }
+
+      // ----------------------------------------------------------- packets
+      for (const packet of packets) {
+        const a = projected[nodeById.get(packet.from) ?? -1];
+        const b = projected[nodeById.get(packet.to) ?? -1];
+        if (!a || !b) continue;
+        const x = a.p.x + (b.p.x - a.p.x) * packet.t;
+        const y = a.p.y + (b.p.y - a.p.y) * packet.t;
+        const glow = ctxSafe.createRadialGradient(x, y, 0, x, y, 11);
+        glow.addColorStop(0, packet.color);
+        glow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctxSafe.globalAlpha = 0.85;
+        ctxSafe.fillStyle = glow;
+        ctxSafe.beginPath();
+        ctxSafe.arc(x, y, 11, 0, Math.PI * 2);
+        ctxSafe.fill();
+        ctxSafe.fillStyle = '#ffffff';
+        ctxSafe.beginPath();
+        ctxSafe.arc(x, y, 2.6, 0, Math.PI * 2);
+        ctxSafe.fill();
+        ctxSafe.globalAlpha = 1;
+      }
+      ctxSafe.restore();
+    };
+
+    let focusEdgeIndex = -1;
+
+    const spawnPacket = (edgeIndex: number, reverse = false, speed = 0.02, color?: string) => {
+      const edge = edges[edgeIndex];
+      if (!edge) return;
+      packets.push({
+        edge: edgeIndex,
+        t: 0,
+        speed: speed * speedMultiplier,
+        color: color || labels.edgeKindColor[edge.kind] || '#38bdf8',
+        from: reverse ? edge.target : edge.source,
+        to: reverse ? edge.source : edge.target,
+      });
+    };
+
+    // ------------------------------------------------------------- the loop
+    let speedMultiplier = 1;
+    let raf = 0;
+    let last = performance.now();
+    let visible = true;
+    let running = true;
+
+    const frame = (now: number) => {
+      const dt = Math.min(64, now - last) / 16.667;
+      last = now;
+      if (autoOrbit && running) yaw += 0.0022 * dt * speedMultiplier;
+      for (const node of nodes) if (node.pulse > 0) node.pulse = Math.max(0, node.pulse - 0.012 * dt);
+      packets = packets.filter((packet) => {
+        packet.t += packet.speed * dt * speedMultiplier;
+        return packet.t < 1;
+      });
+      if (running) {
+        if (!reducedMotion && ambient && Math.random() < 0.012 * dt * speedMultiplier) {
+          spawnPacket(Math.floor(Math.random() * edges.length));
+        }
+      }
+      draw();
+      raf = requestAnimationFrame(frame);
+    };
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      width = rect.width;
+      height = rect.height;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    };
+
+    // ---------------------------------------------------------- scenario run
+    let ambient = !reducedMotion;
+    let generation = 0;
+    const log = root.querySelector<HTMLUListElement>('[data-sim-log]')!;
+    const titleEl = root.querySelector<HTMLElement>('[data-sim-title]')!;
+    const summaryEl = root.querySelector<HTMLElement>('[data-sim-summary]')!;
+    const hudFocus = root.querySelector<HTMLElement>('[data-sim-hud-focus]')!;
+    const stopButton = root.querySelector<HTMLButtonElement>('[data-sim-stop]')!;
+
+    const logLine = (text: string) => {
+      log.querySelector('.atlas-log-empty')?.remove();
+      const li = document.createElement('li');
+      li.innerHTML = text;
+      log.appendChild(li);
+      log.scrollTop = log.scrollHeight;
+      while (log.children.length > 40) log.removeChild(log.firstElementChild!);
+    };
+
+    const edgeIndexBetween = (from: string, to: string) => {
+      let index = edges.findIndex((e) => e.source === from && e.target === to);
+      if (index >= 0) return { index, reverse: false };
+      index = edges.findIndex((e) => e.source === to && e.target === from);
+      if (index >= 0) return { index, reverse: true };
+      return { index: -1, reverse: false };
+    };
+
+    const sleep = (ms: number, token: number) =>
+      new Promise<boolean>((resolve) => {
+        const timer = window.setTimeout(() => resolve(token === generation && running), ms / speedMultiplier);
+        if (token !== generation) {
+          window.clearTimeout(timer);
+          resolve(false);
+        }
+      });
+
+    const setActiveStep = (flowId: string, index: number) => {
+      root.querySelectorAll<HTMLLIElement>('[data-sim-steps] li').forEach((li) => {
+        const owner = li.closest('[data-sim-steps]') as HTMLElement | null;
+        li.dataset.active = String(owner?.dataset.simSteps === flowId && Number(li.dataset.stepIndex) === index);
+      });
+    };
+
+    const stopRun = () => {
+      generation++;
+      ambient = !reducedMotion;
+      stopButton.hidden = true;
+      packets = [];
+      focusEdgeIndex = -1;
+      titleEl.textContent = 'Idle drift';
+      summaryEl.textContent = reducedMotion
+        ? 'Motion is reduced by your system setting, so the scene holds still. Hovering still traces links, and every step is listed as text.'
+        : 'Ambient traffic on the real links. Pick a scenario above to replay one path end to end.';
+      root.querySelectorAll<HTMLElement>('[data-sim-steps]').forEach((ol) => {
+        ol.hidden = true;
+      });
+      setActiveStep('', -1);
+      root.querySelectorAll<HTMLButtonElement>('[data-sim-flow]').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.simFlow === 'idle'));
+      });
+    };
+
+    const runFlow = async (flowId: string) => {
+      const flow = flows.find((f) => f.id === flowId);
+      if (!flow) return;
+      generation++;
+      const token = generation;
+      ambient = false;
+      running = true;
+      stopButton.hidden = false;
+      titleEl.textContent = flow.title;
+      summaryEl.textContent = flow.summary;
+      root.querySelectorAll<HTMLElement>('[data-sim-steps]').forEach((ol) => {
+        ol.hidden = ol.dataset.simSteps !== flow.id;
+      });
+      root.querySelectorAll<HTMLButtonElement>('[data-sim-flow]').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.simFlow === flow.id));
+      });
+      log.innerHTML = '';
+      logLine(`<span class="atlas-tag">${flow.id}</span> replay started with ${flow.steps.length} steps`);
+      let previous: string | null = null;
+      for (let index = 0; index < flow.steps.length; index++) {
+        if (token !== generation) return;
+        const step = flow.steps[index];
+        setActiveStep(flow.id, index);
+        const { index: edgeIndex, reverse } = previous
+          ? edgeIndexBetween(previous, step.at)
+          : { index: -1, reverse: false };
+        if (edgeIndex >= 0) {
+          focusEdgeIndex = edgeIndex;
+          spawnPacket(edgeIndex, reverse, 0.028);
+          await sleep(420, token);
+          focusEdgeIndex = -1;
+        } else if (previous) {
+          const nodeIndex = nodeById.get(step.at);
+          if (nodeIndex !== undefined) nodes[nodeIndex].pulse = 1;
+          await sleep(200, token);
+        }
+        if (token !== generation) return;
+        const nodeIndex = nodeById.get(step.at);
+        if (nodeIndex !== undefined) nodes[nodeIndex].pulse = Math.max(nodes[nodeIndex].pulse, 0.7);
+        logLine(
+          `<span class="atlas-tag">${index + 1}</span> <strong>${step.action}</strong> — ${step.detail}` +
+            (step.tags.length ? ` <span class="text-slate-400">${step.tags.map((t) => `PIPELINE:${t}`).join(' ')}</span>` : ''),
+        );
+        previous = step.at;
+        await sleep(320, token);
+      }
+      if (token !== generation) return;
+      logLine('<span class="atlas-tag">done</span> path complete');
+      setActiveStep(flow.id, -1);
+      focusEdgeIndex = -1;
+      ambient = !reducedMotion;
+    };
+
+    // ----------------------------------------------------------- interaction
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    canvas.addEventListener('pointerdown', (event) => {
+      dragging = true;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      canvas.classList.add('is-dragging');
+      canvas.setPointerCapture(event.pointerId);
+    });
+    canvas.addEventListener('pointermove', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = event.clientX - rect.left;
+      const my = event.clientY - rect.top;
+      if (dragging) {
+        yaw += (event.clientX - lastX) * 0.007;
+        pitch = Math.max(-1.3, Math.min(1.3, pitch + (event.clientY - lastY) * 0.006));
+        lastX = event.clientX;
+        lastY = event.clientY;
+      } else {
+        let nearest = -1;
+        let nearestDist = 16;
+        nodes.forEach((node, index) => {
+          const p = project(node);
+          const dist = Math.hypot(p.x - mx, p.y - my);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearest = index;
+          }
+        });
+        hovered = nearest >= 0 ? nearest : null;
+        canvas.style.cursor = nearest >= 0 ? 'pointer' : '';
+      }
+    });
+    canvas.addEventListener('pointerup', (event) => {
+      if (dragging && Math.hypot(event.clientX - lastX, event.clientY - lastY) < 4) {
+        const rect = canvas.getBoundingClientRect();
+        const mx = event.clientX - rect.left;
+        const my = event.clientY - rect.top;
+        const hit = nodes
+          .map((node, index) => ({ node, index, p: project(node) }))
+          .filter(({ p }) => Math.hypot(p.x - mx, p.y - my) < 18)
+          .sort((a, b) => a.p.depth - b.p.depth)[0];
+        focused = hit ? (focused === hit.node.id ? null : hit.node.id) : null;
+        const component = nodes.find((n) => n.id === focused);
+        hudFocus.hidden = !component;
+        if (component) {
+          hudFocus.textContent = `${component.label} · ${component.tech} · ${component.files || '—'} files`;
+        }
+      }
+      dragging = false;
+      canvas.classList.remove('is-dragging');
+    });
+    canvas.addEventListener(
+      'wheel',
+      (event) => {
+        event.preventDefault();
+        zoom = Math.max(0.45, Math.min(3.2, zoom * (event.deltaY > 0 ? 0.92 : 1.08)));
+      },
+      { passive: false },
+    );
+    canvas.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowLeft') yaw -= 0.12;
+      else if (event.key === 'ArrowRight') yaw += 0.12;
+      else if (event.key === 'ArrowUp') pitch = Math.max(-1.3, pitch - 0.1);
+      else if (event.key === 'ArrowDown') pitch = Math.min(1.3, pitch + 0.1);
+      else if (event.key === '+' || event.key === '=') zoom = Math.min(3.2, zoom * 1.1);
+      else if (event.key === '-') zoom = Math.max(0.45, zoom * 0.9);
+      else if (event.key === 'Escape') {
+        focused = null;
+        hudFocus.hidden = true;
+      } else return;
+      event.preventDefault();
+    });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-sim-flow]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const id = button.dataset.simFlow!;
+        if (id === 'idle') stopRun();
+        else void runFlow(id);
+      });
+    });
+
+    const spinButton = root.querySelector<HTMLButtonElement>('[data-sim-spin]')!;
+    spinButton.addEventListener('click', () => {
+      autoOrbit = !autoOrbit;
+      spinButton.setAttribute('aria-pressed', String(autoOrbit));
+    });
+    if (reducedMotion) {
+      autoOrbit = false;
+      spinButton.setAttribute('aria-pressed', 'false');
+    }
+
+    const labelsButton = root.querySelector<HTMLButtonElement>('[data-sim-labels]')!;
+    labelsButton.addEventListener('click', () => {
+      showLabels = !showLabels;
+      labelsButton.setAttribute('aria-pressed', String(showLabels));
+    });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-sim-zoom]').forEach((button) => {
+      button.addEventListener('click', () => {
+        zoom =
+          button.dataset.simZoom === 'in'
+            ? Math.min(3.2, zoom * 1.15)
+            : Math.max(0.45, zoom * 0.87);
+      });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-sim-reset]')!.addEventListener('click', () => {
+      yaw = 0.5;
+      pitch = -0.42;
+      zoom = 1;
+      focused = null;
+      hovered = null;
+      hudFocus.hidden = true;
+    });
+
+    root.querySelector<HTMLInputElement>('[data-sim-speed]')!.addEventListener('input', (event) => {
+      speedMultiplier = Number((event.target as HTMLInputElement).value) || 1;
+    });
+
+    stopButton.addEventListener('click', () => stopRun());
+
+    document.addEventListener('visibilitychange', () => {
+      running = !document.hidden;
+      last = performance.now();
+    });
+
+    new IntersectionObserver(
+      (entries) => {
+        visible = entries[0]?.isIntersecting ?? true;
+        if (!visible) cancelAnimationFrame(raf);
+        else raf = requestAnimationFrame(frame);
+      },
+      { threshold: 0.05 },
+    ).observe(canvas);
+
+    // Theme switches change the canvas palette; the CSS variables are the
+    // single source of truth for both themes.
+    new MutationObserver(() => {
+      palette = {
+        canvas: readVar('--atlas-canvas', '#060b16'),
+        grid: readVar('--atlas-grid', 'rgba(148,163,184,0.09)'),
+        edge: readVar('--atlas-edge', 'rgba(148,163,184,0.28)'),
+        label: readVar('--atlas-label', '#dbe6f4'),
+        labelDim: readVar('--atlas-label-dim', '#93a4bd'),
+      };
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    const start = async () => {
+      const response = await fetch(graphUrlFromDom, { credentials: 'same-origin' });
+      const graph = (await response.json()) as SimGraph;
+      buildScene(graph);
+      resize();
+      new ResizeObserver(resize).observe(canvas);
+      raf = requestAnimationFrame(frame);
+      root.dataset.simReady = 'true';
+      (window as unknown as Record<string, unknown>).__atlas3d = {
+        components: nodes.length,
+        links: edges.length,
+        flows: flows.map((f) => f.id),
+        runFlow,
+        stopRun,
+        logLines: () => log.children.length,
+      };
+    };
+    void start();
+  }
+</script>
+
+<style>
+  .atlas-hud {
+    position: absolute;
+    inset: auto auto 0.5rem 0.6rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--bg-page) 78%, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    pointer-events: none;
+    max-width: calc(100% - 1.2rem);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .atlas-hud-focus {
+    color: var(--text-primary);
+  }
+</style>

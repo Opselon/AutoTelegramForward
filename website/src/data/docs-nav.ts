@@ -57,6 +57,14 @@ export const docsNav: DocSection[] = [
     ],
   },
   {
+    category: 'System atlas',
+    items: [
+      { title: 'System atlas overview', path: '/system/', desc: 'The whole repository mapped from its own source, with every claim traced.', isNew: true },
+      { title: 'Dependency & structure atlas', path: '/system/dependencies/', desc: 'Module graph, keystone ranking, cross-subsystem traffic and cycles.', isNew: true },
+      { title: 'Connection map (3D)', path: '/system/connections/', desc: 'Simulate the runtime links and replay a request path packet by packet.', isNew: true },
+    ],
+  },
+  {
     category: 'Reference',
     items: [
       { title: 'REST API', path: '/api/', desc: 'Control-plane endpoints, authentication and error model.' },

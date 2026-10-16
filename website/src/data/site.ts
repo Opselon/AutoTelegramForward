@@ -48,6 +48,9 @@ export const primaryNav: NavGroup[] = [
     name: 'Reference',
     href: url('/api/'),
     items: [
+      { name: 'System atlas', href: url('/system/'), desc: 'The whole system, mapped from its own source' },
+      { name: 'Connection map (3D)', href: url('/system/connections/'), desc: 'Simulate every runtime link' },
+      { name: 'Dependency atlas', href: url('/system/dependencies/'), desc: 'Module graph, keystones, cycles' },
       { name: 'REST API', href: url('/api/'), desc: 'Control-plane endpoints and auth' },
       { name: 'CLI reference', href: url('/cli/'), desc: `${repoInfo.stats.cliGroups} command groups` },
       { name: 'Architecture', href: url('/architecture/'), desc: 'Services, pipeline, queues' },
@@ -102,6 +105,9 @@ export const footerColumns = [
   {
     title: 'Reference',
     links: [
+      { name: 'System atlas', href: url('/system/') },
+      { name: 'Connection map (3D)', href: url('/system/connections/') },
+      { name: 'Dependency atlas', href: url('/system/dependencies/') },
       { name: 'REST API', href: url('/api/') },
       { name: 'CLI reference', href: url('/cli/') },
       { name: 'Architecture', href: url('/architecture/') },

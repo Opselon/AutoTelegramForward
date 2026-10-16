@@ -9,6 +9,7 @@ import Accordion from '../components/Accordion.astro';
 import Icon from '../components/Icon.astro';
 import { featurePages } from '../data/features';
 import { localeLabels, site } from '../data/site';
+import { atlas, number, compact } from '../data/system';
 import repoInfo from '../data/repo-info.json';
 import { url } from '../utils/paths';
 
@@ -205,6 +206,86 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
   <section class="section">
     <div class="container-x">
       <ArchitectureDiagram />
+    </div>
+  </section>
+
+
+  <!-- System atlas -->
+  <section class="section bg-slate-900/20 border-y border-slate-900" id="system-atlas">
+    <div class="container-x">
+      <header class="max-w-2xl mb-8">
+        <p class="eyebrow">Derived from the source</p>
+        <h2 class="display-2 text-white mt-2 mb-3">See the whole system, then watch it run</h2>
+        <p class="lede m-0">
+          The architecture below is computed from this repository on every build: {number(atlas.totals.sourceFiles)}
+          source files, {number(atlas.totals.nodes)} modules, {number(atlas.totals.edges)} import links and{' '}
+          {atlas.componentEdges.length} runtime connections. Explore it as a dependency atlas, or orbit it in 3D and
+          replay a real message path packet by packet.
+        </p>
+      </header>
+
+      <div class="rounded-3xl border border-slate-800 bg-slate-950/60 p-4 sm:p-7 overflow-hidden">
+        <ol class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 list-none p-0 m-0">
+          {
+            [
+              ['telegram-cloud', 'Telegram MTProto', 'updates in, copies out'],
+              ['core-ingest', 'Ingestion & sessions', 'albums, flood control'],
+              ['core-pipeline', 'Pipeline & rules', 'filter, clean, rewrite'],
+              ['core-queue', 'Durable queue', 'leases, retries, DLQ'],
+              ['api-rest', 'REST control plane', 'tenancy, logs, admin'],
+            ].map(([id, title, note], index) => {
+              const component = atlas.components.find((c) => c.id === id);
+              return (
+                <li class="relative rounded-2xl border border-slate-800 bg-slate-900/50 p-3.5">
+                  <span class="font-mono text-[10.5px] text-slate-500">0{index + 1}</span>
+                  <p class="m-0 mt-1 text-[13.5px] font-semibold text-white">{title}</p>
+                  <p class="m-0 text-[12px] text-slate-400">{note}</p>
+                  <p class="m-0 mt-2 font-mono text-[11px] text-slate-500">
+                    {component ? `${component.files} files · ${number(component.loc)} loc` : 'external'}
+                  </p>
+                  <span
+                    class="absolute -right-2 top-1/2 hidden lg:block w-4 h-[2px]"
+                    style="background: var(--border-strong)"
+                    aria-hidden="true"
+                  />
+                </li>
+              );
+            })
+          }
+        </ol>
+
+        <div class="mt-5 grid gap-3 sm:grid-cols-3">
+          {
+            [
+              { label: 'Subsystems', value: `${atlas.subsystems.length}`, note: `${compact(atlas.totals.loc)} lines of source` },
+              { label: 'gRPC surface', value: `${atlas.proto.rpcCount}`, note: `${atlas.proto.services.length} services · ${atlas.proto.messageCount} messages` },
+              { label: 'Verified connections', value: `${atlas.componentEdges.length}`, note: `${atlas.verifiedAbsences.length} checked absences` },
+            ].map((item) => (
+              <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-3.5">
+                <p class="m-0 font-mono text-xl font-bold text-white">{item.value}</p>
+                <p class="m-0 text-[12px] text-slate-400">
+                  <strong class="text-slate-300">{item.label}</strong> — {item.note}
+                </p>
+              </div>
+            ))
+          }
+        </div>
+
+        <div class="mt-5 flex flex-wrap gap-3">
+          <a href={url('/system/')} class="btn btn-primary btn-sm">
+            <Icon name="route" class="w-4 h-4" />
+            Open the system atlas
+          </a>
+          <a href={url('/system/connections/')} class="btn btn-secondary btn-sm">
+            <Icon name="activity" class="w-4 h-4" />
+            Replay a message in 3D
+          </a>
+          <a href={url('/system/dependencies/')} class="btn btn-ghost btn-sm">
+            Dependency atlas
+            <Icon name="arrow-right" class="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </div>
     </div>
   </section>
 

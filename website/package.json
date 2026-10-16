@@ -5,13 +5,14 @@
   "main": "index.js",
   "scripts": {
     "dev": "astro dev",
-    "build": "node scripts/sync-repo-content.mjs && astro build",
+    "build": "node scripts/sync-repo-content.mjs && node scripts/sync-architecture.mjs && astro build",
     "preview": "astro preview",
-    "sync": "node scripts/sync-repo-content.mjs",
+    "sync": "node scripts/sync-repo-content.mjs && node scripts/sync-architecture.mjs",
     "test:seo": "node tests/seo-and-links.test.mjs",
     "test:theme": "node tests/theme-coverage.test.mjs",
+    "test:system": "node tests/system-atlas.test.mjs",
     "test:e2e": "playwright test",
-    "test": "npm run test:seo && npm run test:theme && npm run test:e2e"
+    "test": "npm run test:seo && npm run test:theme && npm run test:system && npm run test:e2e"
   },
   "keywords": [],
   "author": "",
