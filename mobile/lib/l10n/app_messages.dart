@@ -36,8 +36,7 @@ class AppMessagesEn {
     'ai_empty': 'No AI configuration yet.',
     'ai_language': 'Target language',
     'ai_model': 'Model',
-    'ai_note':
-        'API keys are configured by the bot or the web dashboard; the mobile app never stores provider keys.',
+    'ai_note': 'API keys are configured by the bot or the web dashboard; the mobile app never stores provider keys.',
     'ai_prompt': 'Prompt',
     'ai_provider': 'Provider',
     'ai_title': 'AI rewriting',
@@ -136,8 +135,7 @@ class AppMessagesEn {
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
     'filters_title': 'Filters',
-    'incompatible_server':
-        'This server is running an older AutoTelegramForward release. Update it to {version} or newer.',
+    'incompatible_server': 'This server is running an older AutoTelegramForward release. Update it to {version} or newer.',
     'lang_label': 'Language',
     'lang_native_en': 'English',
     'lang_native_es': 'Español',
@@ -200,8 +198,7 @@ class AppMessagesEn {
     'logs_policy_admin_required':
         'Only an administrator can open a verbose window.',
     'logs_policy_configured': 'Configured: {levels}',
-    'logs_policy_counters':
-        'Emitted {emitted} · suppressed by level {by_level} · by rate {by_rate}',
+    'logs_policy_counters': 'Emitted {emitted} · suppressed by level {by_level} · by rate {by_rate}',
     'logs_policy_counters_scope': 'Counters are {scope}',
     'logs_policy_data_age': 'Newest record {seconds}s ago',
     'logs_policy_diag_off': 'Verbose window closed',
@@ -227,8 +224,7 @@ class AppMessagesEn {
     'logs_policy_stop': 'Close window',
     'logs_policy_stop_none': 'No verbose window was open',
     'logs_policy_stopped': 'Verbose window closed',
-    'logs_policy_unavailable_hint':
-        'This server does not report its log policy. Update the server to use this tab.',
+    'logs_policy_unavailable_hint': 'This server does not report its log policy. Update the server to use this tab.',
     'logs_scope_corr_chip': 'corr:{id}',
     'logs_scope_service': 'Service',
     'logs_scope_task': 'Task',
@@ -432,13 +428,11 @@ class AppMessagesEn {
         'The server rejected the form. Check the highlighted fields.',
     'server_probe_bad_response':
         'The server answered, but with something unexpected.',
-    'server_probe_no_version':
-        'This server does not expose a version endpoint. Check the address or update the server.',
+    'server_probe_no_version': 'This server does not expose a version endpoint. Check the address or update the server.',
     'server_probe_reachable': 'Server reachable and compatible',
     'server_probe_test': 'Test connection',
     'server_probe_testing': 'Testing connection…',
-    'server_probe_tls_error':
-        'The secure connection failed. Check the server certificate and use https://.',
+    'server_probe_tls_error': 'The secure connection failed. Check the server certificate and use https://.',
     'server_probe_unreachable':
         'Cannot reach the server. Check the address and your network.',
     'server_restore_default': 'Restore official default',
@@ -450,8 +444,7 @@ class AppMessagesEn {
     'sessions_status_live': 'live',
     'sessions_status_offline': 'offline',
     'sessions_terminate': 'Disconnect',
-    'sessions_terminate_confirm':
-        'Disconnect this Telegram account? Forwarding tasks using it will stop.',
+    'sessions_terminate_confirm': 'Disconnect this Telegram account? Forwarding tasks using it will stop.',
     'sessions_title': 'Telegram sessions',
     'settings_about': 'About',
     'settings_change_password': 'Change password',
@@ -499,8 +492,7 @@ class AppMessagesEn {
     'sys_subtitle':
         'Server readiness, service topology and the configuration contract',
     'sys_title': 'System',
-    'sys_unavailable':
-        'This server does not expose the system status endpoint. Update the server to see readiness here.',
+    'sys_unavailable': 'This server does not expose the system status endpoint. Update the server to see readiness here.',
     'tg_login_cancel': 'Cancel login',
     'tg_login_code': 'Verification code',
     'tg_login_code_hint': 'Code from the Telegram app',

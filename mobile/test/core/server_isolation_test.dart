@@ -154,8 +154,9 @@ void main() {
             userId: 7,
             username: 'alice',
             isAdmin: false,
-            expiresAtIso:
-                DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+            expiresAtIso: DateTime.now()
+                .add(const Duration(days: 1))
+                .toIso8601String(),
           ),
         );
         final result = await ApiClient.probeServer(
@@ -180,15 +181,16 @@ void main() {
       final result = await ApiClient.probeServer(
         'https://slow.example.com/',
         minSupportedApiVersion: _minApi,
-        transport: (
-          Uri url, {
-          required String method,
-          Map<String, String>? headers,
-          Object? body,
-          required Duration timeout,
-        }) async {
-          throw TimeoutException('timed out');
-        },
+        transport:
+            (
+              Uri url, {
+              required String method,
+              Map<String, String>? headers,
+              Object? body,
+              required Duration timeout,
+            }) async {
+              throw TimeoutException('timed out');
+            },
         timeout: const Duration(milliseconds: 50),
       );
       expect(result.ok, isFalse);
@@ -200,15 +202,16 @@ void main() {
       final result = await ApiClient.probeServer(
         'https://down.example.com/',
         minSupportedApiVersion: _minApi,
-        transport: (
-          Uri url, {
-          required String method,
-          Map<String, String>? headers,
-          Object? body,
-          required Duration timeout,
-        }) async {
-          throw http.ClientException('Connection refused', url);
-        },
+        transport:
+            (
+              Uri url, {
+              required String method,
+              Map<String, String>? headers,
+              Object? body,
+              required Duration timeout,
+            }) async {
+              throw http.ClientException('Connection refused', url);
+            },
       );
       expect(result.ok, isFalse);
       expect(result.reachable, isFalse);
@@ -219,18 +222,19 @@ void main() {
       final result = await ApiClient.probeServer(
         'https://badcert.example.com/',
         minSupportedApiVersion: _minApi,
-        transport: (
-          Uri url, {
-          required String method,
-          Map<String, String>? headers,
-          Object? body,
-          required Duration timeout,
-        }) async {
-          throw http.ClientException(
-            'TLS handshake failure: certificate expired',
-            url,
-          );
-        },
+        transport:
+            (
+              Uri url, {
+              required String method,
+              Map<String, String>? headers,
+              Object? body,
+              required Duration timeout,
+            }) async {
+              throw http.ClientException(
+                'TLS handshake failure: certificate expired',
+                url,
+              );
+            },
       );
       expect(result.ok, isFalse);
       expect(result.reachable, isFalse);
@@ -298,8 +302,9 @@ void main() {
           userId: 1,
           username: 'alice',
           isAdmin: false,
-          expiresAtIso:
-              DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+          expiresAtIso: DateTime.now()
+              .add(const Duration(days: 1))
+              .toIso8601String(),
         ),
       );
       await state.onLoginSuccess(
@@ -334,8 +339,9 @@ void main() {
           userId: 1,
           username: 'alice',
           isAdmin: false,
-          expiresAtIso:
-              DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+          expiresAtIso: DateTime.now()
+              .add(const Duration(days: 1))
+              .toIso8601String(),
         ),
       );
       final state = AppState(
@@ -390,8 +396,9 @@ void main() {
             userId: 1,
             username: 'alice',
             isAdmin: false,
-            expiresAtIso:
-                DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+            expiresAtIso: DateTime.now()
+                .add(const Duration(days: 1))
+                .toIso8601String(),
           ),
         );
 
@@ -399,17 +406,18 @@ void main() {
         await ApiClient.probeServer(
           serverB,
           minSupportedApiVersion: _minApi,
-          transport: (
-            Uri url, {
-            required String method,
-            Map<String, String>? headers,
-            Object? body,
-            required Duration timeout,
-          }) async {
-            seen.add(url);
-            authSeen[url.origin] = headers?['authorization'];
-            return _versionBody();
-          },
+          transport:
+              (
+                Uri url, {
+                required String method,
+                Map<String, String>? headers,
+                Object? body,
+                required Duration timeout,
+              }) async {
+                seen.add(url);
+                authSeen[url.origin] = headers?['authorization'];
+                return _versionBody();
+              },
         );
         expect(seen.single.origin, 'https://b.example.com');
         expect(authSeen['https://b.example.com'], isNull);
@@ -420,24 +428,25 @@ void main() {
         final clientB = ApiClient(
           baseUrl: serverB,
           tokenStore: tokens,
-          transport: (
-            Uri url, {
-            required String method,
-            Map<String, String>? headers,
-            Object? body,
-            required Duration timeout,
-          }) async {
-            loginSeen.add(url);
-            return http.Response(
-              jsonEncode({
-                'token': 'token-for-b',
-                'user_id': 2,
-                'username': 'bob',
-                'is_admin': false,
-              }),
-              200,
-            );
-          },
+          transport:
+              (
+                Uri url, {
+                required String method,
+                Map<String, String>? headers,
+                Object? body,
+                required Duration timeout,
+              }) async {
+                loginSeen.add(url);
+                return http.Response(
+                  jsonEncode({
+                    'token': 'token-for-b',
+                    'user_id': 2,
+                    'username': 'bob',
+                    'is_admin': false,
+                  }),
+                  200,
+                );
+              },
         );
         await clientB.login(username: 'bob', password: 'secret');
         expect(loginSeen.single.origin, 'https://b.example.com');
@@ -455,8 +464,9 @@ void main() {
             userId: 1,
             username: 'alice',
             isAdmin: false,
-            expiresAtIso:
-                DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+            expiresAtIso: DateTime.now()
+                .add(const Duration(days: 1))
+                .toIso8601String(),
           ),
         );
         final state = AppState(
@@ -470,16 +480,20 @@ void main() {
         final client = ApiClient(
           baseUrl: state.serverUrl,
           tokenStore: tokens,
-          transport: (
-            Uri url, {
-            required String method,
-            Map<String, String>? headers,
-            Object? body,
-            required Duration timeout,
-          }) async {
-            expect(headers?['authorization'], 'Bearer stale-token');
-            return http.Response(jsonEncode({'error': 'token_expired'}), 401);
-          },
+          transport:
+              (
+                Uri url, {
+                required String method,
+                Map<String, String>? headers,
+                Object? body,
+                required Duration timeout,
+              }) async {
+                expect(headers?['authorization'], 'Bearer stale-token');
+                return http.Response(
+                  jsonEncode({'error': 'token_expired'}),
+                  401,
+                );
+              },
         );
         client.setBearer('stale-token');
 

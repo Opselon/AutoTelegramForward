@@ -117,22 +117,20 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
     final client = context.read<AppState>().buildApiClient();
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final resp =
-          start
-              ? await client.startLogDiagnostics()
-              : await client.stopLogDiagnostics();
+      final resp = start
+          ? await client.startLogDiagnostics()
+          : await client.stopLogDiagnostics();
       if (!mounted) return;
       final seconds =
           (resp['seconds'] as num?)?.toInt() ??
           (resp['expires_in_seconds'] as num?)?.toInt() ??
           0;
       final changed = resp['changed'] != false;
-      final message =
-          start
-              ? t.get('logs_policy_started', params: {'seconds': '$seconds'})
-              : (changed
-                  ? t.get('logs_policy_stopped')
-                  : t.get('logs_policy_stop_none'));
+      final message = start
+          ? t.get('logs_policy_started', params: {'seconds': '$seconds'})
+          : (changed
+                ? t.get('logs_policy_stopped')
+                : t.get('logs_policy_stop_none'));
       messenger.showSnackBar(SnackBar(content: Text(message)));
       await _load();
     } on ApiException catch (exc) {
@@ -144,23 +142,20 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
       // 403 is the expected answer for a non-admin: say so in words instead of
       // echoing a permission code the user cannot act on.
       setState(
-        () =>
-            _actionError =
-                exc.error.kind == ErrorKind.forbidden
-                    ? t.get('logs_policy_admin_required')
-                    : t.get(
-                      'logs_policy_start_failed',
-                      params: {'error': exc.error.message},
-                    ),
+        () => _actionError = exc.error.kind == ErrorKind.forbidden
+            ? t.get('logs_policy_admin_required')
+            : t.get(
+                'logs_policy_start_failed',
+                params: {'error': exc.error.message},
+              ),
       );
     } catch (exc) {
       if (!mounted) return;
       setState(
-        () =>
-            _actionError = t.get(
-              'logs_policy_start_failed',
-              params: {'error': '$exc'},
-            ),
+        () => _actionError = t.get(
+          'logs_policy_start_failed',
+          params: {'error': '$exc'},
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -281,12 +276,11 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
   /// Per-service logging reachability, taken from `/api/logs/health`.
   Widget _healthCard(AppMessages t) {
     final health = _health;
-    final services =
-        health == null
-            ? const <Map<String, dynamic>>[]
-            : ((health['services'] as List?) ?? const [])
-                .whereType<Map<String, dynamic>>()
-                .toList(growable: false);
+    final services = health == null
+        ? const <Map<String, dynamic>>[]
+        : ((health['services'] as List?) ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .toList(growable: false);
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -404,10 +398,9 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
   ) {
     final data = scope.value;
     final available = data['available'] == true;
-    final counters =
-        data['counters'] is Map<String, dynamic>
-            ? data['counters'] as Map<String, dynamic>
-            : null;
+    final counters = data['counters'] is Map<String, dynamic>
+        ? data['counters'] as Map<String, dynamic>
+        : null;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -466,12 +459,12 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
               Text(
                 data['diagnostic_active'] == true
                     ? t.get(
-                      'logs_policy_diag_on',
-                      params: {
-                        'seconds':
-                            '${data['diagnostic_seconds_remaining'] ?? 0}',
-                      },
-                    )
+                        'logs_policy_diag_on',
+                        params: {
+                          'seconds':
+                              '${data['diagnostic_seconds_remaining'] ?? 0}',
+                        },
+                      )
                     : t.get('logs_policy_diag_off'),
                 style: const TextStyle(fontSize: 12),
               ),
@@ -564,10 +557,9 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
-                  onPressed:
-                      _busy || !active
-                          ? null
-                          : () => _diagnostics(start: false),
+                  onPressed: _busy || !active
+                      ? null
+                      : () => _diagnostics(start: false),
                   icon: const Icon(Icons.stop, size: 18),
                   label: Text(t.get('logs_policy_stop')),
                 ),
@@ -584,8 +576,8 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
   /// The api scope's window length, so the hint quotes the server's default
   /// instead of a number this screen invented.
   int _windowSeconds() {
-    final remaining =
-        (_apiScope?['diagnostic_seconds_remaining'] as num?)?.toInt();
+    final remaining = (_apiScope?['diagnostic_seconds_remaining'] as num?)
+        ?.toInt();
     if (remaining != null && remaining > 0) return remaining;
     return 600;
   }

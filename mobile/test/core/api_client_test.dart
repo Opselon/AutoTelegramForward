@@ -37,24 +37,19 @@ void main() {
       final client = ApiClient(
         baseUrl: 'https://atf.test/',
         tokenStore: tokenStore,
-        transport: (
-          url, {
-          headers,
-          body,
-          required method,
-          required timeout,
-        }) async {
-          requestedUri = url;
-          capturedHeaders = headers;
-          return http.Response(
-            jsonEncode({
-              'rules': [],
-              'total_sessions': 1,
-              'active_sessions': 1,
-            }),
-            200,
-          );
-        },
+        transport:
+            (url, {headers, body, required method, required timeout}) async {
+              requestedUri = url;
+              capturedHeaders = headers;
+              return http.Response(
+                jsonEncode({
+                  'rules': [],
+                  'total_sessions': 1,
+                  'active_sessions': 1,
+                }),
+                200,
+              );
+            },
       );
 
       client.setBearer('jwt-mock-bearer-token');
@@ -69,15 +64,16 @@ void main() {
       final client = ApiClient(
         baseUrl: 'https://atf.test/',
         tokenStore: tokenStore,
-        transport: (
-          url, {
-          Map<String, String>? headers,
-          Object? body,
-          required String method,
-          required Duration timeout,
-        }) async {
-          return http.Response(jsonEncode({'error': 'token_expired'}), 401);
-        },
+        transport:
+            (
+              url, {
+              Map<String, String>? headers,
+              Object? body,
+              required String method,
+              required Duration timeout,
+            }) async {
+              return http.Response(jsonEncode({'error': 'token_expired'}), 401);
+            },
       );
 
       expect(
@@ -96,18 +92,19 @@ void main() {
       final client = ApiClient(
         baseUrl: 'https://atf.test/',
         tokenStore: tokenStore,
-        transport: (
-          url, {
-          Map<String, String>? headers,
-          Object? body,
-          required String method,
-          required Duration timeout,
-        }) async {
-          return http.Response(
-            jsonEncode({'error': 'rule modified by another session'}),
-            409,
-          );
-        },
+        transport:
+            (
+              url, {
+              Map<String, String>? headers,
+              Object? body,
+              required String method,
+              required Duration timeout,
+            }) async {
+              return http.Response(
+                jsonEncode({'error': 'rule modified by another session'}),
+                409,
+              );
+            },
       );
 
       expect(
@@ -128,19 +125,20 @@ void main() {
         baseUrl: 'https://atf.test/',
         tokenStore: tokenStore,
         maxRetries: 2,
-        transport: (
-          url, {
-          Map<String, String>? headers,
-          Object? body,
-          required String method,
-          required Duration timeout,
-        }) async {
-          attempts++;
-          if (attempts < 2) {
-            return http.Response('temporarily unavailable', 503);
-          }
-          return http.Response(jsonEncode({'rules': []}), 200);
-        },
+        transport:
+            (
+              url, {
+              Map<String, String>? headers,
+              Object? body,
+              required String method,
+              required Duration timeout,
+            }) async {
+              attempts++;
+              if (attempts < 2) {
+                return http.Response('temporarily unavailable', 503);
+              }
+              return http.Response(jsonEncode({'rules': []}), 200);
+            },
       );
 
       final rules = await client.listRules();

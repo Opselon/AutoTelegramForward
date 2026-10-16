@@ -36,31 +36,32 @@ typedef _Sent = ({String method, String path, Object? body});
 
 /// A canned server: sessions and AI configs for the form's pickers, and an
 /// echo rule for the write endpoints.
-HttpTransport _transport(List<_Sent> log) => (
-  Uri url, {
-  required String method,
-  Map<String, String>? headers,
-  Object? body,
-  required Duration timeout,
-}) async {
-  log.add((method: method, path: url.path, body: body));
-  if (url.path.endsWith('/api/sessions')) {
-    return http.Response(
-      '{"sessions":[{"id":"s-1","is_active":true,"phone_number":"+10000000000"}]}',
-      200,
-      headers: _json,
-    );
-  }
-  if (url.path.endsWith('/api/ai-configs')) {
-    return http.Response('{"configs":[]}', 200, headers: _json);
-  }
-  return http.Response(
-    '{"id":"r-saved","source_chat_id":"-1001","target_chat_id":"-1002",'
-    '"is_enabled":true}',
-    200,
-    headers: _json,
-  );
-};
+HttpTransport _transport(List<_Sent> log) =>
+    (
+      Uri url, {
+      required String method,
+      Map<String, String>? headers,
+      Object? body,
+      required Duration timeout,
+    }) async {
+      log.add((method: method, path: url.path, body: body));
+      if (url.path.endsWith('/api/sessions')) {
+        return http.Response(
+          '{"sessions":[{"id":"s-1","is_active":true,"phone_number":"+10000000000"}]}',
+          200,
+          headers: _json,
+        );
+      }
+      if (url.path.endsWith('/api/ai-configs')) {
+        return http.Response('{"configs":[]}', 200, headers: _json);
+      }
+      return http.Response(
+        '{"id":"r-saved","source_chat_id":"-1001","target_chat_id":"-1002",'
+        '"is_enabled":true}',
+        200,
+        headers: _json,
+      );
+    };
 
 AppState _state(List<_Sent> log) => AppState(
   env: _env,
@@ -112,16 +113,14 @@ Future<void> _pumpEditor(
         supportedLocales: AppMessages.supportedLocales,
         home: Scaffold(
           body: Builder(
-            builder:
-                (ctx) => TextButton(
-                  onPressed:
-                      () => Navigator.of(ctx).push(
-                        MaterialPageRoute<bool>(
-                          builder: (_) => RuleEditorScreen(rule: rule),
-                        ),
-                      ),
-                  child: const Text('open editor'),
+            builder: (ctx) => TextButton(
+              onPressed: () => Navigator.of(ctx).push(
+                MaterialPageRoute<bool>(
+                  builder: (_) => RuleEditorScreen(rule: rule),
                 ),
+              ),
+              child: const Text('open editor'),
+            ),
           ),
         ),
       ),
@@ -299,8 +298,9 @@ void main() {
     await tester.ensureVisible(_chip('-1001111111111'));
     await tester.tap(_chip('-1001111111111'));
     await tester.pump();
-    final ctrl =
-        tester.widget<TextFormField>(_field('rule_sources_field')).controller!;
+    final ctrl = tester
+        .widget<TextFormField>(_field('rule_sources_field'))
+        .controller!;
     expect(ctrl.selection.textInside(ctrl.text), '-1001111111111');
 
     // Removing a chip drops exactly that entry, keeping the rest in order.

@@ -78,27 +78,27 @@ void main() {
     });
 
     test('rejects a repeat inside a list and names the offending id', () {
-      final issue =
-          validateRoute(
-            sourcesText: '-1001, -1002, -1001',
-            targetsText: '-1003',
-          )!;
+      final issue = validateRoute(
+        sourcesText: '-1001, -1002, -1001',
+        targetsText: '-1003',
+      )!;
       expect(issue.kind, RouteIssueKind.duplicateSource);
       expect(issue.id, '-1001');
       expect(issue.messageKey, 'rules_route_duplicate_id');
 
-      final targetIssue =
-          validateRoute(sourcesText: '-1001', targetsText: '-1003, -1003')!;
+      final targetIssue = validateRoute(
+        sourcesText: '-1001',
+        targetsText: '-1003, -1003',
+      )!;
       expect(targetIssue.kind, RouteIssueKind.duplicateTarget);
       expect(targetIssue.id, '-1003');
     });
 
     test('rejects a chat that is both a source and a target', () {
-      final issue =
-          validateRoute(
-            sourcesText: '-1001, @news',
-            targetsText: 'https://t.me/news',
-          )!;
+      final issue = validateRoute(
+        sourcesText: '-1001, @news',
+        targetsText: 'https://t.me/news',
+      )!;
       expect(issue.kind, RouteIssueKind.overlap);
       expect(issue.id, '@news');
       expect(issue.messageKey, 'rules_route_overlap_id');

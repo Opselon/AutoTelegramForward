@@ -116,18 +116,15 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
       }
       final t = AppMessages.of(context);
       setState(
-        () =>
-            _loadError =
-                exc.error.message.isNotEmpty
-                    ? exc.error.message
-                    : t.get('rules_settings_load_failed'),
+        () => _loadError = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : t.get('rules_settings_load_failed'),
       );
     } catch (exc) {
       if (!mounted) return;
       setState(
-        () =>
-            _loadError =
-                '${AppMessages.of(context).get('rules_settings_load_failed')}: $exc',
+        () => _loadError =
+            '${AppMessages.of(context).get('rules_settings_load_failed')}: $exc',
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -224,10 +221,9 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
       if (!mounted) return;
       if (resp['success'] == false) {
         setState(
-          () =>
-              _saveError =
-                  '${resp['message'] ?? t.get('rules_settings_save_failed')}'
-                  '${resp['error_code'] != null ? ' (${resp['error_code']})' : ''}',
+          () => _saveError =
+              '${resp['message'] ?? t.get('rules_settings_save_failed')}'
+              '${resp['error_code'] != null ? ' (${resp['error_code']})' : ''}',
         );
         return;
       }
@@ -246,11 +242,9 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         return;
       }
       setState(
-        () =>
-            _saveError =
-                exc.error.message.isNotEmpty
-                    ? exc.error.message
-                    : t.get('rules_settings_save_failed'),
+        () => _saveError = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : t.get('rules_settings_save_failed'),
       );
     } catch (exc) {
       if (!mounted) return;
@@ -340,13 +334,12 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
                     decoration: InputDecoration(
                       isDense: true,
                       prefixIcon: const Icon(Icons.search, size: 18),
-                      suffixIcon:
-                          _query.isEmpty
-                              ? null
-                              : IconButton(
-                                icon: const Icon(Icons.close, size: 16),
-                                onPressed: () => setState(() => _query = ''),
-                              ),
+                      suffixIcon: _query.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.close, size: 16),
+                              onPressed: () => setState(() => _query = ''),
+                            ),
                       hintText: t.get('rules_settings_search_hint'),
                       border: const OutlineInputBorder(),
                     ),
@@ -377,9 +370,9 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
                           _changed.isEmpty
                               ? t.get('rules_settings_no_changes')
                               : t.get(
-                                'rules_settings_change_count',
-                                params: {'n': '${_changed.length}'},
-                              ),
+                                  'rules_settings_change_count',
+                                  params: {'n': '${_changed.length}'},
+                                ),
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
@@ -387,24 +380,24 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
                         ),
                       ),
                       TextButton(
-                        onPressed:
-                            _saving ? null : () => Navigator.of(context).pop(),
+                        onPressed: _saving
+                            ? null
+                            : () => Navigator.of(context).pop(),
                         child: Text(
                           AppMessages.of(context).get('action_cancel'),
                         ),
                       ),
                       const SizedBox(width: 8),
                       FilledButton.icon(
-                        icon:
-                            _saving
-                                ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                                : const Icon(Icons.save_outlined, size: 18),
+                        icon: _saving
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined, size: 18),
                         label: Text(t.get('rules_settings_apply')),
                         onPressed: _saving ? null : _save,
                       ),
@@ -472,15 +465,14 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
     // the middle of "cleanup" is useless if the user has to find the group too.
     if (_query.isNotEmpty) {
       final needle = _query.toLowerCase();
-      final hits =
-          schema.settings
-              .where(
-                (spec) =>
-                    spec.key.toLowerCase().contains(needle) ||
-                    spec.label.toLowerCase().contains(needle) ||
-                    spec.help.toLowerCase().contains(needle),
-              )
-              .toList();
+      final hits = schema.settings
+          .where(
+            (spec) =>
+                spec.key.toLowerCase().contains(needle) ||
+                spec.label.toLowerCase().contains(needle) ||
+                spec.help.toLowerCase().contains(needle),
+          )
+          .toList();
       if (hits.isEmpty) {
         return Center(
           child: Padding(
@@ -590,22 +582,22 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         contentPadding: EdgeInsets.zero,
         dense: true,
         title: Text(spec.label, style: const TextStyle(fontSize: 13)),
-        subtitle:
-            spec.help.isEmpty
-                ? null
-                : Text(spec.help, style: const TextStyle(fontSize: 11)),
+        subtitle: spec.help.isEmpty
+            ? null
+            : Text(spec.help, style: const TextStyle(fontSize: 11)),
         value: value == true,
         onChanged: (v) => setState(() => _values[spec.key] = v),
       );
     }
 
     if (spec.choices.isNotEmpty) {
-      final selected =
-          value != null && spec.choices.contains('$value') ? '$value' : null;
+      final selected = value != null && spec.choices.contains('$value')
+          ? '$value'
+          : null;
       return Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: DropdownButtonFormField<String>(
-          value: selected,
+          initialValue: selected,
           isDense: true,
           decoration: InputDecoration(
             isDense: true,
@@ -639,11 +631,10 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         initial: <String, String>{
           for (final entry in raw.entries) '${entry.key}': '${entry.value}',
         },
-        onChanged:
-            (map) => setState(() {
-              _values[spec.key] = map;
-              _errors.remove(spec.key);
-            }),
+        onChanged: (map) => setState(() {
+          _values[spec.key] = map;
+          _errors.remove(spec.key);
+        }),
       );
     }
 
@@ -654,9 +645,8 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         error,
         lines: 3,
         hint: t.get('rules_settings_json_hint'),
-        encode:
-            (v) =>
-                v is Map ? const JsonEncoder.withIndent('  ').convert(v) : '$v',
+        encode: (v) =>
+            v is Map ? const JsonEncoder.withIndent('  ').convert(v) : '$v',
         decode: (text, spec) {
           final decoded = jsonDecode(text);
           return decoded is Map ? decoded : <String, dynamic>{};
@@ -672,12 +662,11 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         hint: t.get('rules_settings_list_hint'),
         encode: (v) => v is List ? v.join(', ') : '$v',
         decode: (text, spec) {
-          final parts =
-              text
-                  .split(',')
-                  .map((e) => e.trim())
-                  .where((e) => e.isNotEmpty)
-                  .toList();
+          final parts = text
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
           // A list of numbers must stay numeric: sending "30" where the server
           // expects 30 is a type error, not a coercion.
           if (spec.itemKind == 'int' || spec.itemKind == 'float') {
@@ -761,9 +750,8 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
                 _values[spec.key] = null;
                 _errors.remove(spec.key);
               } else {
-                _errors[spec.key] = AppMessages.of(
-                  context,
-                ).get('rules_settings_required');
+                _errors[spec.key] = AppMessages.of(context)
+                    .get('rules_settings_required');
               }
             });
             return;
@@ -776,17 +764,13 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
             });
           } on FormatException {
             setState(
-              () =>
-                  _errors[spec.key] = AppMessages.of(
-                    context,
-                  ).get('rules_settings_invalid', params: {'kind': spec.kind}),
+              () => _errors[spec.key] = AppMessages.of(context)
+                  .get('rules_settings_invalid', params: {'kind': spec.kind}),
             );
           } catch (_) {
             setState(
-              () =>
-                  _errors[spec.key] = AppMessages.of(
-                    context,
-                  ).get('rules_settings_invalid', params: {'kind': spec.kind}),
+              () => _errors[spec.key] = AppMessages.of(context)
+                  .get('rules_settings_invalid', params: {'kind': spec.kind}),
             );
           }
         },
@@ -880,8 +864,9 @@ class _PairEditorState extends State<_PairEditor> {
   @override
   Widget build(BuildContext context) {
     final t = AppMessages.of(context);
-    final problem =
-        _duplicate ? t.get('rules_settings_pair_duplicate') : widget.error;
+    final problem = _duplicate
+        ? t.get('rules_settings_pair_duplicate')
+        : widget.error;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(

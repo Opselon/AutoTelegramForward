@@ -24,8 +24,7 @@ class AppMessagesFa {
     'ai_empty': 'پیکربندی هوش مصنوعی یافت نشد.',
     'ai_language': 'زبان مقصد',
     'ai_model': 'مدل',
-    'ai_note':
-        'کلیدهای API از طریق ربات یا داشبورد وب تنظیم می‌شوند؛ اپلیکیشن موبایل هیچ کلید ارائه‌دهنده‌ای ذخیره نمی‌کند.',
+    'ai_note': 'کلیدهای API از طریق ربات یا داشبورد وب تنظیم می‌شوند؛ اپلیکیشن موبایل هیچ کلید ارائه‌دهنده‌ای ذخیره نمی‌کند.',
     'ai_prompt': 'پرامپت اختصاصی',
     'ai_provider': 'سرویس‌دهنده',
     'ai_title': 'هوش مصنوعی',
@@ -127,8 +126,7 @@ class AppMessagesFa {
     'filters_kind_whitelist': 'لیست سفید',
     'filters_pattern': 'الگو / کلمات کلیدی',
     'filters_title': 'فیلترها',
-    'incompatible_server':
-        'این سرور نسخه قدیمی‌تری از AutoTelegramForward را اجرا می‌کند. آن را به {version} یا جدیدتر به‌روز کنید.',
+    'incompatible_server': 'این سرور نسخه قدیمی‌تری از AutoTelegramForward را اجرا می‌کند. آن را به {version} یا جدیدتر به‌روز کنید.',
     'lang_label': 'زبان',
     'lang_native_en': 'English',
     'lang_native_es': 'Español',
@@ -192,15 +190,13 @@ class AppMessagesFa {
     'logs_policy_admin_required':
         'فقط مدیر می‌تواند پنجره‌ی جمع‌آوری کامل را باز کند.',
     'logs_policy_configured': 'پیکربندی‌شده: {levels}',
-    'logs_policy_counters':
-        'تولید‌شده {emitted} · سرکوب‌شده بر اساس سطح {by_level} · بر اساس نرخ {by_rate}',
+    'logs_policy_counters': 'تولید‌شده {emitted} · سرکوب‌شده بر اساس سطح {by_level} · بر اساس نرخ {by_rate}',
     'logs_policy_counters_scope': 'شمارنده‌ها {scope} هستند',
     'logs_policy_data_age': 'جدیدترین رکورد {seconds} ثانیه پیش',
     'logs_policy_diag_off': 'پنجره‌ی جمع‌آوری کامل بسته شد',
     'logs_policy_diag_on':
         'پنجره‌ی جمع‌آوری کامل باز است — {seconds} ثانیه باقی مانده',
-    'logs_policy_diagnostics_hint':
-        'فقط برای مدیران. به مدت {seconds} ثانیه باز می‌شود و خودش بسته می‌شود.',
+    'logs_policy_diagnostics_hint': 'فقط برای مدیران. به مدت {seconds} ثانیه باز می‌شود و خودش بسته می‌شود.',
     'logs_policy_diagnostics_title': 'پنجره‌ی جمع‌آوری کامل',
     'logs_policy_effective': 'در حال جمع‌آوری: {levels}',
     'logs_policy_health_title': 'سلامت خط لوله',
@@ -220,8 +216,7 @@ class AppMessagesFa {
     'logs_policy_stop': 'بستن پنجره',
     'logs_policy_stop_none': 'هیچ پنجره‌ی جمع‌آوری کاملی باز نبود',
     'logs_policy_stopped': 'پنجره‌ی جمع‌آوری کامل بسته شد',
-    'logs_policy_unavailable_hint':
-        'این سرور سیاست گزارش‌های خود را اعلام نمی‌کند. برای استفاده از این زبانه، سرور را به‌روز کنید.',
+    'logs_policy_unavailable_hint': 'این سرور سیاست گزارش‌های خود را اعلام نمی‌کند. برای استفاده از این زبانه، سرور را به‌روز کنید.',
     'logs_scope_corr_chip': 'شناسه:{id}',
     'logs_scope_service': 'سرویس',
     'logs_scope_task': 'تسک',
@@ -422,13 +417,11 @@ class AppMessagesFa {
     'rules_validation_failed':
         'سرور فرم را رد کرد. فیلدهای مشخص‌شده را بررسی کنید.',
     'server_probe_bad_response': 'سرور پاسخ داد، اما پاسخ غیرمنتظره بود.',
-    'server_probe_no_version':
-        'این سرور مسیر نسخه را ارائه نمی‌دهد. آدرس را بررسی کنید یا سرور را به‌روز کنید.',
+    'server_probe_no_version': 'این سرور مسیر نسخه را ارائه نمی‌دهد. آدرس را بررسی کنید یا سرور را به‌روز کنید.',
     'server_probe_reachable': 'سرور در دسترس و سازگار است',
     'server_probe_test': 'آزمایش اتصال',
     'server_probe_testing': 'در حال آزمایش اتصال…',
-    'server_probe_tls_error':
-        'اتصال امن برقرار نشد. گواهی سرور را بررسی کنید و از https:// استفاده کنید.',
+    'server_probe_tls_error': 'اتصال امن برقرار نشد. گواهی سرور را بررسی کنید و از https:// استفاده کنید.',
     'server_probe_unreachable':
         'ارتباط با سرور برقرار نشد. آدرس و اتصال اینترنت را بررسی کنید.',
     'server_restore_default': 'بازگردانی به پیش‌فرض رسمی',
@@ -439,8 +432,7 @@ class AppMessagesFa {
     'sessions_status_live': 'فعال',
     'sessions_status_offline': 'غیرفعال',
     'sessions_terminate': 'قطع اتصال',
-    'sessions_terminate_confirm':
-        'این حساب تلگرام قطع شود؟ تسک‌هایی که از آن استفاده می‌کنند متوقف می‌شوند.',
+    'sessions_terminate_confirm': 'این حساب تلگرام قطع شود؟ تسک‌هایی که از آن استفاده می‌کنند متوقف می‌شوند.',
     'sessions_title': 'سشن‌های تلگرام',
     'settings_about': 'درباره',
     'settings_change_password': 'تغییر رمز عبور',
@@ -487,8 +479,7 @@ class AppMessagesFa {
     'sys_services_title': 'میکروسرویس‌ها',
     'sys_subtitle': 'آمادگی سرور، چیدمان سرویس‌ها و قرارداد تنظیمات',
     'sys_title': 'سیستم',
-    'sys_unavailable':
-        'این سرور مسیر وضعیت سیستم را ارائه نمی‌دهد. سرور را به‌روز کنید تا آمادگی اینجا نمایش داده شود.',
+    'sys_unavailable': 'این سرور مسیر وضعیت سیستم را ارائه نمی‌دهد. سرور را به‌روز کنید تا آمادگی اینجا نمایش داده شود.',
     'tg_login_cancel': 'انصراف',
     'tg_login_code': 'کد تأیید پیامک/تلگرام',
     'tg_login_code_hint': 'کد ارسال‌شده از طرف تلگرام',

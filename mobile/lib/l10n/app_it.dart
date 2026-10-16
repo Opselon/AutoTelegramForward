@@ -24,8 +24,7 @@ class AppMessagesIt {
     'ai_empty': 'No AI configuration yet.',
     'ai_language': 'Target language',
     'ai_model': 'Model',
-    'ai_note':
-        'Le chiavi API si configurano dal bot o dalla dashboard web; l\'app mobile non salva mai le chiavi dei provider.',
+    'ai_note': 'Le chiavi API si configurano dal bot o dalla dashboard web; l\'app mobile non salva mai le chiavi dei provider.',
     'ai_prompt': 'Prompt',
     'ai_provider': 'Provider',
     'ai_title': 'AI rewriting',
@@ -39,8 +38,7 @@ class AppMessagesIt {
     'chats_members': '{n} membri',
     'chats_new_task': 'Nuova attività da questa chat',
     'chats_new_task_hint': 'Poi scegli l\'altro lato del percorso',
-    'chats_no_sessions':
-        'Collega prima un account Telegram: l\'elenco delle chat viene letto da lì.',
+    'chats_no_sessions': 'Collega prima un account Telegram: l\'elenco delle chat viene letto da lì.',
     'chats_picker_add': 'Aggiungi {n}',
     'chats_picker_add_none': 'Aggiungi',
     'chats_picker_clear': 'Cancella',
@@ -114,8 +112,7 @@ class AppMessagesIt {
     'delivery_retry_failed': 'Impossibile rieseguire l’operazione: {error}',
     'delivery_retry_ok': '{n} operazioni rieseguite',
     'delivery_rule_line': '{forwarded} inoltrati · {errors} errori',
-    'delivery_subtitle':
-        'Che cosa sta facendo il motore in questo momento e che cosa ha abbandonato',
+    'delivery_subtitle': 'Che cosa sta facendo il motore in questo momento e che cosa ha abbandonato',
     'delivery_tab_dlq': 'Scartati',
     'delivery_tab_queue': 'Coda',
     'delivery_title': 'Consegna',
@@ -129,8 +126,7 @@ class AppMessagesIt {
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
     'filters_title': 'Filters',
-    'incompatible_server':
-        'Questo server esegue una versione precedente di AutoTelegramForward. Aggiornala a {version} o successiva.',
+    'incompatible_server': 'Questo server esegue una versione precedente di AutoTelegramForward. Aggiornala a {version} o successiva.',
     'lang_label': 'Lingua',
     'lang_native_en': 'English',
     'lang_native_es': 'Español',
@@ -194,8 +190,7 @@ class AppMessagesIt {
     'logs_policy_admin_required':
         'Solo un amministratore può aprire una finestra dettagliata.',
     'logs_policy_configured': 'Configurato: {levels}',
-    'logs_policy_counters':
-        'Emessi {emitted} · soppressi per livello {by_level} · per frequenza {by_rate}',
+    'logs_policy_counters': 'Emessi {emitted} · soppressi per livello {by_level} · per frequenza {by_rate}',
     'logs_policy_counters_scope': 'Ambito dei contatori: {scope}',
     'logs_policy_data_age': 'Ultimo record {seconds}s fa',
     'logs_policy_diag_off': 'Finestra dettagliata chiusa',
@@ -221,8 +216,7 @@ class AppMessagesIt {
     'logs_policy_stop': 'Chiudi finestra',
     'logs_policy_stop_none': 'Nessuna finestra dettagliata era aperta',
     'logs_policy_stopped': 'Finestra dettagliata chiusa',
-    'logs_policy_unavailable_hint':
-        'Questo server non segnala la sua politica dei log. Aggiorna il server per usare questa scheda.',
+    'logs_policy_unavailable_hint': 'Questo server non segnala la sua politica dei log. Aggiorna il server per usare questa scheda.',
     'logs_scope_corr_chip': 'corr:{id}',
     'logs_scope_service': 'Servizio',
     'logs_scope_task': 'Attività',
@@ -290,8 +284,7 @@ class AppMessagesIt {
     'rules_footer': 'Footer template',
     'rules_forward_mode': 'Modalità inoltro',
     'rules_full_control': 'Controllo completo',
-    'rules_full_control_desc':
-        'Ogni impostazione per attività rispettata dal motore, validata sul server.',
+    'rules_full_control_desc': 'Ogni impostazione per attività rispettata dal motore, validata sul server.',
     'rules_full_control_open': 'Apri',
     'rules_header': 'Header template',
     'rules_ignore_edits': 'Ignore Edits',
@@ -308,8 +301,7 @@ class AppMessagesIt {
     'rules_proc_raw': 'Elabora testo grezzo',
     'rules_remove_emojis': 'Strip Emojis',
     'rules_replace_add': 'Aggiungi sostituzione',
-    'rules_replace_empty':
-        'Nessuna sostituzione. Aggiungine una per riscrivere il testo del messaggio.',
+    'rules_replace_empty': 'Nessuna sostituzione. Aggiungine una per riscrivere il testo del messaggio.',
     'rules_replace_find': 'Testo da trovare',
     'rules_replace_find_required': 'Il testo da trovare è obbligatorio',
     'rules_replace_move_up': 'Sposta su',
@@ -328,8 +320,7 @@ class AppMessagesIt {
     'rules_route_empty':
         'Nessun canale ancora. Inseriscine uno o più, separati da virgole.',
     'rules_route_fan_out': '{count} destinazioni',
-    'rules_route_overlap_id':
-        '{id} è sia sorgente sia destinazione. Un’attività non può inoltrare a se stessa.',
+    'rules_route_overlap_id': '{id} è sia sorgente sia destinazione. Un’attività non può inoltrare a se stessa.',
     'rules_route_preview': '{sources} → {targets}',
     'rules_route_preview_label': 'Anteprima del percorso',
     'rules_route_remove': 'Rimuovi questa voce',
@@ -390,8 +381,7 @@ class AppMessagesIt {
     'rules_simulate_empty': 'Inserisci prima un messaggio di esempio.',
     'rules_simulate_failed': 'Impossibile eseguire il test: {error}',
     'rules_simulate_forward': 'Questo messaggio verrebbe inoltrato.',
-    'rules_simulate_hint':
-        'Esegue l’attività su un messaggio di esempio. Non viene inoltrato nulla.',
+    'rules_simulate_hint': 'Esegue l’attività su un messaggio di esempio. Non viene inoltrato nulla.',
     'rules_simulate_media': 'Il messaggio contiene un media',
     'rules_simulate_media_audio': 'audio',
     'rules_simulate_media_document': 'documento',
@@ -430,13 +420,11 @@ class AppMessagesIt {
         'Il server ha rifiutato il modulo. Controlla i campi evidenziati.',
     'server_probe_bad_response':
         'Il server ha risposto, ma con contenuto inatteso.',
-    'server_probe_no_version':
-        'Questo server non espone un endpoint di versione. Controlla l\'indirizzo o aggiorna il server.',
+    'server_probe_no_version': 'Questo server non espone un endpoint di versione. Controlla l\'indirizzo o aggiorna il server.',
     'server_probe_reachable': 'Server reachable and compatible',
     'server_probe_test': 'Test connection',
     'server_probe_testing': 'Testing connection…',
-    'server_probe_tls_error':
-        'Connessione sicura non riuscita. Controlla il certificato e usa https://.',
+    'server_probe_tls_error': 'Connessione sicura non riuscita. Controlla il certificato e usa https://.',
     'server_probe_unreachable':
         'Cannot reach the server. Check the address and your connection.',
     'server_restore_default': 'Restore official default',
@@ -448,8 +436,7 @@ class AppMessagesIt {
     'sessions_status_live': 'live',
     'sessions_status_offline': 'offline',
     'sessions_terminate': 'Disconnect',
-    'sessions_terminate_confirm':
-        'Disconnettere questo account Telegram? Le attività che lo usano si fermeranno.',
+    'sessions_terminate_confirm': 'Disconnettere questo account Telegram? Le attività che lo usano si fermeranno.',
     'sessions_title': 'Telegram sessions',
     'settings_about': 'About',
     'settings_change_password': 'Change password',
@@ -497,8 +484,7 @@ class AppMessagesIt {
     'sys_subtitle':
         'Stato del server, topologia dei servizi e contratto di configurazione',
     'sys_title': 'Sistema',
-    'sys_unavailable':
-        'Questo server non espone l\'endpoint di stato del sistema. Aggiorna il server per vedere qui lo stato.',
+    'sys_unavailable': 'Questo server non espone l\'endpoint di stato del sistema. Aggiorna il server per vedere qui lo stato.',
     'tg_login_cancel': 'Cancel login',
     'tg_login_code': 'Verification code',
     'tg_login_code_hint': 'Code from the Telegram app',

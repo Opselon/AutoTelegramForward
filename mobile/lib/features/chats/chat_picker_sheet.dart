@@ -45,12 +45,11 @@ Future<List<String>?> showChatPickerSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder:
-        (_) => ChatPickerSheet(
-          title: title,
-          sessionId: sessionId,
-          alreadySelected: alreadySelected,
-        ),
+    builder: (_) => ChatPickerSheet(
+      title: title,
+      sessionId: sessionId,
+      alreadySelected: alreadySelected,
+    ),
   );
 }
 
@@ -275,19 +274,18 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
                       isDense: true,
                       prefixIcon: const Icon(Icons.search, size: 20),
                       hintText: t.get('chats_picker_search_hint'),
-                      suffixIcon:
-                          _loading
-                              ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
+                      suffixIcon: _loading
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
                                 ),
-                              )
-                              : null,
+                              ),
+                            )
+                          : null,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
@@ -311,8 +309,8 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
                               ),
                               label: Text(t.get(entry.$2)),
                               selected: _typeFilter == entry.$1,
-                              onSelected:
-                                  (_) => setState(() => _typeFilter = entry.$1),
+                              onSelected: (_) =>
+                                  setState(() => _typeFilter = entry.$1),
                             ),
                           ),
                       ],
@@ -360,9 +358,9 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
                   _selected.isEmpty
                       ? t.get('chats_picker_subtitle')
                       : t.get(
-                        'chats_picker_selected_count',
-                        params: {'n': '${_selected.length}'},
-                      ),
+                          'chats_picker_selected_count',
+                          params: {'n': '${_selected.length}'},
+                        ),
                   style: theme.textTheme.bodySmall,
                 ),
               ],
@@ -391,12 +389,11 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
     }
     if (visible.isEmpty) {
       return EmptyStateView(
-        message:
-            _chats.isEmpty
-                ? (_error != null
-                    ? t.get('chats_picker_manual_hint')
-                    : t.get('chats_picker_empty'))
-                : t.get('chats_picker_filtered_empty'),
+        message: _chats.isEmpty
+            ? (_error != null
+                  ? t.get('chats_picker_manual_hint')
+                  : t.get('chats_picker_empty'))
+            : t.get('chats_picker_filtered_empty'),
         icon: Icons.forum_outlined,
       );
     }
@@ -587,16 +584,15 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
               _selected.isEmpty
                   ? t.get('chats_picker_add_none')
                   : t.get(
-                    'chats_picker_add',
-                    params: {'n': '${_selected.length}'},
-                  ),
+                      'chats_picker_add',
+                      params: {'n': '${_selected.length}'},
+                    ),
             ),
             // Closing with an empty selection is a legitimate "make this side
             // empty", which the route validator then reports on save.
-            onPressed:
-                () => Navigator.of(
-                  context,
-                ).pop(_selected.values.toList(growable: false)),
+            onPressed: () =>
+                Navigator.of(context)
+                    .pop(_selected.values.toList(growable: false)),
           ),
         ],
       ),

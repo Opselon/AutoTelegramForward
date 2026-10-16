@@ -40,64 +40,65 @@ HttpTransport _transport(
   List<_Sent> log, {
   bool chatsSupported = true,
   int diagnosticsStatus = 200,
-}) => (
-  Uri url, {
-  required String method,
-  Map<String, String>? headers,
-  Object? body,
-  required Duration timeout,
-}) async {
-  log.add((method: method, path: url.path, body: body));
-  if (url.path.endsWith('/chats')) {
-    if (!chatsSupported) {
-      return http.Response('{"error":"not found","code":"not_found"}', 404);
-    }
-    return http.Response(
-      '{"session_id":"s-1","chats":['
-      '{"chat_id":"-1001111111111","title":"Alpha News",'
-      '"username":"alpha_news","chat_type":"channel","members":12000},'
-      '{"chat_id":"-1002222222222","title":"Beta Group",'
-      '"chat_type":"supergroup","members":50,"is_forum":true}'
-      '],"count":2,"total":2}',
-      200,
-      headers: _json,
-    );
-  }
-  if (url.path.endsWith('/logs/policy')) {
-    return http.Response(
-      '{"generated_at":"2026-01-01T00:00:00Z","scopes":{'
-      '"api":{"available":true,"scope":"atf-api producer policy",'
-      '"process":"atf-api","effective_levels":["info","warning","error"],'
-      '"configured_levels":["info","warning","error"],'
-      '"diagnostic_active":false,'
-      '"counters":{"emitted":42,"suppressed_level":7,"suppressed_rate":0},'
-      '"counter_scope":"process-local to atf-api since its last start",'
-      '"observed_at":"2026-01-01T00:00:00Z"},'
-      '"core":{"available":false,"scope":"atf-core producer policy",'
-      '"process":"atf-core","reason":"no policy RPC yet",'
-      '"observed_at":"2026-01-01T00:00:00Z"}},'
-      '"notes":["counters are process-local"]}',
-      200,
-      headers: _json,
-    );
-  }
-  if (url.path.endsWith('/logs/health')) {
-    return http.Response(
-      '{"status":"healthy","services":['
-      '{"service":"atf-logger","status":"healthy","detail":"reachable",'
-      '"data_age_seconds":12,"observed_at":"2026-01-01T00:00:00Z"}]}',
-      200,
-      headers: _json,
-    );
-  }
-  if (url.path.contains('/logs/diagnostics/')) {
-    if (diagnosticsStatus != 200) {
-      return http.Response('{"error":"admin only"}', diagnosticsStatus);
-    }
-    return http.Response('{"ok":true,"seconds":600}', 200, headers: _json);
-  }
-  return http.Response('{"error":"unexpected"}', 500, headers: _json);
-};
+}) =>
+    (
+      Uri url, {
+      required String method,
+      Map<String, String>? headers,
+      Object? body,
+      required Duration timeout,
+    }) async {
+      log.add((method: method, path: url.path, body: body));
+      if (url.path.endsWith('/chats')) {
+        if (!chatsSupported) {
+          return http.Response('{"error":"not found","code":"not_found"}', 404);
+        }
+        return http.Response(
+          '{"session_id":"s-1","chats":['
+          '{"chat_id":"-1001111111111","title":"Alpha News",'
+          '"username":"alpha_news","chat_type":"channel","members":12000},'
+          '{"chat_id":"-1002222222222","title":"Beta Group",'
+          '"chat_type":"supergroup","members":50,"is_forum":true}'
+          '],"count":2,"total":2}',
+          200,
+          headers: _json,
+        );
+      }
+      if (url.path.endsWith('/logs/policy')) {
+        return http.Response(
+          '{"generated_at":"2026-01-01T00:00:00Z","scopes":{'
+          '"api":{"available":true,"scope":"atf-api producer policy",'
+          '"process":"atf-api","effective_levels":["info","warning","error"],'
+          '"configured_levels":["info","warning","error"],'
+          '"diagnostic_active":false,'
+          '"counters":{"emitted":42,"suppressed_level":7,"suppressed_rate":0},'
+          '"counter_scope":"process-local to atf-api since its last start",'
+          '"observed_at":"2026-01-01T00:00:00Z"},'
+          '"core":{"available":false,"scope":"atf-core producer policy",'
+          '"process":"atf-core","reason":"no policy RPC yet",'
+          '"observed_at":"2026-01-01T00:00:00Z"}},'
+          '"notes":["counters are process-local"]}',
+          200,
+          headers: _json,
+        );
+      }
+      if (url.path.endsWith('/logs/health')) {
+        return http.Response(
+          '{"status":"healthy","services":['
+          '{"service":"atf-logger","status":"healthy","detail":"reachable",'
+          '"data_age_seconds":12,"observed_at":"2026-01-01T00:00:00Z"}]}',
+          200,
+          headers: _json,
+        );
+      }
+      if (url.path.contains('/logs/diagnostics/')) {
+        if (diagnosticsStatus != 200) {
+          return http.Response('{"error":"admin only"}', diagnosticsStatus);
+        }
+        return http.Response('{"ok":true,"seconds":600}', 200, headers: _json);
+      }
+      return http.Response('{"error":"unexpected"}', 500, headers: _json);
+    };
 
 AppState _state(List<_Sent> log, {bool chatsSupported = true}) => AppState(
   env: _env,
@@ -149,19 +150,18 @@ Future<void> _openPicker(
       state,
       Scaffold(
         body: Builder(
-          builder:
-              (ctx) => TextButton(
-                onPressed: () async {
-                  final picked = await showChatPickerSheet(
-                    ctx,
-                    title: 'Select sources',
-                    sessionId: 's-1',
-                    alreadySelected: alreadySelected,
-                  );
-                  if (picked != null) captured.addAll(picked);
-                },
-                child: const Text('open picker'),
-              ),
+          builder: (ctx) => TextButton(
+            onPressed: () async {
+              final picked = await showChatPickerSheet(
+                ctx,
+                title: 'Select sources',
+                sessionId: 's-1',
+                alreadySelected: alreadySelected,
+              );
+              if (picked != null) captured.addAll(picked);
+            },
+            child: const Text('open picker'),
+          ),
         ),
       ),
     ),
@@ -244,9 +244,8 @@ void main() {
     // second attempt added nothing.
     expect(
       find.text(
-        AppMessages(
-          const Locale('en'),
-        ).get('chats_picker_selected_count', params: {'n': '1'}),
+        AppMessages(const Locale('en'))
+            .get('chats_picker_selected_count', params: {'n': '1'}),
       ),
       findsOneWidget,
     );

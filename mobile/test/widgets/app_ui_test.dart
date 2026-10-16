@@ -13,7 +13,11 @@ import 'package:flutter_test/flutter_test.dart';
 Widget _host(Widget child, {double width = 420}) {
   return MaterialApp(
     theme: AppTheme.dark(),
-    home: Scaffold(body: Center(child: SizedBox(width: width, child: child))),
+    home: Scaffold(
+      body: Center(
+        child: SizedBox(width: width, child: child),
+      ),
+    ),
   );
 }
 

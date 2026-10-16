@@ -102,10 +102,9 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
       }
       setState(() {
         _stats = null;
-        _error =
-            exc.error.message.isNotEmpty
-                ? exc.error.message
-                : AppMessages.of(context).get('state_error');
+        _error = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : AppMessages.of(context).get('state_error');
       });
     } catch (exc) {
       if (!mounted) return;
@@ -134,10 +133,9 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
       }
       setState(() {
         _dlq = const [];
-        _dlqError =
-            exc.error.message.isNotEmpty
-                ? exc.error.message
-                : AppMessages.of(context).get('state_error');
+        _dlqError = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : AppMessages.of(context).get('state_error');
       });
     } catch (exc) {
       if (!mounted) return;
@@ -191,11 +189,10 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
       if (!mounted) return;
       if (resp['success'] == false) {
         setState(
-          () =>
-              _actionError = t.get(
-                'delivery_retry_failed',
-                params: {'error': _failureDetail(resp, t.get('state_error'))},
-              ),
+          () => _actionError = t.get(
+            'delivery_retry_failed',
+            params: {'error': _failureDetail(resp, t.get('state_error'))},
+          ),
         );
         return;
       }
@@ -211,20 +208,18 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
         return;
       }
       setState(
-        () =>
-            _actionError = t.get(
-              'delivery_retry_failed',
-              params: {'error': exc.error.message},
-            ),
+        () => _actionError = t.get(
+          'delivery_retry_failed',
+          params: {'error': exc.error.message},
+        ),
       );
     } catch (exc) {
       if (!mounted) return;
       setState(
-        () =>
-            _actionError = t.get(
-              'delivery_retry_failed',
-              params: {'error': '$exc'},
-            ),
+        () => _actionError = t.get(
+          'delivery_retry_failed',
+          params: {'error': '$exc'},
+        ),
       );
     } finally {
       if (mounted) setState(() => _busyId = '');
@@ -241,21 +236,20 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     final t = AppMessages.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Text(t.get('delivery_purge')),
-            content: Text(t.get('delivery_purge_confirm')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(t.get('action_cancel')),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(t.get('action_confirm')),
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: Text(t.get('delivery_purge')),
+        content: Text(t.get('delivery_purge_confirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t.get('action_cancel')),
           ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t.get('action_confirm')),
+          ),
+        ],
+      ),
     );
     if (confirmed != true || !mounted) return;
 
@@ -434,15 +428,14 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     return SectionCard(
       title: t.get('rules_title'),
       icon: Icons.alt_route,
-      child:
-          stats.rules.isEmpty
-              ? EmptyStateView(
-                message: t.get('delivery_no_rules'),
-                icon: Icons.send_outlined,
-              )
-              : Column(
-                children: [for (final rule in stats.rules) _ruleRow(t, rule)],
-              ),
+      child: stats.rules.isEmpty
+          ? EmptyStateView(
+              message: t.get('delivery_no_rules'),
+              icon: Icons.send_outlined,
+            )
+          : Column(
+              children: [for (final rule in stats.rules) _ruleRow(t, rule)],
+            ),
     );
   }
 
@@ -451,15 +444,14 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     final label = rule.ruleName.isNotEmpty ? rule.ruleName : rule.ruleId;
     // Paused outranks active: a task the operator stopped will not deliver, so
     // calling it RUNNING because its counters exist would be a lie.
-    final (pillLabel, pillColor) =
-        rule.isPaused
-            ? (t.get('rules_status_paused'), AppTheme.warning)
-            : rule.isActive
-            ? (t.get('rules_status_active'), AppTheme.success)
-            : (
-              t.get('rules_state_off'),
-              AppTheme.statusColor(false, neutralWhenFalse: true),
-            );
+    final (pillLabel, pillColor) = rule.isPaused
+        ? (t.get('rules_status_paused'), AppTheme.warning)
+        : rule.isActive
+        ? (t.get('rules_status_active'), AppTheme.success)
+        : (
+            t.get('rules_state_off'),
+            AppTheme.statusColor(false, neutralWhenFalse: true),
+          );
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
@@ -514,60 +506,59 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     return SectionCard(
       title: t.get('dash_recent_errors'),
       icon: Icons.report_problem_outlined,
-      child:
-          stats.errors.isEmpty
-              // Genuinely zero recent errors is good news, and the empty state
-              // says exactly that rather than leaving a blank card.
-              ? EmptyStateView(
-                message: t.get('logs_empty'),
-                icon: Icons.check_circle_outline,
-                color: AppTheme.success,
-              )
-              : Column(
-                children: [
-                  for (final err in stats.errors)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  err.errorName.isNotEmpty
-                                      ? err.errorName
-                                      : err.category,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
+      child: stats.errors.isEmpty
+          // Genuinely zero recent errors is good news, and the empty state
+          // says exactly that rather than leaving a blank card.
+          ? EmptyStateView(
+              message: t.get('logs_empty'),
+              icon: Icons.check_circle_outline,
+              color: AppTheme.success,
+            )
+          : Column(
+              children: [
+                for (final err in stats.errors)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                err.errorName.isNotEmpty
+                                    ? err.errorName
+                                    : err.category,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
                                 ),
-                                if (err.detail.isNotEmpty) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    err.detail,
-                                    maxLines: 3,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                ],
+                              ),
+                              if (err.detail.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  err.detail,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall,
+                                ),
                               ],
-                            ),
+                            ],
                           ),
-                          const SizedBox(width: AppSpacing.sm),
-                          StatusPill(
-                            label: err.severity.toUpperCase(),
-                            color: AppTheme.severityColor(err.severity),
-                            dense: true,
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        StatusPill(
+                          label: err.severity.toUpperCase(),
+                          color: AppTheme.severityColor(err.severity),
+                          dense: true,
+                        ),
+                      ],
                     ),
-                ],
-              ),
+                  ),
+              ],
+            ),
     );
   }
 
@@ -689,14 +680,13 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
               child: TextButton.icon(
                 key: ValueKey<String>('delivery_replay_${job.id}'),
                 onPressed: busy ? null : () => _replay(job),
-                icon:
-                    busy
-                        ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Icon(Icons.replay, size: 18),
+                icon: busy
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.replay, size: 18),
                 label: Text(t.get('delivery_dlq_retry')),
               ),
             ),
