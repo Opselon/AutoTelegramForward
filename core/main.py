@@ -504,7 +504,11 @@ async def main() -> None:
     # Non-blocking debug-log feed to the Logger microservice.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from logger.log_client import LogClient, CentralLogHandler  # noqa: E402
-    log_client = LogClient(cfg.logger_addr)
+    from core.application.log_policy import LogPolicy  # noqa: E402
+    # The client is the door every event leaves through (audit choke point, the
+    # info/warn/error helpers and the stdlib bridge), so the collection policy is
+    # attached there once instead of at each call site.
+    log_client = LogClient(cfg.logger_addr, policy=LogPolicy.from_env())
     try:
         await log_client.start()
     except Exception as exc:

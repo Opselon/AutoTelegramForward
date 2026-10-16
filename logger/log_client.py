@@ -60,11 +60,23 @@ def _pb_grpc():
 
 
 class LogClient:
-    def __init__(self, address: str = "localhost:50052", max_queue_size: int = 4096) -> None:
+    def __init__(
+        self,
+        address: str = "localhost:50052",
+        max_queue_size: int = 4096,
+        policy: Optional[Any] = None,
+    ) -> None:
         self._address = address
         self._channel: Optional[grpc.aio.Channel] = None
         self._stub: Optional[Any] = None
         self._enabled = True
+        # Optional collection policy, duck-typed: anything exposing
+        # `allow(level, event_type=..., reason_code=...)`. This client is the door
+        # every event in this process leaves through — the audit choke point, the
+        # info/warn/error helpers and the stdlib logging bridge all funnel here —
+        # so it is the only place where "is this collected?" can be answered once
+        # for all of them. None keeps the pre-policy behaviour (no filtering).
+        self._policy = policy
         # Bounded: an unbounded queue is a memory leak whenever the logger is
         # down or slow (a flood of ERROR/WARN records during an outage could
         # grow it without limit). When full we drop the oldest records — the
@@ -196,10 +208,23 @@ class LogClient:
         rule_id: str = "",
         user_id: int = 0,
         correlation_id: str = "",
+        event_type: str = "",
+        reason_code: str = "",
     ) -> None:
         if not self._enabled or self._closing:
             self._disabled_total += 1
             return
+        # Severity policy, applied at the door so every emission path obeys it.
+        # A caller that can name its event lets a security-relevant event through
+        # even when its level sits below the configured threshold.
+        if self._policy is not None:
+            try:
+                if not self._policy.allow(
+                    level, event_type=event_type, reason_code=reason_code
+                ):
+                    return
+            except Exception:
+                pass  # a policy bug must never silence logging entirely
         try:
             # Promote ids found in the structured detail onto the record's own
             # columns. Every existing call site writes rule_id/correlation_id

@@ -307,16 +307,11 @@ class DurableMessagePipeline:
         # forwarding operation means knowing both what happened and how long the
         # pipeline took to decide it. Callers may override it.
         kw.setdefault("duration_ms", int((time.time() - ctx.created_at) * 1000))
-        # Policy applies to the LOG emission only. The durable audit write below is
-        # evidence, not verbosity: suppressing a noisy category must never erase
-        # the audit trail, so the two do not share a gate — and a suppressed event
-        # must NOT return early here, or the audit record would vanish with it.
-        try:
-            emit_log = self.log_policy.allow(
-                severity, event_type=event_type, reason_code=reason_code
-            )
-        except Exception:
-            emit_log = True  # a policy bug must never silence a lifecycle event
+        # The severity decision lives at the door (LogClient), so it governs this
+        # path and the stdlib-logging bridge alike. What this helper must do is
+        # NAME the event, so a security-relevant one can be exempted from the
+        # threshold — and the durable audit write below stays unconditional: the
+        # verbosity gate must never share a path with the evidence.
         try:
             from core.infrastructure.persistence.audit_events import AuditEvent
             evt = AuditEvent(
@@ -325,19 +320,22 @@ class DurableMessagePipeline:
                 correlation_id=ctx.correlation_id, rule_id=rule_id,
                 feature_id=feature_id, **kw,
             )
-            if emit_log:
-                self._log_client.log(
-                    severity if severity != "WARN" else "WARN",
-                    "core", "audit",
-                    f"{event_type} outcome={outcome}" + (f" reason={reason_code}" if reason_code else ""),
-                    evt.to_dict(),
-                    # v18: the ids travel as columns too, so "this task's history"
-                    # and "this message's trail" are index lookups rather than
-                    # free-text scans over the detail blob.
-                    rule_id=rule_id or "",
-                    user_id=int(kw.get("owner_user_id", 0) or kw.get("user_id", 0) or 0),
-                    correlation_id=ctx.correlation_id or "",
-                )
+            self._log_client.log(
+                severity,
+                "core", "audit",
+                f"{event_type} outcome={outcome}" + (f" reason={reason_code}" if reason_code else ""),
+                evt.to_dict(),
+                # v18: the ids travel as columns too, so "this task's history"
+                # and "this message's trail" are index lookups rather than
+                # free-text scans over the detail blob.
+                rule_id=rule_id or "",
+                user_id=int(kw.get("owner_user_id", 0) or kw.get("user_id", 0) or 0),
+                correlation_id=ctx.correlation_id or "",
+                # Naming the event is what lets the door exempt a
+                # security-relevant event from the severity threshold.
+                event_type=event_type,
+                reason_code=reason_code,
+            )
         except Exception:
             pass  # never break the forwarding path for observability
         # Durable audit write (PostgreSQL audit_events) when available — also
