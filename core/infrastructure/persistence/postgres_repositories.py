@@ -745,14 +745,26 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
         UPDATE delivery_jobs
         SET status = 'CLAIMED', worker_id = %s, lease_until = %s, updated_at = %s
         WHERE id IN (
-            SELECT id FROM delivery_jobs
+            SELECT id FROM delivery_jobs AS j
             WHERE (
-                status = 'PENDING'
-                OR status = 'RETRY_WAIT'
-                OR (status = 'CLAIMED' AND lease_until < %s)
+                j.status = 'PENDING'
+                OR j.status = 'RETRY_WAIT'
+                OR (j.status = 'CLAIMED' AND j.lease_until < %s)
             )
-            AND next_retry_at <= %s
-            ORDER BY created_at ASC
+            AND j.next_retry_at <= %s
+            -- One in-flight job per destination, and the destination's own
+            -- source order: a burst must arrive in the order it was posted.
+            -- Different targets still claim in parallel.
+            AND NOT EXISTS (
+                SELECT 1 FROM delivery_jobs AS o
+                WHERE o.target_chat_id = j.target_chat_id
+                  AND o.id <> j.id
+                  AND o.status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')
+                  AND (o.created_at, o.source_chat_id, o.source_message_id, o.id)
+                      < (j.created_at, j.source_chat_id, j.source_message_id, j.id)
+            )
+            ORDER BY j.created_at ASC, j.source_chat_id ASC,
+                     j.source_message_id ASC, j.id ASC
             LIMIT %s
             FOR UPDATE SKIP LOCKED
         )

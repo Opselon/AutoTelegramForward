@@ -37,13 +37,20 @@ def sqlite_db(tmp_path):
     return SqliteDatabase(db_path)
 
 
-def _job(i: int, status: DeliveryStatus = DeliveryStatus.PENDING) -> DeliveryJob:
+def _job(i: int, status: DeliveryStatus = DeliveryStatus.PENDING, target: str = "") -> DeliveryJob:
+    """A job for index `i`.
+
+    Each index gets its own destination by default: delivery is serialised per
+    destination (one in-flight job per target lane, in source order), so a batch
+    claim can only span *different* targets. Tests that deliberately exercise one
+    lane pass `target` explicitly.
+    """
     return DeliveryJob(
         id=f"job:{i}",
         rule_id="rule1",
         source_chat_id="-100123",
         source_message_id=i,
-        target_chat_id="-100999",
+        target_chat_id=target or f"-10099{i}",
         payload_data={"text": "hello", "session_id": "s1"},
         status=status,
     )

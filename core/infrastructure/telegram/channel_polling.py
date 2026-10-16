@@ -39,6 +39,81 @@ POLL_INTERVAL_SECONDS = 15.0
 # Never pull more than this many posts per channel per sweep.
 MAX_POSTS_PER_SWEEP = 100
 
+# How long a sweep waits for a channel's replay lane to hand every post to the
+# pipeline before giving up. The cursor only advances once the lane is drained,
+# so a timeout is safe: the same posts are read again next sweep and the
+# pipeline's dedup layer drops the ones already accepted.
+REPLAY_DRAIN_TIMEOUT_SECONDS = 120.0
+
+
+class _OrderedReplayLane:
+    """A per-channel FIFO that hands replayed posts to the pipeline in order.
+
+    A channel difference is a *sequence*: posts carry a total order (ascending
+    message id) and the target channel must receive them in exactly that order.
+    Scheduling every post as its own task — the previous behaviour — let a
+    50-post burst race through parsing and the pipeline concurrently, so the
+    durable queue was filled in completion order and the target channel received
+    the burst shuffled.
+
+    One consumer per channel keeps the order exact (submit order is message-id
+    order) while leaving the sweep loop free to keep polling other channels.
+    """
+
+    def __init__(self, key: Tuple[str, str], worker) -> None:
+        self.key = key
+        self._worker = worker
+        self._queue: asyncio.Queue = asyncio.Queue()
+        self._task: Optional[asyncio.Task] = None
+        self.submitted = 0
+        self.completed = 0
+        self.failed = 0
+
+    def submit(self, item) -> None:
+        self._queue.put_nowait(item)
+        self.submitted += 1
+        if self._task is None or self._task.done():
+            self._task = asyncio.ensure_future(self._drain())
+
+    async def _drain(self) -> None:
+        while True:
+            item = await self._queue.get()
+            try:
+                await self._worker(item)
+                self.completed += 1
+            except Exception:
+                # One bad post must never kill the lane: the posts behind it are
+                # still ordered work that has to go out.
+                self.failed += 1
+                logger.exception("poll: ordered replay failed for %r", self.key)
+            finally:
+                self._queue.task_done()
+
+    async def join(self, timeout: Optional[float] = None) -> bool:
+        """Wait until every submitted post has been handed to the pipeline.
+
+        Returns True when the queue drained, False on timeout.
+        """
+        if self._queue.empty():
+            return True
+        if timeout is None:
+            timeout = REPLAY_DRAIN_TIMEOUT_SECONDS
+        try:
+            await asyncio.wait_for(self._queue.join(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            logger.warning(
+                "poll: replay lane %r still has %d post(s) pending after %.0fs",
+                self.key, self._queue.qsize(), timeout,
+            )
+            return False
+
+    def idle(self) -> bool:
+        return self._queue.empty() and (self._task is None or self._task.done())
+
+    def pending(self) -> int:
+        return self._queue.qsize()
+
 
 class ChannelPollingService:
     """Poll source channels for new posts when Telegram will not push them."""
@@ -63,6 +138,9 @@ class ChannelPollingService:
         self._stop = asyncio.Event()
         self._last_top: Dict[str, int] = {}
         self._state_store = state_store
+        # Ordered replay lanes, keyed by (session_id, chat_id). One live lane per
+        # polled channel is what guarantees a burst leaves in source order.
+        self._lanes: Dict[Tuple[str, str], _OrderedReplayLane] = {}
 
     # ------------------------------------------------------------------ #
     # Lifecycle
@@ -239,11 +317,23 @@ class ChannelPollingService:
                 "[POLL REPLAY] dispatching post id=%s from %s (%s) through pipeline",
                 getattr(raw, "id", "?"), chat_name or chat_id, chat_id,
             )
-            if self._replay_one(client, session_id, raw, users, chats):
+            if self._replay_one(client, session_id, raw, users, chats, chat_id=chat_id):
                 replayed += 1
         if replayed:
-            self._state[chat_id] = max(self._state.get(chat_id, 0), messages[-1].id)
-            await self._persist_cursors()
+            # Wait for the lane to hand every post to the pipeline *before*
+            # advancing the cursor. Advancing first would let a crash (or a
+            # restart) skip a tail that was never accepted; the cursor is the
+            # only record of what has been seen.
+            lane = self._lane_for(session_id, chat_id)
+            if await lane.join():
+                self._state[chat_id] = max(self._state.get(chat_id, 0), messages[-1].id)
+                await self._persist_cursors()
+            else:
+                logger.warning(
+                    "poll: not advancing cursor for %s (%s) — %d post(s) still in the replay lane",
+                    chat_name or chat_id, chat_id, lane.pending(),
+                )
+        self._prune_lanes()
         return replayed
 
     async def _channel_top_message(self, client, chat_id: str) -> Optional[int]:
@@ -285,49 +375,61 @@ class ChannelPollingService:
         except Exception as exc:
             logger.warning("poll: cannot persist cursors: %s", exc)
 
+    def _lane_for(self, session_id: str, chat_id: str) -> _OrderedReplayLane:
+        key = (str(session_id), str(chat_id))
+        lane = self._lanes.get(key)
+        if lane is None:
+            lane = _OrderedReplayLane(key, self._dispatch_one)
+            self._lanes[key] = lane
+        return lane
+
+    def _prune_lanes(self) -> None:
+        """Drop lanes that have nothing pending so a long-lived process does not
+        accumulate one lane object per channel ever polled."""
+        for key in [k for k, lane in self._lanes.items() if lane.idle()]:
+            self._lanes.pop(key, None)
+
     # ------------------------------------------------------------------ #
     # Dispatch
     # ------------------------------------------------------------------ #
-    def _replay_one(self, client, session_id: str, raw_message, users: dict, chats: dict) -> bool:
-        """Schedule one replay on the loop; True when a task was queued."""
+    def _replay_one(
+        self, client, session_id: str, raw_message, users: dict, chats: dict,
+        chat_id: str = "",
+    ) -> bool:
+        """Submit one replayed post to its channel's ordered lane.
 
-        async def _one():
-            handler = None
-            getter = getattr(self._dispatcher, "message_handler", None)
-            if callable(getter):
-                try:
-                    handler = getter(session_id)
-                except Exception as h_err:
-                    logger.warning("poll: getter(session_id) error for %s: %s", session_id[:8], h_err)
-                    handler = None
-            if handler is None:
-                logger.warning(
-                    "poll: no message handler registered for session %s — dropping post %s",
-                    session_id[:8], getattr(raw_message, "id", "?"),
-                )
-                return
-            try:
-                from pyrogram.types import Message as PyroMessage
-
-                # pyrogram's Message._parse is async in this version.
-                msg = await PyroMessage._parse(client, raw_message, users, chats)  # noqa: SLF001
-            except Exception as exc:
-                logger.warning("poll: failed to parse post %s: %s", getattr(raw_message, "id", "?"), exc)
-                return
-            if msg is None:
-                logger.warning("poll: parsed post %s returned None", getattr(raw_message, "id", "?"))
-                return
-            try:
-                await handler(client, msg)
-            except Exception as exc:
-                logger.error(
-                    "poll: dispatch handler failed for post %s: %s",
-                    getattr(raw_message, "id", "?"), exc, exc_info=True,
-                )
-
+        True when the post was accepted. Posts for one channel are handed to the
+        pipeline strictly in ascending message-id order, one at a time — the
+        sweep itself does not block on them.
+        """
         try:
-            asyncio.ensure_future(_one())
+            lane = self._lane_for(session_id, chat_id or str(getattr(raw_message, "chat_id", "") or ""))
+            lane.submit((client, session_id, raw_message, users, chats))
             return True
         except Exception as exc:
             logger.error("poll: dispatch schedule failed for post %s: %s", getattr(raw_message, "id", "?"), exc)
             return False
+
+    async def _dispatch_one(self, item) -> None:
+        """Lane worker: parse and hand one post to the registered handler."""
+        client, session_id, raw_message, users, chats = item
+        handler = None
+        getter = getattr(self._dispatcher, "message_handler", None)
+        if callable(getter):
+            try:
+                handler = getter(session_id)
+            except Exception as h_err:
+                logger.warning("poll: getter(session_id) error for %s: %s", session_id[:8], h_err)
+                handler = None
+        if handler is None:
+            raise RuntimeError(
+                f"no message handler registered for session {session_id[:12]} — "
+                f"cannot dispatch post {getattr(raw_message, 'id', '?')}"
+            )
+        from pyrogram.types import Message as PyroMessage
+
+        # pyrogram's Message._parse is async in this version.
+        msg = await PyroMessage._parse(client, raw_message, users, chats)  # noqa: SLF001
+        if msg is None:
+            raise RuntimeError(f"parsed post {getattr(raw_message, 'id', '?')} returned None")
+        await handler(client, msg)

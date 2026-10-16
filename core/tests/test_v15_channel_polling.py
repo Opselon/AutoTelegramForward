@@ -168,6 +168,34 @@ def _stub_parse(monkeypatch):
 
     monkeypatch.setattr(Message, "_parse", staticmethod(fake_parse))
 
+
+class PacedDispatcher:
+    """Dispatches slower for *later* ids — i.e. anything concurrent reorders.
+
+    A channel difference is a sequence, so a correct replay hands the posts over
+    one at a time in ascending id order. If the dispatcher is ever called
+    concurrently (the defect this guards), the higher ids — which sleep longest —
+    are appended last, and the recorded order stops being ascending.
+    """
+
+    def __init__(self, base_delay: float = 0.0, gate: asyncio.Event | None = None):
+        self.calls = []
+        self.base_delay = base_delay
+        self.gate = gate
+
+    def message_handler(self, session_id):
+        async def handler(client, message):
+            mid = int(getattr(message, "id", 0) or 0)
+            if self.base_delay:
+                # Inverted: early ids wait longest, so the completion order of a
+                # concurrent fan-out is exactly the reverse of the source order.
+                await asyncio.sleep(self.base_delay * max(1, (100 - mid)))
+            if self.gate is not None:
+                await self.gate.wait()
+            self.calls.append((session_id, mid))
+
+        return handler
+
 # --------------------------------------------------------------------------- #
 # Tests
 # --------------------------------------------------------------------------- #
@@ -299,3 +327,67 @@ def test_config_channel_poll_default():
 
     cfg = Config.load(config_path="/nonexistent.yaml")
     assert cfg.channel_poll_interval == 15.0
+
+
+# --------------------------------------------------------------------------- #
+# Ordered replay: a burst must leave in source order
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_a_burst_of_posts_is_replayed_in_source_order(monkeypatch):
+    """50 posts published together are handed to the pipeline in ascending id order.
+
+    This is the reported defect: a burst reached the target channel scrambled.
+    Replay used to schedule one task per post, so the pipeline saw them in
+    *completion* order; the dispatcher here is deliberately slower for later ids,
+    which is exactly the shape that reorders a concurrent fan-out.
+    """
+    import core.infrastructure.telegram.channel_polling as cp
+
+    client = FakeClient()
+    burst = list(range(1, 13))
+    shuffled = [7, 3, 11, 1, 9, 5, 12, 2, 10, 4, 8, 6]
+    client._history = [FakeRawMessage(mid) for mid in shuffled]
+    disp = PacedDispatcher(base_delay=0.001)
+    poller = cp.ChannelPollingService(FakePool(client), FakeRules([FakeRule("-1001")]), disp)
+    _stub_parse(monkeypatch)
+
+    replayed, _ = await poller.sweep_all()
+    assert replayed == len(burst)
+    # sweep_all waits for the lane to drain, so the order is final here.
+    assert [mid for _, mid in disp.calls] == burst
+
+
+@pytest.mark.asyncio
+async def test_cursor_advances_only_after_the_lane_drains(monkeypatch):
+    """Nothing is marked as seen while its post is still queued.
+
+    If the cursor moved first, a crash (or a restart) between the two would skip
+    the tail of the burst for good — the cursor is the only record of what has
+    been replayed.
+    """
+    import core.infrastructure.telegram.channel_polling as cp
+
+    monkeypatch.setattr(cp, "REPLAY_DRAIN_TIMEOUT_SECONDS", 0.05)
+    client = FakeClient()
+    client._history = [FakeRawMessage(21), FakeRawMessage(22)]
+    gate = asyncio.Event()
+    disp = PacedDispatcher(gate=gate)
+    store = FakeCursorStore()
+    poller = cp.ChannelPollingService(
+        FakePool(client), FakeRules([FakeRule("-1001")]), disp, state_store=store
+    )
+    _stub_parse(monkeypatch)
+
+    replayed, _ = await poller.sweep_all()
+    assert replayed == 2
+    # The posts are still in the lane, so the cursor must not have moved.
+    assert store.store == {}
+    assert "-1001" not in poller._state
+
+    # Once the lane can run, the posts go out and the next sweep records them.
+    gate.set()
+    await asyncio.sleep(0.05)
+    assert [mid for _, mid in disp.calls] == [21, 22]
+    await poller.sweep_all()
+    assert store.store["-1001"] == 22
+
