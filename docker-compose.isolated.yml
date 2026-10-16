@@ -27,16 +27,24 @@ services:
   logger:
     build:
       context: .
-      dockerfile: Dockerfile.logger
+      dockerfile: Dockerfile.logger-rust
     container_name: atf-hardened-logger
     restart: unless-stopped
     environment:
-      ATF_LOGGER_PORT: 50052
-      ATF_LOGGER_DB_PATH: /app/data/logger.db
+      # Rust engine: its own store file, never the retired Python logger.db
+      # (whose schema this engine does not read).
+      ATF_LOGGER_DB_PATH: /app/data/atf_logs_rust.db
+      ATF_LOGGER_METRICS_LISTEN: 0.0.0.0:9109
     volumes:
       - atf-hardening-data:/app/data
     networks:
       - atf-hardening-internal
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9109/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   core:
     build:
