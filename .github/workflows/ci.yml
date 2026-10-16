@@ -184,7 +184,7 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Security-sensitive tests (redaction + ack paths)
         working-directory: rust/logger
-        run: cargo test --lib redaction:: -- --nocapture
+        run: "cargo test --lib redaction:: -- --nocapture"
       - name: Unit tests
         working-directory: rust/logger
         run: cargo test --lib
