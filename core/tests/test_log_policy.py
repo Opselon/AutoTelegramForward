@@ -228,22 +228,72 @@ def _pipeline(log_client, audit_repo, policy):
     )
 
 
-def test_audit_emits_an_info_event_only_when_the_policy_allows_it():
+def test_audit_names_the_event_so_the_door_can_exempt_it():
+    """The threshold decision lives at the client; the helper's job is to say
+    WHICH event this is, so a security-relevant one can be let through."""
+
     async def go():
         client, repo = RecordingLogClient(), RecordingAuditRepo()
         pipeline = _pipeline(client, repo, LogPolicy())
         from core.application.pipeline import PipelineContext
 
+        await pipeline._audit(PipelineContext(), "auth.failed", "FAILED",
+                              severity="INFO", reason_code="UNAUTHORIZED")
+        assert len(client.calls) == 1
+        assert client.calls[0]["event_type"] == "auth.failed"
+        assert client.calls[0]["reason_code"] == "UNAUTHORIZED"
+
+    _run(go())
+
+
+def test_audit_does_not_gate_itself():
+    """Two gates would double-count suppression and hide which one did it; the
+    client owns the decision, so the helper must always hand the event over."""
+    async def go():
+        client, repo = RecordingLogClient(), RecordingAuditRepo()
+        pipeline = _pipeline(client, repo, LogPolicy(levels=("ERROR",)))
+        from core.application.pipeline import PipelineContext
+
+        await pipeline._audit(PipelineContext(), "forward.enqueued", "ACCEPTED")
+        assert len(client.calls) == 1, "the helper gated an event the client owns"
+
+    _run(go())
+
+
+def test_a_real_client_with_the_default_policy_drops_info_but_keeps_the_audit_record():
+    """End to end through the real client: verbosity is suppressed at the door
+    while the durable audit evidence is still written."""
+
+    async def go():
+        from logger.log_client import LogClient
+
+        repo = RecordingAuditRepo()
+        client = LogClient("127.0.0.1:1", policy=LogPolicy())
+        pipeline = _pipeline(client, repo, client._policy)
+        from core.application.pipeline import PipelineContext
+
         ctx = PipelineContext()
         await pipeline._audit(ctx, "forward.enqueued", "ACCEPTED")
-        assert client.calls == [], "an INFO happy-path event was emitted by default"
+        assert client.counters()["accepted"] == 0, "INFO reached the outbound queue"
+        assert client._policy.snapshot()["suppressed_level"] == 1
+        assert len(repo.records) == 1, "the audit record vanished with the log event"
 
-        policy = LogPolicy()
-        policy.enable_diagnostics(60)
-        pipeline = _pipeline(client, repo, policy)
-        await pipeline._audit(ctx, "forward.enqueued", "ACCEPTED")
-        assert len(client.calls) == 1
-        assert client.calls[0]["level"] == "INFO"
+    _run(go())
+
+
+def test_a_real_client_still_sends_a_warn_event_and_a_security_event():
+    async def go():
+        from logger.log_client import LogClient
+
+        client = LogClient("127.0.0.1:1", policy=LogPolicy())
+        pipeline = _pipeline(client, RecordingAuditRepo(), client._policy)
+        from core.application.pipeline import PipelineContext
+
+        await pipeline._audit(PipelineContext(), "forward.dropped", "FAILED",
+                              severity="ERROR", reason_code="SEND_FAILED")
+        await pipeline._audit(PipelineContext(), "auth.failed", "FAILED",
+                              severity="INFO", reason_code="UNAUTHORIZED")
+        assert client.counters()["accepted"] == 2, client.counters()
 
     _run(go())
 
@@ -276,21 +326,6 @@ def test_suppressing_log_verbosity_never_erases_the_durable_audit_trail():
         from core.application.pipeline import PipelineContext
 
         await pipeline._audit(PipelineContext(), "forward.enqueued", "ACCEPTED")
-        assert client.calls == []
         assert len(repo.records) == 1, "the durable audit record must still be written"
-
-    _run(go())
-
-
-def test_the_policy_gate_is_recorded_so_operators_can_see_suppression():
-    async def go():
-        client, repo = RecordingLogClient(), RecordingAuditRepo()
-        policy = LogPolicy()
-        pipeline = _pipeline(client, repo, policy)
-        from core.application.pipeline import PipelineContext
-
-        for _ in range(3):
-            await pipeline._audit(PipelineContext(), "forward.enqueued", "ACCEPTED")
-        assert policy.snapshot()["suppressed_level"] == 3
 
     _run(go())

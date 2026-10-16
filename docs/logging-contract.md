@@ -87,8 +87,12 @@ hot path expensive.
 The table above is a *policy*, and a policy only exists if something enforces it.
 The Python Logger stores whatever it receives (it has no server-side severity
 filter), so the defaults are enforced **at the producer** in
-`core/application/log_policy.py`, applied to every lifecycle event at the single
-`_audit()` choke point in `core/application/pipeline.py`:
+`core/application/log_policy.py`, and attached to the **`LogClient`** — the door
+every event in a process leaves through, since the audit choke point, the
+`info/warn/error` helpers and the stdlib logging bridge all funnel into it. One
+decision at that door therefore covers every emission path; the pipeline's
+`_audit()` helper gates nothing itself, it *names* its events so a
+security-relevant one can be exempted:
 
 * `ATF_LOG_LEVELS` — the collected set (default `WARN,ERROR,CRITICAL`).
 * `ATF_LOG_DIAGNOSTIC_SECONDS` — start a bounded diagnostic window at launch.
@@ -99,10 +103,16 @@ Two rules the producer must not get wrong, and both are tested:
 
 1. **The gate governs the log emission only.** The durable audit write shares no
    gate with it: suppressing a noisy category must never erase the audit trail.
-   (An early version of this code returned from the choke point on suppression
-   and silently dropped the audit record too — caught by
-   `test_suppressing_log_verbosity_never_erases_the_durable_audit_trail`.)
-2. **Suppression is counted, never silent.** `LogPolicy.snapshot()` reports
+   The first version of this code returned from the choke point on suppression
+   and silently dropped the audit record with it — caught by
+   `test_suppressing_log_verbosity_never_erases_the_durable_audit_trail` — and the
+   second put the gate at one call site, which a partially-covered policy is.
+2. **Suppression is not a queue drop.** A record the policy refuses is counted by
+   the policy (`suppressed_level`, `suppressed_rate`); it never appears in the
+   client's `dropped` counter, which means "bounded-queue eviction" and nothing
+   else. An operator judging volume must be able to tell "we chose not to collect
+   this" apart from "we lost it".
+3. **Suppression is counted, never silent.** `LogPolicy.snapshot()` reports
    `emitted` / `emitted_security` / `suppressed_level` / `suppressed_rate` and the
    effective level set, so "collection is off" is distinguishable from "nothing
    happened". Security-relevant events (`auth.*`, `tenant.*`, `admin.*`,

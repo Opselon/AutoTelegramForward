@@ -233,3 +233,83 @@ def test_the_shutdown_drain_delivers_what_it_can():
         assert client.counters()["shutdown_dropped"] == 0
 
     _run(go())
+
+
+# --------------------------------------------------------------------------- #
+# The collection policy is enforced AT THE DOOR: this client is the one place
+# every emission path funnels through (the info/warn/error helpers and the
+# stdlib logging bridge included), so a policy attached here governs them all.
+# --------------------------------------------------------------------------- #
+def _policy(**kw):
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+    from core.application.log_policy import LogPolicy
+
+    return LogPolicy(**kw)
+
+
+def test_without_a_policy_nothing_is_filtered():
+    """Backward compatible: the client only filters when given a policy."""
+
+    async def go():
+        stub = FakeStub()
+        client = _client(stub)
+        client.log("INFO", "core", "boot", "no policy")
+        assert client.counters()["accepted"] == 1
+        await client.close(drain_timeout=0.05)
+
+    _run(go())
+
+
+def test_the_default_policy_suppresses_info_reached_through_every_helper():
+    async def go():
+        stub = FakeStub()
+        client = _client(stub)
+        client._policy = _policy()
+
+        client.info("core", "boot", "not collected by default")
+        client.log("INFO", "core", "audit", "also suppressed")
+        client.debug("core", "boot", "verbose")
+
+        assert client.counters()["accepted"] == 0, client.counters()
+        assert client._policy.snapshot()["suppressed_level"] == 3
+
+        client.warn("core", "queue", "kept")
+        client.error("core", "queue", "kept")
+        assert client.counters()["accepted"] == 2
+        await client.close(drain_timeout=0.05)
+
+    _run(go())
+
+
+def test_a_security_event_passes_the_gate_below_the_threshold():
+    async def go():
+        client = _client(FakeStub())
+        client._policy = _policy(levels=("CRITICAL",))
+
+        client.log("INFO", "core", "audit", "denied", event_type="auth.failed",
+                   reason_code="UNAUTHORIZED")
+        client.info("core", "audit", "normal event")
+
+        assert client.counters()["accepted"] == 1, client.counters()
+        snapshot = client._policy.snapshot()
+        assert snapshot["emitted_security"] == 1
+        assert snapshot["suppressed_level"] == 1
+        await client.close(drain_timeout=0.05)
+
+    _run(go())
+
+
+def test_a_suppressed_event_is_counted_not_silently_dropped():
+    async def go():
+        client = _client(FakeStub())
+        client._policy = _policy()
+        for _ in range(4):
+            client.info("core", "boot", "noise")
+        snapshot = client._policy.snapshot()
+        assert snapshot["suppressed_level"] == 4
+        assert snapshot["emitted"] == 0
+        assert client.counters()["dropped"] == 0, "suppression is not a queue drop"
+        await client.close(drain_timeout=0.05)
+
+    _run(go())
