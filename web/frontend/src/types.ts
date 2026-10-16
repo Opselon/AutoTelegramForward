@@ -32,6 +32,11 @@ export interface ForwardRule {
   // id here, so one task can cover several channels with one set of settings.
   source_chat_ids?: string[]
   source_chat_names?: string[]
+  // Multi-target: mirror of the source list on the destination side. The task
+  // fans out into every id here; target_chat_id stays authoritative and is
+  // always the first entry of the list.
+  target_chat_ids?: string[]
+  target_chat_names?: string[]
   content_mode?: string
   skip_history?: boolean
   since_ts?: number
@@ -64,6 +69,19 @@ export interface ForwardRule {
   domain_allowlist?: string[]
   domain_blocklist?: string[]
   link_rewrite_map?: Record<string, string>
+  // ---- v19: per-task content rules (the server's `content` group) --------
+  // Mirrors core/domain/rule_settings.py. `settings` stays the authoritative
+  // read/write path; these optional fields exist so a rule payload carrying the
+  // content policy (e.g. from backup/restore) is typed, not `any`.
+  content_policy_enabled?: boolean
+  blacklist_words?: string[]
+  whitelist_words?: string[]
+  whitelist_mode?: string
+  strip_words?: string[]
+  regex_block?: string[]
+  regex_require?: string[]
+  source_policies?: Record<string, any>
+  target_policies?: Record<string, any>
   created_at: number
   updated_at: number
   custom_metadata_json?: string
@@ -152,6 +170,21 @@ export interface SaveRuleRequest {
   domain_allowlist?: string[]
   domain_blocklist?: string[]
   link_rewrite_map?: Record<string, string>
+  // Multi-source / multi-target (mirrors of the single-value fields above).
+  source_chat_ids?: string[]
+  source_chat_names?: string[]
+  target_chat_ids?: string[]
+  target_chat_names?: string[]
+  // Per-task content rules (the server's `content` group).
+  content_policy_enabled?: boolean
+  blacklist_words?: string[]
+  whitelist_words?: string[]
+  whitelist_mode?: string
+  strip_words?: string[]
+  regex_block?: string[]
+  regex_require?: string[]
+  source_policies?: Record<string, any>
+  target_policies?: Record<string, any>
   custom_metadata_json?: string
   ai_fallback_policy?: string
   ai_prompt_version?: number

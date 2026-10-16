@@ -192,6 +192,26 @@ class AppMessagesRu {
     'rules_replace_title': 'Правила замены',
     'rules_replace_with': 'Заменить на',
     'rules_replace_with_hint': 'Оставьте пустым, чтобы удалить найденный текст',
+    'rules_route_chip_duplicate': 'Указано дважды',
+    'rules_route_chip_ok': 'Принято',
+    'rules_route_chip_overlap': 'Используется с обеих сторон',
+    'rules_route_chip_tooltip':
+        '{reason} — нажмите на чип, чтобы изменить запись.',
+    'rules_route_duplicate_id':
+        '{id} указан более одного раза. Удалите дубликат.',
+    'rules_route_empty':
+        'Каналов пока нет. Введите один или несколько через запятую.',
+    'rules_route_fan_out': '{count} целей',
+    'rules_route_overlap_id':
+        '{id} является и источником, и целью. Задача не может пересылать сама себе.',
+    'rules_route_preview': '{sources} → {targets}',
+    'rules_route_preview_label': 'Предпросмотр маршрута',
+    'rules_route_remove': 'Удалить эту запись',
+    'rules_route_sources': 'Источники (через запятую)',
+    'rules_route_sources_hint':
+        'ID, @имена пользователей или ссылки t.me, через запятую',
+    'rules_route_targets': 'Цели (через запятую)',
+    'rules_route_targets_hint': 'Каждое сообщение отправляется во все эти цели',
     'rules_sched_auto': 'Планировщик авто-публикаций',
     'rules_sched_power': 'Расписание вкл/выкл',
     'rules_sec_ai': 'Функции ИИ',
@@ -237,6 +257,7 @@ class AppMessagesRu {
     'rules_sync_replies': 'Синхронизация ответов',
     'rules_target': 'Назначение',
     'rules_target_required': 'Pick a destination channel',
+    'rules_task_id': 'ID задачи',
     'rules_time_delay': 'Задержка (сек)',
     'rules_time_edit_limit': 'Макс. время правки (сек)',
     'rules_title': 'Задачи пересылки',

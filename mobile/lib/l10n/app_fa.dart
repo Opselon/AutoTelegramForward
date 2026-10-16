@@ -192,6 +192,26 @@ class AppMessagesFa {
     'rules_replace_title': 'قوانین جایگزینی',
     'rules_replace_with': 'جایگزین با',
     'rules_replace_with_hint': 'برای حذف متن یافت‌شده خالی بگذارید',
+    'rules_route_chip_duplicate': 'دو بار تکرار شده',
+    'rules_route_chip_ok': 'تأیید شد',
+    'rules_route_chip_overlap': 'در هر دو طرف استفاده شده',
+    'rules_route_chip_tooltip':
+        '{reason} — برای ویرایش این مورد روی چیپ بزنید.',
+    'rules_route_duplicate_id':
+        '{id} بیش از یک بار وارد شده است. مورد تکراری را حذف کنید.',
+    'rules_route_empty':
+        'هنوز کانالی ثبت نشده است. یک یا چند مورد را با کاما جدا کنید.',
+    'rules_route_fan_out': '{count} مقصد',
+    'rules_route_overlap_id':
+        '{id} هم منبع و هم مقصد است. یک تسک نمی‌تواند به خودش فوروارد کند.',
+    'rules_route_preview': '{sources} → {targets}',
+    'rules_route_preview_label': 'پیش‌نمایش مسیر',
+    'rules_route_remove': 'حذف این مورد',
+    'rules_route_sources': 'منابع (با کاما جدا کنید)',
+    'rules_route_sources_hint':
+        'شناسه‌ها، یوزرنیم‌ها یا لینک‌های t.me، جدا شده با کاما',
+    'rules_route_targets': 'مقصدها (با کاما جدا کنید)',
+    'rules_route_targets_hint': 'هر پیام به همه این مقصدها ارسال می‌شود',
     'rules_sched_auto': 'زمان‌بند ارسال خودکار',
     'rules_sched_power': 'زمان‌بند روشن/خاموش',
     'rules_sec_ai': 'قابلیت‌های هوش مصنوعی',
@@ -236,6 +256,7 @@ class AppMessagesFa {
     'rules_sync_replies': 'همگام‌سازی پاسخ‌ها',
     'rules_target': 'کانال مقصد',
     'rules_target_required': 'کانال مقصد را انتخاب کنید',
+    'rules_task_id': 'شناسه تسک',
     'rules_time_delay': 'تنظیم تأخیر (ثانیه)',
     'rules_time_edit_limit': 'حداکثر زمان ویرایش (ثانیه)',
     'rules_title': 'قوانین فوروارد',

@@ -6,7 +6,7 @@ import type { ForwardRule, RuleSettingSpec, RuleSettingsSchema } from '../types'
 interface Props {
   rule: ForwardRule
   lang?: 'fa' | 'en'
-  /** Sources are rule fields, so they flow into the modal's own draft + save. */
+  /** Sources/targets are rule fields, so they flow into the modal's own draft + save. */
   onRulePatch: (patch: Partial<ForwardRule>) => void
   onSaved?: () => void
 }
@@ -14,6 +14,7 @@ interface Props {
 const GROUP_LABELS: Record<string, string> = {
   general: 'General',
   cleanup: 'Cleanup',
+  content: 'Content Rules',
   media: 'Media',
   sending: 'Sending',
   keywords: 'Keywords & Replies',
@@ -26,6 +27,20 @@ function groupLabel(group: string): string {
   return GROUP_LABELS[group] || group.charAt(0).toUpperCase() + group.slice(1)
 }
 
+/**
+ * The one normalisation the server applies before it compares two chats
+ * (`normalizeChatID` in the Go API): drop the scheme, drop the t.me / telegram.me
+ * host, drop a leading '@', trim, lowercase. The client mirrors it so a repeat
+ * written two ways ("@Foo", "https://t.me/foo") is caught before the round-trip.
+ */
+function normalizeChat(raw: string): string {
+  let s = String(raw ?? '').trim().toLowerCase()
+  s = s.replace(/^[a-z]+:\/\//, '') // https:// / http://
+  s = s.replace(/^(telegram\.me|t\.me)\//, '')
+  s = s.replace(/^@+/, '')
+  return s.trim()
+}
+
 function sourcesOf(rule: ForwardRule): string[] {
   const list = rule.source_chat_ids?.length ? rule.source_chat_ids : []
   if (list.length) return list
@@ -33,10 +48,27 @@ function sourcesOf(rule: ForwardRule): string[] {
 }
 
 /**
+ * The target list, mirroring sourcesOf: `target_chat_ids` is authoritative,
+ * `target_chat_id` is the fallback for a task that only ever set the scalar.
+ */
+function targetsOf(rule: ForwardRule): string[] {
+  const list = rule.target_chat_ids?.length ? rule.target_chat_ids : []
+  if (list.length) return list
+  return rule.target_chat_id ? [rule.target_chat_id] : []
+}
+
+/** The names list is parallel to the ids list; keep it aligned on every edit. */
+function namesFor(rule: ForwardRule, side: 'source' | 'target'): string[] {
+  const names = side === 'source' ? rule.source_chat_names : rule.target_chat_names
+  return Array.isArray(names) ? names : []
+}
+
+/**
  * The complete per-task control surface, in two halves that behave differently:
  *
- * - Sources are fields on the rule itself, so they are edited into the parent's
- *   draft and saved with it (one request, no partial state).
+ * - Sources and targets are fields on the rule itself, so they are edited into
+ *   the parent's draft and saved with it (one request, no partial state). A task
+ *   forwards FROM every source INTO every target.
  * - Settings are validated by the server against its own registry, so they are
  *   written immediately through the settings endpoint and the answer is the
  *   truth: a rejected value is shown instead of being kept optimistically.
@@ -50,9 +82,9 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [newSource, setNewSource] = useState('')
 
   const sources = useMemo(() => sourcesOf(rule), [rule])
+  const targets = useMemo(() => targetsOf(rule), [rule])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -102,32 +134,74 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
     }
   }
 
-  const addSource = () => {
-    const value = newSource.trim()
-    if (!value) return
-    if (sources.includes(value)) {
-      setNewSource('')
-      return
-    }
+  const addSource = (value: string) => {
     const next = [...sources, value]
     onRulePatch({
       source_chat_ids: next,
-      source_chat_names: [...(rule.source_chat_names || []), value],
+      source_chat_id: next[0],
+      source_chat_names: [...namesFor(rule, 'source'), value],
     })
-    setNewSource('')
   }
 
   const removeSource = (value: string) => {
     // A task needs at least one source: the primary is what the dispatcher and
     // older clients read, so it is never dropped by the UI.
     if (sources.length <= 1) return
+    const idx = sources.indexOf(value)
     const next = sources.filter((s) => s !== value)
     onRulePatch({
       source_chat_ids: next,
-      source_chat_ids_primary: undefined,
       source_chat_id: next[0],
-      source_chat_names: (rule.source_chat_names || []).filter((_, i) => sources[i] !== value),
-    } as Partial<ForwardRule>)
+      source_chat_names: namesFor(rule, 'source').filter((_, i) => i !== idx),
+    })
+  }
+
+  const addTarget = (value: string) => {
+    const next = [...targets, value]
+    onRulePatch({
+      target_chat_ids: next,
+      target_chat_id: next[0],
+      target_chat_names: [...namesFor(rule, 'target'), value],
+    })
+  }
+
+  const removeTarget = (value: string) => {
+    // A task needs at least one target, mirroring the source side.
+    if (targets.length <= 1) return
+    const idx = targets.indexOf(value)
+    const next = targets.filter((t) => t !== value)
+    onRulePatch({
+      target_chat_ids: next,
+      target_chat_id: next[0],
+      target_chat_names: namesFor(rule, 'target').filter((_, i) => i !== idx),
+    })
+  }
+
+  // Client-side mirrors of the server's endpoint checks. They name the offending
+  // entry and use the same normalisation the server does, so a linter here and
+  // the server agree on what counts as a repeat or an overlap.
+  const validateSource = (raw: string): string | null => {
+    const n = normalizeChat(raw)
+    if (!n) return 'Enter a chat, a numeric id or a link.'
+    if (sources.some((s) => normalizeChat(s) === n)) {
+      return `"${raw.trim()}" is already in the source list (duplicate source:${raw.trim()}).`
+    }
+    if (targets.some((t) => normalizeChat(t) === n)) {
+      return `"${raw.trim()}" is already a target of this task — a chat cannot be both source and target (source_target_overlap:${raw.trim()}).`
+    }
+    return null
+  }
+
+  const validateTarget = (raw: string): string | null => {
+    const n = normalizeChat(raw)
+    if (!n) return 'Enter a chat, a numeric id or a link.'
+    if (targets.some((t) => normalizeChat(t) === n)) {
+      return `"${raw.trim()}" is already in the target list (duplicate target:${raw.trim()}).`
+    }
+    if (sources.some((s) => normalizeChat(s) === n)) {
+      return `"${raw.trim()}" is already a source of this task — a chat cannot be both source and target (source_target_overlap:${raw.trim()}).`
+    }
+    return null
   }
 
   const grouped = useMemo(() => {
@@ -170,107 +244,44 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
     <div dir={isRtl ? 'rtl' : 'ltr'}>
       {/* ---------------------------------------------------------- sources */}
       <div style={card}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc' }}>Sources</span>
-          <span
-            style={{
-              fontSize: '11px',
-              color: '#93c5fd',
-              backgroundColor: '#1e3a8a',
-              borderRadius: '999px',
-              padding: '2px 8px',
-            }}
-          >
-            {sources.length}
-          </span>
-        </div>
-        <div style={{ ...hint, marginBottom: '10px' }}>
-          This task forwards from every source below into its single target. Messages from any of
-          them are treated as the same task.
-        </div>
-
-        {sources.map((src, idx) => (
-          <div
-            key={`${src}-${idx}`}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              backgroundColor: '#0f172a',
-              borderRadius: '10px',
-              padding: '8px 10px',
-              marginBottom: '6px',
-            }}
-          >
-            <span
-              style={{
-                fontFamily: 'monospace',
-                fontSize: '12px',
-                color: '#e2e8f0',
-                flex: 1,
-                direction: 'ltr',
-                textAlign: isRtl ? 'right' : 'left',
-              }}
-            >
-              {src}
-            </span>
-            {idx === 0 && (
-              <span style={{ fontSize: '10px', color: '#4ade80', fontWeight: 600 }}>PRIMARY</span>
-            )}
-            <button
-              type="button"
-              onClick={() => removeSource(src)}
-              disabled={sources.length <= 1}
-              title={sources.length <= 1 ? 'A task needs at least one source' : 'Remove source'}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: sources.length <= 1 ? 'not-allowed' : 'pointer',
-                color: sources.length <= 1 ? '#475569' : '#f87171',
-                display: 'flex',
-              }}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ))}
-
-        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-          <input
-            style={inputStyle}
-            placeholder="@channel, t.me/xxx or -1001234567890"
-            value={newSource}
-            onChange={(e) => setNewSource(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                addSource()
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={addSource}
-            disabled={!newSource.trim()}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              backgroundColor: newSource.trim() ? '#2563eb' : '#1e293b',
-              color: newSource.trim() ? '#fff' : '#64748b',
-              border: '1px solid #334155',
-              borderRadius: '8px',
-              padding: '8px 12px',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: newSource.trim() ? 'pointer' : 'not-allowed',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Plus size={14} /> Add
-          </button>
-        </div>
+        <ChatListEditor
+          title="Sources"
+          count={sources.length}
+          hint="This task forwards from every source below into every target. Messages from any of them are treated as the same task."
+          items={sources}
+          primaryLabel="PRIMARY"
+          placeholder="@channel, t.me/xxx or -1001234567890"
+          isRtl={isRtl}
+          inputStyle={inputStyle}
+          hintStyle={hint}
+          canRemove={sources.length > 1}
+          removeDisabledHint="A task needs at least one source"
+          onAdd={addSource}
+          onRemove={removeSource}
+          validate={validateSource}
+        />
         <div style={hint}>Save the task to apply source changes.</div>
+      </div>
+
+      {/* ---------------------------------------------------------- targets */}
+      <div style={card}>
+        <ChatListEditor
+          title="Targets"
+          count={targets.length}
+          hint="Every message is delivered into every target below. Order is kept and the first entry is the primary target."
+          items={targets}
+          primaryLabel="PRIMARY"
+          placeholder="@channel, t.me/xxx or -1001234567890"
+          isRtl={isRtl}
+          inputStyle={inputStyle}
+          hintStyle={hint}
+          canRemove={targets.length > 1}
+          removeDisabledHint="A task needs at least one target"
+          onAdd={addTarget}
+          onRemove={removeTarget}
+          validate={validateTarget}
+        />
+        <div style={hint}>Save the task to apply target changes.</div>
       </div>
 
       {/* --------------------------------------------------------- settings */}
@@ -410,6 +421,184 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
   )
 }
 
+interface ChatListEditorProps {
+  title: string
+  count: number
+  hint: string
+  items: string[]
+  primaryLabel: string
+  placeholder: string
+  isRtl: boolean
+  inputStyle: React.CSSProperties
+  hintStyle: React.CSSProperties
+  canRemove: boolean
+  removeDisabledHint: string
+  onAdd: (value: string) => void
+  onRemove: (value: string) => void
+  /** Returns an error message naming the offending entry, or null when it is ok. */
+  validate: (raw: string) => string | null
+}
+
+/**
+ * One endpoint list (sources or targets): add an entry, remove one, keep the
+ * order, show the mirrored primary. The same component renders both sides so
+ * they cannot drift apart.
+ */
+function ChatListEditor({
+  title,
+  count,
+  hint,
+  items,
+  primaryLabel,
+  placeholder,
+  isRtl,
+  inputStyle,
+  hintStyle,
+  canRemove,
+  removeDisabledHint,
+  onAdd,
+  onRemove,
+  validate,
+}: ChatListEditorProps) {
+  const [draft, setDraft] = useState('')
+  const [localError, setLocalError] = useState<string | null>(null)
+
+  const submit = () => {
+    const value = draft.trim()
+    if (!value) return
+    const problem = validate(value)
+    if (problem) {
+      setLocalError(problem)
+      return
+    }
+    onAdd(value)
+    setDraft('')
+    setLocalError(null)
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc' }}>{title}</span>
+        <span
+          style={{
+            fontSize: '11px',
+            color: '#93c5fd',
+            backgroundColor: '#1e3a8a',
+            borderRadius: '999px',
+            padding: '2px 8px',
+          }}
+        >
+          {count}
+        </span>
+      </div>
+      <div style={{ ...hintStyle, marginBottom: '10px' }}>{hint}</div>
+
+      {items.map((entry, idx) => (
+        <div
+          key={`${entry}-${idx}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: '#0f172a',
+            borderRadius: '10px',
+            padding: '8px 10px',
+            marginBottom: '6px',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'monospace',
+              fontSize: '12px',
+              color: '#e2e8f0',
+              flex: 1,
+              direction: 'ltr',
+              textAlign: isRtl ? 'right' : 'left',
+            }}
+          >
+            {entry}
+          </span>
+          {idx === 0 && (
+            <span style={{ fontSize: '10px', color: '#4ade80', fontWeight: 600 }}>
+              {primaryLabel}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => onRemove(entry)}
+            disabled={!canRemove}
+            title={canRemove ? `Remove ${entry}` : removeDisabledHint}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: canRemove ? 'pointer' : 'not-allowed',
+              color: canRemove ? '#f87171' : '#475569',
+              display: 'flex',
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+        <input
+          style={inputStyle}
+          placeholder={placeholder}
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            if (localError) setLocalError(null)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              submit()
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!draft.trim()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            backgroundColor: draft.trim() ? '#2563eb' : '#1e293b',
+            color: draft.trim() ? '#fff' : '#64748b',
+            border: '1px solid #334155',
+            borderRadius: '8px',
+            padding: '8px 12px',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: draft.trim() ? 'pointer' : 'not-allowed',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Plus size={14} /> Add
+        </button>
+      </div>
+      {localError && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '6px',
+            alignItems: 'center',
+            color: '#fca5a5',
+            fontSize: '11px',
+            marginTop: '6px',
+          }}
+        >
+          <AlertCircle size={12} />
+          <span>{localError}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface RowProps {
   spec: RuleSettingSpec
   value: any
@@ -483,41 +672,22 @@ function SettingRow({ spec, value, changed, isRtl, inputStyle, hintStyle, onChan
     return (
       <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch' }}>
         {label}
-        <textarea
-          style={{ ...inputStyle, minHeight: '54px', fontFamily: 'monospace', marginTop: '6px' }}
-          value={typeof value === 'string' ? value : JSON.stringify(value ?? {}, null, 2)}
-          onChange={(e) => {
-            const raw = e.target.value
-            try {
-              onChange(JSON.parse(raw))
-            } catch {
-              // Keep the raw text so a half-typed object is not thrown away.
-              onChange(raw)
-            }
-          }}
+        <DictEditor
+          spec={spec}
+          value={value}
+          inputStyle={inputStyle}
+          hintStyle={hintStyle}
+          onChange={onChange}
         />
       </div>
     )
   }
 
   if (spec.kind === 'list') {
-    const text = Array.isArray(value) ? value.join(', ') : ''
     return (
-      <div style={rowStyle}>
+      <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch' }}>
         {label}
-        <input
-          style={{ ...inputStyle, direction: 'ltr', maxWidth: '52%' }}
-          value={text}
-          placeholder="comma, separated"
-          onChange={(e) =>
-            onChange(
-              e.target.value
-                .split(',')
-                .map((part) => part.trim())
-                .filter(Boolean),
-            )
-          }
-        />
+        <ListEditor spec={spec} value={value} inputStyle={inputStyle} hintStyle={hintStyle} onChange={onChange} />
       </div>
     )
   }
@@ -562,6 +732,189 @@ function SettingRow({ spec, value, changed, isRtl, inputStyle, hintStyle, onChan
           }}
         />
       )}
+    </div>
+  )
+}
+
+interface ListEditorProps {
+  spec: RuleSettingSpec
+  value: any
+  inputStyle: React.CSSProperties
+  hintStyle: React.CSSProperties
+  onChange: (value: any) => void
+}
+
+/**
+ * A list of words/patterns: add one entry at a time, no cap, remove any entry.
+ * The whole list is kept in the edit buffer and written as an array, so a word
+ * containing a comma (a regex alternation, say) is never split in half.
+ */
+function ListEditor({ spec, value, inputStyle, hintStyle, onChange }: ListEditorProps) {
+  const items: string[] = Array.isArray(value) ? value.map((v) => String(v)) : []
+  const [draft, setDraft] = useState('')
+  const [localError, setLocalError] = useState<string | null>(null)
+
+  const add = () => {
+    const entry = draft.trim()
+    if (!entry) return
+    if (items.includes(entry)) {
+      setLocalError(`"${entry}" is already in this list.`)
+      return
+    }
+    onChange([...items, entry])
+    setDraft('')
+    setLocalError(null)
+  }
+
+  const removeAt = (idx: number) => {
+    onChange(items.filter((_, i) => i !== idx))
+    setLocalError(null)
+  }
+
+  return (
+    <div style={{ marginTop: '6px' }}>
+      {items.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
+          {items.map((entry, idx) => (
+            <span
+              key={`${entry}-${idx}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                backgroundColor: '#0f172a',
+                border: '1px solid #334155',
+                borderRadius: '999px',
+                padding: '2px 6px 2px 10px',
+                fontSize: '11px',
+                color: '#e2e8f0',
+              }}
+              dir="ltr"
+            >
+              {entry}
+              <button
+                type="button"
+                onClick={() => removeAt(idx)}
+                title={`Remove ${entry}`}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#f87171',
+                  display: 'flex',
+                  padding: 0,
+                }}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <input
+          style={{ ...inputStyle, direction: 'ltr' }}
+          value={draft}
+          placeholder={spec.item_kind === 'str' ? 'add one word…' : 'add one entry…'}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            if (localError) setLocalError(null)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              add()
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={!draft.trim()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            backgroundColor: draft.trim() ? '#2563eb' : '#1e293b',
+            color: draft.trim() ? '#fff' : '#64748b',
+            border: '1px solid #334155',
+            borderRadius: '8px',
+            padding: '8px 12px',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: draft.trim() ? 'pointer' : 'not-allowed',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Plus size={14} /> Add
+        </button>
+      </div>
+      <div style={hintStyle}>
+        {items.length === 0 ? 'No entries yet.' : `${items.length} entr${items.length === 1 ? 'y' : 'ies'}.`}
+      </div>
+      {localError && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '6px',
+            alignItems: 'center',
+            color: '#fca5a5',
+            fontSize: '11px',
+            marginTop: '4px',
+          }}
+        >
+          <AlertCircle size={12} />
+          <span>{localError}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface DictEditorProps {
+  spec: RuleSettingSpec
+  value: any
+  inputStyle: React.CSSProperties
+  hintStyle: React.CSSProperties
+  onChange: (value: any) => void
+}
+
+/**
+ * A key -> value map (replacements, per-source / per-target overrides). Edited
+ * as JSON: the raw text is kept while it does not parse yet, so a half-typed
+ * object is not thrown away, and a red hint marks the invalid state.
+ */
+function DictEditor({ spec, value, inputStyle, hintStyle, onChange }: DictEditorProps) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value ?? {}, null, 2)
+  const invalid = typeof value === 'string'
+  return (
+    <div style={{ marginTop: '6px' }}>
+      <textarea
+        style={{
+          ...inputStyle,
+          minHeight: '64px',
+          fontFamily: 'monospace',
+          direction: 'ltr',
+          borderColor: invalid ? '#7f1d1d' : '#334155',
+        }}
+        value={text}
+        spellCheck={false}
+        placeholder='{"key": "value"}'
+        onChange={(e) => {
+          const raw = e.target.value
+          try {
+            const parsed = JSON.parse(raw)
+            // Only an object is a dict; a bare number/array is not this setting.
+            onChange(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : raw)
+          } catch {
+            // Keep the raw text so a half-typed object is not thrown away.
+            onChange(raw)
+          }
+        }}
+      />
+      <div style={{ ...hintStyle, color: invalid ? '#fca5a5' : hintStyle.color }}>
+        {invalid ? 'Not valid JSON yet — fix it before saving.' : spec.help || 'JSON object.'}
+      </div>
     </div>
   )
 }

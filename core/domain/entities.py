@@ -2,7 +2,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from .value_objects import (
     AIFallbackPolicy,
@@ -16,9 +16,30 @@ from .value_objects import (
     TriggerEvent,
 )
 
+if TYPE_CHECKING:  # pragma: no cover - typing only, avoids an import cycle
+    from .content_policy import ContentPolicy
+
 
 def _new_id() -> str:
     return str(uuid.uuid4())
+
+
+def _chat_key(chat_id: Any) -> str:
+    """Normalise a chat id so every spelling of it compares equal.
+
+    ``-100123`` as an int, as a float and as a string is one chat; an
+    ``@username`` is passed through unchanged. Used to match per-source and
+    per-target content-policy overrides.
+    """
+    if chat_id is None:
+        return ""
+    raw = str(chat_id).strip()
+    if not raw:
+        return ""
+    try:
+        return str(int(float(raw)))
+    except (TypeError, ValueError):
+        return raw
 
 
 # Local compiled patterns for CleanerRule. Defined here rather than imported
@@ -597,6 +618,157 @@ class ForwardRule:
         except Exception:
             return None
 
+    # --- Per-task content rules (blacklist / whitelist-only / replace) ------
+    # Carried as metadata like the cleaner, because they are per-task
+    # configuration rather than a shared resource, and because adding table
+    # columns would need a migration for what is really a settings blob.
+    #
+    # Storage shape (``metadata["content_policy"]``)::
+    #
+    #     {
+    #       "enabled": true,
+    #       "blacklist_words": [...],        # never forward if matched
+    #       "whitelist_words": [...],        # forward only if matched
+    #       "whitelist_mode": "any|all|phrase",
+    #       "remove_links": true, "block_links": false,
+    #       "strip_words": [...], "replacements": {"old": "new"},
+    #       "regex_block": [...], "regex_require": [...],
+    #       "min_length": 0, "max_length": 0,
+    #       "source_policies": {"-100a": {...}},   # per-source overrides
+    #       "target_policies": {"-100x": {...}},   # per-target overrides
+    #     }
+    #
+    # Overrides are additive constraints: the chain is (task, source|target) and
+    # every policy in it must allow the message. Nothing in a chain can relax
+    # the task's own rules.
+    @property
+    def content_policy_config(self) -> Dict[str, Any]:
+        """Raw stored policy dict (never None, never shared with the caller)."""
+        if not isinstance(self.metadata, dict):
+            return {}
+        cfg = self.metadata.get("content_policy")
+        return dict(cfg) if isinstance(cfg, dict) else {}
+
+    @content_policy_config.setter
+    def content_policy_config(self, val: Dict[str, Any]) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["content_policy"] = dict(val) if isinstance(val, dict) else {}
+
+    def _policy_key(self, key: str, default: Any) -> Any:
+        cfg = self.content_policy_config
+        val = cfg.get(key, default)
+        return val
+
+    def _set_policy_key(self, key: str, value: Any) -> None:
+        cfg = self.content_policy_config
+        cfg[key] = value
+        self.content_policy_config = cfg
+
+    @property
+    def content_policy_enabled(self) -> bool:
+        """Per-task on/off switch for the content rules."""
+        cfg = self.content_policy_config
+        if "enabled" in cfg:
+            return bool(cfg.get("enabled"))
+        return self.content_policy.has_rules
+
+    @content_policy_enabled.setter
+    def content_policy_enabled(self, val: bool) -> None:
+        self._set_policy_key("enabled", bool(val))
+
+    @property
+    def blacklist_words(self) -> List[str]:
+        return [str(x) for x in (self._policy_key("blacklist_words", []) or [])]
+
+    @blacklist_words.setter
+    def blacklist_words(self, val: Any) -> None:
+        self._set_policy_key("blacklist_words", list(val or []))
+
+    @property
+    def whitelist_words(self) -> List[str]:
+        return [str(x) for x in (self._policy_key("whitelist_words", []) or [])]
+
+    @whitelist_words.setter
+    def whitelist_words(self, val: Any) -> None:
+        self._set_policy_key("whitelist_words", list(val or []))
+
+    @property
+    def whitelist_mode(self) -> str:
+        mode = str(self._policy_key("whitelist_mode", "any") or "any").lower()
+        return mode if mode in ("any", "all", "phrase") else "any"
+
+    @whitelist_mode.setter
+    def whitelist_mode(self, val: str) -> None:
+        self._set_policy_key("whitelist_mode", str(val or "any").lower())
+
+    @property
+    def strip_words(self) -> List[str]:
+        return [str(x) for x in (self._policy_key("strip_words", []) or [])]
+
+    @strip_words.setter
+    def strip_words(self, val: Any) -> None:
+        self._set_policy_key("strip_words", list(val or []))
+
+    @property
+    def source_policies(self) -> Dict[str, Any]:
+        raw = self._policy_key("source_policies", {})
+        return dict(raw) if isinstance(raw, dict) else {}
+
+    @source_policies.setter
+    def source_policies(self, val: Any) -> None:
+        self._set_policy_key("source_policies", dict(val) if isinstance(val, dict) else {})
+
+    @property
+    def target_policies(self) -> Dict[str, Any]:
+        raw = self._policy_key("target_policies", {})
+        return dict(raw) if isinstance(raw, dict) else {}
+
+    @target_policies.setter
+    def target_policies(self, val: Any) -> None:
+        self._set_policy_key("target_policies", dict(val) if isinstance(val, dict) else {})
+
+    @property
+    def content_policy(self) -> "ContentPolicy":
+        """The task-level policy, including the legacy ``block_links`` flag."""
+        from .content_policy import ContentPolicy
+
+        cfg = self.content_policy_config
+        if not cfg.get("block_links") and getattr(self, "block_links", False):
+            cfg = {**cfg, "block_links": True}
+        if not cfg.get("remove_links") and getattr(self, "remove_links", False):
+            cfg = {**cfg, "remove_links": True}
+        return ContentPolicy.from_dict(cfg, source="task")
+
+    def policy_chain(
+        self,
+        *,
+        source_chat_id: Optional[str] = None,
+        target_chat_id: Optional[str] = None,
+    ) -> List["ContentPolicy"]:
+        """Policies that apply to one (source, target) pair, task first.
+
+        Keys are matched on the normalised chat id (int/str forms of the same id
+        are the same chat) so a UI that sends ``-100123`` and a client that
+        sends ``-100123`` as a number do not create two different overrides.
+        """
+        from .content_policy import ContentPolicy
+
+        chain = [self.content_policy]
+        src_key = _chat_key(source_chat_id)
+        tgt_key = _chat_key(target_chat_id)
+        if src_key:
+            for key, raw in self.source_policies.items():
+                if _chat_key(key) == src_key:
+                    chain.append(ContentPolicy.from_dict(raw, source=f"source:{src_key}"))
+                    break
+        if tgt_key:
+            for key, raw in self.target_policies.items():
+                if _chat_key(key) == tgt_key:
+                    chain.append(ContentPolicy.from_dict(raw, source=f"target:{tgt_key}"))
+                    break
+        return chain
+
     # --- Show-forward-header convenience flag (v2.0 app update) ------------
     # DIRECT_FORWARD on Telegram keeps the original sender header; COPY_MESSAGE
     # (the engine default) is a clean copy. The UI toggle maps to forward_mode.
@@ -1118,17 +1290,34 @@ class ForwardRule:
         return getattr(self.forward_mode, "value", str(self.forward_mode))
 
     def matches_source(self, chat_id: str) -> bool:
+        """True when ``chat_id`` is one of this task's sources.
+
+        A task may route several sources to several targets (x,y,z -> a,b), and
+        the extra sources live in ``detection_criteria["source_chat_ids"]``
+        while ``source_chat_id`` mirrors the first one for legacy clients. Both
+        are checked here: matching only the mirrored field silently starved
+        every source but the first.
+        """
         if not self.is_active:
             return False
         cid = str(chat_id).strip()
-        if self.source_chat_id:
-            src = str(self.source_chat_id).strip()
-            if src == cid or src.lstrip("@").lower() == cid.lstrip("@").lower():
+        if not cid:
+            return False
+
+        def _same(a: Any, b: str) -> bool:
+            key_a, key_b = _chat_key(a), _chat_key(b)
+            if key_a and key_a == key_b:
                 return True
-        if self.source_chat_name:
-            src_name = str(self.source_chat_name).strip()
-            if src_name == cid or src_name.lstrip("@").lower() == cid.lstrip("@").lower():
+            # Usernames arrive with and without the @, and case never matters.
+            return str(a).strip().lstrip("@").lower() == b.lstrip("@").lower()
+
+        if self.source_chat_id and _same(self.source_chat_id, cid):
+            return True
+        for candidate in (self.source_chat_ids or []):
+            if _same(candidate, cid):
                 return True
+        if self.source_chat_name and _same(self.source_chat_name, cid):
+            return True
         return False
 
     def to_draft(self) -> Dict[str, Any]:
@@ -1171,6 +1360,18 @@ class ForwardRule:
             "custom_header": str(self.custom_header),
             "custom_footer": str(self.custom_footer),
             "replacements": dict(self.replacements),
+            # Per-task content rules travel with the draft: they are part of the
+            # task, and every surface (bot, web, app, CLI) edits through it.
+            "content_policy": self.content_policy_config,
+            "content_policy_enabled": self.content_policy_enabled,
+            "blacklist_words": list(self.blacklist_words),
+            "whitelist_words": list(self.whitelist_words),
+            "whitelist_mode": self.whitelist_mode,
+            "strip_words": list(self.strip_words),
+            "regex_block": list(self._policy_key("regex_block", []) or []),
+            "regex_require": list(self._policy_key("regex_require", []) or []),
+            "source_policies": dict(self.source_policies),
+            "target_policies": dict(self.target_policies),
             "version": int(getattr(self, "version", 1)),
             # AI Rewrite settings (pipeline stage, off by default)
             "ai_config_id": str(self.ai_config_id or ""),
@@ -1257,6 +1458,30 @@ class ForwardRule:
         elif "target_chat_name" in draft and draft["target_chat_name"] is not None:
             self.target_chat_name = str(draft["target_chat_name"])
 
+        # Multi-target list (canonical fan-out). The legacy `target_chat_id`
+        # above stays the mirror of the first entry, so both a 1-element list
+        # and an N-element list round-trip through the same draft.
+        if "target_chat_ids" in draft and draft["target_chat_ids"] is not None:
+            seen_t: set = set()
+            uniq_t: List[str] = []
+            for raw_t in draft["target_chat_ids"] or []:
+                tid = str(raw_t).strip()
+                if tid and tid not in seen_t:
+                    seen_t.add(tid)
+                    uniq_t.append(tid)
+            self.target_chat_ids = uniq_t
+            if uniq_t and not draft.get("target_chat_id"):
+                self.target_chat_id = uniq_t[0]
+                if not self.target_chat_name:
+                    self.target_chat_name = uniq_t[0]
+
+        # Multi-source list: stored in detection_criteria (see the setter), the
+        # primary `source_chat_id` mirrors the first entry.
+        if isinstance(self.detection_criteria, dict) and self.detection_criteria.get("source_chat_ids"):
+            first_src = str(self.detection_criteria["source_chat_ids"][0]).strip()
+            if first_src and not draft.get("source_chat_id"):
+                self.source_chat_id = first_src
+
         if "forward_mode" in draft:
             try:
                 self.forward_mode = ForwardMode(draft["forward_mode"])
@@ -1319,6 +1544,18 @@ class ForwardRule:
 
         if "replacements" in draft and isinstance(draft["replacements"], dict):
             self.metadata["replacements"] = dict(draft["replacements"])
+
+        # Per-task content rules. Persisted as one blob so a task carries its
+        # own rules through the API, the bot, the app and backup/restore; the
+        # setters are the same ones the settings registry writes through.
+        if "content_policy" in draft and isinstance(draft["content_policy"], dict):
+            cfg = dict(draft["content_policy"])
+            self.content_policy_config = cfg
+        for _key in ("content_policy_enabled", "blacklist_words", "whitelist_words",
+                     "whitelist_mode", "strip_words", "regex_block", "regex_require",
+                     "source_policies", "target_policies"):
+            if _key in draft and draft[_key] is not None:
+                setattr(self, _key, draft[_key])
 
         self.mark_updated()
 

@@ -56,6 +56,26 @@ from .client_pool import ClientPool
 from .errors import SEV_ERROR, SEV_FATAL, tg_detail, tg_error
 from .i18n import I18n, SUPPORTED_LANGUAGES
 from .login_flow import LoginFlowManager
+from .route_lists import (
+    ERR_DUPLICATE_SOURCE,
+    ERR_DUPLICATE_TARGET,
+    ERR_EMPTY_SOURCES,
+    ERR_EMPTY_TARGETS,
+    ERR_OVERLAP,
+    ROUTE_EMPTY_SOURCES,
+    ROUTE_EMPTY_TARGETS,
+    ROUTE_MISSING_ARROW,
+    SHORT_ID_LENGTH,
+    RouteParseError,
+    cb_payload,
+    join_ids,
+    parse_route_command,
+    parse_route_list,
+    short_id,
+    strip_link_prefix,
+    validate_resolved_uniqueness,
+    validate_route_lists,
+)
 
 logger = logging.getLogger("atf.botui")
 
@@ -162,6 +182,64 @@ CB = {
     "adm_admin_del": "admadel",
     "adm_config": "admcfg",
     "check_sub": "chksub",
+    # Multi-source / multi-target route lists (comma-separated entry screens).
+    # Payload shapes are built with cb_payload() so the 64-byte Telegram limit
+    # is checked in one place:
+    #   rsl:<role>:<scope>  -> open the list screen
+    #   rfx:<role>:<scope>  -> fix a single entry
+    #   rsv:<scope>         -> save the route built from the lists
+    # <role> is "s" or "t"; <scope> is "n" (new rule) or a rule id.
+    "route_src_list": "rsl",
+    "route_tgt_list": "rtl",
+    "route_fix_entry": "rfx",
+    "route_save_lists": "rsv",
+    "route_back": "rbk",
+}
+
+
+# --------------------------------------------------------------------------- #
+# Multi-source -> multi-target routes
+# --------------------------------------------------------------------------- #
+#
+# One task routes M source chats to N target chats, with M and N unbounded.
+# The 40 `ui_route_*` catalog keys are the entire vocabulary of this flow, and
+# the list contract (splitting, dedupe, reported duplicates, self-loop refusal)
+# lives in route_lists.py so the wizard and `/route` cannot disagree.
+#
+# Callback scopes: "n" starts a brand-new route, anything else is the task id
+# being edited. Both fit in the payload budget enforced by cb_payload().
+ROUTE_SCOPE_NEW = "n"
+
+#: Per-entry resolution states.
+ROUTE_RESOLVED = "resolved"
+ROUTE_FAILED = "failed"
+ROUTE_UNCHECKED = "unchecked"
+
+#: Cancel words accepted inside the route screens: the ASCII command plus the
+#: same Persian synonyms the rule editor already accepts. Spelled as escapes so
+#: this file carries no literal non-ASCII, and never a new hardcoded string.
+ROUTE_CANCEL_WORDS = (
+    "/cancel",
+    "\u0627\u0646\u0635\u0631\u0627\u0641",
+    "\u0644\u063a\u0648",
+    "\u0628\u0627\u0632\u06af\u0634\u062a",
+)
+
+#: route_lists validation code -> catalog key. Every message names the
+#: offending entry where the catalog string has an {id} placeholder.
+ROUTE_PROBLEM_KEYS = {
+    ERR_DUPLICATE_SOURCE: "ui_route_err_dup_source",
+    ERR_DUPLICATE_TARGET: "ui_route_err_dup_target",
+    ERR_OVERLAP: "ui_route_err_overlap",
+    ERR_EMPTY_SOURCES: "ui_route_err_empty_sources",
+    ERR_EMPTY_TARGETS: "ui_route_err_empty_targets",
+}
+
+#: `/route` parse code -> catalog key.
+ROUTE_PARSE_KEYS = {
+    ROUTE_MISSING_ARROW: "ui_route_need_arrow",
+    ROUTE_EMPTY_SOURCES: "ui_route_err_empty_sources",
+    ROUTE_EMPTY_TARGETS: "ui_route_err_empty_targets",
 }
 
 SEV_ICON = {"info": "ℹ️", "warn": "⚠️", "error": "❌", "auth": "🔐", "fatal": "💀"}
@@ -955,6 +1033,14 @@ class ProBotUI:
         cur_lang = lang or _BOT_RENDER_LANGUAGE.get() or "en"
         rows: List[List[Tuple[str, str]]] = [
             [("➕ " + self._t("ui_rule_add", lang=cur_lang), CB["rule_add"])],
+            # Start a route by listing its sources and targets; the task is
+            # created on save and carries as many of each as the user sends.
+            [
+                (self._t("ui_route_add_sources", lang=cur_lang, count=0),
+                 self._route_cb(CB["route_src_list"], "s", ROUTE_SCOPE_NEW)),
+                (self._t("ui_route_add_targets", lang=cur_lang, count=0),
+                 self._route_cb(CB["route_tgt_list"], "t", ROUTE_SCOPE_NEW)),
+            ],
         ]
         if rules:
             total_items = len(rules)
@@ -1085,6 +1171,14 @@ class ProBotUI:
                 (self._t("ui_rule_edit_source", lang=lang), f"res:{rule.id}"),
                 (self._t("ui_rule_edit_target", lang=lang), f"ret:{rule.id}"),
             ],
+            # M sources -> N targets: one screen per side, with the current
+            # count on each button (the wizard behind them has no cap).
+            [
+                (self._t("ui_route_add_sources", lang=lang, count=len(rule.source_chat_ids)),
+                 self._route_cb(CB["route_src_list"], "s", rule.id)),
+                (self._t("ui_route_add_targets", lang=lang, count=len(rule.all_targets)),
+                 self._route_cb(CB["route_tgt_list"], "t", rule.id)),
+            ],
             [
                 (self._t("ui_rule_btn_header", lang=lang, fwd_hdr_status=fwd_hdr_status), f"rtg_fwdhdr:{rule.id}"),
                 (self._t("ui_rule_btn_topic", lang=lang, topic_str=topic_str), f"rtpc:{rule.id}"),
@@ -1207,6 +1301,696 @@ class ProBotUI:
         ])
 
         return text, self._kbd(rows)
+
+    # ------------------------------------------------------------------ #
+    # multi-source -> multi-target route wizard (rendering + state)       #
+    # ------------------------------------------------------------------ #
+    #
+    # M sources -> N targets per task, no caps. Two entry points share every
+    # method below: the inline-keyboard wizard in the rules dashboard and the
+    # `/route` command. Lists, duplicates and self-loops always go through
+    # route_lists; callback payloads always through cb_payload(); every string
+    # through _t() with the per-user language.
+
+    def _route_cb(self, *parts: Any) -> str:
+        """Build a callback payload that can never exceed Telegram's limit.
+
+        A rule id longer than a uuid would otherwise make a keyboard
+        unbuildable; the shortened form still resolves by prefix.
+        """
+        try:
+            return cb_payload(*parts)
+        except ValueError:
+            return cb_payload(*[
+                short_id(str(part)) if len(str(part)) > SHORT_ID_LENGTH else part
+                for part in parts
+            ])
+
+    def _route_buffer(self, st: UiState) -> Dict[str, Any]:
+        """The FSM buffer, guaranteed to be a dict (it is persisted as JSON)."""
+        if not isinstance(st.buffer, dict):
+            st.buffer = {}
+        return st.buffer
+
+    def _route_scope(self, st: UiState) -> str:
+        """The scope the wizard works on: "n" for a new route, else a task id."""
+        return str(self._route_buffer(st).get("route_scope") or "").strip()
+
+    def _route_id(self, st: UiState) -> str:
+        """The task id shown as `{rid}` — minted once for a new route.
+
+        A new route gets its id up front so every screen can name the task it
+        is building; the rule is created with exactly that id on save.
+        """
+        buf = self._route_buffer(st)
+        rid = str(buf.get("route_rule_id") or "").strip()
+        if not rid:
+            rid = str(uuid.uuid4())
+            buf["route_rule_id"] = rid
+        return rid
+
+    def _route_reset(self, uid: int, st: UiState) -> None:
+        """Drop only the route keys, leaving any other flow's state intact."""
+        buf = self._route_buffer(st)
+        for key in [k for k in list(buf) if str(k).startswith("route_")]:
+            buf.pop(key, None)
+        st.step = ""
+
+    def _route_role_data(self, st: UiState, role: str):
+        """(entries, ids, names, statuses) for one role, always index-aligned."""
+        buf = self._route_buffer(st)
+        if role == "s":
+            entries = list(buf.get("route_sources") or [])
+            ids = list(buf.get("route_src_ids") or [])
+            names = list(buf.get("route_src_names") or [])
+            statuses = list(buf.get("route_src_status") or [])
+        else:
+            entries = list(buf.get("route_targets") or [])
+            ids = list(buf.get("route_tgt_ids") or [])
+            names = list(buf.get("route_tgt_names") or [])
+            statuses = list(buf.get("route_tgt_status") or [])
+        size = len(entries)
+        ids = (ids + [""] * size)[:size]
+        names = (names + [""] * size)[:size]
+        statuses = (statuses + [ROUTE_UNCHECKED] * size)[:size]
+        return entries, ids, names, statuses
+
+    def _route_store_role(self, st: UiState, role: str, entries, ids, names, statuses) -> None:
+        """Persist one role's list with its resolution result per entry."""
+        buf = self._route_buffer(st)
+        prefix = "route_src" if role == "s" else "route_tgt"
+        buf["route_sources" if role == "s" else "route_targets"] = list(entries)
+        buf[prefix + "_ids"] = list(ids)
+        buf[prefix + "_names"] = list(names)
+        buf[prefix + "_status"] = list(statuses)
+
+    def _route_entries(self, st: UiState, role: str):
+        """The stored *raw* entries for one role (used for validation)."""
+        return self._route_role_data(st, role)[0]
+
+    def _route_mark_name(self, lang: str, cid: str, name: str, status: str) -> Tuple[str, str]:
+        """(mark, label) for one entry: resolved, failed, or never checked."""
+        if status == ROUTE_RESOLVED:
+            return self._t("ui_route_status_ok", lang=lang), (name or cid)
+        if status == ROUTE_UNCHECKED:
+            return (
+                self._t("ui_route_status_fail", lang=lang),
+                self._t("ui_route_list_unverified", lang=lang),
+            )
+        return (
+            self._t("ui_route_status_fail", lang=lang),
+            self._t("ui_route_list_failed", lang=lang),
+        )
+
+    def _route_entry_line(self, key: str, lang: str, index: int, cid: str, name: str, status: str) -> str:
+        mark, label = self._route_mark_name(lang, cid, name, status)
+        return self._t(key, lang=lang, index=index, mark=mark, cid=cid or name, name=label)
+
+    def _route_problem_text(self, problems, lang: str) -> str:
+        """Render the first list problem, naming the offending entry."""
+        if not problems:
+            return ""
+        code, offending = problems[0]
+        key = ROUTE_PROBLEM_KEYS.get(code)
+        if not key:
+            return ""
+        if offending:
+            return self._t(key, lang=lang, id=offending)
+        return self._t(key, lang=lang)
+
+    def _route_unresolved(self, st: UiState):
+        """Every entry of either list that is not resolved yet."""
+        pending = []
+        for role in ("s", "t"):
+            entries, _ids, _names, statuses = self._route_role_data(st, role)
+            pending.extend(
+                token for token, status in zip(entries, statuses)
+                if status != ROUTE_RESOLVED
+            )
+        return pending
+
+    def _route_summary_line(self, st: UiState, lang: str) -> str:
+        """The verdict line under the lists (ok / skipped / failed)."""
+        entries_s, ids_s, _ns, status_s = self._route_role_data(st, "s")
+        entries_t, ids_t, _nt, status_t = self._route_role_data(st, "t")
+        pairs = list(zip(entries_s, status_s)) + list(zip(entries_t, status_t))
+        total = len(pairs)
+        if not total:
+            return ""
+        failed = [token for token, status in pairs if status != ROUTE_RESOLVED]
+        if not failed:
+            distinct = {cid for cid in (list(ids_s) + list(ids_t)) if cid}
+            return self._t("ui_route_summary_ok", lang=lang, count=len(distinct))
+        ok = total - len(failed)
+        if len(failed) == 1:
+            return self._t("ui_route_resolve_failed", lang=lang, id=failed[0])
+        return self._t(
+            "ui_route_summary_skip", lang=lang, ok=ok, total=total, id=failed[0]
+        )
+
+    def _route_screen_text(self, st: UiState, role: str, lang: str, note: str = "") -> str:
+        """The numbered list screen for one role."""
+        rid = short_id(self._route_id(st))
+        entries, ids, names, statuses = self._route_role_data(st, role)
+        title_key = "ui_route_sources_title" if role == "s" else "ui_route_targets_title"
+        line_key = "ui_route_source_line" if role == "s" else "ui_route_target_line"
+        lines = [self._t(title_key, lang=lang, rid=rid), ""]
+        if entries:
+            lines.append(self._t(line_key, lang=lang, count=len(entries)))
+            for index, (cid, name, status) in enumerate(zip(ids, names, statuses), 1):
+                lines.append(
+                    self._route_entry_line("ui_route_list_item", lang, index, cid, name, status)
+                )
+        else:
+            lines.append(self._t("ui_route_list_empty", lang=lang))
+        if self._route_scope(st) == ROUTE_SCOPE_NEW and not entries:
+            # A brand-new route has no lists yet: show the one-shot syntax too.
+            lines.extend(["", self._t("ui_route_usage", lang=lang)])
+        summary = self._route_summary_line(st, lang)
+        if summary:
+            lines.extend(["", summary])
+        if note:
+            lines.extend(["", note])
+        return "\n".join(lines)
+
+    def _route_summary_text(self, st: UiState, lang: str, note: str = "") -> str:
+        """The whole route with a confirmation mark per entry."""
+        rid = short_id(self._route_id(st))
+        name = str(self._route_buffer(st).get("route_name") or "")
+        lines = [self._t("ui_route_task_line", lang=lang, task=name or rid, rid=rid)]
+        for role, line_key in (("s", "ui_route_source_line"), ("t", "ui_route_target_line")):
+            entries, ids, names, statuses = self._route_role_data(st, role)
+            lines.extend(["", self._t(line_key, lang=lang, count=len(entries))])
+            if not entries:
+                lines.append(self._t("ui_route_list_empty", lang=lang))
+                continue
+            for cid, label, status in zip(ids, names, statuses):
+                mark, shown = self._route_mark_name(lang, cid, label, status)
+                lines.append(self._t(
+                    "ui_route_confirmed_line", lang=lang, mark=mark, cid=cid or label, name=shown
+                ))
+        summary = self._route_summary_line(st, lang)
+        if summary:
+            lines.extend(["", summary])
+        if note:
+            lines.extend(["", note])
+        return "\n".join(lines)
+
+    def _route_keyboard(self, st: UiState, role: str, lang: str, rule=None) -> InlineKeyboardMarkup:
+        """Save / both lists / fix one entry / per-task content rules / back."""
+        scope = self._route_scope(st) or ROUTE_SCOPE_NEW
+        sources = self._route_entries(st, "s")
+        targets = self._route_entries(st, "t")
+        rows: List[List[Tuple[str, str]]] = [
+            [(self._t("ui_route_btn_save", lang=lang),
+              self._route_cb(CB["route_save_lists"], scope))],
+            [
+                (self._t("ui_route_add_sources", lang=lang, count=len(sources)),
+                 self._route_cb(CB["route_src_list"], "s", scope)),
+                (self._t("ui_route_add_targets", lang=lang, count=len(targets)),
+                 self._route_cb(CB["route_tgt_list"], "t", scope)),
+            ],
+            [(self._t("ui_route_edit_one", lang=lang),
+              self._route_cb(CB["route_fix_entry"], "s" if role == "s" else "t", scope))],
+        ]
+        if rule is not None:
+            # The per-task content rules the task card opens, reachable from the
+            # route screen so a task's route and its content rules are set up in
+            # the same pass (same menus, same handlers, no second mechanism).
+            rows.append([
+                (self._t("ui_rule_btn_blacklist", lang=lang, bl_count=len(rule.blacklist)),
+                 f"rfl_bl:{rule.id}"),
+                (self._t("ui_rule_btn_whitelist", lang=lang, wl_count=len(rule.whitelist)),
+                 f"rfl_wl:{rule.id}"),
+            ])
+            rows.append([
+                (self._t("ui_rule_btn_replace", lang=lang, rep_count=len(rule.replacements)),
+                 f"rtx:{rule.id}"),
+            ])
+        rows.append([(self._t("ui_route_btn_back", lang=lang),
+                      self._route_cb(CB["route_back"], scope))])
+        return self._kbd(rows)
+
+    def _route_render(self, st: UiState, role: str, lang: str, rule=None,
+                      view: str = "list", note: str = ""):
+        """(text, markup) for one wizard screen."""
+        if view == "summary":
+            text = self._route_summary_text(st, lang, note)
+        else:
+            text = self._route_screen_text(st, role, lang, note)
+        return text, self._route_keyboard(st, role, lang, rule)
+
+    # -- resolution (the rule editor's path, shared) ---------------------
+
+    async def _resolve_chat_token(self, uid: int, st: UiState, raw: str):
+        """Resolve one entry to (id, title, status) exactly like the rule editor.
+
+        The buffered dialog list answers first (no network); otherwise the
+        connected client's `get_chat` is asked. `status` is "resolved",
+        "failed", or "unchecked" when there is no connected client to ask —
+        that last case is why the wizard can say "not checked" instead of
+        pretending an id failed.
+        """
+        token = str(raw or "").strip()
+        if not token:
+            return "", "", ROUTE_FAILED
+        buffer = st.buffer if isinstance(st.buffer, dict) else {}
+        if "chats" in buffer:
+            for chat in buffer.get("chats") or []:
+                chat_id = str(chat.get("id") or "")
+                username = str(chat.get("username") or "")
+                if chat_id == token or (username and username.lower() == token.lstrip("@").lower()):
+                    title = "{} {}".format(chat.get("emoji") or "", chat.get("title") or "").strip()
+                    return chat_id or token, title or chat_id or token, ROUTE_RESOLVED
+        try:
+            _fsm_uid = self._scope_uid(uid)
+            sessions = (await self._sessions.list_all() if _fsm_uid is None
+                        else await self._sessions.list_by_owner(uid))
+            if not sessions:
+                return token, token, ROUTE_UNCHECKED
+            client = self._pool.get(sessions[0].id)
+            if not client or not getattr(client, "is_connected", False):
+                return token, token, ROUTE_UNCHECKED
+            chat_obj = await client.get_chat(token)
+            chat_id = getattr(chat_obj, "id", None)
+            if chat_obj is None or chat_id is None:
+                return token, token, ROUTE_FAILED
+            title = (getattr(chat_obj, "title", None) or getattr(chat_obj, "first_name", None)
+                     or str(chat_id))
+            return str(chat_id), "\U0001F4E2 " + str(title), ROUTE_RESOLVED
+        except Exception:
+            return token, token, ROUTE_FAILED
+
+    async def _route_resolve_all(self, uid: int, st: UiState, entries):
+        """(ids, titles, statuses) aligned with `entries`, resolved like above."""
+        ids: List[str] = []
+        names: List[str] = []
+        statuses: List[str] = []
+        for token in entries:
+            cid, title, status = await self._resolve_chat_token(uid, st, token)
+            if status == ROUTE_RESOLVED:
+                ids.append(cid)
+                names.append(title)
+            else:
+                ids.append(str(token))
+                names.append("")
+            statuses.append(status)
+        return ids, names, statuses
+
+    async def _route_find_rule(self, uid: int, scope: str):
+        """The owned task a scope points at, or None.
+
+        The scope is a rule id — or its 8-character form when a payload had to
+        be shortened — and the command also accepts a task name.
+        """
+        if not scope or scope == ROUTE_SCOPE_NEW:
+            return None
+        rule = await self._owned_rule(scope, uid)
+        if rule is not None:
+            return rule
+        if hasattr(self._rules, "list_by_owner"):
+            needle = str(scope).strip().lower()
+            for candidate in await self._rules.list_by_owner(uid):
+                if short_id(candidate.id) == needle[:SHORT_ID_LENGTH]:
+                    return candidate
+                if (candidate.name or "").strip().lower() == needle:
+                    return candidate
+        return None
+
+    async def _route_session(self, uid: int):
+        """The session a newly created task runs on (first owned, like above)."""
+        if not self._sessions:
+            return None
+        try:
+            if self._scope_uid(uid) is None and hasattr(self._sessions, "list_all"):
+                sessions = await self._sessions.list_all()
+            else:
+                sessions = await self._sessions.list_by_owner(uid)
+        except Exception:
+            return None
+        return sessions[0] if sessions else None
+
+    @staticmethod
+    def _route_apply_lists(rule, src_ids, src_names, tgt_ids, tgt_names) -> None:
+        """Write the whole lists *and* the mirrored primary on both sides."""
+        rule.source_chat_ids = [str(x) for x in src_ids if str(x).strip()]  # setter mirrors the first
+        rule.source_chat_names = [str(x) for x in src_names]
+        rule.source_chat_name = (rule.source_chat_names[0] if rule.source_chat_names
+                                 else str(rule.source_chat_id))
+        rule.target_chat_ids = [str(x) for x in tgt_ids if str(x).strip()]
+        if rule.target_chat_ids:
+            rule.target_chat_id = rule.target_chat_ids[0]  # mirror of the first target
+            first = str(tgt_names[0]).strip() if tgt_names else ""
+            rule.target_chat_name = first or rule.target_chat_id
+
+    async def _route_seed(self, uid: int, st: UiState, scope: str) -> None:
+        """Point the wizard at `scope` and seed the lists from the saved task.
+
+        A saved task can only carry resolved ids, so seeded entries start
+        resolved with the names the task already stores.
+        """
+        buffer = self._route_buffer(st)
+        if self._route_scope(st) == scope and buffer.get("route_seeded"):
+            return
+        self._route_reset(uid, st)
+        buffer = self._route_buffer(st)
+        buffer["route_scope"] = scope or ROUTE_SCOPE_NEW
+        buffer["route_seeded"] = True
+        if not scope or scope == ROUTE_SCOPE_NEW:
+            buffer["route_rule_id"] = str(uuid.uuid4())
+            return
+        rule = await self._route_find_rule(uid, scope)
+        if rule is None:
+            buffer["route_rule_id"] = scope
+            return
+        buffer["route_rule_id"] = rule.id
+        buffer["route_name"] = rule.name or ""
+        src_ids = [str(x) for x in rule.source_chat_ids]
+        src_names = list(rule.source_chat_names) + [""] * len(src_ids)
+        self._route_store_role(
+            st, "s", src_ids, src_ids, src_names[:len(src_ids)],
+            [ROUTE_RESOLVED] * len(src_ids),
+        )
+        tgt_ids = [str(x) for x in rule.all_targets]
+        tgt_names = [(rule.target_chat_name or "")] + [""] * max(0, len(tgt_ids) - 1)
+        self._route_store_role(
+            st, "t", tgt_ids, tgt_ids, tgt_names[:len(tgt_ids)],
+            [ROUTE_RESOLVED] * len(tgt_ids),
+        )
+
+    async def _route_commit(self, uid: int, st: UiState, lang: str, name: str,
+                            sources, src_ids, src_names, targets, tgt_ids, tgt_names):
+        """Create the task that carries these lists, or update the one named.
+
+        Returns (ok, message, rule, kind) with kind "created" or "saved".
+        """
+        rule = None
+        scope = self._route_scope(st)
+        if scope and scope != ROUTE_SCOPE_NEW:
+            rule = await self._route_find_rule(uid, scope)
+        if rule is None and name:
+            rule = await self._route_find_rule(uid, name)
+        if rule is not None:
+            self._route_apply_lists(rule, src_ids, src_names, tgt_ids, tgt_names)
+            try:
+                await self._save_owned_rule(rule, uid, getattr(rule, "version", None))
+            except ConcurrencyError:
+                return False, self._t("ui_concurrency_error", lang=lang), None, ""
+            except Exception as exc:
+                await self._record_error("bot", exc, user_id=uid, rule_id=rule.id)
+                return False, self._t("ui_route_failed", lang=lang, error=tg_detail(exc)), None, ""
+            return True, self._t("ui_route_saved_alert", lang=lang), rule, "saved"
+
+        session = await self._route_session(uid)
+        if session is None:
+            return False, self._t("ui_no_sessions", lang=lang), None, ""
+        rid = self._route_id(st) if scope == ROUTE_SCOPE_NEW else str(uuid.uuid4())
+        task_name = (name or "").strip() or f"task_{short_id(rid)}"
+        rule = ForwardRule(
+            id=rid,
+            session_id=session.id,
+            name=task_name,
+            routing_type=RoutingType.CHANNEL_TO_CHANNEL,
+            forward_mode=ForwardMode.COPY_MESSAGE,
+            owner_user_id=uid,
+        )
+        self._route_apply_lists(rule, src_ids, src_names, tgt_ids, tgt_names)
+        try:
+            await self._rules.create(rule)
+        except Exception as exc:
+            await self._record_error("bot", exc, user_id=uid)
+            return False, self._t("ui_route_failed", lang=lang, error=tg_detail(exc)), None, ""
+        try:
+            self._log.info("bot", "rule", f"route created {len(src_ids)} -> {len(tgt_ids)}")
+        except Exception:
+            pass
+        return (
+            True,
+            self._t("ui_route_created", lang=lang, task=rule.name, rid=short_id(rule.id)),
+            rule,
+            "created",
+        )
+
+    # -- wizard flows ----------------------------------------------------
+
+    async def _route_back(self, uid: int, st: UiState, lang: str, cq=None, message=None, scope=None):
+        """Leave the wizard: back to the task card, or to the rules list."""
+        scope = scope if scope is not None else self._route_scope(st)
+        self._route_reset(uid, st)
+        await self._persist(uid, st)
+        rule = await self._route_find_rule(uid, scope) if scope and scope != ROUTE_SCOPE_NEW else None
+        if rule is not None:
+            text, markup = self._render_rule_detail(rule)
+        else:
+            rules = await self._rules.list_by_owner(uid) if uid else []
+            text, markup = self._render_rules_list(rules, page=0)
+        if cq is not None:
+            await self._safe_edit(cq, text, reply_markup=markup)
+            await cq.answer(self._t("ui_route_btn_back", lang=lang))
+        elif message is not None:
+            await message.reply_text(text, reply_markup=markup)
+        return text, markup
+
+    async def _route_problem_reply(self, st: UiState, role: str, lang: str, note: str, uid: int):
+        """Re-render the wizard with a problem note; nothing is stored."""
+        rule = await self._route_find_rule(uid, self._route_scope(st))
+        return self._route_render(st, role, lang, rule=rule, view="summary" if note else "list", note=note)
+
+    async def _route_replace_role(self, message: Message, uid: int, st: UiState, role: str,
+                                  raw: str, lang: str) -> None:
+        """Take a submitted list for one role: validate, resolve, then show it."""
+        parsed = parse_route_list(raw)
+        if not parsed.items:
+            reason_key = "ui_route_err_empty_sources" if role == "s" else "ui_route_err_empty_targets"
+            note = self._t("ui_route_bad_input", lang=lang, reason=self._t(reason_key, lang=lang))
+            text_out, markup = await self._route_problem_reply(st, role, lang, note, uid)
+            await message.reply_text(text_out, reply_markup=markup)
+            return
+        other = "t" if role == "s" else "s"
+        other_entries = self._route_entries(st, other)
+        other_text = ", ".join(other_entries)
+        problems = validate_route_lists(
+            raw if role == "s" else other_text,
+            raw if role == "t" else other_text,
+            require_sources=bool(raw if role == "s" else other_text),
+            require_targets=bool(raw if role == "t" else other_text),
+        )
+        if problems:
+            note = self._route_problem_text(problems, lang)
+            text_out, markup = await self._route_problem_reply(st, role, lang, note, uid)
+            await message.reply_text(text_out, reply_markup=markup)
+            return
+        ids, names, statuses = await self._route_resolve_all(uid, st, parsed.items)
+        self._route_store_role(st, role, parsed.items, ids, names, statuses)
+        await self._persist(uid, st)
+        rule = await self._route_find_rule(uid, self._route_scope(st))
+        text_out, markup = self._route_render(st, role, lang, rule=rule, view="summary")
+        await message.reply_text(text_out, reply_markup=markup)
+
+    async def _route_apply_fix(self, message: Message, uid: int, st: UiState, role: str,
+                               index_text: str, value_text: str, lang: str) -> None:
+        """`index = value` (or `index = -` to remove) on one entry."""
+        entries, ids, names, statuses = self._route_role_data(st, role)
+        try:
+            index = int(str(index_text).strip())
+        except (TypeError, ValueError):
+            await message.reply_text(self._t("ui_route_edit_one_bad", lang=lang))
+            return
+        if index < 1 or index > len(entries):
+            await message.reply_text(self._t(
+                "ui_route_edit_one_out_of_range", lang=lang, index=index, total=len(entries)))
+            return
+        value = str(value_text or "").strip()
+        if value in ("-", ""):
+            removed = entries.pop(index - 1)
+            ids.pop(index - 1)
+            names.pop(index - 1)
+            statuses.pop(index - 1)
+            note = self._t("ui_route_edit_one_removed", lang=lang, index=index, value=removed)
+        else:
+            cid, title, status = await self._resolve_chat_token(uid, st, value)
+            entries[index - 1] = value
+            ids[index - 1] = cid if status == ROUTE_RESOLVED else value
+            names[index - 1] = title if status == ROUTE_RESOLVED else ""
+            statuses[index - 1] = status
+            note = self._t("ui_route_edit_one_updated", lang=lang, index=index, value=value)
+        self._route_store_role(st, role, entries, ids, names, statuses)
+        st.step = "route_sources" if role == "s" else "route_targets"
+        await self._persist(uid, st)
+        rule = await self._route_find_rule(uid, self._route_scope(st))
+        text_out, markup = self._route_render(st, role, lang, rule=rule, view="summary", note=note)
+        await message.reply_text(text_out, reply_markup=markup)
+
+    async def _route_one_shot(self, message: Message, uid: int, st: UiState, lang: str, cmd) -> None:
+        """`<name> <sources> -> <targets>`: resolve everything, then write.
+
+        Shared by `/route` and by a full route line typed inside the wizard, so
+        both produce exactly the same task and the same messages.
+        """
+        problems = validate_route_lists(cmd.source_text, cmd.target_text)
+        if problems:
+            await message.reply_text(self._route_problem_text(problems, lang))
+            return
+        src_ids, src_names, src_status = await self._route_resolve_all(uid, st, cmd.sources)
+        tgt_ids, tgt_names, tgt_status = await self._route_resolve_all(uid, st, cmd.targets)
+        pairs = list(zip(cmd.sources, src_status)) + list(zip(cmd.targets, tgt_status))
+        failed = [token for token, status in pairs if status != ROUTE_RESOLVED]
+        if failed:
+            if len(failed) == 1:
+                note = self._t("ui_route_resolve_failed", lang=lang, id=failed[0])
+            else:
+                note = self._t("ui_route_summary_fail", lang=lang, ok=len(pairs) - len(failed),
+                               total=len(pairs), id=failed[0])
+            await message.reply_text(note)
+            return
+        problems = validate_resolved_uniqueness(src_ids, tgt_ids)
+        if problems:
+            await message.reply_text(self._route_problem_text(problems, lang))
+            return
+        ok, message_text, rule, kind = await self._route_commit(
+            uid, st, lang, cmd.name, cmd.sources, src_ids, src_names,
+            cmd.targets, tgt_ids, tgt_names,
+        )
+        if not ok or rule is None:
+            await message.reply_text(message_text)
+            return
+        self._route_reset(uid, st)
+        await self._persist(uid, st)
+        if kind == "created":
+            body = message_text + "\n\n" + self._t("ui_route_done_footer", lang=lang)
+            markup = self._kbd([
+                [(self._t("ui_rule_adv_settings", lang=lang), f"rd:{rule.id}")],
+                [(self._t("ui_rule_view_all", lang=lang), CB["rules"])],
+            ])
+            await message.reply_text(body, reply_markup=markup)
+        else:
+            await message.reply_text(self._t("ui_route_saved_alert", lang=lang))
+            text_out, markup = self._render_rule_detail(rule)
+            await message.reply_text(text_out, reply_markup=markup)
+
+    async def _handle_route_command(self, message: Message, uid: int) -> None:
+        """`/route <task name or id> <sources> -> <targets>`."""
+        lang = self._resolve_lang(uid)
+        body = (message.text or "").strip()
+        st = self._state(uid) if uid else UiState()
+        args = body.split(None, 1)
+        if len(args) < 2 or not args[1].strip():
+            await message.reply_text(
+                self._t("ui_route_usage", lang=lang),
+                reply_markup=self._kbd([[
+                    (self._t("ui_route_btn_back", lang=lang), CB["rules"]),
+                ]]),
+            )
+            return
+        try:
+            cmd = parse_route_command(body)
+        except RouteParseError as exc:
+            key = ROUTE_PARSE_KEYS.get(exc.code)
+            if key:
+                await message.reply_text(self._t(key, lang=lang))
+                return
+            raise
+        await self._route_one_shot(message, uid, st, lang, cmd)
+
+    async def _route_save(self, cq: CallbackQuery, uid: int, st: UiState, lang: str) -> None:
+        """The save button: only a fully resolved, distinct route is written."""
+        sources, src_ids, src_names, _ss = self._route_role_data(st, "s")
+        targets, tgt_ids, tgt_names, _ts = self._route_role_data(st, "t")
+        rule = await self._route_find_rule(uid, self._route_scope(st))
+        if not sources or not targets or self._route_unresolved(st):
+            await cq.answer(self._t("ui_route_blocked_alert", lang=lang), show_alert=True)
+            text_out, markup = self._route_render(st, "s", lang, rule=rule, view="summary")
+            await self._safe_edit(cq, text_out, reply_markup=markup)
+            return
+        problems = list(validate_route_lists(", ".join(sources), ", ".join(targets)))
+        problems += list(validate_resolved_uniqueness(src_ids, tgt_ids))
+        if problems:
+            note = self._route_problem_text(problems, lang)
+            text_out, markup = self._route_render(st, "s", lang, rule=rule, view="summary", note=note)
+            await self._safe_edit(cq, text_out, reply_markup=markup)
+            await cq.answer(note, show_alert=True)
+            return
+        name = str(self._route_buffer(st).get("route_name") or "")
+        ok, message_text, rule, kind = await self._route_commit(
+            uid, st, lang, name, sources, src_ids, src_names, targets, tgt_ids, tgt_names)
+        if not ok or rule is None:
+            await cq.answer(message_text, show_alert=True)
+            return
+        self._route_reset(uid, st)
+        await self._persist(uid, st)
+        if kind == "created":
+            body = message_text + "\n\n" + self._t("ui_route_done_footer", lang=lang)
+            await self._safe_edit(cq, body, reply_markup=self._kbd([
+                [(self._t("ui_rule_adv_settings", lang=lang), f"rd:{rule.id}")],
+                [(self._t("ui_rule_view_all", lang=lang), CB["rules"])],
+            ]))
+        else:
+            await cq.answer(self._t("ui_route_saved_alert", lang=lang), show_alert=True)
+            text_out, markup = self._render_rule_detail(rule)
+            await self._safe_edit(cq, text_out, reply_markup=markup)
+
+    def _route_open(self, uid: int, st: UiState, role: str) -> str:
+        """Set the step for the screen being opened and return its language."""
+        lang = self._lang_for(st, uid)
+        st.step = "route_sources" if role == "s" else "route_targets"
+        return lang
+
+    # -- text steps ------------------------------------------------------
+
+    async def _route_step_input(self, message: Message, st: UiState, role: str, text: str) -> None:
+        """One text step serves the list, a fix (`index = value`) and a route line."""
+        uid = int(message.from_user.id if message.from_user else 0)
+        lang = self._lang_for(st, message.from_user, uid=uid)
+        raw = (text or "").strip()
+        if raw.lower() in ROUTE_CANCEL_WORDS:
+            await self._route_back(uid, st, lang, message=message)
+            return
+        fix = re.match(r"^\s*(\d+)\s*=\s*(.*)$", raw, re.S)
+        if fix:
+            await self._route_apply_fix(message, uid, st, role, fix.group(1), fix.group(2), lang)
+            return
+        route_line = None
+        try:
+            route_line = parse_route_command(raw)
+        except RouteParseError as exc:
+            # An arrow with an empty side is worth saying out loud; no arrow at
+            # all just means "this is a plain list".
+            key = ROUTE_PARSE_KEYS.get(exc.code) if exc.code != ROUTE_MISSING_ARROW else None
+            if key:
+                note = self._t("ui_route_bad_input", lang=lang, reason=self._t(key, lang=lang))
+                text_out, markup = await self._route_problem_reply(st, role, lang, note, uid)
+                await message.reply_text(text_out, reply_markup=markup)
+                return
+        if route_line is not None:
+            await self._route_one_shot(message, uid, st, lang, route_line)
+            return
+        await self._route_replace_role(message, uid, st, role, raw, lang)
+
+    async def _route_step_fix(self, message: Message, st: UiState, role: str, text: str) -> None:
+        """The `Fix one entry` step accepts only `index = value`."""
+        uid = int(message.from_user.id if message.from_user else 0)
+        lang = self._lang_for(st, message.from_user, uid=uid)
+        raw = (text or "").strip()
+        if raw.lower() in ROUTE_CANCEL_WORDS:
+            await self._route_back(uid, st, lang, message=message)
+            return
+        fix = re.match(r"^\s*(\d+)\s*=\s*(.*)$", raw, re.S)
+        if not fix:
+            await message.reply_text(self._t("ui_route_bad_edit", lang=lang))
+            return
+        await self._route_apply_fix(message, uid, st, role, fix.group(1), fix.group(2), lang)
+
+    async def _step_route_sources(self, message: Message, st: UiState, text: str) -> None:
+        await self._route_step_input(message, st, "s", text)
+
+    async def _step_route_targets(self, message: Message, st: UiState, text: str) -> None:
+        await self._route_step_input(message, st, "t", text)
+
+    async def _step_route_edit_s(self, message: Message, st: UiState, text: str) -> None:
+        await self._route_step_fix(message, st, "s", text)
+
+    async def _step_route_edit_t(self, message: Message, st: UiState, text: str) -> None:
+        await self._route_step_fix(message, st, "t", text)
 
     def _render_advanced_settings(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
         """Render advanced rule controls using the rule owner's selected locale."""
@@ -7004,8 +7788,99 @@ class ProBotUI:
                 cq, self._t("ui_weburl_cleared"), reply_markup=self._main_menu())
             await cq.answer()
 
+        # ---------------- multi-source / multi-target routes ----------------
+        # One task routes M sources to N targets. `/route` is the one-shot entry
+        # point; the callbacks below drive the inline-keyboard wizard and share
+        # every helper with it.
+        @b.on_message(filters.command("route") & filters.private)
+        @self._localized_handler
+        async def _route_cmd(_, message: Message):
+            uid = message.from_user.id if message.from_user else 0
+            logger.info("Handling /route from uid=%s", uid)
+            if not uid:
+                return
+            try:
+                await self._handle_route_command(message, uid)
+            except Exception as exc:
+                logger.exception("/route failed for uid=%s: %s", uid, exc)
+                try:
+                    await message.reply_text(
+                        self._t("ui_route_failed", lang=self._resolve_lang(uid),
+                                error=tg_detail(exc)),
+                        reply_markup=self._rules_menu(),
+                    )
+                except Exception:
+                    pass
+
+        @b.on_callback_query(filters.regex(
+            r"^(?:" + CB["route_src_list"] + r"|" + CB["route_tgt_list"] + r"):([st]):(.+)$"))
+        @self._localized_handler
+        async def _cb_route_open(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            lang = self._resolve_lang(uid)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":", 2)
+            role = parts[1] if len(parts) > 1 and parts[1] in ("s", "t") else "s"
+            scope = parts[2] if len(parts) > 2 else ROUTE_SCOPE_NEW
+            rule = None
+            if scope != ROUTE_SCOPE_NEW:
+                rule = await self._route_find_rule(uid, scope)
+                if rule is None:
+                    return await cq.answer(
+                        self._t("ui_rule_not_found_or_not_owner_alert", lang=lang), show_alert=True)
+            st = self._state(uid)
+            await self._route_seed(uid, st, scope)
+            await self._persist(uid, st)
+            text, markup = self._route_render(st, role, self._route_open(uid, st, role), rule=rule)
+            await self._safe_edit(cq, text, reply_markup=markup)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^" + CB["route_fix_entry"] + r":([st]):(.+)$"))
+        @self._localized_handler
+        async def _cb_route_fix(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            lang = self._resolve_lang(uid)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":", 2)
+            role = parts[1] if len(parts) > 1 and parts[1] in ("s", "t") else "s"
+            scope = parts[2] if len(parts) > 2 else self._route_scope(self._state(uid))
+            st = self._state(uid)
+            if self._route_scope(st) != scope:
+                await self._route_seed(uid, st, scope)
+            st.step = "route_edit_s" if role == "s" else "route_edit_t"
+            await self._persist(uid, st)
+            rule = await self._route_find_rule(uid, scope) if scope != ROUTE_SCOPE_NEW else None
+            await self._safe_edit(
+                cq, self._t("ui_route_edit_one_ask", lang=lang),
+                reply_markup=self._route_keyboard(st, role, lang, rule))
+            await cq.answer(self._t("ui_route_edit_one", lang=lang))
+
+        @b.on_callback_query(filters.regex(r"^" + CB["route_save_lists"] + r":(.+)$"))
+        @self._localized_handler
+        async def _cb_route_save(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            lang = self._resolve_lang(uid)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            scope = raw.split(":", 1)[1]
+            st = self._state(uid)
+            if self._route_scope(st) != scope:
+                if scope != ROUTE_SCOPE_NEW and await self._route_find_rule(uid, scope) is None:
+                    return await cq.answer(
+                        self._t("ui_rule_not_found_or_not_owner_alert", lang=lang), show_alert=True)
+                await self._route_seed(uid, st, scope)
+            await self._route_save(cq, uid, st, lang)
+
+        @b.on_callback_query(filters.regex(r"^" + CB["route_back"] + r":(.+)$"))
+        @self._localized_handler
+        async def _cb_route_back(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            lang = self._resolve_lang(uid)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            scope = raw.split(":", 1)[1]
+            await self._route_back(uid, self._state(uid), lang, cq=cq, scope=scope)
+
         # ---------------- free-text FSM router ----------------
-        @b.on_message(filters.private & filters.text & ~filters.command(["start", "menu", "cancel", "connect", "rules", "panel", "settings", "profile", "forward"]), group=-1)
+        @b.on_message(filters.private & filters.text & ~filters.command(["start", "menu", "cancel", "connect", "rules", "panel", "settings", "profile", "forward", "route"]), group=-1)
         @self._localized_handler
         async def _text(_, message: Message):
             # Every step of every flow is traced: if the bot ever goes quiet
@@ -8387,30 +9262,10 @@ class ProBotUI:
                 await message.reply_text(text_out, reply_markup=kbd)
             return
 
-        matched_title = raw
-        if isinstance(st.buffer, dict) and "chats" in st.buffer:
-            for c in st.buffer["chats"]:
-                if c["id"] == raw or (c.get("username") and c["username"].lower() == raw.lstrip("@").lower()):
-                    matched_title = f"{c['emoji']} {c['title']}"
-                    raw = c["id"]
-                    break
-
-        if matched_title == raw:
-            try:
-                _fsm_uid = self._scope_uid(uid)
-                sessions = (await self._sessions.list_all() if _fsm_uid is None
-                            else await self._sessions.list_by_owner(uid))
-                if sessions:
-                    client = self._pool.get(sessions[0].id)
-                    if client and getattr(client, "is_connected", False):
-                        chat_obj = await client.get_chat(raw)
-                        c_id = getattr(chat_obj, "id", None)
-                        if chat_obj and c_id is not None:
-                            raw = str(c_id)
-                            c_title = getattr(chat_obj, "title", None) or getattr(chat_obj, "first_name", None) or raw
-                            matched_title = f"📢 {c_title}"
-            except Exception:
-                pass
+        # One resolution path for the whole bot: the buffered dialog list first,
+        # then the connected client — the same `_resolve_chat_token` the route
+        # wizard and `/route` use.
+        raw, matched_title, _status = await self._resolve_chat_token(uid, st, raw)
 
         target_id = draft.get("target_chat_id") if in_draft else rule.target_chat_id
         if str(raw).strip() == str(target_id).strip():
@@ -8478,30 +9333,8 @@ class ProBotUI:
                 await message.reply_text(text_out, reply_markup=kbd)
             return
 
-        matched_title = raw
-        if isinstance(st.buffer, dict) and "chats" in st.buffer:
-            for c in st.buffer["chats"]:
-                if c["id"] == raw or (c.get("username") and c["username"].lower() == raw.lstrip("@").lower()):
-                    matched_title = f"{c['emoji']} {c['title']}"
-                    raw = c["id"]
-                    break
-
-        if matched_title == raw:
-            try:
-                _fsm_uid = self._scope_uid(uid)
-                sessions = (await self._sessions.list_all() if _fsm_uid is None
-                            else await self._sessions.list_by_owner(uid))
-                if sessions:
-                    client = self._pool.get(sessions[0].id)
-                    if client and getattr(client, "is_connected", False):
-                        chat_obj = await client.get_chat(raw)
-                        c_id = getattr(chat_obj, "id", None)
-                        if chat_obj and c_id is not None:
-                            raw = str(c_id)
-                            c_title = getattr(chat_obj, "title", None) or getattr(chat_obj, "first_name", None) or raw
-                            matched_title = f"📢 {c_title}"
-            except Exception:
-                pass
+        # Same single resolution path as the source step.
+        raw, matched_title, _status = await self._resolve_chat_token(uid, st, raw)
 
         source_id = draft.get("source_chat_id") if in_draft else rule.source_chat_id
         if str(raw).strip() == str(source_id).strip():

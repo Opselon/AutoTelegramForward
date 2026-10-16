@@ -1,20 +1,25 @@
-core/infrastructure/telegram/pro_bot_ui.py:67
-core/infrastructure/telegram/pro_bot_ui.py:1890
-core/infrastructure/telegram/pro_bot_ui.py:8377
-core/infrastructure/telegram/pro_bot_ui.py:8468
-core/infrastructure/telegram/pro_bot_ui.py:8580
-core/infrastructure/telegram/pro_bot_ui.py:8646
-core/infrastructure/telegram/pro_bot_ui.py:8678
-core/infrastructure/telegram/pro_bot_ui.py:8710
-core/infrastructure/telegram/pro_bot_ui.py:8744
-core/infrastructure/telegram/pro_bot_ui.py:8784
-core/infrastructure/telegram/pro_bot_ui.py:8853
-core/infrastructure/telegram/pro_bot_ui.py:8886
-core/infrastructure/telegram/pro_bot_ui.py:8898
-core/infrastructure/telegram/pro_bot_ui.py:8932
-core/infrastructure/telegram/pro_bot_ui.py:8944
-core/infrastructure/telegram/pro_bot_ui.py:8983
-core/infrastructure/telegram/pro_bot_ui.py:9136
-core/infrastructure/telegram/pro_bot_ui.py:9219
-core/infrastructure/telegram/pro_bot_ui.py:9306
-core/infrastructure/telegram/pro_bot_ui.py:9328
+# Hardcoded-Persian backlog pinned by scripts/audit_cross_language.py.
+# Format: path:lineno|exact line text. The text is the key — a line number
+# is not stable across insertions, so the audit matches on the text and
+# treats the locator as a hint. Shrink-only: convert a line to a catalog
+# key and delete its entry; never add one without explaining why in review.
+core/infrastructure/telegram/pro_bot_ui.py:86|"fa": "فارسی 🇮🇷",
+core/infrastructure/telegram/pro_bot_ui.py:1920|("🇮🇷 فارسی (FA)", f"rtr_set:{rule.id}:fa"),
+core/infrastructure/telegram/pro_bot_ui.py:8407|if raw.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8498|if raw.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8610|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8676|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8708|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8740|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8774|if clean.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8814|if raw_input.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8883|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8916|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8928|if raw in ("حذف", "پاک", "none", "clear", "حذف همه"):
+core/infrastructure/telegram/pro_bot_ui.py:8962|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:8974|if raw in ("حذف", "پاک", "none", "clear"):
+core/infrastructure/telegram/pro_bot_ui.py:9013|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:9166|if url.lower() in ("default", "none", "-", "پیش‌فرض", "پیش فرض"):
+core/infrastructure/telegram/pro_bot_ui.py:9249|if new_url.lower() in ("default", "none", "-", "پیش‌فرض", "پیش فرض"):
+core/infrastructure/telegram/pro_bot_ui.py:9336|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+core/infrastructure/telegram/pro_bot_ui.py:9358|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):

@@ -194,6 +194,27 @@ class AppMessagesIt {
     'rules_replace_title': 'Regole di sostituzione',
     'rules_replace_with': 'Sostituisci con',
     'rules_replace_with_hint': 'Lascia vuoto per rimuovere il testo trovato',
+    'rules_route_chip_duplicate': 'Elencato due volte',
+    'rules_route_chip_ok': 'Accettato',
+    'rules_route_chip_overlap': 'Usato su entrambi i lati',
+    'rules_route_chip_tooltip':
+        '{reason} — tocca il chip per modificare questa voce.',
+    'rules_route_duplicate_id':
+        '{id} è elencato più di una volta. Rimuovi il duplicato.',
+    'rules_route_empty':
+        'Nessun canale ancora. Inseriscine uno o più, separati da virgole.',
+    'rules_route_fan_out': '{count} destinazioni',
+    'rules_route_overlap_id':
+        '{id} è sia sorgente sia destinazione. Un’attività non può inoltrare a se stessa.',
+    'rules_route_preview': '{sources} → {targets}',
+    'rules_route_preview_label': 'Anteprima del percorso',
+    'rules_route_remove': 'Rimuovi questa voce',
+    'rules_route_sources': 'Sorgenti (separate da virgole)',
+    'rules_route_sources_hint':
+        'ID, @nomi utente o link t.me, separati da virgole',
+    'rules_route_targets': 'Destinazioni (separate da virgole)',
+    'rules_route_targets_hint':
+        'Ogni messaggio viene inviato a tutte queste destinazioni',
     'rules_sched_auto': 'Pianificatore pubblicazioni',
     'rules_sched_power': 'Pianificazione accensione/spegnimento',
     'rules_sec_ai': 'Funzioni IA',
@@ -240,6 +261,7 @@ class AppMessagesIt {
     'rules_sync_replies': 'Sincronizza risposte',
     'rules_target': 'Destinazione',
     'rules_target_required': 'Pick a destination channel',
+    'rules_task_id': 'ID attività',
     'rules_time_delay': 'Imposta ritardo (secondi)',
     'rules_time_edit_limit': 'Tempo max modifica (secondi)',
     'rules_title': 'Attività di inoltro',

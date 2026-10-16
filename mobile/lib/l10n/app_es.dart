@@ -194,6 +194,26 @@ class AppMessagesEs {
     'rules_replace_title': 'Reglas de reemplazo',
     'rules_replace_with': 'Reemplazar con',
     'rules_replace_with_hint': 'Dejar vacío para eliminar el texto encontrado',
+    'rules_route_chip_duplicate': 'Aparece dos veces',
+    'rules_route_chip_ok': 'Aceptado',
+    'rules_route_chip_overlap': 'Usado en ambos lados',
+    'rules_route_chip_tooltip':
+        '{reason} — toca el chip para editar esta entrada.',
+    'rules_route_duplicate_id':
+        '{id} aparece más de una vez. Elimina el duplicado.',
+    'rules_route_empty':
+        'Aún no hay canales. Escribe uno o varios, separados por comas.',
+    'rules_route_fan_out': '{count} destinos',
+    'rules_route_overlap_id':
+        '{id} es origen y destino a la vez. Una tarea no puede reenviarse a sí misma.',
+    'rules_route_preview': '{sources} → {targets}',
+    'rules_route_preview_label': 'Vista previa de la ruta',
+    'rules_route_remove': 'Eliminar esta entrada',
+    'rules_route_sources': 'Orígenes (separados por comas)',
+    'rules_route_sources_hint':
+        'IDs, @nombres de usuario o enlaces t.me, separados por comas',
+    'rules_route_targets': 'Destinos (separados por comas)',
+    'rules_route_targets_hint': 'Cada mensaje se envía a todos estos destinos',
     'rules_sched_auto': 'Programador de publicaciones',
     'rules_sched_power': 'Programación de encendido/apagado',
     'rules_sec_ai': 'Funciones de IA',
@@ -239,6 +259,7 @@ class AppMessagesEs {
     'rules_sync_replies': 'Sincronizar respuestas',
     'rules_target': 'Destino',
     'rules_target_required': 'Pick a destination channel',
+    'rules_task_id': 'ID de la tarea',
     'rules_time_delay': 'Establecer retardo (segundos)',
     'rules_time_edit_limit': 'Tiempo máximo de edición (segundos)',
     'rules_title': 'Tareas de reenvío',
