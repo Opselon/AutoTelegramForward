@@ -1,4 +1,4 @@
-/// The navigation shell must adapt: seven destinations do not fit a Material
+/// The navigation shell must adapt: nine destinations do not fit a Material
 /// bottom bar on a phone, so narrow windows get a NavigationBar and wide
 /// windows get a labelled NavigationRail. This locks that behaviour in.
 library;
@@ -61,9 +61,14 @@ void main() {
 
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
-    // All seven destinations are reachable.
+    // Every destination is reachable: chats (routing by picking a chat instead
+    // of pasting an id) and delivery (what is pending and what was given up on)
+    // are first-class pages, not dialogs buried under another tab.
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-    expect(bar.destinations, hasLength(7));
+    expect(bar.destinations, hasLength(9));
+    final t = AppMessages(const Locale('en'));
+    expect(find.text(t.get('nav_chats')), findsWidgets);
+    expect(find.text(t.get('nav_delivery')), findsWidgets);
   });
 
   testWidgets('wide window uses the labelled navigation rail', (tester) async {
@@ -77,6 +82,6 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
     final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-    expect(rail.destinations, hasLength(7));
+    expect(rail.destinations, hasLength(9));
   });
 }
