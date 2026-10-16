@@ -23,6 +23,35 @@
 //! * **Graceful drain.** `begin_drain` refuses new work, the writers keep flushing
 //!   until both lanes are empty, and `wait_drained` reports how much was left
 //!   (counted as `drain_state` and, if the deadline expired, honestly as dropped).
+//!
+//! ## This engine refuses; the Python *producer* evicts
+//!
+//! Two different components with two different overflow policies, deliberately:
+//!
+//! * `logger/log_client.py` — the **producer's** bounded in-process queue. Its
+//!   overflow policy is *evict the oldest* and it counts that in `dropped`, because
+//!   it sits inside the emitting process and its only alternatives are "grow without
+//!   bound" or "block the caller".
+//! * [`Pipeline`] — the **engine's** admission path. It never evicts and never
+//!   buffers "just this once": an over-capacity record is refused with
+//!   `AdmitError::Full` (`OVERLOAD`), counted in `queue_rejected_full{lane}`, and
+//!   the producer is told, so the transport can retry it while it still has it (the
+//!   RPC answers `success=false`, never a silent loss). At-least-once, never
+//!   at-most-once.
+//!
+//! `dropped`(producer) and `queue_rejected_full`(engine) must therefore never be
+//! conflated: the first means "my own queue evicted it before I could send it", the
+//! second means "the engine refused it and said so". Both are counted; neither is
+//! silent. Suppression (a policy refusal, `events_duplicate`) is a third thing
+//! again — it is neither queue loss nor eviction.
+//!
+//! ## Capacity is a bound on what the engine holds, not on what a `VecDeque` sees
+//!
+//! A record belongs to its lane from admission until the batch containing it is
+//! formed ([`Queues::take_batch`]). Nothing in between — not the writer lingering
+//! for companions, not a batch that is still being filled — is allowed to hold
+//! records outside that bound, because otherwise a small lane would silently absorb
+//! `batch_size` extra records while answering `success=true`.
 
 use crate::config::{normal_lane_capacity, AckMode, Config};
 use crate::ingest::{dedupe_key, Prepared, Severity};
@@ -137,18 +166,18 @@ impl QueueState {
     fn pop_next(&mut self) -> Option<Item> {
         // Priority first, always: a reserved lane that could be overtaken by the
         // flood it exists to escape would be pointless.
-        self.priority.pop_front().or_else(|| self.normal.pop_front())
+        self.priority
+            .pop_front()
+            .or_else(|| self.normal.pop_front())
     }
 
     fn is_empty(&self) -> bool {
         self.normal.is_empty() && self.priority.is_empty()
     }
 
-    fn depth(&self, lane: Lane) -> usize {
-        match lane {
-            Lane::Normal => self.normal.len(),
-            Lane::Priority => self.priority.len(),
-        }
+    /// Everything the engine is holding for this pipeline, before batching.
+    fn len(&self) -> usize {
+        self.normal.len() + self.priority.len()
     }
 }
 
@@ -200,10 +229,28 @@ impl Queues {
         Ok(())
     }
 
-    /// Take up to `max` records, blocking for at most `idle_wait` when both lanes
-    /// are empty and at most `linger` while waiting for companions of the first
-    /// record.
+    /// Form a batch: wait for up to `max` companions, then take them.
+    ///
+    /// Blocking is bounded twice: at most `idle_wait` when both lanes are empty
+    /// (there is nothing to take yet) and at most `linger` once there is something
+    /// to take (the first record of a batch is not held hostage by batching).
+    ///
+    /// The waiting happens **before** anything is removed from a lane, and that is
+    /// load-bearing, not an implementation detail: a record is only no longer the
+    /// lane's responsibility once the batch containing it is formed. If the writer
+    /// instead popped the first record and then lingered for companions, it would
+    /// be holding records that no longer count against any capacity — a "4-slot"
+    /// lane could absorb `batch_size` records and answer every producer with
+    /// success while doing it, which is exactly the unbounded buffering the bound
+    /// exists to prevent. So: wait, then take.
+    ///
+    /// A drain request ends the wait early (the lanes have to be flushed, not
+    /// lingered over). An empty batch is possible only when another writer took the
+    /// records during the wait; the caller ignores empty batches.
     fn take_batch(&self, max: usize, linger: Duration, idle_wait: Duration) -> Option<Vec<Item>> {
+        if max == 0 {
+            return None;
+        }
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.is_empty() {
             let (guard, _) = self
@@ -211,34 +258,35 @@ impl Queues {
                 .wait_timeout(state, idle_wait)
                 .unwrap_or_else(|e| e.into_inner());
             state = guard;
-        }
-        let mut batch = Vec::with_capacity(max.min(1024));
-        let first = state.pop_next()?;
-        batch.push(first);
-        let deadline = Instant::now() + linger;
-        while batch.len() < max {
             if state.is_empty() {
-                let remaining = deadline.saturating_duration_since(Instant::now());
-                if remaining.is_zero() {
-                    break;
-                }
-                let (guard, _) = self
-                    .ready
-                    .wait_timeout(state, remaining)
-                    .unwrap_or_else(|e| e.into_inner());
-                state = guard;
-                if state.is_empty() && deadline.saturating_duration_since(Instant::now()).is_zero() {
-                    break;
-                }
-                continue;
+                return None;
             }
+        }
+        let deadline = Instant::now() + linger;
+        // `closed` is a drain: stop waiting for companions and flush what is here.
+        while state.len() < max && !state.closed {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            let (guard, _) = self
+                .ready
+                .wait_timeout(state, remaining)
+                .unwrap_or_else(|e| e.into_inner());
+            state = guard;
+        }
+        let mut batch = Vec::with_capacity(max.min(state.len()).min(1024));
+        while batch.len() < max {
             match state.pop_next() {
                 Some(item) => batch.push(item),
                 None => break,
             }
         }
         if state.is_empty() {
-            self.ready.notify_one();
+            // Nothing left for a peer writer, and a waiting producer's slot has
+            // just been freed: let the idle waits re-evaluate instead of sleeping
+            // out their timeout.
+            self.ready.notify_all();
         }
         Some(batch)
     }
@@ -470,7 +518,9 @@ impl Pipeline {
             let handle = thread::Builder::new()
                 .name(format!("atf-logger-writer-{index}"))
                 .spawn(move || writer_loop(shared))
-                .map_err(|err| StorageError::Config(format!("cannot start writer thread: {err}")))?;
+                .map_err(|err| {
+                    StorageError::Config(format!("cannot start writer thread: {err}"))
+                })?;
             handles.push(handle);
         }
         metrics.pipeline_running.set(1);
@@ -482,6 +532,12 @@ impl Pipeline {
 
     /// Non-blocking admission. `Ack::Immediate` in queued mode, otherwise the
     /// caller must await the returned receiver before answering `success=true`.
+    ///
+    /// The variant is decided by the configured [`AckMode`] and nothing else:
+    /// `queued` means "in the bounded queue, there is nothing to await", `durable`
+    /// means "the writer will report the storage outcome of the batch containing
+    /// this record". Admission itself is identical in both modes — only the promise
+    /// differs — so the push path below is shared.
     pub fn admit(&self, prepared: Prepared) -> Result<Ack, AdmitError> {
         let lane = classify(&prepared);
         let now = Instant::now();
@@ -498,32 +554,31 @@ impl Pipeline {
                 }
             }
         };
-        let item = match self.shared.config.ack_mode {
-            AckMode::Queued => Item {
-                record: prepared.record,
-                admitted: now,
-                ack: None,
-            },
-            AckMode::Durable => {
-                let (tx, rx) = oneshot::channel();
-                let item = Item {
+        let (item, ack) = match self.shared.config.ack_mode {
+            AckMode::Queued => (
+                Item {
                     record: prepared.record,
                     admitted: now,
-                    ack: Some(tx),
-                };
-                return match self.shared.queues.try_push(lane.lane, item) {
-                    Ok(()) => {
-                        self.count_admission(&lane);
-                        Ok(Ack::Pending(rx))
-                    }
-                    Err(err) => Err(self.count_refusal(claimed, err)),
-                };
+                    ack: None,
+                },
+                Ack::Immediate,
+            ),
+            AckMode::Durable => {
+                let (tx, rx) = oneshot::channel();
+                (
+                    Item {
+                        record: prepared.record,
+                        admitted: now,
+                        ack: Some(tx),
+                    },
+                    Ack::Pending(rx),
+                )
             }
         };
         match self.shared.queues.try_push(lane.lane, item) {
             Ok(()) => {
                 self.count_admission(&lane);
-                Ok(Ack::Immediate)
+                Ok(ack)
             }
             Err(err) => Err(self.count_refusal(claimed, err)),
         }
@@ -626,7 +681,8 @@ impl Pipeline {
                 return DrainOutcome {
                     drained: true,
                     remaining: 0,
-                    drained_records: self.shared.drained_records.load(Ordering::Relaxed).max(0) as u64,
+                    drained_records: self.shared.drained_records.load(Ordering::Relaxed).max(0)
+                        as u64,
                     elapsed_millis: started.elapsed().as_millis() as u64,
                 };
             }
@@ -636,7 +692,9 @@ impl Pipeline {
         let (normal, priority) = self.shared.queues.depth();
         DrainOutcome {
             drained: false,
-            remaining: normal + priority + self.shared.pending.load(Ordering::Relaxed).max(0) as usize,
+            remaining: normal
+                + priority
+                + self.shared.pending.load(Ordering::Relaxed).max(0) as usize,
             drained_records: self.shared.drained_records.load(Ordering::Relaxed).max(0) as u64,
             elapsed_millis: started.elapsed().as_millis() as u64,
         }
@@ -663,7 +721,12 @@ impl Pipeline {
             let _ = handle.join();
         }
         if !outcome.drained {
-            let mut state = self.shared.queues.state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut state = self
+                .shared
+                .queues
+                .state
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             // The queues are VecDeque-backed, so the undelivered remainder is too;
             // only emptiness and length are used below.
             let mut leftovers: VecDeque<Item> = std::mem::take(&mut state.normal);
@@ -701,9 +764,11 @@ fn writer_loop(shared: Arc<Shared>) {
             .max(Duration::from_millis(5)),
     );
     loop {
-        let batch = shared
-            .queues
-            .take_batch(shared.config.batch_size, shared.config.batch_delay, idle_wait);
+        let batch = shared.queues.take_batch(
+            shared.config.batch_size,
+            shared.config.batch_delay,
+            idle_wait,
+        );
         match batch {
             Some(items) if !items.is_empty() => commit_batch(&shared, items),
             _ => {
@@ -724,10 +789,7 @@ fn writer_loop(shared: Arc<Shared>) {
 
 fn commit_batch(shared: &Arc<Shared>, items: Vec<Item>) {
     let metrics = &shared.metrics;
-    let wait = items
-        .iter()
-        .map(Item::wait_seconds)
-        .fold(0.0f64, f64::max);
+    let wait = items.iter().map(Item::wait_seconds).fold(0.0f64, f64::max);
     metrics.queue_wait_seconds.observe_seconds(wait);
     metrics.batch_size.observe(items.len() as f64);
     metrics.batches_in_flight.inc();
@@ -743,7 +805,9 @@ fn commit_batch(shared: &Arc<Shared>, items: Vec<Item>) {
         metrics,
     );
     let elapsed = started.elapsed();
-    metrics.batch_flush_seconds.observe_seconds(elapsed.as_secs_f64());
+    metrics
+        .batch_flush_seconds
+        .observe_seconds(elapsed.as_secs_f64());
     metrics.batch_flushes.inc();
 
     match outcome {
@@ -791,9 +855,7 @@ fn commit_batch(shared: &Arc<Shared>, items: Vec<Item>) {
         .pending_writes
         .set(shared.pending.load(Ordering::Relaxed).max(0));
     let (normal, priority) = shared.queues.depth();
-    metrics
-        .queue_depth_current
-        .set((normal + priority) as i64);
+    metrics.queue_depth_current.set((normal + priority) as i64);
 }
 
 /// Severity → lane, exposed for the transport's own diagnostics.
@@ -835,11 +897,20 @@ mod tests {
     use crate::ingest::{CollectPolicy, Limits, RawEntry};
     use crate::storage::sqlite::SqliteStorage;
     use crate::storage::BackendConfig;
+    use std::sync::atomic::AtomicUsize;
 
     struct Harness {
         _dir: tempfile::TempDir,
         path: String,
         metrics: Arc<Metrics>,
+    }
+
+    /// A single-threaded runtime for blocking on a durable ack.
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
     }
 
     impl Harness {
@@ -866,7 +937,8 @@ mod tests {
                 max_rows_per_statement: 500,
             };
             Arc::new(
-                SqliteStorage::open(&Config::default(), &backend, Arc::clone(&self.metrics)).unwrap(),
+                SqliteStorage::open(&Config::default(), &backend, Arc::clone(&self.metrics))
+                    .unwrap(),
             )
         }
 
@@ -884,7 +956,13 @@ mod tests {
         prepared_with(level, "core", "system", message, 0)
     }
 
-    fn prepared_with(level: &str, service: &str, category: &str, message: &str, user_id: i64) -> Prepared {
+    fn prepared_with(
+        level: &str,
+        service: &str,
+        category: &str,
+        message: &str,
+        user_id: i64,
+    ) -> Prepared {
         let entry = RawEntry {
             ts: 1_700_000_000,
             level: level.to_string(),
@@ -913,7 +991,13 @@ mod tests {
     #[test]
     fn batches_commit_and_persist() {
         let harness = Harness::new();
+        // This test is about batch formation, so it pins the ack mode whose contract
+        // it asserts. The documented default is `durable` (`AckMode`, README), and a
+        // durable ack is `Ack::Pending` — that pairing is pinned separately by
+        // `default_config_pins_the_durable_ack_contract`. Asking for `queued`
+        // explicitly is what makes `Ack::Immediate` true here instead of assumed.
         let pipeline = harness.pipeline(PipelineConfig {
+            ack_mode: AckMode::Queued,
             batch_size: 8,
             ..PipelineConfig::from_config(&Config::default())
         });
@@ -948,7 +1032,10 @@ mod tests {
             .unwrap();
         let mut acks = Vec::new();
         for index in 0..12 {
-            match pipeline.admit(prepared("ERROR", &format!("durable {index}"))).unwrap() {
+            match pipeline
+                .admit(prepared("ERROR", &format!("durable {index}")))
+                .unwrap()
+            {
                 Ack::Pending(rx) => acks.push(rx),
                 Ack::Immediate => panic!("durable mode must not answer immediately"),
             }
@@ -1006,10 +1093,14 @@ mod tests {
             ..PipelineConfig::from_config(&Config::default())
         });
         for index in 0..5 {
-            pipeline.admit(prepared("INFO", &format!("normal {index}"))).unwrap();
+            pipeline
+                .admit(prepared("INFO", &format!("normal {index}")))
+                .unwrap();
         }
         for index in 0..3 {
-            pipeline.admit(prepared("CRITICAL", &format!("critical {index}"))).unwrap();
+            pipeline
+                .admit(prepared("CRITICAL", &format!("critical {index}")))
+                .unwrap();
         }
         // Force a single batch by taking it directly through the queue, then verify
         // the priority records came out first.
@@ -1036,7 +1127,9 @@ mod tests {
         });
         let mut acks = Vec::new();
         for index in 0..100 {
-            if let Ok(Ack::Pending(rx)) = pipeline.admit(prepared("WARN", &format!("drain {index}"))) {
+            if let Ok(Ack::Pending(rx)) =
+                pipeline.admit(prepared("WARN", &format!("drain {index}")))
+            {
                 acks.push(rx);
             }
         }
@@ -1055,7 +1148,10 @@ mod tests {
         assert!(pipeline.is_stopped());
         // Admission after the stop is refused, and it says so.
         assert_eq!(
-            pipeline.admit(prepared("INFO", "after stop")).unwrap_err().code(),
+            pipeline
+                .admit(prepared("INFO", "after stop"))
+                .unwrap_err()
+                .code(),
             "SHUTTING_DOWN"
         );
     }
@@ -1063,14 +1159,20 @@ mod tests {
     #[test]
     fn dedupe_window_suppresses_and_counts_duplicates() {
         let harness = Harness::new();
+        // Queued mode: the point here is which records are admitted and counted,
+        // not what the ack promises (that is `durable_ack_means_committed`).
         let pipeline = harness.pipeline(PipelineConfig {
+            ack_mode: AckMode::Queued,
             dedupe_window: Duration::from_secs(60),
             ..PipelineConfig::from_config(&Config::default())
         });
         let first = pipeline.admit(prepared("ERROR", "same message")).unwrap();
         assert!(matches!(first, Ack::Immediate));
         let second = pipeline.admit(prepared("ERROR", "same message"));
-        assert!(second.is_err(), "an identical record inside the window is suppressed");
+        assert!(
+            second.is_err(),
+            "an identical record inside the window is suppressed"
+        );
         assert_eq!(
             second.unwrap_err().code(),
             "DUPLICATE",
@@ -1168,7 +1270,9 @@ mod tests {
                 "broken".to_string()
             }
         }
-        use crate::query::{Bucket, ErrorAgg, GroupBy, Page, PurgeFilter, QueryFilter, Stats, StatsScope};
+        use crate::query::{
+            Bucket, ErrorAgg, GroupBy, Page, PurgeFilter, QueryFilter, Stats, StatsScope,
+        };
 
         let metrics = Arc::new(Metrics::new());
         let pipeline = Pipeline::start(
@@ -1204,14 +1308,389 @@ mod tests {
         let config = Config::default();
         let pipeline_config = PipelineConfig::from_config(&config);
         assert_eq!(pipeline_config.ack_mode, AckMode::Durable);
-        assert_eq!(pipeline_config.normal_capacity, config.queue_capacity - config.priority_capacity);
+        assert_eq!(
+            pipeline_config.normal_capacity,
+            config.queue_capacity - config.priority_capacity
+        );
         assert_eq!(pipeline_config.priority_capacity, config.priority_capacity);
         let described = pipeline_config.describe();
         assert!(described.contains("ack_mode=durable"));
         assert!(described.contains("writers=1"));
-        assert_eq!(PipelineConfig::from_config(&config).with_writers(1).writers, 1);
-        assert_eq!(PipelineConfig::from_config(&config).with_writers(99).writers, 8);
+        assert_eq!(
+            PipelineConfig::from_config(&config).with_writers(1).writers,
+            1
+        );
+        assert_eq!(
+            PipelineConfig::from_config(&config)
+                .with_writers(99)
+                .writers,
+            8
+        );
         assert_eq!(lane_for(Severity::Critical), Lane::Priority);
         assert_eq!(lane_for(Severity::Warn), Lane::Normal);
+    }
+
+    // ---- regression tests for the pipeline defect cluster -------------------
+
+    #[test]
+    fn default_config_pins_the_durable_ack_contract() {
+        // The documented default is `durable` (`AckMode`, README §"Acknowledgement
+        // semantics"): `success=true` means *committed*. This pins the pairing the
+        // admission path must honour — default config ⇒ `Ack::Pending`, and the ack
+        // only resolves as `Ok` once the row is in the database.
+        let harness = Harness::new();
+        let config = PipelineConfig::from_config(&Config::default());
+        assert_eq!(config.ack_mode, AckMode::Durable);
+        let pipeline = harness.pipeline(PipelineConfig {
+            batch_size: 4,
+            ..config
+        });
+        let runtime = runtime();
+        let mut acks = Vec::new();
+        for index in 0..8 {
+            match pipeline
+                .admit(prepared("INFO", &format!("durable {index}")))
+                .unwrap()
+            {
+                Ack::Pending(rx) => acks.push(rx),
+                Ack::Immediate => {
+                    panic!("the default ack mode must not answer before the commit")
+                }
+            }
+        }
+        for ack in acks {
+            assert!(runtime.block_on(ack).expect("writer answered").is_ok());
+        }
+        // Every acknowledged record is already committed when the caller is told.
+        assert_eq!(harness.rows(), 8);
+        assert_eq!(harness.metrics.events_persisted.get(), 8);
+        pipeline.stop(Duration::from_secs(5));
+    }
+
+    #[test]
+    fn capacity_bound_covers_records_waiting_for_a_batch() {
+        // Regression: the bound is on what the *engine* holds, not on what happens to
+        // be in a `VecDeque` at the instant the writer is looking elsewhere. A writer
+        // that pops records and then lingers for companions would let a 2-slot lane
+        // absorb far more than 2 records while answering every producer with
+        // success; the records stay in the lane until the batch is formed, so the
+        // third record of a burst is refused, counted, and never buffered.
+        let harness = Harness::new();
+        let pipeline = harness.pipeline(PipelineConfig {
+            normal_capacity: 2,
+            priority_capacity: 1,
+            batch_size: 4096,
+            batch_delay: Duration::from_millis(300),
+            ..PipelineConfig::from_config(&Config::default())
+        });
+        let mut admitted = 0;
+        let mut refused = 0;
+        for index in 0..10 {
+            match pipeline.admit(prepared("INFO", &format!("burst {index}"))) {
+                Ok(_) => admitted += 1,
+                Err(AdmitError::Full {
+                    lane,
+                    depth,
+                    capacity,
+                }) => {
+                    assert_eq!(lane, Lane::Normal);
+                    assert_eq!(depth, 2);
+                    assert_eq!(capacity, 2);
+                    refused += 1;
+                }
+                Err(other) => panic!("unexpected {other:?}"),
+            }
+        }
+        assert_eq!(admitted, 2, "the lane holds exactly its capacity");
+        assert_eq!(refused, 8);
+        // Nothing else is holding records: the lane depth plus the refusals accounts
+        // for the whole burst, and `pending` (admitted-but-not-committed) agrees.
+        let (normal, priority) = pipeline.depth();
+        assert_eq!((normal, priority), (2, 0));
+        assert_eq!(pipeline.pending(), 2);
+        assert_eq!(normal + priority + refused, 10);
+        // A refusal is backpressure: counted as a refusal, and not conflated with
+        // queue loss (`events_dropped`) or with suppression (`events_duplicate`).
+        assert_eq!(harness.metrics.queue_rejected_full.with("normal").get(), 8);
+        assert_eq!(harness.metrics.queue_rejected_full.total(), 8);
+        assert_eq!(harness.metrics.events_accepted.with("INFO").get(), 2);
+        assert_eq!(harness.metrics.events_dropped.total(), 0);
+        assert_eq!(harness.metrics.events_duplicate.get(), 0);
+        let outcome = pipeline.stop(Duration::from_secs(10));
+        assert!(outcome.drained, "{outcome:?}");
+        assert_eq!(
+            harness.rows(),
+            2,
+            "the admitted records are persisted; the refused ones never entered the engine"
+        );
+    }
+
+    #[test]
+    fn priority_lane_drains_first_and_each_lane_keeps_fifo_order() {
+        // The reserved lane is drained before the normal lane, and each lane keeps
+        // its own admission order: an escalation cannot be overtaken by the flood it
+        // exists to escape, and two records from one producer cannot swap places.
+        let harness = Harness::new();
+        let pipeline = harness.pipeline(PipelineConfig {
+            normal_capacity: 64,
+            priority_capacity: 8,
+            batch_size: 4096,
+            // Long enough that the writer cannot take these records out from under
+            // the test — which is also part of what is being pinned here: admitted
+            // records are in their lane while a batch is still being formed.
+            batch_delay: Duration::from_millis(200),
+            ..PipelineConfig::from_config(&Config::default())
+        });
+        for index in 0..3 {
+            pipeline
+                .admit(prepared("INFO", &format!("normal {index}")))
+                .unwrap();
+            pipeline
+                .admit(prepared("CRITICAL", &format!("critical {index}")))
+                .unwrap();
+        }
+        let batch = pipeline
+            .shared
+            .queues
+            .take_batch(4096, Duration::from_millis(1), Duration::from_millis(1))
+            .expect("the admitted records are still in their lanes");
+        let seen: Vec<(String, String)> = batch
+            .iter()
+            .map(|item| (item.record.level.clone(), item.record.message.clone()))
+            .collect();
+        assert_eq!(
+            seen,
+            vec![
+                ("CRITICAL".to_string(), "critical 0".to_string()),
+                ("CRITICAL".to_string(), "critical 1".to_string()),
+                ("CRITICAL".to_string(), "critical 2".to_string()),
+                ("INFO".to_string(), "normal 0".to_string()),
+                ("INFO".to_string(), "normal 1".to_string()),
+                ("INFO".to_string(), "normal 2".to_string()),
+            ],
+            "priority lane first, FIFO inside each lane"
+        );
+        // The records the test took are deliberately not committed (this is about
+        // ordering), so the drain has nothing of its own to flush.
+        pipeline.stop(Duration::from_millis(200));
+    }
+
+    #[test]
+    fn a_refused_record_stays_retryable_and_is_not_a_duplicate() {
+        // Regression: a record refused for capacity must not leave a dedupe claim
+        // behind. Otherwise the producer's retry of a record that was never accepted
+        // is answered `DUPLICATE` — a permanent loss wearing the costume of a policy
+        // decision. Refusal is backpressure; the record is still the caller's.
+        let harness = Harness::new();
+        let pipeline = harness.pipeline(PipelineConfig {
+            normal_capacity: 1,
+            priority_capacity: 1,
+            batch_size: 1024,
+            batch_delay: Duration::from_millis(200),
+            dedupe_window: Duration::from_secs(60),
+            ..PipelineConfig::from_config(&Config::default())
+        });
+        assert!(pipeline.admit(prepared("INFO", "first")).is_ok());
+        let refused = pipeline.admit(prepared("INFO", "blocked"));
+        assert!(
+            matches!(refused, Err(AdmitError::Full { .. })),
+            "{refused:?}"
+        );
+        let retried = pipeline.admit(prepared("INFO", "blocked"));
+        assert!(
+            matches!(retried, Err(AdmitError::Full { .. })),
+            "a retry of a refused record is refused again, never suppressed: {retried:?}"
+        );
+        assert_eq!(harness.metrics.events_duplicate.get(), 0);
+        // Once the writer has taken the first batch there is room again, and the
+        // retry is admitted — exactly once.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while pipeline.depth().0 > 0 && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(pipeline.depth().0, 0, "the writer took the first batch");
+        assert!(pipeline.admit(prepared("INFO", "blocked")).is_ok());
+        let outcome = pipeline.stop(Duration::from_secs(5));
+        assert!(outcome.drained, "{outcome:?}");
+        assert_eq!(
+            harness.rows(),
+            2,
+            "the first record, and the one retry that landed"
+        );
+        assert_eq!(harness.metrics.events_duplicate.get(), 0);
+        assert_eq!(harness.metrics.events_dropped.total(), 0);
+    }
+
+    // ---- concurrency: many producers admitting while the writer drains -------
+
+    #[test]
+    fn concurrent_producers_never_lose_or_double_count_a_record() {
+        const PRODUCERS: usize = 4;
+        const PER_PRODUCER: usize = 200;
+        const TOTAL: usize = PRODUCERS * PER_PRODUCER;
+
+        let harness = Harness::new();
+        let pipeline = harness.pipeline(PipelineConfig {
+            // Queued mode keeps this test about admission, batching and counters;
+            // the durable ack path has its own concurrent test below.
+            ack_mode: AckMode::Queued,
+            normal_capacity: 8,
+            priority_capacity: 4,
+            batch_size: 32,
+            // A long linger against a small lane: the producers are *bound* to be
+            // refused repeatedly, which is the case being tested.
+            batch_delay: Duration::from_millis(20),
+            ..PipelineConfig::from_config(&Config::default())
+        });
+
+        let admitted = Arc::new(AtomicUsize::new(0));
+        let refused = Arc::new(AtomicUsize::new(0));
+        let mut handles = Vec::new();
+        for producer in 0..PRODUCERS {
+            let pipeline = Arc::clone(&pipeline);
+            let admitted = Arc::clone(&admitted);
+            let refused = Arc::clone(&refused);
+            handles.push(thread::spawn(move || {
+                for index in 0..PER_PRODUCER {
+                    // Every record is unique, so a lost record cannot hide behind a
+                    // suppressed duplicate.
+                    let level = if index % 4 == 0 { "ERROR" } else { "INFO" };
+                    let message = format!("producer {producer} record {index}");
+                    loop {
+                        match pipeline.admit(prepared(level, &message)) {
+                            Ok(_) => {
+                                admitted.fetch_add(1, Ordering::Relaxed);
+                                break;
+                            }
+                            Err(AdmitError::Full { .. }) => {
+                                // Backpressure, not a drop: the same retry a producer
+                                // makes when the RPC answers OVERLOAD.
+                                refused.fetch_add(1, Ordering::Relaxed);
+                                thread::yield_now();
+                            }
+                            Err(other) => panic!("unexpected {other:?}"),
+                        }
+                    }
+                }
+            }));
+        }
+        for handle in handles {
+            handle.join().expect("producer thread");
+        }
+
+        let admitted = admitted.load(Ordering::Relaxed);
+        let refused = refused.load(Ordering::Relaxed);
+        assert_eq!(admitted, TOTAL, "every producer got every record in");
+        assert!(
+            refused > 0,
+            "a 12-slot engine under a 4-producer flood must refuse something"
+        );
+        assert_eq!(
+            harness.metrics.queue_rejected_full.total(),
+            refused as u64,
+            "every refusal is counted exactly once"
+        );
+
+        let outcome = pipeline.stop(Duration::from_secs(30));
+        assert!(outcome.drained, "{outcome:?}");
+        assert_eq!(pipeline.pending(), 0);
+        assert_eq!(pipeline.depth(), (0, 0));
+        assert_eq!(
+            harness.rows(),
+            TOTAL as i64,
+            "one committed row per admitted record: none lost, none duplicated"
+        );
+        assert_eq!(harness.metrics.events_persisted.get(), TOTAL as u64);
+        let accepted = harness.metrics.events_accepted.with("INFO").get()
+            + harness.metrics.events_accepted.with("ERROR").get();
+        assert_eq!(
+            accepted, TOTAL as u64,
+            "each record was admitted exactly once"
+        );
+        assert_eq!(
+            harness.metrics.events_dropped.total(),
+            0,
+            "a refusal is answered, never silently dropped"
+        );
+        assert_eq!(harness.metrics.events_duplicate.get(), 0);
+        assert!(harness.metrics.batch_flushes.get() > 0);
+    }
+
+    #[test]
+    fn concurrent_durable_acks_agree_with_the_rows_on_disk() {
+        const PRODUCERS: usize = 4;
+        const PER_PRODUCER: usize = 100;
+        const TOTAL: usize = PRODUCERS * PER_PRODUCER;
+
+        let harness = Harness::new();
+        let pipeline = harness.pipeline(PipelineConfig {
+            ack_mode: AckMode::Durable,
+            normal_capacity: 8,
+            priority_capacity: 4,
+            batch_size: 16,
+            batch_delay: Duration::from_millis(5),
+            ..PipelineConfig::from_config(&Config::default())
+        });
+
+        let mut handles = Vec::new();
+        for producer in 0..PRODUCERS {
+            let pipeline = Arc::clone(&pipeline);
+            handles.push(thread::spawn(move || {
+                let mut own: Vec<oneshot::Receiver<Result<(), StorageError>>> = Vec::new();
+                for index in 0..PER_PRODUCER {
+                    let level = if index % 4 == 0 { "ERROR" } else { "WARN" };
+                    let message = format!("durable {producer} {index}");
+                    loop {
+                        match pipeline.admit(prepared(level, &message)) {
+                            Ok(Ack::Pending(rx)) => {
+                                own.push(rx);
+                                break;
+                            }
+                            Ok(Ack::Immediate) => {
+                                panic!("a durable ack must never be answered immediately")
+                            }
+                            Err(AdmitError::Full { .. }) => thread::yield_now(),
+                            Err(other) => panic!("unexpected {other:?}"),
+                        }
+                    }
+                }
+                own
+            }));
+        }
+        let mut receivers = Vec::new();
+        for handle in handles {
+            receivers.extend(handle.join().expect("producer thread"));
+        }
+        assert_eq!(receivers.len(), TOTAL);
+
+        let outcome = pipeline.stop(Duration::from_secs(30));
+        assert!(outcome.drained, "{outcome:?}");
+
+        // Every admitted record gets a verdict, and a verdict of success is a row.
+        let runtime = runtime();
+        let mut committed = 0usize;
+        let mut failed = 0usize;
+        for rx in receivers {
+            match runtime.block_on(rx) {
+                Ok(Ok(())) => committed += 1,
+                Ok(Err(_)) | Err(_) => failed += 1,
+            }
+        }
+        assert_eq!(
+            committed + failed,
+            TOTAL,
+            "every admitted record was answered, none left hanging"
+        );
+        assert_eq!(
+            failed, 0,
+            "the drain succeeded, so nothing may be reported as un-stored"
+        );
+        assert_eq!(
+            harness.rows(),
+            committed as i64,
+            "one row per acknowledged record: no loss, no double count"
+        );
+        assert_eq!(harness.metrics.events_persisted.get(), committed as u64);
+        assert_eq!(harness.metrics.events_dropped.total(), 0);
     }
 }
