@@ -1933,12 +1933,18 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
 
 
 class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):
-    def __init__(self, sessions, rules, pipeline, bot_username: str, version: str) -> None:
+    def __init__(self, sessions, rules, pipeline, bot_username: str, version: str,
+                 log_policy=None) -> None:
         self._sessions = sessions
         self._rules = rules
         self._pipeline = pipeline
         self._bot_username = bot_username
         self._version = version
+        # The producer-side collection policy lives in this process, so only it
+        # can answer "what is Core actually collecting?". Optional to keep the
+        # servicer constructible in tests that do not boot the logging stack;
+        # a missing policy is reported as unavailable rather than as a zero.
+        self._log_policy = log_policy
 
     async def GetSystemStats(self, request, context):
         s = self._pipeline.stats
@@ -1959,6 +1965,36 @@ class SystemStatusControlServicer(pb_grpc.SystemStatusControlServiceServicer):
             total_messages_rewritten=s.rewritten,
             bot_username=self._bot_username,
             version=self._version,
+        )
+
+    async def GetLogPolicy(self, request, context):
+        """Report the collection policy this process enforces, honestly.
+
+        The control plane used to hard-code this scope as unavailable because
+        nothing here could be read. The policy is per producer and decided from
+        this process's own environment, so the real answer has to come from
+        inside Core — never estimated by the API, and never zero-filled: a zero
+        would read as "nothing was suppressed", the opposite of the truth.
+        """
+        policy = self._log_policy
+        if policy is None:
+            return pb.LogPolicyResponse(
+                available=False,
+                reason="no collection policy attached to this core process",
+            )
+        snap = policy.snapshot()
+        return pb.LogPolicyResponse(
+            available=True,
+            configured_levels=list(snap.get("configured_levels", [])),
+            effective_levels=list(snap.get("levels", [])),
+            diagnostic_active=bool(snap.get("diagnostic_active")),
+            diagnostic_until=int(snap.get("diagnostic_until") or 0),
+            verbose_rate_per_second=float(snap.get("verbose_rate_per_second") or 0.0),
+            emitted=int(snap.get("emitted") or 0),
+            emitted_security=int(snap.get("emitted_security") or 0),
+            suppressed_level=int(snap.get("suppressed_level") or 0),
+            suppressed_rate=int(snap.get("suppressed_rate") or 0),
+            diagnostic_activations=int(snap.get("diagnostic_activations") or 0),
         )
 
 

@@ -10,7 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"autoforward/internal/grpcclient"
 	"autoforward/internal/logpolicy"
+	pb "autoforward/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // The control plane is where an operator changes what the system records, so the
@@ -54,9 +59,50 @@ func decode(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	return out
 }
 
-func TestLogPolicy_ReportsTheScopeOfEachAnswer(t *testing.T) {
+// fakeCorePolicyClient stands in for atf-core's SystemStatusControlService. It
+// answers GetLogPolicy (or fails) so the control plane's behaviour can be pinned
+// without a live core: what matters is that the API reports what core said,
+// including when core says nothing readable.
+type fakeCorePolicyClient struct {
+	pb.SystemStatusControlServiceClient
+	resp *pb.LogPolicyResponse
+	err  error
+}
+
+func (f *fakeCorePolicyClient) GetLogPolicy(
+	ctx context.Context, in *pb.LogPolicyRequest, opts ...grpc.CallOption,
+) (*pb.LogPolicyResponse, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.resp, nil
+}
+
+// withCore attaches a core client to otherwise policy-only handlers.
+func withCore(h *Handlers, system pb.SystemStatusControlServiceClient) *Handlers {
+	h.c = &grpcclient.Clients{System: system}
+	return h
+}
+
+func TestLogPolicy_ReportsCorePolicyReadFromTheCoreProcess(t *testing.T) {
 	policy := logpolicy.New(nil, 0)
+	// Core reports lower-case levels (its own configured/effective sets) plus a
+	// live diagnostic window, so the API's rendering of them is what is pinned.
+	expires := time.Now().Add(3 * time.Minute).Unix()
 	h, _ := newPolicyHandlers(policy)
+	withCore(h, &fakeCorePolicyClient{resp: &pb.LogPolicyResponse{
+		Available:             true,
+		ConfiguredLevels:      []string{"ERROR", "WARN", "CRITICAL"},
+		EffectiveLevels:       []string{"WARN", "ERROR", "CRITICAL"},
+		DiagnosticActive:      true,
+		DiagnosticUntil:       expires,
+		VerboseRatePerSecond:  20,
+		Emitted:               41,
+		EmittedSecurity:       3,
+		SuppressedLevel:       7,
+		SuppressedRate:        2,
+		DiagnosticActivations: 1,
+	}})
 
 	rec := httptest.NewRecorder()
 	h.LogPolicy(rec, adminRequest("GET", "/logs/policy", ""))
@@ -95,18 +141,95 @@ func TestLogPolicy_ReportsTheScopeOfEachAnswer(t *testing.T) {
 		t.Fatal("process-local counters must say that they are process-local")
 	}
 
+	// The core scope must be what core answered — not defaults the API assumed.
 	core, ok := scopes["core"].(map[string]any)
 	if !ok {
 		t.Fatal("the core scope must be present")
 	}
-	if core["available"] != false {
-		t.Fatalf("core has no readable policy; reporting it as available would be a lie: %v", core)
+	if core["available"] != true {
+		t.Fatalf("a core that answered must be reported as available: %v", core)
 	}
-	if _, invented := core["counters"]; invented {
-		t.Fatal("an unreadable scope must not carry invented counters")
+	coreLevels, _ := core["effective_levels"].([]any)
+	if len(coreLevels) != 3 || coreLevels[0] != "WARN" {
+		t.Fatalf("core's effective levels must be the ones core reported, got %v", core["effective_levels"])
 	}
-	if reason, _ := core["reason"].(string); reason == "" {
-		t.Fatal("an unavailable scope must explain why")
+	coreCounters, _ := core["counters"].(map[string]any)
+	if coreCounters == nil {
+		t.Fatalf("core's counters must be reported when core reports them: %v", core)
+	}
+	for key, want := range map[string]float64{
+		"emitted": 41, "emitted_security": 3, "suppressed_level": 7,
+		"suppressed_rate": 2, "diagnostic_activations": 1,
+	} {
+		if got, _ := coreCounters[key].(float64); got != want {
+			t.Fatalf("core counter %q = %v, want %v (%v)", key, coreCounters[key], want, coreCounters)
+		}
+	}
+	if core["diagnostic_active"] != true {
+		t.Fatal("an open core diagnostic window must be visible here")
+	}
+	if remaining, _ := core["diagnostic_seconds_remaining"].(float64); remaining <= 0 || remaining > 180 {
+		t.Fatalf("the remaining window must be derived from core's expiry, got %v", core["diagnostic_seconds_remaining"])
+	}
+	// A core counter is process-local: presenting it as a system total would let
+	// an operator believe suppression is over when another process is doing it.
+	if scope, _ := core["counter_scope"].(string); !strings.Contains(scope, "atf-core") {
+		t.Fatalf("core counters must be labelled process-local to core, got %q", scope)
+	}
+}
+
+// The regression pin for this feature: before GetLogPolicy existed the core scope
+// was hard-coded unavailable, and the tempting "fix" is to render zeros instead.
+// A zero reads as "nothing was suppressed", so every unreadable state must stay
+// unavailable, name the reason, and carry no counters or levels at all.
+func TestLogPolicy_UnreadableCoreScopeIsNeverZeroFilled(t *testing.T) {
+	cases := []struct {
+		name       string
+		system     pb.SystemStatusControlServiceClient
+		wantReason string
+	}{
+		{
+			name:       "no core client configured",
+			system:     nil,
+			wantReason: "client",
+		},
+		{
+			name:       "core unreachable",
+			system:     &fakeCorePolicyClient{err: status.Error(codes.Unavailable, "connection refused")},
+			wantReason: "failed",
+		},
+		{
+			name:       "core answers without a policy",
+			system:     &fakeCorePolicyClient{resp: &pb.LogPolicyResponse{Available: false, Reason: "no collection policy attached to this core process"}},
+			wantReason: "no collection policy attached",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := newPolicyHandlers(logpolicy.New(nil, 0))
+			if tc.system != nil {
+				withCore(h, tc.system)
+			}
+			rec := httptest.NewRecorder()
+			h.LogPolicy(rec, adminRequest("GET", "/logs/policy", ""))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("an unreadable scope is still a successful read, got %d", rec.Code)
+			}
+			core := decode(t, rec)["scopes"].(map[string]any)["core"].(map[string]any)
+			if core["available"] != false {
+				t.Fatalf("an unreadable core scope must not claim availability: %v", core)
+			}
+			reason, _ := core["reason"].(string)
+			if !strings.Contains(reason, tc.wantReason) {
+				t.Fatalf("reason %q must explain the situation (want %q)", reason, tc.wantReason)
+			}
+			if _, invented := core["counters"]; invented {
+				t.Fatal("an unreadable scope must not carry invented counters")
+			}
+			if _, invented := core["effective_levels"]; invented {
+				t.Fatal("an unreadable scope must not carry levels it did not read")
+			}
+		})
 	}
 }
 
@@ -295,8 +418,14 @@ func TestDiagnosticsMutations_RefuseAnInstanceWithoutAPolicy(t *testing.T) {
 	}
 }
 
-func TestLoggingHealth_ReportsUnknownRatherThanHealthyForWhatItCannotSee(t *testing.T) {
+func TestLoggingHealth_ReportsCoreFromCoreItself(t *testing.T) {
 	h, _ := newPolicyHandlers(logpolicy.New(nil, 0))
+	withCore(h, &fakeCorePolicyClient{resp: &pb.LogPolicyResponse{
+		Available:       true,
+		EffectiveLevels: []string{"WARN", "ERROR", "CRITICAL"},
+		Emitted:         17,
+		SuppressedLevel: 4,
+	}})
 	rec := httptest.NewRecorder()
 	h.LoggingHealth(rec, adminRequest("GET", "/logs/health", ""))
 
@@ -310,10 +439,20 @@ func TestLoggingHealth_ReportsUnknownRatherThanHealthyForWhatItCannotSee(t *test
 		svc := raw.(map[string]any)
 		if svc["service"] == "atf-core" {
 			sawCore = true
-			// Core has no logging telemetry yet. Reporting it "healthy" would be
-			// the same invention as reporting zero suppressed events.
-			if svc["status"] != "unknown" {
-				t.Fatalf("core's logging health is unknown, got %v", svc["status"])
+			// Core's policy is readable now, so "unknown" would hide a real
+			// answer and "healthy" without evidence would be an invention.
+			if svc["status"] != "healthy" {
+				t.Fatalf("a core that answered its policy is healthy, got %v (%v)", svc["status"], svc)
+			}
+			counters, _ := svc["counters"].(map[string]any)
+			if counters == nil {
+				t.Fatalf("core's counters must be surfaced when readable: %v", svc)
+			}
+			if got, _ := counters["emitted"].(float64); got != 17 {
+				t.Fatalf("core's emitted count must be core's own, got %v", counters["emitted"])
+			}
+			if scope, _ := svc["counter_scope"].(string); !strings.Contains(scope, "atf-core") {
+				t.Fatalf("core counters must be labelled process-local, got %q", scope)
 			}
 		}
 		if _, ok := svc["observed_at"]; !ok {
@@ -321,6 +460,34 @@ func TestLoggingHealth_ReportsUnknownRatherThanHealthyForWhatItCannotSee(t *test
 		}
 	}
 	if !sawCore {
-		t.Fatal("core must appear in the logging chain, even as unknown")
+		t.Fatal("core must appear in the logging chain")
 	}
+}
+
+// An unreachable core must degrade the chain rather than being omitted or shown
+// as healthy: the point of this endpoint is telling "quiet" from "not being fed".
+func TestLoggingHealth_DegradesWhenCoreCannotAnswer(t *testing.T) {
+	h, _ := newPolicyHandlers(logpolicy.New(nil, 0))
+	withCore(h, &fakeCorePolicyClient{err: status.Error(codes.Unavailable, "connection refused")})
+	rec := httptest.NewRecorder()
+	h.LoggingHealth(rec, adminRequest("GET", "/logs/health", ""))
+
+	body := decode(t, rec)
+	if body["status"] != "degraded" {
+		t.Fatalf("a core that cannot answer must degrade the chain, got %v", body["status"])
+	}
+	for _, raw := range body["services"].([]any) {
+		svc := raw.(map[string]any)
+		if svc["service"] != "atf-core" {
+			continue
+		}
+		if svc["status"] != "unavailable" {
+			t.Fatalf("an unreachable core is unavailable, got %v", svc["status"])
+		}
+		if detail, _ := svc["detail"].(string); !strings.Contains(detail, "failed") {
+			t.Fatalf("the failure must be named, got %q", detail)
+		}
+		return
+	}
+	t.Fatal("core must appear in the logging chain")
 }
