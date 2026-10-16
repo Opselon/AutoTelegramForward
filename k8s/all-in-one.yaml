@@ -5,6 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: autotelegramforward
     app.kubernetes.io/part-of: atf-platform
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -18,6 +19,25 @@ spec:
   resources:
     requests:
       storage: 5Gi
+---
+# The logger engine owns its own archive: never shared with Core's
+# ReadWriteOnce volume, and the retired Python archive in `atf-data-pvc` is
+# never reopened or written.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: atf-logger-pvc
+  namespace: autoforward
+  labels:
+    app.kubernetes.io/name: autotelegramforward
+    app.kubernetes.io/component: logger
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -38,7 +58,6 @@ data:
   ATF_API_ADDR: "http://atf-api:8080"
   PORT: "8080"
   ATF_DB_PATH: "/app/data/atf.db"
-  ATF_LOGS_DB_PATH: "/app/data/atf_logs.db"
 ---
 apiVersion: v1
 kind: Secret
@@ -55,6 +74,7 @@ stringData:
   ATF_MASTER_KEY: "CHANGE_ME_RANDOM_MASTER_KEY_32_CHARS"
   ATF_API_KEY: ""
 # Logger Microservice
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -81,11 +101,36 @@ spec:
           envFrom:
             - configMapRef:
                 name: atf-config
+          env:
+            # Rust engine: its own archive; the retired Python engine's dead
+            # ATF_LOGS_DB_PATH knob is gone.
+            - name: ATF_LOGGER_DB_PATH
+              value: /app/data/atf_logs_rust.db
+            - name: ATF_LOGGER_METRICS_LISTEN
+              value: 0.0.0.0:9109
           ports:
             - containerPort: 50052
               name: grpc
+            - containerPort: 9109
+              name: metrics
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
-            - name: data
+            - name: logger-data
               mountPath: /app/data
           resources:
             requests:
@@ -94,10 +139,12 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+      # The engine drains its ingest queue on SIGTERM before exiting.
+      terminationGracePeriodSeconds: 30
       volumes:
-        - name: data
+        - name: logger-data
           persistentVolumeClaim:
-            claimName: atf-data-pvc
+            claimName: atf-logger-pvc
 ---
 apiVersion: v1
 kind: Service

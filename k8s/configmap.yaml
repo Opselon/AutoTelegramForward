@@ -18,7 +18,6 @@ data:
   ATF_API_ADDR: "http://atf-api:8080"
   PORT: "8080"
   ATF_DB_PATH: "/app/data/atf.db"
-  ATF_LOGS_DB_PATH: "/app/data/atf_logs.db"
 ---
 apiVersion: v1
 kind: Secret
