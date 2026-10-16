@@ -1,14 +1,44 @@
-"""LogClient — async gRPC client the other services use to push debug logs
-to the Logger microservice. Non-blocking, fire-and-forget, never raises into
-the caller's business logic."""
+"""LogClient — async gRPC client the other services use to push logs to the
+Logger microservice. Non-blocking, fire-and-forget, never raises into the
+caller's business logic.
+
+Delivery contract (what this client's numbers mean)
+--------------------------------------------------
+* **accepted** — admitted to this process's bounded in-memory queue. NOT
+  durable yet; `accepted - sent` is what a crash would lose.
+* **sent**     — the Logger answered `success=true`. Whether that means
+  "queued in the Logger's memory" or "committed to disk" is the Logger's
+  contract, not this client's (see docs/logging-contract.md).
+* **failed**   — an RPC attempt errored. The record is KEPT and retried, so a
+  failure is never itself a loss.
+* **dropped**  — the queue was full and the oldest queued record was evicted to
+  make room (bounded-memory policy: keep the newest context).
+* **pending**  — still queued or in flight when the process stopped.
+
+At-least-once, never at-most-once: a timeout can duplicate a record the Logger
+already stored. Suppressing duplicates needs a stable event id plus a unique
+index in the store — a schema/contract change, deliberately not faked here.
+
+The defect this file used to have: `_pump` removed a record from the queue and
+dropped it on the floor whenever the RPC raised, so a Logger outage ate exactly
+the records that explained the outage.
+"""
 
 import asyncio
 import json
 import logging
+import random
 import time
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 import grpc
+
+# Bounded retry backoff: exponential with jitter, capped so a long outage does
+# not turn into a hammer-storm when the Logger returns.
+_BACKOFF_BASE = 0.25
+_BACKOFF_CAP = 5.0
+# How many queued records one successful round trip may drain before yielding.
+_MAX_BURST = 512
 
 logger = logging.getLogger("atf.logclient")
 
@@ -41,8 +71,24 @@ class LogClient:
         # queue keeps the newest context, which is what an operator needs.
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
         self._task: Optional[asyncio.Task] = None
-        self._dropped_total = 0
         self._max_queue_size = max_queue_size
+        self._closing = False
+        # A record that left the queue but has not been delivered yet. It is the
+        # whole reason this file exists: it is retried until the Logger takes it.
+        self._pending_entry: Optional[Any] = None
+        # Records that have left the queue and are not acknowledged yet: being
+        # sent right now, or held for retry after a failure. Without this
+        # counter a drain cannot see mid-burst work and cancels the pump while a
+        # record is in the air — which is how a "clean" shutdown lost one.
+        self._in_flight = 0
+        self._burst_limit = min(_MAX_BURST, max_queue_size)
+        # Counters — the honest accounting an operator needs during an outage.
+        self._accepted_total = 0
+        self._sent_total = 0
+        self._failed_total = 0
+        self._dropped_total = 0
+        self._disabled_total = 0
+        self._shutdown_dropped_total = 0
 
     def connect(self) -> None:
         if self._channel is not None:
@@ -50,54 +96,79 @@ class LogClient:
         self._channel = grpc.aio.insecure_channel(self._address)
         self._stub = _pb_grpc().LogControlServiceStub(self._channel)
 
+    def _backoff(self, consecutive_errors: int) -> float:
+        """Bounded exponential backoff with jitter (see the constants above)."""
+        window = min(_BACKOFF_BASE * (2 ** min(consecutive_errors - 1, 5)), _BACKOFF_CAP)
+        return window * (0.5 + random.random())
+
     async def start(self) -> None:
+        """Begin delivery. Records logged before this call are not lost: the
+        queue is the buffer, and the pump drains whatever is already in it."""
         self.connect()
         if self._task is None or self._task.done():
             self._task = asyncio.create_task(self._pump())
 
     async def _pump(self) -> None:
-        """Drain the queue; reconnect on transient errors.
+        """Deliver records in order; never drop one because an RPC failed.
 
-        Failures are counted and mirrored to the local logger, never swallowed
-        silently — a broken pipe is the classic reason a service looks "fine"
-        while its logs vanish.
+        A failure keeps the record in `_pending_entry` and backs off; the queue
+        behind it is untouched, so nothing is reordered to the tail and nothing
+        is lost. Delivery is at-least-once (see the module docstring).
         """
         consecutive_errors = 0
         while True:
-            entry = await self._queue.get()
+            if self._closing and self._queue.empty() and self._pending_entry is None:
+                return
+            if self._pending_entry is None:
+                self._pending_entry = await self._queue.get()
+                self._in_flight += 1
             try:
-                await self._stub.Log(_pb().LogRequest(entry=entry))
+                await self._stub.Log(_pb().LogRequest(entry=self._pending_entry))
+                self._sent_total += 1
+                self._pending_entry = None
+                self._in_flight -= 1
                 if consecutive_errors:
-                    logger.info("log client recovered after %d failure(s)", consecutive_errors)
+                    logger.info(
+                        "log client recovered after %d failure(s); sent=%d failed=%d "
+                        "dropped=%d pending=%d",
+                        consecutive_errors, self._sent_total, self._failed_total,
+                        self._dropped_total, self.pending,
+                    )
                 consecutive_errors = 0
-                # v14: drain any records that accumulated while we were
-                # blocked, batching them so a burst does not cost one
-                # round-trip per entry. Keeps ordering within the burst.
-                for _ in range(self._max_queue_size):
+                # v14: drain any records that accumulated while we were blocked,
+                # batching them so a burst does not cost one round-trip per
+                # entry. Ordering within the burst is preserved.
+                for _ in range(self._burst_limit):
                     try:
                         burst_entry = self._queue.get_nowait()
                     except asyncio.QueueEmpty:
                         break
+                    self._in_flight += 1
                     try:
                         await self._stub.Log(_pb().LogRequest(entry=burst_entry))
+                        self._sent_total += 1
+                        self._in_flight -= 1
                     except Exception:
-                        # A mid-burst failure: requeue this entry and let the
-                        # error path below handle reconnect/backoff.
-                        try:
-                            self._queue.put_nowait(burst_entry)
-                        except Exception:
-                            pass
+                        # Keep the record that failed (and everything queued
+                        # behind it): it becomes the pending head, so order is
+                        # preserved and the error path below applies backoff.
+                        self._pending_entry = burst_entry
                         raise
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 consecutive_errors += 1
-                # Keep the entry; it will be retried on the next iteration
-                # after a reconnect.
+                self._failed_total += 1
+                # The record STAYS pending — this is the fix. It is not dropped,
+                # and this counter is a failure count, not a loss count.
                 if consecutive_errors in (1, 5, 20, 100) or consecutive_errors % 500 == 0:
                     logger.error(
-                        "log client could not reach %s (%s): dropped %d entries "
+                        "log client cannot reach %s (%s): %d consecutive failure(s), "
+                        "retrying the same record; sent=%d dropped=%d pending=%d "
                         "[tail=%s]",
                         self._address, type(exc).__name__, consecutive_errors,
-                        (entry.message or "")[:120],
+                        self._sent_total, self._dropped_total, self.pending,
+                        (getattr(self._pending_entry, "message", "") or "")[:120],
                     )
                 # Recreate the channel only occasionally: recreating on every
                 # failure turns a short outage into a connection storm.
@@ -110,8 +181,10 @@ class LogClient:
                     self._channel = None
                     self._stub = None
                     self.connect()
-                # Avoid a tight loop when the server is down.
-                await asyncio.sleep(min(0.25 * consecutive_errors, 2.0))
+                # Avoid a tight loop when the server is down: exponential with
+                # jitter so N services that lost the logger together do not
+                # re-synchronize into a connection storm.
+                await asyncio.sleep(self._backoff(consecutive_errors))
 
     def log(
         self,
@@ -124,7 +197,8 @@ class LogClient:
         user_id: int = 0,
         correlation_id: str = "",
     ) -> None:
-        if not self._enabled or self._stub is None:
+        if not self._enabled or self._closing:
+            self._disabled_total += 1
             return
         try:
             # Promote ids found in the structured detail onto the record's own
@@ -155,6 +229,7 @@ class LogClient:
                 user_id=int(user_id or 0),
                 correlation_id=correlation_id or "",
             )
+            self._accepted_total += 1
             try:
                 self._queue.put_nowait(entry)
             except asyncio.QueueFull:
@@ -214,11 +289,69 @@ class LogClient:
             pb.LogStatsRequest(rule_id=rule_id, user_id=int(user_id or 0))
         )
 
-    async def close(self) -> None:
+    # ------------------------------------------------------------------ #
+    # introspection
+    # ------------------------------------------------------------------ #
+    @property
+    def pending(self) -> int:
+        """Records admitted but not yet acknowledged: queued + in flight."""
+        return self._queue.qsize() + self._in_flight
+
+    def counters(self) -> Dict[str, int]:
+        """Delivery accounting (see the module docstring for each name)."""
+        return {
+            "accepted": self._accepted_total,
+            "sent": self._sent_total,
+            "failed": self._failed_total,
+            "dropped": self._dropped_total,
+            "disabled": self._disabled_total,
+            "shutdown_dropped": self._shutdown_dropped_total,
+            "pending": self.pending,
+            "queue_capacity": self._max_queue_size,
+        }
+
+    # ------------------------------------------------------------------ #
+    # shutdown
+    # ------------------------------------------------------------------ #
+    async def flush(self, timeout: float = 5.0) -> int:
+        """Try to deliver everything already queued, bounded by `timeout`.
+
+        Returns the number of records still undelivered — 0 means every record
+        reached the Logger. Never discards silently: whatever is left is
+        reported and counted as `shutdown_dropped`.
+        """
+        deadline = time.monotonic() + max(0.0, timeout)
+        while self.pending and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+        return self.pending
+
+    async def close(self, drain_timeout: float = 3.0) -> None:
+        """Stop accepting, drain what we can, then shut down — reporting loss.
+
+        A bounded drain is the honest choice: a Logger that is down must not
+        hold the process open forever, but records that did not make it are
+        counted and logged loudly rather than vanishing.
+        """
+        self._closing = True
+        leftover = await self.flush(drain_timeout)
+        if leftover:
+            self._shutdown_dropped_total += leftover
+            logger.error(
+                "log client shutting down with %d undelivered record(s) after a "
+                "%.1fs drain (sent=%d failed=%d dropped=%d) — these are LOST",
+                leftover, drain_timeout, self._sent_total,
+                self._failed_total, self._dropped_total,
+            )
         if self._task and not self._task.done():
             self._task.cancel()
+            try:
+                await self._task
+            except BaseException:
+                pass
         if self._channel:
             await self._channel.close()
+            self._channel = None
+            self._stub = None
 
 
 # Noise filter — pyrogram's TCP layer spams "Send exception: ConnectionResetError"
