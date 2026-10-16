@@ -15,6 +15,9 @@ from .value_objects import (
     RoutingType,
     TriggerEvent,
 )
+# branding.py is dependency-free, so a module-level import is safe here (unlike
+# content_policy, which is imported lazily inside the property below).
+from . import branding as branding_policy
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids an import cycle
     from .content_policy import ContentPolicy
@@ -764,6 +767,100 @@ class ForwardRule:
     @target_policies.setter
     def target_policies(self, val: Any) -> None:
         self._set_policy_key("target_policies", dict(val) if isinstance(val, dict) else {})
+
+    # ------------------------------------------------------------------ #
+    # Branding hop (A -> C -> B)
+    #
+    # Our own channel C is posted first and the final target B receives a
+    # *forward of C*, so B's header names C instead of the source channel.
+    # The storage shape and the trigger semantics live in core/domain/branding.py
+    # (``metadata["branding_hop"]``, a JSON blob — no migration needed); these
+    # properties are the single write path every client uses, which is what keeps
+    # the bot, the dashboard and the mobile app from disagreeing.
+    # ------------------------------------------------------------------ #
+    @property
+    def branding_config(self) -> Dict[str, Any]:
+        """Raw stored branding config (never None, never shared with the caller)."""
+        return branding_policy.read_config(self)
+
+    @branding_config.setter
+    def branding_config(self, val: Any) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        if not isinstance(val, dict):
+            val = {}
+        merged = branding_policy.read_config(self)
+        merged.update(val)
+        self.metadata[branding_policy.BRANDING_META_KEY] = merged
+
+    def _branding_key(self, key: str) -> Any:
+        return branding_policy.read_config(self)[key]
+
+    def _set_branding_key(self, key: str, value: Any) -> None:
+        branding_policy.write_config(self, {key: value})
+
+    @property
+    def branding_triggers_enabled(self) -> bool:
+        """When False the hop is unconditional; when True the triggers below gate it."""
+        return bool(self._branding_key("triggers_enabled"))
+
+    @branding_triggers_enabled.setter
+    def branding_triggers_enabled(self, val: Any) -> None:
+        self._set_branding_key("triggers_enabled", bool(val))
+
+    @property
+    def branding_origin_ids(self) -> List[str]:
+        """Forward-origin chat ids that arm the hop."""
+        return list(self._branding_key("origin_ids"))
+
+    @branding_origin_ids.setter
+    def branding_origin_ids(self, val: Any) -> None:
+        self._set_branding_key("origin_ids", val)
+
+    @property
+    def branding_origin_titles(self) -> List[str]:
+        """Forward-origin channel *names* ("Forwarded from ...") that arm the hop."""
+        return list(self._branding_key("origin_titles"))
+
+    @branding_origin_titles.setter
+    def branding_origin_titles(self, val: Any) -> None:
+        self._set_branding_key("origin_titles", val)
+
+    @property
+    def branding_keywords(self) -> List[str]:
+        """Message-text words that arm the hop."""
+        return list(self._branding_key("keywords"))
+
+    @branding_keywords.setter
+    def branding_keywords(self, val: Any) -> None:
+        self._set_branding_key("keywords", val)
+
+    @property
+    def branding_match_mode(self) -> str:
+        """``any`` (at least one trigger matches) or ``all`` (every one must)."""
+        return str(self._branding_key("match_mode"))
+
+    @branding_match_mode.setter
+    def branding_match_mode(self, val: Any) -> None:
+        self._set_branding_key("match_mode", val)
+
+    @property
+    def branding_require_forward(self) -> bool:
+        """Gate: refuse the hop unless the message is itself a forward."""
+        return bool(self._branding_key("require_forward"))
+
+    @branding_require_forward.setter
+    def branding_require_forward(self, val: Any) -> None:
+        self._set_branding_key("require_forward", bool(val))
+
+    @property
+    def branding_force_forward(self) -> bool:
+        """Stage 2 sends a native forward of C — the only way B can show C."""
+        return bool(self._branding_key("force_forward"))
+
+    @branding_force_forward.setter
+    def branding_force_forward(self, val: Any) -> None:
+        self._set_branding_key("force_forward", bool(val))
 
     @property
     def content_policy(self) -> "ContentPolicy":

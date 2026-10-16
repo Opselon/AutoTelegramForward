@@ -13,6 +13,7 @@ from urllib.parse import urlparse, urlunparse
 
 from ..domain.entities import EvaluationResult, FilterRule, ForwardRule, MessagePayload
 from ..domain.value_objects import DeliveryStatus, FilterAction, LinkPolicy, MediaType, RoutingDecision
+from . import branding
 
 URL_REGEX = re.compile(
     r"(https?://[^\s]+|www\.[^\s]+|(?:https?://)?(?:t(?:elegram)?\.(?:me|dog))/[^\s]+|@[A-Za-z0-9_]{3,32})",
@@ -527,18 +528,46 @@ class SmartRoutingEngine:
 
         return True, "matched"
 
+    def should_brand_hop(self, payload: MessagePayload, rule: ForwardRule) -> Tuple[bool, str]:
+        """The one branding-hop decision: should *this* message go A -> C -> B?
+
+        Shared on purpose. The dispatcher, the durable queue and the dry-run
+        simulation all call this, so the route an operator is shown in the bot or
+        the dashboard is the route the engine actually takes. Keeping a second,
+        simpler check in the dispatcher is what let the hop be "configured" in the
+        UI while messages still went straight to B.
+        """
+        vip = (False, "")
+        vip_configured = self.vip_criteria_configured(rule)
+        if vip_configured:
+            vip = self.is_vip_origin(payload, rule)
+        return branding.should_hop(payload, rule, vip=vip, vip_configured=vip_configured)
+
+    def vip_criteria_configured(self, rule: ForwardRule) -> bool:
+        """Whether this task declared *any* VIP/origin criteria of its own."""
+        criteria = getattr(rule, "detection_criteria", None) or {}
+        if not isinstance(criteria, dict):
+            criteria = {}
+        for key in ("forward_origin_chat_ids", "origin_chat_ids",
+                    "forward_origin_titles", "origin_titles",
+                    "text_contains", "keywords", "regex_pattern", "text_regex"):
+            if criteria.get(key):
+                return True
+        if criteria.get("require_forward_origin"):
+            return True
+        return str(getattr(rule, "message_category", "ALL") or "ALL").upper() in ("VIP", "VIP_ONLY")
+
     def decide_route(self, payload: MessagePayload, rule: ForwardRule) -> Tuple[RoutingDecision, str]:
         """Determine concrete routing path according to rule configuration and message provenance."""
         matched, reason = self.evaluate_rule(payload, rule)
         if not matched:
             return RoutingDecision.DROP, reason
 
-        use_mid = bool(getattr(rule, "use_intermediate", False) and rule.intermediate_channel_id)
-        is_vip, vip_reason = self.is_vip_origin(payload, rule)
+        take_hop, hop_reason = self.should_brand_hop(payload, rule)
         f_mode = getattr(rule.forward_mode, "value", str(rule.forward_mode))
 
-        if use_mid and is_vip:
-            return RoutingDecision.BRANDING_VIA_C, f"VIP matched ({vip_reason}): routed via intermediate C with branding forward"
+        if take_hop:
+            return RoutingDecision.BRANDING_VIA_C, f"Routed via intermediate C with branding forward ({hop_reason})"
         if f_mode == "DIRECT_FORWARD":
             return RoutingDecision.DIRECT_FORWARD, "Native forward directly from A to B"
         if f_mode == "CUSTOM_HEADER_COPY" or getattr(rule, "custom_header", None):

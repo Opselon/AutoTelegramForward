@@ -22,6 +22,7 @@ import time
 from collections import defaultdict, deque
 from typing import Any, Optional
 
+from ...domain import branding
 from ...domain.entities import MessagePayload
 from ...domain.services import AdvancedSettingsEngine, CaptionManagementEngine, safe_text_preview
 from ...domain.value_objects import ContentMode, ForwardMode
@@ -386,14 +387,17 @@ class MessageDispatcher:
             )
             return False
 
-        # Smart routing: intermediate VIP hop
-        # A VIP rule may route Main → Intermediate → Final target.
-        # When enabled, the message is first delivered to the intermediate
-        # channel, and the final target receives a message whose forward
-        # header belongs to the *intermediate* channel — never the original.
+        # Branding hop (A -> C -> B)
+        # Our own channel C is posted first, then the final target receives a
+        # *forward of C*, so its forward header names C — never the original
+        # source channel. The decision is the domain's, not a local shortcut:
+        # `should_brand_hop` is what the bot/dashboard preview shows, so the two
+        # can never disagree about which messages take the hop.
         hop_msg_id = None
-        if bool(getattr(rule, "use_intermediate", False)) and getattr(rule, "intermediate_channel_id", ""):
-            inter_id = str(rule.intermediate_channel_id).strip()
+        branding_plan = None
+        take_hop, hop_reason = self._brand_hop_decision(payload, rule)
+        if take_hop:
+            inter_id = branding.channel_id(rule)
             final_targets = [t for t in targets if str(t).strip() != inter_id]
             if final_targets and inter_id not in (str(payload.chat_id),):
                 try:
@@ -402,8 +406,25 @@ class MessageDispatcher:
                         hop_msg_id = getattr(hop_res[0], "id", None) or getattr(hop_res[0], "message_id", None)
                     elif hop_res is not None:
                         hop_msg_id = getattr(hop_res, "id", None) or getattr(hop_res, "message_id", None)
-                    # Final delivery uses the intermediate as its source identity.
-                    targets = final_targets
+                    if hop_msg_id:
+                        # Final delivery uses the intermediate as its source identity.
+                        targets = final_targets
+                        branding_plan = {
+                            "chat_id": inter_id,
+                            "message_id": int(hop_msg_id),
+                            "force_forward": branding.force_forward(rule),
+                            "reason": hop_reason,
+                        }
+                        logger.info(
+                            "[PIPELINE:BRANDING] rule=%s %s -> C=%s msg=%s -> %d target(s) (%s)",
+                            getattr(rule, "id", "?")[:8], payload.chat_id, inter_id,
+                            hop_msg_id, len(targets), hop_reason,
+                        )
+                    else:
+                        logger.warning(
+                            "[PIPELINE:BRANDING] rule=%s hop to C=%s returned no message id — delivering directly",
+                            getattr(rule, "id", "?")[:8], inter_id,
+                        )
                 except Exception as exc:
                     key, sev, recoverable = tg_error(exc)
                     logger.warning(
@@ -411,12 +432,24 @@ class MessageDispatcher:
                         inter_id, tg_detail(exc), recoverable,
                     )
                     # Fall back to direct delivery without the intermediate hop.
+            elif not final_targets:
+                logger.warning(
+                    "[PIPELINE:BRANDING] rule=%s has no target other than C=%s — delivering directly",
+                    getattr(rule, "id", "?")[:8], inter_id,
+                )
 
         # If durable queue manager is active, delegate delivery non-blockingly!
         if self._queue_manager is not None:
             any_queued = False
             for target in targets:
-                ok = await self._queue_manager.enqueue_delivery(rule, payload, str(target), text, evaluation)
+                # The hop is handed to the queue as *job state*, not as a local
+                # variable: the worker is a different process pass and used to
+                # receive source=A, so B was served a forward of A (the original
+                # header) while an orphan copy stayed behind in C. Passing the
+                # plan makes the queued delivery reproduce the hop exactly.
+                ok = await self._queue_manager.enqueue_delivery(
+                    rule, payload, str(target), text, evaluation, branding=branding_plan,
+                )
                 if ok:
                     any_queued = True
             return any_queued
@@ -455,6 +488,21 @@ class MessageDispatcher:
                     await asyncio.sleep(min(wait_seconds(exc, default=5) + 1, 300))
                 continue  # a multi-target rule must still try its other targets
         return ok_any
+
+    def _brand_hop_decision(self, payload: MessagePayload, rule) -> tuple:
+        """Should this message take the branding hop? (shared decision, see domain).
+
+        Prefers the routing service the pipeline already holds; falls back to the
+        module-level rule only when no service is wired (bare unit tests), so the
+        production path and the preview path can never diverge.
+        """
+        routing = getattr(self._use_case, "_routing", None)
+        if routing is not None and hasattr(routing, "should_brand_hop"):
+            try:
+                return routing.should_brand_hop(payload, rule)
+            except Exception as exc:  # never let the decision break delivery
+                logger.warning("branding decision failed (%s) — using the module rule", exc)
+        return branding.should_hop(payload, rule)
 
     async def _hop_intermediate(self, payload: MessagePayload, rule, text: str, inter_id: str) -> Any:
         """Deliver the message to the intermediate (VIP hop) channel exactly once.
@@ -522,30 +570,36 @@ class MessageDispatcher:
         if topic_id > 0:
             thread_kwargs["message_thread_id"] = topic_id
 
-        # If intermediate hop was used, forward from intermediate channel C to B!
-        if intermediate_msg_id and bool(getattr(rule, "use_intermediate", False)) and getattr(rule, "intermediate_channel_id", ""):
-            inter_id_raw = str(rule.intermediate_channel_id).strip()
+        # If the branding hop ran, stage 2 starts from C — never from A.
+        if intermediate_msg_id and branding.enabled(rule):
+            inter_id_raw = branding.channel_id(rule)
             inter_chat = int(inter_id_raw) if inter_id_raw.lstrip("-").isdigit() else inter_id_raw
-            try:
-                res = await client.forward_messages(
-                    chat_id=target, from_chat_id=inter_chat,
-                    message_ids=[int(intermediate_msg_id)],
-                    **thread_kwargs,
-                )
-                return res[0] if isinstance(res, list) and res else (res or True)
-            except Exception as exc:
-                key, sev, recoverable = tg_error(exc)
-                if not self._fallback_allowed(rule, key, recoverable):
+            if branding.force_forward(rule):
+                try:
+                    res = await client.forward_messages(
+                        chat_id=target, from_chat_id=inter_chat,
+                        message_ids=[int(intermediate_msg_id)],
+                        **thread_kwargs,
+                    )
+                    return res[0] if isinstance(res, list) and res else (res or True)
+                except Exception as exc:
+                    key, sev, recoverable = tg_error(exc)
+                    if not self._fallback_allowed(rule, key, recoverable):
+                        logger.warning(
+                            "forward from C (%s) → %s failed (%s) — fallback disabled",
+                            inter_chat, target, tg_detail(exc),
+                        )
+                        raise
                     logger.warning(
-                        "forward from C (%s) → %s failed (%s) — fallback disabled",
+                        "forward from C (%s) → %s failed (%s) — falling back to a clean copy of C's post",
                         inter_chat, target, tg_detail(exc),
                     )
-                    raise
-                logger.warning(
-                    "forward from C (%s) → %s failed (%s) — falling back to copy",
-                    inter_chat, target, tg_detail(exc),
-                )
-                return await self._deliver_copy(client, payload, rule, text, target, mode_val, caption_tmpl, thread_kwargs)
+            # A clean copy of C's own post: still branded content, and still never
+            # the original source's forward header.
+            return await self._deliver_copy(
+                client, payload, rule, text, target, mode_val, caption_tmpl, thread_kwargs,
+                src_chat=inter_chat, src_msg_id=int(intermediate_msg_id),
+            )
 
         # A. NATIVE FORWARD — preserves Telegram's real forward header
         if f_mode_val == "DIRECT_FORWARD":
@@ -688,8 +742,16 @@ class MessageDispatcher:
             return await client.send_message(chat_id=target, text=fallback_text)
         raise RuntimeError("Protected content cannot be copied or re-uploaded")
 
-    async def _deliver_copy(self, client, payload, rule, text, target, mode_val, caption_tmpl, thread_kwargs: Optional[dict] = None) -> Any:
+    async def _deliver_copy(self, client, payload, rule, text, target, mode_val, caption_tmpl, thread_kwargs: Optional[dict] = None, src_chat: Any = None, src_msg_id: Optional[int] = None) -> Any:
+        """Copy (or re-upload) one message to ``target``.
+
+        ``src_chat``/``src_msg_id`` default to the incoming message, and are only
+        overridden for the branding hop's stage 2 — where the content must be read
+        back from our own channel C rather than from the original source.
+        """
         thread_kwargs = thread_kwargs or {}
+        src_chat = int(payload.chat_id) if src_chat is None else src_chat
+        src_msg_id = int(payload.message_id) if src_msg_id is None else int(src_msg_id)
         # CUSTOM_HEADER_COPY / COPY_MESSAGE:
         if payload.has_media:
             raw_caption = text or caption_tmpl or ""
@@ -700,8 +762,8 @@ class MessageDispatcher:
             res = None
             try:
                 res = await client.copy_message(
-                    chat_id=target, from_chat_id=int(payload.chat_id),
-                    message_id=payload.message_id,
+                    chat_id=target, from_chat_id=src_chat,
+                    message_id=src_msg_id,
                     caption=(formatted_caption or None) if mode_val != "MEDIA_ONLY" else None,
                     **thread_kwargs,
                 )
