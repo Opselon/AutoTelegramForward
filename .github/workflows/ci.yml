@@ -84,7 +84,10 @@ jobs:
         run: docker build -f Dockerfile.api -t atf-api .
 
       - name: Build logger image
-        run: docker build -f Dockerfile.logger -t atf-logger .
+        # The production logging service is the Rust engine; build the recipe the
+        # deployed `logger` service actually uses so a broken root-context build
+        # surfaces here rather than at deploy time.
+        run: docker build -f Dockerfile.logger-rust -t atf-logger .
 
       # The release workflow builds and pushes this image; a stale toolchain
       # pin here once broke a published release (rust:1.85 vs transitive deps

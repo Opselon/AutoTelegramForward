@@ -52,7 +52,7 @@
     {
       "id": "OBS_CENTRAL_LOGGER",
       "name": "Central Logger gRPC microservice",
-      "entry_points": ["logger/main.py#LogControlServicer", "logger/log_client.py#LogClient"],
+      "entry_points": ["rust/logger/src/transport.rs#LogControlService", "logger/log_client.py#LogClient"],
       "db_tables": ["logs (logger-owned SQLite)"],
       "completion_condition": "durable insert before ack; bounded queue with drop-oldest shedding counter",
       "implementation_status": "IMPLEMENTED"

@@ -22,6 +22,14 @@ One binary / one script manages all microservices (core + logger + web + api):
 Works in two modes:
   * source mode   — `python atf.py ...`  (creates .venv on first run)
   * frozen mode   — the PyInstaller `atf` binary (deps baked in, no venv)
+
+Local dev mode runs the Rust logging engine (`rust/logger`, binary `atf-logger`)
+instead of the removed Python `logger/main.py`: its own archive
+`data/atf_logs_rust.db`, gRPC on `127.0.0.1:6002`, metrics on `127.0.0.1:9108`.
+9108 (not the engine's 9109, which the container image binds for its own
+HEALTHCHECK) keeps a locally-run engine and a Docker deployment side by side.
+Resolve the binary with `ATF_LOGGER_BIN`, or build it once with:
+  cargo build --release --manifest-path rust/logger/Cargo.toml
 """
 
 import argparse
@@ -34,6 +42,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import NoReturn
 
 # --------------------------------------------------------------------------- #
 # Paths & mode detection
@@ -80,6 +89,21 @@ WEB_CANDIDATES = [
     ROOT / "web" / "backend" / "target" / "release" / ("atf-web-backend.exe" if IS_WIN else "atf-web-backend"),
     ROOT / "web" / "backend" / "target" / "debug" / ("atf-web-backend.exe" if IS_WIN else "atf-web-backend"),
 ]
+
+# Local dev defaults for the Rust logging engine (it replaced logger/main.py).
+# The metrics listener is deliberately 9108, NOT the engine's 9109 that the
+# container image binds for its own HEALTHCHECK: a locally-run engine and a
+# Docker deployment can then run side by side without a bind clash.
+LOGGER_LOCAL_DB = ROOT / "data" / "atf_logs_rust.db"
+LOGGER_LOCAL_LISTEN = "127.0.0.1:6002"
+LOGGER_LOCAL_METRICS_LISTEN = "127.0.0.1:9108"
+
+# Resolution order for the engine binary: $ATF_LOGGER_BIN, a cargo release
+# build, then a cargo debug build; anything else is an actionable error.
+LOGGER_BIN_NAME = "atf-logger.exe" if IS_WIN else "atf-logger"
+LOGGER_RELEASE_BIN = ROOT / "rust" / "logger" / "target" / "release" / LOGGER_BIN_NAME
+LOGGER_DEBUG_BIN = ROOT / "rust" / "logger" / "target" / "debug" / LOGGER_BIN_NAME
+LOGGER_BUILD_CMD = "cargo build --release --manifest-path rust/logger/Cargo.toml"
 
 # Public api_id/api_hash from the open-source Telegram Desktop client.
 DEFAULT_API_ID = 17349
@@ -145,7 +169,7 @@ def warn(msg: str) -> None:
     print(f"⚠️  {msg}")
 
 
-def die(msg: str, code: int = 1):
+def die(msg: str, code: int = 1) -> NoReturn:
     print(f"✗ {msg}")
     raise SystemExit(code)
 
@@ -329,6 +353,46 @@ def build_web() -> "Path | None":
     return find_web()
 
 
+def find_logger() -> "Path | None":
+    """Resolve the Rust logging engine in the documented order.
+
+    `$ATF_LOGGER_BIN` wins, then a cargo release build, then a cargo debug
+    build. Returns None when none exists; callers turn that into an actionable
+    error rather than starting nothing and leaving port 6002 dead.
+    """
+    candidates = []
+    env_bin = os.environ.get("ATF_LOGGER_BIN", "").strip()
+    if env_bin:
+        candidates.append(Path(env_bin))
+    candidates.append(LOGGER_RELEASE_BIN)
+    candidates.append(LOGGER_DEBUG_BIN)
+    for cand in candidates:
+        try:
+            if cand.is_file():
+                if not IS_WIN:
+                    try:
+                        cand.chmod(cand.stat().st_mode | 0o755)
+                    except OSError:
+                        pass
+                return cand
+        except OSError:
+            continue
+    return None
+
+
+def require_logger() -> Path:
+    """The engine binary, or exit telling the operator exactly how to build it."""
+    exe = find_logger()
+    if exe is None:
+        die(
+            "Rust logging engine (atf-logger) not found.\n"
+            f"  Build it once:  {LOGGER_BUILD_CMD}\n"
+            "  Or point ATF_LOGGER_BIN at an existing binary.\n"
+            "  (Docker mode needs no local build — `atf docker up` builds the image.)"
+        )
+    return exe
+
+
 # --------------------------------------------------------------------------- #
 # Easy Setup Wizard (`atf setup`)
 # --------------------------------------------------------------------------- #
@@ -438,7 +502,12 @@ def _service_env() -> dict:
     return {
         **os.environ,
         "ATF_GRPC_PORT": "6001",
+        # Rust logging engine: gRPC, its own archive, and a metrics port that is
+        # not 9109 (the port the container image binds internally).
         "ATF_LOGGER_PORT": "6002",
+        "ATF_LOGGER_LISTEN": LOGGER_LOCAL_LISTEN,
+        "ATF_LOGGER_METRICS_LISTEN": LOGGER_LOCAL_METRICS_LISTEN,
+        "ATF_LOGGER_DB_PATH": str(LOGGER_LOCAL_DB),
         "ATF_LOGGER_ADDR": "localhost:6002",
         "ATF_CORE_GRPC": "localhost:6001",
     }
@@ -448,6 +517,7 @@ def cmd_start(_args=None) -> None:
     if not CONFIG.exists():
         die("No config.yaml found — run: atf setup")
     ensure_venv()
+    logger_exe = require_logger()
     api_exe = find_api() or build_api()
     web_exe = find_web() or build_web()
     env = _service_env()
@@ -481,16 +551,22 @@ def cmd_start(_args=None) -> None:
     lf = open(log_file, "ab")
 
     try:
-        # Step 1: Logger Microservice
-        step("Starting Logger microservice (gRPC port 6002) ...")
+        # Step 1: Rust logging engine (replaces the removed Python logger/main.py)
+        step("Starting Rust logging engine (gRPC port 6002) ...")
+        LOGGER_LOCAL_DB.parent.mkdir(parents=True, exist_ok=True)
         logger_proc = subprocess.Popen(
-            [str(PY_EXE), "-m", "logger.main"] if not FROZEN else [str(PY_EXE), "logger"],
+            [
+                str(logger_exe),
+                "--db", str(LOGGER_LOCAL_DB),
+                "--listen", LOGGER_LOCAL_LISTEN,
+                "--metrics-listen", LOGGER_LOCAL_METRICS_LISTEN,
+            ],
             cwd=ROOT, env=env, stdout=lf, stderr=subprocess.STDOUT, start_new_session=(not IS_WIN)
         )
         new_pids["logger"] = logger_proc.pid
         if not wait_for_port(6002, timeout=12.0):
-            raise RuntimeError("Logger microservice failed to bind port 6002 within timeout.")
-        ok("Logger microservice is ready (port 6002).")
+            raise RuntimeError("Rust logging engine failed to bind port 6002 within timeout.")
+        ok("Rust logging engine is ready (port 6002).")
 
         # Step 2: Core Microservice (Telegram MTProto & gRPC)
         step("Starting Core microservice (bot + gRPC port 6001) ...")
@@ -543,7 +619,7 @@ def cmd_start(_args=None) -> None:
         if web_exe:
             print(f"  • 🌐 Web Dashboard:    http://localhost:{web_port}")
         print(f"  • 🤖 Telegram Bot:     Active (core:6001)")
-        print(f"  • 📝 Logger Daemon:    Active (logger:6002)")
+        print(f"  • 📝 Rust Log Engine:  Active (grpc :6002, metrics :9108)")
         if api_exe:
             print(f"  • 🔌 Go REST API:      http://localhost:8080")
         print(f"  • 📄 Consolidated Log: {log_file}  (or: atf logs)")
@@ -738,6 +814,7 @@ def cmd_health(_args=None) -> None:
     print(f"• SQLite Database    : {db_file} ({'OK' if db_file.exists() else 'MISSING'})")
     print(f"• Web Gateway binary : {find_web() or 'built in web/backend (Axum)'}")
     print(f"• Go API binary      : {find_api() or 'not built (optional)'}")
+    print(f"• Rust Logger engine : {find_logger() or f'MISSING — {LOGGER_BUILD_CMD}'}")
     docker_mode, container_state = _docker_container_states()
     print(f"• Docker Engine      : {'available' if have('docker') else 'not installed'}")
     print(f"• Kubernetes kubectl : {'available' if have('kubectl') else 'not installed'}")
@@ -755,6 +832,7 @@ def cmd_health(_args=None) -> None:
         print(f"• Deployment mode    : local (systemd / pid files)")
         print(f"• Core gRPC port 6001: {'ACTIVE' if port_open(6001) else 'INACTIVE'}")
         print(f"• Logger port 6002   : {'ACTIVE' if port_open(6002) else 'INACTIVE'}")
+        print(f"• Logger metrics 9108: {'ACTIVE (http://127.0.0.1:9108/metrics)' if port_open(9108) else 'INACTIVE'}")
         print(f"• Web Gateway :8088  : {'ACTIVE (http://localhost:8088)' if port_open(8088) else 'INACTIVE'}")
         print(f"• REST API port 8080 : {'ACTIVE (http://localhost:8080)' if port_open(8080) else 'INACTIVE'}")
     print("=" * 64)
@@ -786,17 +864,21 @@ def _service_install_systemd(exe: str) -> None:
     d.mkdir(parents=True, exist_ok=True)
     web_exe = find_web() or ROOT / "bin" / "atf-web-backend"
     api_exe = find_api() or ROOT / "bin" / "atf-api"
+    # Local mode runs the Rust engine directly; if it is not built yet the unit
+    # falls back to the `atf logger` shim, which fails loudly with build steps.
+    logger_exe = find_logger()
 
     logger_unit = f"""[Unit]
-Description=AutoTelegramForward Logger Microservice
+Description=AutoTelegramForward Rust Logging Engine
 After=network.target
 
 [Service]
 Type=simple
 WorkingDirectory={ROOT}
-Environment="ATF_LOGGER_PORT=6002"
-Environment="ATF_LOGGER_HOST=127.0.0.1"
-ExecStart={exe} logger
+Environment="ATF_LOGGER_DB_PATH={LOGGER_LOCAL_DB}"
+Environment="ATF_LOGGER_LISTEN={LOGGER_LOCAL_LISTEN}"
+Environment="ATF_LOGGER_METRICS_LISTEN={LOGGER_LOCAL_METRICS_LISTEN}"
+ExecStart={logger_exe if logger_exe else f"{exe} logger"}
 Restart=always
 RestartSec=3
 
@@ -1126,13 +1208,24 @@ def cmd_core(_args=None) -> None:
 
 
 def cmd_logger(_args=None) -> None:
-    os.environ.setdefault("ATF_LOGGER_PORT", "6002")
-    if FROZEN:
-        sys.path.insert(0, str(BUNDLE))
-    from logger.main import main
-    import asyncio
+    """Foreground Rust logging engine (`atf logger`).
 
-    asyncio.run(main())
+    Replaces the removed `logger.main` import: the engine is a standalone
+    binary now, so run it directly with the local dev defaults (own SQLite
+    archive, gRPC on 6002, metrics on 9108).
+    """
+    exe = require_logger()
+    env = _service_env()
+    LOGGER_LOCAL_DB.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            str(exe),
+            "--db", env["ATF_LOGGER_DB_PATH"],
+            "--listen", env["ATF_LOGGER_LISTEN"],
+            "--metrics-listen", env["ATF_LOGGER_METRICS_LISTEN"],
+        ],
+        cwd=ROOT, env=env,
+    )
 
 
 def cmd_api(_args=None) -> None:

@@ -49,24 +49,30 @@ this same check in its `clean-install` job and tears the stack down with
 
 ## 4. Volumes / backup / restore
 
-Persistent state lives in the named volume `atf-data`:
+Persistent state lives in two named volumes:
 
-- `/app/data/atf.db` — core state
-- `/app/data/logger.db` — structured logs
+- `atf-data` — core state: `/app/data/atf.db`, plus the **retired** Python
+  logger archive `/app/data/logger.db`. Nothing writes that archive any more
+  (the logging service is the Rust engine); it is kept as a historical record
+  and must not be deleted.
+- `logger-rust-data` — the Rust logging engine's archive:
+  `/app/data/atf_logs_rust.db`.
 
 ```bash
-# backup
+# backup (both volumes)
 docker compose stop
-docker run --rm -v atf-data:/data -v "$PWD":/backup alpine \
-  tar -czf /backup/atf-data-$(date +%F).tar.gz -C /data .
+for v in atf-data logger-rust-data; do
+  docker run --rm -v "$v":/data -v "$PWD":/backup alpine \
+    tar -czf "/backup/$v-$(date +%F).tar.gz" -C /data .
+done
 docker compose start
 
 # restore
 docker compose down
-docker volume rm <project>_atf-data   # project prefix from `docker volume ls`
-docker volume create <project>_atf-data
-docker run --rm -v <project>_atf-data:/data -v "$PWD":/backup alpine \
-  tar -xzf /backup/atf-data-<date>.tar.gz -C /data
+docker volume rm <project>_logger-rust-data  # project prefix from `docker volume ls`
+docker volume create <project>_logger-rust-data
+docker run --rm -v <project>_logger-rust-data:/data -v "$PWD":/backup alpine \
+  tar -xzf /backup/logger-rust-data-<date>.tar.gz -C /data
 docker compose up -d
 ```
 
@@ -86,7 +92,8 @@ docker compose up -d --build
 ```
 
 The database schema is forward-compatible within a major product version;
-if a release notes a breaking migration, back up `atf-data` first.
+if a release notes a breaking migration, back up both volumes (`atf-data`,
+`logger-rust-data`) first.
 Image tags follow the product version
 (`ghcr.io/<owner>/atf-core:<version>`); see `release/manifest.json`
 (`server.images`) for the exact tags of a release.

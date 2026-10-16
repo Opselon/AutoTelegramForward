@@ -1,9 +1,9 @@
-# ATF Logger (Rust engine) — opt-in image.
-# Build:  docker build -f Dockerfile.logger-rust -t atf-logger-rust:latest .
-# Run:    docker compose --profile rust-logger up -d
-# The Rust engine is NOT the default logging service. Until it is explicitly
-# promoted, the Python logger (Dockerfile.logger -> service `logger`) stays the
-# active store and the default `docker compose up` never starts this one.
+# ATF Logger (Rust engine) — the production logging service.
+# Build:  docker build -f Dockerfile.logger-rust -t atf-logger .
+# Run:    docker compose up -d --no-deps logger     (service `logger`, gRPC :50052)
+# This is the recipe the deployed `logger` service uses. The superseded Python
+# logger (Dockerfile.logger, logger/main.py) is gone; its archive is kept as a
+# historical record and is never written again.
 FROM rust:1.90-slim-bookworm AS build
 
 WORKDIR /build
@@ -48,8 +48,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -fsS http://127.0.0.1:9109/healthz || exit 1
 
 ENTRYPOINT ["/usr/local/bin/atf-logger"]
-# Defaults chosen for an isolated container: its own archive and an
-# externally-visible metrics bind. gRPC keeps its documented default 50052,
-# which does NOT collide with the Python logger because each is inside its own
-# container and only core reaches them, by DNS name, over the atf-net network.
+# Defaults chosen for an isolated container: its own archive (never the retired
+# Python archive) and an externally-visible metrics bind so the image's own
+# HEALTHCHECK works with no extra flags. gRPC keeps its documented default 50052;
+# consumers reach it by DNS name (`logger:50052`) over the compose network.
 CMD ["--db", "/app/data/atf_logs_rust.db", "--metrics-listen", "0.0.0.0:9109"]

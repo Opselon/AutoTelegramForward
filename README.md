@@ -109,7 +109,7 @@ AutoTelegramForward v2.0 is engineered with strict, fail-closed microservice bou
                                              │ gRPC (:50051)           │ gRPC (:50052)
                                              ▼                         ▼
                                 ┌─────────────────────────┐ ┌─────────────────────────┐
-                                │   Python MTProto Core   │ │   Central Logger Svc    │
+                                │   Python MTProto Core   │ │  Rust Logger Engine     │
                                 │  Forwarder Engine (:50051) │ (:50052, SQLite DB) │
                                 │  ClientPool + SQLite DB │ └─────────────────────────┘
                                 └─────────────────────────┘
@@ -132,9 +132,10 @@ AutoTelegramForward v2.0 is engineered with strict, fail-closed microservice bou
    - Domain-Driven Design (DDD) rule evaluation pipeline, content sanitization, deduplication, and AI transformations.
    - Encrypted SQLite persistence (`data/atf.db`) utilizing AES-256-GCM for sessions and keys.
 
-4. **Python Central Logger Service (`:50052`)**
-   - Autonomous telemetry and structured observability microservice with dedicated storage (`data/atf_logs.db`).
+4. **Rust Central Logger Engine (`:50052`)**
+   - Autonomous telemetry and structured observability microservice with dedicated storage (`data/atf_logs_rust.db`).
    - Standardized `[PIPELINE:...]` logging with live retention, filtering, and queryable gRPC/REST APIs.
+   - Ingest-time secret redaction, at-least-once producer delivery and a bounded diagnostic window.
 
 5. **Flutter Mobile Client (Android & iOS)**
    - Production native mobile application with secure credential and password persistence.
@@ -317,7 +318,7 @@ cd mobile && flutter test
 
 - **Zero Plaintext Credentials**: All session strings, bot tokens, and AI API keys are encrypted at rest with AES-256-GCM derived from your `master_key`.
 - **Fail-Closed Multi-Tenant Defense**: Authorization is strictly enforced using immutable numeric Telegram User IDs (`user.id`), never mutable usernames.
-- **Network Isolation**: Python Core and Logger microservices bind to private gRPC interfaces and do not expose unauthenticated public ports.
+- **Network Isolation**: The Python Core and the Rust logger bind to private gRPC interfaces and do not expose unauthenticated public ports (the logger's metrics/health surface is container-internal).
 - **Audit Logging**: Sensitive tokens and private credentials are automatically redacted (`[REDACTED]`) before reaching logs or error traces.
 
 ---

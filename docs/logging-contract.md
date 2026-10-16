@@ -224,9 +224,11 @@ with row-count and checksum verification — never an unbounded automatic
 migration during normal startup. Existing SQLite data is never silently
 discarded.
 
-### Acknowledgement semantics (measured on the Python engine)
+### Acknowledgement semantics (inherited from the retired Python engine, kept by the Rust engine)
 
-Read off `logger/main.py` and covered by tests in `logger/tests/test_logger.py`:
+Read off the retired `logger/main.py` (now `rust/logger/src/ingest.rs` +
+`storage*.rs`, covered by the crate's own tests and by
+`scripts/acceptance/logger_acceptance.py`):
 
 * `insert()` commits **before** the RPC answers `success=true`, so the
   producer's `sent` means *committed*, not *queued*.
@@ -246,11 +248,18 @@ Read off `logger/main.py` and covered by tests in `logger/tests/test_logger.py`:
 
 ## 5. Measured baseline (Python Logger engine, before migration)
 
-Reproduce with:
+This baseline was produced by `scripts/bench/logger_baseline.py`, which imported
+the Python engine directly (`from logger.main import …`) and was removed with it.
+The historical numbers below were **not** re-confirmed against the Rust engine.
 
 ```bash
-python -m scripts.bench.logger_baseline --rates 100,1000,10000,50000 --seconds 5 --producers 4
+# the old command (the script no longer exists):
+# python -m scripts.bench.logger_baseline --rates 100,1000,10000,50000 --seconds 5 --producers 4
 ```
+
+The current harness for the Rust engine is `scripts/bench/logger_rust_bench.py`;
+its measured results and exact commands are in
+[`docs/logger-benchmarks.md`](logger-benchmarks.md).
 
 Measured on this repository's Python logger (SQLite, one connection behind a
 lock, commit per insert, no admission control):

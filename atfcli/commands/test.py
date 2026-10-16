@@ -16,9 +16,16 @@ def _run_tests(ctx, args) -> int:
 
     if suite in ("all", "py", "python"):
         ctx.out.step("Running Python test suite...")
-        res = ctx.repo.run_streaming([ctx.repo.python(), "-m", "pytest", "core/tests", "logger/tests"], check=False)
-        if res != 0:
-            failed = True
+        # Only hand pytest the directories that exist: the Python logger engine
+        # and its tests were removed with the Rust cutover, and a missing path
+        # would otherwise turn the suite into a collection error.
+        dirs = [d for d in ("core/tests", "logger/tests") if ctx.repo.exists(d)]
+        if dirs:
+            res = ctx.repo.run_streaming([ctx.repo.python(), "-m", "pytest", *dirs], check=False)
+            if res != 0:
+                failed = True
+        else:
+            ctx.out.warn("no Python test directories found — nothing to run")
 
     if suite in ("all", "go"):
         ctx.out.step("Running Go test suite...")
