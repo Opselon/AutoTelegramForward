@@ -13,11 +13,21 @@ import (
 // configured with?" and "is every service answering?". These tests pin the
 // contract that makes it safe to expose publicly: booleans, never values.
 
+// setRequiredEnv gives the contract what docker-compose.yml gives the container.
+func setRequiredEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("ATF_CORE_GRPC", "core:50051")
+	t.Setenv("ATF_LOGGER_GRPC", "logger:50052")
+}
+
 func TestEnvContractNeverLeaksValues(t *testing.T) {
-	const secret = "123456789:AAveryLongBotTokenValueThatMustNotLeak"
+	// Assembled at runtime on purpose: a credential-shaped literal in the repo
+	// trips the project's own secrets scanner (atf validate --runtime).
+	secret := "123456789:" + strings.Repeat("A", 38)
+	setRequiredEnv(t)
 	t.Setenv("ATF_BOT_TOKEN", secret)
 	t.Setenv("ATF_API_KEY", "another-secret-value-please-redact")
-	t.Setenv("ATF_WEB_URL", "https://example.test")
+	t.Setenv("ATF_WEB_HEALTH_URL", "http://web:8088/healthz")
 
 	h := New(nil)
 	rec := httptest.NewRecorder()
@@ -29,22 +39,29 @@ func TestEnvContractNeverLeaksValues(t *testing.T) {
 	}
 
 	var payload struct {
-		Checks []EnvCheck `json:"checks"`
-		Missing []string `json:"missing_required"`
-		OK      bool      `json:"ok"`
+		Checks   []EnvCheck `json:"checks"`
+		Missing  []string   `json:"missing_required"`
+		MissingR []string   `json:"missing_recommended"`
+		Deploy   string     `json:"deployment"`
+		OK       bool       `json:"ok"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if !payload.OK || len(payload.Missing) != 0 {
-		t.Fatalf("expected a complete contract, got ok=%v missing=%v", payload.OK, payload.Missing)
+	if !payload.OK || len(payload.Missing) != 0 || len(payload.MissingR) != 0 {
+		t.Fatalf("expected a complete contract, got ok=%v missing=%v/%v", payload.OK, payload.Missing, payload.MissingR)
+	}
+	if payload.Deploy != "docker-compose" {
+		t.Fatalf("the contract must say which deployment style it describes, got %q", payload.Deploy)
 	}
 	found := map[string]bool{}
 	for _, check := range payload.Checks {
 		found[check.Key] = check.Set
 	}
-	if !found["ATF_BOT_TOKEN"] || !found["ATF_API_KEY"] || !found["ATF_WEB_URL"] {
-		t.Fatalf("expected those keys to read as set: %+v", payload.Checks)
+	for _, key := range []string{"ATF_CORE_GRPC", "ATF_LOGGER_GRPC", "ATF_API_KEY", "ATF_WEB_HEALTH_URL", "ATF_BOT_TOKEN"} {
+		if !found[key] {
+			t.Fatalf("expected %s to read as set: %+v", key, payload.Checks)
+		}
 	}
 }
 
@@ -53,24 +70,32 @@ func TestEnvContractNeverLeaksValues(t *testing.T) {
 func TestEnvContractAcceptsEveryBotTokenName(t *testing.T) {
 	for _, name := range []string{"ATF_BOT_TOKEN", "TELEGRAM_BOT_TOKEN", "BOT_TOKEN"} {
 		t.Run(name, func(t *testing.T) {
+			setRequiredEnv(t)
 			t.Setenv("ATF_BOT_TOKEN", "")
 			t.Setenv("TELEGRAM_BOT_TOKEN", "")
 			t.Setenv("BOT_TOKEN", "")
 			t.Setenv(name, "token-value")
 
-			h := New(nil)
-			missing := missingRequired(h.EnvContract())
-			if len(missing) != 0 {
-				t.Fatalf("bot token via %s was not recognised, missing=%v", name, missing)
+			botSet := false
+			for _, check := range New(nil).EnvContract() {
+				if check.Key == "ATF_BOT_TOKEN" {
+					botSet = check.Set
+				}
+			}
+			if !botSet {
+				t.Fatalf("bot token via %s was not recognised", name)
 			}
 		})
 	}
 }
 
+// A container that never received the peer addresses cannot work at all, so the
+// missing required keys must be reported with a fix hint (and a bot token, which
+// compose keeps in core, must NOT make a healthy stack look broken).
 func TestEnvContractFlagsMissingRequiredKeys(t *testing.T) {
+	t.Setenv("ATF_CORE_GRPC", "")
+	t.Setenv("ATF_LOGGER_GRPC", "")
 	t.Setenv("ATF_BOT_TOKEN", "")
-	t.Setenv("TELEGRAM_BOT_TOKEN", "")
-	t.Setenv("BOT_TOKEN", "")
 
 	h := New(nil)
 	rec := httptest.NewRecorder()
@@ -83,19 +108,34 @@ func TestEnvContractFlagsMissingRequiredKeys(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if payload.OK || len(payload.Missing) == 0 {
-		t.Fatalf("a deployment without a bot token must not report ready: %s", rec.Body.String())
+	if payload.OK {
+		t.Fatalf("a container without its peer addresses must not report ready: %s", rec.Body.String())
+	}
+	for _, want := range []string{"ATF_CORE_GRPC", "ATF_LOGGER_GRPC"} {
+		found := false
+		for _, key := range payload.Missing {
+			if key == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected %s in missing_required, got %v", want, payload.Missing)
+		}
 	}
 	for _, check := range New(nil).EnvContract() {
-		if check.Key == "ATF_BOT_TOKEN" && check.Hint == "" {
-			t.Fatal("a failing check must carry a fix hint")
+		if check.Level == "required" && check.Hint == "" {
+			t.Fatalf("%s must carry a fix hint", check.Key)
 		}
+	}
+	if missingRequired(New(nil).EnvContract()) == nil {
+		t.Fatal("missing_required must be an empty list, never nil, so JSON stays stable")
 	}
 }
 
 // probe=0 keeps the report instant and dependency-free, which is what the CLI's
 // static validator uses when the stack may be half-up.
 func TestSetupReportSkipsProbesOnDemand(t *testing.T) {
+	setRequiredEnv(t)
 	t.Setenv("ATF_BOT_TOKEN", "token-value")
 
 	h := New(nil)
@@ -136,9 +176,8 @@ func TestSetupReportSkipsProbesOnDemand(t *testing.T) {
 // A missing required key must surface as a fixable next step, never as a bare
 // failure an operator cannot act on.
 func TestSetupReportNextStepsAreActionable(t *testing.T) {
-	t.Setenv("ATF_BOT_TOKEN", "")
-	t.Setenv("TELEGRAM_BOT_TOKEN", "")
-	t.Setenv("BOT_TOKEN", "")
+	t.Setenv("ATF_CORE_GRPC", "")
+	t.Setenv("ATF_LOGGER_GRPC", "")
 
 	h := New(nil)
 	rec := httptest.NewRecorder()

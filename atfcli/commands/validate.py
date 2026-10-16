@@ -504,6 +504,7 @@ def check_container_env_contract(ctx, report: Report, **_) -> None:
 
     checks = payload.get("checks") or []
     missing_container = [str(key) for key in (payload.get("missing_required") or [])]
+    missing_recommended = [str(key) for key in (payload.get("missing_recommended") or [])]
     # A key the host file sets but the container never received means the
     # container predates the change: restarting is the fix, not editing .env.
     stale = [key for key in missing_container if key in host_env]
@@ -525,7 +526,20 @@ def check_container_env_contract(ctx, report: Report, **_) -> None:
             fix="atf setup --check  (then set the keys it reports)",
         )
         return
-    report.add("container-env", "ok", f"{client.url}: container received all {len(checks)} configuration inputs")
+    if missing_recommended:
+        report.add(
+            "container-env",
+            "warn",
+            f"{client.url}: not configured yet (optional but recommended): {', '.join(missing_recommended)}",
+            fix="atf setup --check  (it offers to generate these)",
+        )
+        return
+    deployment = payload.get("deployment") or "unknown"
+    report.add(
+        "container-env",
+        "ok",
+        f"{client.url}: container received every required and recommended input ({len(checks)} checks, {deployment})",
+    )
 
 
 def _fetch_json(url: str, timeout: float = 4.0) -> dict | None:
