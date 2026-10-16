@@ -1929,16 +1929,24 @@ class SqliteChannelCursorRepository:
         if not cursors:
             return
         now = int(time.time())
-        self._db.execute("BEGIN")
-        try:
+
+        def _write(conn) -> None:
             for chat_id, last_id in cursors.items():
-                self._db.execute(
+                conn.execute(
                     "INSERT INTO channel_cursors (chat_id, last_message_id, updated_at)"
                     " VALUES (?,?,?) ON CONFLICT(chat_id) DO UPDATE SET"
                     " last_message_id=excluded.last_message_id, updated_at=excluded.updated_at",
                     (str(chat_id), int(last_id), now),
                 )
-            self._db.execute("COMMIT")
-        except Exception:
-            self._db.execute("ROLLBACK")
-            raise
+
+        # One atomic unit through the database lock. This used to issue a bare
+        # `BEGIN` / `ROLLBACK` on the shared connection, which raced every other
+        # writer: when the connection already had a transaction open, `BEGIN`
+        # raised "cannot start a transaction within a transaction", the handler's
+        # `ROLLBACK` then raised "cannot rollback - no transaction is active",
+        # and that masking error is what reached the log
+        # ("poll: cannot persist cursors: ...") while the real cause and the
+        # cursor write were both lost. run_in_transaction serialises the write,
+        # commits on success and rolls back only when a transaction is open,
+        # never replacing the original error.
+        self._db.run_in_transaction(_write)
