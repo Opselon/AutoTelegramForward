@@ -1,0 +1,102 @@
+# AutoTelegramForward
+
+> AutoTelegramForward v2.0.0 is a self-hosted Telegram message routing platform: one task fans out from M source chats to N target chats with per-task content rules, optional AI rewriting, durable ordered delivery and a fail-closed multi-tenant control plane. It ships as four microservices (bot, core, logger, web) plus a REST API, CLI, dashboard and Flutter client.
+
+Key facts, all derived from the repository at build time:
+
+- Version: 2.0.0 (v2.0.0, 2026-10-16)
+- Source: https://github.com/Opselon/AutoTelegramForward
+- License: MIT
+- Services: 4 (core, logger, api/web gateway, bot UI)
+- UI languages: 10 (en, fa, ru, zh, pt, uz, id, es, fr, it) with enforced 1:1 catalog parity and strict English fallback
+- Localized strings: 1168
+- CLI command groups: 24
+- gRPC RPCs: 61
+- Registered REST routes parsed from api/main.go: 81
+- Media classes handled: 12
+
+## Start here
+
+- [Installation overview](https://opselon.github.io/AutoTelegramForward/getting-started/)
+- [Docker Compose deployment](https://opselon.github.io/AutoTelegramForward/getting-started/docker/)
+- [Configuration reference](https://opselon.github.io/AutoTelegramForward/getting-started/configuration/)
+- [Verification checklist](https://opselon.github.io/AutoTelegramForward/getting-started/verification/)
+- [Feature overview](https://opselon.github.io/AutoTelegramForward/features/)
+- [Architecture](https://opselon.github.io/AutoTelegramForward/architecture/)
+- [Security model and tenant isolation](https://opselon.github.io/AutoTelegramForward/security/)
+- [REST API reference](https://opselon.github.io/AutoTelegramForward/api/)
+- [CLI reference](https://opselon.github.io/AutoTelegramForward/cli/)
+- [Operations and diagnostics](https://opselon.github.io/AutoTelegramForward/operations/)
+- [Interactive transformation playground](https://opselon.github.io/AutoTelegramForward/tools/playground/)
+- [Release notes](https://opselon.github.io/AutoTelegramForward/releases/)
+- [FAQ](https://opselon.github.io/AutoTelegramForward/faq/)
+
+## Feature deep dives
+
+- [Multi-source → multi-target routing](https://opselon.github.io/AutoTelegramForward/features/multi-source-routing/): A single task can watch any number of source chats and deliver to any number of targets, with the primary pair mirrored and forum topics addressable per target.
+- [Per-task content rules](https://opselon.github.io/AutoTelegramForward/features/per-task-content-rules/): Blacklists, whitelists, link handling, regex gates, length limits and ordered replacements — evaluated cheapest-first, with per-source and per-target overrides.
+- [AI rewriting](https://opselon.github.io/AutoTelegramForward/features/ai-rewriting/): Enable or disable LLM rewriting per task, pick a provider, write your own prompts with version history, and keep forwarding even when the model is unreachable.
+- [Observability & log history](https://opselon.github.io/AutoTelegramForward/features/observability-and-logs/): Every delivery is attributable: the central logger stores queryable history with service, owner and correlation id, and dead letters can be replayed.
+- [Ordered delivery](https://opselon.github.io/AutoTelegramForward/features/ordered-delivery/): Lease-based durable workers, per-channel delivery lanes that preserve post order, atomic cursor persistence, retry with jitter, and no duplicate sends.
+- [Dedup, replies & edits](https://opselon.github.io/AutoTelegramForward/features/deduplication-and-replies/): SHA-256 content and album fingerprinting kills duplicate forwards, reply chains stay linked, and edits and deletions propagate within a bounded window.
+- [Clients & interfaces](https://opselon.github.io/AutoTelegramForward/features/clients-and-interfaces/): Telegram bot UI, React dashboard behind a Rust Axum gateway, Flutter client and a REST/gRPC control plane — all enforced against the same contract fixtures.
+- [Multilingual UI](https://opselon.github.io/AutoTelegramForward/features/multilingual-ui/): English, Persian, Russian, Chinese, Portuguese, Uzbek, Indonesian, Spanish, French and Italian share one catalog with enforced 1:1 parity.
+- [DevOps CLI & upgrades](https://opselon.github.io/AutoTelegramForward/features/devops-cli/): 24 command groups cover setup, tasks, logs, backups, docker, k8s and TLS, with a read-only validator for CI and an upgrade engine behind a health gate.
+
+## Documentation index
+
+### Getting started
+
+- [Install overview](https://opselon.github.io/AutoTelegramForward/getting-started/): Choose docker, source or portable mode and know what each gives you.
+- [Docker Compose deployment](https://opselon.github.io/AutoTelegramForward/getting-started/docker/): Run the four services with one compose file and verify the stack.
+- [Linux & Windows setup](https://opselon.github.io/AutoTelegramForward/getting-started/linux-windows/): Native installers, virtualenv setup and boot persistence.
+- [Telegram bot configuration](https://opselon.github.io/AutoTelegramForward/getting-started/telegram-bot-setup/): BotFather token, admin id, first login and the panel.
+- [Configuration & environment](https://opselon.github.io/AutoTelegramForward/getting-started/configuration/): Every environment key, with its default and secret status.
+- [Verifying the installation](https://opselon.github.io/AutoTelegramForward/getting-started/verification/): Prove each service is serving before you trust it.
+
+### New in v2.0
+
+- [Multi-source → multi-target routing](https://opselon.github.io/AutoTelegramForward/features/multi-source-routing/): One task, many sources, many targets.
+- [Per-task content rules](https://opselon.github.io/AutoTelegramForward/features/per-task-content-rules/): Blacklists, whitelists, links, regex and replacements.
+- [AI rewriting](https://opselon.github.io/AutoTelegramForward/features/ai-rewriting/): Optional LLM pass with custom prompt templates.
+- [Observability & log history](https://opselon.github.io/AutoTelegramForward/features/observability-and-logs/): Attributable logs, stats, DLQ replay.
+- [Ordered delivery](https://opselon.github.io/AutoTelegramForward/features/ordered-delivery/): Bursts delivered in posted order.
+- [Dedup, replies & edits](https://opselon.github.io/AutoTelegramForward/features/deduplication-and-replies/): No repeats, no orphaned replies.
+- [Clients & interfaces](https://opselon.github.io/AutoTelegramForward/features/clients-and-interfaces/): Bot, dashboard, mobile and API parity.
+- [Multilingual UI](https://opselon.github.io/AutoTelegramForward/features/multilingual-ui/): Ten locales with enforced 1:1 parity.
+- [DevOps CLI & upgrades](https://opselon.github.io/AutoTelegramForward/features/devops-cli/): Validate, diagnose and upgrade the stack.
+
+### Feature deep dives
+
+- [Feature overview](https://opselon.github.io/AutoTelegramForward/features/): Everything the platform does, grouped by subsystem.
+- [Automated forwarding modes](https://opselon.github.io/AutoTelegramForward/features/automated-forwarding/): Copy versus direct forward, topics and priority.
+- [Tasks & destinations](https://opselon.github.io/AutoTelegramForward/features/rules-and-destinations/): Create, edit, clone, pause and delete tasks.
+- [Text cleaner](https://opselon.github.io/AutoTelegramForward/features/text-cleaner/): URL, mention, hashtag, emoji and phone cleaning.
+- [Whitelist, blacklist & filters](https://opselon.github.io/AutoTelegramForward/features/whitelist-blacklist-filters/): Keyword gates, link rules and media filters.
+- [Header & footer shortcodes](https://opselon.github.io/AutoTelegramForward/features/headers-footers-shortcodes/): Twelve validated shortcodes for attribution.
+- [Replacements & regex](https://opselon.github.io/AutoTelegramForward/features/replacements-and-regex/): Literal and pattern replacements.
+- [Scheduling & delays](https://opselon.github.io/AutoTelegramForward/features/scheduling-and-delays/): Delays, windows and the edit guard.
+- [Media, albums & copy bypass](https://opselon.github.io/AutoTelegramForward/features/media-and-albums/): Albums and protected-channel re-upload.
+- [Backup, clone & migration](https://opselon.github.io/AutoTelegramForward/features/backup-clone-migration/): Encrypted .atf bundles.
+- [Multi-tenant security](https://opselon.github.io/AutoTelegramForward/features/multi-tenant-security/): Fail-closed isolation and encryption.
+
+### Reference
+
+- [REST API](https://opselon.github.io/AutoTelegramForward/api/): Control-plane endpoints, authentication and error model.
+- [CLI reference](https://opselon.github.io/AutoTelegramForward/cli/): Every command group, with examples.
+- [Architecture](https://opselon.github.io/AutoTelegramForward/architecture/): Services, pipeline stages, queues and storage.
+- [Security model](https://opselon.github.io/AutoTelegramForward/security/): Tenant isolation, encryption and redaction.
+- [Operations & diagnostics](https://opselon.github.io/AutoTelegramForward/operations/): Runbooks for the failures you will actually meet.
+
+### Learn
+
+- [Tutorials & recipes](https://opselon.github.io/AutoTelegramForward/tutorials/): Copy-paste walkthroughs for common setups.
+- [Template playground](https://opselon.github.io/AutoTelegramForward/tools/playground/): Try the cleaner and shortcodes in the browser.
+- [Releases](https://opselon.github.io/AutoTelegramForward/releases/): What shipped, and when.
+- [FAQ](https://opselon.github.io/AutoTelegramForward/faq/): Straight answers to the frequent questions.
+
+## Optional
+
+- [RSS feed](https://opselon.github.io/AutoTelegramForward/rss.xml): release notes and feature deep dives
+- [Search index](https://opselon.github.io/AutoTelegramForward/search.json): flat JSON of every documented page
+- [Sitemap](https://opselon.github.io/AutoTelegramForward/sitemap-index.xml)

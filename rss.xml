@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>AutoTelegramForward — releases and feature deep dives</title>
+    <link>https://opselon.github.io/AutoTelegramForward/</link>
+    <description>AutoTelegramForward is a self-hosted Telegram message routing platform. This feed carries every release note and every feature deep dive.</description>
+    <language>en</language>
+    <generator>Astro</generator>
+    <lastBuildDate>Fri, 16 Oct 2026 13:18:02 GMT</lastBuildDate>
+    <atom:link href="https://opselon.github.io/AutoTelegramForward/rss.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>v2.0 — Multi-Source Routing, Per-Task Policies, AI Control &amp; Full Observability</title>
+      <link>https://opselon.github.io/AutoTelegramForward/releases/</link>
+      <guid isPermaLink="false">https://github.com/Opselon/AutoTelegramForward/releases/tag/v2.0.0</guid>
+      <pubDate>Fri, 16 Oct 2026 12:00:00 GMT</pubDate>
+      <category>Release</category>
+      <description>v2.0 turns the forwarder into a routing platform: one task fans out from any number of sources to any number of targets, each with its own content policy. AI rewriting is switchable per task, the whole stack is observable, scriptable and upgradeable from the command line, and both clients share one contract-gated system surface. Highlights: M sources → N targets per task, with the primary mirror kept in step by a single sanctioned write path · Per-task content rules (metadata[&quot;content_policy&quot;]) plus per-source and per-target overrides that are additive only · Unicode-folded, word-boundary keyword matching — one blacklist catches Persian, Arabic and English spellings alike · ReDoS-refused regex gates, single-pass deterministic replacements and cheapest-first evaluation</description>
+    </item>
+    <item>
+      <title>DevOps CLI &amp; upgrades — AutoTelegramForward</title>
+      <link>https://opselon.github.io/AutoTelegramForward/features/devops-cli/</link>
+      <guid isPermaLink="false">https://opselon.github.io/AutoTelegramForward/features/devops-cli/</guid>
+      <pubDate>Fri, 16 Oct 2026 08:00:00 GMT</pubDate>
+      <category>Feature</category>
+      <description>24 command groups cover setup, tasks, logs, backups, docker, k8s and TLS, with a read-only validator for CI and an upgrade engine behind a health gate.</description>
+    </item>
+    <item>
+      <title>Multilingual UI — AutoTelegramForward</title>
+      <link>https://opselon.github.io/AutoTelegramForward/features/multilingual-ui/</link>
+      <guid isPermaLink="false">https://opselon.github.io/AutoTelegramForward/features/multilingual-ui/</guid>
+      <pubDate>Fri, 16 Oct 2026 07:00:00 GMT</pubDate>
+      <category>Feature</category>
+      <description>English, Persian, Russian, Chinese, Portuguese, Uzbek, Indonesian, Spanish, French and Italian share one catalog with enforced 1:1 parity.</description>
+    </item>
+    <item>
+      <title>Clients &amp; interfaces — AutoTelegramForward</title>
+      <link>https://opselon.github.io/AutoTelegramForward/features/clients-and-interfaces/</link>
+      <guid isPermaLink="false">https://opselon.github.io/AutoTelegramForward/features/clients-and-interfaces/</guid>
+      <pubDate>Fri, 16 Oct 2026 06:00:00 GMT</pubDate>
+      <category>Feature</category>
+      <description>Telegram bot UI, React dashboard behind a Rust Axum gateway, Flutter client and a REST/gRPC control plane — all enforced against the same contract fixtures.</description>
+    </item>
+    <item>
+      <title>Dedup, replies &amp; edits — AutoTelegramForward</title>
+      <link>https://opselon.github.io/AutoTelegramForward/features/deduplication-and-replies/</link>
+      <guid isPermaLink="false">https://opselon.github.io/AutoTelegramForward/features/deduplication-and-replies/</guid>
+      <pubDate>Fri, 16 Oct 2026 05:00:00 GMT</pubDate>
+      <category>Feature</category>
+      <description>SHA-256 content and album fingerprinting kills duplicate forwards, reply chains stay linked, and edits and deletions propagate within a bounded window.</description>
+    </item>
+    <item>
+      <title>Ordered delivery — AutoTelegramForward</title>
+      <link>https://opselon.github.io/AutoTelegramForward/features/ordered-delivery/</link>
+      <guid isPermaLink="false">https://opselon.github.io/AutoTelegramForward/features/ordered-delivery/</guid>
+      <pubDate>Fri, 16 Oct 2026 04:00:00 GMT</pubDate>
+      <category>Feature</category>
+      <description>Lease-based durable workers, per-channel delivery lanes that preserve post order, atomic cursor persistence, retry with jitter, and no duplicate sends.</description>
+    </item>
+    <item>
+      <title>Observability &amp; log history — AutoTelegramForward</title>
+      <link>https://opselon.github.io/AutoTelegramForward/features/observability-and-logs/</link>
+      <guid isPermaLink="false">https://opselon.github.io/AutoTelegramForward/features/observability-and-logs/</guid>
+      <pubDate>Fri, 16 Oct 2026 03:00:00 GMT</pubDate>
+      <category>Feature</category>
+      <description>Every delivery is attributable: the central logger stores queryable history with service, owner and correlation id, and dead letters can be replayed.</description>
+    </item>
+    <item>
+      <title>AI rewriting — AutoTelegramForward</title>
+      <link>https://opselon.github.io/AutoTelegramForward/features/ai-rewriting/</link>
+      <guid isPermaLink="false">https://opselon.github.io/AutoTelegramForward/features/ai-rewriting/</guid>
+      <pubDate>Fri, 16 Oct 2026 02:00:00 GMT</pubDate>
+      <category>Feature</category>
+      <description>Enable or disable LLM rewriting per task, pick a provider, write your own prompts with version history, and keep forwarding even when the model is unreachable.</description>
+    </item>
+    <item>
+      <title>Per-task content rules — AutoTelegramForward</title>
+      <link>https://opselon.github.io/AutoTelegramForward/features/per-task-content-rules/</link>
+      <guid isPermaLink="false">https://opselon.github.io/AutoTelegramForward/features/per-task-content-rules/</guid>
+      <pubDate>Fri, 16 Oct 2026 01:00:00 GMT</pubDate>
+      <category>Feature</category>
+      <description>Blacklists, whitelists, link handling, regex gates, length limits and ordered replacements — evaluated cheapest-first, with per-source and per-target overrides.</description>
+    </item>
+    <item>
+      <title>Multi-source → multi-target routing — AutoTelegramForward</title>
+      <link>https://opselon.github.io/AutoTelegramForward/features/multi-source-routing/</link>
+      <guid isPermaLink="false">https://opselon.github.io/AutoTelegramForward/features/multi-source-routing/</guid>
+      <pubDate>Fri, 16 Oct 2026 00:00:00 GMT</pubDate>
+      <category>Feature</category>
+      <description>A single task can watch any number of source chats and deliver to any number of targets, with the primary pair mirrored and forum topics addressable per target.</description>
+    </item>
+    <item>
+      <title>Mobile release hardening</title>
+      <link>https://opselon.github.io/AutoTelegramForward/releases/</link>
+      <guid isPermaLink="false">https://github.com/Opselon/AutoTelegramForward/releases/tag/v1.5.2</guid>
+      <pubDate>Tue, 13 Oct 2026 12:00:00 GMT</pubDate>
+      <category>Release</category>
+      <description>Android permission and packaging fixes on top of the Flutter client preview. Highlights: INTERNET permission restored in the Android manifest · Release APK and Play Store bundle pipeline stabilised · Mobile reachability probing before any credential prompt</description>
+    </item>
+    <item>
+      <title>Flutter client parity pass</title>
+      <link>https://opselon.github.io/AutoTelegramForward/releases/</link>
+      <guid isPermaLink="false">https://github.com/Opselon/AutoTelegramForward/releases/tag/v1.5.1</guid>
+      <pubDate>Tue, 13 Oct 2026 12:00:00 GMT</pubDate>
+      <category>Release</category>
+      <description>Mobile client aligned with the dashboard surface and the localization rules. Highlights: RTL/LTR layout handling verified on Android · Secure credential storage for sessions and passwords · Protocol version compatibility check against the API</description>
+    </item>
+    <item>
+      <title>Flutter mobile client</title>
+      <link>https://opselon.github.io/AutoTelegramForward/releases/</link>
+      <guid isPermaLink="false">https://github.com/Opselon/AutoTelegramForward/releases/tag/v1.5.0</guid>
+      <pubDate>Tue, 13 Oct 2026 12:00:00 GMT</pubDate>
+      <category>Release</category>
+      <description>First packaged mobile release mirroring the dashboard capabilities. Highlights: Native Android build embedding the full control surface · Encrypted local storage of the dashboard token · Live health and topology screen on mobile</description>
+    </item>
+    <item>
+      <title>Bot-layer tenant isolation</title>
+      <link>https://opselon.github.io/AutoTelegramForward/releases/</link>
+      <guid isPermaLink="false">https://github.com/Opselon/AutoTelegramForward/releases/tag/v1.4.1</guid>
+      <pubDate>Sun, 11 Oct 2026 12:00:00 GMT</pubDate>
+      <category>Release</category>
+      <description>Fail-closed ownership enforcement extended into the Telegram bot layer. Highlights: Numeric-id authorization for every bot action · Clean onboarding for unlinked users (no premature dashboard links) · Structured [PIPELINE:*] logging across the bot commands</description>
+    </item>
+  </channel>
+</rss>
