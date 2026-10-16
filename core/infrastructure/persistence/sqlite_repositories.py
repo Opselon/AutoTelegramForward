@@ -1430,6 +1430,24 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
     async def claim_batch(
         self, worker_id: str, batch_size: int = 5, lease_duration: float = 30.0
     ) -> List[DeliveryJob]:
+        """Claim the next deliverable jobs, preserving source order per target.
+
+        Two properties make a burst leave in the order it arrived:
+
+        * the sort key is ``(created_at, source_chat_id, source_message_id, id)``.
+          ``created_at`` is a one-second timestamp, so a 50-post burst shares it
+          and the tie-break has to be the *source's own* order — the message id.
+          (Sorting on ``created_at`` alone left the order of a burst to SQLite's
+          row order, and the round-robin across workers then scrambled it.)
+        * a job is only claimable when no *earlier* unsent job exists for the same
+          target chat. That makes a destination a single lane with one in-flight
+          job at a time, so two workers can never deliver to the same target
+          concurrently — while different targets still proceed in parallel.
+
+        An earlier job that cannot be delivered eventually dead-letters (or its
+        lease expires and is reclaimed), which releases the lane; nothing is
+        silently skipped and nothing overtakes.
+        """
         now = time.time()
         claimed: List[DeliveryJob] = []
         with self._db._lock:
@@ -1439,14 +1457,23 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             # (the pre-v14 idx_delivery_jobs_poll sorted every claim).
             rows = self._db._conn.execute(
                 """
-                SELECT * FROM delivery_jobs
+                SELECT * FROM delivery_jobs AS j
                 WHERE (
-                    status = 'PENDING'
-                    OR status = 'RETRY_WAIT'
-                    OR (status = 'CLAIMED' AND lease_until < ?)
+                    j.status = 'PENDING'
+                    OR j.status = 'RETRY_WAIT'
+                    OR (j.status = 'CLAIMED' AND j.lease_until < ?)
                 )
-                AND next_retry_at <= ?
-                ORDER BY created_at ASC
+                AND j.next_retry_at <= ?
+                AND NOT EXISTS (
+                    SELECT 1 FROM delivery_jobs AS o
+                    WHERE o.target_chat_id = j.target_chat_id
+                      AND o.id <> j.id
+                      AND o.status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')
+                      AND (o.created_at, o.source_chat_id, o.source_message_id, o.id)
+                          < (j.created_at, j.source_chat_id, j.source_message_id, j.id)
+                )
+                ORDER BY j.created_at ASC, j.source_chat_id ASC,
+                         j.source_message_id ASC, j.id ASC
                 LIMIT ?
                 """,
                 (now, now, int(batch_size)),

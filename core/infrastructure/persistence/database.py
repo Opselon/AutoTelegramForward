@@ -535,6 +535,16 @@ MIGRATIONS = {
     );
     CREATE INDEX IF NOT EXISTS idx_broadcast_status ON broadcast_queue(status, created_at);
     """,
+    17: """
+    -- v17: Ordered delivery lanes.
+    -- claim_batch orders by (created_at, source_chat_id, source_message_id, id)
+    -- and refuses to claim a job while an earlier unsent job exists for the same
+    -- target chat, so a burst arrives in the order it was posted. That guard is
+    -- a correlated NOT EXISTS on (target_chat_id, status): without an index it
+    -- scanned every pending job for every candidate row.
+    CREATE INDEX IF NOT EXISTS idx_delivery_jobs_lane
+        ON delivery_jobs(target_chat_id, status, created_at, source_message_id);
+    """,
 }
 
 # Columns added by additive migrations that must also work on a table carried

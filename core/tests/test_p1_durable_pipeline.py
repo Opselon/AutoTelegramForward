@@ -343,17 +343,23 @@ async def test_transform_stage_length_limits(sqlite_db):
 
 @pytest.mark.asyncio
 async def test_concurrent_worker_claim_race_sqlite(sqlite_db):
-    """Verify that 5 concurrent workers claiming jobs from SQLite never double-claim any job."""
+    """Verify that 5 concurrent workers claiming jobs from SQLite never double-claim any job.
+
+    Each job targets its own destination: delivery is serialised per destination
+    (one in-flight job per target lane), so a concurrent claim can only span
+    different targets. The invariant under test is the same as before — no job is
+    ever claimed twice.
+    """
     q_repo = SqliteDeliveryQueueRepository(sqlite_db)
 
-    # Enqueue 20 jobs
+    # Enqueue 20 jobs, one destination each
     for i in range(20):
         job = DeliveryJob(
             id=f"job_sqlite_{i}",
             rule_id="r1",
             source_chat_id="-1001",
             source_message_id=i,
-            target_chat_id="-1002",
+            target_chat_id=f"-1002{i}",
             payload_data={"text": f"Msg {i}"},
         )
         await q_repo.enqueue(job)
@@ -378,8 +384,42 @@ async def test_concurrent_worker_claim_race_sqlite(sqlite_db):
 
 
 @pytest.mark.asyncio
+async def test_concurrent_workers_share_one_destination_lane(sqlite_db):
+    """5 workers racing on ONE destination must produce exactly one in-flight job.
+
+    This is the property that keeps a burst ordered end to end: a destination is
+    a lane, and no two workers may have a job headed for it at the same time.
+    """
+    q_repo = SqliteDeliveryQueueRepository(sqlite_db)
+
+    for i in range(20):
+        await q_repo.enqueue(
+            DeliveryJob(
+                id=f"lane_{i}",
+                rule_id="r1",
+                source_chat_id="-1001",
+                source_message_id=i,
+                target_chat_id="-1002",
+                payload_data={"text": f"Msg {i}"},
+            )
+        )
+
+    async def worker_claim(w_id: str):
+        return await q_repo.claim_batch(w_id, batch_size=5, lease_duration=10.0)
+
+    batches = await asyncio.gather(*(worker_claim(f"w_{w}") for w in range(5)))
+    claimed = [j for batch in batches for j in batch]
+    assert len(claimed) == 1
+    assert claimed[0].source_message_id == 0
+
+
+@pytest.mark.asyncio
 async def test_concurrent_worker_claim_race_postgres(pg_conn):
-    """Verify PostgreSQL repository with FOR UPDATE SKIP LOCKED prevents double-claims."""
+    """Verify PostgreSQL repository with FOR UPDATE SKIP LOCKED prevents double-claims.
+
+    One destination per job, as in the SQLite twin: a destination is a lane with
+    a single in-flight job, so concurrent claims span different targets.
+    """
     q_repo = PostgresDeliveryQueueRepository(pg_conn)
 
     for i in range(20):
@@ -388,7 +428,7 @@ async def test_concurrent_worker_claim_race_postgres(pg_conn):
             rule_id="r_pg",
             source_chat_id="-2001",
             source_message_id=i,
-            target_chat_id="-2002",
+            target_chat_id=f"-2002{i}",
             payload_data={"text": f"PG Msg {i}"},
         )
         await q_repo.enqueue(job)
