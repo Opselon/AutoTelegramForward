@@ -605,10 +605,12 @@ jobs:
     # produced before, and `gh workflow run mobile-android.yml` can produce the
     # same signed artifacts on demand without a release.
     needs: meta
-    # A job that calls a reusable workflow still needs its own bound: the callee
-    # carries its own timeout-minutes too, but a run that hangs before/around the
-    # call would otherwise be ended by the platform, not by us.
-    timeout-minutes: 60
+    # NOTE: a job that calls a reusable workflow may carry only `name`, `uses`,
+    # `with`, `secrets`, `needs`, `if`, `permissions` (and `strategy`). A
+    # `timeout-minutes:` here is not merely ignored — GitHub rejects the whole
+    # workflow file, so every release run since the delegation landed died as
+    # "workflow file issue" with no jobs at all. The bound lives on the callee's
+    # `android` job, which is where the build actually runs.
     uses: ./.github/workflows/mobile-android.yml
     with:
       version: ${{ needs.meta.outputs.version }}
