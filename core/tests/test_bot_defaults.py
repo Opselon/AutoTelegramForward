@@ -397,7 +397,10 @@ def test_a_database_from_before_this_change_gains_the_column_and_keeps_its_rows(
 
     db = SqliteDatabase(path)
     version = db.query_one("SELECT version FROM schema_version")["version"]
-    assert version == SCHEMA_VERSION == 20
+    # The upgrade must land on the current version, whatever that number is now:
+    # a later additive migration moves it and this test must not have to be
+    # edited for that (it would then stop testing the upgrade).
+    assert version == SCHEMA_VERSION >= 20
     assert "defaults_json" in {
         r["name"] for r in db.query_all("PRAGMA table_info(bot_tokens)")
     }
