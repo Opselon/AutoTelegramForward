@@ -11,6 +11,7 @@ permissions:
 jobs:
   python-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -52,6 +53,7 @@ jobs:
 
   go-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -73,30 +75,83 @@ jobs:
 
   docker-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [python-tests, go-tests]
     steps:
       - uses: actions/checkout@v4
-
+      # Every image used to be rebuilt from scratch on every PR with plain
+      # `docker build` — no buildx, no layer cache, no proof that a cache exists.
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Build core image
-        run: docker build -f Dockerfile.core -t atf-core .
-
+        uses: docker/build-push-action@v6
+        timeout-minutes: 15
+        with:
+          context: .
+          file: Dockerfile.core
+          tags: atf-core
+          load: true
+          push: false
+          cache-from: type=gha,scope=ci-core
+          cache-to: type=gha,mode=max,scope=ci-core
       - name: Build api image
-        run: docker build -f Dockerfile.api -t atf-api .
-
+        uses: docker/build-push-action@v6
+        timeout-minutes: 15
+        with:
+          context: .
+          file: Dockerfile.api
+          tags: atf-api
+          load: true
+          push: false
+          cache-from: type=gha,scope=ci-api
+          cache-to: type=gha,mode=max,scope=ci-api
       - name: Build logger image
-        # The production logging service is the Rust engine; build the recipe the
-        # deployed `logger` service actually uses so a broken root-context build
-        # surfaces here rather than at deploy time.
-        run: docker build -f Dockerfile.logger-rust -t atf-logger .
-
-      # The release workflow builds and pushes this image; a stale toolchain
-      # pin here once broke a published release (rust:1.85 vs transitive deps
-      # needing rustc >= 1.86). Keep this so the failure surfaces pre-merge.
+        uses: docker/build-push-action@v6
+        timeout-minutes: 20
+        with:
+          context: .
+          file: Dockerfile.logger-rust
+          tags: atf-logger
+          load: true
+          push: false
+          cache-from: type=gha,scope=ci-logger
+          cache-to: type=gha,mode=max,scope=ci-logger
       - name: Build web image
-        run: docker build -f Dockerfile.web -t atf-web .
+        uses: docker/build-push-action@v6
+        timeout-minutes: 20
+        with:
+          context: .
+          file: Dockerfile.web
+          tags: atf-web
+          load: true
+          push: false
+          cache-from: type=gha,scope=ci-web
+          # also prime a local cache dir so the next step can prove a hit without
+          # depending on the Actions cache token being exported to a run step
+          cache-to: |
+            type=gha,mode=max,scope=ci-web
+            type=local,dest=/tmp/atf-layer-cache,mode=max
+      # The web image is the one that burned 5h22m under QEMU: assert its layers
+      # are really cached, i.e. a second build re-runs no dependency work at all.
+      - name: Prove the web layer cache is a hit
+        run: |
+          set -o pipefail
+          docker buildx build --progress=plain --file Dockerfile.web             --cache-from type=local,src=/tmp/atf-layer-cache             --output type=cacheonly . 2>&1 | tee /tmp/cache-proof.log
+          if ! grep -q "CACHED" /tmp/cache-proof.log; then
+            echo "::error::no layer came from cache — the build is not cacheable"
+            exit 1
+          fi
+          for marker in "added 1" "Compiling " "Successfully installed" "go: downloading" "npm warn"; do
+            if grep -q "$marker" /tmp/cache-proof.log; then
+              echo "::error::dependency work re-ran despite the cache: $marker"
+              exit 1
+            fi
+          done
+          echo "cache hit: no dependency work re-ran"
 
   web-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -129,6 +184,7 @@ jobs:
 
   flutter:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -167,6 +223,7 @@ jobs:
   rust-logger:
     name: Rust Logger (fmt, clippy, test)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       # Pinned, not `stable`: this job denies warnings, so a toolchain bump would

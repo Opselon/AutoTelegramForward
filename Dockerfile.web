@@ -3,9 +3,11 @@
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/web/frontend
 COPY web/frontend/package*.json ./
-RUN npm ci || npm install
+# Cache mount keeps npm's download cache across builds; the install stays a
+# layer so an unchanged package-lock is never reinstalled.
+RUN --mount=type=cache,target=/root/.npm npm ci || npm install
 COPY web/frontend/ ./
-RUN npm run build
+RUN --mount=type=cache,target=/root/.npm npm run build
 
 # Stage 2: Build Rust Backend with Embedded Frontend Assets
 # Rust 1.90+: the transitive deps pulled by the reqwest/idna stack (icu_* 2.3,
@@ -14,10 +16,26 @@ FROM rust:1.90-slim-bookworm AS backend-builder
 WORKDIR /app/web/backend
 RUN apt-get update && apt-get install -y pkg-config libssl-dev build-essential && rm -rf /var/lib/apt/lists/*
 COPY web/backend/Cargo.toml web/backend/Cargo.lock* ./
+# Dependency layer: compile the whole crate graph against a stub main before the
+# real sources — and before the frontend dist that rust-embed bakes in — are
+# copied. Without it every UI byte change recompiled every Rust dependency, and
+# on the release runner that recompilation ran under QEMU emulation.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/web/backend/target \
+    mkdir -p src /app/web/frontend/dist \
+    && printf 'fn main() {}\n' > src/main.rs \
+    && cargo build --release \
+    && rm -rf src
 # Make frontend dist available to rust-embed
 COPY --from=frontend-builder /app/web/frontend/dist /app/web/frontend/dist
 COPY web/backend/src ./src
-RUN cargo build --release
+# Same cache mounts, so only this crate's own sources recompile; the binary is
+# copied out of the cache-mounted target dir into the image layer.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/web/backend/target \
+    touch src/main.rs \
+    && cargo build --release \
+    && cp target/release/atf-web-backend /out-atf-web-backend
 
 # Stage 3: Minimal Self-Contained Runtime
 FROM debian:bookworm-slim
@@ -28,7 +46,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates wget \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=backend-builder /app/web/backend/target/release/atf-web-backend /app/atf-web-backend
+COPY --from=backend-builder /out-atf-web-backend /app/atf-web-backend
 
 ENV ATF_WEB_ADDR=0.0.0.0:8088
 ENV ATF_API_ADDR=http://api:8080

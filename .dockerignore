@@ -1,0 +1,42 @@
+# Build context for the four images (core, api, web, logger).
+#
+# The context is the repository root: without this file the builder receives
+# .git, whatever node_modules a developer happens to have (133 MB in the
+# reference checkout), build outputs and the whole docs/site/mobile trees — for
+# every one of the four image builds. Two consequences, both real: the context
+# transfer is slow, and `COPY web/frontend/ ./` in Dockerfile.web bakes a local
+# node_modules and a stale dist into the image.
+#
+# Everything below is either regenerated inside the image or never COPYed by a
+# Dockerfile. Keep `proto/`, `core/`, `api/`, `web/`, `rust/`, `requirements.txt`
+# and `VERSION` reachable: the builds need them.
+
+.git
+.gitignore
+.github
+.hermes
+.venv
+.env
+.env.*
+
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/*.log
+
+# Dependency trees and build outputs are produced in-image (npm ci, cargo build,
+# flutter build); copying a host copy in only adds time and staleness. The web
+# frontend's dist is built in the frontend stage and handed to the Rust stage with
+# COPY --from, so it must not come from the context.
+**/node_modules
+**/dist
+**/target
+**/.dart_tool
+mobile/
+website/
+docs/
+k8s/
+logger/
+scripts/
+*.md

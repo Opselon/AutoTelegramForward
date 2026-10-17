@@ -16,7 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY rust/logger/Cargo.toml rust/logger/Cargo.lock ./
 COPY rust/logger/build.rs ./
 COPY rust/logger/proto/ ./proto/
-RUN mkdir -p src \
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    mkdir -p src \
     && printf 'pub fn warmup() {}\n' > src/lib.rs \
     && printf 'fn main() {}\n' > src/main.rs \
     && (cargo build --release --bin atf-logger || cargo fetch) \
@@ -24,7 +26,12 @@ RUN mkdir -p src \
 
 # Engine layer.
 COPY rust/logger/src/ ./src/
-RUN touch src/main.rs src/lib.rs \
+# Same cache mounts: the dependency layer above stays warm, so only the engine's
+# own sources recompile. The binary is copied out of the cache-mounted target
+# dir, because a cache mount never becomes part of the image layer.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    touch src/main.rs src/lib.rs \
     && cargo build --release --bin atf-logger \
     && cp target/release/atf-logger /out-atf-logger
 
