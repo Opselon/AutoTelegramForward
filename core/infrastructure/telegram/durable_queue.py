@@ -27,6 +27,7 @@ from ...domain.entities import DeliveryJob, DeliveryStatus, ForwardMode, Message
 from ...domain.services import AdvancedSettingsEngine
 from ...domain.value_objects import ContentMode
 from .errors import tg_detail, tg_error, wait_seconds
+from .bot_transport import BotRouteAdapter, BotTransportCache, BotTransportUnsupported
 
 logger = logging.getLogger("atf.durable_queue")
 
@@ -64,6 +65,7 @@ class DurableQueueManager:
         metrics_repo: Any = None,
         log_client: Any = None,
         batch_size: int = 8,
+        bot_route: Optional[BotTransportCache] = None,
     ) -> None:
         self._queue = queue_repo
         self._map = message_map_repo
@@ -76,6 +78,10 @@ class DurableQueueManager:
         self._max_per_minute = max(1, max_per_minute_per_target)
         self._metrics = metrics_repo
         self._batch_size = max(1, batch_size)
+        # Bot route: one pooled transport per attached token. None means the
+        # route is unavailable in this process and a BOT job retries rather than
+        # silently posting as the owner.
+        self._bot_route_cache = bot_route
 
         self._workers: List[asyncio.Task] = []
         self._watchdog_task: Optional[asyncio.Task] = None
@@ -229,6 +235,13 @@ class DurableQueueManager:
             # Multi-photo option travels with the job: the worker decides whether
             # to keep the media group, send only its first item, or split it.
             "album_mode": str(getattr(rule, "album_mode", "album") or "album"),
+            # --- Delivery route -------------------------------------------------
+            # USER = the owner's own account (default). BOT = post through the
+            # bot whose token the owner attached, which is what makes inline
+            # buttons and bot-authored copies possible.
+            "delivery_transport": str(getattr(rule, "delivery_transport", "USER") or "USER"),
+            "bot_token_id": str(getattr(rule, "bot_token_id", "") or ""),
+            "inline_buttons": getattr(rule, "inline_buttons_raw", None),
             "forward_mode": forward_mode_val,
             "content_mode": mode_val,
             "delay_seconds": float(getattr(rule, "delay_seconds", 0.0) or 0.0),
@@ -528,7 +541,23 @@ class DurableQueueManager:
                     await self._queue.mark_retry(job.id, f"Rule paused ({backoff:.1f}s)", backoff_seconds=backoff)
                     return None
 
-        client = self._pool.get(session_id) if self._pool is not None else None
+        transport_wanted = str(job.payload_data.get("delivery_transport") or "USER").strip().upper()
+        route = None
+        if transport_wanted == "BOT":
+            route = await self._bot_route(job)
+            if route is None:
+                _bump_target("retried")
+                logger.error(
+                    "[BOT ROUTE] [%s] job %s asks for the bot route but token %s is unusable; "
+                    "not falling back silently — fix the token or switch the task back to the account route",
+                    worker_id,
+                    job.id,
+                    str(job.payload_data.get("bot_token_id") or "")[:8] or "(none)",
+                )
+                await self._queue.mark_retry(job.id, "bot route: attached token unusable", backoff_seconds=15.0)
+                return None
+
+        client = route or (self._pool.get(session_id) if self._pool is not None else None)
         if client is None:
             _bump_target("retried")
             logger.error(
@@ -554,9 +583,23 @@ class DurableQueueManager:
             worker_id, job.rule_id[:8], job.source_chat_id, job.source_message_id, target, session_id, job.attempts + 1,
         )
         try:
-            target_msg_id = await self._dispatch_to_telegram(client, job)
+            try:
+                target_msg_id = await self._dispatch_to_telegram(client, job)
+            except BotTransportUnsupported as exc:
+                # The bot route genuinely cannot express this job (a media group
+                # whose source the bot cannot read, say). Keep the message
+                # flowing through the owner's account instead of failing it.
+                fallback_client = self._pool.get(session_id) if self._pool is not None else None
+                if route is None or fallback_client is None:
+                    raise
+                logger.warning(
+                    "[BOT ROUTE] [%s] %s — retrying job %s through the account transport",
+                    worker_id,
+                    exc,
+                    job.id,
+                )
+                target_msg_id = await self._dispatch_to_telegram(fallback_client, job)
             send_duration = time.monotonic() - t0
-            self.total_dispatch_duration_ms += send_duration * 1000
             self.total_dispatches += 1
             _bump_target("sent")
             # v14: how long this job waited in the queue before being sent.
@@ -968,6 +1011,33 @@ class DurableQueueManager:
                 "[PIPELINE:AUTO_DELETE] [%s] Failed to delete message %s in %s after %ds: %s",
                 job_id, message_id, target, ttl, tg_detail(exc),
             )
+
+    async def _bot_route(self, job: DeliveryJob) -> Optional[Any]:
+        """A per-job delivery view onto the bot the task attached.
+
+        Returns ``None`` when the token is missing, inactive or unusable — the
+        caller then retries the job (it must not quietly post as the owner, which
+        would leak the sender identity the owner deliberately changed).
+        """
+        if self._bot_route_cache is None:
+            logger.warning("[BOT ROUTE] job %s asks for the bot route but no token repository is wired here", job.id)
+            return None
+
+        token_id = str(job.payload_data.get("bot_token_id") or "")
+        transport = await self._bot_route_cache.get(token_id)
+        if transport is None:
+            return None
+
+        buttons = job.payload_data.get("inline_buttons")
+        thread_id = int(job.payload_data.get("topic_id") or 0)
+        logger.info(
+            "[BOT ROUTE] delivering rule=%s via bot %s (token %s, buttons=%d)",
+            job.rule_id[:8],
+            transport.username or transport.bot_id,
+            token_id[:8],
+            len(buttons or []) if isinstance(buttons, (list, tuple)) else 0,
+        )
+        return BotRouteAdapter(transport, buttons=buttons, thread_id=thread_id)
 
     async def _dispatch_to_telegram(self, client: Any, job: DeliveryJob) -> int:
         """Call pyrogram client methods and return the sent message ID."""

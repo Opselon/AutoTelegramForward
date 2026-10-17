@@ -550,6 +550,54 @@ class ForwardRule:
             self.metadata = {}
         self.metadata["album_mode"] = str(val or "album")
 
+    # --- Delivery route: the owner's account, or a bot they attached -------- #
+    @property
+    def bot_token_id(self) -> str:
+        """Id of the stored, encrypted bot token this task forwards through."""
+        return str(self.metadata.get("bot_token_id") or "") if isinstance(self.metadata, dict) else ""
+
+    @bot_token_id.setter
+    def bot_token_id(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["bot_token_id"] = str(val or "")
+
+    @property
+    def delivery_transport(self) -> str:
+        """``USER`` (the owner's own account, the default) or ``BOT``.
+
+        A task can only ask for the bot route when a token is actually attached;
+        otherwise it silently falls back to the account route, because a task
+        that stops forwarding is worse than one that forwards as the owner.
+        """
+        if not isinstance(self.metadata, dict):
+            return "USER"
+        wanted = str(self.metadata.get("delivery_transport") or "USER").strip().upper()
+        if wanted == "BOT" and self.bot_token_id:
+            return "BOT"
+        return "USER"
+
+    @delivery_transport.setter
+    def delivery_transport(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["delivery_transport"] = "BOT" if str(val or "").strip().upper() == "BOT" else "USER"
+
+    @property
+    def use_bot_route(self) -> bool:
+        return self.delivery_transport == "BOT"
+
+    @property
+    def inline_buttons_raw(self) -> Any:
+        """Buttons to attach to every copy in bot-route mode (raw config)."""
+        return self.metadata.get("inline_buttons") if isinstance(self.metadata, dict) else None
+
+    @inline_buttons_raw.setter
+    def inline_buttons_raw(self, val: Any) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["inline_buttons"] = val or None
+
     # --- Task Overview & Routing Extensions (Screens 1 & 5) ---
     @property
     def topic_id(self) -> Optional[int]:
@@ -1536,6 +1584,11 @@ class ForwardRule:
             "ignore_edits": bool(self.ignore_edits),
             "sync_deletes": bool(self.sync_deletes),
             "album_mode": str(self.album_mode),
+            # Delivery route travels with the draft too: reopening the editor
+            # must not quietly drop the attached bot or its buttons.
+            "delivery_transport": str(self.delivery_transport),
+            "bot_token_id": str(self.bot_token_id),
+            "inline_buttons": self.inline_buttons_raw,
             "header": str(self.header),
             "footer": str(self.footer),
             "custom_header": str(self.custom_header),
@@ -1718,6 +1771,13 @@ class ForwardRule:
 
         if "sync_deletes" in draft:
             self.metadata["sync_deletes"] = bool(draft["sync_deletes"])
+
+        if "delivery_transport" in draft and draft["delivery_transport"] is not None:
+            self.delivery_transport = str(draft["delivery_transport"])
+        if "bot_token_id" in draft and draft["bot_token_id"] is not None:
+            self.bot_token_id = str(draft["bot_token_id"])
+        if "inline_buttons" in draft:
+            self.inline_buttons_raw = draft["inline_buttons"]
 
         if "smart_ai_rewrite" in draft:
             self.smart_ai_rewrite = bool(draft["smart_ai_rewrite"])
