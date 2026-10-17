@@ -381,3 +381,216 @@ def test_a_choice_setting_offers_pickable_values_not_a_typing_prompt():
     _t2, choices = ed.choices(rule, st, idx)
     picks = [d for row in choices for _l, d in row if d.startswith("rge:v:")]
     assert len(picks) == len(SETTING_SPECS["whitelist_mode"].choices)
+
+
+# --------------------------------------------------------------------------- #
+# Provenance: the screen says where a value came from, not just what it is
+# --------------------------------------------------------------------------- #
+#
+# Comparing the stored value with the registry default — all the editor could do
+# before a bot could supply defaults — cannot answer the question a user is asking:
+# *did I choose this, or am I inheriting it?* A task that deliberately picked the
+# default stores exactly what an untouched task stores, and a task inheriting its
+# bot's value looks like one that set it by hand.
+
+
+def describe_with(rule, key: str, value, source: str, *, bot_label: str = ""):
+    """A describer returning the server's provenance shape for one setting."""
+    spec = SETTING_SPECS[key]
+
+    async def _describe(_rule):
+        entry = {
+            "value": value,
+            "source": source,
+            "default": spec.default,
+            "inheritable": spec.inheritable,
+        }
+        if source == "bot":
+            entry["bot_default"] = value
+            if bot_label:
+                entry["bot_label"] = bot_label
+        if source == "task":
+            entry["pinned"] = True
+        return {key: entry}
+
+    return _describe
+
+
+def editor_with(describer, saver: Saver | None = None) -> RegistryEditor:
+    return RegistryEditor(translate=t, save=saver or Saver(), describe=describer)
+
+
+def test_a_value_inherited_from_the_bot_is_shown_as_the_forwarder_uses_it():
+    rule = make_rule()
+    rule.remove_emojis = False  # what the task stores
+    st = State()
+    ed = editor_with(describe_with(rule, "remove_emojis", True, "bot", bot_label="@fwd_bot"))
+    group = SETTING_SPECS["remove_emojis"].group
+    idx = goto(ed, rule, st, "remove_emojis")
+
+    sources = run(ed.sources_for(rule))
+    text, _rows = ed.group(rule, st, group, idx // ed.page_size, sources)
+
+    # The mark says inherited, and the value shown is the bot's — what the
+    # forwarder will actually use — not the False this task happens to store.
+    assert t("ui_reg_mark_bot") in text
+    assert t("ui_reg_mark_set") not in text
+    assert ed._effective("remove_emojis", ed._values(rule), sources) is True
+    assert "false" not in text.split(t("ui_reg_mark_bot"), 1)[1].lower()
+
+
+def test_a_value_equal_to_the_default_still_reads_as_the_task_s_own():
+    rule = make_rule()
+    st = State()
+    # Chosen by hand, and identical to the registry default: indistinguishable
+    # from "not set" by value alone.
+    ed = editor_with(describe_with(rule, "remove_emojis", False, "task"))
+    idx = goto(ed, rule, st, "remove_emojis")
+
+    text, _rows = ed.detail(rule, st, idx, run(ed.sources_for(rule)))
+
+    status = text.split(t("ui_reg_status"), 1)[1].split("\n", 1)[0]
+    assert t("ui_reg_mark_set") in status
+    assert t("ui_reg_mark_default") not in status
+
+
+def test_the_reset_button_is_offered_for_a_chosen_value_that_matches_the_default():
+    rule = make_rule()
+    st = State()
+    ed = editor_with(describe_with(rule, "remove_emojis", False, "task"))
+    idx = goto(ed, rule, st, "remove_emojis")
+
+    _text, rows = ed.detail(rule, st, idx, run(ed.sources_for(rule)))
+
+    offers = [data for row in rows for _label, data in row if data.startswith("rge:r:")]
+    assert offers, "a task that chose the default value must still be able to hand it back"
+
+
+def test_a_setting_with_nothing_riding_on_it_offers_no_reset():
+    rule = make_rule()
+    st = State()
+    ed = editor_with(describe_with(rule, "remove_emojis", False, "default"))
+    idx = goto(ed, rule, st, "remove_emojis")
+
+    _text, rows = ed.detail(rule, st, idx, run(ed.sources_for(rule)))
+
+    offers = [data for row in rows for _label, data in row if data.startswith("rge:r:")]
+    assert not offers, "there is nothing to hand back to"
+
+
+def test_the_detail_screen_names_the_bot_supplying_the_value():
+    rule = make_rule()
+    rule.bot_token_label = "@fwd_bot"  # as `_save_owned_rule` stores it
+    st = State()
+    ed = editor_with(describe_with(rule, "remove_emojis", True, "bot"))
+    idx = goto(ed, rule, st, "remove_emojis")
+
+    text, _rows = ed.detail(rule, st, idx, run(ed.sources_for(rule)))
+
+    assert "@fwd_bot" in text, "the screen must say which bot the value comes from"
+
+
+def test_without_a_describer_the_marks_fall_back_to_the_old_comparison():
+    """An older caller keeps working: no describer, no provenance, no failure."""
+    rule, st = make_rule(), State()
+    ed = editor()          # no describe=
+    idx = goto(ed, rule, st, "debug_mode")
+    rule.debug_mode = True
+
+    text, _rows = ed.detail(rule, st, idx, run(ed.sources_for(rule)))
+
+    # The old comparison: the stored value differs from the default, so "set".
+    assert t("ui_reg_mark_set") in text
+    assert t("ui_reg_source") not in text, "no describer means no provenance line"
+
+
+def test_a_failing_describer_does_not_break_the_settings_screen():
+    """A convenience setting must never lock a user out of the whole panel."""
+    async def boom(_rule):
+        raise RuntimeError("token store unavailable")
+
+    rule, st = make_rule(), State()
+    ed = editor_with(boom)
+    idx = goto(ed, rule, st, "debug_mode")
+
+    sources = run(ed.sources_for(rule))
+    text, rows = ed.detail(rule, st, idx, sources)
+
+    assert sources == {}
+    assert text and rows
+
+
+def test_the_summary_counts_what_the_task_owns_not_what_it_inherits():
+    """A bot-supplied value is not one the task "set", so it is not counted."""
+    rule = make_rule()
+
+    def entry(value, source):
+        return {
+            "remove_emojis": {"value": value, "source": source, "default": False,
+                              "inheritable": True},
+            "signature": {"value": "x", "source": "task", "default": "",
+                          "inheritable": True},
+        }
+
+    async def inherited(_rule):
+        return entry(True, "bot")
+
+    async def chosen(_rule):
+        return entry(True, "task")
+
+    ed = editor_with(inherited)
+    sources = run(ed.sources_for(rule))
+
+    assert ed._owned("remove_emojis", ed._values(rule), sources) is False
+    assert ed._owned("signature", ed._values(rule), sources) is True
+    # Fixture-independent: the same settings, differing only in who owns that one
+    # value, differ by exactly one in the count. Other settings in the fixture are
+    # counted the same way in both.
+    same_but_owned = run(editor_with(chosen).sources_for(rule))
+    assert ed.changed_count(rule, same_but_owned) == ed.changed_count(rule, sources) + 1
+
+
+# --------------------------------------------------------------------------- #
+# Reset hands the setting back — it does not write the default as a value
+# --------------------------------------------------------------------------- #
+
+
+def test_reset_hands_the_setting_back_to_the_bot_instead_of_pinning_it():
+    """The regression this exists for.
+
+    Writing the default *value* leaves the key pinned to it, so the task stops
+    following its bot — which is the opposite of what the button says now that a
+    bot can supply defaults. The pin has to be removed, and what the task then
+    runs with must be the bot's value, not the registry's.
+    """
+    from core.domain.bot_defaults import effective
+    from core.domain.rule_settings import apply_settings, pinned_keys
+
+    rule = make_rule()
+    apply_settings(rule, {"remove_emojis": True})       # the task's own choice
+    assert "remove_emojis" in pinned_keys(rule)
+
+    st, saver = State(), Saver()
+    ed = editor(saver)
+    idx = goto(ed, rule, st, "remove_emojis")
+
+    notice = run(ed.reset(rule, st, idx))
+
+    assert "remove_emojis" not in pinned_keys(rule), "the pin must be gone, not re-set"
+    assert saver.calls == 1, "the change must be persisted through the caller's save"
+    assert "↩️" in notice
+    # The bot's default now applies — not the registry's.
+    assert effective(rule, {"remove_emojis": True})["remove_emojis"] is True
+    assert effective(rule, {})["remove_emojis"] is False
+
+
+def test_reset_refuses_a_setting_that_no_longer_exists():
+    rule, st, saver = make_rule(), State(), Saver()
+    ed = editor(saver)
+    ed.groups(rule, st)
+    st.buffer["reg_keys"] = ["not_a_setting"]
+
+    notice = run(ed.reset(rule, st, 0))
+
+    assert t("ui_reg_stale") == notice, "an unknown key must be refused, not written"
+    assert saver.calls == 0

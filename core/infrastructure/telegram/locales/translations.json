@@ -1274,7 +1274,10 @@
   "ui_wm_title": "🖼 **Watermark Settings**\\n\\n",
   "ui_words_count": "{count} word(s)",
   "ui_yes": "✅ Yes",
-  "unknown_command": "Unknown command. Use /help."
+  "unknown_command": "Unknown command. Use /help.",
+  "ui_reg_mark_bot": "🤖 from the bot",
+  "ui_reg_source": "Source",
+  "ui_reg_source_bot": "the bot's default{label}"
  },
  "es": {
   "ai_add_hint": "Envía la configuración de IA así:\n`provider model api_key`\nej. `openai gpt-4o-mini sk-...`\nProveedores: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -2551,7 +2554,10 @@
   "ui_wm_title": "🖼 **Ajuste de Marca de Agua (Watermark Text)**\\n\\n",
   "ui_words_count": "{count} palabra(s)",
   "ui_yes": "✅ Sí",
-  "unknown_command": "Comando desconocido. Usa /help."
+  "unknown_command": "Comando desconocido. Usa /help.",
+  "ui_reg_mark_bot": "🤖 del bot",
+  "ui_reg_source": "Origen",
+  "ui_reg_source_bot": "el valor por defecto del bot{label}"
  },
  "fa": {
   "ai_add_hint": "پیکربندی را بفرستید:\n`provider model api_key`\nمثلاً `openai gpt-4o-mini sk-...`\nتأمین‌کنندگان: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -3828,7 +3834,10 @@
   "ui_wm_title": "🖼 **تنظیم واتر‌مارک (Watermark Text)**\\n\\n",
   "ui_words_count": "{count} کلمه",
   "ui_yes": "✅ بله",
-  "unknown_command": "دستور ناشناخته. از /help استفاده کنید."
+  "unknown_command": "دستور ناشناخته. از /help استفاده کنید.",
+  "ui_reg_mark_bot": "🤖 از ربات",
+  "ui_reg_source": "منبع",
+  "ui_reg_source_bot": "پیش‌فرض ربات{label}"
  },
  "fr": {
   "ai_add_hint": "Envoyez la configuration IA ainsi :\n`provider model api_key`\nex. `openai gpt-4o-mini sk-...`\nFournisseurs : openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -5105,7 +5114,10 @@
   "ui_wm_title": "🖼 **Paramètre du Filigrane (Watermark Text)**\\n\\n",
   "ui_words_count": "{count} mot(s)",
   "ui_yes": "✅ Oui",
-  "unknown_command": "Commande inconnue. Utilisez /help."
+  "unknown_command": "Commande inconnue. Utilisez /help.",
+  "ui_reg_mark_bot": "🤖 du bot",
+  "ui_reg_source": "Source",
+  "ui_reg_source_bot": "la valeur par défaut du bot{label}"
  },
  "id": {
   "ai_add_hint": "Kirim konfigurasi AI sebagai:\n`provider model api_key`\nmis. `openai gpt-4o-mini sk-...`\nPenyedia: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -6382,7 +6394,10 @@
   "ui_wm_title": "🖼 **Pengaturan Watermark (Watermark Text)**\\n\\n",
   "ui_words_count": "{count} kata",
   "ui_yes": "✅ Ya",
-  "unknown_command": "Perintah tidak dikenal. Gunakan /help."
+  "unknown_command": "Perintah tidak dikenal. Gunakan /help.",
+  "ui_reg_mark_bot": "🤖 dari bot",
+  "ui_reg_source": "Sumber",
+  "ui_reg_source_bot": "bawaan bot{label}"
  },
  "it": {
   "ai_add_hint": "Invia la configurazione IA così:\n`provider model api_key`\nes. `openai gpt-4o-mini sk-...`\nProvider: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -7659,7 +7674,10 @@
   "ui_wm_title": "🖼 **Impostazione Filigrana (Watermark Text)**\\n\\n",
   "ui_words_count": "{count} parola/e",
   "ui_yes": "✅ Sì",
-  "unknown_command": "Comando sconosciuto. Usa /help."
+  "unknown_command": "Comando sconosciuto. Usa /help.",
+  "ui_reg_mark_bot": "🤖 dal bot",
+  "ui_reg_source": "Origine",
+  "ui_reg_source_bot": "il valore predefinito del bot{label}"
  },
  "pt": {
   "ai_add_hint": "Envie a configuração de IA assim:\n`provider model api_key`\nex.: `openai gpt-4o-mini sk-...`\nProvedores: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -8936,7 +8954,10 @@
   "ui_wm_title": "🖼 **Configuração de Marca D'água (Watermark Text)**\\n\\n",
   "ui_words_count": "{count} palavra(s)",
   "ui_yes": "✅ Sim",
-  "unknown_command": "Comando desconhecido. Use /help."
+  "unknown_command": "Comando desconhecido. Use /help.",
+  "ui_reg_mark_bot": "🤖 do bot",
+  "ui_reg_source": "Origem",
+  "ui_reg_source_bot": "o padrão do bot{label}"
  },
  "ru": {
   "ai_add_hint": "Отправьте конфигурацию:\n`провайдер модель api_key`\nнапример `openai gpt-4o-mini sk-...`\nПровайдеры: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -10213,7 +10234,10 @@
   "ui_wm_title": "🖼 **Настройка водяного знака (Watermark Text)**\\n\\n",
   "ui_words_count": "{count} слов(а)",
   "ui_yes": "✅ Да",
-  "unknown_command": "Неизвестная команда. Используйте /help."
+  "unknown_command": "Неизвестная команда. Используйте /help.",
+  "ui_reg_mark_bot": "🤖 от бота",
+  "ui_reg_source": "Источник",
+  "ui_reg_source_bot": "значение по умолчанию у бота{label}"
  },
  "uz": {
   "ai_add_hint": "IL sozlamasini shunday yuboring:\n`provider model api_key`\nmasalan `openai gpt-4o-mini sk-...`\nProvayderlar: openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -11490,7 +11514,10 @@
   "ui_wm_title": "🖼 **Suv belgisini sozlash (Watermark Text)**\\n\\n",
   "ui_words_count": "{count} ta so'z",
   "ui_yes": "✅ Ha",
-  "unknown_command": "Noma'lum buyruq. /help dan foydalaning."
+  "unknown_command": "Noma'lum buyruq. /help dan foydalaning.",
+  "ui_reg_mark_bot": "🤖 botdan",
+  "ui_reg_source": "Manba",
+  "ui_reg_source_bot": "bot standarti{label}"
  },
  "zh": {
   "ai_add_hint": "发送 AI 配置：\n`provider model api_key`\n例如 `openai gpt-4o-mini sk-...`\n供应商：openai, anthropic, gemini, groq, deepseek, 9router, openrouter, custom",
@@ -12767,6 +12794,9 @@
   "ui_wm_title": "🖼 **水印设置（Watermark Text）**\\n\\n",
   "ui_words_count": "{count} 个词",
   "ui_yes": "✅ 是",
-  "unknown_command": "未知命令，请使用 /help。"
+  "unknown_command": "未知命令，请使用 /help。",
+  "ui_reg_mark_bot": "🤖 来自机器人",
+  "ui_reg_source": "来源",
+  "ui_reg_source_bot": "机器人的默认值{label}"
  }
 }

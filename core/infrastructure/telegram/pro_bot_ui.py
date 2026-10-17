@@ -65,6 +65,7 @@ from ...application.backup_service import (
     serialize_bundle,
 )
 from ...application.repositories import ConcurrencyError
+from ...application.effective_settings import describe_rule
 from ...application.use_cases import (
     AIConfigUseCases,
     FilterRuleUseCases,
@@ -1504,7 +1505,7 @@ class ProBotUI:
         st.buffer["reg_query"] = str(text or "").strip()
         await self._persist(uid, st)
         editor = self._registry_editor(rule, uid)
-        rendered, rows = editor.search(rule, st, st.buffer["reg_query"], 0)
+        rendered, rows = editor.search(rule, st, st.buffer["reg_query"], 0, await editor.sources_for(rule))
         await message.reply_text(rendered, reply_markup=self._kbd(rows))
 
     def _registry_editor(self, rule: ForwardRule, uid: int) -> RegistryEditor:
@@ -1520,6 +1521,9 @@ class ProBotUI:
             save=lambda r: self._save_owned_rule(
                 r, uid, getattr(r, "version", None)
             ),
+            # Where each value comes from. Owner-scoped: this is a human path, so
+            # another tenant's bot is not found and never supplies a default.
+            describe=lambda r: describe_rule(r, self._bot_tokens, uid),
         )
 
     async def _registry_show(self, cq: CallbackQuery, rule: ForwardRule, uid: int,
@@ -6002,7 +6006,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             editor = self._registry_editor(rule, uid)
-            text, rows = editor.groups(rule, st)
+            text, rows = editor.groups(rule, st, await editor.sources_for(rule))
             await self._registry_show(cq, rule, uid, text, rows)
 
         @b.on_callback_query(filters.regex(r"^rge:G:([^:]+):([^:]+):(\d+)$"))
@@ -6016,7 +6020,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             editor = self._registry_editor(rule, uid)
-            text, rows = editor.group(rule, st, group, int(page))
+            text, rows = editor.group(rule, st, group, int(page), await editor.sources_for(rule))
             await self._registry_show(cq, rule, uid, text, rows)
 
         @b.on_callback_query(filters.regex(r"^rge:k:([^:]+):(\d+)$"))
@@ -6030,7 +6034,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             editor = self._registry_editor(rule, uid)
-            text, rows = editor.detail(rule, st, int(idx))
+            text, rows = editor.detail(rule, st, int(idx), await editor.sources_for(rule))
             await self._registry_show(cq, rule, uid, text, rows)
 
         @b.on_callback_query(filters.regex(r"^rge:t:([^:]+):(\d+)$"))
@@ -6045,7 +6049,7 @@ class ProBotUI:
             st = self._state(uid)
             editor = self._registry_editor(rule, uid)
             notice = await editor.toggle(rule, st, int(idx))
-            text, rows = editor.detail(rule, st, int(idx))
+            text, rows = editor.detail(rule, st, int(idx), await editor.sources_for(rule))
             await self._registry_show(cq, rule, uid, text, rows)
             await cq.answer(notice, show_alert=True)
 
@@ -6060,7 +6064,7 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
             editor = self._registry_editor(rule, uid)
-            text, rows = editor.choices(rule, st, int(idx))
+            text, rows = editor.choices(rule, st, int(idx), await editor.sources_for(rule))
             await self._registry_show(cq, rule, uid, text, rows)
 
         @b.on_callback_query(filters.regex(r"^rge:v:([^:]+):(\d+):(\d+)$"))
@@ -6075,7 +6079,7 @@ class ProBotUI:
             st = self._state(uid)
             editor = self._registry_editor(rule, uid)
             notice = await editor.set_choice(rule, st, int(idx), int(pos))
-            text, rows = editor.detail(rule, st, int(idx))
+            text, rows = editor.detail(rule, st, int(idx), await editor.sources_for(rule))
             await self._registry_show(cq, rule, uid, text, rows)
             await cq.answer(notice, show_alert=True)
 
@@ -6091,7 +6095,7 @@ class ProBotUI:
             st = self._state(uid)
             editor = self._registry_editor(rule, uid)
             notice = await editor.reset(rule, st, int(idx))
-            text, rows = editor.detail(rule, st, int(idx))
+            text, rows = editor.detail(rule, st, int(idx), await editor.sources_for(rule))
             await self._registry_show(cq, rule, uid, text, rows)
             await cq.answer(notice, show_alert=True)
 

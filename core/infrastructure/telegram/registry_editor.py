@@ -22,6 +22,12 @@ Two conventions matter for correctness:
 * Nothing is written directly. Every change goes through the registry's
   ``apply_settings``, so a value the API would reject is rejected here too, with
   the same message, and a rejected change never leaves the rule half-updated.
+* A screen shows what the forwarder will *use*, and says where it came from.
+  Comparing the stored value with the registry default cannot tell an inherited
+  value from a chosen one — a task that deliberately picked the default reads as
+  "not set", and a task inheriting its bot's value reads as "set on this task".
+  When the caller supplies a describer, the mark comes from the server's own
+  provenance; without one the old comparison is used, so nothing breaks.
 """
 
 from __future__ import annotations
@@ -33,6 +39,7 @@ from ...domain.rule_settings import (
     SETTING_SPECS,
     SettingError,
     apply_settings,
+    clear_setting,
     read_settings,
 )
 
@@ -72,10 +79,13 @@ class RegistryEditor:
         *,
         translate: Callable[..., str],
         save: Callable[[Any], Any],
+        describe: Optional[Callable[[Any], Any]] = None,
         page_size: int = PAGE_SIZE,
     ) -> None:
         self._t = translate
         self._save = save
+        #: Awaited with the rule, returns ``{key: {value, source, ...}}``.
+        self._describe = describe
         self.page_size = max(1, int(page_size))
 
     # ------------------------------------------------------------------ #
@@ -140,8 +150,72 @@ class RegistryEditor:
             return self._t("ui_reg_empty")
         return _truncate(str(value))
 
-    def _status_mark(self, key: str, value: Any) -> str:
-        """Whether this task sets the value itself or leaves it at the default."""
+    async def sources_for(self, rule: Any) -> Dict[str, Dict[str, Any]]:
+        """Where each setting's effective value comes from.
+
+        Optional by design: without a describer the screens fall back to
+        comparing the stored value with the registry default, exactly as they
+        did before per-bot defaults existed.
+        """
+        if self._describe is None:
+            return {}
+        try:
+            described = await self._describe(rule)
+        except Exception:
+            # A convenience setting must never stop a settings screen from
+            # rendering: no provenance just means no marks.
+            return {}
+        if not isinstance(described, dict):
+            return {}
+        # Name the bot once here: with more than one attached to an account,
+        # "inherited" alone does not say which one is supplying the value. The
+        # label comes from the rule, so no extra lookup is needed.
+        label = str(
+            getattr(rule, "bot_token_label", "") or getattr(rule, "bot_label", "") or ""
+        ).strip()
+        if label:
+            for info in described.values():
+                if (
+                    isinstance(info, dict)
+                    and str(info.get("source") or "") == "bot"
+                    and not info.get("bot_label")
+                ):
+                    info["bot_label"] = label
+        return described
+
+    def _effective(
+        self, key: str, values: Dict[str, Any], sources: Optional[Dict[str, Dict[str, Any]]]
+    ) -> Any:
+        """The value the forwarder will use, so the bot shows the real one."""
+        info = (sources or {}).get(key)
+        if isinstance(info, dict) and "value" in info:
+            return info["value"]
+        return values.get(key, SETTING_SPECS[key].default)
+
+    @staticmethod
+    def _owned(key: str, values: Dict[str, Any], sources: Optional[Dict[str, Dict[str, Any]]]) -> bool:
+        """Whether this task sets the value itself, rather than inheriting it.
+
+        The stored value cannot answer this: a task that chose the registry
+        default stores exactly what an untouched task stores.
+        """
+        info = (sources or {}).get(key)
+        if isinstance(info, dict) and info.get("source"):
+            return str(info["source"]) == "task"
+        return values.get(key) != SETTING_SPECS[key].default
+
+    def _status_mark(
+        self, key: str, value: Any, sources: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> str:
+        """Whether the task sets the value itself, inherits it, or has nothing."""
+        info = (sources or {}).get(key)
+        if isinstance(info, dict) and info.get("source"):
+            mark = {
+                "task": "ui_reg_mark_set",
+                "bot": "ui_reg_mark_bot",
+            }.get(str(info["source"]), "ui_reg_mark_default")
+            return self._t(mark)
+        # No provenance: the task's value is whatever differs from the default.
         default = SETTING_SPECS[key].default
         return self._t("ui_reg_mark_set") if value != default else self._t("ui_reg_mark_default")
 
@@ -153,28 +227,34 @@ class RegistryEditor:
         ordered += [g for g in by_group if g not in GROUP_ORDER]
         return [(g, by_group[g]) for g in ordered]
 
-    def changed_count(self, rule: Any) -> int:
+    def changed_count(
+        self, rule: Any, sources: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> int:
         values = self._values(rule)
         return sum(
-            1 for key, spec in SETTING_SPECS.items() if values.get(key) != spec.default
+            1 for key in SETTING_SPECS if self._owned(key, values, sources)
         )
 
     # ------------------------------------------------------------------ #
     # screens
     # ------------------------------------------------------------------ #
-    def groups(self, rule: Any, st: Any) -> Tuple[str, Keyboard]:
+    def groups(
+        self, rule: Any, st: Any, sources: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> Tuple[str, Keyboard]:
         values = self._values(rule)
         lines = [
             self._t("ui_reg_title"),
             "",
-            self._t("ui_reg_subtitle", changed=self.changed_count(rule), total=len(SETTING_SPECS)),
+            self._t(
+                "ui_reg_subtitle",
+                changed=self.changed_count(rule, sources),
+                total=len(SETTING_SPECS),
+            ),
             "",
         ]
         rows: Keyboard = []
         for group, keys in self._groups():
-            changed = sum(
-                1 for k in keys if values.get(k) != SETTING_SPECS[k].default
-            )
+            changed = sum(1 for k in keys if self._owned(k, values, sources))
             mark = f" • {changed}" if changed else ""
             lines.append(f"• {self._t(f'ui_reg_group_{group}')}{mark}")
             rows.append([(self._t(f"ui_reg_group_{group}"), f"rge:G:{rule.id}:{group}:0")])
@@ -183,11 +263,16 @@ class RegistryEditor:
         return "\n".join(lines), rows
 
     def group(
-        self, rule: Any, st: Any, group: str, page: int = 0
+        self,
+        rule: Any,
+        st: Any,
+        group: str,
+        page: int = 0,
+        sources: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Tuple[str, Keyboard]:
         keys = [k for k, spec in SETTING_SPECS.items() if spec.group == group]
         if not keys:
-            return self.groups(rule, st)
+            return self.groups(rule, st, sources)
         self._set_keys(st, keys, group)
         values = self._values(rule)
         pages = max(1, (len(keys) + self.page_size - 1) // self.page_size)
@@ -203,9 +288,9 @@ class RegistryEditor:
         rows: Keyboard = []
         for offset, key in enumerate(window):
             idx = start + offset
-            value = values.get(key, SETTING_SPECS[key].default)
+            value = self._effective(key, values, sources)
             lines.append(
-                f"{self._status_mark(key, value)} **{self._label(key)}**\n"
+                f"{self._status_mark(key, value, sources)} **{self._label(key)}**\n"
                 f"   `{self._format(key, value)}`"
             )
             rows.append([(self._label(key), f"rge:k:{rule.id}:{idx}")])
@@ -221,21 +306,39 @@ class RegistryEditor:
         rows.append([(self._t("ui_reg_btn_groups"), f"rge:g:{rule.id}")])
         return "\n".join(lines), rows
 
-    def detail(self, rule: Any, st: Any, idx: int) -> Tuple[str, Keyboard]:
+    def detail(
+        self,
+        rule: Any,
+        st: Any,
+        idx: int,
+        sources: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> Tuple[str, Keyboard]:
         key = self._key_at(st, idx)
         if key is None:
             return self._stale(rule, st)
         spec = SETTING_SPECS[key]
         values = self._values(rule)
-        value = values.get(key, spec.default)
+        info = (sources or {}).get(key)
+        owned = self._owned(key, values, sources)
+        # What the forwarder will use, not what this task happens to store: for
+        # an inherited setting those differ, and the effective one is the truth.
+        value = self._effective(key, values, sources)
         lines = [
             self._t("ui_reg_key_title", label=self._label(key)),
             "",
             f"**{self._t('ui_reg_kind')}:** `{spec.kind}`",
             f"**{self._t('ui_reg_value')}:** `{self._format(key, value)}`",
             f"**{self._t('ui_reg_default')}:** `{self._format(key, spec.default)}`",
-            f"**{self._t('ui_reg_status')}:** {self._status_mark(key, value)}",
+            f"**{self._t('ui_reg_status')}:** {self._status_mark(key, value, sources)}",
         ]
+        if isinstance(info, dict) and str(info.get("source") or "") == "bot":
+            # Name the bot: with several attached to an account, "inherited"
+            # alone does not say which one is supplying the value.
+            name = str(info.get("bot_label") or "").strip()
+            lines.append(
+                "**" + self._t("ui_reg_source") + ":** "
+                + self._t("ui_reg_source_bot", label=f" ({name})" if name else "")
+            )
         if spec.help:
             lines += ["", self._t("ui_reg_help", help=spec.help)]
         if spec.choices:
@@ -258,7 +361,9 @@ class RegistryEditor:
             rows.append([(self._t("ui_reg_btn_choose"), f"rge:c:{rule.id}:{idx}")])
         else:
             rows.append([(self._t("ui_reg_btn_edit"), f"rge:e:{rule.id}:{idx}")])
-        if value != spec.default:
+        if owned:
+            # Offered whenever the task owns the value — including when it chose
+            # the registry default, which the old comparison could not see.
             rows.append([(self._t("ui_reg_btn_reset"), f"rge:r:{rule.id}:{idx}")])
         rows.append(
             [(self._t("ui_reg_btn_back_group"),
@@ -266,15 +371,22 @@ class RegistryEditor:
         )
         return "\n".join(lines), rows
 
-    def choices(self, rule: Any, st: Any, idx: int) -> Tuple[str, Keyboard]:
+    def choices(
+        self,
+        rule: Any,
+        st: Any,
+        idx: int,
+        sources: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> Tuple[str, Keyboard]:
         key = self._key_at(st, idx)
         if key is None:
             return self._stale(rule, st)
         spec = SETTING_SPECS[key]
         if not spec.choices:
-            return self.detail(rule, st, idx)
+            return self.detail(rule, st, idx, sources)
         values = self._values(rule)
-        current = values.get(key, spec.default)
+        # The list marks whichever choice is in force, inherited or chosen.
+        current = self._effective(key, values, sources)
         rows: Keyboard = [
             [(f"{'✅ ' if choice == current else ''}{choice}",
               f"rge:v:{rule.id}:{idx}:{pos}")]
@@ -288,11 +400,18 @@ class RegistryEditor:
         ]
         return "\n".join(lines), rows
 
-    def search(self, rule: Any, st: Any, query: str = "", page: int = 0) -> Tuple[str, Keyboard]:
+    def search(
+        self,
+        rule: Any,
+        st: Any,
+        query: str = "",
+        page: int = 0,
+        sources: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> Tuple[str, Keyboard]:
         raw = " ".join(str(query or "").split())
         if not raw:
             self._set_keys(st, [], "")
-            return self.groups(rule, st)
+            return self.groups(rule, st, sources)
         needle = raw.lower()
         keys = [
             key
@@ -316,9 +435,9 @@ class RegistryEditor:
         rows = []
         for offset, key in enumerate(window):
             idx = start + offset
-            value = values.get(key, SETTING_SPECS[key].default)
+            value = self._effective(key, values, sources)
             lines.append(
-                f"{self._status_mark(key, value)} **{self._label(key)}**\n"
+                f"{self._status_mark(key, value, sources)} **{self._label(key)}**\n"
                 f"   `{self._format(key, value)}`"
             )
             rows.append([(self._label(key), f"rge:k:{rule.id}:{idx}")])
@@ -398,11 +517,28 @@ class RegistryEditor:
         return await self._write(rule, {key: value})
 
     async def reset(self, rule: Any, st: Any, idx: int) -> str:
+        """Hand one setting back to the value it inherits.
+
+        Not ``_write({key: default})``: storing the default as a value pins the
+        key to it, so the task would stop following its bot — the opposite of
+        what "reset" means once a bot can supply defaults. The pin is removed
+        instead, and the value falls back to the bot's default, or to the
+        registry's when the bot has none.
+        """
         key = self._key_at(st, idx)
         if key is None:
             return self._t("ui_reg_stale")
-        spec = SETTING_SPECS[key]
-        return await self._write(rule, {key: spec.default}, reset=True)
+        try:
+            clear_setting(rule, key)
+        except SettingError as exc:
+            return self._t("ui_reg_invalid", reason=exc.args[0] if exc.args else str(exc))
+        except Exception as exc:  # pragma: no cover - defensive
+            return self._t("ui_reg_invalid", reason=str(exc))
+        try:
+            await self._save(rule)
+        except Exception as exc:
+            return self._t("ui_reg_save_failed", reason=str(exc))
+        return self._t("ui_reg_reset_done", label=self._label(key))
 
     async def _write(self, rule: Any, values: Dict[str, Any], reset: bool = False) -> str:
         """Apply through the registry, then persist. One write, one message."""
