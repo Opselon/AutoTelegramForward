@@ -21,7 +21,9 @@ set -euo pipefail
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-autotelegramforward}"
 COMPOSE_DIR="${ATF_COMPOSE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 ENV_FILE="${ATF_ENV_FILE:-$COMPOSE_DIR/.env}"
-SERVICES=(core api web logger)
+# Which services to move. All four by default; override to move a subset
+# (ATF_SERVICES="core api") when only some images changed.
+read -r -a SERVICES <<< "${ATF_SERVICES:-core api web logger}"
 HEALTH_TIMEOUT="${ATF_HEALTH_TIMEOUT:-90}"
 DEPLOYED_TAG_FILE="$COMPOSE_DIR/.atf/deployed-tag"
 
@@ -88,7 +90,8 @@ wait_healthy() {
   local deadline=$((SECONDS + HEALTH_TIMEOUT)) name status
   while [ "$SECONDS" -lt "$deadline" ]; do
     local all_up=1
-    for name in atf-${SERVICES[0]} atf-${SERVICES[1]} atf-${SERVICES[2]} atf-${SERVICES[3]}; do
+    for name in "${SERVICES[@]}"; do
+      name="atf-$name"
       status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$name" 2>/dev/null || echo missing)
       case "$status" in
         healthy|running) ;;
@@ -138,9 +141,14 @@ echo "$TAG" > "$DEPLOYED_TAG_FILE"
 echo "== healthy =="
 compose ps
 if [ "$MODE" = "pull" ]; then
+  # What is actually running, per service. `RepoDigests` is empty for an image
+  # fetched by tag through compose, so it reported "unknown" for every service on
+  # the first pull-based deploy — the tag deployed and the resolved image ID are
+  # the handles that always exist.
   for service in "${SERVICES[@]}"; do
-    digest=$(docker inspect -f '{{index .RepoDigests 0}}' "atf-$service" 2>/dev/null || echo "unknown")
-    echo "atf-$service  $digest"
+    ref=$(docker inspect -f '{{.Config.Image}}' "atf-$service" 2>/dev/null || true)
+    id=$(docker inspect -f '{{.Image}}' "atf-$service" 2>/dev/null || true)
+    echo "atf-$service  ${ref:-unknown}  ${id:0:19}"
   done
 fi
 echo "deployed tag: $TAG   (previous: ${BEFORE:-none})"

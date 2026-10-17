@@ -195,3 +195,41 @@ def stripped_context(line: str) -> bool:
     """True when a GHCR_TOKEN mention is prose (a comment or a printed hint)."""
     stripped = line.lstrip()
     return stripped.startswith("#") or stripped.startswith("echo")
+
+
+# --------------------------------------------------------------------------- #
+# What the deploy summary reports must exist for a pulled image
+# --------------------------------------------------------------------------- #
+
+
+def test_the_summary_reports_the_tag_and_image_id_not_an_empty_digest():
+    text = DEPLOY.read_text(encoding="utf-8")
+    # RepoDigests is empty for an image fetched by tag through compose: the first
+    # pull-based deploy printed "unknown" for every service.
+    assert "{{index .RepoDigests 0}}" not in text
+    assert "{{.Config.Image}}" in text
+    assert "{{.Image}}" in text
+
+
+def test_the_health_wait_follows_the_services_being_deployed():
+    text = DEPLOY.read_text(encoding="utf-8")
+    wait = text.split("wait_healthy() {", 1)[1].split("\n}", 1)[0]
+    assert "${SERVICES[@]}" in wait
+    # a hardcoded index would read past the end of a subset deploy
+    for index in range(4):
+        assert f"SERVICES[{index}]" not in text, f"SERVICES[{index}] is a fixed slot"
+
+
+def test_the_service_list_can_be_narrowed_and_defaults_to_the_published_four():
+    text = DEPLOY.read_text(encoding="utf-8")
+    assert "ATF_SERVICES" in text
+    assert "core api web logger" in text
+    assert set(overlay_services()) == set("core api web logger".split())
+
+
+def test_every_deploy_step_uses_the_same_service_list():
+    text = DEPLOY.read_text(encoding="utf-8")
+    for call in ('compose pull --quiet "${SERVICES[@]}"',
+                 'compose up -d --no-deps "${SERVICES[@]}"',
+                 'compose build "${SERVICES[@]}"'):
+        assert call in text, call
