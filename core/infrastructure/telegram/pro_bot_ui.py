@@ -2238,6 +2238,23 @@ class ProBotUI:
         rows.append([(f"🔙 {self._t('ui_rule_back_task')}", f"rd:{rule.id}")])
         return text, self._kbd(rows)
 
+    def _draft_ai_badge(self, draft: Dict[str, Any], lang: str) -> str:
+        """Badge for the task panel's AI row — computed, never remembered.
+
+        The row used to render ``draft["ai_status_badge"]``, a string only the
+        AI menu ever set, so a freshly opened editor read "Off" for every task
+        while the pipeline rewrote every message (it gated on ai_config_id
+        alone). This mirrors ForwardRule.ai_rewrite_active and is the panel's
+        only source for that row.
+        """
+        if not draft.get("ai_config_id"):
+            return self._t("ui_draft_ai_off", lang=lang)
+        addons = draft.get("paid_addons")
+        if isinstance(addons, dict) and addons.get("ai_rewrite") is False:
+            return self._t("ui_draft_ai_off", lang=lang)
+        pol = str(draft.get("ai_fallback_policy") or "DROP")
+        return f"🟢 {pol}"
+
     def _render_draft_editor(self, rule: ForwardRule, draft: Dict[str, Any]) -> Tuple[str, InlineKeyboardMarkup]:
         lang = self._lang_for(rule)
         """Render comprehensive draft editor screen where settings are staged safely."""
@@ -2322,7 +2339,7 @@ class ProBotUI:
                 (self._t("ui_draft_btn_replace", lang=lang, n=reps_count), f"rtx:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_ai", lang=lang, b=draft.get("ai_status_badge") or self._t("ui_draft_ai_off", lang=lang)), f"r_ai:{rule.id}"),
+                (self._t("ui_draft_btn_ai", lang=lang, b=self._draft_ai_badge(draft, lang)), f"r_ai:{rule.id}"),
             ],
             [
                 (self._t("ui_draft_btn_hf", lang=lang), f"rhf:{rule.id}"),
@@ -6245,6 +6262,12 @@ class ProBotUI:
                     before = rule.ai_config_id
                     rule.ai_config_id = target_cfg.id
                     rule.smart_ai_rewrite = True
+                    # The panel's paid-addon switch and the pipeline's gate read
+                    # the same keys: enabling here must open that switch too,
+                    # otherwise ai_rewrite_active keeps saying "off".
+                    _addons = dict(rule.paid_addons or {})
+                    _addons["ai_rewrite"] = True
+                    rule.paid_addons = _addons
                     try:
                         await self._save_owned_rule(rule, uid)
                         saved_ok = True
@@ -6285,6 +6308,9 @@ class ProBotUI:
                     before = rule.ai_config_id
                     rule.ai_config_id = None
                     rule.smart_ai_rewrite = False
+                    _addons = dict(rule.paid_addons or {})
+                    _addons["ai_rewrite"] = False
+                    rule.paid_addons = _addons
                     try:
                         await self._save_owned_rule(rule, uid)
                         logger.info(

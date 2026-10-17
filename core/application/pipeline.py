@@ -706,7 +706,7 @@ class DurableMessagePipeline:
                 "[PIPELINE:TRANSFORM] [%s] Rule %s transformed msg %s: text_len %d -> %d (ai=%s, took %.2fms)",
                 ctx.correlation_id[:8], rule.id[:8], payload.message_id,
                 len(payload.effective_text or ""), len(transformed),
-                bool(rule.ai_config_id), (time.monotonic() - t0) * 1000,
+                bool(getattr(rule, "ai_rewrite_active", bool(rule.ai_config_id))), (time.monotonic() - t0) * 1000,
             )
         except Exception as exc:
             ctx.record_stage(PipelineStage.TRANSFORM, False, reason="transform_error", error=str(exc))
@@ -1008,8 +1008,21 @@ class DurableMessagePipeline:
                     ctx.correlation_id[:8], rule.id[:8], exc,
                 )
 
-        # AI Transformation (Modular, non-blocking, multi-layer defended)
+        # AI Transformation (Modular, non-blocking, multi-layer defended).
+        # The gate is the rule's single AI authority: a configured config id is
+        # not enough, because the task panel can switch rewriting off (and the
+        # paid-addon switch can be closed) while the config stays attached.
         ai_cfg_id = getattr(rule, "ai_config_id", None)
+        if ai_cfg_id and not getattr(rule, "ai_rewrite_active", True):
+            logger.info(
+                "[PIPELINE:AI_REWRITE:OFF] [%s] Rule %s keeps cfg=%s but rewrite is disabled "
+                "(smart_ai_rewrite=%s, paid_addons=%s) — delivering unmodified text",
+                ctx.correlation_id[:8], rule.id[:8], ai_cfg_id,
+                bool(getattr(rule, "smart_ai_rewrite", False)),
+                (getattr(rule, "paid_addons", {}) or {}).get("ai_rewrite")
+                if isinstance(getattr(rule, "paid_addons", None), dict) else None,
+            )
+            ai_cfg_id = None
         if ai_cfg_id:
             ai_transformed = await self._run_ai_transform(ctx, text, rule, payload, evaluation)
             if ai_transformed is None:

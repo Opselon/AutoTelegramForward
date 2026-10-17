@@ -226,6 +226,9 @@ class DurableQueueManager:
             "media_type": getattr(payload.media_type, "value", str(payload.media_type)),
             "media_group_id": payload.media_group_id,
             "album_message_ids": album_ids,
+            # Multi-photo option travels with the job: the worker decides whether
+            # to keep the media group, send only its first item, or split it.
+            "album_mode": str(getattr(rule, "album_mode", "album") or "album"),
             "forward_mode": forward_mode_val,
             "content_mode": mode_val,
             "delay_seconds": float(getattr(rule, "delay_seconds", 0.0) or 0.0),
@@ -1102,6 +1105,35 @@ class DurableQueueManager:
 
         # 2. ALBUM HANDLING (COPY / REUPLOAD)
         if is_album:
+            # Per-task multi-photo option. "album" keeps the media group,
+            # "first" delivers only its first item, "split" delivers every item
+            # as its own post. The switch was persisted and rendered for months
+            # while the worker never read it — every mode behaved like "album".
+            album_mode = str(data.get("album_mode") or "album").lower()
+            if album_mode == "first":
+                try:
+                    res = await client.copy_message(
+                        chat_id=target,
+                        from_chat_id=src_chat,
+                        message_id=int(album_ids[0]),
+                        caption=caption,
+                        **thread_kwargs,
+                    )
+                    return getattr(res, "id", 0)
+                except Exception as one_err:
+                    logger.info("first-album-item copy failed (%s), falling back to the group", one_err)
+            elif album_mode == "split":
+                last_id = 0
+                for item_id in album_ids:
+                    res = await client.copy_message(
+                        chat_id=target,
+                        from_chat_id=src_chat,
+                        message_id=int(item_id),
+                        caption=caption,
+                        **thread_kwargs,
+                    )
+                    last_id = getattr(res, "id", last_id) or last_id
+                return last_id
             try:
                 if hasattr(client, "copy_media_group"):
                     res = await client.copy_media_group(
