@@ -765,11 +765,11 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
                 WHERE o.target_chat_id = j.target_chat_id
                   AND o.id <> j.id
                   AND o.status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')
-                  AND (o.created_at, o.source_chat_id, o.source_message_id, o.id)
-                      < (j.created_at, j.source_chat_id, j.source_message_id, j.id)
+                  AND (o.source_chat_id, o.source_message_id, o.created_at, o.id)
+                      < (j.source_chat_id, j.source_message_id, j.created_at, j.id)
             )
-            ORDER BY j.created_at ASC, j.source_chat_id ASC,
-                     j.source_message_id ASC, j.id ASC
+            ORDER BY j.source_chat_id ASC, j.source_message_id ASC,
+                     j.created_at ASC, j.id ASC
             LIMIT %s
             FOR UPDATE SKIP LOCKED
         )

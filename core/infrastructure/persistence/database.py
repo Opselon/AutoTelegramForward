@@ -545,6 +545,19 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_lane
         ON delivery_jobs(target_chat_id, status, created_at, source_message_id);
     """,
+    18: """
+    -- v18: the lane's order is the source's own order, not the ingest second.
+    -- v17's key started with created_at, which is a one-second timestamp. A
+    -- 50-post burst that straddled a second boundary was therefore reordered by
+    -- *when the poller read each post* instead of by the post's own order: the
+    -- post that happened to arrive first but had a higher message id jumped
+    -- ahead of every lower id, which is exactly the reported symptom ("50
+    -- messages sent at the same time are not forwarded in the source order").
+    -- created_at still breaks ties, but only within one source chat.
+    DROP INDEX IF EXISTS idx_delivery_jobs_lane;
+    CREATE INDEX IF NOT EXISTS idx_delivery_jobs_lane
+        ON delivery_jobs(target_chat_id, status, source_chat_id, source_message_id);
+    """,
 }
 
 # Columns added by additive migrations that must also work on a table carried
