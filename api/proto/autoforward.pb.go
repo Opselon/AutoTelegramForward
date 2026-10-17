@@ -2335,7 +2335,15 @@ type UpdateRuleSettingsRequest struct {
 	// field is not a choice: without this, saving one edited field would pin all
 	// of them and the task would stop inheriting its bot's defaults. When set,
 	// only these keys are applied; when empty, settings_json is taken as written.
-	Changed       []string `protobuf:"bytes,5,rep,name=changed,proto3" json:"changed,omitempty"`
+	Changed []string `protobuf:"bytes,5,rep,name=changed,proto3" json:"changed,omitempty"`
+	// Settings to hand back to the bot's default (or the registry's, if the bot
+	// has none). Removing a task's own value is the opposite of a value write, and
+	// writing the default value instead would leave the key pinned. Unknown keys
+	// are rejected; clearing route settings follows the route-pair rule, so
+	// clearing a bot_token_id while still delivering through that bot is refused
+	// as invalid_state rather than silently dropping the task back to the
+	// account lane.
+	Reset_        []string `protobuf:"bytes,6,rep,name=reset,proto3" json:"reset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2401,6 +2409,13 @@ func (x *UpdateRuleSettingsRequest) GetReplaceAll() bool {
 func (x *UpdateRuleSettingsRequest) GetChanged() []string {
 	if x != nil {
 		return x.Changed
+	}
+	return nil
+}
+
+func (x *UpdateRuleSettingsRequest) GetReset_() []string {
+	if x != nil {
+		return x.Reset_
 	}
 	return nil
 }
@@ -9479,14 +9494,15 @@ const file_autoforward_proto_rawDesc = "" +
 	"\vschema_json\x18\x05 \x01(\tR\n" +
 	"schemaJson\x12!\n" +
 	"\fsources_json\x18\x06 \x01(\tR\vsourcesJson\x12%\n" +
-	"\x0eeffective_json\x18\a \x01(\tR\reffectiveJson\"\xb8\x01\n" +
+	"\x0eeffective_json\x18\a \x01(\tR\reffectiveJson\"\xce\x01\n" +
 	"\x19UpdateRuleSettingsRequest\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\"\n" +
 	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\x12#\n" +
 	"\rsettings_json\x18\x03 \x01(\tR\fsettingsJson\x12\x1f\n" +
 	"\vreplace_all\x18\x04 \x01(\bR\n" +
 	"replaceAll\x12\x18\n" +
-	"\achanged\x18\x05 \x03(\tR\achanged\"\x1b\n" +
+	"\achanged\x18\x05 \x03(\tR\achanged\x12\x14\n" +
+	"\x05reset\x18\x06 \x03(\tR\x05reset\"\x1b\n" +
 	"\x19RuleSettingsSchemaRequest\"G\n" +
 	"\x11DeleteRuleRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\"\n" +

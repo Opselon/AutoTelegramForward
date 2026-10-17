@@ -325,6 +325,14 @@ message UpdateRuleSettingsRequest {
   // of them and the task would stop inheriting its bot's defaults. When set,
   // only these keys are applied; when empty, settings_json is taken as written.
   repeated string changed = 5;
+  // Settings to hand back to the bot's default (or the registry's, if the bot
+  // has none). Removing a task's own value is the opposite of a value write, and
+  // writing the default value instead would leave the key pinned. Unknown keys
+  // are rejected; clearing route settings follows the route-pair rule, so
+  // clearing a bot_token_id while still delivering through that bot is refused
+  // as invalid_state rather than silently dropping the task back to the
+  // account lane.
+  repeated string reset = 6;
 }
 
 message RuleSettingsSchemaRequest {}

@@ -24,11 +24,12 @@ import (
 // through the bot.
 type fakeBotTokens struct {
 	pb.BotTokenControlServiceClient
-	tokens     []*pb.BotTokenInfo
-	owners     map[string]int64
-	createRef  *pb.CreateBotTokenResponse
-	delRefusal string
-	lastCreate *pb.CreateBotTokenRequest
+	tokens       []*pb.BotTokenInfo
+	owners       map[string]int64
+	createRef    *pb.CreateBotTokenResponse
+	delRefusal   string
+	lastCreate   *pb.CreateBotTokenRequest
+	lastDefaults *pb.SetBotDefaultsRequest
 }
 
 func (f *fakeBotTokens) ListBotTokens(ctx context.Context, in *pb.ListBotTokensRequest, opts ...grpc.CallOption) (*pb.ListBotTokensResponse, error) {
@@ -57,6 +58,16 @@ func (f *fakeBotTokens) DeleteBotToken(ctx context.Context, in *pb.DeleteBotToke
 		return &pb.StatusResponse{Success: false, Message: f.delRefusal}, nil
 	}
 	return &pb.StatusResponse{Success: true, Message: "deleted"}, nil
+}
+
+func (f *fakeBotTokens) SetBotDefaults(ctx context.Context, in *pb.SetBotDefaultsRequest, opts ...grpc.CallOption) (*pb.BotDefaultsResponse, error) {
+	f.lastDefaults = in
+	return &pb.BotDefaultsResponse{
+		Success:      true,
+		Message:      "1 default(s) updated",
+		DefaultsJson: in.GetDefaultsJson(),
+		Changed:      []string{"remove_emojis"},
+	}, nil
 }
 
 func botTokenHandlers(client *fakeBotTokens) *Handlers {
@@ -221,5 +232,84 @@ func TestDeleteBotToken_OwnTokenIsDeleted(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// --------------------------------------------------------------------------- //
+// Bot defaults: the two write verbs a client needs
+// --------------------------------------------------------------------------- //
+
+// A client that only wants to drop a default should not have to send an empty
+// object it does not mean. Sending `{"clear":["k"]}` used to reach the core as
+// the JSON literal `null` and come back as "defaults_json must be a JSON object".
+func TestSetBotDefaults_ClearWithoutADefaultsObject(t *testing.T) {
+	client := &fakeBotTokens{
+		tokens: []*pb.BotTokenInfo{{Id: "mine"}},
+		owners: map[string]int64{"mine": 111},
+	}
+	rec := httptest.NewRecorder()
+	req := botReq(111, "PUT", "/api/bot-tokens/mine/defaults", `{"clear":["remove_emojis"]}`)
+	req.SetPathValue("id", "mine")
+	botTokenHandlers(client).SetBotDefaults(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("clearing a default must be accepted, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if client.lastDefaults == nil {
+		t.Fatal("the core was never called")
+	}
+	if got := client.lastDefaults.GetDefaultsJson(); got != "{}" {
+		t.Fatalf("absent defaults must reach the core as an empty object, got %q", got)
+	}
+	if clear := client.lastDefaults.GetClear(); len(clear) != 1 || clear[0] != "remove_emojis" {
+		t.Fatalf("the named keys must be passed through, got %v", clear)
+	}
+	if client.lastDefaults.GetReplaceAll() {
+		t.Fatal("naming keys to clear is not a full replace")
+	}
+}
+
+// Absent is not null: a present, non-object defaults value is still the caller's
+// mistake, not a silent clear-everything.
+func TestSetBotDefaults_NonObjectDefaultsIsRejected(t *testing.T) {
+	client := &fakeBotTokens{
+		tokens: []*pb.BotTokenInfo{{Id: "mine"}},
+		owners: map[string]int64{"mine": 111},
+	}
+	rec := httptest.NewRecorder()
+	req := botReq(111, "PUT", "/api/bot-tokens/mine/defaults", `{"defaults":"nope"}`)
+	req.SetPathValue("id", "mine")
+	botTokenHandlers(client).SetBotDefaults(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("a non-object defaults value must 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if client.lastDefaults != nil {
+		t.Fatal("a rejected body must not reach the core")
+	}
+}
+
+// A full replace travels as itself: the client is stating the whole mapping, so
+// the flag must survive the trip and the empty mapping must mean "none", not
+// "nothing to say".
+func TestSetBotDefaults_FullReplaceTravelsThrough(t *testing.T) {
+	client := &fakeBotTokens{
+		tokens: []*pb.BotTokenInfo{{Id: "mine"}},
+		owners: map[string]int64{"mine": 111},
+	}
+	rec := httptest.NewRecorder()
+	req := botReq(111, "PUT", "/api/bot-tokens/mine/defaults",
+		`{"replace_all":true,"defaults":{"remove_emojis":true}}`)
+	req.SetPathValue("id", "mine")
+	botTokenHandlers(client).SetBotDefaults(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if client.lastDefaults == nil || !client.lastDefaults.GetReplaceAll() {
+		t.Fatal("replace_all must reach the core")
+	}
+	if got := client.lastDefaults.GetDefaultsJson(); got != `{"remove_emojis":true}` {
+		t.Fatalf("the mapping must travel verbatim, got %q", got)
 	}
 }
