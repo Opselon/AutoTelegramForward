@@ -81,8 +81,45 @@ SQLite files must be copied while the stack is stopped; copying a live
 
 ## 5. Upgrade / rollback
 
+Two ways, and they are not equivalent. Prefer the first.
+
+### Run CI-built images (no compilation on the server)
+
+Every push to `master` publishes all four service images to GHCR (the `Publish`
+workflow) as an immutable `sha-<short>` tag plus a moving `master` tag. Pulling
+that tag runs the exact artifact the pipeline built and tested:
+
 ```bash
-# upgrade: pull the new tag, rebuild, restart (data volume is untouched)
+# one-time: the packages are private by default
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
+
+# deploy a tag (pulls first, refuses to compile, rolls back if unhealthy)
+ATF_IMAGE_TAG=sha-abc1234 scripts/deploy_release.sh
+```
+
+`scripts/deploy_release.sh` pulls every service *before* starting anything —
+with `image:` and `build:` both in the merged configuration, `docker compose up`
+would compile the first image it cannot find. It records what it deployed in
+`.atf/deployed-tag` and rolls back to the previous tag when a service does not
+become healthy. `--dry-run` prints what would change; `--pull` is the default.
+
+The published tag goes straight into compose if you prefer to drive it yourself:
+
+```bash
+ATF_IMAGE_TAG=sha-abc1234 docker compose \
+  --env-file .env -f docker-compose.yml -f docker-compose.ghcr.yml \
+  pull && ATF_IMAGE_TAG=sha-abc1234 docker compose \
+  --env-file .env -f docker-compose.yml -f docker-compose.ghcr.yml up -d
+```
+
+Rollback is the same command with the previous `sha-<short>`.
+
+### Build on this host
+
+For a fork, an offline host, or a version tag you want to compile yourself:
+
+```bash
+# upgrade: check out the tag and compile (data volume is untouched)
 git fetch --tags && git checkout vX.Y.Z
 docker compose up -d --build
 
@@ -90,6 +127,9 @@ docker compose up -d --build
 git checkout vX.Y.(Z-1)
 docker compose up -d --build
 ```
+
+This path compiles Python/Node/Rust on the machine that also forwards messages,
+and the result is not bit-identical to the CI image of the same commit.
 
 The database schema is forward-compatible within a major product version;
 if a release notes a breaking migration, back up both volumes (`atf-data`,
