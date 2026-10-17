@@ -25,6 +25,7 @@ Design notes that matter in production:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -369,6 +370,22 @@ class BotTransportCache:
         """Reject a bad token at the moment it is entered, not on first forward."""
         async with BotApiTransport(token, token_id=token_id) as transport:
             return await transport.get_me()
+
+    def forget(self, token_id: str) -> None:
+        """Drop a cached transport (and its negative entry) for one token.
+
+        Called when a token is deleted or replaced: the next job must re-read
+        the store instead of reusing a client built from a token that is gone.
+        """
+        token_id = str(token_id or "").strip()
+        entry = self._entries.pop(token_id, None)
+        self._negative.pop(token_id, None)
+        if entry:
+            transport = entry[1]
+            try:
+                asyncio.get_running_loop().create_task(transport.aclose())
+            except RuntimeError:  # no loop: nothing was using it
+                pass
 
     async def aclose(self) -> None:
         for _, transport in self._entries.values():

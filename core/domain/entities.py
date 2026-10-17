@@ -563,6 +563,17 @@ class ForwardRule:
         self.metadata["bot_token_id"] = str(val or "")
 
     @property
+    def bot_token_label(self) -> str:
+        """Human label of the attached bot (its username) — never the token."""
+        return str(self.metadata.get("bot_token_label") or "") if isinstance(self.metadata, dict) else ""
+
+    @bot_token_label.setter
+    def bot_token_label(self, val: str) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["bot_token_label"] = str(val or "")
+
+    @property
     def delivery_transport(self) -> str:
         """``USER`` (the owner's own account, the default) or ``BOT``.
 

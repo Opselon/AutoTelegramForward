@@ -37,6 +37,13 @@ from pyrogram.types import (
     WebAppInfo,
 )
 
+from .bot_transport import (
+    BotApiError,
+    BotApiTransport,
+    BotTokenInvalid,
+    BotTransportUnsupported,
+    token_looks_valid,
+)
 from .button_style import (
     DANGER as BTN_DANGER,
     PRIMARY as BTN_PRIMARY,
@@ -362,6 +369,7 @@ class ProBotUI:
         admin_ids,
         credentials=None,
         bot_tokens=None,
+        bot_route=None,
         dispatcher=None,
         boot_manager=None,
         ui_state_repo=None,
@@ -399,6 +407,9 @@ class ProBotUI:
         self._db = db
         self._credentials = credentials
         self._bot_tokens = bot_tokens
+        # The same cache the delivery worker uses, so a token entered (or
+        # removed) here takes effect on the very next forward.
+        self._bot_route = bot_route
         self._dispatcher = dispatcher
         self._boot_manager = boot_manager
         self._ui_state_repo = ui_state_repo
@@ -1190,6 +1201,14 @@ class ProBotUI:
         fl_count = (1 if rule.duplicate_filters else 0) + (1 if rule.block_links else 0) + (1 if rule.block_voice else 0) + (1 if rule.block_stickers else 0)
         rep_count = len(rule.replacements)
         delay_val = f"{rule.delay_seconds:.0f}s" if rule.delay_seconds > 0 else "0s"
+        # Who the copies are sent as. The bot route only shows as "Bot" when a
+        # token is actually attached and active, so the button never promises a
+        # sender the task cannot use.
+        transport_state = self._t(
+            "ui_route_transport_bot" if rule.delivery_transport == "BOT" else "ui_route_transport_account",
+            lang=lang,
+        )
+        token_label = rule.bot_token_label or self._t("ui_route_token_none", lang=lang)
 
         grp = rule.feature_group or "all"
         chips = {
@@ -1215,6 +1234,10 @@ class ProBotUI:
             + self._t("ui_rule_detail_sync_row2", lang=lang, fwd_hdr_status=fwd_hdr_status, dup_status=dup_status) + "\n"
             + self._t("ui_rule_detail_sync_row3", lang=lang, cleaner_status=cleaner_status, delay_val=delay_val) + "\n\n"
             + self._t("ui_rule_detail_sender", lang=lang, sender_type=sender_type) + "\n"
+            # Where the copies come from — visible on the task itself, not
+            # only one screen deeper, because it changes the sender identity.
+            + self._t("ui_rule_btn_route", lang=lang, state=transport_state) + "\n"
+            + self._t("ui_rule_btn_bot_token", lang=lang, label=token_label) + "\n"
             + self._t("ui_rule_detail_paid_addon", lang=lang) + "\n"
         )
 
@@ -1269,6 +1292,12 @@ class ProBotUI:
             [
                 (self._t("ui_rule_btn_advanced", lang=lang), f"radv:{rule.id}"),
                 (self._t("ui_rule_btn_delete_task", lang=lang), f"rrm:{rule.id}"),
+            ],
+            # Route: the owner's account, or a bot they attached. The token row
+            # is where that bot is chosen; the token itself is never shown back.
+            [
+                (self._t("ui_rule_btn_route", lang=lang, state=transport_state), f"rdt:{rule.id}"),
+                (self._t("ui_rule_btn_bot_token", lang=lang, label=token_label), f"rbt:{rule.id}"),
             ],
             # Feature groups tabs / chips
             [
@@ -1354,6 +1383,167 @@ class ProBotUI:
         ])
 
         return text, self._kbd(rows)
+
+    # ------------------------------------------------------------------ #
+    # bot route: the sender identity of a task, and the token behind it   #
+    # ------------------------------------------------------------------ #
+    #
+    # A task normally forwards as the owner's own account. It can instead
+    # forward through a bot the owner attached: that bot is the middle hop, so
+    # copies arrive as the bot, the owner's account is never the visible sender,
+    # and Bot API extras such as inline buttons become reachable. The token is
+    # the credential for that hop — written encrypted, never shown back, never
+    # logged, and the message that carried it is deleted.
+
+    async def _active_bot_token(self, token_id: str):
+        """The stored token row behind an id, or None when it is unusable."""
+        token_id = str(token_id or "").strip()
+        if not token_id or self._bot_tokens is None:
+            return None
+        try:
+            record = await self._bot_tokens.get(token_id)
+        except Exception as exc:  # a broken vault must not take the panel down
+            logger.warning("[BOT ROUTE] token %s lookup failed: %s", token_id[:8], exc)
+            return None
+        if record is None or not getattr(record, "is_active", False) or not getattr(record, "token", ""):
+            return None
+        return record
+
+    async def _rules_using_bot_token(self, uid: int, token_id: str) -> List[str]:
+        """Assistant task ids that a route is currently pointing at this token."""
+        token_id = str(token_id or "").strip()
+        if not token_id or self._rules is None:
+            return []
+        owner_id = int(self._scope_uid(uid) or 0)
+        try:
+            owned = await self._rules.list_by_owner(owner_id)
+        except Exception as exc:
+            logger.warning("[BOT ROUTE] rule scan for token %s failed: %s", token_id[:8], exc)
+            return []
+        return [r.id for r in (owned or []) if getattr(r, "bot_token_id", "") == token_id]
+
+    async def _validate_bot_token(self, token: str) -> Tuple[bool, Dict[str, Any]]:
+        """Ask Telegram whether a pasted token works before storing it.
+
+        A token that fails here is never written: attaching a dead token would
+        turn into a task that stops forwarding, which is the worst outcome.
+        """
+        try:
+            if self._bot_route is not None:
+                me = await self._bot_route.validate(token, token_id="pasted")
+            else:
+                async with BotApiTransport(token) as transport:
+                    me = await transport.get_me()
+        except BotApiError as exc:
+            logger.warning("[BOT ROUTE] pasted token refused: %s (code %s)", exc.description, exc.code)
+            return False, {}
+        except BotTransportUnsupported as exc:
+            logger.warning("[BOT ROUTE] pasted token check unsupported: %s", exc)
+            return False, {}
+        except (BotTokenInvalid, ValueError):
+            return False, {}
+        except Exception as exc:  # network trouble: report, do not store
+            logger.warning("[BOT ROUTE] pasted token check failed: %s", type(exc).__name__)
+            return False, {}
+        return True, dict(me or {})
+
+    async def _render_bot_route_screen(self, rule: ForwardRule, st: "UiState") -> Tuple[str, InlineKeyboardMarkup]:
+        """Where a task's copies are sent from, and which bots are available."""
+        lang = self._lang_for(rule)
+        records: List[Any] = []
+        if self._bot_tokens is not None:
+            try:
+                records = [r for r in (await self._bot_tokens.list_all() or []) if getattr(r, "is_active", False)]
+            except Exception as exc:
+                logger.warning("[BOT ROUTE] token list failed: %s", exc)
+        records.sort(key=lambda r: (int(getattr(r, "created_at", 0) or 0), str(r.id)))
+
+        # The keyboard carries indexes, not ids: two uuids plus a prefix would not
+        # fit Telegram's 64-byte callback_data. The handler resolves an index
+        # against this exact list, and refuses when the list has moved on.
+        st.buffer["bot_route_tokens"] = [str(r.id) for r in records]
+        st.buffer["bot_route_rule"] = str(rule.id)
+
+        transport_state = self._t(
+            "ui_route_transport_bot" if rule.delivery_transport == "BOT" else "ui_route_transport_account",
+            lang=lang,
+        )
+        token_label = rule.bot_token_label or self._t("ui_route_token_none", lang=lang)
+        lines = [
+            self._t("ui_route_token_title", lang=lang),
+            "",
+            self._t("ui_rule_btn_route", lang=lang, state=transport_state),
+            self._t("ui_rule_btn_bot_token", lang=lang, label=token_label),
+            "",
+        ]
+        for idx, rec in enumerate(records, start=1):
+            mark = " ✅" if str(rec.id) == rule.bot_token_id else ""
+            lines.append(f"{idx}. {rec.label}{mark}")
+
+        rows: List[List[Tuple[str, str]]] = []
+        for idx, rec in enumerate(records):
+            rows.append([(self._t("ui_route_token_use", lang=lang, label=str(rec.label)[:24]), f"rbts:{rule.id}:{idx}")])
+        rows.append([(self._t("ui_route_token_add", lang=lang), f"rbta:{rule.id}")])
+        for idx, rec in enumerate(records):
+            rows.append([(f"{self._t('ui_route_token_remove', lang=lang)} {str(rec.label)[:20]}", f"rbtd:{rule.id}:{idx}")])
+        rows.append([(f"🔙 {self._t('ui_rule_back_rules')}", f"rbtb:{rule.id}")])
+        return "\n".join(lines), self._kbd(rows)
+
+    def _route_token_choice(self, st: "UiState", rule_id: str, idx: int) -> str:
+        """Resolve a button index to a token id, or "" when the screen is stale."""
+        if st.buffer.get("bot_route_rule") != str(rule_id):
+            return ""
+        tokens = st.buffer.get("bot_route_tokens") or []
+        if not isinstance(tokens, list) or idx < 0 or idx >= len(tokens):
+            return ""
+        return str(tokens[idx] or "")
+
+    async def _step_bot_route_token(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        """The owner pasted a bot token. Take it, store it encrypted, forget it."""
+        uid = message.from_user.id if message.from_user else 0
+        st.step = ""
+        await self._persist(uid, st)
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            return await message.reply_text(self._t("ui_rule_not_found"))
+        lang = self._lang_for(rule)
+        token = (text or "").strip()
+
+        # This message is a credential: remove it before doing anything else so
+        # the token does not sit in the chat history.
+        try:
+            await message.delete()
+        except Exception as exc:
+            logger.warning("[BOT ROUTE] could not delete the token message (uid=%s): %s", uid, exc)
+
+        if not token_looks_valid(token):
+            return await message.reply_text(self._t("ui_route_token_invalid", lang=lang))
+
+        ok, me = await self._validate_bot_token(token)
+        if not ok:
+            return await message.reply_text(self._t("ui_route_token_rejected", lang=lang))
+
+        bot_label = f"@{me.get('username')}" if me.get("username") else f"bot {me.get('id')}"
+        if self._bot_tokens is None:
+            return await message.reply_text(self._t("ui_route_token_rejected", lang=lang))
+        try:
+            record = await self._bot_tokens.create(bot_label, token)
+        except Exception as exc:
+            logger.warning("[BOT ROUTE] storing the pasted token failed: %s", type(exc).__name__)
+            return await message.reply_text(self._t("ui_route_token_rejected", lang=lang))
+
+        rule.bot_token_id = record.id
+        rule.bot_token_label = bot_label
+        rule.delivery_transport = "BOT"
+        await self._save_owned_rule(rule, uid)
+        # Never the token itself: id, resolved bot, and the rule it serves.
+        logger.info(
+            "[BOT ROUTE] token %s attached by uid=%s to rule=%s (bot %s resolved)",
+            str(record.id)[:8], uid, str(rule.id)[:8], me.get("id"),
+        )
+        await message.reply_text(self._t("ui_route_token_attached", lang=lang, bot=bot_label))
+        text_ob, kbd_ob = self._render_rule_detail(rule)
+        await message.reply_text(text_ob, reply_markup=kbd_ob)
 
     # ------------------------------------------------------------------ #
     # multi-source -> multi-target route wizard (rendering + state)       #
@@ -5671,6 +5861,163 @@ class ProBotUI:
             text, kbd = self._render_advanced_settings(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
+        # -- bot route: the sender identity of a task ------------------------ #
+        @b.on_callback_query(filters.regex(r"^rdt:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_route_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            lang = self._lang_for(rule)
+            if rule.delivery_transport == "BOT":
+                rule.delivery_transport = "USER"
+            else:
+                # Fail closed: a task must not be pointed at a bot route whose
+                # token is gone — that would stop it forwarding altogether.
+                if not await self._active_bot_token(rule.bot_token_id):
+                    return await cq.answer(self._t("ui_route_bot_need_token", lang=lang), show_alert=True)
+                rule.delivery_transport = "BOT"
+            await self._save_owned_rule(rule, uid)
+            logger.info(
+                "[BOT ROUTE] rule=%s now delivers via %s (uid=%s)",
+                str(rule.id)[:8], rule.delivery_transport, uid,
+            )
+            state = self._t(
+                "ui_route_transport_bot" if rule.delivery_transport == "BOT" else "ui_route_transport_account",
+                lang=lang,
+            )
+            await cq.answer(self._t("ui_rule_btn_route", lang=lang, state=state))
+            text, kbd = self._render_rule_detail(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rbt:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_bot_token_screen(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            text, kbd = await self._render_bot_route_screen(rule, st)
+            await self._persist(uid, st)
+            await cq.answer()
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rbtb:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_bot_token_back(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            await cq.answer()
+            text, kbd = self._render_rule_detail(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rbta:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_bot_token_attach(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            lang = self._lang_for(rule)
+            st = self._state(uid)
+            st.step = f"bot_route_token_{rule.id}"
+            await self._persist(uid, st)
+            await cq.answer()
+            await self._safe_edit(
+                cq,
+                self._t("ui_route_token_prompt", lang=lang),
+                reply_markup=self._kbd([[(f"🔙 {self._t('ui_rule_back_rules')}", f"rbt:{rule.id}")]]),
+            )
+
+        @b.on_callback_query(filters.regex(r"^rbts:(.+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_rule_bot_token_use(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":")
+            rule_id, idx = parts[1], int(parts[2])
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            lang = self._lang_for(rule)
+            st = self._state(uid)
+            token_id = self._route_token_choice(st, rule.id, idx)
+            record = await self._active_bot_token(token_id) if token_id else None
+            if record is None:
+                # The screen the user tapped is stale (a token was removed, or
+                # another device moved on). Re-render instead of attaching a
+                # token they did not pick.
+                await cq.answer(self._t("ui_route_token_rejected", lang=lang), show_alert=True)
+                text, kbd = await self._render_bot_route_screen(rule, st)
+                await self._persist(uid, st)
+                return await self._safe_edit(cq, text, reply_markup=kbd)
+            rule.bot_token_id = record.id
+            rule.bot_token_label = record.label
+            rule.delivery_transport = "BOT"
+            await self._save_owned_rule(rule, uid)
+            logger.info(
+                "[BOT ROUTE] rule=%s attached token %s (uid=%s)",
+                str(rule.id)[:8], str(record.id)[:8], uid,
+            )
+            await cq.answer(self._t("ui_route_token_attached", lang=lang, bot=record.label))
+            text, kbd = await self._render_bot_route_screen(rule, st)
+            await self._persist(uid, st)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rbtd:(.+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_rule_bot_token_remove(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":")
+            rule_id, idx = parts[1], int(parts[2])
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            lang = self._lang_for(rule)
+            st = self._state(uid)
+            token_id = self._route_token_choice(st, rule.id, idx)
+            if not token_id:
+                await cq.answer(self._t("ui_route_token_rejected", lang=lang), show_alert=True)
+                text, kbd = await self._render_bot_route_screen(rule, st)
+                await self._persist(uid, st)
+                return await self._safe_edit(cq, text, reply_markup=kbd)
+            # Deleting a token a task still routes through would silently break
+            # that task, so the tasks have to be moved off it first.
+            in_use = await self._rules_using_bot_token(uid, token_id)
+            if in_use:
+                return await cq.answer(
+                    self._t("ui_route_token_in_use", lang=lang, count=len(in_use)),
+                    show_alert=True,
+                )
+            removed = False
+            if self._bot_tokens is not None:
+                try:
+                    removed = bool(await self._bot_tokens.delete(token_id))
+                except Exception as exc:
+                    logger.warning("[BOT ROUTE] deleting token %s failed: %s", token_id[:8], exc)
+            if self._bot_route is not None:
+                # Drop the pooled client so nothing keeps posting with a token
+                # the owner just revoked.
+                self._bot_route.forget(token_id)
+            logger.info("[BOT ROUTE] token %s deleted by uid=%s (removed=%s)", token_id[:8], uid, removed)
+            await cq.answer(self._t("ui_route_token_remove", lang=lang))
+            text, kbd = await self._render_bot_route_screen(rule, st)
+            await self._persist(uid, st)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
         @b.on_callback_query(filters.regex(r"^rtg_crypto:(.+)$"))
         @self._localized_handler
         async def _cb_rule_toggle_crypto(_, cq: CallbackQuery):
@@ -8835,6 +9182,9 @@ class ProBotUI:
         if st.step.startswith("rename_rule_"):
             rule_id = st.step.split("rename_rule_", 1)[1]
             return await self._step_rename_rule(message, st, text, rule_id)
+        if st.step.startswith("bot_route_token_"):
+            rule_id = st.step.split("bot_route_token_", 1)[1]
+            return await self._step_bot_route_token(message, st, text, rule_id)
         if st.step.startswith("set_topic_"):
             rule_id = st.step.split("set_topic_", 1)[1]
             return await self._step_set_topic(message, st, text, rule_id)
