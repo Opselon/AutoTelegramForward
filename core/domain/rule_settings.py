@@ -56,6 +56,12 @@ class SettingSpec:
     maximum: Optional[float] = None
     nullable: bool = False
     item_kind: str = "any"  # for kind == "list"
+    #: May a bot default carry this setting for every task that uses the bot?
+    #: False for anything that names a chat, a route or a schedule: those say
+    #: *which* messages the task handles and *when*, which is never a property of
+    #: the bot credential. Inheriting them would point other tasks' forwards at
+    #: someone else's chats.
+    inheritable: bool = True
 
     def to_dict(self, key: str) -> Dict[str, Any]:
         out: Dict[str, Any] = {
@@ -65,6 +71,7 @@ class SettingSpec:
             "group": self.group,
             "label": self.label or key.replace("_", " ").title(),
             "nullable": self.nullable,
+            "inheritable": self.inheritable,
         }
         if self.help:
             out["help"] = self.help
@@ -179,28 +186,28 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     # Two keys, one decision: who the copy is sent as. They are applied as a
     # pair (see apply_settings) because the entity refuses BOT without a token
     # — a half-applied pair would silently leave the task on the account route.
-    "delivery_transport": _s(
+    "delivery_transport": _s(inheritable=False, 
         kind="str", default="USER", group="route", choices=("USER", "BOT"),
         help="USER = this task's account forwards; BOT = the attached bot posts."),
-    "bot_token_id": _s(
+    "bot_token_id": _s(inheritable=False, 
         kind="str", default="", group="route",
         help="Id of an attached bot token ('' = none). Tokens are attached in the"
              " Telegram bot's task screen, where the pasted message is deleted and"
              " the token is stored encrypted; the secret itself is never exposed here."),
 
     # ---- automation ------------------------------------------------------
-    "auto_post_scheduler": _s(kind="dict", default={"enabled": False},
+    "auto_post_scheduler": _s(inheritable=False, kind="dict", default={"enabled": False},
                               group="automation"),
-    "auto_posting": _s(kind="bool", default=False, group="automation",
+    "auto_posting": _s(inheritable=False, kind="bool", default=False, group="automation",
                        help="Convenience view of auto_post_scheduler.enabled."),
-    "power_control": _s(kind="bool", default=False, group="automation",
+    "power_control": _s(inheritable=False, kind="bool", default=False, group="automation",
                         help="Convenience view of power_schedule.enabled."),
-    "power_schedule": _s(kind="dict", default={"enabled": False},
+    "power_schedule": _s(inheritable=False, kind="dict", default={"enabled": False},
                          group="automation"),
     "button_to_text": _s(kind="bool", default=False, group="automation"),
-    "link_buttons": _s(kind="list", default=[], group="automation",
+    "link_buttons": _s(inheritable=False, kind="list", default=[], group="automation",
                        item_kind="str"),
-    "affiliate_kit": _s(kind="dict", default={}, group="automation"),
+    "affiliate_kit": _s(inheritable=False, kind="dict", default={}, group="automation"),
 
     # ---- per-task content rules (blacklist / whitelist-only / replace) -----
     # Read and written through the ForwardRule properties, which keep the whole
@@ -232,10 +239,10 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     "regex_require": _s(
         kind="list", default=[], group="content", item_kind="str",
         help="Forward only a message matching one of these patterns."),
-    "source_policies": _s(
+    "source_policies": _s(inheritable=False, 
         kind="dict", default={}, group="content",
         help="Per-source overrides, keyed by source chat id."),
-    "target_policies": _s(
+    "target_policies": _s(inheritable=False, 
         kind="dict", default={}, group="content",
         help="Per-target overrides, keyed by target chat id."),
     # --- Branding hop (A -> C -> B) --------------------------------------- #
@@ -358,6 +365,90 @@ def _bounded(key: str, value: Any, spec: SettingSpec) -> Any:
 # --------------------------------------------------------------------------- #
 # Read / write
 # --------------------------------------------------------------------------- #
+#: Metadata key holding the settings a task pinned that are stored as real
+#: columns. Those leave no other trace of the choice, so the choice is noted by
+#: name (see :func:`apply_settings`).
+PIN_INDEX = "_pinned_settings"
+
+
+def _pin_index(meta: Any) -> list:
+    """The recorded pin list, reading anything unusable as empty."""
+    if not isinstance(meta, dict):
+        return []
+    raw = meta.get(PIN_INDEX)
+    if not isinstance(raw, list):
+        return []
+    return [str(k) for k in raw if isinstance(k, (str, bytes))]
+
+
+def pinned_keys(rule: Any) -> set:
+    """Settings this task chose itself, rather than inheriting.
+
+    A setting counts as chosen when the task's own value differs from the
+    registry default — that single test covers both storage shapes, because
+    :func:`read_settings` reads the column-backed and metadata-backed settings
+    the same way.
+
+    The gap it leaves is a value a task chose that is *exactly* the default,
+    with a bot default now competing for it (turning a bot's link-cleaning back
+    off, for instance). Those are recorded by name when the write moves the
+    effective value, and this is where they are read back; see
+    :data:`PIN_INDEX`.
+    """
+    meta = getattr(rule, "metadata", None)
+    pinned = {k for k in _pin_index(meta) if k in SETTING_SPECS}
+    values = read_settings(rule)
+    for key, spec in SETTING_SPECS.items():
+        if key in pinned:
+            continue
+        if _chosen_not_default(values.get(key), spec.default):
+            pinned.add(key)
+    return pinned
+
+
+def _chosen_not_default(value: Any, default: Any) -> bool:
+    """Did a task choose this value, judged by it differing from the default?
+
+    Only used for settings that are stored as columns, where there is no other
+    trace of the choice. An unset mapping column reads back as ``{}`` where the
+    registry spells out the full shape (``{"enabled": False}``); both mean
+    "off", so an empty mapping is compared against whether the default asserts
+    anything.
+    """
+    if value == default:
+        return False
+    if isinstance(value, dict) and isinstance(default, dict) and not value:
+        return any(bool(v) for v in default.values())
+    return True
+
+
+def clear_setting(rule: Any, key: str) -> bool:
+    """Return one setting to its inherited value. True when it was pinned.
+
+    Deleting the metadata entry is what actually hands the setting back to the
+    bot default: writing the default *value* instead would leave the key pinned
+    to that value and the task would stop tracking the bot.
+    """
+    if key not in SETTING_SPECS:
+        raise SettingError("unknown_setting", f"unknown setting {key!r}", key)
+    spec = SETTING_SPECS[key]
+    meta = getattr(rule, "metadata", None)
+    was_pinned = key in pinned_keys(rule)
+    # Column-backed settings have no metadata entry; writing the default is how
+    # they are cleared.
+    setattr(rule, key, spec.default)
+    if isinstance(meta, dict):
+        meta.pop(key, None)
+        recorded = _pin_index(meta)
+        if key in recorded:
+            recorded = [k for k in recorded if k != key]
+            if recorded:
+                meta[PIN_INDEX] = recorded
+            else:
+                meta.pop(PIN_INDEX, None)
+    return was_pinned
+
+
 def read_settings(rule: Any) -> Dict[str, Any]:
     """Current effective value of every registered setting on ``rule``."""
     out: Dict[str, Any] = {}
@@ -371,11 +462,27 @@ def read_settings(rule: Any) -> Dict[str, Any]:
     return out
 
 
-def apply_settings(rule: Any, values: Dict[str, Any], replace_all: bool = False) -> List[str]:
-    """Apply ``values`` to ``rule``; returns the keys that changed.
+def apply_settings(
+    rule: Any,
+    values: Dict[str, Any],
+    replace_all: bool = False,
+    effective_before: Optional[Dict[str, Any]] = None,
+) -> List[str]:
+    """Apply ``values`` to ``rule``; returns the keys whose value moved.
 
     Unknown keys and invalid values raise :class:`SettingError` *before* any
     mutation, so a rejected request never leaves the rule half-updated.
+
+    ``effective_before`` is the mapping the forwarder was using *before* this
+    write — a caller that knows which bot the task inherits from passes
+    ``core.domain.bot_defaults.effective(...)``. Two things depend on it, and
+    both are wrong without it:
+
+      * a merge that contains every registered key (what a form posts) would
+        otherwise look like a change to every key;
+      * a task overriding an inherited value with the registry's own value
+        (turning a bot's "clean links on" back off) would otherwise look like no
+        change at all, and the override would be dropped.
     """
     if not isinstance(values, dict):
         raise SettingError("invalid_type", "settings must be an object")
@@ -399,6 +506,7 @@ def apply_settings(rule: Any, values: Dict[str, Any], replace_all: bool = False)
     cleaned = {key: coerce_value(key, raw) for key, raw in target.items()}
 
     current = read_settings(rule)
+    reference = effective_before if isinstance(effective_before, dict) else current
     # The route is a pair, so validate the *resulting* state, not just the keys
     # the request happened to mention. Both halves of the failure would be
     # silent otherwise: switching to BOT with no token is dropped by the entity
@@ -420,9 +528,24 @@ def apply_settings(rule: Any, values: Dict[str, Any], replace_all: bool = False)
 
     changed: List[str] = []
     for key, value in ordered:
-        if current.get(key) != value:
+        if reference.get(key) != value:
             changed.append(key)
         setattr(rule, key, value)
+
+    # Record the keys this write moved, by name. A setting whose chosen value is
+    # exactly the registry default is otherwise indistinguishable from one the
+    # task never touched — a column leaves no other trace, and a metadata entry
+    # holding the default says nothing either — so a bot default would quietly
+    # win over the user's choice. `clear_setting` removes the note.
+    #
+    # Only *moved* keys are noted, so a client that posts a whole settings object
+    # does not pin the settings it merely rendered.
+    meta = getattr(rule, "metadata", None)
+    if isinstance(meta, dict):
+        recorded = _pin_index(meta)
+        added = [k for k in changed if k not in recorded]
+        if added:
+            meta[PIN_INDEX] = sorted(recorded + added)
     return changed
 
 

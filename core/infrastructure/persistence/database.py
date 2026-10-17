@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 # v12 adds owner scoping to api_credentials and prompt_templates. The real work
 # is done by _apply_additive_columns (guarded ALTER + index); MIGRATIONS[12]
 # only exists so schema_version tracks the upgrade and reconciliation runs.
-SCHEMA_VERSION = 15
 
 MIGRATIONS = {
     1: """
@@ -545,6 +544,13 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_lane
         ON delivery_jobs(target_chat_id, status, created_at, source_message_id);
     """,
+    20: """
+    -- v20: a bot carries settings for every task that uses it.
+    -- The column is added by _apply_additive_columns (guarded ALTER, and an
+    -- older database can jump straight to v20); this entry exists so
+    -- schema_version records the upgrade.
+    SELECT 1;
+    """,
     19: """
     -- v19: bot tokens are per-owner. The column + index are added by
     -- _apply_additive_columns (which runs after this script and is idempotent);
@@ -566,8 +572,17 @@ MIGRATIONS = {
     """,
 }
 
+
+# Derived from the migrations themselves rather than hand-maintained: this
+# constant had drifted to 15 while MIGRATIONS ran to 19, so every comparison
+# against a live database's version compared against a version no database
+# had. A new migration now moves it, by construction.
+SCHEMA_VERSION = max(MIGRATIONS)
+
 # Columns added by additive migrations that must also work on a table carried
 # over from an older schema (v11 runs the guarded ALTER in _apply_additive_columns).
+# (table, column, declaration, index) — an empty index name creates no index,
+# for columns that are read with their row and never filtered on.
 _ADDITIVE_COLUMNS = (
     ("ai_configs", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_ai_configs_owner"),
     ("filter_rules", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_filter_rules_owner"),
@@ -581,6 +596,9 @@ _ADDITIVE_COLUMNS = (
     # every owner's route screen listed every other owner's bots, and any
     # tenant could attach — or delete — another tenant's credential.
     ("bot_tokens", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_bot_tokens_owner"),
+    # v20: per-bot defaults ("{}" = none, the behaviour of every bot attached
+    # before this existed). Read with the token row, never queried on its own.
+    ("bot_tokens", "defaults_json", "TEXT NOT NULL DEFAULT '{}'", ""),
 )
 
 
@@ -688,6 +706,8 @@ class SqliteDatabase:
                     )
                 except Exception:
                     continue
+            if not index:
+                continue
             try:
                 self._conn.execute(
                     f"CREATE INDEX IF NOT EXISTS {index} ON {table}({column})"

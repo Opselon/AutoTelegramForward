@@ -1,8 +1,8 @@
 """Repository port interfaces (DIP: domain owns the abstraction)."""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 from ..domain.entities import (
     AIConfig,
@@ -52,6 +52,11 @@ class BotToken:
     # (the worker has no request context); every *human* path — listing,
     # attaching, deleting — must go through the owner-scoped methods below.
     owner_user_id: int = 0
+    # v20: the settings this bot carries for every task that uses it. Behaviour
+    # only — a default may never name a chat, a route or a schedule (see
+    # core.domain.bot_defaults). Empty means "no defaults", which is the
+    # behaviour of every bot attached before this existed.
+    defaults: Dict[str, Any] = field(default_factory=dict)
 
 
 class ISessionRepository(ABC):
@@ -277,7 +282,10 @@ class IBotTokenRepository(ABC):
         ...
 
     @abstractmethod
-    async def delete_owned(self, token_id: str, owner_user_id: int) -> bool:
+    async def set_defaults(
+        self, token_id: str, owner_user_id: int, defaults: Dict[str, Any]
+    ) -> bool:
+        """Replace one owner's bot defaults. False when the bot is not theirs."""
         ...
 
     @abstractmethod

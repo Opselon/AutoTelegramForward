@@ -1166,10 +1166,17 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details("rule not found")
             return pb.RuleSettingsResponse(success=False, error_code="not_found")
+        from ...application.effective_settings import describe_rule
+        # `settings_json` stays exactly what the task itself stores, so a client
+        # that echoes the response back cannot pin an inherited value; the
+        # effective view and its provenance come alongside it.
+        described = await describe_rule(entity, self._bot_tokens, owner)
         return pb.RuleSettingsResponse(
             success=True,
             settings_json=_json.dumps(RS.read_settings(entity)),
             schema_json=_json.dumps(RS.schema()),
+            effective_json=_json.dumps({k: v["value"] for k, v in described.items()}),
+            sources_json=_json.dumps(described),
         )
 
     async def UpdateRuleSettings(self, request, context):
@@ -1214,8 +1221,31 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
                 entity.bot_token_label = record.label
             else:
                 entity.bot_token_label = ""
+        from ...application.effective_settings import resolve_rule
+        # A client that sends the keys the user edited (rather than every field
+        # it rendered) says so here. A form posts all 72 fields and a posted
+        # field is not a choice: applying them all would pin every setting and
+        # the task would stop inheriting its bot. Only the named keys are taken.
+        only = [str(k) for k in (request.changed or [])]
+        if only:
+            unknown = [k for k in only if k not in values]
+            if unknown:
+                return pb.RuleSettingsResponse(
+                    success=False, error_code="unknown_setting",
+                    message=f"{unknown[0]} is not in the posted settings",
+                    settings_json=_json.dumps(RS.read_settings(entity)),
+                )
+            values = {k: values[k] for k in only}
+        # The value the user is looking at is the *effective* one, so "changed"
+        # has to be measured against that: overriding an inherited setting with
+        # the registry's own value is a real change.
         try:
-            changed = RS.apply_settings(entity, values, replace_all=bool(request.replace_all))
+            before = await resolve_rule(entity, self._bot_tokens, owner)
+            changed = RS.apply_settings(
+                entity, values,
+                replace_all=bool(request.replace_all),
+                effective_before=before,
+            )
         except RS.SettingError as exc:
             # Nothing was written: apply_settings validates before it mutates.
             return pb.RuleSettingsResponse(
@@ -1231,11 +1261,15 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
                     success=False, error_code="persist_failed", message=str(exc),
                     settings_json=_json.dumps(RS.read_settings(entity)),
                 )
+        from ...application.effective_settings import describe_rule
+        described = await describe_rule(entity, self._bot_tokens, owner)
         return pb.RuleSettingsResponse(
             success=True,
             message=f"{len(changed)} setting(s) updated",
             settings_json=_json.dumps(RS.read_settings(entity)),
             schema_json=_json.dumps(RS.schema()),
+            effective_json=_json.dumps({k: v["value"] for k, v in described.items()}),
+            sources_json=_json.dumps(described),
         )
 
     async def GetRuleSettingsSchema(self, request, context):
@@ -1487,6 +1521,104 @@ class BotTokenControlServicer(pb_grpc.BotTokenControlServiceServicer):
             self._bot_route.forget(token_id)
         logger.info("[BOT ROUTE] token %s deleted by owner=%s", token_id[:8], owner)
         return _status(removed, "deleted" if removed else "not_found")
+
+    async def GetBotDefaults(self, request, context):
+        """The settings this bot carries for every task that uses it."""
+        import json as _json
+        owner = int(request.owner_user_id or 0)
+        if not owner:
+            return pb.BotDefaultsResponse(success=False, error_code="unauthorized")
+        token_id = str(request.id or "").strip()
+        if not token_id:
+            return pb.BotDefaultsResponse(success=False, error_code="not_found")
+        record = await self._tokens.get_owned(token_id, owner)
+        if record is None:
+            # "Not yours" and "does not exist" are the same answer, as everywhere
+            # else a bot id crosses this boundary.
+            return pb.BotDefaultsResponse(success=False, error_code="not_found")
+        stored = getattr(record, "defaults", None)
+        return pb.BotDefaultsResponse(
+            success=True,
+            defaults_json=_json.dumps(dict(stored) if isinstance(stored, dict) else {}),
+        )
+
+    async def SetBotDefaults(self, request, context):
+        """Replace this owner's defaults for this bot.
+
+        The write is validated against the registry *before* storage, so a value
+        the bot UI or the dashboard would refuse cannot arrive by wire, and a
+        setting that names a chat, a route or a schedule is refused outright:
+        inheriting one of those would point other tasks at other chats.
+        """
+        import json as _json
+        from ...domain import bot_defaults as BD
+        from ...domain.rule_settings import SettingError
+        owner = int(request.owner_user_id or 0)
+        if not owner:
+            return pb.BotDefaultsResponse(success=False, error_code="unauthorized")
+        token_id = str(request.id or "").strip()
+        if not token_id:
+            return pb.BotDefaultsResponse(success=False, error_code="not_found")
+        record = await self._tokens.get_owned(token_id, owner)
+        if record is None:
+            return pb.BotDefaultsResponse(success=False, error_code="not_found")
+        try:
+            incoming = _json.loads(request.defaults_json or "{}")
+        except Exception:
+            return pb.BotDefaultsResponse(
+                success=False, error_code="invalid_json",
+                message="defaults_json is not valid JSON",
+            )
+        if not isinstance(incoming, dict):
+            return pb.BotDefaultsResponse(
+                success=False, error_code="invalid_type",
+                message="defaults_json must be a JSON object",
+            )
+        stored = getattr(record, "defaults", None)
+        stored = dict(stored) if isinstance(stored, dict) else {}
+        try:
+            merged = BD.merge_defaults(
+                stored, incoming,
+                replace_all=bool(request.replace_all),
+                clear=list(request.clear or []),
+            )
+        except SettingError as exc:
+            # Nothing is written: merge_defaults validates the whole result before
+            # it returns anything.
+            return pb.BotDefaultsResponse(
+                success=False, error_code=exc.code, message=str(exc),
+                defaults_json=_json.dumps(stored),
+            )
+        # Missing and null are different answers: dropping a default is a change.
+        _missing = object()
+        changed = sorted(
+            key for key in set(merged) | set(stored)
+            if merged.get(key, _missing) != stored.get(key, _missing)
+        )
+        if merged != stored:
+            try:
+                written = await self._tokens.set_defaults(token_id, owner, merged)
+            except Exception as exc:
+                logger.warning(
+                    "[BOT ROUTE] storing defaults for token %s failed: %s",
+                    token_id[:8], type(exc).__name__,
+                )
+                return pb.BotDefaultsResponse(
+                    success=False, error_code="store_failed",
+                    defaults_json=_json.dumps(stored),
+                )
+            if not written:
+                return pb.BotDefaultsResponse(success=False, error_code="not_found")
+        logger.info(
+            "[BOT ROUTE] defaults for token %s set by owner=%s (%d key(s): %s)",
+            token_id[:8], owner, len(merged), ",".join(sorted(merged)) or "none",
+        )
+        return pb.BotDefaultsResponse(
+            success=True,
+            message=f"{len(changed)} default(s) updated",
+            defaults_json=_json.dumps(merged),
+            changed=changed,
+        )
 
     async def _rules_using(self, owner: int, token_id: str) -> List[str]:
         try:

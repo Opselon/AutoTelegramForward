@@ -261,18 +261,39 @@ func TestGetRuleSettingsSchema_NeedsNoRule(t *testing.T) {
 }
 
 func TestParseSettingsBody_WrappedAndBare(t *testing.T) {
-	wrapped, replace, err := parseSettingsBody([]byte(`{"settings":{"a":1},"replace_all":true}`))
+	wrapped, replace, edited, err := parseSettingsBody([]byte(`{"settings":{"a":1},"replace_all":true}`))
 	if err != nil || !replace || wrapped["a"] != float64(1) {
 		t.Fatalf("wrapped body mis-parsed: %v %v %v", wrapped, replace, err)
 	}
-	bare, replace2, err := parseSettingsBody([]byte(`{"a":1,"b":"x"}`))
+	bare, replace2, edited2, err := parseSettingsBody([]byte(`{"a":1,"b":"x"}`))
 	if err != nil || replace2 || bare["a"] != float64(1) || bare["b"] != "x" {
 		t.Fatalf("bare body mis-parsed: %v %v %v", bare, replace2, err)
 	}
-	if _, _, err := parseSettingsBody([]byte(`[1,2]`)); err == nil {
+	if edited != nil || edited2 != nil {
+		t.Fatalf("no changed list was sent, so none should be reported: %v %v", edited, edited2)
+	}
+	// A form posts every field; `changed` is how it says which one the user
+	// actually edited, so the rest are not pinned onto the task.
+	_, _, named, err := parseSettingsBody(
+		[]byte(`{"settings":{"a":1,"b":"x"},"changed":["b"]}`))
+	if err != nil || len(named) != 1 || named[0] != "b" {
+		t.Fatalf("changed list mis-parsed: %v %v", named, err)
+	}
+	if _, _, _, err := parseSettingsBody([]byte(`{"settings":{},"changed":"b"}`)); err == nil {
+		t.Fatal("a non-list changed value must be rejected")
+	}
+	// The bare shape honours it too, and `changed` is never itself a setting.
+	bareEdited, _, named2, err := parseSettingsBody([]byte(`{"a":1,"changed":["a"]}`))
+	if err != nil || bareEdited["a"] != float64(1) || len(named2) != 1 || named2[0] != "a" {
+		t.Fatalf("bare body with changed mis-parsed: %v %v %v", bareEdited, named2, err)
+	}
+	if _, present := bareEdited["changed"]; present {
+		t.Fatal("changed must not appear as a setting")
+	}
+	if _, _, _, err := parseSettingsBody([]byte(`[1,2]`)); err == nil {
 		t.Fatal("a non-object body must be rejected")
 	}
-	if _, _, err := parseSettingsBody([]byte(`{"settings":"nope"}`)); err == nil {
+	if _, _, _, err := parseSettingsBody([]byte(`{"settings":"nope"}`)); err == nil {
 		t.Fatal("a non-object settings value must be rejected")
 	}
 }

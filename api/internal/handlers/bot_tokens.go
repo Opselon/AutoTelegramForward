@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -23,6 +24,11 @@ import (
 //     "does not exist" are the same 404. A probe must not learn which ids are
 //     real.
 const maxBotTokenBody = 4096
+
+// A bot's defaults are a JSON object of registry settings: bounded, but larger
+// than a token, and still small enough that a bad client cannot stream megabytes
+// through the decode path.
+const maxBotDefaultsBody = 16384
 
 type botTokenRequest struct {
 	Label string `json:"label"`
@@ -123,6 +129,120 @@ func (h *Handlers) DeleteBotToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "deleted"})
+}
+
+// Bot defaults: the settings an attached bot carries for every task that uses
+// it, so a tenant with many tasks configures them once.
+//
+// Two properties carried over from the credential endpoints above:
+//
+//   - the owner is in the WHERE clause, so a transplanted bot id is a 404 and
+//     never a way to read or write another tenant's bot;
+//   - every value is validated against the registry before it is stored, so a
+//     setting that names a chat, a route or a schedule (which would point other
+//     tasks at other chats) is refused with 400 rather than stored.
+type botDefaultsRequest struct {
+	Defaults   map[string]any `json:"defaults"`
+	ReplaceAll bool           `json:"replace_all"`
+	Clear      []string       `json:"clear"`
+}
+
+func (h *Handlers) GetBotDefaults(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+
+	if id.UserID == 0 {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": "link a Telegram account before configuring a bot",
+		})
+		return
+	}
+	if !h.ownsBotToken(ctx, r.PathValue("id"), id.UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "bot not found"})
+		return
+	}
+	resp, err := h.c.BotTokens.GetBotDefaults(ctx, &pb.GetBotDefaultsRequest{
+		Id:          r.PathValue("id"),
+		OwnerUserId: id.UserID,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeDefaultsResponse(w, http.StatusOK, resp)
+}
+
+func (h *Handlers) SetBotDefaults(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+
+	if id.UserID == 0 {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": "link a Telegram account before configuring a bot",
+		})
+		return
+	}
+	if !h.ownsBotToken(ctx, r.PathValue("id"), id.UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "bot not found"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBotDefaultsBody)
+	var body botDefaultsRequest
+	if !bindPB(w, r, &body) {
+		return
+	}
+	encoded, err := json.Marshal(body.Defaults)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "defaults must be an object of settings",
+			"code":  "invalid_body",
+		})
+		return
+	}
+	resp, err := h.c.BotTokens.SetBotDefaults(ctx, &pb.SetBotDefaultsRequest{
+		Id:           r.PathValue("id"),
+		OwnerUserId:  id.UserID,
+		DefaultsJson: string(encoded),
+		ReplaceAll:   body.ReplaceAll,
+		Clear:        body.Clear,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeDefaultsResponse(w, http.StatusOK, resp)
+}
+
+// writeDefaultsResponse answers with the stored mapping even on a refusal, so a
+// client can put the user's screen back to what is actually saved.
+func writeDefaultsResponse(w http.ResponseWriter, status int, resp *pb.BotDefaultsResponse) {
+	if resp == nil {
+		writeJSON(w, status, map[string]any{"success": false, "error": "empty response"})
+		return
+	}
+	out := map[string]any{
+		"success": resp.GetSuccess(),
+		"message": resp.GetMessage(),
+	}
+	if code := resp.GetErrorCode(); code != "" {
+		out["error_code"] = code
+	}
+	if resp.GetDefaultsJson() != "" {
+		var defaults map[string]any
+		if err := json.Unmarshal([]byte(resp.GetDefaultsJson()), &defaults); err == nil {
+			out["defaults"] = defaults
+			out["total"] = len(defaults)
+		}
+	}
+	if resp.GetSuccess() {
+		out["changed"] = resp.GetChanged()
+		writeJSON(w, status, out)
+		return
+	}
+	// A rejected write is a client error, never a 200 with a false flag.
+	writeJSON(w, settingsErrorStatus(resp.GetErrorCode()), out)
 }
 
 // ownsBotToken answers from the caller's own list, so a foreign id is

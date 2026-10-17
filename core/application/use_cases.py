@@ -569,6 +569,25 @@ class BotTokenUseCases:
     async def delete_owned(self, token_id: str, owner_user_id: int) -> bool:
         return await self._repo.delete_owned(token_id, int(owner_user_id or 0))
 
+    async def get_defaults(self, token_id: str, owner_user_id: int) -> dict:
+        """The defaults this owner's bot carries, or {} (never another owner's).
+
+        Reading is not an error when the bot is absent or foreign: a settings
+        screen shows the registry defaults, which is also what the forwarder
+        would use.
+        """
+        record = await self.get_owned(token_id, owner_user_id)
+        stored = getattr(record, "defaults", None) if record is not None else None
+        return dict(stored) if isinstance(stored, dict) else {}
+
+    async def set_defaults(self, token_id: str, owner_user_id: int, defaults: dict) -> bool:
+        """Replace this owner's defaults for this bot; False when not theirs.
+
+        Validation happens in the domain (`core.domain.bot_defaults`) before
+        anything gets here, so this is only the owner-scoped write.
+        """
+        return await self._repo.set_defaults(token_id, int(owner_user_id or 0), dict(defaults or {}))
+
 
 # --------------------------------------------------------------------------- #
 # Message pipeline (the heart of the forwarder)
