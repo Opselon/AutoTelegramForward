@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 # The wheel cache lives in a mount, not in the image layer: repeat builds reuse
 # the compiled wheels while the shipped image stays free of the cache.
-RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
+RUN --mount=type=cache,id=atf-core-pip,target=/root/.cache/pip pip install -r requirements.txt
 
 COPY proto/ ./proto/
 COPY core/ ./core/

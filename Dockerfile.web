@@ -5,9 +5,9 @@ WORKDIR /app/web/frontend
 COPY web/frontend/package*.json ./
 # Cache mount keeps npm's download cache across builds; the install stays a
 # layer so an unchanged package-lock is never reinstalled.
-RUN --mount=type=cache,target=/root/.npm npm ci || npm install
+RUN --mount=type=cache,id=atf-web-npm,target=/root/.npm npm ci || npm install
 COPY web/frontend/ ./
-RUN --mount=type=cache,target=/root/.npm npm run build
+RUN --mount=type=cache,id=atf-web-npm,target=/root/.npm npm run build
 
 # Stage 2: Build Rust Backend with Embedded Frontend Assets
 # Rust 1.90+: the transitive deps pulled by the reqwest/idna stack (icu_* 2.3,
@@ -20,8 +20,8 @@ COPY web/backend/Cargo.toml web/backend/Cargo.lock* ./
 # real sources — and before the frontend dist that rust-embed bakes in — are
 # copied. Without it every UI byte change recompiled every Rust dependency, and
 # on the release runner that recompilation ran under QEMU emulation.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/web/backend/target \
+RUN --mount=type=cache,id=atf-web-cargo-registry,sharing=locked,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=atf-web-cargo-target,target=/app/web/backend/target \
     mkdir -p src /app/web/frontend/dist \
     && printf 'fn main() {}\n' > src/main.rs \
     && cargo build --release \
@@ -31,8 +31,8 @@ COPY --from=frontend-builder /app/web/frontend/dist /app/web/frontend/dist
 COPY web/backend/src ./src
 # Same cache mounts, so only this crate's own sources recompile; the binary is
 # copied out of the cache-mounted target dir into the image layer.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/web/backend/target \
+RUN --mount=type=cache,id=atf-web-cargo-registry,sharing=locked,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=atf-web-cargo-target,target=/app/web/backend/target \
     touch src/main.rs \
     && cargo build --release \
     && cp target/release/atf-web-backend /out-atf-web-backend
