@@ -67,6 +67,32 @@ def stub() -> pb_grpc.LogControlServiceStub:
     return pb_grpc.LogControlServiceStub(grpc.insecure_channel(ADDRESS))
 
 
+def _json_field(text: str, key: str):
+    """One field of a stored detail, or None when the blob is not a JSON object.
+
+    Used to assert that a numeric id survives redaction *as a number*: matching
+    the digits as a substring would also pass on a mangled document.
+    """
+    try:
+        parsed = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    return parsed.get(key) if isinstance(parsed, dict) else None
+
+
+def _is_json_document(text: str) -> bool:
+    """True when a stored detail still parses — the consumers of that column
+    (dashboards, log queries) parse it, so a redaction pass that breaks the JSON
+    is a data-loss bug even when the secrets are gone."""
+    if not text:
+        return False
+    try:
+        json.loads(text)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 def write_entry(s: pb_grpc.LogControlServiceStub, **kw) -> pb.StatusResponse:
     entry = pb.LogEntry(ts=int(time.time()))
     for field, value in kw.items():
@@ -118,13 +144,45 @@ def check_roundtrip_and_redaction() -> None:
         f"user_id={stored.user_id if stored else None}",
     )
     check(
-        "long digit run in free text is masked by the phone heuristic (same as the Python engine)",
-        "5094837833" not in blob and ("[PHONE]" in blob or "[REDACTED]" in blob),
+        "long digit run inside a structured detail is preserved as a number",
+        _json_field(stored.detail if stored else "", "chat_id") == 5094837833,
+        f"chat_id={_json_field(stored.detail if stored else '', 'chat_id')!r}",
+    )
+    check(
+        "the structured detail is still valid JSON after redaction",
+        _is_json_document(stored.detail if stored else ""),
     )
     check(
         "rule id preserved verbatim",
         bool(stored) and stored.rule_id == "rule-42-0912345678",
         f"stored={stored.rule_id if stored else None!r}",
+    )
+
+    # The phone heuristic is a *free-text* pass. Both directions are asserted
+    # here because the engine deliberately reversed the old behaviour, where the
+    # pass ran over the serialised document and stored `"chat_id":5094[PHONE]` —
+    # unparseable JSON, with every ordinary id in the blob mangled
+    # (rust/logger/src/redaction.rs::detail_redaction_keeps_numeric_ids_and_valid_json).
+    phone = "+15551234567"
+    text_corr = f"{corr}-phone"
+    text_resp = write_entry(
+        s,
+        level="WARN",
+        service="acceptance",
+        category="acceptance",
+        message=f"free-text phone probe {text_corr}",
+        detail=f"callback on {phone} about ticket 42",
+        correlation_id=text_corr,
+    )
+    check("free-text probe acknowledged", bool(text_resp.success), f"message={text_resp.message!r}")
+    text_rows = s.QueryLogs(pb.QueryLogsRequest(correlation_id=text_corr, limit=1), timeout=10.0)
+    text_blob = text_rows.logs[0].detail if text_rows.logs else ""
+    check(
+        "a phone number in free text is masked by the phone heuristic",
+        bool(text_blob)
+        and phone not in text_blob
+        and ("[PHONE]" in text_blob or "[REDACTED]" in text_blob),
+        f"stored={text_blob[:80]!r}",
     )
 
 
