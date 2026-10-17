@@ -1422,7 +1422,7 @@ func (h *Handlers) UpdateRuleSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
 		return
 	}
-	settings, replaceAll, err := parseSettingsBody(body)
+	settings, replaceAll, edited, err := parseSettingsBody(body)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error(), "code": "invalid_body"})
 		return
@@ -1437,6 +1437,7 @@ func (h *Handlers) UpdateRuleSettings(w http.ResponseWriter, r *http.Request) {
 		OwnerUserId:  id.UserID,
 		SettingsJson: string(encoded),
 		ReplaceAll:   replaceAll,
+		Changed:      edited,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -1459,13 +1460,17 @@ func (h *Handlers) GetRuleSettingsSchema(w http.ResponseWriter, r *http.Request)
 	writeSettingsResponse(w, http.StatusOK, resp, 0)
 }
 
-// parseSettingsBody accepts {"settings": {...}, "replace_all": true} and the bare
-// {"setting": value, ...} shape, because the second is what a hand-written curl
-// call naturally looks like.
-func parseSettingsBody(body []byte) (map[string]any, bool, error) {
+// parseSettingsBody reads a settings body. It accepts the values under
+// "settings" (with "replace_all" and "changed" alongside) or as a bare object
+// of settings.
+//
+// "changed" is the list of keys the user actually edited, which is how a form
+// that posts every field avoids pinning every field — see
+// UpdateRuleSettingsRequest in the proto.
+func parseSettingsBody(body []byte) (map[string]any, bool, []string, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, false, fmt.Errorf("invalid JSON: %w", err)
+		return nil, false, nil, fmt.Errorf("invalid JSON: %w", err)
 	}
 	replaceAll := false
 	if v, ok := raw["replace_all"]; ok {
@@ -1473,24 +1478,31 @@ func parseSettingsBody(body []byte) (map[string]any, bool, error) {
 	} else if v, ok := raw["replaceAll"]; ok {
 		_ = json.Unmarshal(v, &replaceAll)
 	}
+	var edited []string
+	if v, ok := raw["changed"]; ok {
+		if err := json.Unmarshal(v, &edited); err != nil {
+			return nil, false, nil, fmt.Errorf("changed must be a list of setting names")
+		}
+	}
 	if v, ok := raw["settings"]; ok {
 		var settings map[string]any
 		if err := json.Unmarshal(v, &settings); err != nil {
-			return nil, false, fmt.Errorf("settings must be an object")
+			return nil, false, nil, fmt.Errorf("settings must be an object")
 		}
-		return settings, replaceAll, nil
+		return settings, replaceAll, edited, nil
 	}
 	delete(raw, "replace_all")
 	delete(raw, "replaceAll")
+	delete(raw, "changed")
 	settings := make(map[string]any, len(raw))
 	for k, v := range raw {
 		var decoded any
 		if err := json.Unmarshal(v, &decoded); err != nil {
-			return nil, false, fmt.Errorf("invalid value for %s", k)
+			return nil, false, nil, fmt.Errorf("invalid value for %s", k)
 		}
 		settings[k] = decoded
 	}
-	return settings, replaceAll, nil
+	return settings, replaceAll, edited, nil
 }
 
 func writeSettingsResponse(w http.ResponseWriter, status int, resp *pb.RuleSettingsResponse, requested int) {
@@ -1515,6 +1527,21 @@ func writeSettingsResponse(w http.ResponseWriter, status int, resp *pb.RuleSetti
 		var schema map[string]any
 		if err := json.Unmarshal([]byte(resp.GetSchemaJson()), &schema); err == nil {
 			out["schema"] = schema
+		}
+	}
+	// The values the forwarder will use, and where each came from. `settings` is
+	// what this task itself stores, so a client that echoes it back cannot pin a
+	// value the task merely inherits from its bot.
+	if resp.GetEffectiveJson() != "" {
+		var effective map[string]any
+		if err := json.Unmarshal([]byte(resp.GetEffectiveJson()), &effective); err == nil {
+			out["effective"] = effective
+		}
+	}
+	if resp.GetSourcesJson() != "" {
+		var sources map[string]any
+		if err := json.Unmarshal([]byte(resp.GetSourcesJson()), &sources); err == nil {
+			out["sources"] = sources
 		}
 	}
 	if !resp.GetSuccess() {

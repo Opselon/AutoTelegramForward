@@ -3162,6 +3162,16 @@ class BotTokenControlServiceStub:
                 request_serializer=autoforward__pb2.DeleteBotTokenRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.StatusResponse.FromString,
                 _registered_method=True)
+        self.GetBotDefaults = channel.unary_unary(
+                '/autoforward.BotTokenControlService/GetBotDefaults',
+                request_serializer=autoforward__pb2.GetBotDefaultsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.BotDefaultsResponse.FromString,
+                _registered_method=True)
+        self.SetBotDefaults = channel.unary_unary(
+                '/autoforward.BotTokenControlService/SetBotDefaults',
+                request_serializer=autoforward__pb2.SetBotDefaultsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.BotDefaultsResponse.FromString,
+                _registered_method=True)
 
 
 class BotTokenControlServiceServicer:
@@ -3185,6 +3195,18 @@ class BotTokenControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetBotDefaults(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SetBotDefaults(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_BotTokenControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -3202,6 +3224,16 @@ def add_BotTokenControlServiceServicer_to_server(servicer, server):
                     servicer.DeleteBotToken,
                     request_deserializer=autoforward__pb2.DeleteBotTokenRequest.FromString,
                     response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'GetBotDefaults': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetBotDefaults,
+                    request_deserializer=autoforward__pb2.GetBotDefaultsRequest.FromString,
+                    response_serializer=autoforward__pb2.BotDefaultsResponse.SerializeToString,
+            ),
+            'SetBotDefaults': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetBotDefaults,
+                    request_deserializer=autoforward__pb2.SetBotDefaultsRequest.FromString,
+                    response_serializer=autoforward__pb2.BotDefaultsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -3285,6 +3317,60 @@ class BotTokenControlService:
             '/autoforward.BotTokenControlService/DeleteBotToken',
             autoforward__pb2.DeleteBotTokenRequest.SerializeToString,
             autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetBotDefaults(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.BotTokenControlService/GetBotDefaults',
+            autoforward__pb2.GetBotDefaultsRequest.SerializeToString,
+            autoforward__pb2.BotDefaultsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetBotDefaults(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.BotTokenControlService/SetBotDefaults',
+            autoforward__pb2.SetBotDefaultsRequest.SerializeToString,
+            autoforward__pb2.BotDefaultsResponse.FromString,
             options,
             channel_credentials,
             insecure,
