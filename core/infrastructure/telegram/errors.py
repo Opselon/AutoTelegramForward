@@ -139,14 +139,24 @@ class TelegramErrorEvent:
 # Secret hygiene — never log tokens / session strings / 2FA / codes
 # --------------------------------------------------------------------------- #
 _SECRET_FIELD = re.compile(
-    r"(?i)(api[_-]?hash|api[_-]?id|bot[_-]?token|master[_-]?key|"
+    r"(?i)(api[_-]?hash|api[_-]?id|api[_-]?key|bot[_-]?token|master[_-]?key|"
+    r"access[_-]?hash|file[_-]?reference|auth[_-]?key|"
     r"session[_-]?(string)?|app[_-]?hash)"
 )
 _SECRET_VALUE = re.compile(
-    r"(?i)(api[_-]?hash|api[_-]?id|bot[_-]?token|master[_-]?key|"
+    r"(?i)(api[_-]?hash|api[_-]?id|api[_-]?key|bot[_-]?token|master[_-]?key|"
+    r"access[_-]?hash|file[_-]?reference|auth[_-]?key|"
+    r"access[_-]?token|refresh[_-]?token|token|secret|"
     r"session[_-]?string|password|phone[_-]?code|2fa|verification[_-]?code)"
     r"\s*[:=]\s*\S+"
 )
+#: `Authorization: Bearer <token>` — the value is a credential, the scheme is not.
+_BEARER = re.compile(r"(?i)\b(authorization\s*:\s*bearer)\s+\S+")
+#: Telegram bot-token shape (`123456789:AA…`), which shows up without a key prefix
+#: whenever a request URL or an error string is logged.
+_BOT_TOKEN = re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{25,}\b")
+#: Pyrogram session blobs: long base64 with optional `=` padding.
+_SESSION_BLOB = re.compile(r"\b[A-Za-z0-9+/]{80,}={0,2}\b")
 _LONG_HEX = re.compile(r"\b[0-9a-fA-F]{32,}\b")
 _PHONE = re.compile(r"\+\d{7,16}\b")
 
@@ -166,8 +176,11 @@ def redact(text: Any, *, keep_phone: bool = False) -> str:
     if not text:
         return ""
     try:
-        out = _SECRET_VALUE.sub(r"\1=" + _REDACTED, text)
+        out = _BEARER.sub(r"\1 " + _REDACTED, text)
+        out = _SECRET_VALUE.sub(r"\1=" + _REDACTED, out)
         out = _SECRET_FIELD.sub(_REDACTED, out)
+        out = _BOT_TOKEN.sub(_REDACTED, out)
+        out = _SESSION_BLOB.sub(_REDACTED, out)
         out = _LONG_HEX.sub(_REDACTED, out)
         if not keep_phone:
             out = _PHONE.sub("[PHONE]", out)

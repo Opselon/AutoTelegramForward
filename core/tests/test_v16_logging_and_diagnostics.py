@@ -172,10 +172,15 @@ async def test_durable_queue_transient_failure_logging():
 
 
 @pytest.mark.asyncio
-async def test_raw_telegram_api_tracer(caplog):
-    """RawTelegramApiTracer logs raw MTProto calls and updates safely."""
+async def test_raw_telegram_api_tracer(caplog, monkeypatch):
+    """RawTelegramApiTracer logs raw MTProto calls and updates safely.
+
+    Tracing is opt-in (``ATF_RAW_API_TRACE``): the flag is set here because this
+    test exercises the tracer itself.
+    """
     from core.infrastructure.telegram.raw_tracer import RawTelegramApiTracer
 
+    monkeypatch.setenv("ATF_RAW_API_TRACE", "1")
     client = MagicMock()
     client.invoke = AsyncMock(return_value={"pts": 100, "new_messages": []})
     client.handle_updates = AsyncMock()

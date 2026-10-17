@@ -67,9 +67,6 @@ class ISessionRepository(ABC):
     async def get_by_phone(self, phone: str) -> Optional[TelegramSession]:
         ...
 
-    async def list_by_owner(self, owner_user_id: int) -> List[TelegramSession]:
-        return [s for s in await self.list_all() if getattr(s, "owner_user_id", 0) == owner_user_id]
-
     @abstractmethod
     async def list_all(self) -> List[TelegramSession]:
         ...

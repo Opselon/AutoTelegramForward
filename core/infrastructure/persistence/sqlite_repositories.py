@@ -179,13 +179,6 @@ class SqliteSessionRepository(ISessionRepository):
         rows = self._db.query_all("SELECT * FROM sessions ORDER BY created_at")
         return [self._row_to_entity(r) for r in rows]
 
-    async def list_by_owner(self, owner_user_id: int) -> List[TelegramSession]:
-        rows = self._db.query_all(
-            "SELECT * FROM sessions WHERE owner_user_id=? ORDER BY created_at",
-            (int(owner_user_id),)
-        )
-        return [self._row_to_entity(r) for r in rows]
-
     async def list_active(self) -> List[TelegramSession]:
         rows = self._db.query_all("SELECT * FROM sessions WHERE is_active=1 AND is_authorized=1")
         return [self._row_to_entity(r) for r in rows]

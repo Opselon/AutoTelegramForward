@@ -629,7 +629,6 @@ def test_legacy_v1_bundle_is_refused_and_announced_as_encrypted():
     """A v1 bundle fails closed with an explanation, and is never mistaken
     for a plain bundle (which would import as garbage or, worse, skip the
     passphrase prompt entirely)."""
-    from core.application.backup_service import is_encrypted_bundle
 
     v1_blob = "enc:v1:" + base64.urlsafe_b64encode(b"x" * 40).decode("ascii")
     assert is_encrypted_bundle(v1_blob)

@@ -411,13 +411,13 @@ func TestApplyRuleMetadata_PreservesAllTaskConfigKeys(t *testing.T) {
 	}
 	meta, _ := json.Marshal(raw)
 	body := map[string]any{
-		"name":          "guard-rule",
-		"source_chat":   -1001,
-		"target_chat":   -1002,
-		"metadata":      raw,
-		"is_active":     true,
-		"routing_type":  int32(0),
-		"forward_mode":  int32(1),
+		"name":         "guard-rule",
+		"source_chat":  -1001,
+		"target_chat":  -1002,
+		"metadata":     raw,
+		"is_active":    true,
+		"routing_type": int32(0),
+		"forward_mode": int32(1),
 	}
 	bodyJSON, _ := json.Marshal(body)
 

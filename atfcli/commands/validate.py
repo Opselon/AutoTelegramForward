@@ -13,8 +13,6 @@ import os
 import urllib.error
 import urllib.request
 
-import json
-import os
 import re
 import sqlite3
 import stat

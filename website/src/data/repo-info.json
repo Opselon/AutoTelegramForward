@@ -4,12 +4,12 @@
   "starsUrl": "https://img.shields.io/github/stars/Opselon/AutoTelegramForward?style=social",
   "docsUrl": "https://opselon.github.io/AutoTelegramForward/",
   "license": "MIT",
-  "version": "2.0.0",
-  "releaseTag": "v2.0.0",
+  "version": "2.2.1",
+  "releaseTag": "v2.2.1",
   "releaseDate": "2026-10-16",
-  "gitCommit": "a2df551",
-  "gitDate": "2026-10-16T14:04:33Z",
-  "syncTimestamp": "2026-10-16T14:04:49.568Z",
+  "gitCommit": "3d4366a",
+  "gitDate": "2026-10-17T13:49:34+03:30",
+  "syncTimestamp": "2026-10-17T12:57:11.979Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -18,32 +18,33 @@
   },
   "locales": [
     "en",
-    "fa",
-    "ru",
-    "zh",
-    "pt",
-    "uz",
-    "id",
     "es",
+    "fa",
     "fr",
-    "it"
+    "id",
+    "it",
+    "pt",
+    "ru",
+    "uz",
+    "zh"
   ],
-  "i18nKeyCount": 1168,
+  "i18nKeyCount": 1207,
   "stats": {
-    "pythonTests": 53,
-    "goTests": 17,
-    "grpcRpcCount": 61,
+    "pythonTests": 62,
+    "goTests": 21,
+    "grpcRpcCount": 64,
     "cliGroups": 24,
-    "featureCatalogEntries": 17,
+    "featureCatalogEntries": 18,
     "services": 4,
     "locales": 10,
-    "i18nKeys": 1168
+    "i18nKeys": 1207
   },
   "featureCatalog": [
     "Create forwarding rule",
     "Update forwarding rule (optimistic concurrency)",
     "Pause/resume rule with durable queue semantics",
     "Durable message forwarding pipeline",
+    "Branding hop (A -> C -> B) composed with every message transform",
     "SHA-256 content fingerprint deduplication",
     "Keyword-triggered reply add-on",
     "Central Logger gRPC microservice",
@@ -159,7 +160,7 @@
     {
       "category": "Localization",
       "items": [
-        "10 languages with mandatory 1:1 catalog parity (en, fa, ru, zh, pt, uz, id, es, fr, it)",
+        "10 languages with mandatory 1:1 catalog parity (en, es, fa, fr, id, it, pt, ru, uz, zh)",
         "Per-user language resolution with strict English fallback — never Persian",
         "RTL layout for Persian and Arabic-script content in web, mobile and bot UI",
         "Automated cross-language audits wired into the CLI validator and CI"
@@ -1057,6 +1058,13 @@
     },
     {
       "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/sessions/{sessionId}/chats",
+      "handler": "h.ListChats",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
       "method": "POST",
       "path": "/api/simulate",
       "handler": "h.TestRule",
@@ -1233,38 +1241,48 @@
       "endpoints": [
         [
           "GET",
-          "/api/v1/rules",
+          "/api/rules",
           "List the caller's tasks (tenant-scoped)"
         ],
         [
           "POST",
-          "/api/v1/rules",
+          "/api/rules",
           "Create a task with a source list, a target list and a content policy"
         ],
         [
           "GET",
-          "/api/v1/rules/{id}",
+          "/api/rules/{id}",
           "Read one task including its resolved settings"
         ],
         [
           "PUT",
-          "/api/v1/rules/{id}",
+          "/api/rules/{id}",
           "Update a task (optimistic concurrency, version bumped)"
         ],
         [
           "DELETE",
-          "/api/v1/rules/{id}",
+          "/api/rules/{id}",
           "Delete a task and its schedules"
         ],
         [
           "POST",
-          "/api/v1/rules/{id}/pause",
+          "/api/rules/{id}/pause",
           "Pause a task: queued jobs defer instead of failing"
         ],
         [
           "POST",
-          "/api/v1/rules/{id}/resume",
+          "/api/rules/{id}/resume",
           "Resume a task and unblock retry-wait jobs"
+        ],
+        [
+          "POST",
+          "/api/rules/{id}/toggle",
+          "Enable or disable a task"
+        ],
+        [
+          "POST",
+          "/api/simulate",
+          "Dry-run a message through a task and see the decision"
         ]
       ]
     },
@@ -1273,22 +1291,32 @@
       "endpoints": [
         [
           "GET",
-          "/api/v1/sessions",
+          "/api/sessions",
           "List the caller's Telegram sessions"
         ],
         [
+          "GET",
+          "/api/sessions/{id}/chats",
+          "List the chats a session can see (sources and targets)"
+        ],
+        [
           "POST",
-          "/api/v1/sessions/backup",
+          "/api/sessions/{id}/backup",
           "Export an encrypted session backup"
         ],
         [
           "POST",
-          "/api/v1/sessions/restore",
-          "Restore a session from an encrypted backup"
+          "/api/backup/export",
+          "Export an encrypted backup of sessions and settings"
+        ],
+        [
+          "POST",
+          "/api/backup/import",
+          "Restore from an encrypted backup"
         ],
         [
           "DELETE",
-          "/api/v1/sessions/{id}",
+          "/api/sessions/{id}",
           "Terminate a session and purge its credentials"
         ]
       ]
@@ -1298,38 +1326,43 @@
       "endpoints": [
         [
           "GET",
-          "/api/v1/filters",
+          "/api/filters",
           "List filter rules"
         ],
         [
           "POST",
-          "/api/v1/filters",
+          "/api/filters",
           "Create a filter rule"
         ],
         [
           "PUT",
-          "/api/v1/filters/{id}",
+          "/api/filters/{id}",
           "Update a filter rule"
         ],
         [
           "DELETE",
-          "/api/v1/filters/{id}",
+          "/api/filters/{id}",
           "Delete a filter rule"
         ],
         [
           "GET",
-          "/api/v1/ai",
+          "/api/ai-configs",
           "List AI rewrite configurations"
         ],
         [
           "POST",
-          "/api/v1/ai",
+          "/api/ai-configs",
           "Create an AI configuration (provider, model, prompts)"
         ],
         [
+          "PUT",
+          "/api/ai-configs/{id}",
+          "Update an AI configuration"
+        ],
+        [
           "POST",
-          "/api/v1/ai/{id}/test",
-          "Test a configuration against live or sample text"
+          "/api/prompts/test",
+          "Send sample text through a rewrite prompt"
         ]
       ]
     },
@@ -1338,27 +1371,42 @@
       "endpoints": [
         [
           "GET",
-          "/api/v1/logs?service=&level=&search=&limit=&since=",
+          "/api/logs?service=&level=&search=&limit=&since=",
           "Query attributable log history with bounded paging"
         ],
         [
           "GET",
-          "/api/v1/logs/stats",
+          "/api/logs/stats",
           "Aggregate counts by service and level"
         ],
         [
+          "GET",
+          "/api/logs/policy",
+          "Which levels and services the engine admits"
+        ],
+        [
           "POST",
-          "/api/v1/logs/purge",
+          "/api/logs/purge",
           "Purge log history for the caller's scope"
         ],
         [
           "GET",
-          "/api/v1/delivery/stats",
+          "/api/stats",
           "Delivery throughput and outcome counters"
         ],
         [
+          "GET",
+          "/api/queue",
+          "Queue depth and in-flight jobs"
+        ],
+        [
+          "GET",
+          "/api/dlq",
+          "Dead-lettered jobs"
+        ],
+        [
           "POST",
-          "/api/v1/delivery/dlq/{id}/replay",
+          "/api/dlq/{id}/retry",
           "Replay a dead-lettered job"
         ]
       ]

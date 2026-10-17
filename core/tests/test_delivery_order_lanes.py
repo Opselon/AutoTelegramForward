@@ -20,6 +20,7 @@ assert that property, not the SQL that implements it.
 from __future__ import annotations
 
 import random
+import asyncio
 import time
 
 import pytest
@@ -216,7 +217,7 @@ async def test_an_expired_lease_on_the_lane_head_is_reclaimable(repo):
 
     head = await repo_.claim_batch(worker_id="dead", batch_size=1, lease_duration=0.05)
     assert [j.source_message_id for j in head] == [1]
-    time.sleep(0.1)
+    await asyncio.sleep(0.1)
 
     revived = await repo_.claim_batch(worker_id="alive", batch_size=5, lease_duration=30.0)
     assert [j.source_message_id for j in revived] == [1]

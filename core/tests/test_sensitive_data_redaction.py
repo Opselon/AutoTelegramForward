@@ -227,5 +227,38 @@ def test_valid_port_probes_without_binding_a_wildcard_address():
     probe.close()
     assert ui.valid_port(str(free)) is None
 
-    source = open(ui.__file__, encoding="utf-8").read()
+    with open(ui.__file__, encoding="utf-8") as fh:
+        source = fh.read()
     assert '"0.0.0.0"' not in source
+
+
+def test_python_redactor_covers_the_credential_shapes_the_engine_masks() -> None:
+    """The Python safety net must mask what the engine masks on ingest.
+
+    Field report: `redact("token=abc123def")` and `redact("api_key=sk-live")`
+    came back untouched, so a tracer line written to the container log carried
+    the credential in clear text while the Rust ingest path masked the same
+    shape.
+    """
+    from core.infrastructure.telegram.errors import redact
+
+    for raw, secret in [
+        ("token=abc123def", "abc123def"),
+        ("api_key=sk-live-abc", "sk-live-abc"),
+        ("secret: hunter2", "hunter2"),
+        ("access_token=ya29.token", "ya29.token"),
+        ("access_hash=8130875772", "8130875772"),
+        ("file_reference=ABCDEFpeer", "ABCDEFpeer"),
+        ("Authorization: Bearer eyJhbGciOi.payload.sig", "eyJhbGciOi.payload.sig"),
+        (
+            "bot 123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw",
+            "AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw",
+        ),
+    ]:
+        out = redact(raw)
+        assert secret not in out, f"{raw!r} leaked: {out!r}"
+        assert "[REDACTED]" in out, f"{raw!r} -> {out!r}"
+
+    # Ordinary identifiers and prose survive: over-redaction hides real defects.
+    for raw in ("chat_id=-1001234567890", "forwarded 42 messages", "msg_id=930629"):
+        assert redact(raw) == raw, raw

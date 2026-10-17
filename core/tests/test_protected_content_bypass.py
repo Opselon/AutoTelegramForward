@@ -120,7 +120,8 @@ async def test_restricted_channel_falls_back_to_download_reupload():
     client.download_media = AsyncMock(return_value=tmp)
     client.send_document = AsyncMock(return_value=SimpleNamespace(id=888))
 
-    open(tmp, "wb").write(b"binary")
+    with open(tmp, "wb") as fh:
+        fh.write(b"binary")
 
     try:
         dispatcher = _make_dispatcher(client)

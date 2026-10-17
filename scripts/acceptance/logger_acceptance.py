@@ -46,6 +46,14 @@ SECRET = "acceptance-secret-value-do-not-persist-42"
 SECRET_KEY = "super-secret-password-9182736"
 KEEP = "keep-this-unrelated-field"
 
+#: Every row this suite writes carries this service name, so the run can delete
+#: exactly its own probes afterwards. The documented invocation points at the
+#: live logger, and the rows used to stay there: 504 of them (496 at ERROR) sat
+#: in the production store reading "page row 99", which is what an operator sees
+#: in the Logs screen when they ask "what is failing?".
+PROBE_SERVICE = "acceptance"
+KEEP_ROWS = os.environ.get("ATF_ACCEPTANCE_KEEP_ROWS", "").strip() in {"1", "true", "yes"}
+
 failures: list[str] = []
 
 
@@ -255,7 +263,7 @@ async def check_producer_path() -> None:
     total = 25
     for i in range(total):
         client.error(
-            service="atf-core",
+            service=PROBE_SERVICE,
             category="acceptance-client",
             message=f"{tag} event {i}",
             correlation_id=f"{tag}-{i:03d}",
@@ -280,12 +288,50 @@ async def check_producer_path() -> None:
     )
 
 
+def purge_probe_rows() -> None:
+    """Delete the rows this run wrote, and prove nothing else was touched.
+
+    The suite runs against a live logger in the documented workflow, so leaving
+    its probes behind fills the operator's Logs screen with fake ERRORs. Cleanup
+    is scoped to `service="acceptance"` — the name every row above is written
+    under — so it can never remove a real record.
+    """
+    if KEEP_ROWS:
+        print("\n[cleanup] skipped (ATF_ACCEPTANCE_KEEP_ROWS is set)")
+        return
+    print("\n[cleanup] removing this run's probe rows")
+    s = stub()
+    # Give the producer path a moment to land its last records.
+    time.sleep(0.5)
+    total_purged = 0
+    for field, value in (("service", PROBE_SERVICE), ("category", "acceptance-client")):
+        try:
+            res = s.PurgeLogs(pb.PurgeLogsRequest(**{field: value}), timeout=30.0)
+        except grpc.RpcError as exc:
+            check(f"purge {field}={value}", False, f"{type(exc).__name__}: {exc}")
+            continue
+        total_purged += int(res.purged)
+        check(f"purge {field}={value}", bool(res.success), f"purged={res.purged}")
+    check("probe rows removed", total_purged > 0, f"purged={total_purged}")
+
+    left = s.QueryLogs(pb.QueryLogsRequest(service=PROBE_SERVICE, limit=1), timeout=10.0)
+    check("no probe rows left behind", len(left.logs) == 0, f"remaining={len(left.logs)}")
+
+
 def main() -> int:
     print(f"Logger acceptance against {ADDRESS}\n{'=' * 60}")
-    check_roundtrip_and_redaction()
-    check_filters_and_paging()
-    check_error_reporting()
-    asyncio.run(check_producer_path())
+    try:
+        check_roundtrip_and_redaction()
+        check_filters_and_paging()
+        check_error_reporting()
+        asyncio.run(check_producer_path())
+    finally:
+        # Cleanup runs even when a check failed: a red run must not leave its
+        # probes in the store either.
+        try:
+            purge_probe_rows()
+        except Exception as exc:  # pragma: no cover — cleanup is best effort
+            print(f"  WARN  cleanup could not run: {type(exc).__name__}: {exc}")
     print("\n" + "=" * 60)
     if failures:
         print(f"ACCEPTANCE FAILED: {len(failures)} check(s): {failures}")

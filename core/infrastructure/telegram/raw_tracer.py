@@ -14,17 +14,57 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 from .errors import redact
 
 logger = logging.getLogger("atf.raw_api")
 
+#: Environment flag that turns the deep tracer on. Off by default: the tracer
+#: wraps every RPC and logs a payload summary for each one, which is a
+#: diagnostic tool, not a production default.
+RAW_TRACE_ENV = "ATF_RAW_API_TRACE"
+
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
 _SENSITIVE_ATTRS = frozenset({
     "api_hash", "phone_code", "phone_code_hash", "password", "session",
     "auth_key", "secret", "token", "bot_token", "hash", "password_hash",
+    "access_hash", "file_reference", "auth_key_id",
 })
+
+#: Qualifiers that make a field a credential even though the bare name is not on
+#: the list: MTProto peers carry `access_hash` / `file_reference`, which are as
+#: sensitive as an auth key and were being written to the log in full.
+_SENSITIVE_SUFFIXES = ("_hash", "_reference", "_token", "_secret", "_password", "_key")
+
+#: Upper bound for any single summary, so no payload shape can produce a
+#: multi-line document in the log.
+MAX_SUMMARY_CHARS = 240
+
+
+def tracing_enabled(env: Optional[Mapping[str, str]] = None) -> bool:
+    """Whether raw MTProto tracing was explicitly requested."""
+    source = os.environ if env is None else env
+    return str(source.get(RAW_TRACE_ENV, "")).strip().lower() in _TRUTHY
+
+
+def _is_sensitive_attr(name: Any) -> bool:
+    key = str(name).lower()
+    if key in _SENSITIVE_ATTRS:
+        return True
+    return key.endswith(_SENSITIVE_SUFFIXES)
+
+
+def _one_line(text: Any, limit: int = MAX_SUMMARY_CHARS) -> str:
+    """Collapse `text` to a single bounded line."""
+    collapsed = " ".join(str(text).split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[: limit - 3] + "..."
+
 
 
 def _summarize_raw_object(obj: Any, depth: int = 0) -> str:
@@ -60,11 +100,31 @@ def _summarize_raw_object(obj: Any, depth: int = 0) -> str:
     if isinstance(obj, dict):
         parts = []
         for k, v in list(obj.items())[:5]:
-            if str(k).lower() in _SENSITIVE_ATTRS:
+            if _is_sensitive_attr(k):
                 parts.append(f"{k}=[REDACTED]")
             else:
                 parts.append(f"{k}={_summarize_raw_object(v, depth + 1)}")
         return "{" + ", ".join(parts) + "}"
+
+    # Pyrogram MTProto objects (`TLObject`) use `__slots__` and define a
+    # pretty-printing `__repr__`, so the generic fallback below used to expand
+    # one into a multi-line JSON document carrying `access_hash` and
+    # `file_reference` — hundreds of log lines per RPC. Summarise their slots
+    # instead, and never stringify them.
+    slots = getattr(type(obj), "__slots__", ())
+    if slots and not hasattr(obj, "__dict__"):
+        parts = []
+        for name in list(slots)[:8]:
+            if str(name).startswith("_") or _is_sensitive_attr(name):
+                continue
+            try:
+                value = getattr(obj, name, None)
+            except Exception:
+                continue
+            parts.append(f"{name}={_summarize_raw_object(value, depth + 1)}")
+        if not parts:
+            return cls_name
+        return f"{cls_name}({', '.join(parts[:6])})"
 
     # Generic MTProto object
     if hasattr(obj, "__dict__"):
@@ -72,7 +132,7 @@ def _summarize_raw_object(obj: Any, depth: int = 0) -> str:
         for k, v in vars(obj).items():
             if k.startswith("_"):
                 continue
-            if str(k).lower() in _SENSITIVE_ATTRS:
+            if _is_sensitive_attr(k):
                 parts.append(f"{k}=[REDACTED]")
             else:
                 parts.append(f"{k}={_summarize_raw_object(v, depth + 1)}")
@@ -80,7 +140,9 @@ def _summarize_raw_object(obj: Any, depth: int = 0) -> str:
             return cls_name
         return f"{cls_name}({', '.join(parts[:6])})"
 
-    return redact(str(obj))
+    # Last resort: one bounded line, so an object with a chatty `__repr__` can
+    # never write a document into the log.
+    return _one_line(redact(str(obj)))
 
 
 def _summarize_raw_update(update: Any) -> str:
@@ -125,7 +187,17 @@ class RawTelegramApiTracer:
         self._attached = False
 
     def attach(self) -> None:
-        """Wrap client.invoke and client.handle_updates for live tracing."""
+        """Wrap client.invoke and client.handle_updates for live tracing.
+
+        A no-op unless `ATF_RAW_API_TRACE` asks for tracing: this is a deep
+        diagnostic that logs a summary of every RPC, and running it by default
+        wrote hundreds of lines per call into the log.
+        """
+        if not tracing_enabled():
+            logger.debug(
+                "raw MTProto tracer not attached (set %s=1 to enable)", RAW_TRACE_ENV
+            )
+            return
         if self._attached:
             return
 

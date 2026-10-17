@@ -1,10 +1,12 @@
 """Telegram Bot Manager: command + callback surface over the use cases."""
 
+import asyncio
 import base64
 import io
 import json
 import logging
 import time
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from pyrogram import Client, filters
@@ -351,7 +353,9 @@ class BotManager:
                 return await message.reply_text(self.i18n.t("restore_failed", lang=lang, error="attach .atf file"))
             path = await message.download()
             try:
-                blob = open(path, encoding="utf-8").read().strip()
+                # Reading a bundle can be megabytes off disk: keep the loop free
+                # (and close the handle — the bare open() leaked an fd per restore).
+                blob = (await asyncio.to_thread(Path(path).read_text, encoding="utf-8")).strip()
                 bundle = json.loads(base64.urlsafe_b64decode(blob.encode("ascii")))
                 session = await self._sessions.create(
                     phone_number=bundle["phone"],

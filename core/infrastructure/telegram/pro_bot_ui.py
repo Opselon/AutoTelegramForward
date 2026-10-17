@@ -13,6 +13,7 @@ the debug panel can show it.
 
 import asyncio
 import base64
+from pathlib import Path
 import copy
 from contextvars import ContextVar
 import json
@@ -3533,7 +3534,7 @@ class ProBotUI:
             role_key = "ui_settings_role_admin" if self._is_admin(uid) else "ui_settings_role_user"
             text = self._t("ui_settings_body", lang=lang, uid=uid, role=self._t(role_key, lang=lang))
             kbd = self._client_settings_menu(uid)
-            await message.reply_text("\n".join(lines), reply_markup=kbd)
+            await message.reply_text(text, reply_markup=kbd)
 
         @b.on_message(filters.command("admin") & filters.private)
         @self._localized_handler
@@ -3763,7 +3764,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_help(_, cq: CallbackQuery):
             btn_back = "⬅️ " + self._t("ui_back")
-            btn_sup = self._t("ui_support_btn", lang=self._resolve_lang(uid))
+            btn_sup = self._t("ui_support_btn", lang=self._resolve_lang(cq.from_user.id))
             kbd = InlineKeyboardMarkup([
                 [InlineKeyboardButton(btn_sup, url="https://t.me/Capxi")],
                 [InlineKeyboardButton(btn_back, callback_data=CB["main"])],
@@ -4372,7 +4373,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_creds(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             lines = [self._t("ui_creds_title"), ""]
             if self._credentials is not None:
                 try:
@@ -4394,7 +4395,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_cred_add(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "cred_label"
             await self._persist(cq.from_user.id, st)
@@ -4417,7 +4418,7 @@ class ProBotUI:
                     except Exception:
                         pass
                 except PermissionError:
-                    return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                    return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
                 except Exception as exc:
                     await self._record_error("bot", exc, user_id=cq.from_user.id)
             await cq.answer(self._t("ui_cred_set_default", id=cid[:8]), show_alert=True)
@@ -4650,7 +4651,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_del(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rid = raw.split(":", 1)[1]
             rule = await self._rules.get(rid)
@@ -4737,7 +4738,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_replace_menu(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -4751,7 +4752,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_replace_add(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -4768,7 +4769,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_replace_clear(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -4786,7 +4787,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_replace_del(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             parts = raw.split(":")
             rule_id, idx_str = parts[1], parts[2]
@@ -5254,7 +5255,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_toggle_link(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -5274,7 +5275,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_toggle_voice(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -5294,7 +5295,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_toggle_sticker(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -5314,7 +5315,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_toggle_emoji(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -5367,7 +5368,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_toggle_media_group(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -5389,7 +5390,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_toggle_mode(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6117,7 +6118,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_save(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             uid = cq.from_user.id
             st = self._state(uid)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
@@ -6491,7 +6492,7 @@ class ProBotUI:
         async def _cb_rule_ai_test(_, cq: CallbackQuery):
             """Dry-run: uses the real prompt+config pipeline, sends nothing."""
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             uid = cq.from_user.id
             st = self._state(uid)
             rule_id = (cq.data.decode() if isinstance(cq.data, (bytes, bytearray)) else str(cq.data)).split(":", 1)[1]
@@ -6532,7 +6533,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_cancel(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             uid = cq.from_user.id
             st = self._state(uid)
             st.step = ""
@@ -6585,7 +6586,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_target(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6616,7 +6617,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_edit_source(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6645,7 +6646,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_edit_target(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6674,7 +6675,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_mode(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6701,7 +6702,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_active(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6726,7 +6727,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_link(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6751,7 +6752,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_voice(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6776,7 +6777,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_sticker(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6801,7 +6802,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_emoji(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6826,7 +6827,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_edit(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6851,7 +6852,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_delete(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6876,7 +6877,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rule_draft_media_group(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6905,7 +6906,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_rule_menu(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6919,7 +6920,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_toggle_route_path(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6962,7 +6963,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_toggle_match_mode(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -6987,7 +6988,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_set_text_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -7006,7 +7007,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_set_regex_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -7025,7 +7026,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_toggle_category(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -7048,7 +7049,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_toggle_intermediate(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -7069,7 +7070,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_toggle_mode(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -7093,7 +7094,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_priority_up(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -7112,7 +7113,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_priority_down(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -7132,7 +7133,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_clear_header(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -7151,7 +7152,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_set_intermediate_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -7170,7 +7171,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_brand_origins_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -7189,7 +7190,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_brand_words_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -7208,7 +7209,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_brand_gate_toggle(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -7227,7 +7228,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_brand_force_toggle(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -7246,7 +7247,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_brand_triggers_toggle(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             rule = await self._rules.get(rule_id)
@@ -7274,7 +7275,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_set_header_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -7293,7 +7294,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_smart_test_prompt(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rule_id = raw.split(":", 1)[1]
             st = self._state(cq.from_user.id)
@@ -7313,7 +7314,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_filter_add(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "filter_name"
             await self._persist(cq.from_user.id, st)
@@ -7330,7 +7331,7 @@ class ProBotUI:
             try:
                 await self._filters.delete_owned(fid, None if self._is_admin(fuid) else fuid)
             except PermissionError:
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             await self._safe_edit(cq, self._t("ui_done"), reply_markup=self._filters_menu())
             await cq.answer()
 
@@ -7339,7 +7340,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_ai_add(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "ai_name"
             await self._persist(cq.from_user.id, st)
@@ -7469,7 +7470,7 @@ class ProBotUI:
             try:
                 await self._ai.update_owned(cfg, self._scope_uid(cq.from_user.id if cq.from_user else 0))
             except PermissionError:
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             status_text = self._t("ui_rule_status_on") if cfg.is_enabled else self._t("ui_rule_status_off")
             await cq.answer(self._t("ui_ai_status_changed_alert", status=status_text), show_alert=False)
             text, kbd = self._render_ai_detail(cfg)
@@ -7499,7 +7500,7 @@ class ProBotUI:
             try:
                 await self._ai.delete_owned(aid, None if self._is_admin(auid) else auid)
             except PermissionError:
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             await cq.answer(self._t("ui_ai_config_deleted_alert"), show_alert=True)
             cfgs = await (self._ai.list_all() if self._is_admin(auid) else self._ai.list_by_owner(auid))
             lines = [self._t("ui_ai_title"), "", self._t("ui_ai_config_deleted_body_full")]
@@ -7732,8 +7733,7 @@ class ProBotUI:
                     text = encrypt_bundle(text, passphrase)
                     fname = "atf-backup.enc"
                 path = os.path.join(tempfile.gettempdir(), f"atf_{cq.from_user.id}_{fname}")
-                with open(path, "w", encoding="utf-8") as fh:
-                    fh.write(text)
+                await asyncio.to_thread(Path(path).write_text, text, encoding="utf-8")
                 counts = doc.get("counts") or {}
                 lines = [self._t("ui_migrate_exported"),
                          "─────────────────────"]
@@ -7763,7 +7763,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_migrate(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             await self._safe_edit(cq, self._t("ui_migrate_title"),
                                   reply_markup=self._migrate_menu())
             await cq.answer()
@@ -7772,7 +7772,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_migrate_export(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             await cq.answer()
             await _do_migration_export(cq, "")
 
@@ -7780,7 +7780,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_migrate_export_enc(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             await cq.answer()
             st = self._state(cq.from_user.id)
             st.step = "migrate_passphrase"
@@ -7794,7 +7794,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_migrate_import(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             await cq.answer()
             st = self._state(cq.from_user.id)
             st.step = "migrate_await_file"
@@ -7809,7 +7809,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_migrate_overwrite(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             await cq.answer()
             st = self._state(cq.from_user.id)
             if st.step == "migrate_await_file":
@@ -7925,7 +7925,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_weburl_set(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             st = self._state(cq.from_user.id)
             st.step = "weburl_input"
             await self._persist(cq.from_user.id, st)
@@ -7937,7 +7937,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_weburl_clear(_, cq: CallbackQuery):
             if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
             if self._settings is not None:
                 try:
                     await self._settings.set("web_url", "")
@@ -8831,8 +8831,7 @@ class ProBotUI:
         path = os.path.join(tempfile.gettempdir(), f"atf_import_{uid}_{doc.file_id[:12]}")
         try:
             await message.download(file_name=path)
-            with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                blob = fh.read()
+            blob = await asyncio.to_thread(Path(path).read_text, encoding="utf-8", errors="replace")
         finally:
             try:
                 os.remove(path)
@@ -9001,8 +9000,7 @@ class ProBotUI:
             fname = "atf-backup.enc"
             text = encrypt_bundle(text, passphrase)
             path = os.path.join(tempfile.gettempdir(), f"atf_{uid}_{fname}")
-            with open(path, "w", encoding="utf-8") as fh:
-                fh.write(text)
+            await asyncio.to_thread(Path(path).write_text, text, encoding="utf-8")
             counts = doc.get("counts") or {}
             lines = [self._t("ui_migrate_exported"),
                      "🔒 AES-GCM " + self._t("ui_migrate_encrypted"),
@@ -9532,6 +9530,7 @@ class ProBotUI:
     async def _step_rule_editing_draft(self, message: Message, st: UiState, text: str) -> None:
         raw = text.strip()
         uid = int(message.from_user.id if message.from_user else (message.chat.id if message.chat else 0))
+        lang = self._resolve_lang(uid)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
         rule = await self._owned_rule(rule_id, uid)
         if not rule:
@@ -9764,6 +9763,7 @@ class ProBotUI:
     # ---------------- smart routing FSM steps ----------------
     async def _step_smart_set_intermediate(self, message: Message, st: UiState, text: str) -> None:
         uid = int(message.from_user.id if message.from_user else 0)
+        lang = self._resolve_lang(uid)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
         rule = await self._owned_rule(rule_id, uid)
         if not rule:
@@ -10010,6 +10010,7 @@ class ProBotUI:
 
     async def _step_smart_set_regex(self, message: Message, st: UiState, text: str) -> None:
         uid = int(message.from_user.id if message.from_user else 0)
+        lang = self._resolve_lang(uid)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
         rule = await self._owned_rule(rule_id, uid)
         if not rule:

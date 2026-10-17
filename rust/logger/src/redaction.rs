@@ -121,7 +121,15 @@ fn phone_candidate() -> &'static Regex {
 /// the text form `token=abc12345` was redacted. `redact` — the parity-pinned
 /// port — is deliberately left alone, because the fixture pins a bare
 /// `token <jwt>` as *not* redacted by the Python module (case `multiline`).
-const ENGINE_SECRET_KEYS: &str = r"token";
+///
+/// `session` is here for the same reason: a detail keyed `session` holds a
+/// Pyrogram session blob (the base64 auth key), which is the single most
+/// valuable credential the stack touches. It used to look redacted only because
+/// the free-text phone pass chewed the trailing digits of the fixture — masking
+/// a credential by accident, while corrupting every ordinary id in the same
+/// document. A session *name* in a detail blob is masked too; losing that label
+/// is the safe direction.
+const ENGINE_SECRET_KEYS: &str = r"token|session";
 
 /// Key-name matcher for the field-aware layer: a *whole* key must be secret.
 fn secret_key() -> &'static Regex {
@@ -339,7 +347,19 @@ pub fn redact_detail(detail: &str, max_bytes: usize) -> RedactedDetail {
             }
         }
     }
-    let mut text = redact_strong(&body);
+    // When the field-aware pass ran, the body is already valid JSON whose string
+    // values were scrubbed one by one. The free-text phone heuristic must NOT run
+    // over the serialised document: inside JSON every bare number is an id, and
+    // the phone pass rewrites digit runs (`"chat_id":5094837833` became
+    // `"chat_id":5094[PHONE]`, an unparseable blob that then reached every
+    // consumer of the detail column). Same reasoning as `redact_credentials`:
+    // masking a credential shape is hardening, mangling an ordinary id is a
+    // regression.
+    let mut text = if structured {
+        body
+    } else {
+        redact_strong(&body)
+    };
     // The text pass cannot grow a string beyond a small multiple of the input, but
     // keep the promise of a bound anyway.
     let ceiling = max_bytes.saturating_mul(2).max(64);
@@ -379,8 +399,26 @@ pub fn redact_value(value: &Value, depth: usize) -> Value {
                 Value::Array(items.iter().map(|v| redact_value(v, depth + 1)).collect())
             }
         }
+        // String values are where credentials hide (`{"note":"password=hunter2"}`),
+        // so scrub them field by field. Only the credential passes run: a string
+        // that happens to be an id stays byte-identical, and serde re-escapes the
+        // result so the document stays parseable.
+        Value::String(s) => Value::String(redact_field_text(s)),
         other => other.clone(),
     }
+}
+
+/// Credential-only redaction for one JSON string value (no phone heuristic).
+fn redact_field_text(text: &str) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
+    let pre = auth_header()
+        .replace_all(text, |c: &Captures<'_>| {
+            format!("{}{}{REPLACEMENT}", &c[1], &c[2])
+        })
+        .into_owned();
+    redact_credentials(&pre)
 }
 
 fn render(value: &Value) -> String {
@@ -549,6 +587,76 @@ mod tests {
         let out = redact_detail(r#"{"password": "hunter2", broken"#, 4096);
         assert!(!out.structured);
         assert!(!out.text.contains("hunter2"));
+    }
+
+    #[test]
+    fn detail_redaction_keeps_numeric_ids_and_valid_json() {
+        // Regression: the phone pass ran over the serialised document, so
+        // `"actor":5094837833` was stored as `"actor":5094[PHONE]` — an
+        // unparseable blob for every consumer of the detail column.
+        let detail = r#"{"actor":5094837833,"chat_id":-1001234567890,"seconds":900,"note":"ok"}"#;
+        let out = redact_detail(detail, 4096);
+        assert!(out.structured);
+        let parsed: serde_json::Value =
+            serde_json::from_str(&out.text).expect("structured detail must stay valid JSON");
+        assert_eq!(parsed["actor"], serde_json::json!(5094837833i64));
+        assert_eq!(parsed["chat_id"], serde_json::json!(-1001234567890i64));
+        assert_eq!(parsed["seconds"], serde_json::json!(900));
+        assert!(
+            !out.text.contains(PHONE_SUFFIX),
+            "numeric ids must survive untouched: {}",
+            out.text
+        );
+    }
+
+    #[test]
+    fn detail_redaction_masks_a_bare_session_key() {
+        // `{"session": "<pyrogram auth blob>"}` is the highest-value credential
+        // the stack writes. Before `session` joined the engine's secret keys this
+        // only appeared redacted because the phone pass mangled the blob's
+        // trailing digits — the same pass that corrupted ordinary ids. See
+        // `redaction_happens_before_persistence` in tests/grpc_end_to_end.rs.
+        let detail = r#"{"session":"1BVtsOKlukZZZ1234567890","chat_id":5094837833}"#;
+        let out = redact_detail(detail, 4096);
+        assert!(out.structured);
+        assert!(
+            !out.text.contains("1BVtsOKlukZZZ1234567890"),
+            "a session blob must not survive: {}",
+            out.text
+        );
+        let parsed: serde_json::Value = serde_json::from_str(&out.text).expect("valid json");
+        assert_eq!(parsed["session"], serde_json::json!(REPLACEMENT));
+        assert_eq!(parsed["chat_id"], serde_json::json!(5094837833i64));
+    }
+
+    #[test]
+    fn detail_redaction_still_masks_credentials_inside_strings() {
+        let detail = r#"{"note":"password=hunter2 keep","token":"abc123def","chat":"5094837833"}"#;
+        let out = redact_detail(detail, 4096);
+        let parsed: serde_json::Value = serde_json::from_str(&out.text).expect("valid json");
+        assert!(!out.text.contains("hunter2"), "{}", out.text);
+        assert_eq!(parsed["token"], serde_json::json!(REPLACEMENT));
+        let note = parsed["note"].as_str().unwrap_or_default();
+        assert!(note.contains(REPLACEMENT), "note={}", note);
+        assert!(!note.contains("hunter2"), "note={}", note);
+        // A string that is an id stays byte-identical: lookup keys are not phones.
+        assert_eq!(parsed["chat"], serde_json::json!("5094837833"));
+    }
+
+    #[test]
+    fn detail_redaction_keeps_nested_objects_parseable() {
+        let detail = r#"{"nested":{"access_token":"tok-abc","chat_id":5094837833},"list":[1,2]}"#;
+        let out = redact_detail(detail, 4096);
+        let parsed: serde_json::Value = serde_json::from_str(&out.text).expect("valid json");
+        assert_eq!(
+            parsed["nested"]["access_token"],
+            serde_json::json!(REPLACEMENT)
+        );
+        assert_eq!(
+            parsed["nested"]["chat_id"],
+            serde_json::json!(5094837833i64)
+        );
+        assert_eq!(parsed["list"], serde_json::json!([1, 2]));
     }
 
     #[test]

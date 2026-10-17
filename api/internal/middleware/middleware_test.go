@@ -35,7 +35,9 @@ func TestAPIKeyAuth_AllowsPublicVersionEndpoint(t *testing.T) {
 	called := false
 	h := APIKeyAuth("secret", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true }))
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/version", nil))
-	if !called { t.Fatal("public version endpoint must not require the global API key") }
+	if !called {
+		t.Fatal("public version endpoint must not require the global API key")
+	}
 }
 
 func TestAPIKeyAuth_AllowsUserJWTToReachJWTValidation(t *testing.T) {
@@ -44,7 +46,9 @@ func TestAPIKeyAuth_AllowsUserJWTToReachJWTValidation(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/rules", nil)
 	req.Header.Set("Authorization", "Bearer user-jwt-not-global-key")
 	h.ServeHTTP(httptest.NewRecorder(), req)
-	if !called { t.Fatal("Bearer JWT must reach JWT-aware handler, not be compared to ATF_API_KEY") }
+	if !called {
+		t.Fatal("Bearer JWT must reach JWT-aware handler, not be compared to ATF_API_KEY")
+	}
 }
 
 func TestAPIKeyAuth_AcceptsBearer(t *testing.T) {
