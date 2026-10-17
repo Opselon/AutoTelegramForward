@@ -188,6 +188,24 @@ class SqliteSessionRepository(ISessionRepository):
         return cur.rowcount > 0
 
 
+def _reject_inherited_write(rule: Any) -> None:
+    """Refuse to save a rule carrying inherited bot defaults.
+
+    The forwarding paths hand the pipeline a *copy* of a rule with the attached
+    bot's defaults filled in (see core.application.effective_settings). Those
+    values are not the task's choices; writing them back would pin them and the
+    task would silently stop tracking its bot. A save of such an object is a bug
+    in the caller, so it fails loudly here instead of corrupting configuration.
+    """
+    inherited = getattr(rule, "_inherited_defaults", None)
+    if inherited:
+        raise ValueError(
+            "refusing to persist a rule carrying inherited bot defaults "
+            f"({', '.join(inherited)}); resolve them for forwarding without "
+            "writing them back"
+        )
+
+
 class SqliteForwardRuleRepository(IForwardRuleRepository):
     def __init__(self, db: SqliteDatabase) -> None:
         self._db = db
@@ -310,6 +328,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         return rule
 
     async def update(self, rule: ForwardRule, expected_version: Optional[int] = None) -> ForwardRule:
+        _reject_inherited_write(rule)
         rule_version = int(getattr(rule, "version", 1) or 1)
         next_version = rule_version + 1
 
