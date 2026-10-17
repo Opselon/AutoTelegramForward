@@ -1395,13 +1395,20 @@ class ProBotUI:
     # the credential for that hop — written encrypted, never shown back, never
     # logged, and the message that carried it is deleted.
 
-    async def _active_bot_token(self, token_id: str):
-        """The stored token row behind an id, or None when it is unusable."""
+    async def _active_bot_token(self, token_id: str, uid: int = 0):
+        """The stored token row behind an id, or None when it is unusable.
+
+        Scoped by owner: an id transplanted from another tenant's screen must
+        not resolve, let alone return a decrypted token.
+        """
         token_id = str(token_id or "").strip()
         if not token_id or self._bot_tokens is None:
             return None
         try:
-            record = await self._bot_tokens.get(token_id)
+            if uid:
+                record = await self._bot_tokens.get_owned(token_id, int(uid))
+            else:
+                record = await self._bot_tokens.get(token_id)
         except Exception as exc:  # a broken vault must not take the panel down
             logger.warning("[BOT ROUTE] token %s lookup failed: %s", token_id[:8], exc)
             return None
@@ -1450,10 +1457,12 @@ class ProBotUI:
     async def _render_bot_route_screen(self, rule: ForwardRule, st: "UiState") -> Tuple[str, InlineKeyboardMarkup]:
         """Where a task's copies are sent from, and which bots are available."""
         lang = self._lang_for(rule)
+        owner_id = int(getattr(rule, "owner_user_id", 0) or getattr(st, "user_id", 0) or 0)
         records: List[Any] = []
-        if self._bot_tokens is not None:
+        if self._bot_tokens is not None and owner_id:
             try:
-                records = [r for r in (await self._bot_tokens.list_all() or []) if getattr(r, "is_active", False)]
+                listed = await self._bot_tokens.list_by_owner(owner_id)
+                records = [r for r in (listed or []) if getattr(r, "is_active", False)]
             except Exception as exc:
                 logger.warning("[BOT ROUTE] token list failed: %s", exc)
         records.sort(key=lambda r: (int(getattr(r, "created_at", 0) or 0), str(r.id)))
@@ -1527,7 +1536,7 @@ class ProBotUI:
         if self._bot_tokens is None:
             return await message.reply_text(self._t("ui_route_token_rejected", lang=lang))
         try:
-            record = await self._bot_tokens.create(bot_label, token)
+            record = await self._bot_tokens.create(bot_label, token, owner_user_id=uid)
         except Exception as exc:
             logger.warning("[BOT ROUTE] storing the pasted token failed: %s", type(exc).__name__)
             return await message.reply_text(self._t("ui_route_token_rejected", lang=lang))
@@ -5877,7 +5886,7 @@ class ProBotUI:
             else:
                 # Fail closed: a task must not be pointed at a bot route whose
                 # token is gone — that would stop it forwarding altogether.
-                if not await self._active_bot_token(rule.bot_token_id):
+                if not await self._active_bot_token(rule.bot_token_id, uid):
                     return await cq.answer(self._t("ui_route_bot_need_token", lang=lang), show_alert=True)
                 rule.delivery_transport = "BOT"
             await self._save_owned_rule(rule, uid)
@@ -5954,7 +5963,7 @@ class ProBotUI:
             lang = self._lang_for(rule)
             st = self._state(uid)
             token_id = self._route_token_choice(st, rule.id, idx)
-            record = await self._active_bot_token(token_id) if token_id else None
+            record = await self._active_bot_token(token_id, uid) if token_id else None
             if record is None:
                 # The screen the user tapped is stale (a token was removed, or
                 # another device moved on). Re-render instead of attaching a
@@ -5989,7 +5998,9 @@ class ProBotUI:
             lang = self._lang_for(rule)
             st = self._state(uid)
             token_id = self._route_token_choice(st, rule.id, idx)
-            if not token_id:
+            # Ownership is checked before the in-use scan: a foreign id must
+            # not even be probed for use, let alone deleted.
+            if not token_id or await self._active_bot_token(token_id, uid) is None:
                 await cq.answer(self._t("ui_route_token_rejected", lang=lang), show_alert=True)
                 text, kbd = await self._render_bot_route_screen(rule, st)
                 await self._persist(uid, st)
@@ -6005,7 +6016,7 @@ class ProBotUI:
             removed = False
             if self._bot_tokens is not None:
                 try:
-                    removed = bool(await self._bot_tokens.delete(token_id))
+                    removed = bool(await self._bot_tokens.delete_owned(token_id, uid))
                 except Exception as exc:
                     logger.warning("[BOT ROUTE] deleting token %s failed: %s", token_id[:8], exc)
             if self._bot_route is not None:

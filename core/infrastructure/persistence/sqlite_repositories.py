@@ -782,23 +782,30 @@ class SqliteBotTokenRepository(IBotTokenRepository):
 
     async def add(self, token: BotToken) -> BotToken:
         self._db.execute(
-            "INSERT INTO bot_tokens (id, label, token_encrypted, is_active, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO bot_tokens"
+            " (id, label, token_encrypted, is_active, created_at, updated_at, owner_user_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 token.id, token.label,
                 self._crypto.encrypt(token.token) if token.token else "",
                 int(token.is_active), token.created_at, token.updated_at,
+                int(token.owner_user_id or 0),
             ),
         )
         return token
 
     def _row_to_entity(self, row) -> BotToken:
         enc = row["token_encrypted"]
+        try:
+            owner = int(row["owner_user_id"] or 0)
+        except (IndexError, KeyError):
+            owner = 0  # a row read from a database that predates the column
         return BotToken(
             id=row["id"], label=row["label"],
             token=self._crypto.decrypt(enc) if enc else "",
             is_active=bool(row["is_active"]),
             created_at=row["created_at"], updated_at=row["updated_at"],
+            owner_user_id=owner,
         )
 
     async def get_by_id(self, token_id: str) -> Optional[BotToken]:
@@ -815,6 +822,30 @@ class SqliteBotTokenRepository(IBotTokenRepository):
 
     async def delete(self, token_id: str) -> bool:
         cur = self._db.execute("DELETE FROM bot_tokens WHERE id=?", (token_id,))
+        return cur.rowcount > 0
+
+    # -- owner-scoped paths: every human-facing read and write goes here ---- #
+    async def list_by_owner(self, owner_user_id: int) -> List[BotToken]:
+        rows = self._db.query_all(
+            "SELECT * FROM bot_tokens WHERE owner_user_id=? ORDER BY created_at",
+            (int(owner_user_id or 0),),
+        )
+        return [self._row_to_entity(r) for r in rows]
+
+    async def get_owned(self, token_id: str, owner_user_id: int) -> Optional[BotToken]:
+        # The owner is part of the WHERE clause, not an if after the read:
+        # a transplanted id must not even round-trip the secret.
+        row = self._db.query_one(
+            "SELECT * FROM bot_tokens WHERE id=? AND owner_user_id=?",
+            (token_id, int(owner_user_id or 0)),
+        )
+        return self._row_to_entity(row) if row else None
+
+    async def delete_owned(self, token_id: str, owner_user_id: int) -> bool:
+        cur = self._db.execute(
+            "DELETE FROM bot_tokens WHERE id=? AND owner_user_id=?",
+            (token_id, int(owner_user_id or 0)),
+        )
         return cur.rowcount > 0
 
 

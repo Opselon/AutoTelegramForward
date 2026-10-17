@@ -58,12 +58,14 @@ class FakeBot:
 
 
 class FakeRecord:
-    def __init__(self, id=TOKEN_ID, label="@PanelBot", token=TOKEN, is_active=True, created_at=1):
+    def __init__(self, id=TOKEN_ID, label="@PanelBot", token=TOKEN, is_active=True, created_at=1,
+                 owner_user_id=OWNER):
         self.id = id
         self.label = label
         self.token = token
         self.is_active = is_active
         self.created_at = created_at
+        self.owner_user_id = owner_user_id
 
 
 class FakeRules:
@@ -100,19 +102,31 @@ class FakeTokens:
                 return r
         return None
 
+    async def get_owned(self, token_id, owner_user_id):
+        for r in self.records:
+            if r.id == token_id and r.owner_user_id == owner_user_id:
+                return r
+        return None
+
+    async def list_by_owner(self, owner_user_id):
+        return [r for r in self.records if r.owner_user_id == owner_user_id]
+
     async def list_all(self):
         return list(self.records)
 
-    async def create(self, label, token):
-        rec = FakeRecord(id="new-token-id", label=label, token=token, created_at=2)
+    async def create(self, label, token, owner_user_id=0):
+        rec = FakeRecord(id="new-token-id", label=label, token=token, created_at=2,
+                         owner_user_id=owner_user_id)
         self.records.append(rec)
         self.created.append((label, token))
         return rec
 
-    async def delete(self, token_id):
+    async def delete_owned(self, token_id, owner_user_id):
         self.deleted.append(token_id)
-        self.records = [r for r in self.records if r.id != token_id]
-        return True
+        before = len(self.records)
+        self.records = [r for r in self.records
+                        if not (r.id == token_id and r.owner_user_id == owner_user_id)]
+        return len(self.records) < before
 
 
 class FakeRoute:
