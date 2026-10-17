@@ -49,11 +49,23 @@ class RuleSettingsSheet extends StatefulWidget {
 class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
   RuleSettingsSchema? _schema;
 
-  /// Effective values, keyed by setting name. Edits mutate this map so the
-  /// sheet can diff it against [_original] to send only real changes.
+  /// The values the sheet opens on — what the forwarder will use, with the
+  /// bot's defaults applied — keyed by setting name. Edits mutate this map so
+  /// the sheet can diff it against [_original] to send only real changes.
+  ///
+  /// Seeding from the *effective* view (not from what the task stores) is what
+  /// keeps an inherited value from being posted back as a choice: a switch the
+  /// user never touches is identical to the baseline and never sent, while a
+  /// value the task already owns is also unchanged and equally ignored.
   final Map<String, dynamic> _values = {};
   final Map<String, dynamic> _original = {};
   final Map<String, String> _errors = {};
+
+  /// Where each value comes from: the task's own, its bot's, or the registry's.
+  Map<String, SettingProvenance> _sources = const <String, SettingProvenance>{};
+
+  /// Keys whose reset is in flight, so the sheet can show it without blocking.
+  final Set<String> _resetting = <String>{};
 
   bool _loading = true;
   bool _saving = false;
@@ -102,17 +114,19 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
     final client = context.read<AppState>().buildApiClient();
     try {
       final schema = await client.ruleSettingsSchema();
-      final current = await client.getRuleSettings(widget.ruleId);
+      final view = await client.ruleSettings(widget.ruleId);
       if (!mounted) return;
       _reloadBots(client: client);
+      final baseline = view.baseline;
       setState(() {
         _schema = schema;
+        _sources = view.sources;
         _values
           ..clear()
-          ..addAll(current);
+          ..addAll(baseline);
         _original
           ..clear()
-          ..addAll(current);
+          ..addAll(baseline);
         _errors.clear();
       });
     } on ApiException catch (exc) {
@@ -206,6 +220,153 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         ..addAll(errors);
     });
     return errors.isEmpty;
+  }
+
+  /// Hand one setting back to the value it inherits.
+  ///
+  /// A reset is not a write: the server drops this task's own value so the bot
+  /// (or the registry) supplies it again. Saving the value the sheet is showing
+  /// instead would pin it, and the task would stop following its bot.
+  Future<void> _resetSetting(String key) async {
+    final t = AppMessages.of(context);
+    if (_resetting.contains(key)) return;
+    setState(() {
+      _resetting.add(key);
+      _saveError = null;
+    });
+    final client = context.read<AppState>().buildApiClient();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final resp = await client.updateRuleSettings(
+        widget.ruleId,
+        <String, dynamic>{},
+        reset: <String>[key],
+      );
+      if (!mounted) return;
+      if (resp['success'] == false) {
+        setState(
+          () => _saveError =
+              '${resp['message'] ?? t.get('rules_settings_save_failed')}'
+              '${resp['error_code'] != null ? ' (${resp['error_code']})' : ''}',
+        );
+        return;
+      }
+      // Re-read rather than guess: the value that comes back is whatever the
+      // setting inherits now, which is the whole point of the action.
+      final view = await client.ruleSettings(widget.ruleId);
+      if (!mounted) return;
+      final baseline = view.baseline;
+      setState(() {
+        _sources = view.sources;
+        _values
+          ..clear()
+          ..addAll(baseline);
+        _original
+          ..clear()
+          ..addAll(baseline);
+        _errors.remove(key);
+      });
+      messenger.showSnackBar(
+        SnackBar(content: Text(t.get('rules_settings_back_to_default'))),
+      );
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      if (exc.error.kind == ErrorKind.unauthorized) {
+        context.read<AppState>().markExpired();
+        return;
+      }
+      setState(
+        () => _saveError = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : t.get('rules_settings_save_failed'),
+      );
+    } catch (exc) {
+      if (!mounted) return;
+      setState(
+        () => _saveError = '${t.get('rules_settings_save_failed')}: $exc',
+      );
+    } finally {
+      if (mounted) setState(() => _resetting.remove(key));
+    }
+  }
+
+  /// Where a setting's value comes from, as a small label — or null when there
+  /// is nothing worth saying (the registry default is the quiet, usual case).
+  Widget? _provenanceChip(RuleSettingSpec spec, {bool dense = false}) {
+    final info = _sources[spec.key];
+    if (info == null || !(info.isTask || info.isBot)) return null;
+    final t = AppMessages.of(context);
+    final label = info.isBot
+        ? (info.botLabel.isEmpty
+              ? t.get('rules_settings_from_bot')
+              : t.get(
+                  'rules_settings_from_bot_named',
+                  params: {'bot': info.botLabel},
+                ))
+        : t.get('rules_settings_own_value');
+    final color = info.isBot
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.tertiary;
+    return Padding(
+      padding: EdgeInsets.only(left: dense ? 0 : 6, bottom: 2),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The "hand it back" affordance, shown only where the task owns the value —
+  /// a setting it already inherits has nothing to hand back, and one already on
+  /// the registry default has neither.
+  Widget? _resetButton(RuleSettingSpec spec) {
+    final info = _sources[spec.key];
+    if (info == null || !info.isTask) return null;
+    final t = AppMessages.of(context);
+    if (_resetting.contains(spec.key)) {
+      return const SizedBox(
+        width: 18,
+        height: 18,
+        child: Padding(
+          padding: EdgeInsets.all(3),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    return IconButton(
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      iconSize: 16,
+      tooltip: t.get('rules_settings_use_default'),
+      icon: const Icon(Icons.settings_backup_restore),
+      onPressed: () => _resetSetting(spec.key),
+    );
+  }
+
+  /// Badge and reset, side by side, for the trailing slot of a field.
+  Widget? _provenanceTrailing(RuleSettingSpec spec) {
+    final chip = _provenanceChip(spec);
+    final reset = _resetButton(spec);
+    if (chip == null && reset == null) return null;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[?chip, ?reset],
+    );
   }
 
   Future<void> _save() async {
@@ -813,14 +974,24 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
     }
 
     if (spec.isBool) {
+      final chip = _provenanceChip(spec);
+      final reset = _resetButton(spec);
       return SwitchListTile(
         contentPadding: EdgeInsets.zero,
         dense: true,
-        title: Text(spec.label, style: const TextStyle(fontSize: 13)),
+        title: Row(
+          children: <Widget>[
+            Flexible(
+              child: Text(spec.label, style: const TextStyle(fontSize: 13)),
+            ),
+            ?chip,
+          ],
+        ),
         subtitle: spec.help.isEmpty
             ? null
             : Text(spec.help, style: const TextStyle(fontSize: 11)),
         value: value == true,
+        secondary: reset,
         onChanged: (v) => setState(() => _values[spec.key] = v),
       );
     }
@@ -839,6 +1010,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
             labelText: spec.label,
             helperText: spec.help.isEmpty ? null : spec.help,
             errorText: error,
+            suffix: _provenanceTrailing(spec),
             border: const OutlineInputBorder(),
           ),
           items: [
@@ -975,6 +1147,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
           hintText: hint,
           helperText: spec.help.isEmpty ? null : spec.help,
           errorText: error,
+          suffix: _provenanceTrailing(spec),
           border: const OutlineInputBorder(),
         ),
         onChanged: (text) {

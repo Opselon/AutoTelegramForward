@@ -376,6 +376,11 @@ class AppMessagesEs {
     'rules_settings_int_hint': 'entero',
     'rules_settings_invalid': '{kind} no válido',
     'rules_settings_json_hint': 'Objeto JSON',
+    'rules_settings_from_bot': 'del bot',
+    'rules_settings_from_bot_named': 'de {bot}',
+    'rules_settings_own_value': 'definido aquí',
+    'rules_settings_use_default': 'Usar el valor por defecto',
+    'rules_settings_back_to_default': 'Devuelto al valor por defecto',
     'rules_settings_list_hint': 'separado por comas',
     'rules_settings_load_failed':
         'No se pudieron cargar los ajustes de la tarea',

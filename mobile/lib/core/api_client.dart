@@ -1022,17 +1022,37 @@ class ApiClient {
     retryable: true,
   );
 
+  /// The same read, keeping the provenance: what the task stores, what the
+  /// forwarder will use once its bot's defaults are applied, and where each
+  /// value came from.
+  Future<RuleSettingsView> ruleSettings(String ruleId) => _request(
+    method: 'GET',
+    path: '/api/rules/$ruleId/settings',
+    fromJson: RuleSettingsView.fromJson,
+    retryable: true,
+  );
+
   /// Applies a validated batch of settings (`PATCH /api/rules/{id}/settings`).
   /// The server rejects an unknown name, a wrong type or an out-of-range value,
   /// so the thrown [ApiException] carries the server's own explanation.
+  ///
+  /// [reset] names settings to hand back to the bot's default (or the registry's
+  /// when the bot has none). It is a distinct verb rather than a write: storing
+  /// the default value instead would pin the key to it, and the task would stop
+  /// following its bot.
   Future<Map<String, dynamic>> updateRuleSettings(
     String ruleId,
     Map<String, dynamic> values, {
     bool replaceAll = false,
+    List<String> reset = const <String>[],
   }) => _request(
     method: 'PATCH',
     path: '/api/rules/$ruleId/settings',
-    body: {'settings': values, 'replace_all': replaceAll},
+    body: {
+      'settings': values,
+      'replace_all': replaceAll,
+      if (reset.isNotEmpty) 'reset': reset,
+    },
     fromJson: (json) => json,
     retryable: false,
   );
