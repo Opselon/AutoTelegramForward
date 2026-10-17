@@ -427,7 +427,6 @@ class TestKeywordReplyJobIsolation:
 
     @staticmethod
     def _mgr_with_fake_queue():
-        import asyncio
 
         from core.infrastructure.telegram.durable_queue import DurableQueueManager
 

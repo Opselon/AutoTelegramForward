@@ -28,6 +28,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Lint (ruff)
+        # Fail-closed gate on defects, not style (see ruff.toml): undefined names,
+        # dead redefinitions, duplicate dict keys, and blocking I/O inside async
+        # handlers. Pinned so an upstream ruff release cannot turn a green PR red;
+        # bump it deliberately, with the new findings fixed in the same PR.
+        run: |
+          pip install ruff==0.17.1
+          ruff check core scripts atfcli
+
       - name: Run Python tests
         run: python -m pytest -q core/tests scripts/tests
 

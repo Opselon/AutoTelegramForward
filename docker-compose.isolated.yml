@@ -5,10 +5,21 @@
 
 name: atf-architecture-hardening
 
+# Bounded container logs. The `json-file` driver is unbounded by default: the
+# core container's log had reached 46 MB / 434k lines, and reading it back for a
+# diagnosis took seconds. Cap and rotate instead of letting a log fill the disk.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: atf-hardened-postgres
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-atf}
@@ -29,6 +40,8 @@ services:
       context: .
       dockerfile: Dockerfile.logger-rust
     container_name: atf-hardened-logger
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
     restart: unless-stopped
     environment:
       # Rust engine: its own store file, never the retired Python logger.db
@@ -51,6 +64,8 @@ services:
       context: .
       dockerfile: Dockerfile.core
     container_name: atf-hardened-core
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       postgres:
@@ -81,6 +96,8 @@ services:
       context: .
       dockerfile: Dockerfile.api
     container_name: atf-hardened-api
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       - core
@@ -100,6 +117,8 @@ services:
       context: .
       dockerfile: Dockerfile.web
     container_name: atf-hardened-web
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       - api

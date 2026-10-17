@@ -126,6 +126,21 @@ from master `885674f`:
 | Live API → engine | authenticated 4xx through `atf-api` | WARN rows with `service="api"`, real `corr-…` ids stored verbatim and queryable |
 | Python parity | same payload to the retired Python engine and to Rust | identical redaction/identifier behaviour; only the JSON whitespace of `detail` differs |
 
+**Cleanup is part of the run.** The suite writes every probe under
+`service="acceptance"` and purges exactly that scope in a `finally` block, so a
+run — green or red — leaves the operator's Logs screen untouched:
+
+```bash
+docker exec -e ATF_LOGGER_ADDR=atf-logger:50052 -i atf-core python - \
+  < scripts/acceptance/logger_acceptance.py     # prints [cleanup] purged=<n>
+```
+
+Before that guard existed, a single run deposited 755 rows into the live store —
+most of them ERROR-level, reading `page row 99` — which is what an operator saw
+when they opened Logs to ask what was failing. Set
+`ATF_ACCEPTANCE_KEEP_ROWS=1` only when you need to inspect the probes afterwards;
+delete them yourself (`POST /api/logs/purge {"service":"acceptance"}`).
+
 ### Behaviour differences from the retired Python engine (all in the safer direction)
 
 * An entry-less `LogRequest` is **rejected** (`success=false`, nothing written,

@@ -1,3 +1,12 @@
+# Bounded container logs. The `json-file` driver is unbounded by default: the
+# core container's log had reached 46 MB / 434k lines, and reading it back for a
+# diagnosis took seconds. Cap and rotate instead of letting a log fill the disk.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # Production logging engine (Rust, rust/logger). Promoted over the legacy
   # Python logger: the service name and the `logger:50052` address consumers use
@@ -9,6 +18,8 @@ services:
       context: .
       dockerfile: Dockerfile.logger-rust
     container_name: atf-logger
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
     restart: unless-stopped
     environment:
       ATF_LOGGER_DB_PATH: /app/data/atf_logs_rust.db
@@ -31,6 +42,8 @@ services:
       context: .
       dockerfile: Dockerfile.core
     container_name: atf-core
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       - logger
@@ -75,6 +88,8 @@ services:
       context: .
       dockerfile: Dockerfile.api
     container_name: atf-api
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       - core
@@ -107,6 +122,8 @@ services:
       context: .
       dockerfile: Dockerfile.web
     container_name: atf-web
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       - api
@@ -131,6 +148,8 @@ services:
     profiles: ["tls"]
     image: caddy:2-alpine
     container_name: atf-caddy
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       - web

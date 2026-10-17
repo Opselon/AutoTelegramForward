@@ -470,7 +470,6 @@ def test_use_case_owned_mutations_deny_cross_tenant(tmp_path):
     import time
     from core.application.use_cases import (
         ForwardRuleUseCases, FilterRuleUseCases, AIConfigUseCases)
-    from core.domain.entities import FilterRule, AIConfig
     from core.domain.value_objects import RoutingType, ForwardMode
     from core.infrastructure.persistence.sqlite_repositories import (
         SqliteFilterRuleRepository, SqliteAIConfigRepository)
@@ -523,7 +522,6 @@ def test_ai_and_credential_guards_deny_cross_tenant(tmp_path):
     another tenant's API key, and `set_default` flips shared default state."""
     from core.application.use_cases import (
         AIConfigUseCases, ApiCredentialUseCases)
-    from core.domain.entities import AIConfig
     from core.application.repositories import ApiCredential
     from core.infrastructure.persistence.sqlite_repositories import (
         SqliteAIConfigRepository, SqliteApiCredentialRepository)

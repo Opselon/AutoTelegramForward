@@ -264,7 +264,8 @@ class SyncEngine:
                     replied_count += 1
                     logger.info(
                         "[PIPELINE:SYNC_REPLY] rule=%s src=%s:%s -> tgt=%s replied to %s",
-                        rule.id[:8], payload.chat_id, payload.message_id,
+                        rule.id[:8], payload.chat_id, payload.message_id, target,
+                        getattr(sent, "id", None) or getattr(sent, "message_id", None),
                     )
             except Exception as exc:
                 logger.warning(

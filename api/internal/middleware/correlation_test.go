@@ -66,11 +66,11 @@ func TestCorrelationID_PreservesValidIncoming(t *testing.T) {
 
 func TestCorrelationID_RejectsMalformedAndOversized(t *testing.T) {
 	badIDs := []string{
-		"short",                          // < 8 chars
-		strings.Repeat("a", 130),          // > 128 chars
-		"bad<script>alert(1)</script>",    // dangerous characters
-		"newline\nid\r\nvalue",           // header injection attempt
-		"bad space in id",                // spaces not allowed
+		"short",                        // < 8 chars
+		strings.Repeat("a", 130),       // > 128 chars
+		"bad<script>alert(1)</script>", // dangerous characters
+		"newline\nid\r\nvalue",         // header injection attempt
+		"bad space in id",              // spaces not allowed
 	}
 
 	for _, bad := range badIDs {

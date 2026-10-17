@@ -1,0 +1,45 @@
+# Ruff gate for the Python side of the stack (core, scripts, atfcli).
+#
+# Scope is deliberately narrow: this repo has ~2.3k warnings under ruff's full
+# rule set, and a gate that starts red gets switched off. What is enabled here
+# is the class of finding that is an actual defect, not a matter of taste:
+#
+#   E9      syntax/runtime errors (a broken file, an `except:` after `try`)
+#   F821    undefined name — raised NameError at runtime, in a handler nobody
+#           had exercised. This gate found 61 of them in pro_bot_ui.py (every
+#           non-admin button tap) plus a `/settings` command that sent an
+#           undefined variable, and four FSM steps that used an undefined `lang`.
+#   F811    a name defined twice, so one definition is dead. Found a second
+#           `list_by_owner` shadowing the first in three repositories.
+#   F601    duplicate dictionary key — the last one silently wins.
+#   ASYNC230 blocking `open()` inside `async def`: stalls the whole event loop
+#   ASYNC251 `time.sleep()` inside `async def`: freezes every task on the loop
+#
+# Excluded on purpose, with the reason, so nobody re-adds them casually:
+#   F401 (182)    unused imports — noise; a large share is re-exports
+#   F841 (28)     unused locals
+#   PLC0415 (356) import-outside-top-level — this codebase lazy-imports on
+#                 purpose (startup cost, optional deps)
+#   PLE1205/1206  logging-argument count. Real defects were fixed by hand (a
+#                 `%s`-starved sync_engine log line), but the rule false-positives
+#                 on `LogClient.info(service, category, message, detail)`, whose
+#                 signature merely looks like `logging.info`.
+#   ASYNC240      `os.path`/`pathlib` probes in async code: microsecond syscalls
+#                 on a local disk, not worth a `to_thread` hop per call.
+#   ASYNC110      bounded poll loops (`while pending and now < deadline`) are a
+#                 legitimate pattern; rewriting them to Events changes behaviour.
+#
+# Ratchet: when a file is cleaned of F401/F841 debt, add the rule here.
+
+target-version = "py311"
+
+[lint]
+select = ["E9", "F821", "F811", "F601", "ASYNC230", "ASYNC251"]
+
+[lint.per-file-ignores]
+# `__init__.py` files re-export their package surface by importing it.
+"*/__init__.py" = ["F401"]
+# Tests set up temp files and wait for real time synchronously on purpose; the
+# ASYNC rules exist to keep production handlers off the event loop.
+"core/tests/*" = ["ASYNC230", "ASYNC251"]
+"scripts/tests/*" = ["ASYNC230", "ASYNC251"]

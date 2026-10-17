@@ -325,7 +325,6 @@ def build_container(cfg: Config) -> dict:
         "ai_transformer": ai_transformer,
         "ai_circuit_registry": ai_circuit_registry,
         "pv_responder": pv_responder,
-        "account_servicer": account_servicer,
         "settings": settings_repo,
         # The raw pool (or its deferred coroutine) — awaited by _resolve_pg_pool.
         "pg_pool_holder": pg_pool,

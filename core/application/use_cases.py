@@ -203,9 +203,6 @@ class ForwardRuleUseCases:
         return await self._repo.list_by_session(session_id, owner_user_id)
 
     async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
-        return await self._repo.list_by_owner(owner_user_id)
-
-    async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
         if hasattr(self._repo, "list_by_owner"):
             return await self._repo.list_by_owner(owner_user_id)
         return [r for r in await self._repo.list_all() if getattr(r, "owner_user_id", 0) == owner_user_id]

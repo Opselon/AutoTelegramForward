@@ -150,7 +150,6 @@ func TestAuthTMA_SignatureVerification(t *testing.T) {
 	}
 }
 
-
 // TestNormalizeAdvancedMetadataValidation covers the Phase 2 typed-validation
 // contract: every known advanced field is coerced to its canonical type and an
 // out-of-range or malformed value is normalized instead of persisted as
@@ -327,15 +326,15 @@ func TestCleanerConfigNormalization(t *testing.T) {
 		rawBody := map[string]any{
 			"cleaner_enabled": true,
 			"cleaner_config": map[string]any{
-				"patterns":     []any{"spam"},
-				"remove_urls":  true,
-				"language":     "pt",
+				"patterns":    []any{"spam"},
+				"remove_urls": true,
+				"language":    "pt",
 			},
-			"sync_replies":         true,
-			"sync_edits":           true,
-			"sync_deletes":         true,
-			"show_forward_header":  true,
-			"duplicate_filters":    true,
+			"sync_replies":        true,
+			"sync_edits":          true,
+			"sync_deletes":        true,
+			"show_forward_header": true,
+			"duplicate_filters":   true,
 		}
 		rule := &pb.ForwardRule{Id: "r-v2", CustomMetadataJson: ""}
 		bodyJSON, err := json.Marshal(rawBody)
