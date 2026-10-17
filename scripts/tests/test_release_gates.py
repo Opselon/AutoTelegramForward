@@ -155,8 +155,25 @@ def test_release_workflow_gates():
     assert "--list-sample" in text, "post-publish must download the exact sampled entries"
     assert "--sample 4 --seed 42" in text or "--sample 4" in text
     workflow_text = (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text()
-    assert "ANDROID_KEYSTORE_BASE64" in workflow_text
-    assert 'echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"' in workflow_text
+    if "ANDROID_KEYSTORE_BASE64" not in workflow_text:
+        # The Android build (and therefore the keystore) lives in the reusable
+        # workflow this job delegates to. Follow the delegation: the release path
+        # must still be the thing that validates the signing secrets.
+        delegating = wf["jobs"].get("mobile-android", {})
+        assert delegating.get("uses") == "./.github/workflows/mobile-android.yml", (
+            "release.yml neither handles the Android signing secrets nor delegates to "
+            "the workflow that does"
+        )
+        assert delegating.get("secrets") == "inherit"
+        android_text = (
+            REPO_ROOT / ".github" / "workflows" / "mobile-android.yml"
+        ).read_text()
+    else:
+        android_text = workflow_text
+    # The keystore is validated where the APK is built (see above); everything
+    # below is release.yml's own surface.
+    assert "ANDROID_KEYSTORE_BASE64" in android_text
+    assert 'echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"' in android_text
     assert "HAS_IOS_SECRETS" in workflow_text
     assert "ProductVersion=${{ needs.meta.outputs.version }}" in workflow_text
     assert "CommitSHA=${GITHUB_SHA}" in workflow_text
