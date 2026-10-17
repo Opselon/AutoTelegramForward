@@ -36,6 +36,7 @@ from ..domain.services import (
     RoutingPolicy,
     TransformationService,
 )
+from .effective_settings import materialize
 from .log_policy import LogPolicy
 from ..domain.value_objects import (
     AIFallbackPolicy,
@@ -272,6 +273,7 @@ class DurableMessagePipeline:
         audit_repo: Optional[Any] = None,
         log_policy: Optional["LogPolicy"] = None,
         branding_hop: Optional[Any] = None,
+        bot_tokens: Optional[Any] = None,
     ) -> None:
         self._rules = rule_repo
         self._filters = filter_repo
@@ -291,6 +293,12 @@ class DurableMessagePipeline:
         # optional so a bare pipeline — unit tests, embedded use — still runs;
         # without it a rule that asks for the hop simply delivers directly.
         self._branding_hop = branding_hop
+        # Per-bot defaults: a task inherits the behaviour settings of the bot it
+        # has attached. Read here, at the moment a message is decided, because
+        # everything downstream — the transform *and* the delivery job, which
+        # carries delivery_transport, bot_token_id and auto_delete_seconds — is
+        # derived from the rule object this pipeline hands along.
+        self._bot_tokens = bot_tokens
         self.metrics = PipelineMetrics()
         # Which lifecycle events may leave this process, and how often. The
         # Logger has no server-side filter yet, so the documented severity
@@ -481,6 +489,11 @@ class DurableMessagePipeline:
         payload = ctx.payload
         if payload is None:
             return
+
+        # The rule as the forwarder should see it: the attached bot's defaults
+        # filled in for everything this task does not set itself. A copy, so
+        # nothing here can be written back as if the task had chosen it.
+        rule = await materialize(rule, self._bot_tokens)
 
         if getattr(rule, "is_paused", False) and getattr(rule, "is_currently_paused", lambda: True)():
             ctx.record_stage(PipelineStage.FILTER, False, reason="rule_paused")
