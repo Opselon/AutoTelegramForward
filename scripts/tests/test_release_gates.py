@@ -162,7 +162,10 @@ def test_release_workflow_gates():
     assert "CommitSHA=${GITHUB_SHA}" in workflow_text
     assert "d.get('status') == 'healthy'" in workflow_text
     publish_text = workflow_text[workflow_text.index("  publish:"):]
-    assert "needs.docker.result == 'success'" in publish_text
+    # The images publish as a multi-arch manifest: `docker-manifest` is the job
+    # whose success means `latest`/`<version>` exist for both architectures, so
+    # that — not the per-architecture build job — is what the gate must name.
+    assert "needs.docker-manifest.result == 'success'" in publish_text
     assert "needs.ios-simulator.result == 'success'" in publish_text
     assert "continue-on-error: true" not in workflow_text[workflow_text.index("  docker:"):workflow_text.index("  portable:")]
     ci_text = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()

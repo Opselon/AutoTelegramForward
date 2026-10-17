@@ -383,12 +383,32 @@ jobs:
   # ------------------------------------------------------------------------ #
   docker:
     needs: meta
-    runs-on: ubuntu-latest
+    # One native runner per platform, with the build cache enabled and a hard
+    # time box. This used to be a single job cross-building both architectures
+    # through QEMU with no cache and no timeout: the arm64 halves of four images
+    # emulated at a crawl, and the job sat "in progress" for hours and was
+    # cancelled — so no release was ever published. The repository already has
+    # arm64 runners (the `binaries` job uses one), so the fix is to stop
+    # emulating: each platform builds natively and a follow-up job publishes the
+    # multi-arch manifest. Per-platform images are pushed under a `-<arch>` tag
+    # because two runners pushing the same tag would race and the slower one
+    # would silently drop the other's manifest.
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            suffix: amd64
+            scope: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            suffix: arm64
+            scope: arm64
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
@@ -406,53 +426,120 @@ jobs:
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
 
-      - name: Build & push core image
+      - name: Build & push core image (${{ matrix.platform }})
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.core
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            ghcr.io/${{ steps.repo.outputs.owner }}/atf-core:latest
-            ghcr.io/${{ steps.repo.outputs.owner }}/atf-core:${{ needs.meta.outputs.version }}
+          provenance: false
+          cache-from: type=gha,scope=core-${{ matrix.scope }}
+          cache-to: type=gha,mode=max,scope=core-${{ matrix.scope }}
+          tags: ghcr.io/${{ steps.repo.outputs.owner }}/atf-core:${{ needs.meta.outputs.version }}-${{ matrix.suffix }}
 
-      - name: Logger image
+      - name: Logger image (${{ matrix.platform }})
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.logger-rust
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            ghcr.io/${{ steps.repo.outputs.owner }}/atf-logger:latest
-            ghcr.io/${{ steps.repo.outputs.owner }}/atf-logger:${{ needs.meta.outputs.version }}
+          provenance: false
+          cache-from: type=gha,scope=logger-${{ matrix.scope }}
+          cache-to: type=gha,mode=max,scope=logger-${{ matrix.scope }}
+          tags: ghcr.io/${{ steps.repo.outputs.owner }}/atf-logger:${{ needs.meta.outputs.version }}-${{ matrix.suffix }}
 
-      - name: API image
+      - name: API image (${{ matrix.platform }})
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.api
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            ghcr.io/${{ steps.repo.outputs.owner }}/atf-api:latest
-            ghcr.io/${{ steps.repo.outputs.owner }}/atf-api:${{ needs.meta.outputs.version }}
+          provenance: false
+          cache-from: type=gha,scope=api-${{ matrix.scope }}
+          cache-to: type=gha,mode=max,scope=api-${{ matrix.scope }}
+          tags: ghcr.io/${{ steps.repo.outputs.owner }}/atf-api:${{ needs.meta.outputs.version }}-${{ matrix.suffix }}
 
-      - name: Web image
+      - name: Web image (${{ matrix.platform }})
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.web
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            ghcr.io/${{ steps.repo.outputs.owner }}/atf-web:latest
-            ghcr.io/${{ steps.repo.outputs.owner }}/atf-web:${{ needs.meta.outputs.version }}
+          provenance: false
+          cache-from: type=gha,scope=web-${{ matrix.scope }}
+          cache-to: type=gha,mode=max,scope=web-${{ matrix.scope }}
+          tags: ghcr.io/${{ steps.repo.outputs.owner }}/atf-web:${{ needs.meta.outputs.version }}-${{ matrix.suffix }}
 
   # ------------------------------------------------------------------------ #
-  # Portable source bundle — the no-binary path (any POSIX box).
+  # Combine the per-architecture images into one multi-arch tag per service.
+  # `latest` and the release tag only exist once this job has run, so a partial
+  # build can never publish a single-architecture "multi-arch" image.
   # ------------------------------------------------------------------------ #
+  docker-manifest:
+    needs: [meta, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve lowercase repository owner
+        id: repo
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish multi-arch manifests
+        run: |
+          set -euo pipefail
+          OWNER="${{ steps.repo.outputs.owner }}"
+          VERSION="${{ needs.meta.outputs.version }}"
+          for IMG in core logger api web; do
+            REPO="ghcr.io/${OWNER}/atf-${IMG}"
+            echo "::group::${IMG}"
+            docker buildx imagetools create \
+              -t "${REPO}:latest" \
+              -t "${REPO}:${VERSION}" \
+              "${REPO}:${VERSION}-amd64" \
+              "${REPO}:${VERSION}-arm64"
+            echo "::endgroup::"
+          done
+
+      - name: Verify every manifest carries both architectures
+        run: |
+          set -euo pipefail
+          OWNER="${{ steps.repo.outputs.owner }}"
+          VERSION="${{ needs.meta.outputs.version }}"
+          FAILED=0
+          for IMG in core logger api web; do
+            REPO="ghcr.io/${OWNER}/atf-${IMG}"
+            for TAG in latest "${VERSION}"; do
+              PLATFORMS=$(docker buildx imagetools inspect "${REPO}:${TAG}" --format '{{json .Manifest}}' \
+                | python3 -c 'import json,sys; m=json.load(sys.stdin); print(" ".join(sorted({x["platform"]["os"]+"/"+x["platform"]["architecture"] for x in m.get("manifests",[])})))')
+              echo "${REPO}:${TAG} -> ${PLATFORMS}"
+              for ARCH in linux/amd64 linux/arm64; do
+                case " ${PLATFORMS} " in
+                  *" ${ARCH} "*) : ;;
+                  *) echo "::error::${REPO}:${TAG} is missing ${ARCH}"; FAILED=1 ;;
+                esac
+              done
+            done
+          done
+          exit "${FAILED}"
+
   portable:
     needs: meta
     runs-on: ubuntu-latest
@@ -696,8 +783,8 @@ jobs:
   # clean-install job, and post-publish-verify below.
   # ------------------------------------------------------------------------ #
   manifest:
-    needs: [meta, binaries, api-binaries, docker, portable, mobile-android, ios-simulator, signed-ios]
-    if: always() && needs.meta.result == 'success' && needs.docker.result == 'success'
+    needs: [meta, binaries, api-binaries, docker-manifest, portable, mobile-android, ios-simulator, signed-ios]
+    if: always() && needs.meta.result == 'success' && needs.docker-manifest.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -815,7 +902,7 @@ jobs:
     # self-verify + post-publish-verify jobs enforce REQUIRED completeness).
     # clean-install is REQUIRED for production: every required internal
     # service must report healthy before publishing.
-    needs: [meta, binaries, api-binaries, docker, portable, mobile-android, ios-simulator, manifest, clean-install]
+    needs: [meta, binaries, api-binaries, docker-manifest, portable, mobile-android, ios-simulator, manifest, clean-install]
     if: |
       always() &&
       needs.meta.result == 'success' &&
@@ -823,7 +910,7 @@ jobs:
       needs.api-binaries.result != 'failure' &&
       needs.mobile-android.result != 'failure' &&
       needs.manifest.result == 'success' &&
-      needs.docker.result == 'success' &&
+      needs.docker-manifest.result == 'success' &&
       needs.ios-simulator.result == 'success' &&
       needs.clean-install.result == 'success'
     runs-on: ubuntu-latest
