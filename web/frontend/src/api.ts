@@ -149,12 +149,23 @@ export const api = {
     id: string,
     settings: Record<string, any>,
     replaceAll = false,
+    /**
+     * Settings to hand back to the bot's default (or the registry's, if the bot
+     * has none). This is the only way to say "stop overriding this": writing the
+     * default value instead would leave the key pinned to it, and the task would
+     * stop following the bot.
+     */
+    reset: string[] = [],
   ) =>
     fetchJson<RuleSettingsResponse>(
       `${API_BASE}/rules/${encodeURIComponent(id)}/settings`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ settings, replace_all: replaceAll }),
+        body: JSON.stringify({
+          settings,
+          replace_all: replaceAll,
+          ...(reset.length ? { reset } : {}),
+        }),
       },
     ),
   // Bot-route credentials. The bot token travels one way: it goes up in the
