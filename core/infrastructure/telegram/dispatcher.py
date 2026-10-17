@@ -274,15 +274,33 @@ class MessageDispatcher:
             if self._sync_engine is None or not messages:
                 return
             try:
-                chat_id = ""
-                msg_ids = []
+                # updateDeleteChannelMessages names the channel; updateDeleteMessages
+                # (private chats, basic groups) does not, and pyrogram hands those
+                # over as Message(chat=None). Bucket what we can identify and pass
+                # the rest on by message id, so delete sync still works there.
+                by_chat: dict = {}
+                unresolved: list = []
                 for m in messages:
-                    if hasattr(m, "chat") and m.chat:
-                        chat_id = str(m.chat.id)
-                    if hasattr(m, "id"):
-                        msg_ids.append(int(m.id))
-                if chat_id and msg_ids:
+                    msg_id = getattr(m, "id", None)
+                    if msg_id is None:
+                        continue
+                    chat = getattr(m, "chat", None)
+                    chat_id = str(chat.id) if chat is not None and getattr(chat, "id", None) is not None else ""
+                    if chat_id:
+                        by_chat.setdefault(chat_id, []).append(int(msg_id))
+                    else:
+                        unresolved.append(int(msg_id))
+
+                logger.info(
+                    "[DISPATCH IN] DELETED_MESSAGES n=%d chats=%s unresolved=%d",
+                    len(messages),
+                    list(by_chat) or "-",
+                    len(unresolved),
+                )
+                for chat_id, msg_ids in by_chat.items():
                     await self._sync_engine.handle_delete(chat_id, msg_ids)
+                if unresolved:
+                    await self._sync_engine.handle_delete_without_chat(unresolved)
             except Exception:
                 logger.exception("Error in deleted_messages handler")
         return _del_handler

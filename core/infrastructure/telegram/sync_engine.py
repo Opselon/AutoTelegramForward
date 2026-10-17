@@ -15,7 +15,7 @@ import time
 from typing import Any, List, Optional
 
 from ...application.repositories import IFilterRuleRepository, IForwardRuleRepository, IMessageMapRepository
-from ...domain.entities import DeliveryStatus, ForwardRule, MessagePayload
+from ...domain.entities import DeliveryStatus, ForwardRule, MessageMapping, MessagePayload
 from ...domain.services import FilterAction, FilterEngine
 
 logger = logging.getLogger("atf.sync_engine")
@@ -183,54 +183,98 @@ class SyncEngine:
         deleted_count = 0
         for msg_id in deleted_message_ids:
             mappings = await self._map.get_by_source(str(source_chat_id), int(msg_id))
+            if mappings:
+                deleted_count += await self._delete_mapped(mappings, str(source_chat_id), int(msg_id))
+        return deleted_count
+
+    async def handle_delete_without_chat(self, deleted_message_ids: List[int]) -> int:
+        """Delete-sync when Telegram did not say which chat the message was in.
+
+        ``updateDeleteMessages`` (private chats and basic groups) carries message
+        ids only, so pyrogram hands the handler ``Message(chat=None)``. Dropping
+        that update left the task panel's "Delete Sync" switch dead for every
+        non-channel source. The message map still knows the id, so resolve it
+        there — but only when the id maps to a single source chat. Two monitored
+        chats can hold the same message id, and removing the wrong copy is worse
+        than missing a delete, so an ambiguous id is skipped and logged.
+        """
+        deleted_count = 0
+        for msg_id in deleted_message_ids:
+            mappings = await self._map.list_by_source_message_id(int(msg_id))
             if not mappings:
                 continue
+            chats = {str(m.source_chat_id) for m in mappings}
+            if len(chats) > 1:
+                logger.warning(
+                    "[PIPELINE:SYNC_DELETE_AMBIGUOUS] msg id %s maps to %d source chats (%s); "
+                    "skipping delete sync",
+                    msg_id,
+                    len(chats),
+                    ", ".join(sorted(chats)[:4]),
+                )
+                continue
+            deleted_count += await self._delete_mapped(mappings, chats.pop(), int(msg_id))
+        return deleted_count
 
-            for m in mappings:
-                if not m.target_message_id:
-                    continue
+    async def _delete_mapped(self, mappings: List[MessageMapping], source_chat_id: str, msg_id: int) -> int:
+        """Remove the delivered copies of one source message. Returns the count.
 
-                rule = await self._rules.get_by_id(m.rule_id)
-                if not rule or not rule.is_active:
-                    continue
+        Shared by both delete paths so chat-known and chat-less updates can never
+        drift apart on the rule gate (active + ``sync_deletes``) or on the
+        already-deleted case.
+        """
+        deleted_count = 0
+        for m in mappings:
+            if not m.target_message_id:
+                continue
 
-                if not getattr(rule, "sync_deletes", False):
-                    continue
+            rule = await self._rules.get_by_id(m.rule_id)
+            if not rule or not rule.is_active:
+                continue
 
-                client = self._pool.get(rule.session_id)
-                if client is None:
-                    continue
+            if not getattr(rule, "sync_deletes", False):
+                continue
 
-                target = int(m.target_chat_id) if m.target_chat_id.lstrip("-").isdigit() else m.target_chat_id
-                target_msg_id = int(m.target_message_id)
+            client = self._pool.get(rule.session_id)
+            if client is None:
+                logger.warning(
+                    "[PIPELINE:SYNC_DELETE_NO_CLIENT] rule=%s has no live client; copy %s:%s left behind",
+                    rule.id[:8],
+                    m.target_chat_id,
+                    m.target_message_id,
+                )
+                continue
 
-                try:
-                    await client.delete_messages(
-                        chat_id=target,
-                        message_ids=[target_msg_id],
-                    )
+            target = int(m.target_chat_id) if m.target_chat_id.lstrip("-").isdigit() else m.target_chat_id
+            target_msg_id = int(m.target_message_id)
+
+            try:
+                await client.delete_messages(
+                    chat_id=target,
+                    message_ids=[target_msg_id],
+                )
+                deleted_count += 1
+                logger.info(
+                    "[PIPELINE:SYNC_DELETE] Synced delete rule=%s src=%s:%s -> tgt=%s:%s",
+                    rule.id[:8],
+                    source_chat_id,
+                    msg_id,
+                    target,
+                    target_msg_id,
+                )
+            except Exception as exc:
+                err_str = str(exc)
+                if "MessageIdInvalid" in err_str or "MESSAGE_ID_INVALID" in err_str:
+                    # Already deleted
                     deleted_count += 1
-                    logger.info(
-                        "[PIPELINE:SYNC_DELETE] Synced delete rule=%s src=%s:%s -> tgt=%s:%s",
+                else:
+                    logger.warning(
+                        "[PIPELINE:SYNC_DELETE_FAIL] Delete sync failed rule=%s tgt=%s:%s: %s",
                         rule.id[:8],
-                        source_chat_id,
-                        msg_id,
                         target,
                         target_msg_id,
+                        exc,
                     )
-                except Exception as exc:
-                    err_str = str(exc)
-                    if "MessageIdInvalid" in err_str or "MESSAGE_ID_INVALID" in err_str:
-                        # Already deleted
-                        deleted_count += 1
-                    else:
-                        logger.warning(
-                            "[PIPELINE:SYNC_DELETE_FAIL] Delete sync failed rule=%s tgt=%s:%s: %s",
-                            rule.id[:8],
-                            target,
-                            target_msg_id,
-                            exc,
-                        )
 
         return deleted_count
 

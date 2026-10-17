@@ -1220,6 +1220,13 @@ class SqliteMessageMapRepository(IMessageMapRepository):
         )
         return self._row_to_entity(row) if row else None
 
+    async def list_by_source_message_id(self, source_message_id: int) -> List[MessageMapping]:
+        rows = self._db.query_all(
+            "SELECT * FROM message_map WHERE source_message_id=?",
+            (int(source_message_id),),
+        )
+        return [self._row_to_entity(r) for r in rows]
+
     async def get_by_rule_and_source(
         self, rule_id: str, source_chat_id: str, source_message_id: int
     ) -> List[MessageMapping]:
