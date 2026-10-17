@@ -873,9 +873,12 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
 
 
 class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
-    def __init__(self, rules, queue=None) -> None:
+    def __init__(self, rules, queue=None, bot_tokens=None) -> None:
         self._rules = rules
         self._queue = queue
+        # Only the rule-settings surface needs this: a route must point at a
+        # token the caller actually owns.
+        self._bot_tokens = bot_tokens
 
     async def ListRules(self, request, context):
         owner = int(request.owner_user_id or 0)
@@ -1182,6 +1185,23 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
                 success=False, error_code="invalid_type",
                 message="settings_json must be a JSON object",
             )
+        # A route may only name a token this owner holds: the wire must not be
+        # able to attach another tenant's bot, or a made-up id.
+        if "bot_token_id" in values:
+            token_id = str(values.get("bot_token_id") or "").strip()
+            if token_id:
+                record = None
+                if self._bot_tokens is not None:
+                    record = await self._bot_tokens.get_owned(token_id, owner)
+                if record is None:
+                    return pb.RuleSettingsResponse(
+                        success=False, error_code="unknown_token",
+                        message="bot token not found for this owner",
+                        settings_json=_json.dumps(RS.read_settings(entity)),
+                    )
+                entity.bot_token_label = record.label
+            else:
+                entity.bot_token_label = ""
         try:
             changed = RS.apply_settings(entity, values, replace_all=bool(request.replace_all))
         except RS.SettingError as exc:

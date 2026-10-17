@@ -405,7 +405,10 @@ async def serve_grpc(container: dict, cfg: Config):
         servicers.SessionControlServicer(container["sessions"], container["pool"]), server
     )
     pb_grpc.add_ForwardRuleControlServiceServicer_to_server(
-        servicers.ForwardRuleControlServicer(container["rules"], queue=container.get("queue_repo")), server
+        servicers.ForwardRuleControlServicer(
+            container["rules"], queue=container.get("queue_repo"),
+            bot_tokens=container.get("bot_tokens"),
+        ), server
     )
     pb_grpc.add_FilterControlServiceServicer_to_server(
         servicers.FilterControlServicer(container["filters"]), server
