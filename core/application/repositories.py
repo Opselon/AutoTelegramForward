@@ -111,8 +111,18 @@ class IForwardRuleRepository(ABC):
         ...
 
     @abstractmethod
-    async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
+    async def list_by_owner(
+        self, owner_user_id: int, limit: Optional[int] = None, offset: int = 0
+    ) -> List[ForwardRule]:
         ...
+
+    async def count_by_owner(self, owner_user_id: int) -> int:
+        """How many tasks this tenant owns, without materialising them.
+
+        Concrete, not abstract: this is the honest default for an implementation
+        that has no aggregate of its own, and it keeps the interface additive.
+        """
+        return len(await self.list_by_owner(owner_user_id))
 
     @abstractmethod
     async def list_all(self) -> List[ForwardRule]:

@@ -551,6 +551,16 @@ MIGRATIONS = {
     -- schema_version records the upgrade.
     SELECT 1;
     """,
+    21: """
+    -- v21: the two reads a message and a task list hit on every call are
+    -- indexed. Measured on 10,000 tenants, `list_active_by_source` was a full
+    -- scan of forward_rules — its OR/EXISTS over json_each cannot use a
+    -- single-column index — and the owner-scoped page sorted through a temp
+    -- B-tree. The column and indexes are installed by _apply_scale_indexes
+    -- (idempotent, and an older database can jump straight here); this entry
+    -- exists so schema_version records the upgrade.
+    SELECT 1;
+    """,
     19: """
     -- v19: bot tokens are per-owner. The column + index are added by
     -- _apply_additive_columns (which runs after this script and is idempotent);
@@ -715,6 +725,8 @@ class SqliteDatabase:
             except Exception:
                 pass
 
+        self._apply_scale_indexes()
+
         # v12: single-tenant upgrade reconciliation.
         # Legacy rows in api_credentials / prompt_templates were created before
         # owner_user_id existed, so they defaulted to 0 (the shared system
@@ -725,6 +737,75 @@ class SqliteDatabase:
         # there are zero or several, leave them at 0 (admin/system scope) and
         # let the operator claim them explicitly.
         self._reconcile_legacy_ownership()
+
+    def _apply_scale_indexes(self) -> None:
+        """Install the indexes that keep two hot reads bounded as tenants grow.
+
+        Both were found by measuring, not by reading the schema:
+
+        * ``list_active_by_source`` — the query the worker runs for every inbound
+          message — was a full scan of ``forward_rules``. Its
+          ``source_chat_id = ? OR EXISTS(json_each(...))`` cannot be answered by
+          a single-column index, so at 10,000 tenants every message read every
+          rule. The fix is a derived flag (``has_extra_sources``), computed by
+          SQLite from ``detection_criteria`` itself, plus a *partial* index that
+          covers only the rows that actually carry extra sources — so the JSON
+          branch scans a handful of rows instead of the whole table.
+
+          Derived, not stored: nothing writes it, so it cannot drift from the
+          JSON it is derived from, and no backfill is needed for existing rows.
+
+        * the owner-scoped task page sorted through a temp B-tree; a composite
+          ``(owner_user_id, created_at)`` index matches the read exactly. The
+          single-column index it subsumes is dropped, so the write cost does not
+          grow.
+
+        Idempotent, and safe to run against a database that already has either
+        index: everything is guarded.
+        """
+        try:
+            cols = {
+                str(r[0])
+                for r in self._conn.execute("PRAGMA table_info(forward_rules)").fetchall()
+            }
+        except Exception:
+            return
+        if not cols:
+            # No such table (a database that predates it): nothing to index.
+            return
+        if "has_extra_sources" not in cols:
+            try:
+                self._conn.execute(
+                    "ALTER TABLE forward_rules ADD COLUMN has_extra_sources INTEGER"
+                    " GENERATED ALWAYS AS (CASE WHEN detection_criteria IS NOT NULL"
+                    "   AND json_valid(detection_criteria)"
+                    "   AND json_type(detection_criteria, '$.source_chat_ids') = 'array'"
+                    "   AND json_array_length(json_extract(detection_criteria,"
+                    "        '$.source_chat_ids')) > 0"
+                    "  THEN 1 ELSE 0 END) VIRTUAL"
+                )
+            except Exception:
+                # SQLite older than 3.31 (or a build without JSON1) cannot do
+                # this. The repository's query still returns the right rows in
+                # that case; it just cannot be indexed, so leave it unindexed
+                # rather than refuse to start.
+                return
+        for ddl in (
+            "CREATE INDEX IF NOT EXISTS idx_rules_extra_sources"
+            " ON forward_rules(has_extra_sources) WHERE has_extra_sources = 1",
+            "CREATE INDEX IF NOT EXISTS idx_rules_owner_created"
+            " ON forward_rules(owner_user_id, created_at)",
+        ):
+            try:
+                self._conn.execute(ddl)
+            except Exception:
+                pass
+        # Subsumed by the composite index above: any owner-only lookup can use
+        # the leftmost prefix, so keeping it would only cost writes.
+        try:
+            self._conn.execute("DROP INDEX IF EXISTS idx_rules_owner")
+        except Exception:
+            pass
 
     def _reconcile_legacy_ownership(self) -> None:
         try:

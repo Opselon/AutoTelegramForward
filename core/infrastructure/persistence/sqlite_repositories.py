@@ -540,12 +540,35 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             )
         return [self._row_to_entity(r) for r in rows]
 
-    async def list_by_owner(self, owner_user_id: int) -> List[ForwardRule]:
-        rows = self._db.query_all(
-            "SELECT * FROM forward_rules WHERE owner_user_id=? ORDER BY created_at",
-            (int(owner_user_id),)
-        )
+    async def list_by_owner(
+        self, owner_user_id: int, limit: Optional[int] = None, offset: int = 0
+    ) -> List[ForwardRule]:
+        """A tenant's own tasks, optionally one page of them.
+
+        Unpaged by default: every existing caller keeps the behaviour it had.
+        ``limit`` exists for the paths that put tasks on a screen, where reading
+        a tenant's whole configuration to show fifty rows is the difference
+        between a bounded read and one that grows with the tenant's history.
+        """
+        sql = "SELECT * FROM forward_rules WHERE owner_user_id=? ORDER BY created_at"
+        params: List[Any] = [int(owner_user_id)]
+        if limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            params += [max(0, int(limit)), max(0, int(offset))]
+        rows = self._db.query_all(sql, tuple(params))
         return [self._row_to_entity(r) for r in rows]
+
+    async def count_by_owner(self, owner_user_id: int) -> int:
+        """How many tasks a tenant has — without materialising them.
+
+        A page count is not a reason to read every row: this answers "how many
+        pages" with one aggregate.
+        """
+        row = self._db.query_one(
+            "SELECT COUNT(*) AS n FROM forward_rules WHERE owner_user_id=?",
+            (int(owner_user_id),),
+        )
+        return int(row["n"] if isinstance(row, dict) else row[0])
 
     async def list_all(self) -> List[ForwardRule]:
         rows = self._db.query_all("SELECT * FROM forward_rules ORDER BY created_at")
@@ -560,16 +583,34 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         and ``json_valid`` guards rows whose detection_criteria is not JSON — an
         invalid document would otherwise raise inside json_each and abort the
         whole query, silently stopping forwarding for EVERY rule.
+
+        Written as two branches over ``UNION ALL`` rather than one ``OR``, because
+        the OR is what made this a **full scan**: measured at 10,000 tenants, no
+        index can answer ``source_chat_id = ? OR EXISTS(json_each(...))``, so
+        every inbound message read every rule in the table.
+
+          * the first branch is the common case and is an index seek on
+            ``idx_rules_source``;
+          * the second is guarded by the derived ``has_extra_sources`` flag,
+            which SQLite computes from ``detection_criteria`` itself, and a
+            partial index covers only those rows — normally none, so the branch
+            costs an index probe rather than a table scan.
+
+        ``UNION ALL`` (not ``UNION``) with the ``source_chat_id <> ?`` guard: a
+        rule whose *primary* source is the searched chat is already in the first
+        branch, and would otherwise appear twice — once per branch — and forward
+        the message twice.
         """
         cid = str(source_chat_id)
         rows = self._db.query_all(
-            "SELECT * FROM forward_rules WHERE is_active=1 AND ("
-            "  source_chat_id = ?"
-            "  OR (json_valid(detection_criteria) AND EXISTS ("
+            "SELECT * FROM forward_rules WHERE is_active=1 AND source_chat_id = ?"
+            " UNION ALL"
+            " SELECT * FROM forward_rules WHERE is_active=1 AND has_extra_sources = 1"
+            "   AND source_chat_id <> ?"
+            "   AND json_valid(detection_criteria) AND EXISTS ("
             "        SELECT 1 FROM json_each(detection_criteria, '$.source_chat_ids')"
-            "        WHERE value = ?))"
-            ")",
-            (cid, cid),
+            "        WHERE value = ?)",
+            (cid, cid, cid),
         )
         return [self._row_to_entity(r) for r in rows]
 
