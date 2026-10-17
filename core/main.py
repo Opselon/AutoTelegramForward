@@ -697,6 +697,7 @@ async def main() -> None:
             error_log=container.get("error_log"),
             metrics=container.get("metrics"),
             rule_stats=container.get("rule_stats"),
+            delivery_queue=container.get("queue_repo"),
             users=container.get("users"),
             prompt_service=container.get("prompt_service"),
             ai_transformer=container.get("ai_transformer"),
