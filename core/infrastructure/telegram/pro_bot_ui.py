@@ -37,6 +37,17 @@ from pyrogram.types import (
     WebAppInfo,
 )
 
+from .button_style import (
+    DANGER as BTN_DANGER,
+    PRIMARY as BTN_PRIMARY,
+    SUCCESS as BTN_SUCCESS,
+    button,
+    disable_styles,
+    is_style_rejection,
+    plain_markup,
+    styles_enabled,
+)
+
 from ...application.backup_service import (
     decrypt_bundle,
     deserialize_bundle,
@@ -596,6 +607,18 @@ class ProBotUI:
             await target.edit_message_text(text, reply_markup=reply_markup, **kw)
         except MessageNotModified:
             pass
+        except Exception as exc:
+            # Styled buttons use a newer TL constructor than this client's
+            # layer. If anything rejects them, strip the styles once and
+            # re-render rather than leaving the panel on a dead screen.
+            if reply_markup is not None and styles_enabled() and is_style_rejection(exc):
+                disable_styles(str(exc)[:120])
+                try:
+                    await target.edit_message_text(text, reply_markup=plain_markup(reply_markup), **kw)
+                    return
+                except MessageNotModified:
+                    return
+            raise
 
     def _kbd(self, rows) -> InlineKeyboardMarkup:
         built_rows = []
@@ -605,12 +628,19 @@ class ProBotUI:
                 if isinstance(item, InlineKeyboardButton):
                     built_row.append(item)
                     continue
-                text, data = item
+                style = None
+                if len(item) == 3:
+                    text, data, style = item
+                else:
+                    text, data = item
                 sdata = str(data)
                 if sdata.startswith("webapp:"):
                     built_row.append(InlineKeyboardButton(text, web_app=WebAppInfo(url=sdata[7:])))
                 elif sdata.startswith("http://") or sdata.startswith("https://"):
                     built_row.append(InlineKeyboardButton(text, url=data))
+                elif style:
+                    # (text, data, "primary"|"success"|"danger") — keyboardButtonStyle
+                    built_row.append(button(text, data, style))
                 else:
                     built_row.append(InlineKeyboardButton(text, callback_data=data))
             built_rows.append(built_row)
@@ -2313,14 +2343,14 @@ class ProBotUI:
             + self._t("ui_draft_hint", lang=lang)
         )
 
-        rows: List[List[Tuple[str, str]]] = [
+        rows: List[List[tuple]] = [
             [
-                (self._t("ui_draft_btn_src", lang=lang), f"ed_s:{rule.id}"),
-                (self._t("ui_draft_btn_dst", lang=lang), f"ed_t:{rule.id}"),
+                (self._t("ui_draft_btn_src", lang=lang), f"ed_s:{rule.id}", BTN_PRIMARY),
+                (self._t("ui_draft_btn_dst", lang=lang), f"ed_t:{rule.id}", BTN_PRIMARY),
             ],
             [
-                (self._t("ui_draft_btn_mode", lang=lang, m=mode_val), f"ed_m:{rule.id}"),
-                (self._t("ui_draft_btn_status", lang=lang, s=status_str), f"ed_a:{rule.id}"),
+                (self._t("ui_draft_btn_mode", lang=lang, m=mode_val), f"ed_m:{rule.id}", BTN_PRIMARY),
+                (self._t("ui_draft_btn_status", lang=lang, s=status_str), f"ed_a:{rule.id}", BTN_PRIMARY),
             ],
             [
                 (self._t("ui_draft_btn_links", lang=lang, b=lk_badge), f"ed_lk:{rule.id}"),
@@ -2332,24 +2362,27 @@ class ProBotUI:
             ],
             [
                 (self._t("ui_draft_btn_edit", lang=lang, b=ed_badge), f"ed_ed:{rule.id}"),
-                (self._t("ui_draft_btn_del", lang=lang, b=dl_badge), f"ed_dl:{rule.id}"),
+                # Deleting in the target is destructive: colour it red while it
+                # is armed, neutral while it is off.
+                (
+                    (self._t("ui_draft_btn_del", lang=lang, b=dl_badge), f"ed_dl:{rule.id}", BTN_DANGER)
+                    if draft.get("sync_deletes")
+                    else (self._t("ui_draft_btn_del", lang=lang, b=dl_badge), f"ed_dl:{rule.id}")
+                ),
             ],
             [
                 (self._t("ui_draft_btn_album", lang=lang, b=alb_badge), f"ed_mg:{rule.id}"),
                 (self._t("ui_draft_btn_replace", lang=lang, n=reps_count), f"rtx:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_ai", lang=lang, b=self._draft_ai_badge(draft, lang)), f"r_ai:{rule.id}"),
+                (self._t("ui_draft_btn_ai", lang=lang, b=self._draft_ai_badge(draft, lang)), f"r_ai:{rule.id}", BTN_PRIMARY),
             ],
             [
                 (self._t("ui_draft_btn_hf", lang=lang), f"rhf:{rule.id}"),
             ],
             [
-                (self._t("ui_draft_btn_save", lang=lang), f"ed_save:{rule.id}"),
-                (self._t("ui_draft_btn_cancel", lang=lang), f"ed_can:{rule.id}"),
-            ],
-            [
-                (f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}"),
+                (self._t("ui_draft_btn_save", lang=lang), f"ed_save:{rule.id}", BTN_SUCCESS),
+                (self._t("ui_draft_btn_cancel", lang=lang), f"ed_can:{rule.id}", BTN_DANGER),
             ],
         ]
         return text, self._kbd(rows)

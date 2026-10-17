@@ -64,6 +64,12 @@ from core.infrastructure.telegram.dispatcher import MessageDispatcher  # noqa: E
 from core.infrastructure.telegram.durable_queue import DurableQueueManager  # noqa: E402
 from core.infrastructure.telegram.sync_engine import SyncEngine  # noqa: E402
 from core.infrastructure.telegram.pro_bot_ui import ProBotUI  # noqa: E402
+from core.infrastructure.telegram.button_style import (  # noqa: E402
+    DANGER as BTN_DANGER,
+    PRIMARY as BTN_PRIMARY,
+    SUCCESS as BTN_SUCCESS,
+    disable_styles,
+)
 from core.infrastructure.telegram.i18n import I18n  # noqa: E402
 
 logging.basicConfig(
@@ -685,6 +691,33 @@ async def main() -> None:
         # it answers; otherwise BotManager (commands) answers. No doubles.
         bot.bot_ui = ui
         bot.ui_step_checker = lambda uid: bool(ui._state(uid).step)
+
+        # Opt-in diagnostic: ATF_BUTTON_STYLE_PROBE=<chat id> sends ONE message
+        # with a styled keyboard through the live client, which is the only way
+        # to prove the server accepts keyboardButtonStyle on this session's
+        # layer. Off unless set; a rejection disables styles for the process so
+        # a panel can never be left unrenderable.
+        probe_chat = os.environ.get("ATF_BUTTON_STYLE_PROBE", "").strip()
+        if probe_chat:
+            async def _style_probe(chat_id: str) -> None:
+                try:
+                    target = int(chat_id) if chat_id.lstrip("-").isdigit() else chat_id
+                    await ui.bot.send_message(
+                        target,
+                        "Button style probe: primary / success / danger",
+                        reply_markup=ui._kbd([[
+                            ("Primary", "probe:p", BTN_PRIMARY),
+                            ("Success", "probe:s", BTN_SUCCESS),
+                            ("Danger", "probe:d", BTN_DANGER),
+                        ]]),
+                    )
+                    logger.info("[UI:STYLE] probe delivered to %s — styled keyboard accepted", target)
+                except Exception as exc:
+                    disable_styles(str(exc)[:120])
+                    logger.error("[UI:STYLE] probe rejected by the server: %s", exc)
+
+            asyncio.create_task(_style_probe(probe_chat))
+
         log_client.info("core", "system", "pro button UI mounted")
     except Exception as exc:
         logger.warning("ProBotUI mount failed: %s", exc)
