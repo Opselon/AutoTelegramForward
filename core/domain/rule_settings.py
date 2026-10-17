@@ -175,6 +175,17 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     "crypto_mode": _s(kind="bool", default=False, group="ai"),
     "paid_addons": _s(kind="dict", default={}, group="ai"),
 
+    # ---- bot route -------------------------------------------------------
+    # Two keys, one decision: who the copy is sent as. They are applied as a
+    # pair (see apply_settings) because the entity refuses BOT without a token
+    # — a half-applied pair would silently leave the task on the account route.
+    "delivery_transport": _s(
+        kind="str", default="USER", group="route", choices=("USER", "BOT"),
+        help="USER = this task's account forwards; BOT = the attached bot posts."),
+    "bot_token_id": _s(
+        kind="str", default="", group="route",
+        help="Id of the attached bot token ('' = none). The token itself is never exposed."),
+
     # ---- automation ------------------------------------------------------
     "auto_post_scheduler": _s(kind="dict", default={"enabled": False},
                               group="automation"),
@@ -253,7 +264,7 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
         help="Send the final step as a native forward of C, so B's header names C."),
 }
 
-_GROUP_ORDER = ("general", "cleanup", "content", "media", "branding", "sending",
+_GROUP_ORDER = ("general", "cleanup", "content", "media", "route", "branding", "sending",
                 "keywords", "audience", "ai", "automation")
 
 
@@ -385,9 +396,28 @@ def apply_settings(rule: Any, values: Dict[str, Any], replace_all: bool = False)
     # Validate everything first: an invalid entry must not leave a partial write.
     cleaned = {key: coerce_value(key, raw) for key, raw in target.items()}
 
-    changed: List[str] = []
     current = read_settings(rule)
-    for key, value in cleaned.items():
+    # The route is a pair, so validate the *resulting* state, not just the keys
+    # the request happened to mention. Both halves of the failure would be
+    # silent otherwise: switching to BOT with no token is dropped by the entity
+    # setter (a no-op success), and clearing the token while still on BOT drops
+    # the task back to the account route behind the owner's back.
+    effective_transport = cleaned.get("delivery_transport", current.get("delivery_transport", "USER"))
+    effective_token = cleaned.get("bot_token_id", current.get("bot_token_id", ""))
+    if str(effective_transport or "").upper() == "BOT" and not str(effective_token or "").strip():
+        raise SettingError(
+            "invalid_state",
+            "the bot route needs an attached bot_token_id — send delivery_transport='USER'"
+            " with the removal, or attach a token",
+            "bot_token_id" if "bot_token_id" in cleaned else "delivery_transport",
+        )
+
+    # Apply the token before the transport: a single request may attach and
+    # switch at once, and the setter only accepts BOT once a token is present.
+    ordered = sorted(cleaned.items(), key=lambda kv: 0 if kv[0] == "bot_token_id" else 1)
+
+    changed: List[str] = []
+    for key, value in ordered:
         if current.get(key) != value:
             changed.append(key)
         setattr(rule, key, value)
