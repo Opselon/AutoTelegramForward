@@ -442,6 +442,16 @@ class IMessageMapRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_by_source_message_id(self, source_message_id: int) -> List[MessageMapping]:
+        """Every mapping for a source message id, whatever chat it came from.
+
+        Needed because Telegram's non-channel delete update carries message ids
+        only; the caller disambiguates by checking how many distinct source
+        chats the id maps to.
+        """
+        ...
+
+    @abstractmethod
     async def get_by_target(self, target_chat_id: str, target_message_id: int) -> Optional[MessageMapping]:
         ...
 
