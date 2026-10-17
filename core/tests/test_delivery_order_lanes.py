@@ -11,9 +11,15 @@ Two defects produced it, and both are pinned here:
    for the *same* destination at the same time, so even a correctly ordered
    claim set was delivered out of order by racing workers.
 
+A third one survived that fix and is pinned here too: with ``created_at`` as the
+*first* sort key, a burst that straddled a one-second boundary left in the order
+the poller happened to read it, so a post with a higher message id overtook every
+lower id (``test_a_burst_that_straddles_a_second_boundary_still_leaves_in_source_order``).
+
 The fix gives every destination a lane: jobs are claimed in
-``(created_at, source_chat_id, source_message_id, id)`` order, and a job is only
-claimable when no earlier unsent job exists for the same target. These tests
+``(source_chat_id, source_message_id, created_at, id)`` order — the source's own
+order, with the ingest second only breaking ties inside one chat — and a job is
+only claimable when no earlier unsent job exists for the same target. These tests
 assert that property, not the SQL that implements it.
 """
 
@@ -97,6 +103,42 @@ async def test_a_burst_sharing_one_timestamp_is_ordered_by_message_id(repo):
         await repo_.enqueue(_job(msg_id, created_at=stamp))
 
     assert await _drain_lane(repo_) == [1, 3, 5, 7, 9]
+
+
+@pytest.mark.asyncio
+async def test_a_burst_that_straddles_a_second_boundary_still_leaves_in_source_order(repo):
+    """The poller reading half the burst one second later must not reorder it.
+
+    The regression this pins was found by a 50-post burst test that failed only
+    on a slow runner: ``created_at`` led the sort key, so whatever the poller
+    read first came out first. Here post 40 is read in the first second and the
+    rest (ids 1..39) in the next, which is the exact shape of the failure — post
+    40 overtook every lower id. The order a destination receives posts in is the
+    order the *source* published them, not the order we happened to read them.
+    """
+    db, repo_ = repo
+    stamp = int(time.time())
+    await repo_.enqueue(_job(40, created_at=stamp))
+    for msg_id in range(1, 40):
+        await repo_.enqueue(_job(msg_id, created_at=stamp + 1))
+
+    assert await _drain_lane(repo_) == list(range(1, 41))
+
+
+@pytest.mark.asyncio
+async def test_the_ingest_second_only_breaks_ties_within_one_source(repo):
+    """Fan-in (A,B -> X): a later second on one source must not reorder the other.
+
+    Both sources post 1,2,3; source B is read a second later. Each source keeps
+    its own order, and the interleave stays stable (source_chat_id leads).
+    """
+    db, repo_ = repo
+    stamp = int(time.time())
+    for msg_id in (1, 2, 3):
+        await repo_.enqueue(_job(msg_id, source="-1001111111", created_at=stamp))
+        await repo_.enqueue(_job(msg_id, source="-1002222222", created_at=stamp + 1))
+
+    assert await _drain_lane(repo_) == [1, 2, 3, 1, 2, 3]
 
 
 @pytest.mark.asyncio

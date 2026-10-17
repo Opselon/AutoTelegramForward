@@ -1434,11 +1434,15 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
 
         Two properties make a burst leave in the order it arrived:
 
-        * the sort key is ``(created_at, source_chat_id, source_message_id, id)``.
-          ``created_at`` is a one-second timestamp, so a 50-post burst shares it
-          and the tie-break has to be the *source's own* order — the message id.
-          (Sorting on ``created_at`` alone left the order of a burst to SQLite's
-          row order, and the round-robin across workers then scrambled it.)
+        * the sort key is ``(source_chat_id, source_message_id, created_at, id)``.
+          The source's own order is the message id, so that leads; ``created_at``
+          only breaks ties inside one chat. (Ordering by ``created_at`` first was
+          a defect: it is a one-second timestamp, so a burst that straddled a
+          second boundary left in *ingest* order — the post the poller happened
+          to read first jumped ahead of lower message ids. Sorting on
+          ``created_at`` alone was worse still: it left the order of a burst to
+          SQLite's row order, and the round-robin across workers then scrambled
+          it.)
         * a job is only claimable when no *earlier* unsent job exists for the same
           target chat. That makes a destination a single lane with one in-flight
           job at a time, so two workers can never deliver to the same target
@@ -1469,11 +1473,11 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
                     WHERE o.target_chat_id = j.target_chat_id
                       AND o.id <> j.id
                       AND o.status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')
-                      AND (o.created_at, o.source_chat_id, o.source_message_id, o.id)
-                          < (j.created_at, j.source_chat_id, j.source_message_id, j.id)
+                      AND (o.source_chat_id, o.source_message_id, o.created_at, o.id)
+                          < (j.source_chat_id, j.source_message_id, j.created_at, j.id)
                 )
-                ORDER BY j.created_at ASC, j.source_chat_id ASC,
-                         j.source_message_id ASC, j.id ASC
+                ORDER BY j.source_chat_id ASC, j.source_message_id ASC,
+                         j.created_at ASC, j.id ASC
                 LIMIT ?
                 """,
                 (now, now, int(batch_size)),
