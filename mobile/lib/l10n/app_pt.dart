@@ -363,6 +363,7 @@ class AppMessagesPt {
     'rules_settings_apply': 'Aplicar',
     'rules_settings_change_count': '{n} alterações',
     'rules_settings_count': '{n} configurações',
+    'rules_settings_group_route': 'Rota de entrega',
     'rules_settings_group_branding': 'Salto de marca (A → C → B)',
     'rules_settings_int_hint': 'inteiro',
     'rules_settings_invalid': '{kind} inválido',

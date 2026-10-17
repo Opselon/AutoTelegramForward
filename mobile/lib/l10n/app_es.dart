@@ -359,6 +359,7 @@ class AppMessagesEs {
     'rules_settings_apply': 'Aplicar',
     'rules_settings_change_count': '{n} cambios',
     'rules_settings_count': '{n} ajustes',
+    'rules_settings_group_route': 'Ruta de entrega',
     'rules_settings_group_branding': 'Salto de marca (A → C → B)',
     'rules_settings_int_hint': 'entero',
     'rules_settings_invalid': '{kind} no válido',

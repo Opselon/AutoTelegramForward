@@ -184,7 +184,9 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
         help="USER = this task's account forwards; BOT = the attached bot posts."),
     "bot_token_id": _s(
         kind="str", default="", group="route",
-        help="Id of the attached bot token ('' = none). The token itself is never exposed."),
+        help="Id of an attached bot token ('' = none). Tokens are attached in the"
+             " Telegram bot's task screen, where the pasted message is deleted and"
+             " the token is stored encrypted; the secret itself is never exposed here."),
 
     # ---- automation ------------------------------------------------------
     "auto_post_scheduler": _s(kind="dict", default={"enabled": False},

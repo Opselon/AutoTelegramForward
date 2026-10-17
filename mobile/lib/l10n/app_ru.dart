@@ -356,6 +356,7 @@ class AppMessagesRu {
     'rules_settings_apply': 'Применить',
     'rules_settings_change_count': '{n} изменений',
     'rules_settings_count': '{n} настроек',
+    'rules_settings_group_route': 'Маршрут доставки',
     'rules_settings_group_branding': 'Брендовый переход (A → C → B)',
     'rules_settings_int_hint': 'целое число',
     'rules_settings_invalid': 'недопустимое значение {kind}',

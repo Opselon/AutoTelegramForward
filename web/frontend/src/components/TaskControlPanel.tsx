@@ -26,6 +26,8 @@ const GROUP_LABELS: Record<string, string> = {
   // `branding` group; without this label the panel would fall back to the raw
   // group key ("Branding").
   branding: 'Branding hop (A → C → B)',
+  // Who the copy is sent as: this task's account, or a bot the owner attached.
+  route: 'Delivery route',
 }
 
 function groupLabel(group: string): string {

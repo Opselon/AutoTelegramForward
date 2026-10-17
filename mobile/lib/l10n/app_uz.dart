@@ -355,6 +355,7 @@ class AppMessagesUz {
     'rules_settings_apply': 'Qo‘llash',
     'rules_settings_change_count': '{n} o‘zgarish',
     'rules_settings_count': '{n} sozlama',
+    'rules_settings_group_route': 'Yetkazish yoʻnalishi',
     'rules_settings_group_branding': 'Brend sakrashi (A → C → B)',
     'rules_settings_int_hint': 'butun son',
     'rules_settings_invalid': 'noto‘g‘ri {kind}',

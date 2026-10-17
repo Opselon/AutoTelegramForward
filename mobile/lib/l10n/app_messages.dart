@@ -369,6 +369,7 @@ class AppMessagesEn {
     'rules_settings_apply': 'Apply',
     'rules_settings_change_count': '{n} changes',
     'rules_settings_count': '{n} settings',
+    'rules_settings_group_route': 'Delivery route',
     'rules_settings_group_branding': 'Branding hop (A → C → B)',
     'rules_settings_int_hint': 'integer',
     'rules_settings_invalid': 'invalid {kind}',
