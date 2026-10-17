@@ -92,10 +92,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final client = _client();
     try {
       // Rules are loaded alongside the sessions so the usage count can be
-      // computed locally: one request instead of one per chat.
+      // computed locally: one request instead of one per chat. They are a
+      // secondary read — a badge on each row — so a failure there must never
+      // take the chat list down with it.
       final results = await Future.wait<Object>([
         client.listSessions(),
-        client.listRules(),
+        _rulesOrEmpty(client),
       ]);
       if (!mounted) return;
       final sessions = results[0] as List<TelegramSession>;
@@ -112,6 +114,26 @@ class _ChatsScreenState extends State<ChatsScreen> {
         _loading = false;
         _loadError = _failureText(AppMessages.of(context), exc);
       });
+    } catch (exc) {
+      // Anything else — a payload this client cannot parse, most of all — is
+      // still an answer the user is owed. Leaving `_loading` set would show a
+      // spinner forever with no way to tell that nothing was ever going to
+      // arrive.
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadError = '${AppMessages.of(context).get('state_error')} ($exc)';
+      });
+    }
+  }
+
+  /// The rule list only badges each chat with its usage count, so an
+  /// unreachable or unparseable one yields no badges instead of no page.
+  Future<List<ForwardRule>> _rulesOrEmpty(ApiClient client) async {
+    try {
+      return await client.listRules();
+    } catch (_) {
+      return const [];
     }
   }
 

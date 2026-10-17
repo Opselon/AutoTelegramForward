@@ -1,0 +1,19 @@
+{
+  "configs": [
+    {
+      "id": "d63b3267-ceb0-45b2-bf39-7dbdc935a9ba",
+      "name": "AI",
+      "provider": "9router",
+      "model": "coding",
+      "api_key": "",
+      "base_url": "http://9router:20128/v1",
+      "system_prompt": "You are an intelligent editor. Clean up and improve the text while keeping the original meaning.",
+      "user_prompt_template": "{text}",
+      "temperature": 0.7,
+      "is_enabled": true,
+      "target_language": "en",
+      "owner_user_id": 5094837833
+    }
+  ],
+  "total": 1
+}

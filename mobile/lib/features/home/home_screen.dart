@@ -173,18 +173,194 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       body: body,
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _ScrollableDestinationBar(
+        destinations: _destinations,
         selectedIndex: _currentIndex,
-        onDestinationSelected: _select,
-        destinations: [
-          for (final d in _destinations)
-            NavigationDestination(
-              icon: Icon(d.icon),
-              selectedIcon: Icon(d.selectedIcon),
-              label: t.get(d.labelKey),
-              tooltip: t.get(d.labelKey),
+        onSelected: _select,
+        labelOf: (d) => t.get(d.labelKey),
+      ),
+    );
+  }
+}
+
+/// The bottom bar for narrow windows.
+///
+/// Nine labelled destinations do not fit a phone's width, and Material's
+/// [NavigationBar] splits the bar into nine equal slices — narrower than the
+/// labels themselves — so its row overflowed the screen and the first and last
+/// labels were clipped by the edges. Every destination here keeps a fixed,
+/// tappable width and the strip scrolls horizontally instead of clipping, and
+/// the selected destination is scrolled into view so the active page can never
+/// sit off-screen.
+class _ScrollableDestinationBar extends StatefulWidget {
+  const _ScrollableDestinationBar({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onSelected,
+    required this.labelOf,
+  });
+
+  final List<_Destination> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  final String Function(_Destination) labelOf;
+
+  /// Wide enough for the longest shipped label on one line, and taller than the
+  /// 48dp touch minimum.
+  static const double itemWidth = 84;
+  static const double barHeight = 68;
+
+  @override
+  State<_ScrollableDestinationBar> createState() =>
+      _ScrollableDestinationBarState();
+}
+
+class _ScrollableDestinationBarState extends State<_ScrollableDestinationBar> {
+  final ScrollController _controller = ScrollController();
+  late List<GlobalKey> _itemKeys;
+
+  @override
+  void initState() {
+    super.initState();
+    _itemKeys = List.generate(widget.destinations.length, (_) => GlobalKey());
+  }
+
+  @override
+  void didUpdateWidget(covariant _ScrollableDestinationBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex) _revealSelected();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Bring the active destination into view — the case that matters is a
+  /// rotation from a wide window into a narrow one with a late destination
+  /// selected. `Scrollable.ensureVisible` is used instead of arithmetic on the
+  /// scroll offset because it is direction-aware, and in an RTL locale the
+  /// strip starts from the right edge.
+  void _revealSelected() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _itemKeys[widget.selectedIndex].currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          height: _ScrollableDestinationBar.barHeight,
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: theme.dividerColor, width: 1),
             ),
-        ],
+          ),
+          child: SingleChildScrollView(
+            key: const ValueKey<String>('nav_bar_scroll'),
+            controller: _controller,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+            child: Row(
+              children: [
+                for (var i = 0; i < widget.destinations.length; i++)
+                  SizedBox(
+                    key: _itemKeys[i],
+                    width: _ScrollableDestinationBar.itemWidth,
+                    child: _DestinationButton(
+                      destination: widget.destinations[i],
+                      label: widget.labelOf(widget.destinations[i]),
+                      selected: i == widget.selectedIndex,
+                      onTap: () => widget.onSelected(i),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One destination in the narrow-window bar.
+class _DestinationButton extends StatelessWidget {
+  const _DestinationButton({
+    required this.destination,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _Destination destination;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = selected
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: InkWell(
+          key: ValueKey<String>('nav_item_${destination.labelKey}'),
+          onTap: onTap,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? color.withValues(alpha: 0.16)
+                      : Colors.transparent,
+                  borderRadius: AppRadii.allMd,
+                ),
+                child: Icon(
+                  selected ? destination.selectedIcon : destination.icon,
+                  size: 22,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 2),
+              // One line, and never wrapped mid-word: the width is fixed, so a
+              // label too long for it is ellipsised rather than clipped.
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

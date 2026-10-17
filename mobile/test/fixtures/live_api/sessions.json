@@ -1,0 +1,17 @@
+{
+  "sessions": [
+    {
+      "id": "1d12518c-039c-437a-aebd-7b9b7c720a18",
+      "phone_number": "+989016807808",
+      "user_id": "5094837833",
+      "username": "CAPXI",
+      "first_name": "𝐂ap$iz𝗲Ʀ",
+      "is_active": true,
+      "is_authorized": true,
+      "created_at": 1791838674,
+      "updated_at": 1791838674,
+      "owner_user_id": 5094837833
+    }
+  ],
+  "total": 1
+}

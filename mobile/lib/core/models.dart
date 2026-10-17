@@ -6,6 +6,8 @@
 /// returns for the authenticated caller.
 library;
 
+import 'json_cast.dart';
+
 import 'package:flutter/foundation.dart';
 
 import 'route_input.dart';
@@ -102,7 +104,7 @@ class AuthSession {
 
   factory AuthSession.fromJson(Map<String, dynamic> json) => AuthSession(
     token: json['token'] as String,
-    userId: (json['user_id'] as num).toInt(),
+    userId: jsonInt(json['user_id']),
     username: json['username'] as String,
     isAdmin: json['is_admin'] as bool? ?? false,
     serverUrl: json['server_url'] as String,
@@ -156,7 +158,7 @@ class TelegramSession {
         username: json['username'] as String? ?? '',
         firstName: json['first_name'] as String? ?? '',
         apiCredentialId: json['api_credential_id'] as String? ?? '',
-        ownerUserId: (json['owner_user_id'] as num?)?.toInt() ?? 0,
+        ownerUserId: jsonInt(json['owner_user_id']),
       );
 
   @override
@@ -688,9 +690,7 @@ class ForwardRule {
       // server writes; parse it defensively and never send it back.
       brandingHop: BrandingHopConfig.fromValue(meta['branding_hop']),
       name: (json['name'] as String?) ?? (meta['name'] as String? ?? ''),
-      topicId:
-          (json['topic_id'] as num?)?.toInt() ??
-          ((meta['topic_id'] as num?)?.toInt() ?? 0),
+      topicId: jsonInt(json['topic_id'], jsonInt(meta['topic_id'])),
       debugMode:
           (json['debug_mode'] as bool?) ??
           (meta['debug_mode'] as bool? ?? false),
@@ -712,9 +712,10 @@ class ForwardRule {
       powerControl:
           (json['power_control'] as bool?) ??
           (meta['power_control'] as bool? ?? false),
-      editTimeLimitSeconds:
-          (json['edit_time_limit_seconds'] as num?)?.toInt() ??
-          ((meta['edit_time_limit_seconds'] as num?)?.toInt() ?? 0),
+      editTimeLimitSeconds: jsonInt(
+        json['edit_time_limit_seconds'],
+        jsonInt(meta['edit_time_limit_seconds']),
+      ),
       processRawText:
           (json['process_raw_text'] as bool?) ??
           (meta['process_raw_text'] as bool? ?? false),
@@ -738,12 +739,14 @@ class ForwardRule {
               (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
             )
           : const {},
-      aiCreativity:
-          (json['ai_creativity'] as num?)?.toDouble() ??
-          ((meta['ai_creativity'] as num?)?.toDouble() ?? 0.7),
-      aiMaxTokens:
-          (json['ai_max_tokens'] as num?)?.toInt() ??
-          ((meta['ai_max_tokens'] as num?)?.toInt() ?? 600),
+      aiCreativity: jsonDouble(
+        json['ai_creativity'],
+        jsonDouble(meta['ai_creativity'], 0.7),
+      ),
+      aiMaxTokens: jsonInt(
+        json['ai_max_tokens'],
+        jsonInt(meta['ai_max_tokens'], 600),
+      ),
       paidAddons: parsedAddons,
       cleanerEnabled:
           (json['cleaner_enabled'] as bool?) ??
@@ -767,7 +770,7 @@ class ForwardRule {
           const [],
       filterMode: json['filter_mode'] as String? ?? 'all',
       mediaMode: json['media_mode'] as String? ?? 'all',
-      delaySeconds: (json['delay_seconds'] as num?)?.toInt() ?? 0,
+      delaySeconds: jsonInt(json['delay_seconds']),
       headerTemplate: json['header_template'] as String? ?? '',
       footerTemplate: json['footer_template'] as String? ?? '',
       aiConfigId: json['ai_config_id'] as String? ?? '',
@@ -791,10 +794,10 @@ class ForwardRule {
       albumMode:
           (json['album_mode'] as String?) ??
           (meta['album_mode'] as String? ?? 'album'),
-      version: (json['version'] as num?)?.toInt() ?? 0,
+      version: jsonInt(json['version']),
       isEnabled:
           json['is_enabled'] as bool? ?? !(json['is_paused'] as bool? ?? false),
-      ownerUserId: (json['owner_user_id'] as num?)?.toInt() ?? 0,
+      ownerUserId: jsonInt(json['owner_user_id']),
     );
   }
 
@@ -847,7 +850,7 @@ class FilterRule {
     pattern: json['pattern'] as String? ?? '',
     kind: json['kind'] as String? ?? 'blacklist',
     isEnabled: json['is_enabled'] as bool? ?? true,
-    version: (json['version'] as num?)?.toInt() ?? 0,
+    version: jsonInt(json['version']),
   );
 }
 
@@ -918,7 +921,7 @@ class AiConfig {
     prompt: json['prompt'] as String? ?? '',
     baseUrl: json['base_url'] as String? ?? '',
     isEnabled: json['is_enabled'] as bool? ?? false,
-    version: (json['version'] as num?)?.toInt() ?? 0,
+    version: jsonInt(json['version']),
   );
 }
 
@@ -951,37 +954,30 @@ class SystemStats {
   factory SystemStats.fromJson(Map<String, dynamic> json) {
     final dynamic rules = json['rules'];
     final int totalRules = rules is Map
-        ? (rules['total'] as num?)?.toInt() ??
-              (json['total_rules'] as num?)?.toInt() ??
-              0
-        : (json['total_rules'] as num?)?.toInt() ?? 0;
+        ? jsonInt(rules['total'], jsonInt(json['total_rules']))
+        : jsonInt(json['total_rules']);
     final int activeRules = rules is Map
-        ? (rules['active'] as num?)?.toInt() ??
-              (json['active_rules'] as num?)?.toInt() ??
-              0
-        : (json['active_rules'] as num?)?.toInt() ?? 0;
+        ? jsonInt(rules['active'], jsonInt(json['active_rules']))
+        : jsonInt(json['active_rules']);
     return SystemStats(
       totalRules: totalRules,
       activeRules: activeRules,
-      totalSessions:
-          (json['total_sessions'] as num?)?.toInt() ??
-          (json['active_sessions_count'] as num?)?.toInt() ??
-          0,
-      activeSessions:
-          (json['active_sessions'] as num?)?.toInt() ??
-          (json['active_sessions_count'] as num?)?.toInt() ??
-          0,
+      totalSessions: jsonInt(
+        json['total_sessions'],
+        jsonInt(json['active_sessions_count']),
+      ),
+      activeSessions: jsonInt(
+        json['active_sessions'],
+        jsonInt(json['active_sessions_count']),
+      ),
       coreRunning: json['core_running'] as bool? ?? false,
       version: json['version'] as String? ?? '',
-      uptimeSeconds: (json['uptime_seconds'] as num?)?.toInt() ?? 0,
-      deliveredTotal:
-          (json['delivered_total'] as num?)?.toInt() ??
-          (json['total_delivered'] as num?)?.toInt() ??
-          0,
-      failedTotal:
-          (json['failed_total'] as num?)?.toInt() ??
-          (json['total_failed'] as num?)?.toInt() ??
-          0,
+      uptimeSeconds: jsonInt(json['uptime_seconds']),
+      deliveredTotal: jsonInt(
+        json['delivered_total'],
+        jsonInt(json['total_delivered']),
+      ),
+      failedTotal: jsonInt(json['failed_total'], jsonInt(json['total_failed'])),
     );
   }
 }
@@ -1004,7 +1000,7 @@ class ServiceHealth {
     name: json['name'] as String? ?? '',
     online: json['online'] as bool? ?? false,
     detail: json['detail'] as String? ?? '',
-    latencyMs: (json['latency_ms'] as num?)?.toInt() ?? 0,
+    latencyMs: jsonInt(json['latency_ms']),
   );
 }
 
@@ -1188,10 +1184,7 @@ class LogEntry {
       service: json['service'] as String? ?? '',
       detail: json['detail'] as String? ?? '',
       ruleId: json['rule_id'] as String? ?? '',
-      userId:
-          (json['user_id'] as num?)?.toInt() ??
-          int.tryParse('${json['user_id'] ?? ''}') ??
-          0,
+      userId: jsonInt(json['user_id']),
       correlationId: json['correlation_id'] as String? ?? '',
     );
   }
@@ -1228,13 +1221,13 @@ class LogPage {
               .map(LogEntry.fromJson)
               .toList(growable: false)
         : const <LogEntry>[];
-    final total = (json['total'] as num?)?.toInt() ?? logs.length;
+    final total = jsonInt(json['total'], logs.length);
     return LogPage(
       logs: logs,
       total: total,
       hasMore: json['has_more'] as bool? ?? false,
-      offset: (json['offset'] as num?)?.toInt() ?? 0,
-      limit: (json['limit'] as num?)?.toInt() ?? logs.length,
+      offset: jsonInt(json['offset']),
+      limit: jsonInt(json['limit'], logs.length),
     );
   }
 }
@@ -1263,20 +1256,17 @@ class LogStats {
   final int oldestTs;
   final int newestTs;
 
-  static Map<String, int> _counts(Object? raw) {
-    if (raw is! Map) return const {};
-    return raw.map((k, v) => MapEntry('$k', (v as num?)?.toInt() ?? 0));
-  }
+  static Map<String, int> _counts(Object? raw) => jsonIntMap(raw);
 
   factory LogStats.fromJson(Map<String, dynamic> json) => LogStats(
-    total: (json['total'] as num?)?.toInt() ?? 0,
-    errors: (json['errors'] as num?)?.toInt() ?? 0,
-    warnings: (json['warnings'] as num?)?.toInt() ?? 0,
+    total: jsonInt(json['total']),
+    errors: jsonInt(json['errors']),
+    warnings: jsonInt(json['warnings']),
     byLevel: _counts(json['by_level']),
     byRule: _counts(json['by_rule']),
     byService: _counts(json['by_service']),
-    oldestTs: (json['oldest_ts'] as num?)?.toInt() ?? 0,
-    newestTs: (json['newest_ts'] as num?)?.toInt() ?? 0,
+    oldestTs: jsonInt(json['oldest_ts']),
+    newestTs: jsonInt(json['newest_ts']),
   );
 }
 
@@ -1333,8 +1323,8 @@ class RuleSettingSpec {
       choices: rawChoices is List
           ? rawChoices.map((e) => '$e').toList(growable: false)
           : const [],
-      minimum: json['minimum'] as num?,
-      maximum: json['maximum'] as num?,
+      minimum: jsonNum(json['minimum']),
+      maximum: jsonNum(json['maximum']),
       nullable: json['nullable'] as bool? ?? false,
       itemKind: json['item_kind'] as String? ?? 'any',
     );
@@ -1373,7 +1363,7 @@ class RuleSettingsSchema {
   factory RuleSettingsSchema.fromJson(Map<String, dynamic> json) {
     final raw = json['settings'];
     return RuleSettingsSchema(
-      version: (json['version'] as num?)?.toInt() ?? 0,
+      version: jsonInt(json['version']),
       groups: json['groups'] is List
           ? (json['groups'] as List).map((e) => '$e').toList(growable: false)
           : const [],
@@ -1442,7 +1432,7 @@ class AuditEvent {
   final int durationMs;
 
   factory AuditEvent.fromJson(Map<String, dynamic> json) {
-    final ts = json['ts_utc'] as num? ?? 0;
+    final ts = jsonInt(json['ts_utc']);
     String timeStr;
     if (ts > 0) {
       final dt = DateTime.fromMillisecondsSinceEpoch(ts.toInt() * 1000);
@@ -1466,7 +1456,7 @@ class AuditEvent {
       reasonCode: json['reason_code'] as String? ?? '',
       resultSummary: json['result_summary'] as String? ?? '',
       errorCode: json['error_code'] as String? ?? '',
-      durationMs: (json['duration_ms'] as num?)?.toInt() ?? 0,
+      durationMs: jsonInt(json['duration_ms']),
     );
   }
 }
@@ -1550,16 +1540,16 @@ class DiagnosticsReport {
 
     return DiagnosticsReport(
       status: (json['status'] as String? ?? 'healthy').toLowerCase(),
-      score: (json['score'] as num?)?.toInt() ?? 0,
-      errorCount: (counts['error'] as num?)?.toInt() ?? 0,
-      warningCount: (counts['warning'] as num?)?.toInt() ?? 0,
-      infoCount: (counts['info'] as num?)?.toInt() ?? 0,
+      score: jsonInt(json['score']),
+      errorCount: jsonInt(counts['error']),
+      warningCount: jsonInt(counts['warning']),
+      infoCount: jsonInt(counts['info']),
       services: rawServices
           .whereType<Map>()
           .map((e) => ServiceHealth.fromJson(e.cast<String, dynamic>()))
           .toList(growable: false),
-      rulesScanned: (scanned['rules'] as num?)?.toInt() ?? 0,
-      aiConfigsScanned: (scanned['ai_configs'] as num?)?.toInt() ?? 0,
+      rulesScanned: jsonInt(scanned['rules']),
+      aiConfigsScanned: jsonInt(scanned['ai_configs']),
       findings: rawFindings
           .whereType<Map>()
           .map((e) => DiagnosticFinding.fromJson(e.cast<String, dynamic>()))
@@ -1627,7 +1617,7 @@ class ChatSummary {
     title: json['title']?.toString() ?? '',
     username: json['username']?.toString() ?? '',
     chatType: (json['chat_type']?.toString() ?? '').toLowerCase(),
-    members: (json['members'] as num?)?.toInt() ?? 0,
+    members: jsonInt(json['members']),
     isForum: json['is_forum'] as bool? ?? false,
   );
 
@@ -1674,7 +1664,7 @@ class ChatListPage {
     return ChatListPage(
       sessionId: json['session_id']?.toString() ?? '',
       chats: List<ChatSummary>.unmodifiable(chats),
-      total: (json['total'] as num?)?.toInt() ?? chats.length,
+      total: jsonInt(json['total'], chats.length),
       truncated: json['truncated'] as bool? ?? false,
     );
   }
@@ -1780,9 +1770,9 @@ class RuleLiveStat {
     ruleName: json['rule_name'] as String? ?? '',
     isActive: json['is_active'] as bool? ?? false,
     isPaused: json['is_paused'] as bool? ?? false,
-    forwarded: (json['forwarded'] as num?)?.toInt() ?? 0,
-    filtered: (json['filtered'] as num?)?.toInt() ?? 0,
-    errors: (json['errors'] as num?)?.toInt() ?? 0,
+    forwarded: jsonInt(json['forwarded']),
+    filtered: jsonInt(json['filtered']),
+    errors: jsonInt(json['errors']),
     lastError: json['last_error'] as String? ?? '',
   );
 }
@@ -1815,7 +1805,7 @@ class DeliveryStats {
   final List<RecentDeliveryError> errors;
 
   factory DeliveryStats.fromJson(Map<String, dynamic> json) {
-    int num_(String key) => (json[key] as num?)?.toInt() ?? 0;
+    int num_(String key) => jsonInt(json[key]);
     return DeliveryStats(
       processedTotal: num_('processed_total'),
       forwardedTotal: num_('forwarded_total'),
@@ -1897,11 +1887,11 @@ class DeadLetterJob {
     id: json['id'] as String? ?? '',
     ruleId: json['rule_id'] as String? ?? '',
     sourceChatId: json['source_chat_id'] as String? ?? '',
-    sourceMessageId: (json['source_message_id'] as num?)?.toInt() ?? 0,
+    sourceMessageId: jsonInt(json['source_message_id']),
     targetChatId: json['target_chat_id'] as String? ?? '',
-    attempts: (json['attempts'] as num?)?.toInt() ?? 0,
+    attempts: jsonInt(json['attempts']),
     lastError: json['last_error'] as String? ?? '',
     errorCategory: json['error_category'] as String? ?? '',
-    deadLetteredAt: (json['dead_lettered_at'] as num?)?.toInt() ?? 0,
+    deadLetteredAt: jsonInt(json['dead_lettered_at']),
   );
 }
