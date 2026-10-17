@@ -380,6 +380,11 @@ class AppMessagesPt {
     'rules_settings_int_hint': 'inteiro',
     'rules_settings_invalid': '{kind} inválido',
     'rules_settings_json_hint': 'Objeto JSON',
+    'rules_settings_from_bot': 'do bot',
+    'rules_settings_from_bot_named': 'de {bot}',
+    'rules_settings_own_value': 'definido aqui',
+    'rules_settings_use_default': 'Usar o padrão',
+    'rules_settings_back_to_default': 'Voltou ao padrão',
     'rules_settings_list_hint': 'separado por vírgulas',
     'rules_settings_load_failed':
         'Não foi possível carregar as definições da tarefa',

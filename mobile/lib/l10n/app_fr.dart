@@ -375,6 +375,11 @@ class AppMessagesFr {
     'rules_settings_int_hint': 'entier',
     'rules_settings_invalid': '{kind} invalide',
     'rules_settings_json_hint': 'Objet JSON',
+    'rules_settings_from_bot': 'du bot',
+    'rules_settings_from_bot_named': 'de {bot}',
+    'rules_settings_own_value': 'défini ici',
+    'rules_settings_use_default': 'Utiliser la valeur par défaut',
+    'rules_settings_back_to_default': 'Revenu à la valeur par défaut',
     'rules_settings_list_hint': 'séparé par des virgules',
     'rules_settings_load_failed':
         'Impossible de charger les réglages de la tâche',

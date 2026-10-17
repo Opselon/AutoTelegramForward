@@ -1314,6 +1314,7 @@ class RuleSettingSpec {
     this.maximum,
     this.nullable = false,
     this.itemKind = 'any',
+    this.inheritable = true,
   });
 
   final String key;
@@ -1329,6 +1330,11 @@ class RuleSettingSpec {
   final num? maximum;
   final bool nullable;
   final String itemKind;
+
+  /// Whether a bot may supply this setting to the tasks routing through it.
+  /// Chat, route and schedule settings cannot: pointing other tasks at other
+  /// chats is not a preference.
+  final bool inheritable;
 
   bool get isBool => kind == 'bool';
   bool get isNumber => kind == 'int' || kind == 'float';
@@ -1351,6 +1357,7 @@ class RuleSettingSpec {
       maximum: jsonNum(json['maximum']),
       nullable: json['nullable'] as bool? ?? false,
       itemKind: json['item_kind'] as String? ?? 'any',
+      inheritable: json['inheritable'] != false,
     );
   }
 }
@@ -1397,6 +1404,109 @@ class RuleSettingsSchema {
                 .map(RuleSettingSpec.fromJson)
                 .toList(growable: false)
           : const [],
+    );
+  }
+}
+
+/// Where one setting's effective value comes from.
+///
+/// A task's own choice beats its bot's default, which beats the registry's. The
+/// client needs this because a value cannot answer the question on its own: a
+/// task that deliberately picked the registry default stores exactly what an
+/// untouched task stores, and one inheriting its bot's value looks hand-set.
+@immutable
+class SettingProvenance {
+  const SettingProvenance({
+    required this.source,
+    this.value,
+    this.botLabel = '',
+    this.pinned = false,
+  });
+
+  /// `task` | `bot` | `default`.
+  final String source;
+
+  /// The value the forwarder will use.
+  final Object? value;
+
+  /// The bot supplying it, when one does.
+  final String botLabel;
+
+  /// True when this task chose the value, including when it chose the default.
+  final bool pinned;
+
+  bool get isTask => source == 'task';
+  bool get isBot => source == 'bot';
+  bool get isDefault => source == 'default';
+
+  factory SettingProvenance.fromJson(Map<String, dynamic> json) =>
+      SettingProvenance(
+        source: '${json['source'] ?? ''}',
+        value: json['value'],
+        botLabel: '${json['bot_label'] ?? ''}',
+        pinned: json['pinned'] == true,
+      );
+
+  @override
+  String toString() => 'SettingProvenance($source)';
+}
+
+/// One task's settings, the three ways the server can describe them.
+///
+/// * [settings] — what the task itself stores. Saving this back would pin every
+///   value, ending every inheritance, which is why the sheet does not edit it.
+/// * [effective] — what the forwarder will use, with the bot's defaults applied.
+/// * [sources] — where each of those values came from.
+@immutable
+class RuleSettingsView {
+  const RuleSettingsView({
+    this.settings = const {},
+    this.effective = const {},
+    this.sources = const {},
+  });
+
+  final Map<String, dynamic> settings;
+  final Map<String, dynamic> effective;
+  final Map<String, SettingProvenance> sources;
+
+  /// The values a settings sheet opens on: the effective ones, so an inherited
+  /// value the user never touched is not a change to send back.
+  ///
+  /// Falls back to [settings] when the server reports no `effective` (an older
+  /// API), which keeps the sheet working exactly as before.
+  Map<String, dynamic> get baseline => effective.isEmpty ? settings : effective;
+
+  SettingProvenance? provenanceFor(String key) => sources[key];
+
+  factory RuleSettingsView.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic> mapOf(Object? raw) {
+      if (raw is Map) {
+        return <String, dynamic>{
+          for (final entry in raw.entries) '${entry.key}': entry.value,
+        };
+      }
+      return const <String, dynamic>{};
+    }
+
+    final rawSources = json['sources'];
+    final sources = <String, SettingProvenance>{};
+    if (rawSources is Map) {
+      for (final entry in rawSources.entries) {
+        final info = entry.value;
+        if (info is Map) {
+          sources['${entry.key}'] = SettingProvenance.fromJson(
+            <String, dynamic>{
+              for (final field in info.entries) '${field.key}': field.value,
+            },
+          );
+        }
+      }
+    }
+    return RuleSettingsView(
+      // Some deployments answer with the settings map at the top level.
+      settings: json['settings'] is Map ? mapOf(json['settings']) : mapOf(json),
+      effective: mapOf(json['effective']),
+      sources: sources,
     );
   }
 }

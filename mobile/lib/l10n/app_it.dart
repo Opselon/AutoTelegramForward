@@ -377,6 +377,11 @@ class AppMessagesIt {
     'rules_settings_int_hint': 'intero',
     'rules_settings_invalid': '{kind} non valido',
     'rules_settings_json_hint': 'Oggetto JSON',
+    'rules_settings_from_bot': 'dal bot',
+    'rules_settings_from_bot_named': 'da {bot}',
+    'rules_settings_own_value': 'impostato qui',
+    'rules_settings_use_default': 'Usa il valore predefinito',
+    'rules_settings_back_to_default': 'Ripristinato il valore predefinito',
     'rules_settings_list_hint': 'separati da virgole',
     'rules_settings_load_failed':
         'Impossibile caricare le impostazioni dell\'attività',
