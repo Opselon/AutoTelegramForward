@@ -37,6 +37,8 @@ from pyrogram.types import (
     WebAppInfo,
 )
 
+from ...domain.rule_settings import SETTING_SPECS
+from .registry_editor import RegistryEditor
 from .bot_transport import (
     BotApiError,
     BotApiTransport,
@@ -1291,6 +1293,10 @@ class ProBotUI:
             ],
             [
                 (self._t("ui_rule_btn_advanced", lang=lang), f"radv:{rule.id}"),
+                # The curated panels cover the common path; this one is the whole
+                # registry, so a setting that has no hand-written panel is still
+                # reachable without leaving Telegram.
+                (self._t("ui_reg_btn_all", lang=lang), f"rge:g:{rule.id}"),
                 (self._t("ui_rule_btn_delete_task", lang=lang), f"rrm:{rule.id}"),
             ],
             # Route: the owner's account, or a bot they attached. The token row
@@ -1453,6 +1459,81 @@ class ProBotUI:
             logger.warning("[BOT ROUTE] pasted token check failed: %s", type(exc).__name__)
             return False, {}
         return True, dict(me or {})
+
+    @staticmethod
+    def _cb_rule_id(cq: CallbackQuery) -> str:
+        """The rule id from "<verb>:<rule_id>[:...]" callback data."""
+        raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+        parts = raw.split(":")
+        return parts[2] if len(parts) > 2 else ""
+
+    async def _step_registry_edit(self, message: Message, st: "UiState", text: str,
+                                  rule_id: str) -> None:
+        """A typed value for one registry setting: validated, then written."""
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(
+                self._t("ui_rule_not_found"), reply_markup=self._main_menu()
+            )
+        editor = self._registry_editor(rule, uid)
+        idx = int(st.buffer.get("reg_key_idx", -1))
+        raw = str(text or "").strip()
+        spec = editor.spec_for(str(st.buffer.get("reg_key") or "")) if st.buffer.get("reg_key") in SETTING_SPECS else None
+        if spec is not None and spec.kind == "list" and raw == "-":
+            raw = ""  # the documented way to empty a list
+        notice = await editor.set_value(rule, st, idx, raw)
+        st.step = ""
+        await self._persist(uid, st)
+        detail, rows = editor.detail(rule, st, idx)
+        await message.reply_text(f"{notice}\n\n{detail}", reply_markup=self._kbd(rows))
+
+    async def _step_registry_search(self, message: Message, st: "UiState", text: str,
+                                    rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(
+                self._t("ui_rule_not_found"), reply_markup=self._main_menu()
+            )
+        st.step = ""
+        st.buffer["reg_query"] = str(text or "").strip()
+        await self._persist(uid, st)
+        editor = self._registry_editor(rule, uid)
+        rendered, rows = editor.search(rule, st, st.buffer["reg_query"], 0)
+        await message.reply_text(rendered, reply_markup=self._kbd(rows))
+
+    def _registry_editor(self, rule: ForwardRule, uid: int) -> RegistryEditor:
+        """The registry editor, bound to this rule's language and owner.
+
+        `save` goes through `_save_owned_rule`, so a rule id transplanted into
+        another user's callback data is refused at the write, exactly like every
+        other bot write.
+        """
+        lang = self._lang_for(rule)
+        return RegistryEditor(
+            translate=lambda key, **params: self._t(key, lang=lang, **params),
+            save=lambda r: self._save_owned_rule(
+                r, uid, getattr(r, "version", None)
+            ),
+        )
+
+    async def _registry_show(self, cq: CallbackQuery, rule: ForwardRule, uid: int,
+                             text: str, rows) -> None:
+        """Render one registry screen and persist the FSM it was built from.
+
+        The rows carry indexes into `st.buffer["reg_keys"]`, so the state has to
+        be persisted with them: a button tapped after a restart would otherwise
+        point at a list this process no longer has.
+        """
+        st = self._state(uid)
+        await self._persist(uid, st)
+        await self._safe_edit(cq, text, reply_markup=self._kbd(rows))
+        await cq.answer()
 
     async def _render_bot_route_screen(self, rule: ForwardRule, st: "UiState") -> Tuple[str, InlineKeyboardMarkup]:
         """Where a task's copies are sent from, and which bots are available."""
@@ -2414,6 +2495,7 @@ class ProBotUI:
                 (self._t("ui_adv_btn_news_digest", lang=lang, status=digest_status), f"rtg_digest:{rule.id}"),
                 (self._t("ui_adv_btn_ai_config", lang=lang, creativity=rule.ai_creativity, max_tokens=rule.ai_max_tokens), f"rai_cfg:{rule.id}"),
             ],
+            [(self._t("ui_reg_btn_all", lang=lang), f"rge:g:{rule.id}")],
             [(self._t("ui_rule_back_task", lang=lang), f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
@@ -5902,6 +5984,173 @@ class ProBotUI:
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
+        # ------------------------------------------------------------------ #
+        # The whole settings registry, from the bot.
+        #
+        # Callback data stays short (Telegram caps it at 64 bytes): "rge:<verb>"
+        # plus the rule id, and an *index* into the list the user is looking at.
+        # The index is re-validated against the FSM on every tap, so a stale
+        # button from a previous screen is refused instead of applied to
+        # whatever now sits in that position.
+        # ------------------------------------------------------------------ #
+        @b.on_callback_query(filters.regex(r"^rge:g:(.+)$"))
+        @self._localized_handler
+        async def _cb_reg_groups(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            rule = await self._owned_rule(self._cb_rule_id(cq), uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            editor = self._registry_editor(rule, uid)
+            text, rows = editor.groups(rule, st)
+            await self._registry_show(cq, rule, uid, text, rows)
+
+        @b.on_callback_query(filters.regex(r"^rge:G:([^:]+):([^:]+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_reg_group(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = str(cq.data or "")
+            _, _, rule_id, group, page = raw.split(":", 4)
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            editor = self._registry_editor(rule, uid)
+            text, rows = editor.group(rule, st, group, int(page))
+            await self._registry_show(cq, rule, uid, text, rows)
+
+        @b.on_callback_query(filters.regex(r"^rge:k:([^:]+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_reg_key(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = str(cq.data or "")
+            _, _, rule_id, idx = raw.split(":", 3)
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            editor = self._registry_editor(rule, uid)
+            text, rows = editor.detail(rule, st, int(idx))
+            await self._registry_show(cq, rule, uid, text, rows)
+
+        @b.on_callback_query(filters.regex(r"^rge:t:([^:]+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_reg_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = str(cq.data or "")
+            _, _, rule_id, idx = raw.split(":", 3)
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            editor = self._registry_editor(rule, uid)
+            notice = await editor.toggle(rule, st, int(idx))
+            text, rows = editor.detail(rule, st, int(idx))
+            await self._registry_show(cq, rule, uid, text, rows)
+            await cq.answer(notice, show_alert=True)
+
+        @b.on_callback_query(filters.regex(r"^rge:c:([^:]+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_reg_choices(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = str(cq.data or "")
+            _, _, rule_id, idx = raw.split(":", 3)
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            editor = self._registry_editor(rule, uid)
+            text, rows = editor.choices(rule, st, int(idx))
+            await self._registry_show(cq, rule, uid, text, rows)
+
+        @b.on_callback_query(filters.regex(r"^rge:v:([^:]+):(\d+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_reg_choose(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = str(cq.data or "")
+            _, _, rule_id, idx, pos = raw.split(":", 4)
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            editor = self._registry_editor(rule, uid)
+            notice = await editor.set_choice(rule, st, int(idx), int(pos))
+            text, rows = editor.detail(rule, st, int(idx))
+            await self._registry_show(cq, rule, uid, text, rows)
+            await cq.answer(notice, show_alert=True)
+
+        @b.on_callback_query(filters.regex(r"^rge:r:([^:]+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_reg_reset(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = str(cq.data or "")
+            _, _, rule_id, idx = raw.split(":", 3)
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            editor = self._registry_editor(rule, uid)
+            notice = await editor.reset(rule, st, int(idx))
+            text, rows = editor.detail(rule, st, int(idx))
+            await self._registry_show(cq, rule, uid, text, rows)
+            await cq.answer(notice, show_alert=True)
+
+        @b.on_callback_query(filters.regex(r"^rge:e:([^:]+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_reg_edit(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = str(cq.data or "")
+            _, _, rule_id, idx = raw.split(":", 3)
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            editor = self._registry_editor(rule, uid)
+            key = editor.key_at(st, int(idx))
+            if key is None:
+                return await cq.answer(self._t("ui_reg_stale"), show_alert=True)
+            spec = editor.spec_for(key)
+            st.buffer["reg_key_idx"] = int(idx)
+            st.buffer["reg_key"] = key
+            st.step = f"rge_edit_{rule_id}"
+            await self._persist(uid, st)
+            hint = self._t("ui_reg_list_hint") if spec.kind == "list" else ""
+            await self._safe_edit(
+                cq,
+                self._t("ui_reg_prompt_value", label=spec.label or key, kind=spec.kind,
+                        help=(spec.help or hint)),
+            )
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rge:s:(.+)$"))
+        @self._localized_handler
+        async def _cb_reg_search(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            rule = await self._owned_rule(self._cb_rule_id(cq), uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            st.step = f"rge_search_{rule.id}"
+            await self._persist(uid, st)
+            await self._safe_edit(cq, self._t("ui_reg_prompt_search"))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rge:q:([^:]+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_reg_search_page(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = str(cq.data or "")
+            _, _, rule_id, page = raw.split(":", 3)
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            editor = self._registry_editor(rule, uid)
+            text, rows = editor.search(
+                rule, st, str(st.buffer.get("reg_query") or ""), int(page)
+            )
+            await self._registry_show(cq, rule, uid, text, rows)
+
         @b.on_callback_query(filters.regex(r"^rbt:(.+)$"))
         @self._localized_handler
         async def _cb_rule_bot_token_screen(_, cq: CallbackQuery):
@@ -9193,6 +9442,12 @@ class ProBotUI:
         if st.step.startswith("rename_rule_"):
             rule_id = st.step.split("rename_rule_", 1)[1]
             return await self._step_rename_rule(message, st, text, rule_id)
+        if st.step.startswith("rge_edit_"):
+            rule_id = st.step.split("rge_edit_", 1)[1]
+            return await self._step_registry_edit(message, st, text, rule_id)
+        if st.step.startswith("rge_search_"):
+            rule_id = st.step.split("rge_search_", 1)[1]
+            return await self._step_registry_search(message, st, text, rule_id)
         if st.step.startswith("bot_route_token_"):
             rule_id = st.step.split("bot_route_token_", 1)[1]
             return await self._step_bot_route_token(message, st, text, rule_id)

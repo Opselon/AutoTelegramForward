@@ -43,7 +43,9 @@ def validate_and_append(new_keys: dict) -> int:
     for loc in locales:
         cat[loc] = dict(sorted(cat[loc].items()))
 
-    CAT_PATH.write_text(json.dumps(cat, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # indent=1 is the format the catalog file is kept in: a batch must be a pure
+    # addition, not a reformat of 12k lines nobody asked to review.
+    CAT_PATH.write_text(json.dumps(cat, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"PASS: appended {len(new_keys)} key(s) across {len(locales)} locales")
     return 0
 
