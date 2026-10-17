@@ -114,7 +114,8 @@ from master `885674f`:
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Contract suite (24 checks) | `docker exec -i atf-core python - < scripts/acceptance/logger_acceptance.py` | `ACCEPTANCE PASSED` (exit 0) |
+| Contract suite | `docker exec -i atf-core python - < scripts/acceptance/logger_acceptance.py` | `ACCEPTANCE PASSED` (exit 0) — 34 checks green, 1 skipped when the metrics port is not reachable from the invoking container |
+| Redaction keeps ids usable in *both* directions | acceptance checks 8–12 | `chat_id=5094837833` survives as a JSON number and the detail still parses; free text `callback on +155[PHONE] about ticket 42` is masked |
 | Correlation ids verbatim + searchable | acceptance check 2 | `stored='acceptance-…'`, lookup by the original id returns the row |
 | Secret redaction, unrelated fields intact | acceptance checks 3 | `password`/`access_token` → `[REDACTED]`, `note` kept, `user_id`/`rule_id` columns verbatim |
 | Persistence / filter / page / stats | acceptance checks 4 | category, level, search, `limit`/`offset`/`has_more`, `LogStats` all consistent |
