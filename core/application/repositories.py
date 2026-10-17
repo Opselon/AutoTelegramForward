@@ -48,6 +48,10 @@ class BotToken:
     is_active: bool = True
     created_at: int = 0
     updated_at: int = 0
+    # The tenant that pasted the token. Delivery resolves a token by id alone
+    # (the worker has no request context); every *human* path — listing,
+    # attaching, deleting — must go through the owner-scoped methods below.
+    owner_user_id: int = 0
 
 
 class ISessionRepository(ABC):
@@ -262,6 +266,18 @@ class IBotTokenRepository(ABC):
 
     @abstractmethod
     async def list_active(self) -> List[BotToken]:
+        ...
+
+    @abstractmethod
+    async def list_by_owner(self, owner_user_id: int) -> List[BotToken]:
+        ...
+
+    @abstractmethod
+    async def get_owned(self, token_id: str, owner_user_id: int) -> Optional[BotToken]:
+        ...
+
+    @abstractmethod
+    async def delete_owned(self, token_id: str, owner_user_id: int) -> bool:
         ...
 
     @abstractmethod

@@ -537,26 +537,37 @@ class BotTokenUseCases:
     def __init__(self, repo) -> None:
         self._repo = repo
 
-    async def create(self, label: str, token: str):
+    async def create(self, label: str, token: str, owner_user_id: int = 0):
         import uuid as _uuid, time as _time
         from .repositories import BotToken
         tok = BotToken(
             id=str(_uuid.uuid4()), label=label, token=token.strip(),
             is_active=True, created_at=int(_time.time()), updated_at=int(_time.time()),
+            owner_user_id=int(owner_user_id or 0),
         )
         return await self._repo.add(tok)
 
     async def get(self, token_id: str):
+        """Delivery resolves a token by id: the worker has no tenant context."""
         return await self._repo.get_by_id(token_id)
+
+    async def get_owned(self, token_id: str, owner_user_id: int):
+        return await self._repo.get_owned(token_id, int(owner_user_id or 0))
 
     async def list_all(self):
         return await self._repo.list_all()
+
+    async def list_by_owner(self, owner_user_id: int):
+        return await self._repo.list_by_owner(int(owner_user_id or 0))
 
     async def list_active(self):
         return await self._repo.list_active()
 
     async def delete(self, token_id: str) -> bool:
         return await self._repo.delete(token_id)
+
+    async def delete_owned(self, token_id: str, owner_user_id: int) -> bool:
+        return await self._repo.delete_owned(token_id, int(owner_user_id or 0))
 
 
 # --------------------------------------------------------------------------- #

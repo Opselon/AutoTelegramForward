@@ -545,6 +545,12 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_lane
         ON delivery_jobs(target_chat_id, status, created_at, source_message_id);
     """,
+    19: """
+    -- v19: bot tokens are per-owner. The column + index are added by
+    -- _apply_additive_columns (which runs after this script and is idempotent);
+    -- the entry exists so schema_version records the upgrade.
+    SELECT 1;
+    """,
     18: """
     -- v18: the lane's order is the source's own order, not the ingest second.
     -- v17's key started with created_at, which is a one-second timestamp. A
@@ -571,6 +577,10 @@ _ADDITIVE_COLUMNS = (
     ("api_credentials", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_api_credentials_owner"),
     ("prompt_templates", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_prompt_templates_owner"),
     ("users", "status", "TEXT NOT NULL DEFAULT 'active'", "idx_users_status"),
+    # v19: a bot token belongs to the tenant that pasted it. Without an owner
+    # every owner's route screen listed every other owner's bots, and any
+    # tenant could attach — or delete — another tenant's credential.
+    ("bot_tokens", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_bot_tokens_owner"),
 )
 
 
