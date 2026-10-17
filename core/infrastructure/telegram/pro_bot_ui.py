@@ -9764,7 +9764,6 @@ class ProBotUI:
     async def _step_smart_set_intermediate(self, message: Message, st: UiState, text: str) -> None:
         uid = int(message.from_user.id if message.from_user else 0)
         lang = self._resolve_lang(uid)
-        lang = self._resolve_lang(uid)
         rule_id = st.buffer.get("rule_id", "") if isinstance(st.buffer, dict) else ""
         rule = await self._owned_rule(rule_id, uid)
         if not rule:
