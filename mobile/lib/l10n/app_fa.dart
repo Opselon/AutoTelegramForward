@@ -360,6 +360,7 @@ class AppMessagesFa {
     'rules_settings_apply': 'اعمال',
     'rules_settings_change_count': '{n} تغییر',
     'rules_settings_count': '{n} تنظیم',
+    'rules_settings_group_route': 'مسیر ارسال',
     'rules_settings_group_branding': 'پرش برندینگ (A → C → B)',
     'rules_settings_int_hint': 'عدد صحیح',
     'rules_settings_invalid': '{kind} نامعتبر',

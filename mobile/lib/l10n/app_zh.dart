@@ -341,6 +341,7 @@ class AppMessagesZh {
     'rules_settings_apply': '应用',
     'rules_settings_change_count': '{n} 项更改',
     'rules_settings_count': '{n} 项设置',
+    'rules_settings_group_route': '投递路由',
     'rules_settings_group_branding': '品牌跳转 (A → C → B)',
     'rules_settings_int_hint': '整数',
     'rules_settings_invalid': '{kind} 无效',

@@ -970,4 +970,7 @@ String ruleSettingsGroupTitle(AppMessages t, String group) {
 /// keys exist in every one of the ten catalogs (the parity audit enforces it).
 const Map<String, String> _groupLabelKeys = {
   'branding': 'rules_settings_group_branding',
+  // Who the copy is sent as (account or an attached bot) — a server group the
+  // dashboard and the sheet both render, so it needs an authored label.
+  'route': 'rules_settings_group_route',
 };

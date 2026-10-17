@@ -353,6 +353,7 @@ class AppMessagesId {
     'rules_settings_apply': 'Terapkan',
     'rules_settings_change_count': '{n} perubahan',
     'rules_settings_count': '{n} pengaturan',
+    'rules_settings_group_route': 'Rute pengiriman',
     'rules_settings_group_branding': 'Lompatan branding (A → C → B)',
     'rules_settings_int_hint': 'bilangan bulat',
     'rules_settings_invalid': '{kind} tidak valid',

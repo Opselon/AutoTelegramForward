@@ -358,6 +358,7 @@ class AppMessagesFr {
     'rules_settings_apply': 'Appliquer',
     'rules_settings_change_count': '{n} modifications',
     'rules_settings_count': '{n} réglages',
+    'rules_settings_group_route': 'Route de livraison',
     'rules_settings_group_branding': 'Saut de marque (A → C → B)',
     'rules_settings_int_hint': 'entier',
     'rules_settings_invalid': '{kind} invalide',

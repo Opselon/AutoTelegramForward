@@ -360,6 +360,7 @@ class AppMessagesIt {
     'rules_settings_apply': 'Applica',
     'rules_settings_change_count': '{n} modifiche',
     'rules_settings_count': '{n} impostazioni',
+    'rules_settings_group_route': 'Rotta di consegna',
     'rules_settings_group_branding': 'Salto di branding (A → C → B)',
     'rules_settings_int_hint': 'intero',
     'rules_settings_invalid': '{kind} non valido',
