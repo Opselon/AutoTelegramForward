@@ -60,6 +60,12 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
   String? _loadError;
   String? _saveError;
 
+  /// The account's attached bots. Loaded with the settings because the route's
+  /// `bot_token_id` field offers them by name; a failed read is shown inside
+  /// that field, not as a sheet-wide error.
+  List<BotTokenInfo> _bots = const <BotTokenInfo>[];
+  String? _botsError;
+
   /// Live filter over the whole schema. With ~120 settings, scrolling to find
   /// "remove_links" is the slow path; typing three letters is the fast one.
   String _query = '';
@@ -98,6 +104,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
       final schema = await client.ruleSettingsSchema();
       final current = await client.getRuleSettings(widget.ruleId);
       if (!mounted) return;
+      _reloadBots(client: client);
       setState(() {
         _schema = schema;
         _values
@@ -561,9 +568,249 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
     );
   }
 
+  /// Reads the attached bots. Called on open and after an attach/remove; a
+  /// failure is reported inside the route field so the other ~120 settings stay
+  /// editable.
+  Future<void> _reloadBots({ApiClient? client}) async {
+    final api = client ?? context.read<AppState>().buildApiClient();
+    try {
+      final bots = await api.listBotTokens();
+      if (!mounted) return;
+      setState(() {
+        _bots = bots;
+        _botsError = null;
+      });
+    } catch (exc) {
+      if (!mounted) return;
+      setState(() => _botsError = '$exc');
+    }
+  }
+
+  /// The credential half of source -> BOT -> target.
+  ///
+  /// A raw id box would be unusable — the value is a server-side id the user
+  /// never sees — so the field lists the attached bots by name and offers
+  /// attach/remove inline. The two refusals that matter (a token Telegram
+  /// rejects, a bot a task still routes through) are the server's and are shown
+  /// verbatim: a second copy of those rules here would drift from them.
+  Widget _botTokenField(RuleSettingSpec spec, Object? value, String? error) {
+    final t = AppMessages.of(context);
+    final selectedId = value == null ? '' : '$value';
+    BotTokenInfo? selected;
+    for (final bot in _bots) {
+      if (bot.id == selectedId) {
+        selected = bot;
+        break;
+      }
+    }
+    // A dropdown may only be given a value that is among its items. The setting
+    // can name a bot the list has not loaded yet (first frame) or no longer has
+    // (removed on another client), and asserting on that mismatch would crash
+    // the whole sheet rather than show the field.
+    final hasSelected = selected != null;
+    final staleSelection = selectedId.isNotEmpty && !hasSelected;
+    final onBotRoute = '${_values['delivery_transport'] ?? ''}' == 'BOT';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: hasSelected ? selectedId : '',
+            isDense: true,
+            decoration: InputDecoration(
+              isDense: true,
+              labelText: spec.label,
+              helperText: spec.help.isEmpty ? null : spec.help,
+              errorText: error,
+              border: const OutlineInputBorder(),
+            ),
+            items: [
+              DropdownMenuItem(
+                value: '',
+                child: Text(
+                  _bots.isEmpty
+                      ? t.get('rules_bot_empty')
+                      : t.get('rules_bot_none'),
+                ),
+              ),
+              for (final bot in _bots)
+                DropdownMenuItem(value: bot.id, child: Text(bot.label)),
+            ],
+            onChanged: _bots.isEmpty
+                ? null
+                : (v) => setState(() {
+                    _values[spec.key] = v ?? '';
+                    _errors.remove(spec.key);
+                  }),
+          ),
+          Wrap(
+            spacing: 4,
+            children: [
+              TextButton.icon(
+                onPressed: _showAttachBotDialog,
+                icon: const Icon(Icons.key_outlined, size: 16),
+                label: Text(t.get('rules_bot_attach')),
+              ),
+              if (selected case final selectedBot?)
+                TextButton.icon(
+                  onPressed: () => _removeBot(selectedBot),
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: Text(t.get('rules_bot_remove')),
+                ),
+            ],
+          ),
+          if (_botsError != null)
+            Text(
+              _botsError!,
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          if (staleSelection && _botsError == null)
+            Text(
+              t.get('rules_bot_missing'),
+              style: const TextStyle(fontSize: 11, color: Colors.orange),
+            ),
+          if (onBotRoute && _bots.isEmpty)
+            Text(
+              t.get('rules_bot_need_bot'),
+              style: const TextStyle(fontSize: 11, color: Colors.orange),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAttachBotDialog() async {
+    final t = AppMessages.of(context);
+    final labelController = TextEditingController();
+    final tokenController = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t.get('rules_bot_attach')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              t.get('rules_bot_attach_help'),
+              style: const TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: labelController,
+              decoration: InputDecoration(
+                labelText: t.get('rules_bot_label'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: tokenController,
+              obscureText: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                labelText: t.get('rules_bot_token'),
+                hintText: '123456789:AA…',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(t.get('action_cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(t.get('rules_bot_attach')),
+          ),
+        ],
+      ),
+    );
+    final token = tokenController.text.trim();
+    final label = labelController.text.trim();
+    labelController.dispose();
+    tokenController.dispose();
+    if (submitted != true || token.isEmpty || !mounted) return;
+
+    final client = context.read<AppState>().buildApiClient();
+    try {
+      final info = await client.createBotToken(token, label: label);
+      if (!mounted) return;
+      await _reloadBots(client: client);
+      if (!mounted) return;
+      setState(() {
+        _values['bot_token_id'] = info.id;
+        _errors.remove('bot_token_id');
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t.get('rules_bot_added', params: {'label': info.label}),
+          ),
+        ),
+      );
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      // The server's own reason ("Telegram refused this token") is the useful
+      // message; the raw exception text is not.
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
+    }
+  }
+
+  Future<void> _removeBot(BotTokenInfo bot) async {
+    final t = AppMessages.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t.get('rules_bot_remove')),
+        content: Text(
+          t.get('rules_bot_remove_confirm', params: {'label': bot.label}),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(t.get('action_cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(t.get('rules_bot_remove')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final client = context.read<AppState>().buildApiClient();
+    try {
+      await client.deleteBotToken(bot.id);
+      if (!mounted) return;
+      await _reloadBots(client: client);
+      if (!mounted) return;
+      if ('${_values['bot_token_id'] ?? ''}' == bot.id) {
+        setState(() => _values['bot_token_id'] = '');
+      }
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      // "still used by N task(s)" lands here; the route has to move first.
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
+    }
+  }
+
   Widget _field(RuleSettingSpec spec) {
     final value = _values[spec.key];
     final error = _errors[spec.key];
+
+    if (spec.key == 'bot_token_id') {
+      return _botTokenField(spec, value, error);
+    }
 
     if (spec.isBool) {
       return SwitchListTile(

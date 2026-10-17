@@ -3180,3 +3180,182 @@ var AdminControlService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "autoforward.proto",
 }
+
+const (
+	BotTokenControlService_ListBotTokens_FullMethodName  = "/autoforward.BotTokenControlService/ListBotTokens"
+	BotTokenControlService_CreateBotToken_FullMethodName = "/autoforward.BotTokenControlService/CreateBotToken"
+	BotTokenControlService_DeleteBotToken_FullMethodName = "/autoforward.BotTokenControlService/DeleteBotToken"
+)
+
+// BotTokenControlServiceClient is the client API for BotTokenControlService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type BotTokenControlServiceClient interface {
+	ListBotTokens(ctx context.Context, in *ListBotTokensRequest, opts ...grpc.CallOption) (*ListBotTokensResponse, error)
+	CreateBotToken(ctx context.Context, in *CreateBotTokenRequest, opts ...grpc.CallOption) (*CreateBotTokenResponse, error)
+	DeleteBotToken(ctx context.Context, in *DeleteBotTokenRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+}
+
+type botTokenControlServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewBotTokenControlServiceClient(cc grpc.ClientConnInterface) BotTokenControlServiceClient {
+	return &botTokenControlServiceClient{cc}
+}
+
+func (c *botTokenControlServiceClient) ListBotTokens(ctx context.Context, in *ListBotTokensRequest, opts ...grpc.CallOption) (*ListBotTokensResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBotTokensResponse)
+	err := c.cc.Invoke(ctx, BotTokenControlService_ListBotTokens_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botTokenControlServiceClient) CreateBotToken(ctx context.Context, in *CreateBotTokenRequest, opts ...grpc.CallOption) (*CreateBotTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateBotTokenResponse)
+	err := c.cc.Invoke(ctx, BotTokenControlService_CreateBotToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botTokenControlServiceClient) DeleteBotToken(ctx context.Context, in *DeleteBotTokenRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, BotTokenControlService_DeleteBotToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// BotTokenControlServiceServer is the server API for BotTokenControlService service.
+// All implementations must embed UnimplementedBotTokenControlServiceServer
+// for forward compatibility.
+type BotTokenControlServiceServer interface {
+	ListBotTokens(context.Context, *ListBotTokensRequest) (*ListBotTokensResponse, error)
+	CreateBotToken(context.Context, *CreateBotTokenRequest) (*CreateBotTokenResponse, error)
+	DeleteBotToken(context.Context, *DeleteBotTokenRequest) (*StatusResponse, error)
+	mustEmbedUnimplementedBotTokenControlServiceServer()
+}
+
+// UnimplementedBotTokenControlServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedBotTokenControlServiceServer struct{}
+
+func (UnimplementedBotTokenControlServiceServer) ListBotTokens(context.Context, *ListBotTokensRequest) (*ListBotTokensResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBotTokens not implemented")
+}
+func (UnimplementedBotTokenControlServiceServer) CreateBotToken(context.Context, *CreateBotTokenRequest) (*CreateBotTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateBotToken not implemented")
+}
+func (UnimplementedBotTokenControlServiceServer) DeleteBotToken(context.Context, *DeleteBotTokenRequest) (*StatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteBotToken not implemented")
+}
+func (UnimplementedBotTokenControlServiceServer) mustEmbedUnimplementedBotTokenControlServiceServer() {
+}
+func (UnimplementedBotTokenControlServiceServer) testEmbeddedByValue() {}
+
+// UnsafeBotTokenControlServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to BotTokenControlServiceServer will
+// result in compilation errors.
+type UnsafeBotTokenControlServiceServer interface {
+	mustEmbedUnimplementedBotTokenControlServiceServer()
+}
+
+func RegisterBotTokenControlServiceServer(s grpc.ServiceRegistrar, srv BotTokenControlServiceServer) {
+	// If the following call panics, it indicates UnimplementedBotTokenControlServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&BotTokenControlService_ServiceDesc, srv)
+}
+
+func _BotTokenControlService_ListBotTokens_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBotTokensRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotTokenControlServiceServer).ListBotTokens(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotTokenControlService_ListBotTokens_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotTokenControlServiceServer).ListBotTokens(ctx, req.(*ListBotTokensRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotTokenControlService_CreateBotToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateBotTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotTokenControlServiceServer).CreateBotToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotTokenControlService_CreateBotToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotTokenControlServiceServer).CreateBotToken(ctx, req.(*CreateBotTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotTokenControlService_DeleteBotToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteBotTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotTokenControlServiceServer).DeleteBotToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotTokenControlService_DeleteBotToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotTokenControlServiceServer).DeleteBotToken(ctx, req.(*DeleteBotTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// BotTokenControlService_ServiceDesc is the grpc.ServiceDesc for BotTokenControlService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var BotTokenControlService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "autoforward.BotTokenControlService",
+	HandlerType: (*BotTokenControlServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListBotTokens",
+			Handler:    _BotTokenControlService_ListBotTokens_Handler,
+		},
+		{
+			MethodName: "CreateBotToken",
+			Handler:    _BotTokenControlService_CreateBotToken_Handler,
+		},
+		{
+			MethodName: "DeleteBotToken",
+			Handler:    _BotTokenControlService_DeleteBotToken_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "autoforward.proto",
+}

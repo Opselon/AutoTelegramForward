@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, Loader2, Plus, Save, X } from 'lucide-react'
 import { api } from '../api'
-import type { ForwardRule, RuleSettingSpec, RuleSettingsSchema } from '../types'
+import type { BotTokenInfo, ForwardRule, RuleSettingSpec, RuleSettingsSchema } from '../types'
+import { BotRouteField } from './BotRouteField'
 
 interface Props {
   rule: ForwardRule
@@ -89,6 +90,21 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // The owner's attached bots. Loaded with the settings because the route's
+  // `bot_token_id` field offers them by name; a failed read must not hide the
+  // rest of the panel, so it is tracked separately from `error`.
+  const [bots, setBots] = useState<BotTokenInfo[]>([])
+  const [botsError, setBotsError] = useState<string | null>(null)
+
+  const loadBots = useCallback(async () => {
+    try {
+      setBots(await api.listBotTokens())
+      setBotsError(null)
+    } catch (err) {
+      setBots([])
+      setBotsError(err instanceof Error ? err.message : 'Could not load your bots')
+    }
+  }, [])
 
   const sources = useMemo(() => sourcesOf(rule), [rule])
   const targets = useMemo(() => targetsOf(rule), [rule])
@@ -111,6 +127,10 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    void loadBots()
+  }, [loadBots])
 
   const dirtyKeys = Object.keys(edits)
 
@@ -371,6 +391,14 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
                 inputStyle={inputStyle}
                 hintStyle={hint}
                 onChange={(value) => setEdits((prev) => ({ ...prev, [spec.key]: value }))}
+                bots={bots}
+                reloadBots={loadBots}
+                botsError={botsError}
+                botRoute={
+                  String(
+                    'delivery_transport' in edits ? edits.delivery_transport : settings.delivery_transport ?? '',
+                  ) === 'BOT'
+                }
               />
             ))}
           </div>
@@ -611,13 +639,30 @@ interface RowProps {
   value: any
   changed: boolean
   isRtl: boolean
+  /** Owner's bots, the pending route (for the BOT-without-token warning) and a reload hook. */
+  bots?: BotTokenInfo[]
+  botsError?: string | null
+  botRoute?: boolean
+  reloadBots?: () => Promise<void> | void
   labelStyle: React.CSSProperties
   inputStyle: React.CSSProperties
   hintStyle: React.CSSProperties
   onChange: (value: any) => void
 }
 
-function SettingRow({ spec, value, changed, isRtl, inputStyle, hintStyle, onChange }: RowProps) {
+function SettingRow({
+  spec,
+  value,
+  changed,
+  isRtl,
+  inputStyle,
+  hintStyle,
+  onChange,
+  bots = [],
+  botsError = null,
+  botRoute = false,
+  reloadBots,
+}: RowProps) {
   const rowStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
@@ -695,6 +740,29 @@ function SettingRow({ spec, value, changed, isRtl, inputStyle, hintStyle, onChan
       <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch' }}>
         {label}
         <ListEditor spec={spec} value={value} inputStyle={inputStyle} hintStyle={hintStyle} onChange={onChange} />
+      </div>
+    )
+  }
+
+  if (spec.key === 'bot_token_id') {
+    // A raw id box would be unusable: the value is a server-side id the user
+    // never sees. Offer the attached bots by name, and an inline way to attach
+    // a new one without leaving the task.
+    return (
+      <div style={{ ...rowStyle, alignItems: 'flex-start' }}>
+        {label}
+        <div style={{ maxWidth: '58%', flex: 1, minWidth: 0 }}>
+          <BotRouteField
+            bots={bots}
+            value={value ?? ''}
+            inputStyle={inputStyle}
+            hintStyle={hintStyle}
+            onChange={onChange}
+            reloadBots={reloadBots ?? (() => undefined)}
+            botRoute={botRoute}
+          />
+          {botsError && <div style={{ ...hintStyle, color: '#fca5a5' }}>{botsError}</div>}
+        </div>
       </div>
     )
   }

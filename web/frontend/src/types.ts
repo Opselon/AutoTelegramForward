@@ -874,6 +874,19 @@ export interface DiagnosticsResponse {
 // ---------------------------------------------------------------------------
 
 /** One controllable per-task setting, as described by the server. */
+/**
+ * A bot the owner attached, so a task can deliver as it instead of as the
+ * account. This is the whole payload the API exposes: the credential itself is
+ * write-only.
+ */
+export interface BotTokenInfo {
+  id: string
+  label: string
+  is_active: boolean
+  created_at?: number
+  updated_at?: number
+}
+
 export interface RuleSettingSpec {
   key: string
   kind: 'bool' | 'int' | 'float' | 'str' | 'list' | 'dict'

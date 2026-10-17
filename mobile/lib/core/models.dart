@@ -1277,6 +1277,30 @@ class LogStats {
 /// validation, and this mirrors it so the editor can render the right control
 /// and refuse an out-of-range value before a round-trip.
 @immutable
+/// A Telegram bot the owner attached, so a task can deliver *as* it instead of
+/// as the account. The credential is write-only: the server never returns it,
+/// so this model has no token field by construction.
+class BotTokenInfo {
+  const BotTokenInfo({
+    required this.id,
+    required this.label,
+    this.isActive = true,
+  });
+
+  final String id;
+  final String label;
+  final bool isActive;
+
+  factory BotTokenInfo.fromJson(Map<String, dynamic> json) => BotTokenInfo(
+    id: '${json['id'] ?? ''}',
+    label: '${json['label'] ?? ''}'.isEmpty ? 'bot' : '${json['label']}',
+    isActive: json['is_active'] != false,
+  );
+
+  @override
+  String toString() => label;
+}
+
 class RuleSettingSpec {
   const RuleSettingSpec({
     required this.key,

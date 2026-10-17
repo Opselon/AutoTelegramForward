@@ -437,6 +437,13 @@ async def serve_grpc(container: dict, cfg: Config):
     # before the client exists.
     container["system_status_servicer"] = system_status
     pb_grpc.add_SystemStatusControlServiceServicer_to_server(system_status, server)
+    pb_grpc.add_BotTokenControlServiceServicer_to_server(
+        servicers.BotTokenControlServicer(
+            container["bot_tokens"], rules=container["rules"],
+            bot_route=container.get("bot_route"),
+        ),
+        server,
+    )
     pb_grpc.add_DeliveryControlServiceServicer_to_server(
         servicers.DeliveryControlServicer(
             container["db"],

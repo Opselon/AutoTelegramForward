@@ -42,21 +42,24 @@ type Clients struct {
 	Backup   pb.BackupControlServiceClient
 	Admin    pb.AdminControlServiceClient
 	Audit    pb.AuditControlServiceClient
+	// Bot route credentials: the bots a tenant forwards *as*.
+	BotTokens pb.BotTokenControlServiceClient
 }
 
 // NewClients bundles the core service stubs.
 func NewClients(conn *grpc.ClientConn) *Clients {
 	return &Clients{
-		Sessions: pb.NewSessionControlServiceClient(conn),
-		Rules:    pb.NewForwardRuleControlServiceClient(conn),
-		Filters:  pb.NewFilterControlServiceClient(conn),
-		AI:       pb.NewAIControlServiceClient(conn),
-		System:   pb.NewSystemStatusControlServiceClient(conn),
-		Delivery: pb.NewDeliveryControlServiceClient(conn),
-		Account:  pb.NewAccountControlServiceClient(conn),
-		Backup:   pb.NewBackupControlServiceClient(conn),
-		Admin:    pb.NewAdminControlServiceClient(conn),
-		Audit:    pb.NewAuditControlServiceClient(conn),
+		Sessions:  pb.NewSessionControlServiceClient(conn),
+		Rules:     pb.NewForwardRuleControlServiceClient(conn),
+		Filters:   pb.NewFilterControlServiceClient(conn),
+		AI:        pb.NewAIControlServiceClient(conn),
+		System:    pb.NewSystemStatusControlServiceClient(conn),
+		Delivery:  pb.NewDeliveryControlServiceClient(conn),
+		Account:   pb.NewAccountControlServiceClient(conn),
+		Backup:    pb.NewBackupControlServiceClient(conn),
+		Admin:     pb.NewAdminControlServiceClient(conn),
+		Audit:     pb.NewAuditControlServiceClient(conn),
+		BotTokens: pb.NewBotTokenControlServiceClient(conn),
 	}
 }
 
