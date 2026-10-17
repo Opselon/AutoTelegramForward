@@ -35,6 +35,11 @@ services:
     depends_on:
       - logger
     environment:
+      # Supported gRPC-only mode (no bot, no Telegram login). The release smoke
+      # test sets it: .env.example credentials cannot log in, and a core that
+      # exits on the failed login restart-loops and SIGKILLs checks running
+      # through `docker compose exec` (the v2.2.0 clean-install died at 137).
+      ATF_DISABLE_BOT: ${ATF_DISABLE_BOT:-}
       ATF_API_ID: ${ATF_API_ID}
       ATF_API_HASH: ${ATF_API_HASH}
       ATF_BOT_TOKEN: ${ATF_BOT_TOKEN}
