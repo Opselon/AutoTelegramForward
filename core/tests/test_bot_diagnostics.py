@@ -193,6 +193,30 @@ def test_a_queue_that_is_only_busy_is_reported_as_clear():
     assert t("ui_diag_clear") in body
 
 
+def test_a_queue_that_reports_its_failures_as_zeroes_is_reported_as_clear():
+    """Found against the live database: the queue names every state it knows.
+
+    A healthy production queue answers with FAILED 0 and UNKNOWN 0 rather than
+    omitting them, and "FAILED 0" on a diagnostics screen reads like a problem
+    report. Only non-zero states are shown.
+    """
+    report = run(
+        collect_report(
+            queue=Queue(
+                stats={
+                    "PENDING": 0, "SENT": 29, "RETRY": 0, "FAILED": 0, "UNKNOWN": 0,
+                    "PROCESSING": 0,
+                }
+            )
+        )
+    )
+
+    body = render_report(t, report)
+
+    assert t("ui_diag_clear") in body
+    assert "FAILED" not in body and "UNKNOWN" not in body
+
+
 def test_a_failure_carries_the_id_a_user_can_quote():
     report = run(
         collect_report(
