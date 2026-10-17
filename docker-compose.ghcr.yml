@@ -1,0 +1,28 @@
+# Overlay: run CI-published images instead of compiling on this host.
+#
+#   ATF_IMAGE_TAG=sha-abc1234 docker compose \
+#     -p autotelegramforward --env-file .env \
+#     -f docker-compose.yml -f docker-compose.ghcr.yml pull
+#   ATF_IMAGE_TAG=sha-abc1234 docker compose \
+#     -p autotelegramforward --env-file .env \
+#     -f docker-compose.yml -f docker-compose.ghcr.yml up -d --no-deps core api web logger
+#
+# or just: ATF_IMAGE_TAG=sha-abc1234 scripts/deploy_release.sh
+#
+# Every service keeps its `build:` in the base file, so a host that has no
+# registry access (a fork, an offline install, the clean-install smoke test in
+# the release pipeline) still works with `docker compose up -d --build`. This
+# overlay only names where the merged configuration should get its image from.
+#
+# Tag default `master` is the moving tag the Publish workflow maintains; pin a
+# `sha-<short>` tag for a deploy you can name again later. A version tag (vX.Y.Z)
+# from release.yml is the right choice for a stable install.
+services:
+  logger:
+    image: ${ATF_REGISTRY:-ghcr.io}/${ATF_GHCR_OWNER:-opselon}/atf-logger:${ATF_IMAGE_TAG:-master}
+  core:
+    image: ${ATF_REGISTRY:-ghcr.io}/${ATF_GHCR_OWNER:-opselon}/atf-core:${ATF_IMAGE_TAG:-master}
+  api:
+    image: ${ATF_REGISTRY:-ghcr.io}/${ATF_GHCR_OWNER:-opselon}/atf-api:${ATF_IMAGE_TAG:-master}
+  web:
+    image: ${ATF_REGISTRY:-ghcr.io}/${ATF_GHCR_OWNER:-opselon}/atf-web:${ATF_IMAGE_TAG:-master}

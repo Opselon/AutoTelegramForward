@@ -1,0 +1,129 @@
+name: Publish
+
+# Images are built here, once, and the production host pulls them.
+#
+# Before this workflow, a merge to master could only be deployed by compiling on
+# the server: `docker compose build` ran pip/npm/cargo *on the box that also has
+# to forward messages*. That competes for the same CPU the forwarder needs, and
+# it makes the deployed artifact impossible to compare with what CI tested —
+# two builds of the same commit are not the same image.
+#
+# So: every master push publishes all four service images to GHCR under an
+# immutable `sha-<short>` tag plus a moving `master` tag, and
+# `scripts/deploy_release.sh` pulls. A version tag (v*) is still release.yml's
+# job, which additionally produces multi-arch manifests.
+#
+# Cache: the `ci-<service>` scopes are the ones the `docker-build` job in ci.yml
+# already fills, so a publish run normally re-uses the layers that job just
+# built and pushes them without re-doing the work.
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Extra tag to publish (default: the commit's branch name)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+# Never cancel a half-finished publish: a cancelled run can leave a `master`
+# tag pointing at one service's new image and another's old one.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # service -> the Dockerfile the base compose file builds it from.
+          # scripts/tests/test_publish_images.py fails if these drift apart.
+          - service: core
+            dockerfile: Dockerfile.core
+          - service: api
+            dockerfile: Dockerfile.api
+          - service: web
+            dockerfile: Dockerfile.web
+          - service: logger
+            dockerfile: Dockerfile.logger-rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve tags
+        id: meta
+        run: |
+          # GHCR requires a lowercase path; repository_owner can carry capitals.
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          SHORT=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          MOVING="${{ inputs.tag }}"
+          if [ -z "$MOVING" ]; then
+            MOVING="${GITHUB_REF_NAME}"
+          fi
+          MOVING=$(echo "$MOVING" | tr '[:upper:]' '[:lower:]')
+          echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
+          echo "short=${SHORT}" >> "$GITHUB_OUTPUT"
+          echo "moving=${MOVING}" >> "$GITHUB_OUTPUT"
+          echo "### atf-${{ matrix.service }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`${REGISTRY}/${OWNER}/atf-${{ matrix.service }}:sha-${SHORT}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`${REGISTRY}/${OWNER}/atf-${{ matrix.service }}:${MOVING}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        timeout-minutes: 45
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          # The production host is linux/amd64. release.yml builds the multi-arch
+          # manifest for version tags; keeping this single-architecture keeps a
+          # master publish short and cheap.
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          cache-from: type=gha,scope=ci-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=ci-${{ matrix.service }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.owner }}/atf-${{ matrix.service }}:sha-${{ steps.meta.outputs.short }}
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.owner }}/atf-${{ matrix.service }}:${{ steps.meta.outputs.moving }}
+
+  # One place that says out loud what to paste on the host, so a deploy is a
+  # pull of a tag that CI built and not an improvised rebuild.
+  deploy-command:
+    runs-on: ubuntu-latest
+    needs: [images]
+    steps:
+      - name: Print the pull-based deploy command
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          SHORT=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          {
+            echo "## Deploying ${SHORT}"
+            echo
+            echo 'On the host (nothing is compiled there):'
+            echo
+            echo '```bash'
+            echo "ATF_IMAGE_TAG=sha-${SHORT} ATF_GHCR_OWNER=${OWNER} scripts/deploy_release.sh"
+            echo '```'
+            echo
+            echo "Rollback is the same command with the previous \`sha-<short>\`."
+          } >> "$GITHUB_STEP_SUMMARY"
