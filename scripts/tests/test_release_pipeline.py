@@ -284,3 +284,33 @@ def test_ci_docker_job_uses_caches_and_proves_a_hit():
         "the proof must rebuild from a cache and fail when no layer came from it"
     )
     assert "::error::" in script, "a cache miss must fail the job"
+
+
+# --------------------------------------------------------------------------- #
+# The compose smoke test must start deterministically (release v2.2.0 regression)
+# --------------------------------------------------------------------------- #
+def test_smoke_job_starts_the_core_without_live_telegram_credentials():
+    """.env.example credentials cannot log in: the core exited on the failed bot
+    login, docker restarted it, and the acceptance `docker compose exec` died at
+    137 mid-check — so the whole release run failed its clean-install gate."""
+    workflow = _workflow()
+    job = workflow["jobs"]["clean-install"]
+    script = "\n".join(str(s.get("run", "")) for s in _steps(job))
+
+    assert "ATF_DISABLE_BOT=1" in script, (
+        "the smoke test must run the core in its supported gRPC-only mode; with "
+        "placeholder credentials it restart-loops and kills exec'd checks"
+    )
+    assert "Diagnostics on failure" in [s.get("name") for s in _steps(job)], (
+        "a failed smoke test must dump ps/logs/disk instead of leaving a bare exit code"
+    )
+
+    compose = yaml.safe_load((REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    core_env = compose["services"]["core"]["environment"]
+    assert "ATF_DISABLE_BOT" in core_env, (
+        "docker-compose.yml must pass ATF_DISABLE_BOT through to the core container, "
+        "or setting it in .env changes nothing"
+    )
+    assert core_env["ATF_DISABLE_BOT"].endswith(":-}") or "${ATF_DISABLE_BOT" in str(core_env["ATF_DISABLE_BOT"]), (
+        "the variable must default to empty so normal deployments are unaffected"
+    )

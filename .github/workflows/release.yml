@@ -865,6 +865,12 @@ jobs:
         run: |
           cp .env.example .env
           echo "compose smoke test uses placeholder credentials from .env.example"
+          # Those credentials cannot log in to Telegram. Without the core's
+          # supported gRPC-only mode it exits on the failed bot login, restart-loops,
+          # and any `docker compose exec` into it dies with 137 mid-check — which is
+          # exactly how the v2.2.0 release failed this job.
+          echo "ATF_DISABLE_BOT=1" >> .env
+          grep -q '^ATF_DISABLE_BOT=1$' .env
 
       - name: Compose up
         shell: bash
@@ -909,6 +915,20 @@ jobs:
           # 24 contract checks through Core's own stubs and producer class.
           docker compose exec -e ATF_LOGGER_ADDR=logger:50052 -T core python - \
             < scripts/acceptance/logger_acceptance.py
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo "::group::compose ps"
+          docker compose ps
+          echo "::endgroup::"
+          echo "::group::logs"
+          docker compose logs --tail=200
+          echo "::endgroup::"
+          echo "::group::disk"
+          df -h /
+          docker system df
+          echo "::endgroup::"
 
       - name: Compose down (always)
         if: always()
