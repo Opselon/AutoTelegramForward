@@ -235,6 +235,13 @@ def build_container(cfg: Config) -> dict:
     sync_engine = SyncEngine(msg_map_repo, rule_repo, pool, filter_repo=filter_repo)
     # LogClient is created later (line ~291); queue_manager receives it via a
     # late attribute set right after the client exists (see below).
+    from core.infrastructure.telegram.bot_transport import BotTransportCache  # noqa: E402
+
+    # Bot route: tasks can deliver through a bot the owner attached instead of
+    # the owner's account. The cache holds one pooled transport per token, so
+    # neither the database nor a TLS handshake is repeated per message.
+    bot_route = BotTransportCache(token_repo)
+
     queue_manager = DurableQueueManager(
         queue_repo=queue_repo,
         message_map_repo=msg_map_repo,
@@ -246,6 +253,7 @@ def build_container(cfg: Config) -> dict:
         lease_duration=getattr(cfg, "queue_lease_seconds", 30.0),
         max_per_minute_per_target=getattr(cfg, "queue_max_per_minute_per_target", 25),
         metrics_repo=metrics_repo,
+        bot_route=bot_route,
     )
     from core.application.pipeline import DurableMessagePipeline  # noqa: E402
     durable_pipeline = DurableMessagePipeline(
