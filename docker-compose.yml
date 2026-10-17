@@ -68,6 +68,13 @@ services:
       ATF_GRPC_PORT: 50051
       ATF_DB_PATH: /app/data/atf.db
       ATF_LOGGER_ADDR: logger:50052
+      # Diagnostics, empty = off: ATF_RAW_API_TRACE dumps per-request MTProto
+      # traffic, ATF_BUTTON_STYLES=0 disables styled keyboards and
+      # ATF_BUTTON_STYLE_PROBE=<chat id> sends one styled message at boot so an
+      # operator can confirm the live session accepts keyboardButtonStyle.
+      ATF_RAW_API_TRACE: ${ATF_RAW_API_TRACE:-}
+      ATF_BUTTON_STYLES: ${ATF_BUTTON_STYLES:-}
+      ATF_BUTTON_STYLE_PROBE: ${ATF_BUTTON_STYLE_PROBE:-}
     volumes:
       - atf-data:/app/data
     networks:
