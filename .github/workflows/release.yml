@@ -600,84 +600,19 @@ jobs:
   # not exist in this repo's secrets, so only Android is published here.
   # ------------------------------------------------------------------------ #
   mobile-android:
+    # The Android build lives in its own reusable workflow so it has exactly one
+    # definition: this delegation keeps tag releases byte-identical to what they
+    # produced before, and `gh workflow run mobile-android.yml` can produce the
+    # same signed artifacts on demand without a release.
     needs: meta
-    runs-on: ubuntu-latest
+    # A job that calls a reusable workflow still needs its own bound: the callee
+    # carries its own timeout-minutes too, but a run that hangs before/around the
+    # call would otherwise be ended by the platform, not by us.
     timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.47.7"
-          channel: stable
-          cache: true
-
-      - name: Run mobile tests
-        working-directory: mobile
-        run: flutter test
-
-      - name: Analyze mobile code
-        working-directory: mobile
-        run: flutter analyze
-
-      - name: Configure Android release signing
-        shell: bash
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Required Android release signing secret ${name} is missing."
-              exit 1
-            fi
-          done
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/atf-release.keystore"
-          {
-            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/atf-release.keystore"
-            echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
-            echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS"
-            echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
-          } >> "$GITHUB_ENV"
-
-      - name: Build release APKs (split per ABI)
-        working-directory: mobile
-        run: |
-          flutter build apk --release --split-per-abi
-          # NOTE: working-directory is $GITHUB_WORKSPACE/mobile, so the
-          # staging dir is ../atf-mobile (= $GITHUB_WORKSPACE/atf-mobile),
-          # matching the upload-artifact path below. Do NOT use ../../ here.
-          mkdir -p ../atf-mobile
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
-             "../atf-mobile/AutoTelegramForward-${{ needs.meta.outputs.version }}-android-arm64.apk"
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
-             "../atf-mobile/AutoTelegramForward-${{ needs.meta.outputs.version }}-android-armv7.apk"
-          cp build/app/outputs/flutter-apk/app-x86_64-release.apk \
-             "../atf-mobile/AutoTelegramForward-${{ needs.meta.outputs.version }}-android-x86_64.apk"
-          (cd ../atf-mobile && sha256sum *.apk > SHA256SUMS-mobile.txt && ls -la)
-
-      - name: Build release App Bundle (Play Store)
-        working-directory: mobile
-        run: |
-          flutter build appbundle --release
-          cp build/app/outputs/bundle/release/app-release.aab \
-             "../atf-mobile/AutoTelegramForward-${{ needs.meta.outputs.version }}-android-bundle.aab"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mobile-android
-          path: atf-mobile/*
-          if-no-files-found: error
-          retention-days: 14
+    uses: ./.github/workflows/mobile-android.yml
+    with:
+      version: ${{ needs.meta.outputs.version }}
+    secrets: inherit
 
   # ------------------------------------------------------------------------ #
   # iOS simulator build (unsigned) — validates the Flutter iOS target on
