@@ -2,10 +2,15 @@ FROM golang:1.27.2-alpine AS builder
 
 WORKDIR /build
 COPY api/go.mod api/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 COPY api/ .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /atf-api .
+# Module and build caches are mounted, so a source-only change reuses every
+# compiled dependency package instead of rebuilding the Go standard library
+# dependencies from scratch.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -ldflags="-s -w" -o /atf-api .
 
 FROM alpine:3.20
 # Retry: dl-cdn.alpinelinux.org intermittently returns transient network

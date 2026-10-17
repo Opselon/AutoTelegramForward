@@ -176,3 +176,111 @@ def test_version_is_semver_and_the_mobile_app_matches_it():
         "workflow refuses a tag that disagrees with VERSION, so the two must move "
         "together"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Build time itself: these four images must not be able to hang a run again
+# --------------------------------------------------------------------------- #
+WORKFLOWS = [REPO_ROOT / ".github" / "workflows" / name for name in ("release.yml", "ci.yml")]
+DOCKERFILES = {
+    "core": REPO_ROOT / "Dockerfile.core",
+    "logger": REPO_ROOT / "Dockerfile.logger-rust",
+    "api": REPO_ROOT / "Dockerfile.api",
+    "web": REPO_ROOT / "Dockerfile.web",
+}
+# manifest COPY (dependency layer) must come before the source COPY, per image.
+DEPENDENCY_BEFORE_SOURCE = {
+    "core": ("requirements.txt", "core/"),
+    "logger": ("rust/logger/Cargo.toml", "rust/logger/src/"),
+    "api": ("api/go.sum", "COPY api/ ."),
+    "web": ("web/backend/Cargo.toml", "web/backend/src"),
+}
+
+
+def test_no_job_in_any_workflow_is_unbounded():
+    """A job with no `timeout-minutes` can only end when GitHub cancels the run."""
+    for path in WORKFLOWS:
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        missing = [name for name, job in workflow["jobs"].items() if not job.get("timeout-minutes")]
+        assert not missing, (
+            f"{path.name}: jobs {missing} have no timeout-minutes. The v2.1.0 release "
+            "burned the platform's 6-hour limit because the hanging job had no bound."
+        )
+
+
+def test_dockerignore_keeps_the_build_context_lean():
+    """308 MB of context (133 MB of a developer's node_modules) went to every build."""
+    ignored = (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+
+    for pattern in (".git", "**/node_modules", "**/dist", "**/target"):
+        assert pattern in ignored, (
+            f".dockerignore must exclude {pattern}: it is either not needed by any "
+            "Dockerfile COPY or rebuilt inside the image"
+        )
+    # and it must not exclude anything a Dockerfile does COPY
+    for needed in ("core/", "api/", "web/", "rust/", "proto/", "VERSION"):
+        assert needed not in ignored, f".dockerignore excludes {needed}, which a build needs"
+
+
+def test_dependency_layers_precede_sources_and_are_cache_mounted():
+    for service, (manifest, source) in DEPENDENCY_BEFORE_SOURCE.items():
+        text = DOCKERFILES[service].read_text(encoding="utf-8")
+        assert manifest in text and source in text, f"{service}: missing layer markers"
+        assert text.index(manifest) < text.index(source), (
+            f"{service}: {source} is copied before {manifest}, so every source edit "
+            "re-runs the dependency install"
+        )
+        assert "--mount=type=cache" in text, (
+            f"{service}: no BuildKit cache mount, so dependency downloads and "
+            "compiled artifacts are thrown away between builds"
+        )
+
+
+def test_web_backend_compiles_dependencies_against_a_stub_main():
+    """Every UI change used to recompile the whole Rust dependency graph."""
+    text = DOCKERFILES["web"].read_text(encoding="utf-8")
+    stub = [line for line in text.splitlines() if "fn main()" in line and "printf" in line]
+
+    assert stub, "Dockerfile.web has no dependency layer (stub main.rs) for the Rust backend"
+    assert text.index(stub[0]) < text.index("COPY web/backend/src"), (
+        "the stub dependency build must come before the real sources are copied"
+    )
+    assert "cp target/release/atf-web-backend /out-atf-web-backend" in text, (
+        "the binary must be copied out of the cache-mounted target dir into the image"
+    )
+
+
+def test_no_dockerfile_contains_an_unbounded_retry_loop():
+    for service, path in DOCKERFILES.items():
+        text = path.read_text(encoding="utf-8")
+        assert "while true" not in text and "while :" not in text, (
+            f"{service}: an unbounded retry loop can hang the build forever"
+        )
+        for line in text.splitlines():
+            if line.strip().startswith("for ") and " in " in line and "seq" not in line:
+                # a bounded word list ("for i in 1 2 3 4 5") is fine; a shell glob is not
+                assert "for i in 1 2" in line, f"{service}: retry loop {line.strip()!r} is not bounded"
+
+
+def test_ci_docker_job_uses_caches_and_proves_a_hit():
+    """CI rebuilt all four images from scratch on every PR and never checked that
+    a cache existed at all."""
+    workflow = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    job = workflow["jobs"]["docker-build"]
+    builds = [s for s in job["steps"] if "build-push-action" in str(s.get("uses", ""))]
+
+    assert len(builds) == len(SERVICES), f"expected {len(SERVICES)} cached image builds, got {len(builds)}"
+    for step in builds:
+        with_ = step["with"]
+        assert with_.get("cache-from") and with_.get("cache-to"), (
+            f"ci.yml {step['name']} has no cache: every PR rebuilds it from scratch"
+        )
+        assert step.get("timeout-minutes"), f"ci.yml {step['name']} can hang unbounded"
+
+    proof = [s for s in job["steps"] if "run" in s and "cache" in str(s.get("name", "")).lower()]
+    assert proof, "the CI docker job must prove a cache hit, not merely set cache-from"
+    script = proof[0]["run"]
+    assert "type=local,src=" in script and "CACHED" in script, (
+        "the proof must rebuild from a cache and fail when no layer came from it"
+    )
+    assert "::error::" in script, "a cache miss must fail the job"
