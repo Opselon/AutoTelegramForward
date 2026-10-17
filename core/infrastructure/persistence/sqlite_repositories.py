@@ -775,6 +775,26 @@ class SqliteApiCredentialRepository(IApiCredentialRepository):
         return cur.rowcount > 0
 
 
+def _dump_defaults(defaults: Optional[Dict[str, Any]]) -> str:
+    """Serialise a bot's defaults. Values were validated by the registry first;
+    this layer only has to be total."""
+    try:
+        return json.dumps(defaults or {}, ensure_ascii=False, sort_keys=True)
+    except (TypeError, ValueError):
+        return "{}"
+
+
+def _parse_defaults(raw: str) -> Dict[str, Any]:
+    """Read a stored mapping back. Anything unusable reads as "no defaults"
+    rather than failing the whole token — a bot whose defaults cannot be parsed
+    still forwards with the registry defaults."""
+    try:
+        loaded = json.loads(raw or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
 class SqliteBotTokenRepository(IBotTokenRepository):
     def __init__(self, db: SqliteDatabase, crypto: CryptoService) -> None:
         self._db = db
@@ -783,13 +803,15 @@ class SqliteBotTokenRepository(IBotTokenRepository):
     async def add(self, token: BotToken) -> BotToken:
         self._db.execute(
             "INSERT INTO bot_tokens"
-            " (id, label, token_encrypted, is_active, created_at, updated_at, owner_user_id)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            " (id, label, token_encrypted, is_active, created_at, updated_at,"
+            "  owner_user_id, defaults_json)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 token.id, token.label,
                 self._crypto.encrypt(token.token) if token.token else "",
                 int(token.is_active), token.created_at, token.updated_at,
                 int(token.owner_user_id or 0),
+                _dump_defaults(token.defaults),
             ),
         )
         return token
@@ -800,12 +822,17 @@ class SqliteBotTokenRepository(IBotTokenRepository):
             owner = int(row["owner_user_id"] or 0)
         except (IndexError, KeyError):
             owner = 0  # a row read from a database that predates the column
+        try:
+            raw_defaults = row["defaults_json"] or "{}"
+        except (IndexError, KeyError):
+            raw_defaults = "{}"  # a row from a database that predates v20
         return BotToken(
             id=row["id"], label=row["label"],
             token=self._crypto.decrypt(enc) if enc else "",
             is_active=bool(row["is_active"]),
             created_at=row["created_at"], updated_at=row["updated_at"],
             owner_user_id=owner,
+            defaults=_parse_defaults(raw_defaults),
         )
 
     async def get_by_id(self, token_id: str) -> Optional[BotToken]:
@@ -845,6 +872,28 @@ class SqliteBotTokenRepository(IBotTokenRepository):
         cur = self._db.execute(
             "DELETE FROM bot_tokens WHERE id=? AND owner_user_id=?",
             (token_id, int(owner_user_id or 0)),
+        )
+        return cur.rowcount > 0
+
+    async def set_defaults(
+        self, token_id: str, owner_user_id: int, defaults: Dict[str, Any]
+    ) -> bool:
+        """Replace this owner's bot defaults.
+
+        The owner is in the WHERE clause for the same reason it is on every
+        other human path: a transplanted token id must not let one tenant write
+        settings onto another tenant's bot. A row this owner does not own
+        returns False, which the caller answers as "not found".
+        """
+        cur = self._db.execute(
+            "UPDATE bot_tokens SET defaults_json=?, updated_at=? "
+            "WHERE id=? AND owner_user_id=?",
+            (
+                _dump_defaults(defaults),
+                int(time.time()),
+                token_id,
+                int(owner_user_id or 0),
+            ),
         )
         return cur.rowcount > 0
 

@@ -302,6 +302,14 @@ message RuleSettingsResponse {
   string settings_json = 4;
   // Field specs (kind, default, choices, bounds, label) for rendering controls.
   string schema_json = 5;
+  // Where each effective value came from: "task", "bot" (an inherited default,
+  // with the bot named) or "default" (the registry). Clients use this to show
+  // inherited values differently from task-specific ones.
+  string sources_json = 6;
+  // The values the forwarder will actually use, inheritance applied. Kept
+  // apart from settings_json so a client echoing the response back cannot pin
+  // everything the task merely inherits.
+  string effective_json = 7;
 }
 
 message UpdateRuleSettingsRequest {
@@ -312,6 +320,11 @@ message UpdateRuleSettingsRequest {
   // true  = the request is the complete settings state (unlisted keys reset)
   // false = merge only the keys present in settings_json
   bool replace_all = 4;
+  // The keys the user actually edited. A form posts every field, and a posted
+  // field is not a choice: without this, saving one edited field would pin all
+  // of them and the task would stop inheriting its bot's defaults. When set,
+  // only these keys are applied; when empty, settings_json is taken as written.
+  repeated string changed = 5;
 }
 
 message RuleSettingsSchemaRequest {}
@@ -1198,8 +1211,43 @@ message DeleteBotTokenRequest {
   int64 owner_user_id = 2;
 }
 
+// Per-bot defaults: the settings this bot carries for every task that uses it.
+// Which tasks are affected is the point — see the registry's `inheritable`
+// field, exposed through GetRuleSettingsSchema.
+message GetBotDefaultsRequest {
+  string id = 1;
+  int64 owner_user_id = 2;
+}
+
+message SetBotDefaultsRequest {
+  string id = 1;
+  int64 owner_user_id = 2;
+  // A JSON object keyed by setting name. Every value is validated against the
+  // registry before anything is stored; a setting that names a chat, a route or
+  // a schedule is refused.
+  string defaults_json = 3;
+  // true  = defaults_json is the complete set (unlisted defaults are dropped)
+  // false = merge into the stored set
+  bool replace_all = 4;
+  // Defaults to drop, so one shared setting can be handed back to the registry
+  // default without restating every other one.
+  repeated string clear = 5;
+}
+
+message BotDefaultsResponse {
+  bool success = 1;
+  string error_code = 2;
+  string message = 3;
+  // The stored mapping, keyed by setting name.
+  string defaults_json = 4;
+  // The settings this write changed, so a caller can report what it did.
+  repeated string changed = 5;
+}
+
 service BotTokenControlService {
   rpc ListBotTokens(ListBotTokensRequest) returns (ListBotTokensResponse);
   rpc CreateBotToken(CreateBotTokenRequest) returns (CreateBotTokenResponse);
   rpc DeleteBotToken(DeleteBotTokenRequest) returns (StatusResponse);
+  rpc GetBotDefaults(GetBotDefaultsRequest) returns (BotDefaultsResponse);
+  rpc SetBotDefaults(SetBotDefaultsRequest) returns (BotDefaultsResponse);
 }

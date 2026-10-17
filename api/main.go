@@ -100,6 +100,9 @@ func main() {
 	dashMux.HandleFunc("GET /bot-tokens", h.ListBotTokens)
 	dashMux.HandleFunc("POST /bot-tokens", h.CreateBotToken)
 	dashMux.HandleFunc("DELETE /bot-tokens/{id}", h.DeleteBotToken)
+	// Per-bot defaults: what every task attached to this bot inherits.
+	dashMux.HandleFunc("GET /bot-tokens/{id}/defaults", h.GetBotDefaults)
+	dashMux.HandleFunc("PUT /bot-tokens/{id}/defaults", h.SetBotDefaults)
 	dashMux.HandleFunc("GET /ai-configs", h.ListAIConfigs)
 	dashMux.HandleFunc("POST /ai-configs", h.CreateAIConfig)
 	dashMux.HandleFunc("PUT /ai-configs/{id}", h.UpdateAIConfig)
