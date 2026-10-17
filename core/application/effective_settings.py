@@ -16,6 +16,7 @@ on a settings screen is what the forwarder uses.
 """
 from __future__ import annotations
 
+import copy
 from typing import Any, Dict, Optional
 
 from ..domain.bot_defaults import describe, effective
@@ -56,3 +57,46 @@ async def describe_rule(
 ) -> Dict[str, Dict[str, Any]]:
     """Every effective setting with its source, for a client to render."""
     return describe(rule, await attached_defaults(rule, tokens, owner_user_id))
+
+
+#: Attribute a materialised copy carries so a save attempt is caught rather than
+#: quietly writing a bot's defaults into a task (they would become pins and the
+#: task would stop tracking the bot).
+INHERITED_MARK = "_inherited_defaults"
+
+
+async def materialize(rule: Any, tokens: Any) -> Any:
+    """``rule`` as the forwarder should see it: bot defaults filled in.
+
+    Returns the rule itself when there is nothing to fill in (no bot attached,
+    no defaults, or every setting already the task's own), so the common path
+    allocates nothing. Otherwise a copy: the loaded entity must not be modified,
+    because a caller that saves it afterwards would turn the inherited values
+    into the task's own choices — the exact opposite of inheriting them.
+
+    A default that fails validation (only possible if storage was hand-edited)
+    is skipped rather than raised: a convenience setting must never stop a task
+    from forwarding.
+    """
+    from ..domain.rule_settings import SETTING_SPECS, SettingError, apply_settings, pinned_keys
+
+    defaults = await attached_defaults(rule, tokens)
+    if not defaults:
+        return rule
+    pinned = pinned_keys(rule)
+    carry = {
+        key: value
+        for key, value in defaults.items()
+        if key in SETTING_SPECS and SETTING_SPECS[key].inheritable and key not in pinned
+    }
+    if not carry:
+        return rule
+    try:
+        effective_rule = copy.deepcopy(rule)
+        apply_settings(effective_rule, carry)
+    except SettingError:
+        return rule
+    except Exception:  # a rule that cannot be copied is not worth failing a forward over
+        return rule
+    setattr(effective_rule, INHERITED_MARK, sorted(carry))
+    return effective_rule

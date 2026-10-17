@@ -628,6 +628,7 @@ class MessageForwardingUseCase:
         filter_engine: Optional[FilterEngine] = None,
         routing_policy: Optional[RoutingPolicy] = None,
         processed_repo=None,
+        bot_tokens=None,
     ) -> None:
         self._rule_repo = rule_repo
         self._filter_repo = filter_repo
@@ -636,6 +637,10 @@ class MessageForwardingUseCase:
         self._filter_engine = filter_engine or FilterEngine()
         self._routing = routing_policy or RoutingPolicy()
         self._processed = processed_repo
+        # Per-bot defaults, resolved per message (see core.application
+        # .effective_settings). The resolved values travel with the rule this
+        # use case hands to its sender, so nothing downstream has to know.
+        self._bot_tokens = bot_tokens
         self.sender = None  # async callable: (payload, rule, text, eval_result) -> bool
         self.stats = ForwardingStats()
 
@@ -672,6 +677,10 @@ class MessageForwardingUseCase:
     async def _process_rule(
         self, payload: MessagePayload, rule: ForwardRule, trigger: str = "NEW_MESSAGE"
     ) -> PipelineOutcome:
+        # The rule as the forwarder should see it: the attached bot's defaults
+        # filled in for everything this task does not set itself.
+        from .effective_settings import materialize
+        rule = await materialize(rule, self._bot_tokens)
         # --- time floor: skip backlog / old messages ------------------
         since = getattr(rule, "since_ts", 0) or 0
         if since and payload.date and payload.date < since:

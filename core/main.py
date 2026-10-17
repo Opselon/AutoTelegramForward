@@ -230,6 +230,9 @@ def build_container(cfg: Config) -> dict:
         rule_repo, filter_repo, ai_repo, factory,
         filter_engine=FilterEngine(), routing_policy=RoutingPolicy(),
         processed_repo=processed_repo,
+        # Same inheritance rule as the durable pipeline below; this path is the
+        # one the Telegram bot and the reply/PV flows run through.
+        bot_tokens=token_repo,
     )
     pool = ClientPool(cfg.api_id, cfg.api_hash)
     sync_engine = SyncEngine(msg_map_repo, rule_repo, pool, filter_repo=filter_repo)
@@ -268,6 +271,10 @@ def build_container(cfg: Config) -> dict:
         prompt_service=prompt_service,
         pool=pool,
         audit_repo=audit_repo,
+        # Tasks inherit the defaults of the bot they have attached; resolving it
+        # here means the transform and the delivery job it enqueues both use the
+        # effective settings.
+        bot_tokens=token_repo,
     )
     from core.infrastructure.telegram.pv_responder import AIPVResponder  # noqa: E402
     pv_responder = AIPVResponder(ai_repo=ai_repo, ai_factory=factory, db=db)
