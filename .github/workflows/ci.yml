@@ -187,6 +187,17 @@ jobs:
           npx tsc -p tsconfig.app.json --noEmit
           npx tsc -p tsconfig.node.json --noEmit
 
+      - name: Provenance rules
+        # Verify how a settings row decides what to show (edit/own/inherited)
+        # by running that logic directly, like the Go and Python suites do.
+        # No framework here: the module is compiled standalone and loaded by node.
+        working-directory: web/frontend
+        run: |
+          node node_modules/typescript/bin/tsc src/settingProvenance.ts \
+            --ignoreConfig --outDir .provenance-build \
+            --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
+          node tests/settingProvenance.test.mjs
+
       - name: Build
         working-directory: web/frontend
         run: npm run build

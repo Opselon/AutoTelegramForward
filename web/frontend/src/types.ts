@@ -899,6 +899,12 @@ export interface RuleSettingSpec {
   maximum?: number
   nullable?: boolean
   item_kind?: string
+  /**
+   * Whether a bot may supply this setting to the tasks that route through it.
+   * Chat, route and schedule settings are false: letting a bot carry them would
+   * point other tasks at other chats.
+   */
+  inheritable?: boolean
 }
 
 export interface RuleSettingsSchema {
@@ -908,11 +914,35 @@ export interface RuleSettingsSchema {
   settings: RuleSettingSpec[]
 }
 
+/** Where one effective value comes from. */
+export type SettingSource = 'task' | 'bot' | 'default'
+
+export interface SettingSourceInfo {
+  /** The value the forwarder will use. */
+  value: any
+  /** The task's own value wins over the bot's, which wins over the registry's. */
+  source: SettingSource
+  /** The registry default, for showing what "use the default" would mean. */
+  default: any
+  inheritable: boolean
+  /** True when the task's stored value differs from, or was recorded over, the default. */
+  pinned?: boolean
+  /** The bot's value, present when this setting is a bot default. */
+  bot_default?: any
+  /** The bot that supplies it, so the panel can name it. */
+  bot_label?: string
+}
+
 export interface RuleSettingsResponse {
   success: boolean
   message?: string
   error_code?: string
+  /** What the task itself stores. Posting this back would pin every value. */
   settings?: Record<string, any>
   schema?: RuleSettingsSchema
+  /** The values the forwarder will use, inheritance applied. */
+  effective?: Record<string, any>
+  /** Where each effective value came from. */
+  sources?: Record<string, SettingSourceInfo>
   requested?: number
 }

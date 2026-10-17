@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, Loader2, Plus, Save, X } from 'lucide-react'
 import { api } from '../api'
-import type { BotTokenInfo, ForwardRule, RuleSettingSpec, RuleSettingsSchema } from '../types'
+import type {
+  BotTokenInfo,
+  ForwardRule,
+  RuleSettingSpec,
+  RuleSettingsSchema,
+  SettingSourceInfo,
+} from '../types'
 import { BotRouteField } from './BotRouteField'
+import { badgeFor, canReset, isInherited, rowValue } from '../settingProvenance'
 
 interface Props {
   rule: ForwardRule
@@ -84,8 +91,14 @@ function namesFor(rule: ForwardRule, side: 'source' | 'target'): string[] {
 export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Props) {
   const isRtl = lang === 'fa'
   const [schema, setSchema] = useState<RuleSettingsSchema | null>(null)
+  // What the task itself stores, and separately what the forwarder will use with
+  // its bot's defaults applied. The two are shown apart on purpose: saving a
+  // value the task merely inherits would pin it and end the inheritance.
   const [settings, setSettings] = useState<Record<string, any>>({})
+  // Named settingSources: `sources` is already the task's source chat list.
+  const [settingSources, setSettingSources] = useState<Record<string, SettingSourceInfo>>({})
   const [edits, setEdits] = useState<Record<string, any>>({})
+  const [resetting, setResetting] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -116,6 +129,9 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
       const res = await api.getRuleSettings(rule.id)
       if (res?.settings) setSettings(res.settings)
       if (res?.schema) setSchema(res.schema)
+      // Where each value comes from. Absent on an older API, which simply means
+      // the panel shows values without provenance rather than failing.
+      setSettingSources(res?.sources ?? {})
       setEdits({})
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load task settings')
@@ -151,6 +167,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
         return
       }
       if (res?.settings) setSettings(res.settings)
+      setSettingSources(res?.sources ?? settingSources)
       setEdits({})
       setNotice(res?.message || 'Settings saved')
       onSaved?.()
@@ -158,6 +175,44 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
       setError(err instanceof Error ? err.message : 'Could not save settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  /**
+   * Hand one setting back to the bot's default.
+   *
+   * A reset is not a write: the server drops the task's own value so the bot
+   * (or the registry) supplies it again. Saving the value the task was shown
+   * instead would pin it and the task would stop following the bot.
+   */
+  const handleResetSetting = async (key: string) => {
+    setResetting(key)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await api.updateRuleSettings(rule.id, {}, false, [key])
+      if (res?.success === false) {
+        setError(
+          res.message
+            ? `${res.error_code ? res.error_code + ': ' : ''}${res.message}`
+            : 'The server refused to reset this setting',
+        )
+        return
+      }
+      if (res?.settings) setSettings(res.settings)
+      setSettingSources(res?.sources ?? {})
+      setEdits((prev: Record<string, any>) => {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+      setNotice(res?.message || 'Handed back to the default')
+      onSaved?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reset this setting')
+    } finally {
+      setResetting(null)
     }
   }
 
@@ -384,8 +439,15 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
               <SettingRow
                 key={spec.key}
                 spec={spec}
-                value={spec.key in edits ? edits[spec.key] : settings[spec.key]}
+                value={rowValue(spec.key, edits, settings, settingSources)}
                 changed={spec.key in edits}
+                sourceInfo={settingSources[spec.key]}
+                resetting={resetting === spec.key}
+                onReset={
+                  canReset(spec.key, edits, settingSources)
+                    ? () => void handleResetSetting(spec.key)
+                    : undefined
+                }
                 isRtl={isRtl}
                 labelStyle={labelStyle}
                 inputStyle={inputStyle}
@@ -644,6 +706,12 @@ interface RowProps {
   botsError?: string | null
   botRoute?: boolean
   reloadBots?: () => Promise<void> | void
+  /** Where this row's value comes from, when the API reports provenance. */
+  sourceInfo?: SettingSourceInfo
+  /** True while this row's reset is in flight. */
+  resetting?: boolean
+  /** Absent when there is nothing to hand back (the value is already a default). */
+  onReset?: () => void
   labelStyle: React.CSSProperties
   inputStyle: React.CSSProperties
   hintStyle: React.CSSProperties
@@ -654,6 +722,9 @@ function SettingRow({
   spec,
   value,
   changed,
+  sourceInfo,
+  resetting = false,
+  onReset,
   isRtl,
   inputStyle,
   hintStyle,
@@ -670,14 +741,59 @@ function SettingRow({
     padding: '7px 0',
     borderBottom: '1px solid #1f2937',
   }
+  const badge = badgeFor(sourceInfo)
   const label = (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <span style={{ fontSize: '12px', color: '#e2e8f0', fontWeight: changed ? 700 : 500 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+        <span
+          style={{
+            fontSize: '12px',
+            // An inherited value is dimmer than one this task chose, so the two
+            // never look alike.
+            color: isInherited(sourceInfo) ? '#cbd5e1' : '#e2e8f0',
+            fontWeight: changed ? 700 : 500,
+          }}
+        >
           {spec.label}
         </span>
         {changed && (
           <span style={{ fontSize: '9px', color: '#fbbf24', fontWeight: 700 }}>EDITED</span>
+        )}
+        {badge && !changed && (
+          <span
+            title={badge.title}
+            style={{
+              fontSize: '9px',
+              color: badge.color,
+              backgroundColor: badge.background,
+              border: `1px solid ${badge.color}33`,
+              borderRadius: '4px',
+              padding: '1px 5px',
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {badge.text}
+          </span>
+        )}
+        {onReset && !changed && (
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={resetting}
+            title="Use the default for this setting"
+            style={{
+              fontSize: '9px',
+              color: resetting ? '#64748b' : '#7dd3fc',
+              background: 'none',
+              border: '1px solid #334155',
+              borderRadius: '4px',
+              padding: '1px 5px',
+              cursor: resetting ? 'default' : 'pointer',
+            }}
+          >
+            {resetting ? '…' : isRtl ? 'پیش‌فرض' : 'use default'}
+          </button>
         )}
       </div>
       {spec.help && <div style={hintStyle}>{spec.help}</div>}

@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Compiled in CI to run the provenance rules directly
+.provenance-build/
