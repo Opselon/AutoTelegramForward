@@ -199,10 +199,14 @@ def render_report(t, report: Dict[str, Any]) -> str:
             t("ui_diag_queue", pending=_as_int(queue.get("pending")), detail=detail)
         )
         states = queue.get("states") or {}
+        # Only states that have something in them. A store that reports its
+        # failures as zeroes is a healthy queue, and "FAILED 0, RETRY 0" reads
+        # like a problem report when there is none.
         attention = {
             state: count
             for state, count in states.items()
             if str(state).upper() in ("RETRY", "FAILED", "UNKNOWN")
+            and _as_int(count) > 0
         }
         if attention:
             lines.append(
