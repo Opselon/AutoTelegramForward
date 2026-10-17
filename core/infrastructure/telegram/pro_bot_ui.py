@@ -38,6 +38,7 @@ from pyrogram.types import (
 )
 
 from ...domain.rule_settings import SETTING_SPECS
+from . import diagnostics
 from .registry_editor import RegistryEditor
 from .bot_transport import (
     BotApiError,
@@ -128,6 +129,7 @@ CB = {
     "ai": "a",
     "logs": "l",
     "stats": "st",
+    "diag": "dg",
     "lang": "lg",
     "login": "sl",
     "backup": "sb",
@@ -379,6 +381,7 @@ class ProBotUI:
         error_log=None,
         metrics=None,
         rule_stats=None,
+        delivery_queue=None,
         users=None,
         prompt_service=None,
         ai_transformer=None,
@@ -419,6 +422,9 @@ class ProBotUI:
         self._error_log = error_log
         self._metrics = metrics
         self._rule_stats = rule_stats
+        #: The delivery queue, so the diagnostics screen can report what is
+        #: waiting, retrying or stuck rather than only what has been sent.
+        self._delivery_queue = delivery_queue
         self._users = users
         self._prompts = prompt_service
         self._ai_transformer = ai_transformer
@@ -976,6 +982,9 @@ class ProBotUI:
             [
                 InlineKeyboardButton(self._t("ui_main_menu_upgrade", lang=cur_lang), callback_data=CB["upgrade"]),
                 InlineKeyboardButton(self._t("ui_main_menu_stats", lang=cur_lang), callback_data=CB["stats"]),
+            ],
+            [
+                InlineKeyboardButton(self._t("ui_main_menu_diag", lang=cur_lang), callback_data=CB["diag"]),
             ],
             [
                 InlineKeyboardButton(self._t("ui_main_menu_help", lang=cur_lang), callback_data=CB["help"]),
@@ -4040,6 +4049,40 @@ class ProBotUI:
             ])
             await self._safe_edit(cq, 
                 await self._dashboard_body(), reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["diag"] + "$"))
+        @self._localized_handler
+        async def _cb_diag(_, cq: CallbackQuery):
+            """What is stuck, what failed and under which id — for this user only.
+
+            The error log and the per-task counters are global tables, so the
+            rule ids are gathered owner-scoped here and everything else is
+            filtered against them: another tenant's task can never appear, and a
+            row that names an unowned rule is dropped rather than summarised.
+            """
+            uid = cq.from_user.id if cq.from_user else 0
+            owned: list[str] = []
+            try:
+                owned = diagnostics.owned_ids_of(
+                    await self._rules.list_by_owner(uid)
+                ) if uid else []
+            except Exception:
+                owned = []
+            lang = self._resolve_lang(uid)
+            body = await diagnostics.diagnostics_message(
+                lambda key, **params: self._t(key, lang=lang, **params),
+                queue=self._delivery_queue,
+                errors=self._error_log,
+                metrics=self._metrics,
+                rule_stats=self._rule_stats,
+                owned_rule_ids=owned,
+            )
+            kbd = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 " + self._t("ui_refresh"), callback_data=CB["diag"])],
+                [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])],
+            ])
+            await self._safe_edit(cq, body, reply_markup=kbd)
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["perf"] + "$"))

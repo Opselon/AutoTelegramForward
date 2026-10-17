@@ -124,8 +124,10 @@ def test_main_menu_buttons_structure(mock_pro_bot_ui):
     kbd = ui._main_menu()
     rows = kbd.inline_keyboard
 
-    # Check row count
-    assert len(rows) == 7
+    # Check row count. Row 5 is the diagnostics screen: the reads it surfaces
+    # (queue depth, retries, recent failures with their ids) existed server-side
+    # but had no way in from Telegram at all.
+    assert len(rows) == 8
 
     # Row 1: Forward | Spam
     assert rows[0][0].text == "Forward" and rows[0][0].callback_data == CB["rules"]
@@ -143,16 +145,19 @@ def test_main_menu_buttons_structure(mock_pro_bot_ui):
     assert rows[3][0].text == "💎 Upgrade" and rows[3][0].callback_data == CB["upgrade"]
     assert rows[3][1].text == "📊 Statistics" and rows[3][1].callback_data == CB["stats"]
 
-    # Row 5: Documentation | Language
-    assert rows[4][0].text == "📖 Documentation ↗" and rows[4][0].callback_data == CB["help"]
-    assert rows[4][1].text == "🌐 Language" and rows[4][1].callback_data == CB["lang"]
+    # Row 5: Diagnostics
+    assert rows[4][0].text == "🩺 Diagnostics" and rows[4][0].callback_data == CB["diag"]
 
-    # Row 6: Support (URL to @Capxi)
-    assert rows[5][0].text == "🆘 Support (@Capxi)"
-    assert rows[5][0].url == "https://t.me/Capxi"
+    # Row 6: Documentation | Language
+    assert rows[5][0].text == "📖 Documentation ↗" and rows[5][0].callback_data == CB["help"]
+    assert rows[5][1].text == "🌐 Language" and rows[5][1].callback_data == CB["lang"]
 
-    # Row 7: Disconnect / Sessions
-    assert rows[6][0].text == "🔌 Disconnect" and rows[6][0].callback_data == CB["sessions"]
+    # Row 7: Support (URL to @Capxi)
+    assert rows[6][0].text == "🆘 Support (@Capxi)"
+    assert rows[6][0].url == "https://t.me/Capxi"
+
+    # Row 8: Disconnect / Sessions
+    assert rows[7][0].text == "🔌 Disconnect" and rows[7][0].callback_data == CB["sessions"]
 
     # Ensure "Get App" is NOT present anywhere
     for row in rows:
