@@ -1,0 +1,178 @@
+# AutoTelegramForward — Android release artifacts, built on GitHub's runners.
+#
+# This is the ONE place the Android APK/AAB is built. The Release workflow calls
+# it (so a tag still produces the same artifacts it always did) and it is also
+# directly dispatchable, which is what makes "build me a release APK" possible
+# without a Flutter/Android SDK toolchain on a production host:
+#
+#   gh workflow run mobile-android.yml -f version=2.2.2
+#
+# Signing: the release keystore comes from repository secrets
+# (ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS /
+# ANDROID_KEY_PASSWORD) and mobile/android/app/build.gradle.kts picks it up from
+# the environment. When a secret is absent the job FAILS rather than silently
+# producing an artifact signed with the debug key — an unsigned-by-accident APK
+# is worse than no APK, because it installs and then cannot be upgraded over.
+#
+# NOTE: the `mobile-android` artifact name is part of the release contract — the
+# manifest job in release.yml downloads exactly that name.
+
+name: Android release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version stamped into artifact names (from the release meta job)"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for the artifact names (default: the VERSION file)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android release APK + bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: v
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.version }}"
+          if [ -z "${VERSION}" ]; then
+            VERSION="$(tr -d '[:space:]' < VERSION)"
+          fi
+          if [ -z "${VERSION}" ]; then
+            echo "::error::no version given and the VERSION file is empty"
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "building Android artifacts for ${VERSION} at ${GITHUB_SHA}"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+          cache: true
+
+      - name: Run mobile tests
+        working-directory: mobile
+        run: flutter test
+
+      - name: Analyze mobile code
+        working-directory: mobile
+        run: flutter analyze
+
+      - name: Configure Android release signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required Android release signing secret ${name} is missing."
+              exit 1
+            fi
+          done
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/atf-release.keystore"
+          {
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/atf-release.keystore"
+            echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
+            echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Build release APKs (split per ABI)
+        working-directory: mobile
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          flutter build apk --release --split-per-abi
+          # NOTE: working-directory is $GITHUB_WORKSPACE/mobile, so the
+          # staging dir is ../atf-mobile (= $GITHUB_WORKSPACE/atf-mobile),
+          # matching the upload-artifact path below. Do NOT use ../../ here.
+          mkdir -p ../atf-mobile
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+             "../atf-mobile/AutoTelegramForward-${VERSION}-android-arm64.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+             "../atf-mobile/AutoTelegramForward-${VERSION}-android-armv7.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk \
+             "../atf-mobile/AutoTelegramForward-${VERSION}-android-x86_64.apk"
+          (cd ../atf-mobile && sha256sum *.apk > SHA256SUMS-mobile.txt && ls -la)
+
+      - name: Build release App Bundle (Play Store)
+        working-directory: mobile
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          flutter build appbundle --release
+          cp build/app/outputs/bundle/release/app-release.aab \
+             "../atf-mobile/AutoTelegramForward-${VERSION}-android-bundle.aab"
+
+      - name: Verify the APKs are signed and report their identity
+        working-directory: mobile
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          APKSIGNER="$(find "${SDK}/build-tools" -name apksigner -type f 2>/dev/null | sort | tail -1)"
+          if [ -z "${APKSIGNER}" ]; then
+            echo "::error::apksigner not found under ${SDK}/build-tools"
+            exit 1
+          fi
+          cd ../atf-mobile
+          for apk in *.apk; do
+            echo "::group::${apk}"
+            "$APKSIGNER" verify --print-certs "${apk}" | head -6
+            if "$APKSIGNER" verify --print-certs "${apk}" | grep -qi 'Android Debug'; then
+              echo "::error::${apk} is signed with the DEBUG key"
+              exit 1
+            fi
+            "$APKSIGNER" verify "${apk}"
+            echo "::endgroup::"
+          done
+          echo "every APK verifies against the release certificate"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile-android
+          path: atf-mobile/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summary
+        working-directory: mobile
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          {
+            echo "### Android release artifacts (${VERSION})"
+            echo ""
+            echo "commit \`${GITHUB_SHA}\`, signed with the repository release keystore"
+            echo ""
+            cd ../atf-mobile && cat SHA256SUMS-mobile.txt
+          } >> "$GITHUB_STEP_SUMMARY"
