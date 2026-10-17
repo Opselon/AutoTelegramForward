@@ -22,6 +22,8 @@
 /// app keeps working against a release that predates the control plane.
 library;
 
+import '../../core/json_cast.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -121,10 +123,10 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
           ? await client.startLogDiagnostics()
           : await client.stopLogDiagnostics();
       if (!mounted) return;
-      final seconds =
-          (resp['seconds'] as num?)?.toInt() ??
-          (resp['expires_in_seconds'] as num?)?.toInt() ??
-          0;
+      final seconds = jsonInt(
+        resp['seconds'],
+        jsonInt(resp['expires_in_seconds']),
+      );
       final changed = resp['changed'] != false;
       final message = start
           ? t.get('logs_policy_started', params: {'seconds': '$seconds'})
@@ -358,7 +360,7 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
   /// The age of the newest stored record — the number that separates "quiet
   /// because nothing is wrong" from "quiet because nothing is arriving".
   String _ageLine(AppMessages t, Map<String, dynamic> svc) {
-    final age = (svc['data_age_seconds'] as num?)?.toInt();
+    final age = jsonIntOrNull(svc['data_age_seconds']);
     if (age == null) return t.get('logs_policy_no_records');
     return t.get('logs_policy_data_age', params: {'seconds': '$age'});
   }
@@ -576,8 +578,7 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
   /// The api scope's window length, so the hint quotes the server's default
   /// instead of a number this screen invented.
   int _windowSeconds() {
-    final remaining = (_apiScope?['diagnostic_seconds_remaining'] as num?)
-        ?.toInt();
+    final remaining = jsonIntOrNull(_apiScope?['diagnostic_seconds_remaining']);
     if (remaining != null && remaining > 0) return remaining;
     return 600;
   }

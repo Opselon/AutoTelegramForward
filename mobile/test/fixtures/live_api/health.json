@@ -1,0 +1,30 @@
+{
+  "services": [
+    {
+      "name": "core",
+      "online": true,
+      "detail": "uptime=1070s sessions=0",
+      "latency_ms": 0
+    },
+    {
+      "name": "logger",
+      "online": true,
+      "detail": "events=784",
+      "latency_ms": 0
+    },
+    {
+      "name": "api",
+      "online": true,
+      "detail": "this process",
+      "latency_ms": 0
+    },
+    {
+      "name": "web",
+      "online": true,
+      "detail": "http://web:8088/healthz",
+      "latency_ms": 1
+    }
+  ],
+  "status": "healthy",
+  "time": "2026-10-17T10:03:50Z"
+}

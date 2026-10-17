@@ -6,6 +6,8 @@
 /// state machines never depend on a platform plugin.
 library;
 
+import 'json_cast.dart';
+
 import 'package:flutter/foundation.dart';
 
 @immutable
@@ -48,7 +50,7 @@ class StoredCredentials {
       StoredCredentials(
         serverUrl: json['server_url'] as String? ?? '',
         token: json['token'] as String? ?? '',
-        userId: (json['user_id'] as num?)?.toInt() ?? 0,
+        userId: jsonInt(json['user_id']),
         username: json['username'] as String? ?? '',
         password: json['password'] as String? ?? '',
         isAdmin: json['is_admin'] as bool? ?? false,

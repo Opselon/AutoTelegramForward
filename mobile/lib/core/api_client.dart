@@ -14,6 +14,8 @@
 ///     Mutations are single-shot so a duplicate submission is never created.
 library;
 
+import 'json_cast.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -587,7 +589,7 @@ class ApiClient {
     }
     final session = AuthSession(
       token: jwt,
-      userId: (json['user_id'] as num?)?.toInt() ?? 0,
+      userId: jsonInt(json['user_id']),
       username: json['username'] as String? ?? username,
       isAdmin: json['is_admin'] as bool? ?? false,
       serverUrl: baseUrl,
@@ -1284,11 +1286,11 @@ class LoginChallenge {
     state: json['state'] as String? ?? LoginChallengeState.pending,
     message: json['message'] as String? ?? '',
     sessionId: json['session_id'] as String? ?? '',
-    retryAfterSeconds:
-        (json['retry_after_seconds'] as num?)?.toInt() ??
-        (json['retry_after'] as num?)?.toInt() ??
-        0,
-    attemptsRemaining: (json['attempts_remaining'] as num?)?.toInt() ?? 0,
+    retryAfterSeconds: jsonInt(
+      json['retry_after_seconds'],
+      jsonInt(json['retry_after']),
+    ),
+    attemptsRemaining: jsonInt(json['attempts_remaining']),
     phoneNumber: json['phone_number'] as String? ?? '',
   );
 }

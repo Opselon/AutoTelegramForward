@@ -1,0 +1,17 @@
+{
+  "product_version": "2.2.0",
+  "api_version": "1.0.0",
+  "min_supported_client": "1.0.0",
+  "commit_sha": "unknown",
+  "features": [
+    "rules",
+    "filters",
+    "ai_configs",
+    "sessions",
+    "logs",
+    "dlq",
+    "backup",
+    "system_setup",
+    "env_contract"
+  ]
+}

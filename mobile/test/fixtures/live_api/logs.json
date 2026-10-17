@@ -1,0 +1,79 @@
+{
+  "count": 20,
+  "has_more": true,
+  "limit": 20,
+  "logs": [
+    {
+      "category": "http",
+      "correlation_id": "corr-18df48e560f29203",
+      "detail": "{\"bytes\":19,\"correlation_id\":\"corr-18df48e560f29203\",\"ip\":\"172.19.0.5:51430\",\"method\":\"GET\",\"ms\":1,\"path\":\"/api/v1/rules\",\"query\":\"\",\"status\":404,\"ua\":\"curl/8.18.0\",\"user\":\"cli-5094[PHONE]\",\"user_id\":5094[PHONE]}",
+      "error_name": "http",
+      "id": 1792231326,
+      "level": "WARN",
+      "message": "Not Found GET /api/v1/rules",
+      "rule_id": "",
+      "service": "api",
+      "severity": "WARN",
+      "ts": 1792231326,
+      "user_id": 5094837833
+    },
+    {
+      "category": "http",
+      "correlation_id": "corr-18df48e295895040",
+      "detail": "{\"bytes\":36,\"correlation_id\":\"corr-18df48e295895040\",\"ip\":\"172.19.0.5:51430\",\"method\":\"GET\",\"ms\":0,\"path\":\"/api/sessions\",\"query\":\"\",\"status\":401,\"ua\":\"curl/8.18.0\",\"user\":\"\",\"user_id\":0}",
+      "error_name": "http",
+      "id": 1792231314,
+      "level": "WARN",
+      "message": "Unauthorized GET /api/sessions",
+      "rule_id": "",
+      "service": "api",
+      "severity": "WARN",
+      "ts": 1792231314,
+      "user_id": 0
+    },
+    {
+      "category": "http",
+      "correlation_id": "corr-18df48e294ed6d5b",
+      "detail": "{\"bytes\":36,\"correlation_id\":\"corr-18df48e294ed6d5b\",\"ip\":\"172.19.0.5:51430\",\"method\":\"GET\",\"ms\":0,\"path\":\"/api/rules\",\"query\":\"\",\"status\":401,\"ua\":\"curl/8.18.0\",\"user\":\"\",\"user_id\":0}",
+      "error_name": "http",
+      "id": 1792231314,
+      "level": "WARN",
+      "message": "Unauthorized GET /api/rules",
+      "rule_id": "",
+      "service": "api",
+      "severity": "WARN",
+      "ts": 1792231314,
+      "user_id": 0
+    },
+    {
+      "category": "http",
+      "correlation_id": "corr-18df48defdc3ef43",
+      "detail": "{\"bytes\":25,\"correlation_id\":\"corr-18df48defdc3ef43\",\"ip\":\"172.19.0.5:51430\",\"method\":\"GET\",\"ms\":0,\"path\":\"/api/sessions\",\"query\":\"\",\"status\":401,\"ua\":\"curl/8.18.0\",\"user\":\"\",\"user_id\":0}",
+      "error_name": "http",
+      "id": 1792231299,
+      "level": "WARN",
+      "message": "Unauthorized GET /api/sessions",
+      "rule_id": "",
+      "service": "api",
+      "severity": "WARN",
+      "ts": 1792231299,
+      "user_id": 0
+    },
+    {
+      "category": "http",
+      "correlation_id": "corr-18df48defd4f8d65",
+      "detail": "{\"bytes\":25,\"correlation_id\":\"corr-18df48defd4f8d65\",\"ip\":\"172.19.0.5:51430\",\"method\":\"GET\",\"ms\":0,\"path\":\"/api/v1/rules\",\"query\":\"\",\"status\":401,\"ua\":\"curl/8.18.0\",\"user\":\"\",\"user_id\":0}",
+      "error_name": "http",
+      "id": 1792231299,
+      "level": "WARN",
+      "message": "Unauthorized GET /api/v1/rules",
+      "rule_id": "",
+      "service": "api",
+      "severity": "WARN",
+      "ts": 1792231299,
+      "user_id": 0
+    }
+  ],
+  "offset": 0,
+  "total": 782
+}

@@ -1,0 +1,17 @@
+{
+  "active_rules": 1,
+  "active_rules_count": 1,
+  "active_sessions": 1,
+  "active_sessions_count": 1,
+  "atf_core_online": true,
+  "atf_logger_online": true,
+  "bot_username": "",
+  "core_running": true,
+  "total_forwarded_24h": 0,
+  "total_messages_filtered": 0,
+  "total_messages_forwarded": 0,
+  "total_messages_processed": 0,
+  "total_messages_rewritten": 0,
+  "uptime_seconds": 1070,
+  "version": "1.2.2"
+}
