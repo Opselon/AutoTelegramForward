@@ -95,6 +95,11 @@ func main() {
 	dashMux.HandleFunc("GET /sessions/{sessionId}/chats", h.ListChats)
 	dashMux.HandleFunc("POST /sessions/{id}/backup", h.BackupSession)
 	dashMux.HandleFunc("DELETE /sessions/{id}", h.TerminateSession)
+	// Bot-route credentials. The route itself is a per-task setting below; this is
+	// how a dashboard or mobile client attaches the bot a task forwards through.
+	dashMux.HandleFunc("GET /bot-tokens", h.ListBotTokens)
+	dashMux.HandleFunc("POST /bot-tokens", h.CreateBotToken)
+	dashMux.HandleFunc("DELETE /bot-tokens/{id}", h.DeleteBotToken)
 	dashMux.HandleFunc("GET /ai-configs", h.ListAIConfigs)
 	dashMux.HandleFunc("POST /ai-configs", h.CreateAIConfig)
 	dashMux.HandleFunc("PUT /ai-configs/{id}", h.UpdateAIConfig)

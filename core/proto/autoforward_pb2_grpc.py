@@ -3136,3 +3136,161 @@ class AdminControlService:
             timeout,
             metadata,
             _registered_method=True)
+
+
+class BotTokenControlServiceStub:
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.ListBotTokens = channel.unary_unary(
+                '/autoforward.BotTokenControlService/ListBotTokens',
+                request_serializer=autoforward__pb2.ListBotTokensRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListBotTokensResponse.FromString,
+                _registered_method=True)
+        self.CreateBotToken = channel.unary_unary(
+                '/autoforward.BotTokenControlService/CreateBotToken',
+                request_serializer=autoforward__pb2.CreateBotTokenRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.CreateBotTokenResponse.FromString,
+                _registered_method=True)
+        self.DeleteBotToken = channel.unary_unary(
+                '/autoforward.BotTokenControlService/DeleteBotToken',
+                request_serializer=autoforward__pb2.DeleteBotTokenRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+
+
+class BotTokenControlServiceServicer:
+    """Missing associated documentation comment in .proto file."""
+
+    def ListBotTokens(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreateBotToken(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteBotToken(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_BotTokenControlServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'ListBotTokens': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListBotTokens,
+                    request_deserializer=autoforward__pb2.ListBotTokensRequest.FromString,
+                    response_serializer=autoforward__pb2.ListBotTokensResponse.SerializeToString,
+            ),
+            'CreateBotToken': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateBotToken,
+                    request_deserializer=autoforward__pb2.CreateBotTokenRequest.FromString,
+                    response_serializer=autoforward__pb2.CreateBotTokenResponse.SerializeToString,
+            ),
+            'DeleteBotToken': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteBotToken,
+                    request_deserializer=autoforward__pb2.DeleteBotTokenRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'autoforward.BotTokenControlService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('autoforward.BotTokenControlService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class BotTokenControlService:
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def ListBotTokens(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.BotTokenControlService/ListBotTokens',
+            autoforward__pb2.ListBotTokensRequest.SerializeToString,
+            autoforward__pb2.ListBotTokensResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateBotToken(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.BotTokenControlService/CreateBotToken',
+            autoforward__pb2.CreateBotTokenRequest.SerializeToString,
+            autoforward__pb2.CreateBotTokenResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteBotToken(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.BotTokenControlService/DeleteBotToken',
+            autoforward__pb2.DeleteBotTokenRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)

@@ -970,6 +970,39 @@ class ApiClient {
     retryable: false,
   );
 
+  /// The bots this account attached, for the source -> BOT -> target route.
+  /// The token itself is never part of the answer.
+  Future<List<BotTokenInfo>> listBotTokens() => _requestList(
+    method: 'GET',
+    path: '/api/bot-tokens',
+    listKey: 'tokens',
+    fromJson: BotTokenInfo.fromJson,
+  );
+
+  /// Attaches a bot. The server validates the token with Telegram before it
+  /// stores anything, so a bad token throws [ApiException] with its reason
+  /// instead of producing a task that stops forwarding later.
+  Future<BotTokenInfo> createBotToken(String token, {String label = ''}) =>
+      _request(
+        method: 'POST',
+        path: '/api/bot-tokens',
+        body: {'token': token, 'label': label},
+        fromJson: (json) {
+          final raw = json['token'] ?? json;
+          return BotTokenInfo.fromJson(raw as Map<String, dynamic>);
+        },
+        retryable: false,
+      );
+
+  /// Removes a bot. The server refuses (409) while a task still routes through
+  /// it, and that refusal arrives as an [ApiException] the caller can show.
+  Future<void> deleteBotToken(String id) => _request(
+    method: 'DELETE',
+    path: '/api/bot-tokens/$id',
+    fromJson: (json) => json,
+    retryable: false,
+  );
+
   /// Every controllable per-task setting (`GET /api/rules/settings/schema`).
   /// Fetched once and cached by the caller; it is server metadata, not per-rule
   /// state.

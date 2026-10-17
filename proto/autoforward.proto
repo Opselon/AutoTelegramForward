@@ -1159,3 +1159,47 @@ service AdminControlService {
   rpc GetClientSettings(ClientSettingsRequest) returns (ClientSettingsResponse);
   rpc SaveClientCredentials(ClientSaveCredentialsRequest) returns (StatusResponse);
 }
+
+// --------------------------------------------------------------------------- //
+// Bot route: the Telegram bots an owner attached, so a task can post as one    //
+// of them instead of as the owner's personal account.                          //
+// --------------------------------------------------------------------------- //
+message BotTokenInfo {
+  string id = 1;
+  string label = 2;          // resolved @username (never the secret)
+  bool is_active = 3;
+  int64 created_at = 4;
+  int64 updated_at = 5;
+}
+
+message ListBotTokensRequest {
+  int64 owner_user_id = 1;
+}
+
+message ListBotTokensResponse {
+  repeated BotTokenInfo tokens = 1;
+}
+
+message CreateBotTokenRequest {
+  int64 owner_user_id = 1;
+  string label = 2;          // optional: the server resolves the @username
+  string token = 3;          // the secret; validated with Telegram, stored encrypted, never returned
+}
+
+message CreateBotTokenResponse {
+  bool success = 1;
+  string error_code = 2;
+  string message = 3;
+  BotTokenInfo token = 4;
+}
+
+message DeleteBotTokenRequest {
+  string id = 1;
+  int64 owner_user_id = 2;
+}
+
+service BotTokenControlService {
+  rpc ListBotTokens(ListBotTokensRequest) returns (ListBotTokensResponse);
+  rpc CreateBotToken(CreateBotTokenRequest) returns (CreateBotTokenResponse);
+  rpc DeleteBotToken(DeleteBotTokenRequest) returns (StatusResponse);
+}

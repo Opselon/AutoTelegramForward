@@ -8670,6 +8670,354 @@ func (x *ClientSaveCredentialsRequest) GetApiHash() string {
 	return ""
 }
 
+// --------------------------------------------------------------------------- //
+// Bot route: the Telegram bots an owner attached, so a task can post as one    //
+// of them instead of as the owner's personal account.                          //
+// --------------------------------------------------------------------------- //
+type BotTokenInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"` // resolved @username (never the secret)
+	IsActive      bool                   `protobuf:"varint,3,opt,name=is_active,json=isActive,proto3" json:"is_active,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BotTokenInfo) Reset() {
+	*x = BotTokenInfo{}
+	mi := &file_autoforward_proto_msgTypes[115]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BotTokenInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BotTokenInfo) ProtoMessage() {}
+
+func (x *BotTokenInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[115]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BotTokenInfo.ProtoReflect.Descriptor instead.
+func (*BotTokenInfo) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{115}
+}
+
+func (x *BotTokenInfo) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *BotTokenInfo) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *BotTokenInfo) GetIsActive() bool {
+	if x != nil {
+		return x.IsActive
+	}
+	return false
+}
+
+func (x *BotTokenInfo) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *BotTokenInfo) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type ListBotTokensRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBotTokensRequest) Reset() {
+	*x = ListBotTokensRequest{}
+	mi := &file_autoforward_proto_msgTypes[116]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBotTokensRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBotTokensRequest) ProtoMessage() {}
+
+func (x *ListBotTokensRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[116]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBotTokensRequest.ProtoReflect.Descriptor instead.
+func (*ListBotTokensRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{116}
+}
+
+func (x *ListBotTokensRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+type ListBotTokensResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tokens        []*BotTokenInfo        `protobuf:"bytes,1,rep,name=tokens,proto3" json:"tokens,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBotTokensResponse) Reset() {
+	*x = ListBotTokensResponse{}
+	mi := &file_autoforward_proto_msgTypes[117]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBotTokensResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBotTokensResponse) ProtoMessage() {}
+
+func (x *ListBotTokensResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[117]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBotTokensResponse.ProtoReflect.Descriptor instead.
+func (*ListBotTokensResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{117}
+}
+
+func (x *ListBotTokensResponse) GetTokens() []*BotTokenInfo {
+	if x != nil {
+		return x.Tokens
+	}
+	return nil
+}
+
+type CreateBotTokenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"` // optional: the server resolves the @username
+	Token         string                 `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"` // the secret; validated with Telegram, stored encrypted, never returned
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateBotTokenRequest) Reset() {
+	*x = CreateBotTokenRequest{}
+	mi := &file_autoforward_proto_msgTypes[118]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateBotTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateBotTokenRequest) ProtoMessage() {}
+
+func (x *CreateBotTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[118]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateBotTokenRequest.ProtoReflect.Descriptor instead.
+func (*CreateBotTokenRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{118}
+}
+
+func (x *CreateBotTokenRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *CreateBotTokenRequest) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *CreateBotTokenRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+type CreateBotTokenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	ErrorCode     string                 `protobuf:"bytes,2,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	Token         *BotTokenInfo          `protobuf:"bytes,4,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateBotTokenResponse) Reset() {
+	*x = CreateBotTokenResponse{}
+	mi := &file_autoforward_proto_msgTypes[119]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateBotTokenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateBotTokenResponse) ProtoMessage() {}
+
+func (x *CreateBotTokenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[119]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateBotTokenResponse.ProtoReflect.Descriptor instead.
+func (*CreateBotTokenResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{119}
+}
+
+func (x *CreateBotTokenResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *CreateBotTokenResponse) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
+func (x *CreateBotTokenResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *CreateBotTokenResponse) GetToken() *BotTokenInfo {
+	if x != nil {
+		return x.Token
+	}
+	return nil
+}
+
+type DeleteBotTokenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteBotTokenRequest) Reset() {
+	*x = DeleteBotTokenRequest{}
+	mi := &file_autoforward_proto_msgTypes[120]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteBotTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteBotTokenRequest) ProtoMessage() {}
+
+func (x *DeleteBotTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[120]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteBotTokenRequest.ProtoReflect.Descriptor instead.
+func (*DeleteBotTokenRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{120}
+}
+
+func (x *DeleteBotTokenRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *DeleteBotTokenRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
 var File_autoforward_proto protoreflect.FileDescriptor
 
 const file_autoforward_proto_rawDesc = "" +
@@ -9434,7 +9782,32 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x1cClientSaveCredentialsRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x15\n" +
 	"\x06api_id\x18\x02 \x01(\x03R\x05apiId\x12\x19\n" +
-	"\bapi_hash\x18\x03 \x01(\tR\aapiHash*n\n" +
+	"\bapi_hash\x18\x03 \x01(\tR\aapiHash\"\x8f\x01\n" +
+	"\fBotTokenInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x1b\n" +
+	"\tis_active\x18\x03 \x01(\bR\bisActive\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x04 \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\":\n" +
+	"\x14ListBotTokensRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"J\n" +
+	"\x15ListBotTokensResponse\x121\n" +
+	"\x06tokens\x18\x01 \x03(\v2\x19.autoforward.BotTokenInfoR\x06tokens\"g\n" +
+	"\x15CreateBotTokenRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x14\n" +
+	"\x05token\x18\x03 \x01(\tR\x05token\"\x9c\x01\n" +
+	"\x16CreateBotTokenResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x02 \x01(\tR\terrorCode\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\x12/\n" +
+	"\x05token\x18\x04 \x01(\v2\x19.autoforward.BotTokenInfoR\x05token\"K\n" +
+	"\x15DeleteBotTokenRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId*n\n" +
 	"\vRoutingType\x12\x13\n" +
 	"\x0fROUTING_UNKNOWN\x10\x00\x12\x16\n" +
 	"\x12CHANNEL_TO_CHANNEL\x10\x01\x12\f\n" +
@@ -9529,7 +9902,11 @@ const file_autoforward_proto_rawDesc = "" +
 	"\bAddAdmin\x12!.autoforward.AdminAddAdminRequest\x1a\x1b.autoforward.StatusResponse\x12P\n" +
 	"\vRemoveAdmin\x12$.autoforward.AdminRemoveAdminRequest\x1a\x1b.autoforward.StatusResponse\x12\\\n" +
 	"\x11GetClientSettings\x12\".autoforward.ClientSettingsRequest\x1a#.autoforward.ClientSettingsResponse\x12_\n" +
-	"\x15SaveClientCredentials\x12).autoforward.ClientSaveCredentialsRequest\x1a\x1b.autoforward.StatusResponseB%Z#autoforward/api/proto;autoforwardpbb\x06proto3"
+	"\x15SaveClientCredentials\x12).autoforward.ClientSaveCredentialsRequest\x1a\x1b.autoforward.StatusResponse2\x9e\x02\n" +
+	"\x16BotTokenControlService\x12V\n" +
+	"\rListBotTokens\x12!.autoforward.ListBotTokensRequest\x1a\".autoforward.ListBotTokensResponse\x12Y\n" +
+	"\x0eCreateBotToken\x12\".autoforward.CreateBotTokenRequest\x1a#.autoforward.CreateBotTokenResponse\x12Q\n" +
+	"\x0eDeleteBotToken\x12\".autoforward.DeleteBotTokenRequest\x1a\x1b.autoforward.StatusResponseB%Z#autoforward/api/proto;autoforwardpbb\x06proto3"
 
 var (
 	file_autoforward_proto_rawDescOnce sync.Once
@@ -9544,7 +9921,7 @@ func file_autoforward_proto_rawDescGZIP() []byte {
 }
 
 var file_autoforward_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_autoforward_proto_msgTypes = make([]protoimpl.MessageInfo, 121)
+var file_autoforward_proto_msgTypes = make([]protoimpl.MessageInfo, 127)
 var file_autoforward_proto_goTypes = []any{
 	(RoutingType)(0),                     // 0: autoforward.RoutingType
 	(ForwardMode)(0),                     // 1: autoforward.ForwardMode
@@ -9663,12 +10040,18 @@ var file_autoforward_proto_goTypes = []any{
 	(*ClientSettingsRequest)(nil),        // 114: autoforward.ClientSettingsRequest
 	(*ClientSettingsResponse)(nil),       // 115: autoforward.ClientSettingsResponse
 	(*ClientSaveCredentialsRequest)(nil), // 116: autoforward.ClientSaveCredentialsRequest
-	nil,                                  // 117: autoforward.LogStatsResponse.ByLevelEntry
-	nil,                                  // 118: autoforward.LogStatsResponse.ByCategoryEntry
-	nil,                                  // 119: autoforward.LogStatsResponse.ByRuleEntry
-	nil,                                  // 120: autoforward.LogStatsResponse.ByServiceEntry
-	nil,                                  // 121: autoforward.BackupExportResponse.CountsEntry
-	nil,                                  // 122: autoforward.BackupImportResponse.StatsEntry
+	(*BotTokenInfo)(nil),                 // 117: autoforward.BotTokenInfo
+	(*ListBotTokensRequest)(nil),         // 118: autoforward.ListBotTokensRequest
+	(*ListBotTokensResponse)(nil),        // 119: autoforward.ListBotTokensResponse
+	(*CreateBotTokenRequest)(nil),        // 120: autoforward.CreateBotTokenRequest
+	(*CreateBotTokenResponse)(nil),       // 121: autoforward.CreateBotTokenResponse
+	(*DeleteBotTokenRequest)(nil),        // 122: autoforward.DeleteBotTokenRequest
+	nil,                                  // 123: autoforward.LogStatsResponse.ByLevelEntry
+	nil,                                  // 124: autoforward.LogStatsResponse.ByCategoryEntry
+	nil,                                  // 125: autoforward.LogStatsResponse.ByRuleEntry
+	nil,                                  // 126: autoforward.LogStatsResponse.ByServiceEntry
+	nil,                                  // 127: autoforward.BackupExportResponse.CountsEntry
+	nil,                                  // 128: autoforward.BackupImportResponse.StatsEntry
 }
 var file_autoforward_proto_depIdxs = []int32{
 	3,   // 0: autoforward.ListSessionsResponse.sessions:type_name -> autoforward.SessionInfo
@@ -9689,154 +10072,162 @@ var file_autoforward_proto_depIdxs = []int32{
 	47,  // 15: autoforward.SavePromptTemplateRequest.template:type_name -> autoforward.PromptTemplate
 	59,  // 16: autoforward.LogRequest.entry:type_name -> autoforward.LogEntry
 	59,  // 17: autoforward.QueryLogsResponse.logs:type_name -> autoforward.LogEntry
-	117, // 18: autoforward.LogStatsResponse.by_level:type_name -> autoforward.LogStatsResponse.ByLevelEntry
-	118, // 19: autoforward.LogStatsResponse.by_category:type_name -> autoforward.LogStatsResponse.ByCategoryEntry
-	119, // 20: autoforward.LogStatsResponse.by_rule:type_name -> autoforward.LogStatsResponse.ByRuleEntry
-	120, // 21: autoforward.LogStatsResponse.by_service:type_name -> autoforward.LogStatsResponse.ByServiceEntry
+	123, // 18: autoforward.LogStatsResponse.by_level:type_name -> autoforward.LogStatsResponse.ByLevelEntry
+	124, // 19: autoforward.LogStatsResponse.by_category:type_name -> autoforward.LogStatsResponse.ByCategoryEntry
+	125, // 20: autoforward.LogStatsResponse.by_rule:type_name -> autoforward.LogStatsResponse.ByRuleEntry
+	126, // 21: autoforward.LogStatsResponse.by_service:type_name -> autoforward.LogStatsResponse.ByServiceEntry
 	70,  // 22: autoforward.ListDeadLetterResponse.entries:type_name -> autoforward.DeadLetterEntry
 	76,  // 23: autoforward.DeliveryStatsResponse.rules:type_name -> autoforward.RuleLiveStat
 	77,  // 24: autoforward.DeliveryStatsResponse.errors:type_name -> autoforward.RecentError
 	81,  // 25: autoforward.QueryAuditEventsResponse.events:type_name -> autoforward.AuditEventEntry
-	121, // 26: autoforward.BackupExportResponse.counts:type_name -> autoforward.BackupExportResponse.CountsEntry
-	122, // 27: autoforward.BackupImportResponse.stats:type_name -> autoforward.BackupImportResponse.StatsEntry
+	127, // 26: autoforward.BackupExportResponse.counts:type_name -> autoforward.BackupExportResponse.CountsEntry
+	128, // 27: autoforward.BackupImportResponse.stats:type_name -> autoforward.BackupImportResponse.StatsEntry
 	88,  // 28: autoforward.RegisterAccountResponse.account:type_name -> autoforward.WebAccount
 	88,  // 29: autoforward.LoginAccountResponse.account:type_name -> autoforward.WebAccount
 	100, // 30: autoforward.AdminListUsersResponse.users:type_name -> autoforward.AdminUser
 	109, // 31: autoforward.AdminListAdminsResponse.admins:type_name -> autoforward.AdminAdministrator
-	87,  // 32: autoforward.BackupImportResponse.StatsEntry.value:type_name -> autoforward.EntityImportStats
-	4,   // 33: autoforward.SessionControlService.ListSessions:input_type -> autoforward.ListSessionsRequest
-	6,   // 34: autoforward.SessionControlService.StartLogin:input_type -> autoforward.StartLoginRequest
-	8,   // 35: autoforward.SessionControlService.SubmitCode:input_type -> autoforward.SubmitCodeRequest
-	10,  // 36: autoforward.SessionControlService.SubmitPassword:input_type -> autoforward.SubmitPasswordRequest
-	12,  // 37: autoforward.SessionControlService.BackupSession:input_type -> autoforward.BackupSessionRequest
-	14,  // 38: autoforward.SessionControlService.RestoreSession:input_type -> autoforward.RestoreSessionRequest
-	16,  // 39: autoforward.SessionControlService.TerminateSession:input_type -> autoforward.TerminateSessionRequest
-	19,  // 40: autoforward.SessionControlService.ResolveChat:input_type -> autoforward.ResolveChatRequest
-	21,  // 41: autoforward.SessionControlService.ListChats:input_type -> autoforward.ListChatsRequest
-	30,  // 42: autoforward.ForwardRuleControlService.ListRules:input_type -> autoforward.ListRulesRequest
-	31,  // 43: autoforward.ForwardRuleControlService.GetRule:input_type -> autoforward.GetRuleRequest
-	18,  // 44: autoforward.ForwardRuleControlService.CreateRule:input_type -> autoforward.CreateRuleRequest
-	24,  // 45: autoforward.ForwardRuleControlService.UpdateRule:input_type -> autoforward.UpdateRuleRequest
-	29,  // 46: autoforward.ForwardRuleControlService.DeleteRule:input_type -> autoforward.DeleteRuleRequest
-	67,  // 47: autoforward.ForwardRuleControlService.TestRule:input_type -> autoforward.TestRuleRequest
-	78,  // 48: autoforward.ForwardRuleControlService.PauseRule:input_type -> autoforward.PauseRuleRequest
-	78,  // 49: autoforward.ForwardRuleControlService.ResumeRule:input_type -> autoforward.PauseRuleRequest
-	25,  // 50: autoforward.ForwardRuleControlService.GetRuleSettings:input_type -> autoforward.RuleSettingsRequest
-	27,  // 51: autoforward.ForwardRuleControlService.UpdateRuleSettings:input_type -> autoforward.UpdateRuleSettingsRequest
-	28,  // 52: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:input_type -> autoforward.RuleSettingsSchemaRequest
-	74,  // 53: autoforward.DeliveryControlService.GetDeliveryStats:input_type -> autoforward.DeliveryStatsRequest
-	69,  // 54: autoforward.DeliveryControlService.ListDeadLetter:input_type -> autoforward.ListDeadLetterRequest
-	72,  // 55: autoforward.DeliveryControlService.ReplayDeadLetter:input_type -> autoforward.ReplayDeadLetterRequest
-	73,  // 56: autoforward.DeliveryControlService.PurgeDeadLetter:input_type -> autoforward.PurgeDeadLetterRequest
-	37,  // 57: autoforward.FilterControlService.ListFilters:input_type -> autoforward.ListFiltersRequest
-	34,  // 58: autoforward.FilterControlService.CreateFilter:input_type -> autoforward.CreateFilterRequest
-	35,  // 59: autoforward.FilterControlService.UpdateFilter:input_type -> autoforward.UpdateFilterRequest
-	36,  // 60: autoforward.FilterControlService.DeleteFilter:input_type -> autoforward.DeleteFilterRequest
-	43,  // 61: autoforward.AIControlService.ListAIConfigs:input_type -> autoforward.ListAIConfigsRequest
-	40,  // 62: autoforward.AIControlService.CreateAIConfig:input_type -> autoforward.CreateAIConfigRequest
-	41,  // 63: autoforward.AIControlService.UpdateAIConfig:input_type -> autoforward.UpdateAIConfigRequest
-	42,  // 64: autoforward.AIControlService.DeleteAIConfig:input_type -> autoforward.DeleteAIConfigRequest
-	45,  // 65: autoforward.AIControlService.TestAIRewrite:input_type -> autoforward.TestAIRewriteRequest
-	48,  // 66: autoforward.AIControlService.ListPromptTemplates:input_type -> autoforward.ListPromptTemplatesRequest
-	50,  // 67: autoforward.AIControlService.SavePromptTemplate:input_type -> autoforward.SavePromptTemplateRequest
-	51,  // 68: autoforward.AIControlService.DeletePromptTemplate:input_type -> autoforward.DeletePromptTemplateRequest
-	52,  // 69: autoforward.AIControlService.TestPrompt:input_type -> autoforward.TestPromptRequest
-	54,  // 70: autoforward.SystemStatusControlService.GetSystemStats:input_type -> autoforward.SystemStatsRequest
-	56,  // 71: autoforward.SystemStatusControlService.GetLogPolicy:input_type -> autoforward.LogPolicyRequest
-	57,  // 72: autoforward.SystemStatusControlService.SetLogPolicy:input_type -> autoforward.SetLogPolicyRequest
-	80,  // 73: autoforward.AuditControlService.QueryAuditEvents:input_type -> autoforward.QueryAuditEventsRequest
-	60,  // 74: autoforward.LogControlService.Log:input_type -> autoforward.LogRequest
-	61,  // 75: autoforward.LogControlService.QueryLogs:input_type -> autoforward.QueryLogsRequest
-	65,  // 76: autoforward.LogControlService.LogStats:input_type -> autoforward.LogStatsRequest
-	62,  // 77: autoforward.LogControlService.PurgeLogs:input_type -> autoforward.PurgeLogsRequest
-	83,  // 78: autoforward.BackupControlService.BackupExport:input_type -> autoforward.BackupExportRequest
-	85,  // 79: autoforward.BackupControlService.BackupImport:input_type -> autoforward.BackupImportRequest
-	89,  // 80: autoforward.AccountControlService.RegisterAccount:input_type -> autoforward.RegisterAccountRequest
-	91,  // 81: autoforward.AccountControlService.LoginAccount:input_type -> autoforward.LoginAccountRequest
-	93,  // 82: autoforward.AccountControlService.ValidateToken:input_type -> autoforward.ValidateTokenRequest
-	95,  // 83: autoforward.AccountControlService.IssueWebToken:input_type -> autoforward.IssueWebTokenRequest
-	96,  // 84: autoforward.AccountControlService.ChangePassword:input_type -> autoforward.ChangePasswordRequest
-	97,  // 85: autoforward.AccountControlService.GetAccount:input_type -> autoforward.GetAccountRequest
-	98,  // 86: autoforward.AdminControlService.GetOverview:input_type -> autoforward.AdminOverviewRequest
-	101, // 87: autoforward.AdminControlService.ListUsers:input_type -> autoforward.AdminListUsersRequest
-	103, // 88: autoforward.AdminControlService.SetUserStatus:input_type -> autoforward.AdminSetUserStatusRequest
-	104, // 89: autoforward.AdminControlService.Broadcast:input_type -> autoforward.AdminBroadcastRequest
-	106, // 90: autoforward.AdminControlService.GetSettings:input_type -> autoforward.AdminGetSettingsRequest
-	108, // 91: autoforward.AdminControlService.SaveSettings:input_type -> autoforward.AdminSaveSettingsRequest
-	110, // 92: autoforward.AdminControlService.ListAdmins:input_type -> autoforward.AdminListAdminsRequest
-	112, // 93: autoforward.AdminControlService.AddAdmin:input_type -> autoforward.AdminAddAdminRequest
-	113, // 94: autoforward.AdminControlService.RemoveAdmin:input_type -> autoforward.AdminRemoveAdminRequest
-	114, // 95: autoforward.AdminControlService.GetClientSettings:input_type -> autoforward.ClientSettingsRequest
-	116, // 96: autoforward.AdminControlService.SaveClientCredentials:input_type -> autoforward.ClientSaveCredentialsRequest
-	5,   // 97: autoforward.SessionControlService.ListSessions:output_type -> autoforward.ListSessionsResponse
-	7,   // 98: autoforward.SessionControlService.StartLogin:output_type -> autoforward.StartLoginResponse
-	9,   // 99: autoforward.SessionControlService.SubmitCode:output_type -> autoforward.SubmitCodeResponse
-	11,  // 100: autoforward.SessionControlService.SubmitPassword:output_type -> autoforward.SubmitPasswordResponse
-	13,  // 101: autoforward.SessionControlService.BackupSession:output_type -> autoforward.BackupSessionResponse
-	15,  // 102: autoforward.SessionControlService.RestoreSession:output_type -> autoforward.RestoreSessionResponse
-	2,   // 103: autoforward.SessionControlService.TerminateSession:output_type -> autoforward.StatusResponse
-	20,  // 104: autoforward.SessionControlService.ResolveChat:output_type -> autoforward.ResolveChatResponse
-	23,  // 105: autoforward.SessionControlService.ListChats:output_type -> autoforward.ListChatsResponse
-	32,  // 106: autoforward.ForwardRuleControlService.ListRules:output_type -> autoforward.ListRulesResponse
-	17,  // 107: autoforward.ForwardRuleControlService.GetRule:output_type -> autoforward.ForwardRule
-	17,  // 108: autoforward.ForwardRuleControlService.CreateRule:output_type -> autoforward.ForwardRule
-	17,  // 109: autoforward.ForwardRuleControlService.UpdateRule:output_type -> autoforward.ForwardRule
-	2,   // 110: autoforward.ForwardRuleControlService.DeleteRule:output_type -> autoforward.StatusResponse
-	68,  // 111: autoforward.ForwardRuleControlService.TestRule:output_type -> autoforward.TestRuleResponse
-	79,  // 112: autoforward.ForwardRuleControlService.PauseRule:output_type -> autoforward.RuleActionResponse
-	79,  // 113: autoforward.ForwardRuleControlService.ResumeRule:output_type -> autoforward.RuleActionResponse
-	26,  // 114: autoforward.ForwardRuleControlService.GetRuleSettings:output_type -> autoforward.RuleSettingsResponse
-	26,  // 115: autoforward.ForwardRuleControlService.UpdateRuleSettings:output_type -> autoforward.RuleSettingsResponse
-	26,  // 116: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:output_type -> autoforward.RuleSettingsResponse
-	75,  // 117: autoforward.DeliveryControlService.GetDeliveryStats:output_type -> autoforward.DeliveryStatsResponse
-	71,  // 118: autoforward.DeliveryControlService.ListDeadLetter:output_type -> autoforward.ListDeadLetterResponse
-	79,  // 119: autoforward.DeliveryControlService.ReplayDeadLetter:output_type -> autoforward.RuleActionResponse
-	79,  // 120: autoforward.DeliveryControlService.PurgeDeadLetter:output_type -> autoforward.RuleActionResponse
-	38,  // 121: autoforward.FilterControlService.ListFilters:output_type -> autoforward.ListFiltersResponse
-	33,  // 122: autoforward.FilterControlService.CreateFilter:output_type -> autoforward.FilterRule
-	33,  // 123: autoforward.FilterControlService.UpdateFilter:output_type -> autoforward.FilterRule
-	2,   // 124: autoforward.FilterControlService.DeleteFilter:output_type -> autoforward.StatusResponse
-	44,  // 125: autoforward.AIControlService.ListAIConfigs:output_type -> autoforward.ListAIConfigsResponse
-	39,  // 126: autoforward.AIControlService.CreateAIConfig:output_type -> autoforward.AIConfig
-	39,  // 127: autoforward.AIControlService.UpdateAIConfig:output_type -> autoforward.AIConfig
-	2,   // 128: autoforward.AIControlService.DeleteAIConfig:output_type -> autoforward.StatusResponse
-	46,  // 129: autoforward.AIControlService.TestAIRewrite:output_type -> autoforward.TestAIRewriteResponse
-	49,  // 130: autoforward.AIControlService.ListPromptTemplates:output_type -> autoforward.ListPromptTemplatesResponse
-	47,  // 131: autoforward.AIControlService.SavePromptTemplate:output_type -> autoforward.PromptTemplate
-	2,   // 132: autoforward.AIControlService.DeletePromptTemplate:output_type -> autoforward.StatusResponse
-	53,  // 133: autoforward.AIControlService.TestPrompt:output_type -> autoforward.TestPromptResponse
-	55,  // 134: autoforward.SystemStatusControlService.GetSystemStats:output_type -> autoforward.SystemStatsResponse
-	58,  // 135: autoforward.SystemStatusControlService.GetLogPolicy:output_type -> autoforward.LogPolicyResponse
-	58,  // 136: autoforward.SystemStatusControlService.SetLogPolicy:output_type -> autoforward.LogPolicyResponse
-	82,  // 137: autoforward.AuditControlService.QueryAuditEvents:output_type -> autoforward.QueryAuditEventsResponse
-	2,   // 138: autoforward.LogControlService.Log:output_type -> autoforward.StatusResponse
-	64,  // 139: autoforward.LogControlService.QueryLogs:output_type -> autoforward.QueryLogsResponse
-	66,  // 140: autoforward.LogControlService.LogStats:output_type -> autoforward.LogStatsResponse
-	63,  // 141: autoforward.LogControlService.PurgeLogs:output_type -> autoforward.PurgeLogsResponse
-	84,  // 142: autoforward.BackupControlService.BackupExport:output_type -> autoforward.BackupExportResponse
-	86,  // 143: autoforward.BackupControlService.BackupImport:output_type -> autoforward.BackupImportResponse
-	90,  // 144: autoforward.AccountControlService.RegisterAccount:output_type -> autoforward.RegisterAccountResponse
-	92,  // 145: autoforward.AccountControlService.LoginAccount:output_type -> autoforward.LoginAccountResponse
-	94,  // 146: autoforward.AccountControlService.ValidateToken:output_type -> autoforward.ValidateTokenResponse
-	92,  // 147: autoforward.AccountControlService.IssueWebToken:output_type -> autoforward.LoginAccountResponse
-	2,   // 148: autoforward.AccountControlService.ChangePassword:output_type -> autoforward.StatusResponse
-	88,  // 149: autoforward.AccountControlService.GetAccount:output_type -> autoforward.WebAccount
-	99,  // 150: autoforward.AdminControlService.GetOverview:output_type -> autoforward.AdminOverviewResponse
-	102, // 151: autoforward.AdminControlService.ListUsers:output_type -> autoforward.AdminListUsersResponse
-	2,   // 152: autoforward.AdminControlService.SetUserStatus:output_type -> autoforward.StatusResponse
-	105, // 153: autoforward.AdminControlService.Broadcast:output_type -> autoforward.AdminBroadcastResponse
-	107, // 154: autoforward.AdminControlService.GetSettings:output_type -> autoforward.AdminSettingsResponse
-	2,   // 155: autoforward.AdminControlService.SaveSettings:output_type -> autoforward.StatusResponse
-	111, // 156: autoforward.AdminControlService.ListAdmins:output_type -> autoforward.AdminListAdminsResponse
-	2,   // 157: autoforward.AdminControlService.AddAdmin:output_type -> autoforward.StatusResponse
-	2,   // 158: autoforward.AdminControlService.RemoveAdmin:output_type -> autoforward.StatusResponse
-	115, // 159: autoforward.AdminControlService.GetClientSettings:output_type -> autoforward.ClientSettingsResponse
-	2,   // 160: autoforward.AdminControlService.SaveClientCredentials:output_type -> autoforward.StatusResponse
-	97,  // [97:161] is the sub-list for method output_type
-	33,  // [33:97] is the sub-list for method input_type
-	33,  // [33:33] is the sub-list for extension type_name
-	33,  // [33:33] is the sub-list for extension extendee
-	0,   // [0:33] is the sub-list for field type_name
+	117, // 32: autoforward.ListBotTokensResponse.tokens:type_name -> autoforward.BotTokenInfo
+	117, // 33: autoforward.CreateBotTokenResponse.token:type_name -> autoforward.BotTokenInfo
+	87,  // 34: autoforward.BackupImportResponse.StatsEntry.value:type_name -> autoforward.EntityImportStats
+	4,   // 35: autoforward.SessionControlService.ListSessions:input_type -> autoforward.ListSessionsRequest
+	6,   // 36: autoforward.SessionControlService.StartLogin:input_type -> autoforward.StartLoginRequest
+	8,   // 37: autoforward.SessionControlService.SubmitCode:input_type -> autoforward.SubmitCodeRequest
+	10,  // 38: autoforward.SessionControlService.SubmitPassword:input_type -> autoforward.SubmitPasswordRequest
+	12,  // 39: autoforward.SessionControlService.BackupSession:input_type -> autoforward.BackupSessionRequest
+	14,  // 40: autoforward.SessionControlService.RestoreSession:input_type -> autoforward.RestoreSessionRequest
+	16,  // 41: autoforward.SessionControlService.TerminateSession:input_type -> autoforward.TerminateSessionRequest
+	19,  // 42: autoforward.SessionControlService.ResolveChat:input_type -> autoforward.ResolveChatRequest
+	21,  // 43: autoforward.SessionControlService.ListChats:input_type -> autoforward.ListChatsRequest
+	30,  // 44: autoforward.ForwardRuleControlService.ListRules:input_type -> autoforward.ListRulesRequest
+	31,  // 45: autoforward.ForwardRuleControlService.GetRule:input_type -> autoforward.GetRuleRequest
+	18,  // 46: autoforward.ForwardRuleControlService.CreateRule:input_type -> autoforward.CreateRuleRequest
+	24,  // 47: autoforward.ForwardRuleControlService.UpdateRule:input_type -> autoforward.UpdateRuleRequest
+	29,  // 48: autoforward.ForwardRuleControlService.DeleteRule:input_type -> autoforward.DeleteRuleRequest
+	67,  // 49: autoforward.ForwardRuleControlService.TestRule:input_type -> autoforward.TestRuleRequest
+	78,  // 50: autoforward.ForwardRuleControlService.PauseRule:input_type -> autoforward.PauseRuleRequest
+	78,  // 51: autoforward.ForwardRuleControlService.ResumeRule:input_type -> autoforward.PauseRuleRequest
+	25,  // 52: autoforward.ForwardRuleControlService.GetRuleSettings:input_type -> autoforward.RuleSettingsRequest
+	27,  // 53: autoforward.ForwardRuleControlService.UpdateRuleSettings:input_type -> autoforward.UpdateRuleSettingsRequest
+	28,  // 54: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:input_type -> autoforward.RuleSettingsSchemaRequest
+	74,  // 55: autoforward.DeliveryControlService.GetDeliveryStats:input_type -> autoforward.DeliveryStatsRequest
+	69,  // 56: autoforward.DeliveryControlService.ListDeadLetter:input_type -> autoforward.ListDeadLetterRequest
+	72,  // 57: autoforward.DeliveryControlService.ReplayDeadLetter:input_type -> autoforward.ReplayDeadLetterRequest
+	73,  // 58: autoforward.DeliveryControlService.PurgeDeadLetter:input_type -> autoforward.PurgeDeadLetterRequest
+	37,  // 59: autoforward.FilterControlService.ListFilters:input_type -> autoforward.ListFiltersRequest
+	34,  // 60: autoforward.FilterControlService.CreateFilter:input_type -> autoforward.CreateFilterRequest
+	35,  // 61: autoforward.FilterControlService.UpdateFilter:input_type -> autoforward.UpdateFilterRequest
+	36,  // 62: autoforward.FilterControlService.DeleteFilter:input_type -> autoforward.DeleteFilterRequest
+	43,  // 63: autoforward.AIControlService.ListAIConfigs:input_type -> autoforward.ListAIConfigsRequest
+	40,  // 64: autoforward.AIControlService.CreateAIConfig:input_type -> autoforward.CreateAIConfigRequest
+	41,  // 65: autoforward.AIControlService.UpdateAIConfig:input_type -> autoforward.UpdateAIConfigRequest
+	42,  // 66: autoforward.AIControlService.DeleteAIConfig:input_type -> autoforward.DeleteAIConfigRequest
+	45,  // 67: autoforward.AIControlService.TestAIRewrite:input_type -> autoforward.TestAIRewriteRequest
+	48,  // 68: autoforward.AIControlService.ListPromptTemplates:input_type -> autoforward.ListPromptTemplatesRequest
+	50,  // 69: autoforward.AIControlService.SavePromptTemplate:input_type -> autoforward.SavePromptTemplateRequest
+	51,  // 70: autoforward.AIControlService.DeletePromptTemplate:input_type -> autoforward.DeletePromptTemplateRequest
+	52,  // 71: autoforward.AIControlService.TestPrompt:input_type -> autoforward.TestPromptRequest
+	54,  // 72: autoforward.SystemStatusControlService.GetSystemStats:input_type -> autoforward.SystemStatsRequest
+	56,  // 73: autoforward.SystemStatusControlService.GetLogPolicy:input_type -> autoforward.LogPolicyRequest
+	57,  // 74: autoforward.SystemStatusControlService.SetLogPolicy:input_type -> autoforward.SetLogPolicyRequest
+	80,  // 75: autoforward.AuditControlService.QueryAuditEvents:input_type -> autoforward.QueryAuditEventsRequest
+	60,  // 76: autoforward.LogControlService.Log:input_type -> autoforward.LogRequest
+	61,  // 77: autoforward.LogControlService.QueryLogs:input_type -> autoforward.QueryLogsRequest
+	65,  // 78: autoforward.LogControlService.LogStats:input_type -> autoforward.LogStatsRequest
+	62,  // 79: autoforward.LogControlService.PurgeLogs:input_type -> autoforward.PurgeLogsRequest
+	83,  // 80: autoforward.BackupControlService.BackupExport:input_type -> autoforward.BackupExportRequest
+	85,  // 81: autoforward.BackupControlService.BackupImport:input_type -> autoforward.BackupImportRequest
+	89,  // 82: autoforward.AccountControlService.RegisterAccount:input_type -> autoforward.RegisterAccountRequest
+	91,  // 83: autoforward.AccountControlService.LoginAccount:input_type -> autoforward.LoginAccountRequest
+	93,  // 84: autoforward.AccountControlService.ValidateToken:input_type -> autoforward.ValidateTokenRequest
+	95,  // 85: autoforward.AccountControlService.IssueWebToken:input_type -> autoforward.IssueWebTokenRequest
+	96,  // 86: autoforward.AccountControlService.ChangePassword:input_type -> autoforward.ChangePasswordRequest
+	97,  // 87: autoforward.AccountControlService.GetAccount:input_type -> autoforward.GetAccountRequest
+	98,  // 88: autoforward.AdminControlService.GetOverview:input_type -> autoforward.AdminOverviewRequest
+	101, // 89: autoforward.AdminControlService.ListUsers:input_type -> autoforward.AdminListUsersRequest
+	103, // 90: autoforward.AdminControlService.SetUserStatus:input_type -> autoforward.AdminSetUserStatusRequest
+	104, // 91: autoforward.AdminControlService.Broadcast:input_type -> autoforward.AdminBroadcastRequest
+	106, // 92: autoforward.AdminControlService.GetSettings:input_type -> autoforward.AdminGetSettingsRequest
+	108, // 93: autoforward.AdminControlService.SaveSettings:input_type -> autoforward.AdminSaveSettingsRequest
+	110, // 94: autoforward.AdminControlService.ListAdmins:input_type -> autoforward.AdminListAdminsRequest
+	112, // 95: autoforward.AdminControlService.AddAdmin:input_type -> autoforward.AdminAddAdminRequest
+	113, // 96: autoforward.AdminControlService.RemoveAdmin:input_type -> autoforward.AdminRemoveAdminRequest
+	114, // 97: autoforward.AdminControlService.GetClientSettings:input_type -> autoforward.ClientSettingsRequest
+	116, // 98: autoforward.AdminControlService.SaveClientCredentials:input_type -> autoforward.ClientSaveCredentialsRequest
+	118, // 99: autoforward.BotTokenControlService.ListBotTokens:input_type -> autoforward.ListBotTokensRequest
+	120, // 100: autoforward.BotTokenControlService.CreateBotToken:input_type -> autoforward.CreateBotTokenRequest
+	122, // 101: autoforward.BotTokenControlService.DeleteBotToken:input_type -> autoforward.DeleteBotTokenRequest
+	5,   // 102: autoforward.SessionControlService.ListSessions:output_type -> autoforward.ListSessionsResponse
+	7,   // 103: autoforward.SessionControlService.StartLogin:output_type -> autoforward.StartLoginResponse
+	9,   // 104: autoforward.SessionControlService.SubmitCode:output_type -> autoforward.SubmitCodeResponse
+	11,  // 105: autoforward.SessionControlService.SubmitPassword:output_type -> autoforward.SubmitPasswordResponse
+	13,  // 106: autoforward.SessionControlService.BackupSession:output_type -> autoforward.BackupSessionResponse
+	15,  // 107: autoforward.SessionControlService.RestoreSession:output_type -> autoforward.RestoreSessionResponse
+	2,   // 108: autoforward.SessionControlService.TerminateSession:output_type -> autoforward.StatusResponse
+	20,  // 109: autoforward.SessionControlService.ResolveChat:output_type -> autoforward.ResolveChatResponse
+	23,  // 110: autoforward.SessionControlService.ListChats:output_type -> autoforward.ListChatsResponse
+	32,  // 111: autoforward.ForwardRuleControlService.ListRules:output_type -> autoforward.ListRulesResponse
+	17,  // 112: autoforward.ForwardRuleControlService.GetRule:output_type -> autoforward.ForwardRule
+	17,  // 113: autoforward.ForwardRuleControlService.CreateRule:output_type -> autoforward.ForwardRule
+	17,  // 114: autoforward.ForwardRuleControlService.UpdateRule:output_type -> autoforward.ForwardRule
+	2,   // 115: autoforward.ForwardRuleControlService.DeleteRule:output_type -> autoforward.StatusResponse
+	68,  // 116: autoforward.ForwardRuleControlService.TestRule:output_type -> autoforward.TestRuleResponse
+	79,  // 117: autoforward.ForwardRuleControlService.PauseRule:output_type -> autoforward.RuleActionResponse
+	79,  // 118: autoforward.ForwardRuleControlService.ResumeRule:output_type -> autoforward.RuleActionResponse
+	26,  // 119: autoforward.ForwardRuleControlService.GetRuleSettings:output_type -> autoforward.RuleSettingsResponse
+	26,  // 120: autoforward.ForwardRuleControlService.UpdateRuleSettings:output_type -> autoforward.RuleSettingsResponse
+	26,  // 121: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:output_type -> autoforward.RuleSettingsResponse
+	75,  // 122: autoforward.DeliveryControlService.GetDeliveryStats:output_type -> autoforward.DeliveryStatsResponse
+	71,  // 123: autoforward.DeliveryControlService.ListDeadLetter:output_type -> autoforward.ListDeadLetterResponse
+	79,  // 124: autoforward.DeliveryControlService.ReplayDeadLetter:output_type -> autoforward.RuleActionResponse
+	79,  // 125: autoforward.DeliveryControlService.PurgeDeadLetter:output_type -> autoforward.RuleActionResponse
+	38,  // 126: autoforward.FilterControlService.ListFilters:output_type -> autoforward.ListFiltersResponse
+	33,  // 127: autoforward.FilterControlService.CreateFilter:output_type -> autoforward.FilterRule
+	33,  // 128: autoforward.FilterControlService.UpdateFilter:output_type -> autoforward.FilterRule
+	2,   // 129: autoforward.FilterControlService.DeleteFilter:output_type -> autoforward.StatusResponse
+	44,  // 130: autoforward.AIControlService.ListAIConfigs:output_type -> autoforward.ListAIConfigsResponse
+	39,  // 131: autoforward.AIControlService.CreateAIConfig:output_type -> autoforward.AIConfig
+	39,  // 132: autoforward.AIControlService.UpdateAIConfig:output_type -> autoforward.AIConfig
+	2,   // 133: autoforward.AIControlService.DeleteAIConfig:output_type -> autoforward.StatusResponse
+	46,  // 134: autoforward.AIControlService.TestAIRewrite:output_type -> autoforward.TestAIRewriteResponse
+	49,  // 135: autoforward.AIControlService.ListPromptTemplates:output_type -> autoforward.ListPromptTemplatesResponse
+	47,  // 136: autoforward.AIControlService.SavePromptTemplate:output_type -> autoforward.PromptTemplate
+	2,   // 137: autoforward.AIControlService.DeletePromptTemplate:output_type -> autoforward.StatusResponse
+	53,  // 138: autoforward.AIControlService.TestPrompt:output_type -> autoforward.TestPromptResponse
+	55,  // 139: autoforward.SystemStatusControlService.GetSystemStats:output_type -> autoforward.SystemStatsResponse
+	58,  // 140: autoforward.SystemStatusControlService.GetLogPolicy:output_type -> autoforward.LogPolicyResponse
+	58,  // 141: autoforward.SystemStatusControlService.SetLogPolicy:output_type -> autoforward.LogPolicyResponse
+	82,  // 142: autoforward.AuditControlService.QueryAuditEvents:output_type -> autoforward.QueryAuditEventsResponse
+	2,   // 143: autoforward.LogControlService.Log:output_type -> autoforward.StatusResponse
+	64,  // 144: autoforward.LogControlService.QueryLogs:output_type -> autoforward.QueryLogsResponse
+	66,  // 145: autoforward.LogControlService.LogStats:output_type -> autoforward.LogStatsResponse
+	63,  // 146: autoforward.LogControlService.PurgeLogs:output_type -> autoforward.PurgeLogsResponse
+	84,  // 147: autoforward.BackupControlService.BackupExport:output_type -> autoforward.BackupExportResponse
+	86,  // 148: autoforward.BackupControlService.BackupImport:output_type -> autoforward.BackupImportResponse
+	90,  // 149: autoforward.AccountControlService.RegisterAccount:output_type -> autoforward.RegisterAccountResponse
+	92,  // 150: autoforward.AccountControlService.LoginAccount:output_type -> autoforward.LoginAccountResponse
+	94,  // 151: autoforward.AccountControlService.ValidateToken:output_type -> autoforward.ValidateTokenResponse
+	92,  // 152: autoforward.AccountControlService.IssueWebToken:output_type -> autoforward.LoginAccountResponse
+	2,   // 153: autoforward.AccountControlService.ChangePassword:output_type -> autoforward.StatusResponse
+	88,  // 154: autoforward.AccountControlService.GetAccount:output_type -> autoforward.WebAccount
+	99,  // 155: autoforward.AdminControlService.GetOverview:output_type -> autoforward.AdminOverviewResponse
+	102, // 156: autoforward.AdminControlService.ListUsers:output_type -> autoforward.AdminListUsersResponse
+	2,   // 157: autoforward.AdminControlService.SetUserStatus:output_type -> autoforward.StatusResponse
+	105, // 158: autoforward.AdminControlService.Broadcast:output_type -> autoforward.AdminBroadcastResponse
+	107, // 159: autoforward.AdminControlService.GetSettings:output_type -> autoforward.AdminSettingsResponse
+	2,   // 160: autoforward.AdminControlService.SaveSettings:output_type -> autoforward.StatusResponse
+	111, // 161: autoforward.AdminControlService.ListAdmins:output_type -> autoforward.AdminListAdminsResponse
+	2,   // 162: autoforward.AdminControlService.AddAdmin:output_type -> autoforward.StatusResponse
+	2,   // 163: autoforward.AdminControlService.RemoveAdmin:output_type -> autoforward.StatusResponse
+	115, // 164: autoforward.AdminControlService.GetClientSettings:output_type -> autoforward.ClientSettingsResponse
+	2,   // 165: autoforward.AdminControlService.SaveClientCredentials:output_type -> autoforward.StatusResponse
+	119, // 166: autoforward.BotTokenControlService.ListBotTokens:output_type -> autoforward.ListBotTokensResponse
+	121, // 167: autoforward.BotTokenControlService.CreateBotToken:output_type -> autoforward.CreateBotTokenResponse
+	2,   // 168: autoforward.BotTokenControlService.DeleteBotToken:output_type -> autoforward.StatusResponse
+	102, // [102:169] is the sub-list for method output_type
+	35,  // [35:102] is the sub-list for method input_type
+	35,  // [35:35] is the sub-list for extension type_name
+	35,  // [35:35] is the sub-list for extension extendee
+	0,   // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_autoforward_proto_init() }
@@ -9851,9 +10242,9 @@ func file_autoforward_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_autoforward_proto_rawDesc), len(file_autoforward_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   121,
+			NumMessages:   127,
 			NumExtensions: 0,
-			NumServices:   11,
+			NumServices:   12,
 		},
 		GoTypes:           file_autoforward_proto_goTypes,
 		DependencyIndexes: file_autoforward_proto_depIdxs,

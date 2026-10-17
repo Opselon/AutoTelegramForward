@@ -1,6 +1,7 @@
 import type {
   AIConfig,
   AuthResponse,
+  BotTokenInfo,
   BackupExportRequest,
   BackupExportResponse,
   BackupImportRequest,
@@ -99,6 +100,18 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
+/** Pull the server's own message out of an error body ("{"error":"..."}"). */
+function reasonOf(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && typeof parsed.error === 'string') {
+      return parsed.error
+    }
+  } catch {}
+  return raw
+}
+
 export const api = {
   getStats: () => fetchJson<StatsResponse>(`${API_BASE}/stats`),
   // Readiness surface (v19). Shared verbatim with the CLI wizard and the mobile
@@ -144,6 +157,36 @@ export const api = {
         body: JSON.stringify({ settings, replace_all: replaceAll }),
       },
     ),
+  // Bot-route credentials. The bot token travels one way: it goes up in the
+  // request body and never comes back — every answer carries id + @username.
+  listBotTokens: async (): Promise<BotTokenInfo[]> => {
+    const res = await fetchJson<any>(`${API_BASE}/bot-tokens`)
+    if (Array.isArray(res)) return res
+    if (Array.isArray(res?.tokens)) return res.tokens
+    return []
+  },
+  createBotToken: async (token: string, label = ''): Promise<BotTokenInfo> => {
+    try {
+      const res = await fetchJson<any>(`${API_BASE}/bot-tokens`, {
+        method: 'POST',
+        body: JSON.stringify({ token, label }),
+      })
+      return res?.token ?? res
+    } catch (err) {
+      // The API answers {"error": "...", "code": "..."}: surface the reason, not
+      // the raw body — the panel shows it verbatim to the user.
+      throw new Error(reasonOf(err))
+    }
+  },
+  deleteBotToken: async (id: string): Promise<void> => {
+    try {
+      await fetchJson<any>(`${API_BASE}/bot-tokens/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      })
+    } catch (err) {
+      throw new Error(reasonOf(err))
+    }
+  },
   // Partial update: only the named fields are applied, and a named field is
   // applied even when its value is zero/false — the only way to clear a value.
   patchRule: (id: string, patch: Record<string, any>, updateMask: string[]) =>

@@ -17,6 +17,7 @@ from ...application.backup_service import (  # noqa: E402
     serialize_bundle,
 )
 from ...application.log_policy import LogPolicyError  # noqa: E402
+from ..telegram.bot_transport import BotApiTransport, token_looks_valid  # noqa: E402
 
 
 def _status(success: bool, message: str = "", error_code: str = "") -> pb.StatusResponse:
@@ -626,6 +627,17 @@ def _clamp_chat_limit(value) -> int:
     if n <= 0:
         return _DEFAULT_CHAT_LIMIT
     return min(200, n)
+
+
+def _bot_token_pb(t) -> "pb.BotTokenInfo":
+    """A token as the outside world may see it: never the secret."""
+    return pb.BotTokenInfo(
+        id=str(getattr(t, "id", "") or ""),
+        label=str(getattr(t, "label", "") or ""),
+        is_active=bool(getattr(t, "is_active", True)),
+        created_at=int(getattr(t, "created_at", 0) or 0),
+        updated_at=int(getattr(t, "updated_at", 0) or 0),
+    )
 
 
 class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
@@ -1378,6 +1390,117 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             except Exception:
                 pass
         return pb.RuleActionResponse(success=True, message="resumed")
+
+
+class BotTokenControlServicer(pb_grpc.BotTokenControlServiceServicer):
+    """The Telegram bots an owner attached, so a task can post as one of them.
+
+    The route itself is a per-task setting (see the settings registry); this is
+    only the *credential* half: attach, list, remove. Three rules hold here that
+    do not hold anywhere else in the control plane:
+
+      * the secret arrives once and never leaves — responses carry id + resolved
+        @username, and it is never logged, not even truncated;
+      * a token is validated with Telegram *before* it is stored, because
+        attaching a dead token produces a task that silently stops forwarding;
+      * a token a task still routes through cannot be deleted out from under it.
+    """
+
+    def __init__(self, tokens, rules=None, bot_route=None) -> None:
+        self._tokens = tokens
+        self._rules = rules
+        self._bot_route = bot_route
+
+    async def ListBotTokens(self, request, context):
+        owner = int(request.owner_user_id or 0)
+        if not owner:
+            # Fail closed: an unscoped list would hand one tenant every other
+            # tenant's bots.
+            return pb.ListBotTokensResponse(tokens=[])
+        rows = await self._tokens.list_by_owner(owner)
+        return pb.ListBotTokensResponse(tokens=[_bot_token_pb(t) for t in rows])
+
+    async def CreateBotToken(self, request, context):
+        owner = int(request.owner_user_id or 0)
+        if not owner:
+            return pb.CreateBotTokenResponse(success=False, error_code="unauthorized")
+        token = str(request.token or "").strip()
+        if not token_looks_valid(token):
+            return pb.CreateBotTokenResponse(
+                success=False, error_code="invalid_token",
+                message="that is not a bot token (expected 123456789:AA…)",
+            )
+        # Ask Telegram before storing anything: a token that fails here must not
+        # become a task that stops forwarding later.
+        try:
+            me = await self._validate(token)
+        except Exception as exc:
+            logger.warning("[BOT ROUTE] token validation failed: %s", type(exc).__name__)
+            return pb.CreateBotTokenResponse(
+                success=False, error_code="rejected",
+                message="Telegram refused this token",
+            )
+        label = str(request.label or "").strip()
+        if not label:
+            username = (me or {}).get("username")
+            label = f"@{username}" if username else f"bot {(me or {}).get('id')}"
+        try:
+            record = await self._tokens.create(label, token, owner_user_id=owner)
+        except Exception as exc:
+            # Never echo the token or the driver's message: it can contain it.
+            logger.warning("[BOT ROUTE] storing a token failed: %s", type(exc).__name__)
+            return pb.CreateBotTokenResponse(success=False, error_code="store_failed")
+        # id, resolved bot and the owner — never the token.
+        logger.info(
+            "[BOT ROUTE] token %s stored for owner=%s (bot %s resolved)",
+            str(getattr(record, "id", ""))[:8], owner, (me or {}).get("id"),
+        )
+        return pb.CreateBotTokenResponse(success=True, token=_bot_token_pb(record))
+
+    async def DeleteBotToken(self, request, context):
+        owner = int(request.owner_user_id or 0)
+        if not owner:
+            return _status(False, "unauthorized")
+        token_id = str(request.id or "").strip()
+        if not token_id:
+            return _status(False, "not_found")
+        record = await self._tokens.get_owned(token_id, owner)
+        if record is None:
+            # Same answer for "not yours" and "does not exist": a probe must not
+            # learn which ids are real.
+            return _status(False, "not_found")
+        if self._rules is not None:
+            in_use = await self._rules_using(owner, token_id)
+            if in_use:
+                return _status(
+                    False,
+                    f"still used by {len(in_use)} task(s); switch them to the account route first",
+                )
+        try:
+            removed = await self._tokens.delete_owned(token_id, owner)
+        except Exception as exc:
+            logger.warning("[BOT ROUTE] deleting token %s failed: %s", token_id[:8], exc)
+            return _status(False, "delete_failed")
+        if self._bot_route is not None:
+            # Drop the pooled client so nothing keeps posting with a credential
+            # the owner just revoked.
+            self._bot_route.forget(token_id)
+        logger.info("[BOT ROUTE] token %s deleted by owner=%s", token_id[:8], owner)
+        return _status(removed, "deleted" if removed else "not_found")
+
+    async def _rules_using(self, owner: int, token_id: str) -> List[str]:
+        try:
+            owned = await self._rules.list_by_owner(owner)
+        except Exception as exc:
+            logger.warning("[BOT ROUTE] rule scan for token %s failed: %s", token_id[:8], exc)
+            return []
+        return [r.id for r in (owned or []) if getattr(r, "bot_token_id", "") == token_id]
+
+    async def _validate(self, token: str) -> Dict[str, Any]:
+        if self._bot_route is not None:
+            return await self._bot_route.validate(token, token_id="control-plane")
+        async with BotApiTransport(token) as transport:
+            return await transport.get_me()
 
 
 class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
