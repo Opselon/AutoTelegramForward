@@ -1236,6 +1236,38 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
                     settings_json=_json.dumps(RS.read_settings(entity)),
                 )
             values = {k: values[k] for k in only}
+
+        # `reset` hands keys back to the bot's default. Validate every name and
+        # the route's resulting state *before* anything mutates: an invalid reset
+        # must not slip past a settings write that was fine, and the two halves
+        # of the route pair must still agree after both halves of this request.
+        resets = [str(k) for k in (request.reset or [])]
+        unknown = [k for k in resets if k not in RS.SETTING_SPECS]
+        if unknown:
+            return pb.RuleSettingsResponse(
+                success=False, error_code="unknown_setting",
+                message=f"cannot reset unknown setting {unknown[0]}",
+                settings_json=_json.dumps(RS.read_settings(entity)),
+            )
+        current = RS.read_settings(entity)
+        if "delivery_transport" in values:
+            transport = str(values.get("delivery_transport") or "").upper()
+        else:
+            transport = str(current.get("delivery_transport", "USER") or "USER").upper()
+        if "bot_token_id" in values:
+            token = str(values.get("bot_token_id") or "").strip()
+        elif "bot_token_id" in resets:
+            token = ""
+        else:
+            token = str(current.get("bot_token_id") or "").strip()
+        if transport == "BOT" and not token:
+            return pb.RuleSettingsResponse(
+                success=False, error_code="invalid_state",
+                message="the bot route needs an attached bot_token_id — send "
+                        "delivery_transport='USER' with the reset, or keep the token",
+                settings_json=_json.dumps(current),
+            )
+
         # The value the user is looking at is the *effective* one, so "changed"
         # has to be measured against that: overriding an inherited setting with
         # the registry's own value is a real change.
@@ -1252,7 +1284,11 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
                 success=False, error_code=exc.code, message=str(exc),
                 settings_json=_json.dumps(RS.read_settings(entity)),
             )
-        if changed:
+        # Hand the named keys back *after* the values, so a request that both
+        # writes and resets a key ends on the reset — the more explicit of the
+        # two statements about what the user wants.
+        cleared = [key for key in resets if RS.clear_setting(entity, key)]
+        if changed or cleared:
             entity.mark_updated()
             try:
                 await self._rules.update(entity)
@@ -1265,7 +1301,7 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         described = await describe_rule(entity, self._bot_tokens, owner)
         return pb.RuleSettingsResponse(
             success=True,
-            message=f"{len(changed)} setting(s) updated",
+            message=f"{len(changed) + len(cleared)} setting(s) updated",
             settings_json=_json.dumps(RS.read_settings(entity)),
             schema_json=_json.dumps(RS.schema()),
             effective_json=_json.dumps({k: v["value"] for k, v in described.items()}),

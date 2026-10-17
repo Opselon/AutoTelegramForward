@@ -1422,7 +1422,7 @@ func (h *Handlers) UpdateRuleSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
 		return
 	}
-	settings, replaceAll, edited, err := parseSettingsBody(body)
+	settings, replaceAll, edited, resets, err := parseSettingsBody(body)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error(), "code": "invalid_body"})
 		return
@@ -1438,6 +1438,7 @@ func (h *Handlers) UpdateRuleSettings(w http.ResponseWriter, r *http.Request) {
 		SettingsJson: string(encoded),
 		ReplaceAll:   replaceAll,
 		Changed:      edited,
+		Reset_:       resets,
 	})
 	if err != nil {
 		grpcError(w, err)
@@ -1466,11 +1467,14 @@ func (h *Handlers) GetRuleSettingsSchema(w http.ResponseWriter, r *http.Request)
 //
 // "changed" is the list of keys the user actually edited, which is how a form
 // that posts every field avoids pinning every field — see
-// UpdateRuleSettingsRequest in the proto.
-func parseSettingsBody(body []byte) (map[string]any, bool, []string, error) {
+// UpdateRuleSettingsRequest in the proto. "reset" hands the named keys back to
+// the bot's default, which is a different statement from writing a value: it is
+// the only way to say "stop overriding this", and writing the default value
+// instead would leave the key pinned to it.
+func parseSettingsBody(body []byte) (map[string]any, bool, []string, []string, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, false, nil, fmt.Errorf("invalid JSON: %w", err)
+		return nil, false, nil, nil, fmt.Errorf("invalid JSON: %w", err)
 	}
 	replaceAll := false
 	if v, ok := raw["replace_all"]; ok {
@@ -1481,28 +1485,35 @@ func parseSettingsBody(body []byte) (map[string]any, bool, []string, error) {
 	var edited []string
 	if v, ok := raw["changed"]; ok {
 		if err := json.Unmarshal(v, &edited); err != nil {
-			return nil, false, nil, fmt.Errorf("changed must be a list of setting names")
+			return nil, false, nil, nil, fmt.Errorf("changed must be a list of setting names")
+		}
+	}
+	var resets []string
+	if v, ok := raw["reset"]; ok {
+		if err := json.Unmarshal(v, &resets); err != nil {
+			return nil, false, nil, nil, fmt.Errorf("reset must be a list of setting names")
 		}
 	}
 	if v, ok := raw["settings"]; ok {
 		var settings map[string]any
 		if err := json.Unmarshal(v, &settings); err != nil {
-			return nil, false, nil, fmt.Errorf("settings must be an object")
+			return nil, false, nil, nil, fmt.Errorf("settings must be an object")
 		}
-		return settings, replaceAll, edited, nil
+		return settings, replaceAll, edited, resets, nil
 	}
 	delete(raw, "replace_all")
 	delete(raw, "replaceAll")
 	delete(raw, "changed")
+	delete(raw, "reset")
 	settings := make(map[string]any, len(raw))
 	for k, v := range raw {
 		var decoded any
 		if err := json.Unmarshal(v, &decoded); err != nil {
-			return nil, false, nil, fmt.Errorf("invalid value for %s", k)
+			return nil, false, nil, nil, fmt.Errorf("invalid value for %s", k)
 		}
 		settings[k] = decoded
 	}
-	return settings, replaceAll, edited, nil
+	return settings, replaceAll, edited, resets, nil
 }
 
 func writeSettingsResponse(w http.ResponseWriter, status int, resp *pb.RuleSettingsResponse, requested int) {

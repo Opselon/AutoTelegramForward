@@ -113,11 +113,11 @@ class Harness:
         ))
 
     def update_settings(self, rule_id: str, owner: int, values: dict,
-                        replace_all=False, edited=None):
+                        replace_all=False, edited=None, reset=None):
         return run(self.rule_control.UpdateRuleSettings(
             Req(rule_id=rule_id, owner_user_id=owner,
                 settings_json=json.dumps(values), replace_all=replace_all,
-                changed=edited or []),
+                changed=edited or [], reset=reset or []),
             None,
         ))
 
@@ -379,3 +379,100 @@ def test_a_full_body_put_without_a_changed_list_is_taken_as_written():
     after = h.settings("r-1", ALICE)
     assert json.loads(after.sources_json)["footer"]["source"] == "task"
     assert json.loads(after.effective_json)["footer"] == ""
+
+
+# --------------------------------------------------------------------------- #
+# Handing a setting back
+# --------------------------------------------------------------------------- #
+def test_reset_hands_a_key_back_to_the_bot_default():
+    """The verb a client needs to say "stop overriding this".
+
+    Writing the registry's value instead would leave the key pinned to it, and
+    the task would stop following the bot — which is exactly the bug the pin
+    index exists to prevent, in reverse.
+    """
+    h = Harness()
+    h.seed_token("tok-a", ALICE, {"footer": "from the bot"})
+    h.seed_rule("r-1", ALICE, token_id="tok-a")
+    h.update_settings("r-1", ALICE, {"footer": "mine"}, edited=["footer"])
+    assert json.loads(h.settings("r-1", ALICE).sources_json)["footer"]["source"] == "task"
+
+    resp = h.update_settings("r-1", ALICE, {}, reset=["footer"])
+    assert resp.success and "1 setting(s) updated" in resp.message
+    after = h.settings("r-1", ALICE)
+    assert json.loads(after.sources_json)["footer"]["source"] == "bot"
+    assert json.loads(after.effective_json)["footer"] == "from the bot"
+    # The task's stored value is the registry default again, not the bot's: the
+    # bot's value arrives by inheritance, never by copying.
+    assert json.loads(after.settings_json)["footer"] == ""
+
+
+def test_resetting_a_key_the_task_never_chose_is_a_no_op():
+    h = Harness()
+    h.seed_token("tok-a", ALICE, {"footer": "from the bot"})
+    h.seed_rule("r-1", ALICE, token_id="tok-a")
+    resp = h.update_settings("r-1", ALICE, {}, reset=["footer"])
+    assert resp.success and "0 setting(s) updated" in resp.message
+    assert json.loads(h.settings("r-1", ALICE).sources_json)["footer"]["source"] == "bot"
+
+
+def test_reset_and_a_write_in_one_request_end_on_the_reset():
+    h = Harness()
+    h.seed_token("tok-a", ALICE, {"remove_emojis": True, "footer": "from the bot"})
+    h.seed_rule("r-1", ALICE, token_id="tok-a")
+    resp = h.update_settings(
+        "r-1", ALICE,
+        {"footer": "written", "remove_emojis": True},
+        edited=["footer", "remove_emojis"], reset=["footer"],
+    )
+    assert resp.success
+    after = h.settings("r-1", ALICE)
+    sources = json.loads(after.sources_json)
+    # The reset is the last word on footer, so the bot supplies it again.
+    assert sources["footer"]["source"] == "bot"
+    assert json.loads(after.effective_json)["footer"] == "from the bot"
+    assert json.loads(after.settings_json)["footer"] == ""
+    # remove_emojis was named as edited, so it is the task's own value — which
+    # happens to equal the bot's default. The effective result is the same either
+    # way, and the response says where it came from rather than guessing.
+    assert sources["remove_emojis"]["source"] == "task"
+    assert json.loads(after.effective_json)["remove_emojis"] is True
+
+
+def test_resetting_an_unknown_key_is_refused_and_writes_nothing():
+    h = Harness()
+    h.seed_token("tok-a", ALICE, {"footer": "from the bot"})
+    h.seed_rule("r-1", ALICE, token_id="tok-a")
+    resp = h.update_settings("r-1", ALICE, {"footer": "written"}, edited=["footer"],
+                            reset=["not_a_setting"])
+    assert not resp.success and resp.error_code == "unknown_setting"
+    # The whole request is refused before anything mutates.
+    assert json.loads(h.settings("r-1", ALICE).sources_json)["footer"]["source"] == "bot"
+
+
+def test_resetting_the_token_while_still_on_the_bot_route_is_refused():
+    """The route is a pair, and the reset verb must not be a way around that.
+
+    Clearing the token while the task still delivers through it would silently
+    drop the task back to the account lane — the owner's forwarding would change
+    because they clicked "use the default" on a stranger's field.
+    """
+    h = Harness()
+    h.seed_token("tok-a", ALICE)
+    h.seed_rule("r-1", ALICE, token_id="tok-a")
+    # Put the task on the bot lane first: that pairing is what makes clearing the
+    # token a state change rather than a no-op.
+    on_bot = h.update_settings("r-1", ALICE,
+                               {"delivery_transport": "BOT", "bot_token_id": "tok-a"},
+                               edited=["delivery_transport", "bot_token_id"])
+    assert on_bot.success
+    resp = h.update_settings("r-1", ALICE, {}, reset=["bot_token_id"])
+    assert not resp.success and resp.error_code == "invalid_state"
+    assert json.loads(h.settings("r-1", ALICE).settings_json)["bot_token_id"] == "tok-a"
+
+    # Sending the transport back with it is the coherent request, and it lands.
+    ok = h.update_settings("r-1", ALICE, {"delivery_transport": "USER"},
+                           edited=["delivery_transport"], reset=["bot_token_id"])
+    assert ok.success
+    stored = json.loads(h.settings("r-1", ALICE).settings_json)
+    assert stored["bot_token_id"] == "" and stored["delivery_transport"] == "USER"

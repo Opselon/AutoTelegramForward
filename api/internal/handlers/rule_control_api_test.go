@@ -261,11 +261,11 @@ func TestGetRuleSettingsSchema_NeedsNoRule(t *testing.T) {
 }
 
 func TestParseSettingsBody_WrappedAndBare(t *testing.T) {
-	wrapped, replace, edited, err := parseSettingsBody([]byte(`{"settings":{"a":1},"replace_all":true}`))
+	wrapped, replace, edited, _, err := parseSettingsBody([]byte(`{"settings":{"a":1},"replace_all":true}`))
 	if err != nil || !replace || wrapped["a"] != float64(1) {
 		t.Fatalf("wrapped body mis-parsed: %v %v %v", wrapped, replace, err)
 	}
-	bare, replace2, edited2, err := parseSettingsBody([]byte(`{"a":1,"b":"x"}`))
+	bare, replace2, edited2, _, err := parseSettingsBody([]byte(`{"a":1,"b":"x"}`))
 	if err != nil || replace2 || bare["a"] != float64(1) || bare["b"] != "x" {
 		t.Fatalf("bare body mis-parsed: %v %v %v", bare, replace2, err)
 	}
@@ -274,27 +274,60 @@ func TestParseSettingsBody_WrappedAndBare(t *testing.T) {
 	}
 	// A form posts every field; `changed` is how it says which one the user
 	// actually edited, so the rest are not pinned onto the task.
-	_, _, named, err := parseSettingsBody(
+	_, _, named, _, err := parseSettingsBody(
 		[]byte(`{"settings":{"a":1,"b":"x"},"changed":["b"]}`))
 	if err != nil || len(named) != 1 || named[0] != "b" {
 		t.Fatalf("changed list mis-parsed: %v %v", named, err)
 	}
-	if _, _, _, err := parseSettingsBody([]byte(`{"settings":{},"changed":"b"}`)); err == nil {
+	if _, _, _, _, err := parseSettingsBody([]byte(`{"settings":{},"changed":"b"}`)); err == nil {
 		t.Fatal("a non-list changed value must be rejected")
 	}
 	// The bare shape honours it too, and `changed` is never itself a setting.
-	bareEdited, _, named2, err := parseSettingsBody([]byte(`{"a":1,"changed":["a"]}`))
+	bareEdited, _, named2, _, err := parseSettingsBody([]byte(`{"a":1,"changed":["a"]}`))
 	if err != nil || bareEdited["a"] != float64(1) || len(named2) != 1 || named2[0] != "a" {
 		t.Fatalf("bare body with changed mis-parsed: %v %v %v", bareEdited, named2, err)
 	}
 	if _, present := bareEdited["changed"]; present {
 		t.Fatal("changed must not appear as a setting")
 	}
-	if _, _, _, err := parseSettingsBody([]byte(`[1,2]`)); err == nil {
+	if _, _, _, _, err := parseSettingsBody([]byte(`[1,2]`)); err == nil {
 		t.Fatal("a non-object body must be rejected")
 	}
-	if _, _, _, err := parseSettingsBody([]byte(`{"settings":"nope"}`)); err == nil {
+	if _, _, _, _, err := parseSettingsBody([]byte(`{"settings":"nope"}`)); err == nil {
 		t.Fatal("a non-object settings value must be rejected")
+	}
+}
+
+// TestParseSettingsBody_Reset covers the verb a client needs to hand a setting
+// back to the bot's default. It travels next to the values rather than inside
+// them: handing a key back is the opposite of writing one, and a client must be
+// able to say it without inventing a value.
+func TestParseSettingsBody_Reset(t *testing.T) {
+	values, _, _, resets, err := parseSettingsBody(
+		[]byte(`{"settings":{},"reset":["remove_emojis","link_policy"]}`))
+	if err != nil {
+		t.Fatalf("reset body rejected: %v", err)
+	}
+	if len(values) != 0 || len(resets) != 2 || resets[1] != "link_policy" {
+		t.Fatalf("reset list mis-parsed: values=%v resets=%v", values, resets)
+	}
+	// A bare body honours it and never leaks it in as a setting name.
+	bare, _, _, bareResets, err := parseSettingsBody([]byte(`{"a":1,"reset":["a"]}`))
+	if err != nil || bare["a"] != float64(1) || len(bareResets) != 1 {
+		t.Fatalf("bare body with reset mis-parsed: %v %v %v", bare, bareResets, err)
+	}
+	if _, present := bare["reset"]; present {
+		t.Fatal("reset must not appear as a setting")
+	}
+	// Both verbs in one request: the values are written and the named keys are
+	// handed back, which is how a form saves alongside a "use the default" click.
+	both, _, changed, bothResets, err := parseSettingsBody(
+		[]byte(`{"settings":{"remove_emojis":true},"changed":["remove_emojis"],"reset":["link_policy"]}`))
+	if err != nil || both["remove_emojis"] != true || len(changed) != 1 || len(bothResets) != 1 {
+		t.Fatalf("combined body mis-parsed: %v %v %v %v", both, changed, bothResets, err)
+	}
+	if _, _, _, _, err := parseSettingsBody([]byte(`{"settings":{},"reset":"link_policy"}`)); err == nil {
+		t.Fatal("a non-list reset value must be rejected")
 	}
 }
 

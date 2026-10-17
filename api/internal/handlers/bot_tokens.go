@@ -193,7 +193,15 @@ func (h *Handlers) SetBotDefaults(w http.ResponseWriter, r *http.Request) {
 	if !bindPB(w, r, &body) {
 		return
 	}
-	encoded, err := json.Marshal(body.Defaults)
+	// `defaults` absent means "no values in this request", which is how a client
+	// asks to clear named keys (or to state the whole mapping with replace_all)
+	// without also sending an empty object it does not mean. Absent is not null:
+	// only a present, non-object value is a mistake.
+	requested := body.Defaults
+	if requested == nil {
+		requested = map[string]any{}
+	}
+	encoded, err := json.Marshal(requested)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "defaults must be an object of settings",
