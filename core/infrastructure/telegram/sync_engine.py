@@ -37,6 +37,21 @@ class SyncEngine:
         self._filters = filter_repo
         self._filter_engine = FilterEngine()
 
+    async def has_mapping(self, source_chat_id: Any, source_message_id: int) -> bool:
+        """Whether this message was already delivered by any rule.
+
+        The dispatcher asks this to decide what an edit means: a mapped
+        message is updated in place and must never be posted again; an unmapped
+        one was never delivered, so forwarding it is a first delivery rather
+        than a duplicate.
+        """
+        try:
+            mappings = await self._map.get_by_source(str(source_chat_id), int(source_message_id))
+        except Exception:
+            logger.debug("message_map lookup failed for %s:%s", source_chat_id, source_message_id)
+            return False
+        return bool(mappings)
+
     async def handle_edit(self, payload: MessagePayload, formatted_text: str) -> int:
         """Propagate an edit from source message to all mapped target messages.
 
@@ -66,8 +81,12 @@ class SyncEngine:
                 logger.debug("Rule %s has ignore_edits=True, skipping edit sync", rule.id[:8])
                 continue
 
-            if not getattr(rule, "sync_edits", False):
-                logger.debug("Rule %s has sync_edits=False, skipping post-send edit", rule.id[:8])
+            # One authority: the panel's "Message Edit" switch (ignore_edits)
+            # with an explicit legacy sync_edits override. Consulting the bare
+            # sync_edits flag made every panel "Sync" task skip the in-place
+            # update and fall through to a duplicate re-post.
+            if not getattr(rule, "sync_edits_effective", getattr(rule, "sync_edits", False)):
+                logger.debug("Rule %s has edit sync disabled, skipping edit", rule.id[:8])
                 continue
 
             # 1. max_time_edit check: ignore edits if older than max_time_edit

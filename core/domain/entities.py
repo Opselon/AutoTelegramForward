@@ -525,6 +525,22 @@ class ForwardRule:
         self.metadata["sync_deletes"] = bool(val)
 
     @property
+    def sync_edits_effective(self) -> bool:
+        """Whether an edit must update the already-delivered copy in place.
+
+        ``ignore_edits`` is the switch the task panel exposes ("Message Edit:
+        Sync / Ignore"); ``sync_edits`` is an older post-send gate that no
+        surface ever wrote. Because the sync engine only consulted
+        ``sync_edits``, a task showing "Sync" both skipped the in-place update
+        and fell through to the pipeline, which re-posted the edit as a brand
+        new message. An explicit ``sync_edits`` in metadata still wins;
+        otherwise the panel's switch decides.
+        """
+        if isinstance(self.metadata, dict) and "sync_edits" in self.metadata:
+            return bool(self.metadata["sync_edits"])
+        return not bool(self.ignore_edits)
+
+    @property
     def album_mode(self) -> str:
         return str(self.metadata.get("album_mode") or "album") if isinstance(self.metadata, dict) else "album"
 
@@ -1157,6 +1173,28 @@ class ForwardRule:
         self.metadata["smart_ai_rewrite"] = bool(val)
 
     @property
+    def ai_rewrite_active(self) -> bool:
+        """Single authority for "does this task rewrite text with an LLM?".
+
+        Three surfaces write AI state: the AI menu (``ai_config_id`` +
+        ``smart_ai_rewrite``) and the task panel's paid-addon switch
+        (``paid_addons["ai_rewrite"]``). The pipeline used to gate on
+        ``ai_config_id`` alone, so a task whose panel read "AI Rewrite: Off"
+        still had every message rewritten. Every reader — pipeline and UI —
+        now asks this property instead.
+        """
+        if not self.ai_config_id:
+            return False
+        # `ai_config_id` alone keeps meaning "rewrite with this config" —
+        # API clients, backups and the AI menu have always relied on that.
+        # The task panel's paid-addon switch is the explicit veto on top.
+        if isinstance(self.metadata, dict):
+            addons = self.metadata.get("paid_addons")
+            if isinstance(addons, dict) and "ai_rewrite" in addons:
+                return bool(addons["ai_rewrite"])
+        return True
+
+    @property
     def news_digest(self) -> bool:
         return bool(self.metadata.get("news_digest", False)) if isinstance(self.metadata, dict) else False
 
@@ -1522,6 +1560,11 @@ class ForwardRule:
             "ai_prompt_version": int(getattr(self, "ai_prompt_version", 0) or 0),
             "ai_timeout_seconds": float(getattr(self, "ai_timeout_seconds", 15.0) or 15.0),
             "prompt_id": str((self.metadata or {}).get("prompt_id", "") or ""),
+            # The two switches ai_rewrite_active also consults: without them a
+            # draft round-trip would show and save an AI state that differs
+            # from what the pipeline sees.
+            "smart_ai_rewrite": bool(self.smart_ai_rewrite),
+            "paid_addons": dict(self.paid_addons or {}),
         }
 
     def apply_draft(self, draft: Dict[str, Any]) -> None:
@@ -1675,6 +1718,12 @@ class ForwardRule:
 
         if "sync_deletes" in draft:
             self.metadata["sync_deletes"] = bool(draft["sync_deletes"])
+
+        if "smart_ai_rewrite" in draft:
+            self.smart_ai_rewrite = bool(draft["smart_ai_rewrite"])
+
+        if "paid_addons" in draft and isinstance(draft["paid_addons"], dict):
+            self.paid_addons = dict(draft["paid_addons"])
 
         if "album_mode" in draft:
             self.metadata["album_mode"] = str(draft["album_mode"])

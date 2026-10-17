@@ -287,6 +287,23 @@ class MessageDispatcher:
                 logger.exception("Error in deleted_messages handler")
         return _del_handler
 
+    async def _route_edit(self, payload: MessagePayload) -> bool:
+        """Claim an edit for the sync engine; True when nothing else may post it.
+
+        A message this bot already delivered is updated in place, so the caller
+        must stop. A message it never delivered is *not* claimed: the caller
+        forwards it once as a first delivery. Either way an edit can no longer
+        become a duplicate of a live post.
+        """
+        if self._sync_engine is None:
+            return False
+        probe = getattr(self._sync_engine, "has_mapping", None)
+        mapped = bool(await probe(payload.chat_id, payload.message_id)) if probe else True
+        if not mapped:
+            return False
+        await self._sync_engine.handle_edit(payload, payload.effective_text)
+        return True
+
     def _make_handler(self, trigger: str, session_id: Optional[str] = None):
         async def _handler(client, message):
             try:
@@ -316,11 +333,21 @@ class MessageDispatcher:
                         logger.warning("pv_responder handle_message failed: %s", exc)
 
             # Sync edits propagation
-            if trigger == "EDITED_MESSAGE" and self._sync_engine is not None:
+            if trigger == "EDITED_MESSAGE":
+                # An edit is never a new post. If this message was already
+                # delivered (a message_map row exists), each target copy is
+                # updated in place and processing stops here. The old code
+                # called handle_edit and then fell through to the pipeline,
+                # which re-posted the edit as a duplicate — the panel's
+                # "Message Edit: Sync" produced two copies and no update.
                 try:
-                    await self._sync_engine.handle_edit(payload, payload.effective_text)
+                    if await self._route_edit(payload):
+                        return
                 except Exception:
                     logger.exception("sync_engine handle_edit failed")
+                # Never delivered by any rule: fall through so this edit is
+                # its first delivery, exactly once (the dedupe stage below
+                # stops repeats on reconnect).
 
             # Album: bounded LRU aggregator with TTL
             if payload.media_group_id and trigger == "NEW_MESSAGE":
