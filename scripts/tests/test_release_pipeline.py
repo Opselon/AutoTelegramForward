@@ -201,11 +201,59 @@ def test_no_job_in_any_workflow_is_unbounded():
     """A job with no `timeout-minutes` can only end when GitHub cancels the run."""
     for path in WORKFLOWS:
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
-        missing = [name for name, job in workflow["jobs"].items() if not job.get("timeout-minutes")]
+        missing = [
+            name
+            for name, job in workflow["jobs"].items()
+            if not job.get("timeout-minutes") and not _calls_a_reusable_workflow(job)
+        ]
         assert not missing, (
             f"{path.name}: jobs {missing} have no timeout-minutes. The v2.1.0 release "
             "burned the platform's 6-hour limit because the hanging job had no bound."
         )
+
+
+def _calls_a_reusable_workflow(job: dict) -> bool:
+    uses = job.get("uses", "")
+    return isinstance(uses, str) and uses.startswith("./")
+
+
+def test_a_job_without_a_timeout_is_only_ever_a_reusable_workflow_caller():
+    """The one exemption above, and the reason it is not a loophole.
+
+    GitHub allows a *caller* job no `timeout-minutes` — adding one is not a
+    harmless hint, it makes the whole workflow file invalid, so a run is created
+    with zero jobs and no logs. That is how v2.2.2 published no APK: release.yml
+    carried `timeout-minutes: 60` on the job calling the Android workflow, put
+    there to satisfy the rule above.
+
+    So a caller is exempt only because its bound lives on the callee. This proves
+    the callee has one, for every delegation in the repository.
+    """
+    seen = []
+    for path in WORKFLOWS:
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for name, job in workflow["jobs"].items():
+            if not _calls_a_reusable_workflow(job):
+                continue
+            seen.append(name)
+            assert "timeout-minutes" not in job, (
+                f"{path.name}: '{name}' calls a reusable workflow and must not "
+                "carry timeout-minutes — GitHub rejects the entire workflow file"
+            )
+            target = REPO_ROOT / job["uses"].removeprefix("./")
+            assert target.exists(), f"{path.name}: '{name}' calls a missing {job['uses']}"
+            callee = yaml.safe_load(target.read_text(encoding="utf-8"))
+            unbounded = [
+                callee_name
+                for callee_name, callee_job in callee["jobs"].items()
+                if not callee_job.get("timeout-minutes")
+            ]
+            assert not unbounded, (
+                f"{path.name}: '{name}' delegates to {job['uses']}, but its jobs "
+                f"{unbounded} are unbounded — the caller is exempt from the rule "
+                "above only because the callee carries the bound"
+            )
+    assert seen, "no reusable-workflow caller found; this test would silently pass"
 
 
 def test_dockerignore_keeps_the_build_context_lean():
