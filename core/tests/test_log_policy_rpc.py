@@ -14,6 +14,8 @@ import asyncio
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from core.application.log_policy import LogPolicy  # noqa: E402
@@ -21,17 +23,36 @@ from core.infrastructure.grpc_server import servicers  # noqa: E402
 from core.proto import autoforward_pb2 as pb  # noqa: E402
 
 
+_CREATED_LOOPS: list = []
+
+
 def _run(coro):
-    """Run a coroutine without clearing the thread's event loop."""
+    """Run a coroutine without clearing the thread's event loop.
+
+    Loops created here are closed by `_close_created_loops`: a leaked loop is
+    collected much later and surfaces as an unclosed-event-loop ResourceWarning
+    attributed to whichever unrelated test triggered the GC.
+    """
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        _CREATED_LOOPS.append(loop)
     if loop.is_closed():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        _CREATED_LOOPS.append(loop)
     return loop.run_until_complete(coro)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _close_created_loops():
+    yield
+    for loop in _CREATED_LOOPS:
+        if not loop.is_closed():
+            loop.close()
+    _CREATED_LOOPS.clear()
 
 
 def _servicer(log_policy=None):
