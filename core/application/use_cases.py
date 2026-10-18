@@ -334,6 +334,44 @@ class AIConfigUseCases:
         from ..domain.value_objects import AIProviderType
         return [p.value for p in AIProviderType]
 
+    #: display names for the providers the factory knows.  English only — a
+    #: client localizes from its own catalog when it has keys for them.
+    PROVIDER_LABELS = {
+        "openai": "OpenAI", "anthropic": "Anthropic", "gemini": "Google Gemini",
+        "groq": "Groq", "deepseek": "DeepSeek", "openrouter": "OpenRouter",
+        "9router": "9Router", "ninerouter": "9Router", "xai": "xAI",
+        "mistral": "Mistral", "together": "Together AI", "fireworks": "Fireworks",
+        "custom": "Custom (OpenAI-compatible)",
+    }
+
+    def provider_catalog(self) -> List[dict]:
+        """Providers this deployment can call, with their default endpoints.
+
+        The catalogue comes from the same registry the rewrite path resolves a
+        provider through, so a client never keeps a second copy that can drift
+        — a provider that can be chosen here is one that can actually be called.
+        """
+        from ..infrastructure.ai.providers import AIProviderFactory, OpenAICompatibleProvider
+
+        factory = self._factory if self._factory is not None else AIProviderFactory()
+        try:
+            names = list(factory.providers())
+        except Exception:  # pragma: no cover - a broken factory must not blank the UI
+            names = list(AIProviderFactory().providers())
+        catalog = []
+        for name in names:
+            try:
+                models = list(factory.models_for(name) or [])
+            except Exception:  # pragma: no cover - defensive
+                models = []
+            catalog.append({
+                "id": name,
+                "label": self.PROVIDER_LABELS.get(name, name),
+                "default_base_url": OpenAICompatibleProvider.default_base_urls.get(name, ""),
+                "models": models,
+            })
+        return catalog
+
     def models_for(self, provider: str) -> list:
         """Curated model list for a provider (falls back to free text)."""
         factory = self._factory

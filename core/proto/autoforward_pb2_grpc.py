@@ -1394,6 +1394,16 @@ class AIControlServiceStub(object):
                 request_serializer=autoforward__pb2.TestAIRewriteRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.TestAIRewriteResponse.FromString,
                 _registered_method=True)
+        self.CheckProviderKey = channel.unary_unary(
+                '/autoforward.AIControlService/CheckProviderKey',
+                request_serializer=autoforward__pb2.CheckProviderKeyRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.CheckProviderKeyResponse.FromString,
+                _registered_method=True)
+        self.ListAIProviders = channel.unary_unary(
+                '/autoforward.AIControlService/ListAIProviders',
+                request_serializer=autoforward__pb2.ListAIProvidersRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListAIProvidersResponse.FromString,
+                _registered_method=True)
         self.ListPromptTemplates = channel.unary_unary(
                 '/autoforward.AIControlService/ListPromptTemplates',
                 request_serializer=autoforward__pb2.ListPromptTemplatesRequest.SerializeToString,
@@ -1444,6 +1454,18 @@ class AIControlServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def TestAIRewrite(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CheckProviderKey(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListAIProviders(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1502,6 +1524,16 @@ def add_AIControlServiceServicer_to_server(servicer, server):
                     servicer.TestAIRewrite,
                     request_deserializer=autoforward__pb2.TestAIRewriteRequest.FromString,
                     response_serializer=autoforward__pb2.TestAIRewriteResponse.SerializeToString,
+            ),
+            'CheckProviderKey': grpc.unary_unary_rpc_method_handler(
+                    servicer.CheckProviderKey,
+                    request_deserializer=autoforward__pb2.CheckProviderKeyRequest.FromString,
+                    response_serializer=autoforward__pb2.CheckProviderKeyResponse.SerializeToString,
+            ),
+            'ListAIProviders': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListAIProviders,
+                    request_deserializer=autoforward__pb2.ListAIProvidersRequest.FromString,
+                    response_serializer=autoforward__pb2.ListAIProvidersResponse.SerializeToString,
             ),
             'ListPromptTemplates': grpc.unary_unary_rpc_method_handler(
                     servicer.ListPromptTemplates,
@@ -1659,6 +1691,60 @@ class AIControlService(object):
             '/autoforward.AIControlService/TestAIRewrite',
             autoforward__pb2.TestAIRewriteRequest.SerializeToString,
             autoforward__pb2.TestAIRewriteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CheckProviderKey(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AIControlService/CheckProviderKey',
+            autoforward__pb2.CheckProviderKeyRequest.SerializeToString,
+            autoforward__pb2.CheckProviderKeyResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAIProviders(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AIControlService/ListAIProviders',
+            autoforward__pb2.ListAIProvidersRequest.SerializeToString,
+            autoforward__pb2.ListAIProvidersResponse.FromString,
             options,
             channel_credentials,
             insecure,

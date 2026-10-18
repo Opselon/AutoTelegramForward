@@ -107,6 +107,10 @@ func main() {
 	dashMux.HandleFunc("POST /ai-configs", h.CreateAIConfig)
 	dashMux.HandleFunc("PUT /ai-configs/{id}", h.UpdateAIConfig)
 	dashMux.HandleFunc("DELETE /ai-configs/{id}", h.DeleteAIConfig)
+	// The tenant's own endpoint + key: what the catalogue offers, and whether
+	// the key they typed is accepted before it is stored.
+	dashMux.HandleFunc("GET /ai-configs/providers", h.ListAIProviders)
+	dashMux.HandleFunc("POST /ai-configs/check-key", h.CheckProviderKey)
 	dashMux.HandleFunc("GET /filters", h.ListFilters)
 	dashMux.HandleFunc("POST /filters", h.CreateFilter)
 	dashMux.HandleFunc("PUT /filters/{id}", h.UpdateFilter)

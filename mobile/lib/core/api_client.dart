@@ -963,6 +963,37 @@ class ApiClient {
     retryable: false,
   );
 
+  /// The providers the core can call, for the editor's dropdown.
+  Future<List<AiProviderInfo>> listAiProviders() => _requestList(
+    method: 'GET',
+    path: '/api/ai-configs/providers',
+    fromJson: AiProviderInfo.fromJson,
+    listKey: 'providers',
+  );
+
+  /// Probes a provider endpoint and key *on the server*: the key never leaves
+  /// this process any other way, and a stored config's key is used when the
+  /// user did not type a new one.
+  Future<KeyCheckResult> checkProviderKey({
+    String aiConfigId = '',
+    String provider = '',
+    String model = '',
+    String baseUrl = '',
+    String apiKey = '',
+  }) => _request(
+    method: 'POST',
+    path: '/api/ai-configs/check-key',
+    body: {
+      if (aiConfigId.isNotEmpty) 'ai_config_id': aiConfigId,
+      'provider': provider,
+      'model': model,
+      if (baseUrl.isNotEmpty) 'base_url': baseUrl,
+      if (apiKey.isNotEmpty) 'api_key': apiKey,
+    },
+    fromJson: KeyCheckResult.fromJson,
+    retryable: false,
+  );
+
   Future<void> deleteAiConfig(String id) => _request(
     method: 'DELETE',
     path: '/api/ai-configs/$id',

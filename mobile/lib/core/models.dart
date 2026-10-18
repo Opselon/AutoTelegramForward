@@ -866,6 +866,7 @@ class AiConfig {
     this.targetLanguage = '',
     this.prompt = '',
     this.baseUrl = '',
+    this.apiKey = '',
     this.version = 0,
   });
 
@@ -878,6 +879,11 @@ class AiConfig {
   /// OpenAI-compatible providers may point at a self-hosted gateway. The API
   /// key itself is never returned by the server and never stored on-device.
   final String baseUrl;
+
+  /// Write-only: set from what the user typed in the editor, sent once, and
+  /// never read back. An empty value means "keep the key already stored", which
+  /// is why [fromJson] never fills it.
+  final String apiKey;
   final bool isEnabled;
   final int version;
 
@@ -888,6 +894,7 @@ class AiConfig {
     String? targetLanguage,
     String? prompt,
     String? baseUrl,
+    String? apiKey,
     bool? isEnabled,
     int? version,
   }) => AiConfig(
@@ -897,18 +904,21 @@ class AiConfig {
     targetLanguage: targetLanguage ?? this.targetLanguage,
     prompt: prompt ?? this.prompt,
     baseUrl: baseUrl ?? this.baseUrl,
+    apiKey: apiKey ?? this.apiKey,
     isEnabled: isEnabled ?? this.isEnabled,
     version: version ?? this.version,
   );
 
-  /// Sent to the server. `api_key` is deliberately absent: the mobile client
-  /// never holds provider keys; the existing bot/web flows own that.
+  /// Sent to the server. `api_key` travels only when the user just typed one:
+  /// an empty field means "keep the stored key", and the server never sends a
+  /// key back for the client to resend.
   Map<String, dynamic> toJson() => {
     'provider': provider,
     'model': model,
     'target_language': targetLanguage,
     'prompt': prompt,
     if (baseUrl.isNotEmpty) 'base_url': baseUrl,
+    if (apiKey.isNotEmpty) 'api_key': apiKey,
     'is_enabled': isEnabled,
     'expected_version': version,
   };
@@ -923,6 +933,84 @@ class AiConfig {
     isEnabled: json['is_enabled'] as bool? ?? false,
     version: jsonInt(json['version']),
   );
+}
+
+/// A provider the core can actually call. The editor's dropdown is built from
+/// this list rather than a table kept in the client, so an option offered here
+/// is one the rewrite path accepts.
+@immutable
+class AiProviderInfo {
+  const AiProviderInfo({
+    required this.id,
+    required this.label,
+    this.defaultBaseUrl = '',
+    this.models = const [],
+  });
+
+  final String id;
+  final String label;
+
+  /// Shown as the endpoint field's placeholder: empty means "use the default".
+  final String defaultBaseUrl;
+  final List<String> models;
+
+  factory AiProviderInfo.fromJson(Map<String, dynamic> json) => AiProviderInfo(
+    id: json['id'] as String? ?? '',
+    label: json['label'] as String? ?? '',
+    defaultBaseUrl: json['default_base_url'] as String? ?? '',
+    models: ((json['models'] as List?) ?? const []).whereType<String>().toList(
+      growable: false,
+    ),
+  );
+}
+
+/// The verdict of a provider endpoint + key probe.
+///
+/// `success` means the check ran and reached an answer; `healthy` means the
+/// provider accepted the credentials. They are different questions: a refused
+/// key and an endpoint the server cannot reach both leave `success` false, and
+/// the user needs the reason, not a spinner that stops.
+@immutable
+class KeyCheckResult {
+  const KeyCheckResult({
+    required this.success,
+    required this.healthy,
+    this.latencyMs = 0,
+    this.detail = '',
+    this.errorCode = '',
+  });
+
+  final bool success;
+  final bool healthy;
+  final double latencyMs;
+
+  /// The provider's own words, already redacted server-side.
+  final String detail;
+  final String errorCode;
+
+  factory KeyCheckResult.fromJson(Map<String, dynamic> json) => KeyCheckResult(
+    success: json['success'] as bool? ?? false,
+    healthy: json['healthy'] as bool? ?? false,
+    latencyMs: jsonDouble(json['latency_ms']),
+    detail: json['detail'] as String? ?? '',
+    errorCode: json['error_code'] as String? ?? '',
+  );
+
+  /// The catalog key that names this refusal in the user's language. An unknown
+  /// code yields '' so the caller falls back to a generic line instead of
+  /// rendering a raw identifier.
+  String get reasonKey => switch (errorCode) {
+    'invalid_key' => 'ai_check_invalid_key',
+    'missing_key' => 'ai_check_missing_key',
+    'missing_endpoint' => 'ai_check_missing_endpoint',
+    'endpoint_invalid' => 'ai_check_endpoint_invalid',
+    'endpoint_blocked' => 'ai_check_endpoint_blocked',
+    'endpoint_unreachable' => 'ai_check_endpoint_unreachable',
+    'timeout' => 'ai_check_timeout',
+    'rate_limited' => 'ai_check_rate_limited',
+    'provider_error' => 'ai_check_provider_error',
+    _ => '',
+  };
 }
 
 /// ---- Dashboard / operations --------------------------------------------

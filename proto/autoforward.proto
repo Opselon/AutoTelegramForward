@@ -507,6 +507,44 @@ message TestPromptResponse {
   string circuit_state = 9;
 }
 
+// A tenant-supplied provider endpoint and key, probed before it is saved.
+//
+// `api_key` is write-only: a response never carries it, and a blank or masked
+// ("***abcd") value means "use the one already stored for ai_config_id".  The
+// probe reaches a host the tenant names, so it reports a status class and a
+// redacted message — never the provider's body verbatim.
+message CheckProviderKeyRequest {
+  string provider = 1;
+  string model = 2;
+  string base_url = 3;      // the endpoint the tenant typed; blank = stored
+  string api_key = 4;       // write-only; blank or masked = stored
+  string ai_config_id = 5;  // fill blanks from this config, if it is theirs
+  int64 owner_user_id = 6;  // required: the probe spends this tenant's credentials
+}
+
+message CheckProviderKeyResponse {
+  bool success = 1;         // the probe ran and reached an answer
+  bool healthy = 2;         // the endpoint accepted the credentials
+  double latency_ms = 3;
+  string detail = 4;        // safe, non-secret explanation of a refusal
+  string error_code = 5;    // invalid_key | endpoint_blocked | timeout | ...
+}
+
+// The provider catalogue, so a client never has to keep its own copy of what
+// the core supports.  One source of truth: AIProviderFactory.
+message AIProviderInfo {
+  string id = 1;                 // the value stored in AIConfig.provider
+  string label = 2;              // English fallback; clients localize when they can
+  string default_base_url = 3;   // "" when the endpoint must be typed
+  repeated string models = 4;    // curated suggestions, not a limit
+}
+
+message ListAIProvidersRequest {}
+
+message ListAIProvidersResponse {
+  repeated AIProviderInfo providers = 1;
+}
+
 // -----------------------------------------------------------------------------
 // System Status & Statistics
 // -----------------------------------------------------------------------------
@@ -844,6 +882,8 @@ service AIControlService {
   rpc UpdateAIConfig(UpdateAIConfigRequest) returns (AIConfig);
   rpc DeleteAIConfig(DeleteAIConfigRequest) returns (StatusResponse);
   rpc TestAIRewrite(TestAIRewriteRequest) returns (TestAIRewriteResponse);
+  rpc CheckProviderKey(CheckProviderKeyRequest) returns (CheckProviderKeyResponse);
+  rpc ListAIProviders(ListAIProvidersRequest) returns (ListAIProvidersResponse);
   // Prompt template management (AI Rewrite prompts) — shared surface for the
   // Telegram bot and the web dashboard.
   rpc ListPromptTemplates(ListPromptTemplatesRequest) returns (ListPromptTemplatesResponse);

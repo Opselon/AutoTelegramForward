@@ -41,6 +41,7 @@ import {
 } from 'lucide-react'
 import { api } from './api'
 import { isAccepted, purgedCount, refusalReason } from './actionResult'
+import { describeKeyCheck } from './providerKey'
 import { AdminPanel } from './components/AdminPanel'
 import { AuditEventsPanel } from './components/AuditEventsPanel'
 import { ClientSettings } from './components/ClientSettings'
@@ -53,6 +54,8 @@ import type {
   SaveRuleRequest,
   Session,
   AIConfig,
+  AIProviderInfo,
+  CheckProviderKeyResponse,
   SaveAIConfigRequest,
   PromptTemplate,
   TestPromptResponse,
@@ -207,6 +210,10 @@ export function App() {
   const [rules, setRules] = useState<ForwardRule[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
+  // The provider catalogue comes from the core (one source of truth), never
+  // from a table kept here: a provider offered in this select is one the
+  // rewrite path can actually call.
+  const [aiProviders, setAiProviders] = useState<AIProviderInfo[]>([])
   const [filterRules, setFilterRules] = useState<FilterRule[]>([])
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([])
   const [queueJobs, setQueueJobs] = useState<DeliveryJob[]>([])
@@ -312,7 +319,7 @@ export function App() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [r, s, ai, pt, f, q, dlq, gw, st, l, ds, pv] = await Promise.all([
+      const [r, s, ai, pt, f, q, dlq, gw, st, l, ds, pv, prov] = await Promise.all([
         api.getRules().catch(() => []),
         api.getSessions().catch(() => []),
         api.getAIConfigs().catch(() => []),
@@ -325,10 +332,12 @@ export function App() {
         api.getLogs().catch(() => []),
         api.getDeliveryStats().catch(() => null),
         api.getPVResponder().catch(() => null),
+        api.getAIProviders().catch(() => []),
       ])
       setRules(Array.isArray(r) ? r : [])
       setSessions(Array.isArray(s) ? s : [])
       setAiConfigs(Array.isArray(ai) ? ai : [])
+      setAiProviders(Array.isArray(prov) ? prov : [])
       setPromptTemplates(Array.isArray(pt) ? pt : [])
       setFilterRules(Array.isArray(f) ? f : [])
       setQueueJobs(Array.isArray(q) ? q : [])
@@ -2304,6 +2313,13 @@ export function App() {
                     <span style={{ color: '#94a3b8' }}>API Key: </span>
                     <code>{ai.api_key_masked || 'None / Environment'}</code>
                   </div>
+                  <div style={{ overflowWrap: 'anywhere' }}>
+                    <span style={{ color: '#94a3b8' }}>
+                      {isRtl ? 'آدرس سرویس‌دهنده: ' : 'Endpoint: '}
+                    </span>
+                    <code dir="ltr">{ai.base_url || (isRtl ? 'پیش‌فرض ارائه‌دهنده' : 'provider default')}</code>
+                  </div>
+                  <ProviderKeyCheck aiConfigId={ai.id} isRtl={isRtl} compact />
                   <div>
                     <span style={{ color: '#94a3b8' }}>Temperature: </span>
                     <span>{ai.temperature}</span> | <span style={{ color: '#94a3b8' }}>Lang: </span>
@@ -4290,7 +4306,15 @@ export function App() {
       )}
 
       {/* CREATE / EDIT AI MODAL */}
-      {isAiModalOpen && (
+      {isAiModalOpen && (() => {
+        // The catalogue is the core's list; this only reads it. `provider`
+        // arrives from the API as the enum name (OPENAI) and the catalogue is
+        // keyed by id (openai), so compare case-insensitively.
+        const providerId = (aiFormData.provider || 'openai').toLowerCase()
+        const providerMeta = aiProviders.find((p) => p.id === providerId)
+        const endpointHint = providerMeta?.default_base_url || ''
+        const modelIdeas = providerMeta?.models || []
+        return (
         <div
           style={{
             position: 'fixed',
@@ -4342,13 +4366,22 @@ export function App() {
                     {isRtl ? 'ارائه‌دهنده (Provider):' : 'Provider:'}
                   </label>
                   <select
-                    value={aiFormData.provider || 'OPENAI'}
+                    value={providerId}
                     onChange={(e) => setAiFormData({ ...aiFormData, provider: e.target.value })}
                     className="input-field"
                   >
-                    <option value="OPENAI">OpenAI</option>
-                    <option value="ANTHROPIC">Anthropic</option>
-                    <option value="CUSTOM">Custom / Local LLM</option>
+                    {(aiProviders.length
+                      ? aiProviders
+                      : [
+                          { id: 'openai', label: 'OpenAI', default_base_url: '', models: [] },
+                          { id: 'anthropic', label: 'Anthropic', default_base_url: '', models: [] },
+                          { id: 'custom', label: 'Custom (OpenAI-compatible)', default_base_url: '', models: [] },
+                        ]
+                    ).map((prov) => (
+                      <option key={prov.id} value={prov.id}>
+                        {prov.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -4358,12 +4391,41 @@ export function App() {
                   <input
                     type="text"
                     required
+                    list="ai-model-suggestions"
                     value={aiFormData.model || ''}
                     onChange={(e) => setAiFormData({ ...aiFormData, model: e.target.value })}
                     className="input-field"
-                    placeholder="gpt-4o"
+                    placeholder={modelIdeas[0] || 'gpt-4o-mini'}
                   />
+                  <datalist id="ai-model-suggestions">
+                    {modelIdeas.map((m) => (
+                      <option key={m} value={m} />
+                    ))}
+                  </datalist>
                 </div>
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
+                  {isRtl ? 'آدرس سرویس‌دهنده (Endpoint):' : 'Provider Endpoint (Base URL):'}
+                </label>
+                <input
+                  type="text"
+                  value={aiFormData.base_url || ''}
+                  onChange={(e) => setAiFormData({ ...aiFormData, base_url: e.target.value })}
+                  className="input-field"
+                  dir="ltr"
+                  placeholder={endpointHint || 'https://api.example.com/v1'}
+                />
+                <span style={{ display: 'block', fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
+                  {endpointHint
+                    ? isRtl
+                      ? `خالی بگذارید تا از پیش‌فرض این ارائه‌دهنده استفاده شود: ${endpointHint}`
+                      : `Leave blank to use this provider's default: ${endpointHint}`
+                    : isRtl
+                      ? 'برای ارائه‌دهنده سفارشی، آدرس کامل سرویس‌دهنده خود را وارد کنید'
+                      : 'For a custom provider, enter the full address of your own endpoint'}
+                </span>
               </div>
 
               <div style={{ marginBottom: 12 }}>
@@ -4375,8 +4437,28 @@ export function App() {
                   value={aiFormData.api_key || ''}
                   onChange={(e) => setAiFormData({ ...aiFormData, api_key: e.target.value })}
                   className="input-field"
+                  dir="ltr"
                   placeholder="sk-..."
                 />
+                <span style={{ display: 'block', fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
+                  {aiFormData.id
+                    ? isRtl
+                      ? 'برای نگه داشتن کلید ذخیره‌شده این فیلد را خالی بگذارید'
+                      : 'Leave blank to keep the stored key'
+                    : isRtl
+                      ? 'کلید فقط روی سرور ذخیره می‌شود و هرگز به مرورگر بازنمی‌گردد'
+                      : 'Stored on the server only; it is never sent back to this page'}
+                </span>
+                <div style={{ marginTop: 8 }}>
+                  <ProviderKeyCheck
+                    aiConfigId={aiFormData.id}
+                    provider={providerId}
+                    model={aiFormData.model}
+                    baseUrl={aiFormData.base_url}
+                    apiKey={aiFormData.api_key}
+                    isRtl={isRtl}
+                  />
+                </div>
               </div>
 
               <div style={{ marginBottom: 16 }}>
@@ -4404,7 +4486,8 @@ export function App() {
             </form>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* CREATE / EDIT FILTER MODAL */}
       {isFilterModalOpen && (
@@ -4566,6 +4649,96 @@ export default App
 // ===========================================================================
 // AI Rewrite Prompt Editor & Tester (shared bot + dashboard logic via API)
 // ===========================================================================
+// ---------------------------------------------------------------- key check
+//
+// "Can this endpoint and key be used?" — asked before saving, and again for a
+// stored config. The probe runs on the server (the key never leaves it) and the
+// answer names its own refusal, so a tenant can fix the thing that is wrong
+// instead of guessing.
+function ProviderKeyCheck({
+  aiConfigId,
+  provider,
+  model,
+  baseUrl,
+  apiKey,
+  isRtl,
+  compact,
+}: {
+  aiConfigId?: string
+  provider?: string
+  model?: string
+  baseUrl?: string
+  apiKey?: string
+  isRtl?: boolean
+  compact?: boolean
+}) {
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<CheckProviderKeyResponse | null>(null)
+  const [failure, setFailure] = useState('')
+  const view = describeKeyCheck(result, !!isRtl, !(apiKey || '').trim())
+
+  const run = async () => {
+    setBusy(true)
+    setFailure('')
+    setResult(null)
+    try {
+      setResult(
+        await api.checkProviderKey({
+          provider,
+          model,
+          base_url: baseUrl,
+          api_key: apiKey,
+          ai_config_id: aiConfigId,
+        }),
+      )
+    } catch (err: any) {
+      setFailure(String(err?.message || err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="btn btn-secondary"
+        style={{ alignSelf: 'flex-start', padding: compact ? '4px 8px' : '6px 10px', fontSize: '0.78rem' }}
+      >
+        <HeartPulse size={14} />
+        <span>
+          {busy
+            ? isRtl
+              ? 'در حال بررسی…'
+              : 'Checking…'
+            : isRtl
+              ? 'بررسی کلید و آدرس'
+              : 'Check key & endpoint'}
+        </span>
+      </button>
+      {failure && <span style={{ fontSize: '0.75rem', color: '#f87171' }}>{failure}</span>}
+      {view.text && (
+        <span
+          style={{
+            fontSize: '0.75rem',
+            color: view.ok ? '#34d399' : '#f87171',
+            display: 'flex',
+            gap: 6,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span>
+            {view.ok ? '✓' : '✕'} {view.text}
+          </span>
+          {view.detail && <span style={{ color: '#94a3b8', overflowWrap: 'anywhere' }}>{view.detail}</span>}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
   prompts: PromptTemplate[]
   aiConfigs: AIConfig[]
