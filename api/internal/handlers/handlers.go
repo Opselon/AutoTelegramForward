@@ -429,6 +429,11 @@ func enrichCustomMetadata(rawBody []byte, rule *pb.ForwardRule) {
 		}
 	}
 	parityKeys := []string{
+		// The route pair: without these a client's chosen bot never reaches the
+		// rule, so the task cannot inherit that bot's defaults or deliver
+		// through it — the setting would look saved in the UI and do nothing.
+		// Core validates ownership; the API never decides it.
+		"bot_token_id", "delivery_transport",
 		"topic_id", "debug_mode", "sender_type", "feature_group",
 		"duplicate_filters", "crypto_mode", "auto_posting", "power_control",
 		"forward_delay_seconds", "edit_time_limit_seconds", "process_raw_text", "button_to_text",
