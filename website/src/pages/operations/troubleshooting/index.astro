@@ -1,0 +1,503 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import Callout from '../../../components/Callout.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Accordion from '../../../components/Accordion.astro';
+import Icon from '../../../components/Icon.astro';
+import repoInfo from '../../../data/repo-info.json';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'Troubleshooting runbook';
+const pageDesc =
+  'One failure class at a time: unhealthy services, a login loop, a task that never forwards, a stuck queue, FloodWait, busy ports and truncated logs.';
+
+const toc = [
+  { id: 'fast-triage', title: 'Fast triage' },
+  { id: 'service-unhealthy', title: 'A service will not start' },
+  { id: 'dashboard-login', title: 'Dashboard login fails' },
+  { id: 'task-not-forwarding', title: 'A task never forwards' },
+  { id: 'queue-and-dlq', title: 'Queue stuck or dead-lettered' },
+  { id: 'floodwait-and-copy-protection', title: 'FloodWait & protected posts' },
+  { id: 'port-in-use', title: 'Port already in use' },
+  { id: 'rate-limiting', title: '429 rate limiting' },
+  { id: 'ai-unreachable', title: 'AI provider unreachable' },
+  { id: 'log-history', title: 'Log history empty' },
+  { id: 'stale-container', title: 'Container older than .env' },
+  { id: 'collect-evidence', title: 'Collect evidence' },
+];
+
+const triageSignals = [
+  ['<code>atf status</code>', 'Live board: services, listening ports and task counts in one read.'],
+  ['<code>atf validate --strict</code>', 'Config, compose, catalog parity and a secrets scan; exits non-zero on warnings too.'],
+  ['<code>atf doctor</code>', 'Deep checks across docker, the containers and their network aliases, ports, the API, the services, the database, logs, sessions, certificates, disk and AI providers. Exit code 0 when nothing failed, 1 when any check failed.'],
+  ['<code>atf logs query --level ERROR</code>', 'Attributable error history — actor, service, subject task, correlation id.'],
+];
+
+const apiProbes = [
+  ['<code>GET /healthz</code>', 'Liveness of the API process. Answers <code>200</code> while the gateway is up.'],
+  ['<code>GET /api/health/services</code>', 'Live probe of every service. <code>status</code> is <code>healthy</code> only when all answer, otherwise <code>degraded</code>.'],
+  ['<code>GET /api/system/setup</code>', '<code>ready</code> folds the env contract and the service probes together; also returns <code>missing_required</code> and the version block.'],
+  ['<code>GET /api/system/env</code>', 'The env contract itself: <code>ok</code> is true only when no required key is missing.'],
+];
+
+const servicePorts = [
+  ['api', '<code>8080</code>', 'Go gateway — REST control plane for the dashboard, mobile and CLI.'],
+  ['web', '<code>8088</code>', 'Rust Axum gateway plus the React SPA; also proxies <code>/api</code>.'],
+  ['core', '<code>50051</code>', 'Python engine over gRPC — reads Telegram and runs the pipeline.'],
+  ['logger', '<code>50052</code>', 'Log ingest and query service over gRPC.'],
+];
+
+const loginErrors = [
+  ['<code>401 LOGIN_CODE_REQUIRED</code>', 'No login code was sent to <code>POST /api/auth/exchange-bot-token</code>.'],
+  ['<code>401 INVALID_LOGIN_CODE</code>', 'The code is used, expired or unknown. Core answers the same for all three on purpose.'],
+  ['<code>429 COOLDOWN</code>', 'A still-valid link was minted for this user inside the 60-second cooldown. <code>Retry-After</code> carries the seconds left.'],
+];
+
+const forwardSignals = [
+  ['<code>[PIPELINE:ROUTE]</code>', 'A task matched the message. If you never see this, no rule matched — check source id and filters.'],
+  ['<code>[PIPELINE:FILTER_DROP]</code>', 'A filter rejected the post. Expected only if the rule says so.'],
+  ['<code>[PIPELINE:CLEAN]</code>', 'The cleaner removed content, leaving nothing worth sending.'],
+  ['<code>[PIPELINE:RESTRICTED_BYPASS]</code>', 'Protected content was re-uploaded instead of forwarded. Normal copy-protection handling.'],
+  ['<code>[PIPELINE:DELIVERED]</code>', 'Telegram confirmed the delivery.'],
+];
+
+const queueStates = [
+  ['<code>PENDING</code>', 'Queued, waiting for a worker.'],
+  ['<code>RUNNING</code>', 'A worker holds the job.'],
+  ['<code>RETRY_WAIT</code>', 'Waiting out its backoff — a paused task keeps jobs here by design.'],
+  ['<code>SUCCEEDED</code>', 'Delivered.'],
+  ['<code>UNKNOWN</code>', 'Telegram timed out; the outcome was never confirmed, so it is never reported as silent success or failure.'],
+  ['<code>DEAD_LETTER</code>', 'Retries were exhausted — inspect the recorded error, fix the cause, then replay.'],
+];
+
+const rateLimitResponses = [
+  ['<code>429</code>', '<code>rate_limited</code>', 'Body carries <code>retry_after_seconds</code>, <code>limit</code> and the <code>scope</code>; the header carries <code>Retry-After</code> too.'],
+  ['<code>503</code>', '<code>rate_limit_unavailable</code>', 'A security class could not evaluate its limit at all and fails closed — retry shortly, do not keep hammering.'],
+];
+
+const aiFallback = [
+  ['<code>SEND_ORIGINAL</code>', 'Deliver the untransformed text. Delivery is never blocked by the provider.'],
+  ['<code>DROP</code>', 'Drop the post rather than deliver without the rewrite. The default policy.'],
+  ['<code>RETRY</code>', 'Requeue the job and try the provider again later.'],
+  ['<code>QUARANTINE</code>', 'Hold the job for review instead of guessing.'],
+];
+
+const logFindings = [
+  ['<code>[LOGIN-CODE] refused reason=already_used</code>', 'The dashboard link was opened twice. Mint a fresh link from the bot.'],
+  ['<code>[LOGIN-CODE] refused reason=expired</code>', 'The code outlived its 600-second lifetime.'],
+  ['<code>[LOGIN-CODE] cooldown user_id=…</code>', 'A mint was refused because an unused link is still live.'],
+  ['<code>[PIPELINE:FLOODWAIT]</code>', 'Telegram rate-limited the account; the worker backed off and will resume.'],
+  ['<code>[PIPELINE:AI_REWRITE:OFF]</code>', 'A configured rewrite was disabled per task; the text was delivered unmodified.'],
+  ['<code>[PIPELINE:AI_REWRITE:FAILED]</code>', 'The provider call failed and the configured fallback policy ran.'],
+];
+
+const faq = [
+  {
+    q: 'Nothing is forwarding — where do I start?',
+    a: 'Run <code>atf status</code> then <code>atf doctor</code>. If a service is red, fix that first; the pipeline cannot read Telegram without core. If everything is green, run <code>atf rules simulate &lt;task&gt; --text "…" --show</code> to see exactly what the rule engine would do with a post.',
+  },
+  {
+    q: 'The dashboard link says the login expired, but I just clicked it.',
+    a: 'Login codes are single-use with a 600-second lifetime and are burned on the first exchange, so a second tab, a refresh or a link forwarded through chat history will fail. Ask the bot for a new link — it is valid for ten minutes and for one click.',
+  },
+  {
+    q: 'Bot says the port is already in use at boot.',
+    a: 'Run <code>atf validate --runtime</code>: the <code>ports</code> check reports which process owns the port. The contract is api 8080, web 8088, core 50051 and logger 50052.',
+  },
+  {
+    q: 'My log history looks empty after an upgrade.',
+    a: 'History is bounded by design: the logger evicts the oldest queued record under load and retention deletes rows older than the policy age (seven days by default). Check <code>atf logs stats</code> before assuming data loss.',
+  },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Reference', href: url('/api/') },
+    { name: 'Troubleshooting', href: url('/operations/troubleshooting/') },
+  ]}
+  path="/operations/troubleshooting/"
+  toc={toc}
+  faq={faq}
+  keywords={[
+    'AutoTelegramForward troubleshooting',
+    'atf doctor',
+    'Telegram FloodWait handling',
+    'dead letter queue replay',
+    'dashboard login code expired',
+  ]}
+>
+  <div class="space-y-6">
+    <p class="lede">
+      This is the page you open when something is wrong. Every section names the symptom as you meet it, the cause in
+      the implementation, the exact commands to run and the evidence that proves the fix. Nothing here asks you to guess.
+    </p>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="fast-triage" class="display-3 text-white mb-3 scroll-mt-24">Fast triage</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        Four commands, cheapest first, tell you whether the failure is the stack, the configuration or the rules. Run
+        them before reading any single section below.
+      </p>
+      <SpecTable headers={['Command', 'What it answers']} rows={triageSignals} caption="Start here" titleColumn={0} />
+
+      <p class="mt-5 mb-3 text-[15px] leading-relaxed text-slate-300">
+        The same questions are answerable over HTTP, which is what a dashboard or a monitoring script uses:
+      </p>
+      <CodeBlock
+        label="The four probes"
+        language="bash"
+        content={`curl -sf localhost:8080/healthz                       # is the gateway alive
+curl -s localhost:8080/api/health/services | jq .status  # healthy | degraded
+curl -s localhost:8080/api/system/setup | jq '.ready, .missing_required'
+curl -s localhost:8080/api/system/env | jq '.ok, .missing_required'`}
+      />
+      <SpecTable headers={['Probe', 'Reads']} rows={apiProbes} caption="API probes" titleColumn={0} />
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="service-unhealthy" class="display-3 text-white mb-3 scroll-mt-24">A service will not start, or is unhealthy</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        <strong>Symptom.</strong> The dashboard is blank, forwarding stopped, or a service shows red on the board.
+        <strong>Cause.</strong> One container is down — a crash loop, a missing env key, or a port already bound. The
+        stack tolerates a down web or logger without stopping delivery, but a down core reads nothing from Telegram.
+      </p>
+      <CodeBlock
+        label="Isolate the failing container"
+        language="bash"
+        content={`docker compose ps                 # state and ports of every container
+atf docker ps                     # the same, ATF containers only
+atf docker logs core              # docker logs for atf-core (tail 100)
+atf system services               # state, health, endpoint and version; exit 1 if any is down
+atf system services --json        # {services:[...], healthy:N, total:4, failing:[...]}`}
+      />
+      <p class="mt-4 mb-3 text-[15px] leading-relaxed text-slate-300">
+        Confirm the fix with <code>atf system services</code> (all four <code>OK</code>) and
+        <code>curl -s localhost:8080/api/health/services | jq .status</code> returning <code>healthy</code>. The port
+        contract each service is probed on is fixed:
+      </p>
+      <SpecTable headers={['Service', 'Port', 'Role']} rows={servicePorts} caption="Port contract" titleColumn={0} />
+      <Callout type="warn" class="mt-4" title="Fix the port owner, do not remap blindly">
+        <p>
+          If two services disagree about a port, remapping one hides the conflict and breaks the reverse proxy's upstream
+          resolution. <code>atf validate --runtime</code> reports which process owns a busy port so you can stop the
+          right thing.
+        </p>
+      </Callout>
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="dashboard-login" class="display-3 text-white mb-3 scroll-mt-24">Dashboard login fails or loops</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        <strong>Symptom.</strong> The link from the bot bounces back to the login screen, or the dashboard keeps asking
+        you to re-authenticate. <strong>Cause.</strong> A dashboard link carries a <em>single-use code</em>, not a
+        session token: codes live 600 seconds, are burned on first exchange, and only the core that minted one can trade
+        it for a session. A second tab, a refresh or a link replayed from chat history all fail the same way.
+      </p>
+      <SpecTable headers={['Response', 'Meaning']} rows={loginErrors} caption="Login error codes" titleColumn={0} />
+      <div class="mt-4 grid gap-4 lg:grid-cols-2">
+        <CodeBlock
+          label="The auth endpoints"
+          language="bash"
+          content={`# Exchange a bot-issued code for a 7-day session
+curl -s -X POST localhost:8080/api/auth/exchange-bot-token \\
+  -H 'Content-Type: application/json' \\
+  -d '{"login_code":"<code from the bot>"}' | jq
+
+# Ask for a fresh one-tap link (needs a Bearer token)
+curl -si localhost:8080/api/auth/bot-login-link \\
+  -H "Authorization: Bearer <token>" | grep -i retry-after`}
+        />
+        <CodeBlock
+          label="How it looks in the logs"
+          language="bash"
+          content={`atf logs query --service core -s LOGIN-CODE -n 20
+
+[LOGIN-CODE] refused reason=already_used user_id=1001
+[LOGIN-CODE] refused reason=expired      user_id=1001
+[LOGIN-CODE] cooldown user_id=1001`}
+        />
+      </div>
+      <Callout type="tip" class="mt-4" title="The re-login hand-off is deliberate">
+        <p>
+          When the stored session is dead, the dashboard calls <code>GET /api/auth/bot-login-link</code> instead of
+          looping. That endpoint mints for the caller's own verified identity only — never a user id from the body — and
+          answers <code>429 COOLDOWN</code> with a <code>Retry-After</code> header when a link from the last click is
+          still live, rather than invalidating it.
+        </p>
+      </Callout>
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="task-not-forwarding" class="display-3 text-white mb-3 scroll-mt-24">A task creates but never forwards</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        <strong>Symptom.</strong> The rule saves and shows as active, but posts from the source never reach the target.
+        <strong>Cause.</strong> Almost always one of five things: the bot is not an admin in the source or the target,
+        the channel id is a username where a numeric id is required (or the reverse), the rule is paused, deduplication
+        recognises the post, or a filter drops it.
+      </p>
+      <CodeBlock
+        label="Dry-run the exact decision"
+        language="bash"
+        content={`# Simulate a post through the live rule engine: no delivery is made
+atf rules simulate <task-id-or-name> --text "the post text" --show
+
+# The answer names matched / would_forward / reason / transformed_text,
+# so a filter or a pause is visible instead of guessed.
+atf rules list --json | jq '.[] | {id, name, enabled, paused}'`}
+      />
+      <SpecTable headers={['Log signal', 'What it tells you']} rows={forwardSignals} caption="Pipeline vocabulary" titleColumn={0} />
+      <Accordion
+        items={[
+          {
+            q: 'The bot must be an admin in both chats',
+            a: 'A bot that is only a member cannot post. Telegram answers <code>ChatAdminRequired</code>, which ATF classifies as <code>err_admin_required</code> and surfaces as “check admin”. Add the bot as an administrator of the source and of each target, then re-run <code>atf rules simulate</code>.',
+          },
+          {
+            q: 'Numeric id versus @username',
+            a: 'Telegram resolves a numeric chat id and an <code>@username</code> differently, and a bot cannot always resolve a username it has never seen the chat through. When a target stays silent while the simulation matches, store the numeric id the bot reports and try again.',
+          },
+          {
+            q: 'Paused rules keep their queued work',
+            a: 'A paused rule never forwards new messages, and jobs already queued for it are deferred with backoff rather than dropped, so resuming continues exactly where it stopped. Check the rule state before assuming a bug.',
+          },
+          {
+            q: 'Deduplication and filters',
+            a: 'A SHA-256 content fingerprint suppresses a post the rule has already delivered, and any active filter — keyword, link rule, media type — drops it outright with a <code>[PIPELINE:FILTER_DROP]</code> line. The simulation reports the same decision without touching Telegram.',
+          },
+        ]}
+      />
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="queue-and-dlq" class="display-3 text-white mb-3 scroll-mt-24">Messages stuck in the queue or dead-lettered</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        <strong>Symptom.</strong> Posts are accepted but nothing arrives, or the dashboard shows a growing backlog.
+        <strong>Cause.</strong> A job is waiting in the durable queue or has exhausted its retries and landed in the
+        dead-letter queue. Replay is deliberate: fix the cause first, then replay.
+      </p>
+      <div class="grid gap-4 lg:grid-cols-2">
+        <CodeBlock
+          label="Inspect and replay from the CLI"
+          language="bash"
+          content={`atf data queue                 # depth and in-flight jobs by state
+atf data dlq                   # dead-lettered jobs with their errors
+atf data dlq retry <id>        # replay one job after the cause is fixed
+atf data dlq purge             # clear the DLQ once nothing is worth replaying`}
+        />
+        <CodeBlock
+          label="The same over HTTP"
+          language="bash"
+          content={`curl -s localhost:8080/api/queue -H "Authorization: Bearer ***" | jq
+curl -s localhost:8080/api/dlq -H "Authorization: Bearer ***" | jq '.items'
+curl -s -X POST localhost:8080/api/dlq/<id>/retry \\
+  -H "Authorization: Bearer ***" | jq`}
+        />
+      </div>
+      <SpecTable headers={['State', 'Means']} rows={queueStates} caption="Delivery job states" titleColumn={0} />
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="floodwait-and-copy-protection" class="display-3 text-white mb-3 scroll-mt-24">FloodWait & protected posts</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        <strong>Symptom.</strong> Deliveries stop for a while, then resume on their own; or a post arrives re-uploaded
+        instead of as a forward. <strong>Cause.</strong> Telegram rate-limits accounts (<code>FloodWait</code>), and
+        channels can forbid forwarding. Neither is a bug.
+      </p>
+      <ol class="grid gap-2 list-none p-0 m-0">
+        <li class="flex gap-2.5 text-[14.5px] text-slate-300">
+          <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+          <span>The account is marked time-limited for the wait Telegram named, and its deliveries pause.</span>
+        </li>
+        <li class="flex gap-2.5 text-[14.5px] text-slate-300">
+          <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+          <span>Jobs stay queued in <code>RETRY_WAIT</code>; other accounts keep serving, so one limited account never stalls the installation.</span>
+        </li>
+        <li class="flex gap-2.5 text-[14.5px] text-slate-300">
+          <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+          <span>When a forward is refused because the channel is protected, the post is re-uploaded instead. Repeated FloodWaits mean your rates are too high, not that the code is broken.</span>
+        </li>
+      </ol>
+      <Callout type="warn" class="mt-4" title="Do not fight a FloodWait">
+        <p>
+          Retrying immediately is how accounts get banned. Watch the wait in the logs and let the queue drain; if it
+          happens constantly, lower the send rate rather than removing the backoff.
+        </p>
+      </Callout>
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="port-in-use" class="display-3 text-white mb-3 scroll-mt-24">“Port already in use”</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        <strong>Symptom.</strong> A service fails to start with <code>port already in use</code>, often <code>8088</code>
+        or <code>8080</code>. <strong>Cause.</strong> Another process — usually a previous stack that was not shut down —
+        owns the port. The contract is fixed: api <code>8080</code>, web <code>8088</code>, core <code>50051</code>,
+        logger <code>50052</code>.
+      </p>
+      <CodeBlock
+        label="Find the owner, then reclaim the port"
+        language="bash"
+        content={`atf validate --runtime      # the ports check names the owning process
+atf system restart          # recreate the stack on the current .env
+docker compose down         # or tear the old stack down first
+atf doctor                  # confirm 8080, 8088, 50051, 50052 all answering`}
+      />
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="rate-limiting" class="display-3 text-white mb-3 scroll-mt-24">429 rate limiting</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        <strong>Symptom.</strong> The dashboard or a script gets <code>429 Too Many Requests</code>. <strong>Cause.</strong>
+        The API enforces per-route limits in front of the control plane, and the unauthenticated auth endpoints are limited
+        hardest. Every refusal names itself, so a client can pace itself instead of discovering the limit by being refused.
+      </p>
+      <CodeBlock
+        label="Read the quota off the response"
+        language="bash"
+        content={`curl -si localhost:8080/api/rules -H "Authorization: Bearer ***" | grep -i 'x-ratelimit\\|retry-after'
+
+X-RateLimit-Limit: 120
+X-RateLimit-Remaining: 0
+Retry-After: 12
+X-RateLimit-Degraded: 1     # limit enforced per process (Redis unreachable)`}
+      />
+      <SpecTable headers={['Status', 'Code', 'Reading it']} rows={rateLimitResponses} caption="Rate-limit responses" titleColumn={0} />
+      <Callout type="info" class="mt-4" title="Degraded is not normal">
+        <p>
+          When Redis is unreachable the limiter still enforces a per-process fallback, but it reports that path
+          explicitly — <code>X-RateLimit-Degraded: 1</code> on the response and a degraded state on the admin panel.
+          A deployment that is quietly degraded should be repaired, not tolerated.
+        </p>
+      </Callout>
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="ai-unreachable" class="display-3 text-white mb-3 scroll-mt-24">An AI provider is unreachable</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        <strong>Symptom.</strong> Rewritten posts arrive unmodified, or a rule with a rewrite configured stops sending.
+        <strong>Cause.</strong> The provider is down, the key is wrong, or the rewrite was turned off for that task. A
+        provider failure must <em>never</em> block delivery: the outcome is decided by the rule's fallback policy.
+      </p>
+      <div class="grid gap-4 lg:grid-cols-2">
+        <CodeBlock
+          label="Prove the provider before blaming the pipeline"
+          language="bash"
+          content={`# Probe a provider key without sending anything
+curl -s -X POST localhost:8080/api/ai-configs/check-key \\
+  -H "Authorization: Bearer ***" -H 'Content-Type: application/json' \\
+  -d '{"provider":"openai","model":"gpt-4o-mini"}' | jq '.success, .healthy, .error_code'
+
+# Confirm the per-task toggle in the logs
+atf logs query --level WARN -s AI_REWRITE -n 20`}
+        />
+        <CodeBlock
+          label="Turn the rewrite off, if that is the answer"
+          language="bash"
+          content={`# The pipeline asks one question: ai_rewrite_active.
+# A task that has an ai_config_id rewrites, unless the task panel's
+# paid-addon switch vetoes it. That switch is paid_addons.ai_rewrite.
+atf rules settings set <task> paid_addons.ai_rewrite=false
+atf rules simulate <task> --text "sample" --show`}
+        />
+      </div>
+      <SpecTable headers={['Fallback policy', 'Behaviour when the provider fails']} rows={aiFallback} caption="AI fallback policy (per task)" titleColumn={0} />
+      <Callout type="success" class="mt-4" title="Delivery is never blocked by the provider">
+        <p>
+          A failed transform is counted and logged (<code>[PIPELINE:AI_REWRITE:FAILED]</code>) and the fallback policy
+          decides what happens to the post. A rewrite that is disabled per task logs
+          <code>[PIPELINE:AI_REWRITE:OFF]</code> and sends the original text — that is the intended path, not an error.
+        </p>
+      </Callout>
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="log-history" class="display-3 text-white mb-3 scroll-mt-24">Log history is empty or truncated</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        <strong>Symptom.</strong> Old entries are gone, or history is thinner than expected. <strong>Cause.</strong>
+        History is bounded on purpose. The logger keeps a bounded in-memory queue and, when it is full, evicts the
+        <em>oldest</em> queued record (reported as <code>dropped</code>) so the newest context survives. Age-based
+        retention then deletes rows past the policy age — seven days by default — while audit and security categories
+        are excluded from deletion by policy.
+      </p>
+      <CodeBlock
+        label="Check what retention and shedding did"
+        language="bash"
+        content={`atf logs stats                        # volume by service and level
+atf logs query --level ERROR --hours 24
+atf logs purge --older-than-days 30   # a separate, audited action — not the same as shedding
+curl -s localhost:8080/api/logs/policy -H "Authorization: Bearer ***" | jq`}
+      />
+      <Callout type="info" class="mt-4" title="Shedding is not purging">
+        <p>
+          A <code>dropped</code> counter means bounded-queue eviction under load; it is not a deletion of stored history.
+          Lowering a log level to reduce noise is also not a purge. If stored rows really are missing, check the retention
+          policy before assuming corruption.
+        </p>
+      </Callout>
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="stale-container" class="display-3 text-white mb-3 scroll-mt-24">A container is older than your .env</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        <strong>Symptom.</strong> The bot reports it is unconfigured although <code>.env</code> is filled, or the
+        validator warns <code>container-env</code>. <strong>Cause.</strong> Environment variables are read when a
+        container is created, so a container started before the last <code>.env</code> change keeps the old values.
+      </p>
+      <CodeBlock
+        label="Detect and fix"
+        language="bash"
+        content={`atf validate --strict      # container-env flags a container missing a key .env sets
+atf system restart         # recreate the containers on the current .env
+atf doctor                 # confirm every service reconnected`}
+      />
+      <SpecTable
+        headers={['Message', 'Fix']}
+        rows={[
+          ['<code>container is missing KEY although .env sets it</code>', '<code>atf system restart</code> — recreate on the current environment.'],
+          ['<code>container-env warns /api/system/env unavailable</code>', 'An older api image; <code>atf system restart</code> to pick up the current image.'],
+        ]}
+        caption="Container-env signals"
+        titleColumn={0}
+      />
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="collect-evidence" class="display-3 text-white mb-3 scroll-mt-24">Collect evidence before you ask for help</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        A bug report is only actionable with the correlation id, the log slice and a machine-readable doctor report.
+        Gather all three; they answer most follow-up questions before they are asked.
+      </p>
+      <CodeBlock
+        label="One command each"
+        language="bash"
+        content={`# 1. Correlation id — every request carries one end to end
+atf logs query --level ERROR -n 20          # copy the correlation id
+atf logs query --corr <correlation-id>      # the whole story for that request
+
+# 2. A log export (JSON or CSV)
+atf logs export --format json -o atf-logs.json --hours 24
+
+# 3. Machine-readable health
+atf doctor --json              # exit 0 clean, 1 if any check failed
+atf validate --json            # one JSON object on stdout
+atf system services --json     # {services:[...], healthy:N, total:4, failing:[...]}`}
+      />
+      <Callout type="tip" class="mt-4" title="Secrets are redacted for you">
+        <p>
+          Field-aware redaction runs on the logger and in error paths, so a doctor report or a log export is safe to
+          attach. Verify anything you copy by hand is a line number or an id, not a token.
+        </p>
+      </Callout>
+    </section>
+
+    <p class="text-[13px] text-slate-400">
+      The command surface is documented in the <a class="text-sky-400" href={url('/cli/')}>CLI reference</a>, the runtime
+      runbooks in <a class="text-sky-400" href={url('/operations/')}>Operations &amp; diagnostics</a>, and what shipped in
+      each version on the <a class="text-sky-400" href={url('/releases/')}>releases page</a>. This page describes
+      v{repoInfo.version}.
+    </p>
+  </div>
+</DocsLayout>

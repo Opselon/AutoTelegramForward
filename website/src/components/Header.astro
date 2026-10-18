@@ -3,6 +3,7 @@ import repoInfo from '../data/repo-info.json';
 import { primaryNav } from '../data/site';
 import { url } from '../utils/paths';
 import Icon from './Icon.astro';
+import Logo from './Logo.astro';
 
 const currentPath = Astro.url.pathname;
 const versionTag = `v${repoInfo.version}`;
@@ -27,18 +28,19 @@ const isActive = (href: string) => {
 <header class="sticky top-0 z-50 w-full glass border-b border-slate-800/80">
   <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between gap-2 h-14 lg:h-16">
-      <a href={url('/')} class="flex items-center gap-2.5 group shrink-0" aria-label="AutoTelegramForward home">
-        <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-tg-blue to-brand-500 flex items-center justify-center shadow-lg shadow-sky-500/20 group-hover:scale-105 transition-transform">
-          <Icon name="bolt" class="w-5 h-5 text-white" strokeWidth={2.2} />
-        </span>
-        <span class="font-bold text-[15px] sm:text-lg tracking-tight text-white flex items-center gap-2">
-          <span class="hidden xs:inline">AutoTelegramForward</span>
-          <span class="xs:hidden">ATF</span>
-          <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-sky-950 text-sky-300 border border-sky-800/60">
-            {versionTag}
-          </span>
-        </span>
-      </a>
+      <div class="flex items-center gap-2 shrink-0 min-w-0">
+        <a href={url('/')} class="group shrink-0 rounded-xl" aria-label="AutoTelegramForward home">
+          <Logo />
+        </a>
+        <a
+          href={url('/releases/')}
+          class="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold bg-sky-950/80 text-sky-300 border border-sky-800/60 hover:border-sky-600 transition-colors"
+          title={`Release ${versionTag} — release notes`}
+        >
+          <span class="pill-live-dot" aria-hidden="true"></span>
+          {versionTag}
+        </a>
+      </div>
 
       <nav class="hidden lg:flex items-center gap-0.5" aria-label="Main navigation">
         {

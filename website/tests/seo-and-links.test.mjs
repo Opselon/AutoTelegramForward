@@ -364,6 +364,30 @@ if (fontCount < 2) {
   console.log(`🔤 ${fontCount} self-hosted webfont files emitted.`);
 }
 
+
+// 8. Element ids must be unique per document. A duplicated id is invalid HTML
+//    and makes every in-page anchor ambiguous — the class of defect the new
+//    status and troubleshooting pages shipped with (section wrapper and heading
+//    sharing one id).
+let idChecked = 0;
+for (const file of htmlFiles) {
+  const relPath = path.relative(distDir, file);
+  const content = withoutScriptBodies(fs.readFileSync(file, 'utf8'));
+  const ids = [...content.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+  idChecked += ids.length;
+  const seen = new Set();
+  const duplicates = new Set();
+  for (const id of ids) {
+    if (seen.has(id)) duplicates.add(id);
+    seen.add(id);
+  }
+  if (duplicates.size > 0) {
+    console.error(`❌ [${relPath}] Duplicate element id(s): ${[...duplicates].join(', ')}`);
+    errors++;
+  }
+}
+console.log(`🆔 ${idChecked} element ids across ${htmlFiles.length} pages are unique.`);
+
 const totalWords = [...headingCounts.values()].reduce((sum, n) => sum + n, 0);
 console.log(`🧭 ${headingCounts.size} pages, ${totalWords} headings, snippet budgets enforced.`);
 

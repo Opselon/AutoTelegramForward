@@ -4,6 +4,7 @@ import Footer from '../components/Footer.astro';
 import BottomNav from '../components/BottomNav.astro';
 import SEO from '../components/SEO.astro';
 import Icon from '../components/Icon.astro';
+import Motion from '../components/Motion.astro';
 import interLatin from '../assets/fonts/inter-var-latin.woff2?url';
 import monoLatin from '../assets/fonts/jetbrains-mono-var-latin.woff2?url';
 import '../styles/fonts.css';
@@ -50,7 +51,7 @@ const favicon =
 ---
 
 <!doctype html>
-<html lang="en" class="dark" data-theme="dark">
+<html lang="en" class="dark no-js" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href={favicon} />
@@ -74,6 +75,9 @@ const favicon =
           root.setAttribute('data-theme', resolved);
           root.setAttribute('data-theme-mode', mode);
           root.classList.toggle('dark', resolved === 'dark');
+          // Motion is progressive: the class only exists so a JS-less visitor
+          // never sees content stuck at opacity 0.
+          root.classList.remove('no-js');
           document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
             m.setAttribute('content', resolved === 'light' ? '#f6f8fc' : '#0b1120');
           });
@@ -112,6 +116,7 @@ const favicon =
     </main>
     <Footer />
     <BottomNav />
+    <Motion />
 
     <button type="button" class="to-top" id="to-top" aria-label="Back to top" hidden>
       <Icon name="arrow-up" class="w-4 h-4" strokeWidth={2.2} />

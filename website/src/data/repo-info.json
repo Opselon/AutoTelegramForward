@@ -4,12 +4,12 @@
   "starsUrl": "https://img.shields.io/github/stars/Opselon/AutoTelegramForward?style=social",
   "docsUrl": "https://opselon.github.io/AutoTelegramForward/",
   "license": "MIT",
-  "version": "2.2.1",
-  "releaseTag": "v2.2.1",
+  "version": "2.2.4",
+  "releaseTag": "v2.2.4",
   "releaseDate": "2026-10-16",
-  "gitCommit": "3d4366a",
-  "gitDate": "2026-10-17T13:49:34+03:30",
-  "syncTimestamp": "2026-10-17T12:57:11.979Z",
+  "gitCommit": "6bb4172",
+  "gitDate": "2026-10-19T00:31:47+03:30",
+  "syncTimestamp": "2026-10-18T21:52:52.773Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -28,16 +28,20 @@
     "uz",
     "zh"
   ],
-  "i18nKeyCount": 1207,
+  "i18nKeyCount": 1311,
   "stats": {
-    "pythonTests": 62,
-    "goTests": 21,
-    "grpcRpcCount": 64,
+    "pythonTests": 96,
+    "goTests": 35,
+    "grpcRpcCount": 78,
     "cliGroups": 24,
     "featureCatalogEntries": 18,
     "services": 4,
     "locales": 10,
-    "i18nKeys": 1207
+    "i18nKeys": 1311,
+    "implementedFeatures": 14,
+    "partialFeatures": 2,
+    "plannedFeatures": 2,
+    "apiRoutes": 97
   },
   "featureCatalog": [
     "Create forwarding rule",
@@ -59,6 +63,275 @@
     "Slow-query threshold monitoring with configurable limits",
     "Bounded-label metrics aggregation (per-feature latency, error rates)"
   ],
+  "featureCatalogDetail": [
+    {
+      "id": "FWD_RULE_CREATE",
+      "name": "Create forwarding rule",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "miniapp"
+      ],
+      "dbTables": [
+        "forward_rules"
+      ],
+      "completionCondition": "rule row committed with generated id and owner_user_id",
+      "entryPoints": [
+        "api/internal/handlers/handlers.go#CreateRule",
+        "core/infrastructure/grpc_server/servicers.py#ForwardRuleControlServicer.CreateRule",
+        "core/infrastructure/telegram/pro_bot_ui.py#_finish_rule_creation"
+      ]
+    },
+    {
+      "id": "FWD_RULE_UPDATE",
+      "name": "Update forwarding rule (optimistic concurrency)",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [
+        "forward_rules"
+      ],
+      "completionCondition": "version-bumped UPDATE committed; version conflict returns explicit error",
+      "entryPoints": [
+        "core/infrastructure/persistence/postgres_repositories.py#update",
+        "core/infrastructure/grpc_server/servicers.py#UpdateRule"
+      ]
+    },
+    {
+      "id": "FWD_RULE_PAUSE_RESUME",
+      "name": "Pause/resume rule with durable queue semantics",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [
+        "forward_rules",
+        "delivery_jobs"
+      ],
+      "completionCondition": "paused rules never forward new messages; queued jobs deferred with backoff; resume unblocks RETRY_WAIT jobs",
+      "entryPoints": [
+        "core/domain/entities.py#is_currently_paused",
+        "core/domain/services.py#evaluate_rule",
+        "core/application/pipeline.py#_process_for_rule",
+        "core/infrastructure/telegram/durable_queue.py#_process_job",
+        "core/infrastructure/grpc_server/servicers.py#ResumeRule"
+      ]
+    },
+    {
+      "id": "FWD_MESSAGE_DELIVERY",
+      "name": "Durable message forwarding pipeline",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [
+        "delivery_jobs",
+        "message_map",
+        "content_dedup"
+      ],
+      "completionCondition": "Telegram API confirms delivery (target_msg_id > 0); UNKNOWN on timeout; DLQ after max retries",
+      "entryPoints": [
+        "core/application/pipeline.py#DurableMessagePipeline",
+        "core/infrastructure/telegram/durable_queue.py#_process_job",
+        "core/infrastructure/telegram/dispatcher.py"
+      ]
+    },
+    {
+      "id": "FWD_BRANDING_HOP",
+      "name": "Branding hop (A -> C -> B) composed with every message transform",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [
+        "delivery_jobs (branding hop state)"
+      ],
+      "completionCondition": "the processed message is posted into C once per deliverable and the target receives a forward of C; transforms run exactly once (never skipped or doubled by the worker); any hop failure falls back to a direct A -> B delivery",
+      "entryPoints": [
+        "core/domain/branding.py#should_hop",
+        "core/application/branding_hop.py#post_to_channel",
+        "core/application/pipeline.py#_perform_brand_hop",
+        "core/infrastructure/telegram/dispatcher.py#perform_branding_hop",
+        "core/infrastructure/telegram/durable_queue.py#_dispatch_to_telegram"
+      ]
+    },
+    {
+      "id": "FWD_CONTENT_DEDUP",
+      "name": "SHA-256 content fingerprint deduplication",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [
+        "content_dedup"
+      ],
+      "completionCondition": "",
+      "entryPoints": [
+        "core/application/pipeline.py#_process_for_rule",
+        "core/infrastructure/persistence/postgres_repositories.py#PostgresMessageMapRepository.was_content_forwarded"
+      ]
+    },
+    {
+      "id": "FWD_KEYWORD_REPLY",
+      "name": "Keyword-triggered reply add-on",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "",
+      "entryPoints": [
+        "core/application/pipeline.py#_process_for_rule (job_kind=keyword_reply)"
+      ]
+    },
+    {
+      "id": "OBS_CENTRAL_LOGGER",
+      "name": "Central Logger gRPC microservice",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [
+        "logs (logger-owned SQLite)"
+      ],
+      "completionCondition": "durable insert before ack; bounded queue with drop-oldest shedding counter",
+      "entryPoints": [
+        "rust/logger/src/transport.rs#LogControlService",
+        "core/observability/log_client.py#LogClient"
+      ]
+    },
+    {
+      "id": "OBS_CORRELATION_ID",
+      "name": "End-to-end correlation ID propagation",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "ID extracted/generated at gateway, echoed in response, propagated via gRPC metadata, persisted in queue job payload",
+      "entryPoints": [
+        "api/internal/middleware/correlation.go",
+        "api/internal/grpcclient/grpcclient.go",
+        "web/backend/src/main.rs#proxy_api_handler",
+        "core/application/pipeline.py#PipelineContext.correlation_id",
+        "core/infrastructure/telegram/durable_queue.py#enqueue_delivery"
+      ]
+    },
+    {
+      "id": "OBS_DB_QUERY_EVENTS",
+      "name": "Database query error/latency events",
+      "status": "PARTIALLY_IMPLEMENTED",
+      "bucket": "partial",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "",
+      "entryPoints": [
+        "core/infrastructure/persistence/postgres_repositories.py#_execute_db/_fetch_all_db",
+        "core/infrastructure/persistence/database.py#SqliteDatabase.execute"
+      ]
+    },
+    {
+      "id": "OBS_AUDIT_OUTBOX",
+      "name": "Transactional audit / outbox for business mutations",
+      "status": "PARTIALLY_IMPLEMENTED",
+      "bucket": "partial",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "",
+      "entryPoints": [
+        "(new) core/infrastructure/persistence/audit_outbox.py",
+        "scripts/postgres/schema.sql#audit_events/audit_outbox"
+      ]
+    },
+    {
+      "id": "OBS_UI_LOG_EXPLORER",
+      "name": "Web DevOps log explorer with live stream, filters, stats, purge",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "",
+      "entryPoints": [
+        "web/frontend/src/App.tsx#devops tab",
+        "api/internal/handlers/handlers.go#QueryLogs/LogStats/PurgeLogs"
+      ]
+    },
+    {
+      "id": "OBS_SECRET_REDACTION",
+      "name": "Field-aware secret redaction in logs/errors",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "",
+      "entryPoints": [
+        "core/infrastructure/telegram/errors.py#redact",
+        "core/infrastructure/telegram/raw_tracer.py"
+      ]
+    },
+    {
+      "id": "OBS_DLQ_LIFECYCLE",
+      "name": "Dead-letter queue inspect/replay/purge with tenant scoping",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "",
+      "entryPoints": [
+        "core/infrastructure/grpc_server/servicers.py#DeliveryControlServicer"
+      ]
+    },
+    {
+      "id": "OBS_UNKNOWN_OUTCOME",
+      "name": "Telegram timeout classified as OUTCOME_UNCONFIRMED (never silent success/failure)",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "",
+      "entryPoints": [
+        "core/infrastructure/telegram/durable_queue.py#_process_job (mark_unknown / DeliveryStatus.UNKNOWN)"
+      ]
+    },
+    {
+      "id": "OBS_HEALTH_TOPOLOGY",
+      "name": "Service topology live health probing",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "",
+      "entryPoints": [
+        "api/main.go#/api/v1/health/services",
+        "web/frontend/src/App.tsx#Services Topology panel"
+      ]
+    },
+    {
+      "id": "OBS_SLOW_QUERY_MONITOR",
+      "name": "Slow-query threshold monitoring with configurable limits",
+      "status": "NOT_IMPLEMENTED",
+      "bucket": "planned",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "",
+      "entryPoints": [
+        "(new) core/infrastructure/persistence/db_observability.py"
+      ]
+    },
+    {
+      "id": "OBS_METRICS_AGGREGATION",
+      "name": "Bounded-label metrics aggregation (per-feature latency, error rates)",
+      "status": "NOT_IMPLEMENTED",
+      "bucket": "planned",
+      "clients": [],
+      "dbTables": [],
+      "completionCondition": "",
+      "entryPoints": [
+        "(new) core/infrastructure/persistence/db_observability.py#metrics"
+      ]
+    }
+  ],
+  "featureCatalogStatus": {
+    "implemented": 14,
+    "partial": 2,
+    "planned": 2
+  },
   "verifiedFeatures": [
     {
       "category": "Routing & Task Model",
@@ -590,6 +863,13 @@
     {
       "group": "Service health & system",
       "method": "GET",
+      "path": "/api/openapi.yaml",
+      "handler": "h.OpenAPIDoc",
+      "auth": "none"
+    },
+    {
+      "group": "Service health & system",
+      "method": "GET",
       "path": "/api/system/env",
       "handler": "h.EnvContractHandler",
       "auth": "none"
@@ -641,6 +921,13 @@
       "method": "GET",
       "path": "/healthz",
       "handler": "h.Health",
+      "auth": "none"
+    },
+    {
+      "group": "Authentication",
+      "method": "GET",
+      "path": "/api/auth/bot-login-link",
+      "handler": "h.AuthBotLoginLink",
       "auth": "none"
     },
     {
@@ -715,6 +1002,20 @@
     },
     {
       "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/ai-configs/check-key",
+      "handler": "h.CheckProviderKey",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/ai-configs/providers",
+      "handler": "h.ListAIProviders",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
       "method": "GET",
       "path": "/api/audit/events",
       "handler": "h.QueryAuditEvents",
@@ -732,6 +1033,41 @@
       "method": "POST",
       "path": "/api/backup/import",
       "handler": "h.BackupImport",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/bot-tokens",
+      "handler": "h.ListBotTokens",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/bot-tokens",
+      "handler": "h.CreateBotToken",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "DELETE",
+      "path": "/api/bot-tokens/{id}",
+      "handler": "h.DeleteBotToken",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/bot-tokens/{id}/defaults",
+      "handler": "h.GetBotDefaults",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "PUT",
+      "path": "/api/bot-tokens/{id}/defaults",
+      "handler": "h.SetBotDefaults",
       "auth": "bearer"
     },
     {
@@ -1078,6 +1414,41 @@
       "auth": "bearer"
     },
     {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/tasks",
+      "handler": "h.ListTasks",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/tasks",
+      "handler": "h.CreateTask",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/tasks/{id}",
+      "handler": "h.GetTask",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/tasks/{id}/cancel",
+      "handler": "h.CancelTask",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/tasks/{id}/retry",
+      "handler": "h.RetryTask",
+      "auth": "bearer"
+    },
+    {
       "group": "Administration",
       "method": "GET",
       "path": "/api/admin/admins",
@@ -1129,6 +1500,13 @@
     {
       "group": "Administration",
       "method": "GET",
+      "path": "/api/admin/ratelimit",
+      "handler": "h.RateLimitStatus",
+      "auth": "bearer"
+    },
+    {
+      "group": "Administration",
+      "method": "GET",
       "path": "/api/admin/settings",
       "handler": "h.AdminGetSettings",
       "auth": "bearer"
@@ -1162,6 +1540,13 @@
     "Administration"
   ],
   "apiAuthRoutes": [
+    {
+      "group": "Authentication",
+      "method": "GET",
+      "path": "/api/auth/bot-login-link",
+      "handler": "h.AuthBotLoginLink",
+      "auth": "none"
+    },
     {
       "group": "Authentication",
       "method": "PATCH",
@@ -1287,6 +1672,36 @@
       ]
     },
     {
+      "group": "Task lifecycle (async jobs)",
+      "endpoints": [
+        [
+          "GET",
+          "/api/tasks",
+          "List the caller's async jobs (state machine, tenant-scoped)"
+        ],
+        [
+          "POST",
+          "/api/tasks",
+          "Submit an async job (session backup, DLQ replay/purge, backup export); idempotent via idempotency_key"
+        ],
+        [
+          "GET",
+          "/api/tasks/{id}",
+          "Poll one job: state, attempt, timestamps, structured error details"
+        ],
+        [
+          "POST",
+          "/api/tasks/{id}/cancel",
+          "Cancel a queued job before a worker claims it"
+        ],
+        [
+          "POST",
+          "/api/tasks/{id}/retry",
+          "Re-queue a failed job (attempt budget reset)"
+        ]
+      ]
+    },
+    {
       "group": "Sessions",
       "endpoints": [
         [
@@ -1408,6 +1823,11 @@
           "POST",
           "/api/dlq/{id}/retry",
           "Replay a dead-lettered job"
+        ],
+        [
+          "DELETE",
+          "/api/dlq",
+          "Purge dead-lettered jobs for the caller scope (answers with the number removed)"
         ]
       ]
     }

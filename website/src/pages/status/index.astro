@@ -1,0 +1,280 @@
+---
+/**
+ * Status & roadmap board.
+ *
+ * Every row, count and status on this page is read from
+ * `repoInfo.featureCatalogDetail` / `repoInfo.featureCatalogStatus`, which the
+ * build regenerates from docs/feature_catalog.json. No feature name is typed by
+ * hand, and the page never claims more than the catalog does.
+ */
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import Callout from '../../components/Callout.astro';
+import Icon from '../../components/Icon.astro';
+import repoInfo from '../../data/repo-info.json';
+import { url } from '../../utils/paths';
+
+const pageTitle = 'Status & roadmap';
+const pageDesc =
+  'An honest implemented / partial / planned board for AutoTelegramForward, generated from the feature catalog on every build with the reason each is unfinished.';
+
+const toc = [
+  { id: 'implemented', title: 'Implemented' },
+  { id: 'partial', title: 'Partially implemented' },
+  { id: 'planned', title: 'Planned' },
+  { id: 'how-produced', title: 'How this list is produced' },
+];
+
+const catalog = repoInfo.featureCatalogDetail ?? [];
+const counts = repoInfo.featureCatalogStatus ?? { implemented: 0, partial: 0, planned: 0 };
+
+const implemented = catalog.filter((f) => f.bucket === 'implemented');
+const partial = catalog.filter((f) => f.bucket === 'partial');
+const planned = catalog.filter((f) => f.bucket === 'planned');
+
+const total = catalog.length;
+
+const statusChipClass = (bucket: string) =>
+  bucket === 'implemented'
+    ? 'status-chip status-chip--ok'
+    : bucket === 'partial'
+      ? 'status-chip status-chip--partial'
+      : 'status-chip status-chip--planned';
+
+const statusLabel = (f: (typeof catalog)[number]) =>
+  f.status === 'IMPLEMENTED'
+    ? 'Implemented'
+    : f.status === 'PARTIALLY_IMPLEMENTED'
+      ? 'Partially implemented'
+      : 'Not implemented';
+
+/** The catalog marks an aspirational entry point with a leading "(new)". */
+const isPlannedEntryPoint = (entry: string) => entry.startsWith('(new)');
+const cleanEntryPoint = (entry: string) => entry.replace(/^\(new\)\s*/, '');
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/status/"
+  breadcrumbs={[
+    { name: 'Reference', href: url('/api/') },
+    { name: 'Status', href: url('/status/') },
+  ]}
+  toc={toc}
+  itemList={{
+    name: 'AutoTelegramForward feature status',
+    items: catalog.map((f) => ({
+      name: f.name,
+      description: `Status: ${f.status}.`,
+      url: url('/status/'),
+    })),
+  }}
+  keywords={[
+    'AutoTelegramForward status',
+    'feature roadmap',
+    'implemented vs planned',
+    'feature catalog',
+  ]}
+>
+  <div class="space-y-6">
+    <p class="lede">
+      This page does not have an opinion about what is finished. It renders the catalog the repository maintains for
+      itself: <code>docs/feature_catalog.json</code>, read at build time and shown verbatim. {total} features are listed —
+      each one either implemented, partially implemented, or planned.
+    </p>
+
+    <div class="not-prose grid gap-3 sm:grid-cols-3 my-5">
+      <div class="stat">
+        <span class="stat-value text-emerald-400">{counts.implemented}</span>
+        <span class="stat-label">Implemented</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value text-amber-400">{counts.partial}</span>
+        <span class="stat-label">Partial</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value text-slate-300">{counts.planned}</span>
+        <span class="stat-label">Planned</span>
+      </div>
+    </div>
+
+    <p class="text-[14px] leading-relaxed text-slate-300">
+      The three counts sum to {total}. A row is <strong>implemented</strong> only when the catalog records{' '}
+      <code>IMPLEMENTED</code> for it; anything the catalog marks <code>PARTIALLY_IMPLEMENTED</code> or{' '}
+      <code>NOT_IMPLEMENTED</code> is shown as partial or planned here, with the reason.
+    </p>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="implemented" class="display-3 text-white mb-3 scroll-mt-24">
+        Implemented <span class="chip chip-success ml-1">{implemented.length}</span>
+      </h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        Shipped and reachable through the clients and entry points the catalog names. Where a completion condition is
+        recorded, it is what the feature had to prove to leave this list.
+      </p>
+      <ul class="grid gap-3 list-none p-0 m-0">
+        {
+          implemented.map((f) => (
+            <li class="card">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-semibold text-slate-100">{f.name}</span>
+                <span class={statusChipClass(f.bucket)}>{statusLabel(f)}</span>
+                {f.clients.map((client) => (
+                  <span class="chip chip-accent font-mono">{client}</span>
+                ))}
+              </div>
+              {f.completionCondition ? (
+                <p class="m-0 mt-2 text-[12.5px] leading-relaxed text-slate-400">
+                  <span class="text-slate-500">Completion condition:</span> {f.completionCondition}
+                </p>
+              ) : (
+                <p class="m-0 mt-2 text-[12.5px] leading-relaxed text-slate-500">
+                  No completion condition recorded in the catalog.
+                </p>
+              )}
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="partial" class="display-3 text-white mb-3 scroll-mt-24">
+        Partially implemented <span class="chip chip-warn ml-1">{partial.length}</span>
+      </h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        The catalog marks these <code>PARTIALLY_IMPLEMENTED</code>, so the site does not present them as finished. Each
+        row states exactly what is missing.
+      </p>
+      <ul class="grid gap-3 list-none p-0 m-0">
+        {
+          partial.map((f) => (
+            <li class="card">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="font-semibold text-slate-100">{f.name}</span>
+                <span class={statusChipClass(f.bucket)}>{statusLabel(f)}</span>
+                {f.clients.map((client) => (
+                  <span class="chip chip-accent font-mono">{client}</span>
+                ))}
+              </div>
+              <Callout type="warn" title="Why this is only partial">
+                {f.completionCondition ? (
+                  <p class="m-0">
+                    Recorded as <code>PARTIALLY_IMPLEMENTED</code>. The catalog still expects:{' '}
+                    {f.completionCondition}
+                  </p>
+                ) : (
+                  <p class="m-0">
+                    Recorded as <code>PARTIALLY_IMPLEMENTED</code> with no completion condition, so there is no recorded
+                    bar it has passed. The pieces below exist; the catalog does not yet declare the feature complete.
+                  </p>
+                )}
+              </Callout>
+              <ul class="mt-3 grid gap-1.5 list-none p-0 m-0">
+                {f.entryPoints.map((entry) => (
+                  <li class="flex items-start gap-2 text-[12.5px] text-slate-400 font-mono break-all">
+                    <Icon
+                      name={isPlannedEntryPoint(entry) ? 'alert' : 'check'}
+                      class={`w-3.5 h-3.5 mt-[3px] shrink-0 ${isPlannedEntryPoint(entry) ? 'text-amber-400' : 'text-emerald-400'}`}
+                    />
+                    <span>
+                      {isPlannedEntryPoint(entry) ? <span class="text-amber-400">[new] </span> : null}
+                      {cleanEntryPoint(entry)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {f.entryPoints.some(isPlannedEntryPoint) && (
+                <p class="m-0 mt-2 text-[12px] text-amber-400">
+                  An entry point marked <code>[new]</code> is one the catalog records as newly planned rather than as a
+                  runtime path the pipeline reaches today.
+                </p>
+              )}
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="planned" class="display-3 text-white mb-3 scroll-mt-24">
+        Planned <span class="chip ml-1">{planned.length}</span>
+      </h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        The catalog records these <code>NOT_IMPLEMENTED</code>. Each of their entry points is marked{' '}
+        <code>(new)</code> — recorded as planned rather than as a path the pipeline reaches today — so nothing here is
+        described as working.
+      </p>
+      <ul class="grid gap-3 list-none p-0 m-0">
+        {
+          planned.map((f) => (
+            <li class="card">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="font-semibold text-slate-100">{f.name}</span>
+                <span class={statusChipClass(f.bucket)}>{statusLabel(f)}</span>
+                {f.clients.map((client) => (
+                  <span class="chip chip-accent font-mono">{client}</span>
+                ))}
+              </div>
+              <Callout type="warn" title="Why this is not available yet">
+                <p class="m-0">
+                  Recorded as <code>NOT_IMPLEMENTED</code>. Its only entry point is marked <code>(new)</code>, so the
+                  catalog is describing a planned file rather than a runtime path the pipeline reaches today. Treat this
+                  as a roadmap item, not a feature.
+                </p>
+              </Callout>
+              <ul class="mt-3 grid gap-1.5 list-none p-0 m-0">
+                {f.entryPoints.map((entry) => (
+                  <li class="flex items-start gap-2 text-[12.5px] text-slate-400 font-mono break-all">
+                    <Icon name="alert" class="w-3.5 h-3.5 mt-[3px] shrink-0 text-amber-400" />
+                    <span>
+                      <span class="text-amber-400">[new] </span>
+                      {cleanEntryPoint(entry)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="not-prose scroll-mt-24">
+      <h2 id="how-produced" class="display-3 text-white mb-3 scroll-mt-24">How this list is produced</h2>
+      <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+        The single source of truth is <code>docs/feature_catalog.json</code> at the root of the repository. On every
+        build, <code>scripts/sync-repo-content.mjs</code> reads that file and writes it into
+        <code>src/data/repo-info.json</code> as <code>featureCatalogDetail</code> and <code>featureCatalogStatus</code>,
+        which this page reads directly. No feature name, status or count on this page is typed by hand, so the site
+        cannot claim more than the repository does.
+      </p>
+      <div class="grid gap-3 sm:grid-cols-3 my-5">
+        <div class="card">
+          <p class="m-0 text-[12px] uppercase tracking-wider text-slate-400">Source of truth</p>
+          <p class="m-0 mt-1 font-mono text-[13px] text-slate-200">docs/feature_catalog.json</p>
+        </div>
+        <div class="card">
+          <p class="m-0 text-[12px] uppercase tracking-wider text-slate-400">Built by</p>
+          <p class="m-0 mt-1 font-mono text-[13px] text-slate-200">scripts/sync-repo-content.mjs</p>
+        </div>
+        <div class="card">
+          <p class="m-0 text-[12px] uppercase tracking-wider text-slate-400">Rendered from</p>
+          <p class="m-0 mt-1 font-mono text-[13px] text-slate-200">repoInfo.featureCatalogDetail</p>
+        </div>
+      </div>
+      <Callout type="info" title="Read the release notes next to this board">
+        <p>
+          This page states <em>what exists</em>; it is not a changelog. For what shipped in each version — and the order
+          the features landed in — see the <a class="text-sky-400" href={url('/releases/')}>release notes</a>. The command
+          surface the implemented rows expose is documented in the <a class="text-sky-400" href={url('/cli/')}>CLI reference</a>
+          and the <a class="text-sky-400" href={url('/api/')}>REST API reference</a>.
+        </p>
+      </Callout>
+      <p class="text-[13px] text-slate-400">
+        Catalog state for AutoTelegramForward v{repoInfo.version} (commit {repoInfo.gitCommit}): {counts.implemented}{' '}
+        implemented, {counts.partial} partial, {counts.planned} planned.
+      </p>
+    </section>
+  </div>
+</DocsLayout>

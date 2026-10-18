@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-16T17:58:30.913Z",
-  "commit": "9a26ace",
-  "gitDate": "2026-10-16T17:52:14Z",
+  "generatedAt": "2026-10-18T21:52:53.279Z",
+  "commit": "6bb4172",
+  "gitDate": "2026-10-19T00:31:47+03:30",
   "granularity": {
     "python": "module (file)",
     "go": "package (directory)",
@@ -21,33 +21,41 @@
       "role": "Forwarding engine",
       "tech": "Python 3 · Pyrogram · gRPC",
       "blurb": "Domain model, rule engine and the durable delivery pipeline. Owns the Telegram sessions and the database.",
-      "files": 120,
-      "sourceFiles": 119,
-      "loc": 44397,
+      "files": 179,
+      "sourceFiles": 178,
+      "loc": 62541,
       "langs": [
         "python"
       ],
       "areas": [
         {
           "id": "infrastructure",
-          "files": 38,
-          "loc": 21445,
+          "files": 50,
+          "loc": 27145,
           "langs": [
             "python"
           ]
         },
         {
           "id": "tests",
-          "files": 58,
-          "loc": 12457,
+          "files": 97,
+          "loc": 21656,
+          "langs": [
+            "python"
+          ]
+        },
+        {
+          "id": "application",
+          "files": 13,
+          "loc": 4623,
           "langs": [
             "python"
           ]
         },
         {
           "id": "domain",
-          "files": 7,
-          "loc": 3601,
+          "files": 9,
+          "loc": 4235,
           "langs": [
             "python"
           ]
@@ -55,15 +63,7 @@
         {
           "id": "proto",
           "files": 3,
-          "loc": 2966,
-          "langs": [
-            "python"
-          ]
-        },
-        {
-          "id": "application",
-          "files": 7,
-          "loc": 2916,
+          "loc": 3698,
           "langs": [
             "python"
           ]
@@ -71,7 +71,7 @@
         {
           "id": "(root)",
           "files": 4,
-          "loc": 697,
+          "loc": 869,
           "langs": [
             "python"
           ]
@@ -94,25 +94,25 @@
       "role": "Control plane",
       "tech": "Go · net/http · gRPC client",
       "blurb": "Stateless REST control plane. Authenticates clients, applies tenant scoping, and speaks gRPC to the core and the logger.",
-      "files": 37,
-      "sourceFiles": 35,
-      "loc": 19616,
+      "files": 65,
+      "sourceFiles": 63,
+      "loc": 27979,
       "langs": [
         "go"
       ],
       "areas": [
         {
-          "id": "proto",
-          "files": 2,
-          "loc": 10738,
+          "id": "internal",
+          "files": 60,
+          "loc": 14479,
           "langs": [
             "go"
           ]
         },
         {
-          "id": "internal",
-          "files": 32,
-          "loc": 8734,
+          "id": "proto",
+          "files": 2,
+          "loc": 13298,
           "langs": [
             "go"
           ]
@@ -120,7 +120,7 @@
         {
           "id": "(root)",
           "files": 1,
-          "loc": 144,
+          "loc": 202,
           "langs": [
             "go"
           ]
@@ -160,25 +160,25 @@
       "role": "Operator console",
       "tech": "TypeScript · React · Vite",
       "blurb": "Task control, log explorer, diagnostics and admin surfaces for a signed-in tenant.",
-      "files": 18,
-      "sourceFiles": 13,
-      "loc": 10852,
+      "files": 25,
+      "sourceFiles": 20,
+      "loc": 13003,
       "langs": [
         "typescript"
       ],
       "areas": [
         {
           "id": "(root)",
-          "files": 4,
-          "loc": 5670,
+          "files": 8,
+          "loc": 6850,
           "langs": [
             "typescript"
           ]
         },
         {
           "id": "components",
-          "files": 8,
-          "loc": 4923,
+          "files": 11,
+          "loc": 5893,
           "langs": [
             "typescript"
           ]
@@ -186,7 +186,7 @@
         {
           "id": "pages",
           "files": 1,
-          "loc": 259,
+          "loc": 260,
           "langs": [
             "typescript"
           ]
@@ -201,9 +201,9 @@
       "role": "Client",
       "tech": "Dart · Flutter",
       "blurb": "Native client with its own 10-locale catalog and the same REST contract as the dashboard.",
-      "files": 43,
-      "sourceFiles": 43,
-      "loc": 19344,
+      "files": 44,
+      "sourceFiles": 44,
+      "loc": 20982,
       "langs": [
         "dart"
       ],
@@ -211,7 +211,7 @@
         {
           "id": "features",
           "files": 19,
-          "loc": 9101,
+          "loc": 9744,
           "langs": [
             "dart"
           ]
@@ -219,15 +219,15 @@
         {
           "id": "l10n",
           "files": 10,
-          "loc": 5409,
+          "loc": 6039,
           "langs": [
             "dart"
           ]
         },
         {
           "id": "core",
-          "files": 8,
-          "loc": 3629,
+          "files": 9,
+          "loc": 3998,
           "langs": [
             "dart"
           ]
@@ -235,7 +235,7 @@
         {
           "id": "widgets",
           "files": 4,
-          "loc": 1136,
+          "loc": 1132,
           "langs": [
             "dart"
           ]
@@ -260,7 +260,7 @@
       "blurb": "Install, validate, diagnose and upgrade the stack from one command surface.",
       "files": 36,
       "sourceFiles": 36,
-      "loc": 5788,
+      "loc": 5835,
       "langs": [
         "python"
       ],
@@ -268,7 +268,7 @@
         {
           "id": "commands",
           "files": 26,
-          "loc": 4019,
+          "loc": 4039,
           "langs": [
             "python"
           ]
@@ -276,7 +276,7 @@
         {
           "id": "(root)",
           "files": 10,
-          "loc": 1769,
+          "loc": 1796,
           "langs": [
             "python"
           ]
@@ -293,7 +293,7 @@
       "blurb": "The gRPC service definitions, the generated Go stubs and the cross-language JSON fixtures that pin the wire format.",
       "files": 1,
       "sourceFiles": 1,
-      "loc": 839,
+      "loc": 1032,
       "langs": [
         "proto"
       ],
@@ -301,7 +301,7 @@
         {
           "id": "(root)",
           "files": 1,
-          "loc": 839,
+          "loc": 1032,
           "langs": [
             "proto"
           ]
@@ -316,9 +316,9 @@
       "role": "Documentation",
       "tech": "Astro · TypeScript",
       "blurb": "The site you are reading, generated from the same checkout it documents.",
-      "files": 70,
-      "sourceFiles": 61,
-      "loc": 9725,
+      "files": 82,
+      "sourceFiles": 73,
+      "loc": 13508,
       "langs": [
         "astro",
         "typescript"
@@ -326,8 +326,8 @@
       "areas": [
         {
           "id": "pages",
-          "files": 35,
-          "loc": 4605,
+          "files": 42,
+          "loc": 7999,
           "langs": [
             "astro",
             "typescript"
@@ -335,8 +335,8 @@
         },
         {
           "id": "components",
-          "files": 19,
-          "loc": 3257,
+          "files": 24,
+          "loc": 3623,
           "langs": [
             "astro"
           ]
@@ -344,7 +344,7 @@
         {
           "id": "data",
           "files": 4,
-          "loc": 1426,
+          "loc": 1446,
           "langs": [
             "typescript"
           ]
@@ -352,7 +352,7 @@
         {
           "id": "layouts",
           "files": 2,
-          "loc": 409,
+          "loc": 412,
           "langs": [
             "astro"
           ]
@@ -369,51 +369,51 @@
     }
   ],
   "totals": {
-    "files": 330,
-    "sourceFiles": 310,
-    "loc": 111870,
-    "nodes": 281,
-    "edges": 874,
+    "files": 437,
+    "sourceFiles": 417,
+    "loc": 146189,
+    "nodes": 361,
+    "edges": 1227,
     "generatedFiles": 2,
-    "testFiles": 76,
+    "testFiles": 132,
     "subsystems": 8
   },
   "languages": [
     {
       "lang": "python",
-      "files": 156,
-      "loc": 51242,
-      "bytes": 2707040
+      "files": 215,
+      "loc": 69433,
+      "bytes": 3754451
     },
     {
       "lang": "go",
-      "files": 35,
-      "loc": 19616,
-      "bytes": 817209
+      "files": 63,
+      "loc": 27979,
+      "bytes": 1199990
     },
     {
       "lang": "dart",
-      "files": 43,
-      "loc": 19344,
-      "bytes": 833926
+      "files": 44,
+      "loc": 20982,
+      "bytes": 925306
     },
     {
       "lang": "typescript",
-      "files": 21,
-      "loc": 12495,
-      "bytes": 555793
+      "files": 28,
+      "loc": 14673,
+      "bytes": 655005
     },
     {
       "lang": "astro",
-      "files": 53,
-      "loc": 8082,
-      "bytes": 383800
+      "files": 65,
+      "loc": 11838,
+      "bytes": 612660
     },
     {
       "lang": "proto",
       "files": 1,
-      "loc": 839,
-      "bytes": 35867
+      "loc": 1032,
+      "bytes": 49174
     },
     {
       "lang": "rust",
@@ -459,7 +459,7 @@
         "application"
       ],
       "isTest": false,
-      "fanIn": 0,
+      "fanIn": 4,
       "fanOut": 0,
       "isEntry": false
     },
@@ -473,7 +473,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 582,
+      "loc": 622,
       "generated": false,
       "areas": [
         "application"
@@ -481,6 +481,46 @@
       "isTest": false,
       "fanIn": 6,
       "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/branding_hop.py",
+      "label": "branding_hop",
+      "path": "core/application/branding_hop.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 216,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/effective_settings.py",
+      "label": "effective_settings",
+      "path": "core/application/effective_settings.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 72,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 5,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -493,13 +533,33 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 147,
+      "loc": 291,
       "generated": false,
       "areas": [
         "application"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 8,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/ownership_backfill.py",
+      "label": "ownership_backfill",
+      "path": "core/application/ownership_backfill.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 195,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 1,
       "fanOut": 0,
       "isEntry": false
     },
@@ -513,14 +573,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 919,
+      "loc": 995,
       "generated": false,
       "areas": [
         "application"
       ],
       "isTest": false,
-      "fanIn": 11,
-      "fanOut": 7,
+      "fanIn": 13,
+      "fanOut": 10,
       "isEntry": false
     },
     {
@@ -553,13 +613,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 396,
+      "loc": 585,
       "generated": false,
       "areas": [
         "application"
       ],
       "isTest": false,
-      "fanIn": 14,
+      "fanIn": 25,
       "fanOut": 1,
       "isEntry": false
     },
@@ -573,14 +633,74 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 566,
+      "loc": 668,
       "generated": false,
       "areas": [
         "application"
       ],
       "isTest": false,
-      "fanIn": 10,
-      "fanOut": 4,
+      "fanIn": 20,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/user_task_worker.py",
+      "label": "user_task_worker",
+      "path": "core/application/user_task_worker.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 273,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/user_tasks.py",
+      "label": "user_tasks",
+      "path": "core/application/user_tasks.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 278,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 6,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/web_login_codes.py",
+      "label": "web_login_codes",
+      "path": "core/application/web_login_codes.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 122,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -593,13 +713,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 118,
+      "loc": 156,
       "generated": false,
       "areas": [
         "(root)"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 7,
       "fanOut": 0,
       "isEntry": false
     },
@@ -619,7 +739,7 @@
         "domain"
       ],
       "isTest": false,
-      "fanIn": 4,
+      "fanIn": 12,
       "fanOut": 0,
       "isEntry": false
     },
@@ -644,6 +764,46 @@
       "isEntry": false
     },
     {
+      "id": "core/domain/bot_defaults.py",
+      "label": "bot_defaults",
+      "path": "core/domain/bot_defaults.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 117,
+      "generated": false,
+      "areas": [
+        "domain"
+      ],
+      "isTest": false,
+      "fanIn": 5,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "core/domain/branding.py",
+      "label": "branding",
+      "path": "core/domain/branding.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 204,
+      "generated": false,
+      "areas": [
+        "domain"
+      ],
+      "isTest": false,
+      "fanIn": 7,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
       "id": "core/domain/content_policy.py",
       "label": "content_policy",
       "path": "core/domain/content_policy.py",
@@ -659,7 +819,7 @@
         "domain"
       ],
       "isTest": false,
-      "fanIn": 3,
+      "fanIn": 4,
       "fanOut": 1,
       "isEntry": false
     },
@@ -673,14 +833,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1441,
+      "loc": 1611,
       "generated": false,
       "areas": [
         "domain"
       ],
       "isTest": false,
-      "fanIn": 51,
-      "fanOut": 2,
+      "fanIn": 75,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -693,13 +853,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 299,
+      "loc": 419,
       "generated": false,
       "areas": [
         "domain"
       ],
       "isTest": false,
-      "fanIn": 3,
+      "fanIn": 15,
       "fanOut": 0,
       "isEntry": false
     },
@@ -713,14 +873,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1061,
+      "loc": 1084,
       "generated": false,
       "areas": [
         "domain"
       ],
       "isTest": false,
-      "fanIn": 17,
-      "fanOut": 2,
+      "fanIn": 21,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -739,7 +899,7 @@
         "domain"
       ],
       "isTest": false,
-      "fanIn": 37,
+      "fanIn": 44,
       "fanOut": 0,
       "isEntry": false
     },
@@ -813,14 +973,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 249,
+      "loc": 429,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 6,
-      "fanOut": 1,
+      "fanIn": 10,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -879,7 +1039,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 7,
       "fanOut": 0,
       "isEntry": false
     },
@@ -893,14 +1053,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 295,
+      "loc": 407,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 2,
-      "fanOut": 2,
+      "fanIn": 4,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -924,6 +1084,26 @@
       "isEntry": false
     },
     {
+      "id": "core/infrastructure/grpc_server/internal_auth.py",
+      "label": "internal_auth",
+      "path": "core/infrastructure/grpc_server/internal_auth.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 98,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "core/infrastructure/grpc_server/servicers.py",
       "label": "servicers",
       "path": "core/infrastructure/grpc_server/servicers.py",
@@ -933,14 +1113,34 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1724,
+      "loc": 2140,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 6,
-      "fanOut": 9,
+      "fanIn": 11,
+      "fanOut": 14,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/grpc_server/task_servicer.py",
+      "label": "task_servicer",
+      "path": "core/infrastructure/grpc_server/task_servicer.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 86,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -959,7 +1159,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 0,
+      "fanIn": 2,
       "fanOut": 0,
       "isEntry": false
     },
@@ -979,7 +1179,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 6,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1033,13 +1233,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 664,
+      "loc": 827,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 25,
+      "fanIn": 48,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1064,6 +1264,26 @@
       "isEntry": false
     },
     {
+      "id": "core/infrastructure/persistence/log_policy_store.py",
+      "label": "log_policy_store",
+      "path": "core/infrastructure/persistence/log_policy_store.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 93,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "core/infrastructure/persistence/postgres_repositories.py",
       "label": "postgres_repositories",
       "path": "core/infrastructure/persistence/postgres_repositories.py",
@@ -1073,13 +1293,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1147,
+      "loc": 1693,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 7,
+      "fanIn": 9,
       "fanOut": 4,
       "isEntry": false
     },
@@ -1093,14 +1313,54 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1608,
+      "loc": 2134,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 20,
+      "fanIn": 38,
       "fanOut": 7,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/redis/__init__.py",
+      "label": "__init__",
+      "path": "core/infrastructure/redis/__init__.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 30,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/redis/lease.py",
+      "label": "lease",
+      "path": "core/infrastructure/redis/lease.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 238,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -1139,7 +1399,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 10,
+      "fanIn": 19,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1159,7 +1419,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 1,
+      "fanIn": 5,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1193,13 +1453,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 298,
+      "loc": 372,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 6,
+      "fanIn": 7,
       "fanOut": 1,
       "isEntry": false
     },
@@ -1213,14 +1473,54 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 444,
+      "loc": 445,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 8,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/telegram/bot_transport.py",
+      "label": "bot_transport",
+      "path": "core/infrastructure/telegram/bot_transport.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 329,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 6,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/telegram/button_style.py",
+      "label": "button_style",
+      "path": "core/infrastructure/telegram/button_style.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 139,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
       "fanIn": 3,
-      "fanOut": 8,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -1253,13 +1553,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 332,
+      "loc": 348,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 2,
+      "fanIn": 3,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1284,6 +1584,26 @@
       "isEntry": false
     },
     {
+      "id": "core/infrastructure/telegram/diagnostics.py",
+      "label": "diagnostics",
+      "path": "core/infrastructure/telegram/diagnostics.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 322,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "core/infrastructure/telegram/dispatcher.py",
       "label": "dispatcher",
       "path": "core/infrastructure/telegram/dispatcher.py",
@@ -1293,14 +1613,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 566,
+      "loc": 707,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 5,
-      "fanOut": 7,
+      "fanIn": 9,
+      "fanOut": 11,
       "isEntry": false
     },
     {
@@ -1313,14 +1633,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 975,
+      "loc": 1145,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 9,
-      "fanOut": 6,
+      "fanIn": 15,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -1333,13 +1653,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 389,
+      "loc": 398,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 6,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1359,7 +1679,27 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 16,
+      "fanIn": 22,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/telegram/identity_redaction.py",
+      "label": "identity_redaction",
+      "path": "core/infrastructure/telegram/identity_redaction.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 64,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1379,7 +1719,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 6,
       "fanOut": 3,
       "isEntry": false
     },
@@ -1393,14 +1733,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 9107,
+      "loc": 10152,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 16,
-      "fanOut": 14,
+      "fanIn": 22,
+      "fanOut": 25,
       "isEntry": false
     },
     {
@@ -1433,7 +1773,27 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 163,
+      "loc": 204,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/telegram/registry_editor.py",
+      "label": "registry_editor",
+      "path": "core/infrastructure/telegram/registry_editor.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 470,
       "generated": false,
       "areas": [
         "infrastructure"
@@ -1473,14 +1833,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 180,
+      "loc": 183,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 1,
-      "fanOut": 1,
+      "fanIn": 2,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -1493,14 +1853,54 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 218,
+      "loc": 267,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 3,
+      "fanIn": 5,
       "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/telegram/ui_state.py",
+      "label": "ui_state",
+      "path": "core/infrastructure/telegram/ui_state.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 67,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/telegram/ui_state_manager.py",
+      "label": "ui_state_manager",
+      "path": "core/infrastructure/telegram/ui_state_manager.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 272,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -1513,14 +1913,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 560,
+      "loc": 694,
       "generated": false,
       "areas": [
         "(root)"
       ],
       "isTest": false,
       "fanIn": 3,
-      "fanOut": 34,
+      "fanOut": 42,
       "isEntry": true
     },
     {
@@ -1579,7 +1979,7 @@
         "proto"
       ],
       "isTest": false,
-      "fanIn": 14,
+      "fanIn": 20,
       "fanOut": 2,
       "isEntry": false
     },
@@ -1593,13 +1993,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 295,
+      "loc": 357,
       "generated": false,
       "areas": [
         "proto"
       ],
       "isTest": false,
-      "fanIn": 6,
+      "fanIn": 12,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1613,14 +2013,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 2663,
+      "loc": 3333,
       "generated": false,
       "areas": [
         "proto"
       ],
       "isTest": false,
-      "fanIn": 3,
-      "fanOut": 2,
+      "fanIn": 4,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -1654,26 +2054,6 @@
       "files": 1,
       "testFiles": 1,
       "loc": 0,
-      "generated": false,
-      "areas": [
-        "tests"
-      ],
-      "isTest": true,
-      "fanIn": 0,
-      "fanOut": 0,
-      "isEntry": false
-    },
-    {
-      "id": "core/tests/conftest.py",
-      "label": "conftest",
-      "path": "core/tests/conftest.py",
-      "subsystem": "core",
-      "granularity": "file",
-      "granularityLabel": "module (file)",
-      "lang": "python",
-      "files": 1,
-      "testFiles": 1,
-      "loc": 10,
       "generated": false,
       "areas": [
         "tests"
@@ -1741,6 +2121,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_ai_endpoint_guard.py",
+      "label": "test_ai_endpoint_guard",
+      "path": "core/tests/test_ai_endpoint_guard.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 126,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -1844,6 +2244,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_auth_flow_concurrency.py",
+      "label": "test_auth_flow_concurrency",
+      "path": "core/tests/test_auth_flow_concurrency.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 223,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_auth_state_machine.py",
       "label": "test_auth_state_machine",
       "path": "core/tests/test_auth_state_machine.py",
@@ -1893,13 +2313,193 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 442,
+      "loc": 470,
       "generated": false,
       "areas": [
         "tests"
       ],
       "isTest": true,
       "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_dead_letter_screen.py",
+      "label": "test_bot_dead_letter_screen",
+      "path": "core/tests/test_bot_dead_letter_screen.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 194,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_defaults.py",
+      "label": "test_bot_defaults",
+      "path": "core/tests/test_bot_defaults.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 287,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_defaults_api.py",
+      "label": "test_bot_defaults_api",
+      "path": "core/tests/test_bot_defaults_api.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 351,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_defaults_worker.py",
+      "label": "test_bot_defaults_worker",
+      "path": "core/tests/test_bot_defaults_worker.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 218,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 11,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_diagnostics.py",
+      "label": "test_bot_diagnostics",
+      "path": "core/tests/test_bot_diagnostics.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 225,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_registry_editor.py",
+      "label": "test_bot_registry_editor",
+      "path": "core/tests/test_bot_registry_editor.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 399,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_registry_ui.py",
+      "label": "test_bot_registry_ui",
+      "path": "core/tests/test_bot_registry_ui.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 202,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_route.py",
+      "label": "test_bot_route",
+      "path": "core/tests/test_bot_route.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 252,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_route_panel.py",
+      "label": "test_bot_route_panel",
+      "path": "core/tests/test_bot_route_panel.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 364,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 1,
       "fanOut": 4,
       "isEntry": false
     },
@@ -1921,6 +2521,106 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_token_control.py",
+      "label": "test_bot_token_control",
+      "path": "core/tests/test_bot_token_control.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 172,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_token_ownership.py",
+      "label": "test_bot_token_ownership",
+      "path": "core/tests/test_bot_token_ownership.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 268,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_branding_hop.py",
+      "label": "test_branding_hop",
+      "path": "core/tests/test_branding_hop.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 380,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 10,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_branding_hop_pipeline.py",
+      "label": "test_branding_hop_pipeline",
+      "path": "core/tests/test_branding_hop_pipeline.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 657,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_button_styles.py",
+      "label": "test_button_styles",
+      "path": "core/tests/test_button_styles.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 108,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -1954,6 +2654,26 @@
       "files": 1,
       "testFiles": 1,
       "loc": 203,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_core_rpc_auth.py",
+      "label": "test_core_rpc_auth",
+      "path": "core/tests/test_core_rpc_auth.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 205,
       "generated": false,
       "areas": [
         "tests"
@@ -2004,6 +2724,46 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_dead_letter_replay.py",
+      "label": "test_dead_letter_replay",
+      "path": "core/tests/test_dead_letter_replay.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 251,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_delete_sync_paths.py",
+      "label": "test_delete_sync_paths",
+      "path": "core/tests/test_delete_sync_paths.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 169,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_delivery_order_lanes.py",
       "label": "test_delivery_order_lanes",
       "path": "core/tests/test_delivery_order_lanes.py",
@@ -2013,7 +2773,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 151,
+      "loc": 181,
       "generated": false,
       "areas": [
         "tests"
@@ -2144,6 +2904,46 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_identity_fields_are_not_inheritable.py",
+      "label": "test_identity_fields_are_not_inheritable",
+      "path": "core/tests/test_identity_fields_are_not_inheritable.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 172,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_jwt_secret_hardening.py",
+      "label": "test_jwt_secret_hardening",
+      "path": "core/tests/test_jwt_secret_hardening.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 176,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_log_client.py",
       "label": "test_log_client",
       "path": "core/tests/test_log_client.py",
@@ -2204,6 +3004,46 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_log_policy_mutation.py",
+      "label": "test_log_policy_mutation",
+      "path": "core/tests/test_log_policy_mutation.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 370,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_log_policy_rpc.py",
+      "label": "test_log_policy_rpc",
+      "path": "core/tests/test_log_policy_rpc.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 77,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_logger_engine_packaging.py",
       "label": "test_logger_engine_packaging",
       "path": "core/tests/test_logger_engine_packaging.py",
@@ -2241,6 +3081,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_ownership_backfill.py",
+      "label": "test_ownership_backfill",
+      "path": "core/tests/test_ownership_backfill.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 177,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
       "isEntry": false
     },
     {
@@ -2324,6 +3184,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_per_task_option_logic.py",
+      "label": "test_per_task_option_logic",
+      "path": "core/tests/test_per_task_option_logic.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 199,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_phase2_advanced_settings_execution.py",
       "label": "test_phase2_advanced_settings_execution",
       "path": "core/tests/test_phase2_advanced_settings_execution.py",
@@ -2333,7 +3213,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 375,
+      "loc": 374,
       "generated": false,
       "areas": [
         "tests"
@@ -2341,6 +3221,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_postgres_schema_parity.py",
+      "label": "test_postgres_schema_parity",
+      "path": "core/tests/test_postgres_schema_parity.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 184,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -2373,7 +3273,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 130,
+      "loc": 131,
       "generated": false,
       "areas": [
         "tests"
@@ -2381,6 +3281,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_provider_key_check.py",
+      "label": "test_provider_key_check",
+      "path": "core/tests/test_provider_key_check.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 265,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -2424,6 +3344,66 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_raw_tracer_safety.py",
+      "label": "test_raw_tracer_safety",
+      "path": "core/tests/test_raw_tracer_safety.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 114,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_redis_lease_coordination.py",
+      "label": "test_redis_lease_coordination",
+      "path": "core/tests/test_redis_lease_coordination.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 267,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_rule_bot_attachment_guard.py",
+      "label": "test_rule_bot_attachment_guard",
+      "path": "core/tests/test_rule_bot_attachment_guard.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 201,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_rule_control_api.py",
       "label": "test_rule_control_api",
       "path": "core/tests/test_rule_control_api.py",
@@ -2464,6 +3444,66 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_rule_reference_refusal.py",
+      "label": "test_rule_reference_refusal",
+      "path": "core/tests/test_rule_reference_refusal.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 148,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_rule_settings_bot_route.py",
+      "label": "test_rule_settings_bot_route",
+      "path": "core/tests/test_rule_settings_bot_route.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 136,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 10,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_scale_indexes.py",
+      "label": "test_scale_indexes",
+      "path": "core/tests/test_scale_indexes.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 219,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_secure_control_plane.py",
       "label": "test_secure_control_plane",
       "path": "core/tests/test_secure_control_plane.py",
@@ -2481,6 +3521,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_sensitive_data_redaction.py",
+      "label": "test_sensitive_data_redaction",
+      "path": "core/tests/test_sensitive_data_redaction.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 193,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
       "isEntry": false
     },
     {
@@ -2653,7 +3713,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 613,
+      "loc": 684,
       "generated": false,
       "areas": [
         "tests"
@@ -2661,6 +3721,86 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 16,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_ui_state_manager.py",
+      "label": "test_ui_state_manager",
+      "path": "core/tests/test_ui_state_manager.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 101,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_user_task_lifecycle.py",
+      "label": "test_user_task_lifecycle",
+      "path": "core/tests/test_user_task_lifecycle.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 283,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_user_task_retention.py",
+      "label": "test_user_task_retention",
+      "path": "core/tests/test_user_task_retention.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 286,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_user_task_state_integrity.py",
+      "label": "test_user_task_state_integrity",
+      "path": "core/tests/test_user_task_state_integrity.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 254,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
       "isEntry": false
     },
     {
@@ -2713,7 +3853,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 159,
+      "loc": 162,
       "generated": false,
       "areas": [
         "tests"
@@ -2733,7 +3873,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 128,
+      "loc": 129,
       "generated": false,
       "areas": [
         "tests"
@@ -2804,6 +3944,46 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_web_login_code_exchange.py",
+      "label": "test_web_login_code_exchange",
+      "path": "core/tests/test_web_login_code_exchange.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 128,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_web_login_codes.py",
+      "label": "test_web_login_codes",
+      "path": "core/tests/test_web_login_codes.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 75,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
       "id": "api/internal/grpcclient",
       "label": "grpcclient",
       "path": "api/internal/grpcclient",
@@ -2811,9 +3991,9 @@
       "granularity": "package",
       "granularityLabel": "package (directory)",
       "lang": "go",
-      "files": 1,
-      "testFiles": 0,
-      "loc": 56,
+      "files": 2,
+      "testFiles": 1,
+      "loc": 226,
       "generated": false,
       "areas": [
         "internal"
@@ -2831,16 +4011,16 @@
       "granularity": "package",
       "granularityLabel": "package (directory)",
       "lang": "go",
-      "files": 21,
-      "testFiles": 12,
-      "loc": 7095,
+      "files": 34,
+      "testFiles": 22,
+      "loc": 9810,
       "generated": false,
       "areas": [
         "internal"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 4,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -2871,9 +4051,9 @@
       "granularity": "package",
       "granularityLabel": "package (directory)",
       "lang": "go",
-      "files": 8,
-      "testFiles": 5,
-      "loc": 1032,
+      "files": 9,
+      "testFiles": 6,
+      "loc": 1102,
       "generated": false,
       "areas": [
         "internal"
@@ -2881,6 +4061,26 @@
       "isTest": false,
       "fanIn": 3,
       "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "api/internal/ratelimit",
+      "label": "ratelimit",
+      "path": "api/internal/ratelimit",
+      "subsystem": "api",
+      "granularity": "package",
+      "granularityLabel": "package (directory)",
+      "lang": "go",
+      "files": 13,
+      "testFiles": 5,
+      "loc": 2790,
+      "generated": false,
+      "areas": [
+        "internal"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -2893,14 +4093,14 @@
       "lang": "go",
       "files": 1,
       "testFiles": 0,
-      "loc": 144,
+      "loc": 202,
       "generated": false,
       "areas": [
         "(root)"
       ],
       "isTest": false,
       "fanIn": 0,
-      "fanOut": 4,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -2913,7 +4113,7 @@
       "lang": "go",
       "files": 2,
       "testFiles": 0,
-      "loc": 10738,
+      "loc": 13298,
       "generated": true,
       "areas": [
         "(root)"
@@ -2953,14 +4153,34 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 4244,
+      "loc": 4698,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 8,
+      "fanOut": 13,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/actionResult.ts",
+      "label": "actionResult",
+      "path": "web/frontend/src/actionResult.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 66,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -2973,14 +4193,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 557,
+      "loc": 653,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
-      "fanIn": 8,
-      "fanOut": 1,
+      "fanIn": 13,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -3014,6 +4234,26 @@
       "files": 1,
       "testFiles": 0,
       "loc": 270,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/components/BotRouteField.tsx",
+      "label": "BotRouteField",
+      "path": "web/frontend/src/components/BotRouteField.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 224,
       "generated": false,
       "areas": [
         "web"
@@ -3064,6 +4304,46 @@
       "isEntry": false
     },
     {
+      "id": "web/frontend/src/components/JobsPanel.tsx",
+      "label": "JobsPanel",
+      "path": "web/frontend/src/components/JobsPanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 244,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/components/LogPolicyPanel.tsx",
+      "label": "LogPolicyPanel",
+      "path": "web/frontend/src/components/LogPolicyPanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 334,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
       "id": "web/frontend/src/components/SystemPanel.tsx",
       "label": "SystemPanel",
       "path": "web/frontend/src/components/SystemPanel.tsx",
@@ -3093,14 +4373,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 865,
+      "loc": 1033,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 2,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -3153,14 +4433,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 110,
+      "loc": 231,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 0,
-      "fanOut": 2,
+      "fanOut": 4,
       "isEntry": true
     },
     {
@@ -3173,7 +4453,67 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 259,
+      "loc": 260,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/providerKey.ts",
+      "label": "providerKey",
+      "path": "web/frontend/src/providerKey.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 85,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/session.ts",
+      "label": "session",
+      "path": "web/frontend/src/session.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 125,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/settingProvenance.ts",
+      "label": "settingProvenance",
+      "path": "web/frontend/src/settingProvenance.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 89,
       "generated": false,
       "areas": [
         "web"
@@ -3193,13 +4533,13 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 759,
+      "loc": 903,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
-      "fanIn": 8,
+      "fanIn": 13,
       "fanOut": 0,
       "isEntry": false
     },
@@ -3233,14 +4573,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1101,
+      "loc": 1212,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 18,
-      "fanOut": 3,
+      "fanIn": 19,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -3253,7 +4593,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 200,
+      "loc": 198,
       "generated": false,
       "areas": [
         "lib"
@@ -3284,6 +4624,26 @@
       "isEntry": false
     },
     {
+      "id": "mobile/lib/core/json_cast.dart",
+      "label": "json_cast",
+      "path": "mobile/lib/core/json_cast.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 22,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "mobile/lib/core/models.dart",
       "label": "models",
       "path": "mobile/lib/core/models.dart",
@@ -3293,14 +4653,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1493,
+      "loc": 1737,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 18,
-      "fanOut": 1,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -3333,7 +4693,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 76,
+      "loc": 73,
       "generated": false,
       "areas": [
         "lib"
@@ -3353,14 +4713,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 108,
+      "loc": 109,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 3,
-      "fanOut": 0,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -3373,7 +4733,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 435,
+      "loc": 431,
       "generated": false,
       "areas": [
         "lib"
@@ -3393,14 +4753,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 132,
+      "loc": 306,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 1,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -3413,7 +4773,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 247,
+      "loc": 271,
       "generated": false,
       "areas": [
         "lib"
@@ -3433,7 +4793,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 257,
+      "loc": 248,
       "generated": false,
       "areas": [
         "lib"
@@ -3453,7 +4813,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 520,
+      "loc": 516,
       "generated": false,
       "areas": [
         "lib"
@@ -3473,7 +4833,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 593,
+      "loc": 604,
       "generated": false,
       "areas": [
         "lib"
@@ -3493,7 +4853,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 404,
+      "loc": 391,
       "generated": false,
       "areas": [
         "lib"
@@ -3513,7 +4873,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 622,
+      "loc": 612,
       "generated": false,
       "areas": [
         "lib"
@@ -3533,7 +4893,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 274,
+      "loc": 261,
       "generated": false,
       "areas": [
         "lib"
@@ -3553,7 +4913,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 169,
+      "loc": 313,
       "generated": false,
       "areas": [
         "lib"
@@ -3573,14 +4933,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 553,
+      "loc": 545,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 5,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -3593,7 +4953,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1026,
+      "loc": 998,
       "generated": false,
       "areas": [
         "lib"
@@ -3613,7 +4973,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1359,
+      "loc": 1419,
       "generated": false,
       "areas": [
         "lib"
@@ -3633,7 +4993,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 862,
+      "loc": 1218,
       "generated": false,
       "areas": [
         "lib"
@@ -3653,7 +5013,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 341,
+      "loc": 336,
       "generated": false,
       "areas": [
         "lib"
@@ -3673,7 +5033,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 667,
+      "loc": 645,
       "generated": false,
       "areas": [
         "lib"
@@ -3693,7 +5053,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 167,
+      "loc": 170,
       "generated": false,
       "areas": [
         "lib"
@@ -3713,7 +5073,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 313,
+      "loc": 312,
       "generated": false,
       "areas": [
         "lib"
@@ -3733,7 +5093,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 232,
+      "loc": 224,
       "generated": false,
       "areas": [
         "lib"
@@ -3753,7 +5113,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 363,
+      "loc": 355,
       "generated": false,
       "areas": [
         "lib"
@@ -3773,7 +5133,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 528,
+      "loc": 590,
       "generated": false,
       "areas": [
         "lib"
@@ -3793,7 +5153,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 526,
+      "loc": 591,
       "generated": false,
       "areas": [
         "lib"
@@ -3813,7 +5173,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 532,
+      "loc": 590,
       "generated": false,
       "areas": [
         "lib"
@@ -3833,7 +5193,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 526,
+      "loc": 586,
       "generated": false,
       "areas": [
         "lib"
@@ -3853,7 +5213,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 533,
+      "loc": 594,
       "generated": false,
       "areas": [
         "lib"
@@ -3873,13 +5233,13 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 692,
+      "loc": 758,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 20,
+      "fanIn": 21,
       "fanOut": 10,
       "isEntry": false
     },
@@ -3893,7 +5253,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 533,
+      "loc": 596,
       "generated": false,
       "areas": [
         "lib"
@@ -3913,7 +5273,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 525,
+      "loc": 588,
       "generated": false,
       "areas": [
         "lib"
@@ -3933,7 +5293,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 527,
+      "loc": 588,
       "generated": false,
       "areas": [
         "lib"
@@ -3953,7 +5313,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 487,
+      "loc": 558,
       "generated": false,
       "areas": [
         "lib"
@@ -3993,7 +5353,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 684,
+      "loc": 681,
       "generated": false,
       "areas": [
         "lib"
@@ -4013,7 +5373,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 92,
+      "loc": 91,
       "generated": false,
       "areas": [
         "lib"
@@ -4079,7 +5439,7 @@
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 6,
       "fanOut": 1,
       "isEntry": false
     },
@@ -4293,7 +5653,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 101,
+      "loc": 123,
       "generated": false,
       "areas": [
         "atfcli"
@@ -4633,7 +5993,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 574,
+      "loc": 572,
       "generated": false,
       "areas": [
         "atfcli"
@@ -4773,13 +6133,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 183,
+      "loc": 210,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 4,
+      "fanIn": 5,
       "fanOut": 0,
       "isEntry": false
     },
@@ -4793,7 +6153,7 @@
       "lang": "proto",
       "files": 1,
       "testFiles": 0,
-      "loc": 839,
+      "loc": 1032,
       "generated": false,
       "areas": [
         "proto"
@@ -4819,7 +6179,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 3,
+      "fanIn": 4,
       "fanOut": 0,
       "isEntry": false
     },
@@ -4899,7 +6259,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 13,
+      "fanIn": 20,
       "fanOut": 1,
       "isEntry": false
     },
@@ -4939,7 +6299,27 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 7,
+      "fanIn": 13,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/components/DeliveryConsole.astro",
+      "label": "DeliveryConsole",
+      "path": "website/src/components/DeliveryConsole.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 70,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 1,
       "fanOut": 0,
       "isEntry": false
     },
@@ -4973,14 +6353,14 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 102,
+      "loc": 107,
       "generated": false,
       "areas": [
         "src"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 3,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -4993,14 +6373,14 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 420,
+      "loc": 422,
       "generated": false,
       "areas": [
         "src"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 3,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -5019,8 +6399,68 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 27,
+      "fanIn": 36,
       "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/components/Logo.astro",
+      "label": "Logo",
+      "path": "website/src/components/Logo.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 37,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/components/Motion.astro",
+      "label": "Motion",
+      "path": "website/src/components/Motion.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 70,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/components/PipelineRail.astro",
+      "label": "PipelineRail",
+      "path": "website/src/components/PipelineRail.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 81,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -5099,8 +6539,28 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 9,
+      "fanIn": 15,
       "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/components/StatusBoard.astro",
+      "label": "StatusBoard",
+      "path": "website/src/components/StatusBoard.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 101,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -5119,7 +6579,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 1,
+      "fanIn": 5,
       "fanOut": 1,
       "isEntry": false
     },
@@ -5193,7 +6653,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 87,
+      "loc": 94,
       "generated": false,
       "areas": [
         "src"
@@ -5213,7 +6673,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 987,
+      "loc": 988,
       "generated": false,
       "areas": [
         "src"
@@ -5233,7 +6693,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 161,
+      "loc": 173,
       "generated": false,
       "areas": [
         "src"
@@ -5273,14 +6733,14 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 149,
+      "loc": 152,
       "generated": false,
       "areas": [
         "src"
       ],
       "isTest": false,
       "fanIn": 3,
-      "fanOut": 5,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -5299,7 +6759,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 30,
+      "fanIn": 37,
       "fanOut": 5,
       "isEntry": false
     },
@@ -5321,6 +6781,26 @@
       "isTest": false,
       "fanIn": 0,
       "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/api/authentication/index.astro",
+      "label": "index",
+      "path": "website/src/pages/api/authentication/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 435,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -5393,7 +6873,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 213,
+      "loc": 252,
       "generated": false,
       "areas": [
         "src"
@@ -5493,14 +6973,14 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 145,
+      "loc": 148,
       "generated": false,
       "areas": [
         "src"
       ],
       "isTest": false,
       "fanIn": 0,
-      "fanOut": 8,
+      "fanOut": 9,
       "isEntry": false
     },
     {
@@ -5604,6 +7084,26 @@
       "isEntry": false
     },
     {
+      "id": "website/src/pages/features/task-creation/index.astro",
+      "label": "index",
+      "path": "website/src/pages/features/task-creation/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 382,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
       "id": "website/src/pages/features/text-cleaner.astro",
       "label": "text-cleaner",
       "path": "website/src/pages/features/text-cleaner.astro",
@@ -5641,6 +7141,26 @@
       "isTest": false,
       "fanIn": 0,
       "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/getting-started/account-linking/index.astro",
+      "label": "index",
+      "path": "website/src/pages/getting-started/account-linking/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 345,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -5724,6 +7244,26 @@
       "isEntry": false
     },
     {
+      "id": "website/src/pages/getting-started/quickstart/index.astro",
+      "label": "index",
+      "path": "website/src/pages/getting-started/quickstart/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 365,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
       "id": "website/src/pages/getting-started/telegram-bot-setup.astro",
       "label": "telegram-bot-setup",
       "path": "website/src/pages/getting-started/telegram-bot-setup.astro",
@@ -5773,14 +7313,14 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 386,
+      "loc": 698,
       "generated": false,
       "areas": [
         "src"
       ],
       "isTest": false,
       "fanIn": 0,
-      "fanOut": 12,
+      "fanOut": 15,
       "isEntry": false
     },
     {
@@ -5793,7 +7333,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 77,
+      "loc": 84,
       "generated": false,
       "areas": [
         "src"
@@ -5801,6 +7341,26 @@
       "isTest": false,
       "fanIn": 0,
       "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/operations/ai-providers/index.astro",
+      "label": "index",
+      "path": "website/src/pages/operations/ai-providers/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 772,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -5821,6 +7381,26 @@
       "isTest": false,
       "fanIn": 0,
       "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/operations/troubleshooting/index.astro",
+      "label": "index",
+      "path": "website/src/pages/operations/troubleshooting/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 469,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -5901,6 +7481,26 @@
       "isTest": false,
       "fanIn": 0,
       "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/status/index.astro",
+      "label": "index",
+      "path": "website/src/pages/status/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 265,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -6019,7 +7619,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 40,
+      "fanIn": 49,
       "fanOut": 0,
       "isEntry": false
     },
@@ -6061,6 +7661,41 @@
       "kind": "import"
     },
     {
+      "source": "core/application/branding_hop.py",
+      "target": "core/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/branding_hop.py",
+      "target": "core/domain/branding.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/branding_hop.py",
+      "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/effective_settings.py",
+      "target": "core/domain/bot_defaults.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/effective_settings.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/pipeline.py",
+      "target": "core/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/pipeline.py",
+      "target": "core/domain/branding.py",
+      "kind": "import"
+    },
+    {
       "source": "core/application/pipeline.py",
       "target": "core/domain/entities.py",
       "kind": "import"
@@ -6073,6 +7708,11 @@
     {
       "source": "core/application/pipeline.py",
       "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/pipeline.py",
+      "target": "core/application/effective_settings.py",
       "kind": "import"
     },
     {
@@ -6136,8 +7776,48 @@
       "kind": "import"
     },
     {
+      "source": "core/application/use_cases.py",
+      "target": "core/infrastructure/ai/providers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/use_cases.py",
+      "target": "core/application/effective_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/user_task_worker.py",
+      "target": "core/application/user_tasks.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/user_task_worker.py",
+      "target": "core/infrastructure/persistence/audit_events.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/user_tasks.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/user_tasks.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
       "source": "core/domain/authorization.py",
       "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/domain/bot_defaults.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/domain/branding.py",
+      "target": "core/domain/content_policy.py",
       "kind": "import"
     },
     {
@@ -6148,6 +7828,16 @@
     {
       "source": "core/domain/entities.py",
       "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/domain/entities.py",
+      "target": "core/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/domain/entities.py",
+      "target": "core/domain/branding.py",
       "kind": "import"
     },
     {
@@ -6166,6 +7856,16 @@
       "kind": "import"
     },
     {
+      "source": "core/domain/services.py",
+      "target": "core/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/domain/services.py",
+      "target": "core/domain/branding.py",
+      "kind": "import"
+    },
+    {
       "source": "core/infrastructure/ai/circuit_breaker.py",
       "target": "core/domain/value_objects.py",
       "kind": "import"
@@ -6173,6 +7873,11 @@
     {
       "source": "core/infrastructure/ai/providers.py",
       "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/ai/providers.py",
+      "target": "core/domain/value_objects.py",
       "kind": "import"
     },
     {
@@ -6216,6 +7921,11 @@
       "kind": "import"
     },
     {
+      "source": "core/infrastructure/grpc_server/account_servicer.py",
+      "target": "core/application/web_login_codes.py",
+      "kind": "import"
+    },
+    {
       "source": "core/infrastructure/grpc_server/admin_servicer.py",
       "target": "core/proto/__init__.py",
       "kind": "import"
@@ -6238,6 +7948,16 @@
     {
       "source": "core/infrastructure/grpc_server/servicers.py",
       "target": "core/application/backup_service.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/servicers.py",
+      "target": "core/application/log_policy.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/servicers.py",
+      "target": "core/infrastructure/telegram/bot_transport.py",
       "kind": "import"
     },
     {
@@ -6267,12 +7987,47 @@
     },
     {
       "source": "core/infrastructure/grpc_server/servicers.py",
+      "target": "core/application/effective_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/servicers.py",
       "target": "core/domain/services.py",
       "kind": "import"
     },
     {
       "source": "core/infrastructure/grpc_server/servicers.py",
       "target": "core/infrastructure/persistence/postgres_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/servicers.py",
+      "target": "core/domain/bot_defaults.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/servicers.py",
+      "target": "core/infrastructure/ai/providers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/task_servicer.py",
+      "target": "core/proto/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/task_servicer.py",
+      "target": "core/proto/autoforward_pb2.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/task_servicer.py",
+      "target": "core/proto/autoforward_pb2_grpc.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/task_servicer.py",
+      "target": "core/application/user_tasks.py",
       "kind": "import"
     },
     {
@@ -6346,6 +8101,11 @@
       "kind": "import"
     },
     {
+      "source": "core/infrastructure/redis/__init__.py",
+      "target": "core/infrastructure/redis/lease.py",
+      "kind": "import"
+    },
+    {
       "source": "core/infrastructure/telegram/album_aggregator.py",
       "target": "core/domain/entities.py",
       "kind": "import"
@@ -6412,6 +8172,26 @@
     },
     {
       "source": "core/infrastructure/telegram/dispatcher.py",
+      "target": "core/application/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/dispatcher.py",
+      "target": "core/application/branding_hop.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/dispatcher.py",
+      "target": "core/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/dispatcher.py",
+      "target": "core/domain/branding.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/dispatcher.py",
       "target": "core/domain/entities.py",
       "kind": "import"
     },
@@ -6472,6 +8252,11 @@
     },
     {
       "source": "core/infrastructure/telegram/durable_queue.py",
+      "target": "core/infrastructure/telegram/bot_transport.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/durable_queue.py",
       "target": "core/infrastructure/persistence/database.py",
       "kind": "import"
     },
@@ -6492,6 +8277,36 @@
     },
     {
       "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/infrastructure/telegram/diagnostics.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/infrastructure/telegram/registry_editor.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/infrastructure/telegram/bot_transport.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/infrastructure/telegram/button_style.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
       "target": "core/application/backup_service.py",
       "kind": "import"
     },
@@ -6502,7 +8317,32 @@
     },
     {
       "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/application/effective_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/infrastructure/telegram/ui_state.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/infrastructure/telegram/ui_state_manager.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
       "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/domain/branding.py",
       "kind": "import"
     },
     {
@@ -6571,6 +8411,16 @@
       "kind": "import"
     },
     {
+      "source": "core/infrastructure/telegram/registry_editor.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/session_boot.py",
+      "target": "core/infrastructure/telegram/identity_redaction.py",
+      "kind": "import"
+    },
+    {
       "source": "core/infrastructure/telegram/session_boot.py",
       "target": "core/infrastructure/telegram/channel_catchup.py",
       "kind": "import"
@@ -6591,8 +8441,18 @@
       "kind": "import"
     },
     {
+      "source": "core/infrastructure/telegram/ui_state_manager.py",
+      "target": "core/infrastructure/telegram/ui_state.py",
+      "kind": "import"
+    },
+    {
       "source": "core/main.py",
       "target": "core/config.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/application/log_policy.py",
       "kind": "import"
     },
     {
@@ -6618,6 +8478,11 @@
     {
       "source": "core/main.py",
       "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/infrastructure/persistence/log_policy_store.py",
       "kind": "import"
     },
     {
@@ -6692,6 +8557,11 @@
     },
     {
       "source": "core/main.py",
+      "target": "core/infrastructure/telegram/button_style.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
       "target": "core/infrastructure/telegram/i18n.py",
       "kind": "import"
     },
@@ -6702,7 +8572,22 @@
     },
     {
       "source": "core/main.py",
+      "target": "core/application/user_tasks.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
       "target": "core/application/backup_service.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/infrastructure/telegram/bot_transport.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/infrastructure/redis/__init__.py",
       "kind": "import"
     },
     {
@@ -6737,17 +8622,27 @@
     },
     {
       "source": "core/main.py",
+      "target": "core/infrastructure/grpc_server/internal_auth.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/infrastructure/grpc_server/task_servicer.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/application/user_task_worker.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
       "target": "core/infrastructure/telegram/session_boot.py",
       "kind": "import"
     },
     {
       "source": "core/main.py",
       "target": "core/observability/log_client.py",
-      "kind": "import"
-    },
-    {
-      "source": "core/main.py",
-      "target": "core/application/log_policy.py",
       "kind": "import"
     },
     {
@@ -6773,16 +8668,6 @@
     {
       "source": "core/proto/__init__.py",
       "target": "core/proto/autoforward_pb2_grpc.py",
-      "kind": "import"
-    },
-    {
-      "source": "core/proto/autoforward_pb2_grpc.py",
-      "target": "core/proto/__init__.py",
-      "kind": "import"
-    },
-    {
-      "source": "core/proto/autoforward_pb2_grpc.py",
-      "target": "core/proto/autoforward_pb2.py",
       "kind": "import"
     },
     {
@@ -6908,6 +8793,31 @@
     {
       "source": "core/tests/test_ai_config_ux.py",
       "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ai_endpoint_guard.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ai_endpoint_guard.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ai_endpoint_guard.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ai_endpoint_guard.py",
+      "target": "core/infrastructure/ai/providers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ai_endpoint_guard.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
       "kind": "import"
     },
     {
@@ -7066,6 +8976,26 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_auth_flow_concurrency.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_auth_flow_concurrency.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_auth_flow_concurrency.py",
+      "target": "core/infrastructure/telegram/auth_state.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_auth_flow_concurrency.py",
+      "target": "core/infrastructure/persistence/__init__.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_auth_state_machine.py",
       "target": "core/infrastructure/persistence/database.py",
       "kind": "import"
@@ -7151,6 +9081,241 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_bot_dead_letter_screen.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_dead_letter_screen.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_dead_letter_screen.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_dead_letter_screen.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_dead_letter_screen.py",
+      "target": "core/infrastructure/telegram/diagnostics.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults.py",
+      "target": "core/domain/bot_defaults.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_api.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_api.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_api.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_api.py",
+      "target": "core/infrastructure/grpc_server/servicers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_api.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_api.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_api.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_api.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/application/effective_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/application/pipeline.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_defaults_worker.py",
+      "target": "core/infrastructure/telegram/durable_queue.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_diagnostics.py",
+      "target": "core/infrastructure/telegram/diagnostics.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_diagnostics.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_registry_editor.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_registry_editor.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_registry_editor.py",
+      "target": "core/infrastructure/telegram/registry_editor.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_registry_editor.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_registry_editor.py",
+      "target": "core/domain/bot_defaults.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_registry_ui.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_registry_ui.py",
+      "target": "core/tests/test_bot_route_panel.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_route.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_route.py",
+      "target": "core/infrastructure/telegram/bot_transport.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_route.py",
+      "target": "core/infrastructure/telegram/durable_queue.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_route_panel.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_route_panel.py",
+      "target": "core/infrastructure/telegram/bot_transport.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_route_panel.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_route_panel.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_bot_routing_guards.py",
       "target": "core/infrastructure/persistence/database.py",
       "kind": "import"
@@ -7181,6 +9346,181 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_bot_token_control.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_control.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_control.py",
+      "target": "core/infrastructure/grpc_server/servicers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_control.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_control.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_control.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_control.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_ownership.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_ownership.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_ownership.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_ownership.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_ownership.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_ownership.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_ownership.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_token_ownership.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop.py",
+      "target": "core/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop.py",
+      "target": "core/domain/branding.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop.py",
+      "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop.py",
+      "target": "core/infrastructure/telegram/durable_queue.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop.py",
+      "target": "core/infrastructure/telegram/dispatcher.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop_pipeline.py",
+      "target": "core/application/branding_hop.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop_pipeline.py",
+      "target": "core/application/pipeline.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop_pipeline.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop_pipeline.py",
+      "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop_pipeline.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop_pipeline.py",
+      "target": "core/infrastructure/telegram/durable_queue.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_branding_hop_pipeline.py",
+      "target": "core/infrastructure/telegram/dispatcher.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_button_styles.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_button_styles.py",
+      "target": "core/infrastructure/telegram/button_style.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_button_styles.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_channel_cursor_persistence.py",
       "target": "core/infrastructure/persistence/database.py",
       "kind": "import"
@@ -7201,6 +9541,16 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_core_rpc_auth.py",
+      "target": "core/infrastructure/grpc_server/internal_auth.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_core_rpc_auth.py",
+      "target": "core/config.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_cross_language_isolation.py",
       "target": "core/infrastructure/telegram/i18n.py",
       "kind": "import"
@@ -7213,6 +9563,46 @@
     {
       "source": "core/tests/test_crypto.py",
       "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dead_letter_replay.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dead_letter_replay.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dead_letter_replay.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_delete_sync_paths.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_delete_sync_paths.py",
+      "target": "core/infrastructure/telegram/sync_engine.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_delete_sync_paths.py",
+      "target": "core/infrastructure/telegram/dispatcher.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_delete_sync_paths.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_delete_sync_paths.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
       "kind": "import"
     },
     {
@@ -7356,6 +9746,51 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_identity_fields_are_not_inheritable.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_identity_fields_are_not_inheritable.py",
+      "target": "core/domain/bot_defaults.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_identity_fields_are_not_inheritable.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_identity_fields_are_not_inheritable.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_identity_fields_are_not_inheritable.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_identity_fields_are_not_inheritable.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_identity_fields_are_not_inheritable.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_jwt_secret_hardening.py",
+      "target": "core/infrastructure/grpc_server/account_servicer.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_jwt_secret_hardening.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_log_client.py",
       "target": "core/observability/log_client.py",
       "kind": "import"
@@ -7386,6 +9821,56 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_log_policy_mutation.py",
+      "target": "core/application/log_policy.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_log_policy_mutation.py",
+      "target": "core/infrastructure/grpc_server/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_log_policy_mutation.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_log_policy_mutation.py",
+      "target": "core/infrastructure/persistence/log_policy_store.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_log_policy_mutation.py",
+      "target": "core/proto/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_log_policy_mutation.py",
+      "target": "core/proto/autoforward_pb2.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_log_policy_rpc.py",
+      "target": "core/application/log_policy.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_log_policy_rpc.py",
+      "target": "core/infrastructure/grpc_server/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_log_policy_rpc.py",
+      "target": "core/proto/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_log_policy_rpc.py",
+      "target": "core/proto/autoforward_pb2.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_logger_engine_packaging.py",
       "target": "atf.py",
       "kind": "import"
@@ -7398,6 +9883,46 @@
     {
       "source": "core/tests/test_multilingual_chat_picker_and_dialog_fetch.py",
       "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ownership_backfill.py",
+      "target": "core/application/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ownership_backfill.py",
+      "target": "core/application/ownership_backfill.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ownership_backfill.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ownership_backfill.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ownership_backfill.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ownership_backfill.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ownership_backfill.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ownership_backfill.py",
+      "target": "core/infrastructure/security/crypto.py",
       "kind": "import"
     },
     {
@@ -7556,6 +10081,31 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_per_task_option_logic.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_per_task_option_logic.py",
+      "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_per_task_option_logic.py",
+      "target": "core/infrastructure/telegram/sync_engine.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_per_task_option_logic.py",
+      "target": "core/infrastructure/telegram/dispatcher.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_per_task_option_logic.py",
+      "target": "core/infrastructure/telegram/durable_queue.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_phase2_advanced_settings_execution.py",
       "target": "core/domain/entities.py",
       "kind": "import"
@@ -7581,6 +10131,26 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_postgres_schema_parity.py",
+      "target": "core/infrastructure/persistence/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_postgres_schema_parity.py",
+      "target": "core/infrastructure/persistence/postgres_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_postgres_schema_parity.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_postgres_schema_parity.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_pro_ui_callbacks.py",
       "target": "core/infrastructure/telegram/pro_bot_ui.py",
       "kind": "import"
@@ -7598,6 +10168,26 @@
     {
       "source": "core/tests/test_protected_content_bypass.py",
       "target": "core/infrastructure/telegram/dispatcher.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_provider_key_check.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_provider_key_check.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_provider_key_check.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_provider_key_check.py",
+      "target": "core/infrastructure/ai/providers.py",
       "kind": "import"
     },
     {
@@ -7628,6 +10218,81 @@
     {
       "source": "core/tests/test_pyrogram_utf16_surrogate_boundary.py",
       "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_raw_tracer_safety.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_raw_tracer_safety.py",
+      "target": "core/infrastructure/telegram/raw_tracer.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_redis_lease_coordination.py",
+      "target": "core/config.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_redis_lease_coordination.py",
+      "target": "core/infrastructure/redis/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_redis_lease_coordination.py",
+      "target": "core/infrastructure/telegram/channel_polling.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_redis_lease_coordination.py",
+      "target": "core/infrastructure/telegram/durable_queue.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_redis_lease_coordination.py",
+      "target": "core/infrastructure/redis/lease.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_bot_attachment_guard.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_bot_attachment_guard.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_bot_attachment_guard.py",
+      "target": "core/infrastructure/grpc_server/servicers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_bot_attachment_guard.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_bot_attachment_guard.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_bot_attachment_guard.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_bot_attachment_guard.py",
+      "target": "core/proto/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_bot_attachment_guard.py",
+      "target": "core/proto/autoforward_pb2.py",
       "kind": "import"
     },
     {
@@ -7726,6 +10391,106 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_rule_reference_refusal.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_reference_refusal.py",
+      "target": "core/infrastructure/grpc_server/servicers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_reference_refusal.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_reference_refusal.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_reference_refusal.py",
+      "target": "core/proto/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_reference_refusal.py",
+      "target": "core/proto/autoforward_pb2.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_settings_bot_route.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_settings_bot_route.py",
+      "target": "core/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_settings_bot_route.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_settings_bot_route.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_settings_bot_route.py",
+      "target": "core/infrastructure/grpc_server/servicers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_settings_bot_route.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_settings_bot_route.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_settings_bot_route.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_settings_bot_route.py",
+      "target": "core/proto/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_rule_settings_bot_route.py",
+      "target": "core/proto/autoforward_pb2.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_scale_indexes.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_scale_indexes.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_scale_indexes.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_scale_indexes.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_secure_control_plane.py",
       "target": "core/domain/authorization.py",
       "kind": "import"
@@ -7738,6 +10503,46 @@
     {
       "source": "core/tests/test_secure_control_plane.py",
       "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sensitive_data_redaction.py",
+      "target": "core/infrastructure/telegram/bot_manager.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sensitive_data_redaction.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sensitive_data_redaction.py",
+      "target": "core/infrastructure/telegram/identity_redaction.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sensitive_data_redaction.py",
+      "target": "core/infrastructure/telegram/login_flow.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sensitive_data_redaction.py",
+      "target": "core/infrastructure/telegram/session_boot.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sensitive_data_redaction.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sensitive_data_redaction.py",
+      "target": "atfcli/ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sensitive_data_redaction.py",
+      "target": "core/infrastructure/telegram/errors.py",
       "kind": "import"
     },
     {
@@ -7971,6 +10776,111 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_ui_state_manager.py",
+      "target": "core/infrastructure/telegram/ui_state_manager.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ui_state_manager.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_lifecycle.py",
+      "target": "core/application/user_tasks.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_lifecycle.py",
+      "target": "core/application/user_task_worker.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_lifecycle.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_lifecycle.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_lifecycle.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_retention.py",
+      "target": "core/application/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_retention.py",
+      "target": "core/application/user_task_worker.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_retention.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_retention.py",
+      "target": "core/application/user_tasks.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_retention.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_retention.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_state_integrity.py",
+      "target": "core/application/user_tasks.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_state_integrity.py",
+      "target": "core/application/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_state_integrity.py",
+      "target": "core/application/user_task_worker.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_state_integrity.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_state_integrity.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_state_integrity.py",
+      "target": "core/infrastructure/persistence/postgres_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_state_integrity.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_task_state_integrity.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_v14_queue_scalability.py",
       "target": "core/application/repositories.py",
       "kind": "import"
@@ -8111,6 +11021,41 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_web_login_code_exchange.py",
+      "target": "core/infrastructure/grpc_server/account_servicer.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_web_login_code_exchange.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_web_login_code_exchange.py",
+      "target": "core/proto/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_web_login_code_exchange.py",
+      "target": "core/proto/autoforward_pb2.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_web_login_code_exchange.py",
+      "target": "core/application/web_login_codes.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_web_login_codes.py",
+      "target": "core/application/web_login_codes.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_web_login_codes.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
       "source": "api/internal/grpcclient",
       "target": "api/internal/middleware",
       "kind": "import"
@@ -8133,6 +11078,11 @@
     {
       "source": "api/internal/handlers",
       "target": "api/internal/logpolicy",
+      "kind": "import"
+    },
+    {
+      "source": "api/internal/handlers",
+      "target": "api/internal/ratelimit",
       "kind": "import"
     },
     {
@@ -8171,8 +11121,23 @@
       "kind": "import"
     },
     {
+      "source": "api",
+      "target": "api/internal/ratelimit",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/App.tsx",
       "target": "web/frontend/src/api.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/actionResult.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/providerKey.ts",
       "kind": "import"
     },
     {
@@ -8202,6 +11167,16 @@
     },
     {
       "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/components/JobsPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/components/LogPolicyPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
       "target": "web/frontend/src/components/SystemPanel.tsx",
       "kind": "import"
     },
@@ -8211,8 +11186,18 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/session.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/api.ts",
       "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/api.ts",
+      "target": "web/frontend/src/session.ts",
       "kind": "import"
     },
     {
@@ -8231,6 +11216,16 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/components/BotRouteField.tsx",
+      "target": "web/frontend/src/api.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/BotRouteField.tsx",
+      "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/components/ClientSettings.tsx",
       "target": "web/frontend/src/api.ts",
       "kind": "import"
@@ -8241,6 +11236,26 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/components/JobsPanel.tsx",
+      "target": "web/frontend/src/api.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/JobsPanel.tsx",
+      "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/LogPolicyPanel.tsx",
+      "target": "web/frontend/src/api.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/LogPolicyPanel.tsx",
+      "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/components/SystemPanel.tsx",
       "target": "web/frontend/src/api.ts",
       "kind": "import"
@@ -8258,6 +11273,16 @@
     {
       "source": "web/frontend/src/components/TaskControlPanel.tsx",
       "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/TaskControlPanel.tsx",
+      "target": "web/frontend/src/components/BotRouteField.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/TaskControlPanel.tsx",
+      "target": "web/frontend/src/settingProvenance.ts",
       "kind": "import"
     },
     {
@@ -8296,8 +11321,38 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/main.tsx",
+      "target": "web/frontend/src/api.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/main.tsx",
+      "target": "web/frontend/src/session.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/pages/Auth.tsx",
       "target": "web/frontend/src/api.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/pages/Auth.tsx",
+      "target": "web/frontend/src/session.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/session.ts",
+      "target": "web/frontend/src/api.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/session.ts",
+      "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/settingProvenance.ts",
+      "target": "web/frontend/src/types.ts",
       "kind": "import"
     },
     {
@@ -8323,6 +11378,11 @@
     {
       "source": "mobile/lib/app.dart",
       "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/core/api_client.dart",
+      "target": "mobile/lib/core/json_cast.dart",
       "kind": "import"
     },
     {
@@ -8362,6 +11422,11 @@
     },
     {
       "source": "mobile/lib/core/models.dart",
+      "target": "mobile/lib/core/json_cast.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/core/models.dart",
       "target": "mobile/lib/core/route_input.dart",
       "kind": "import"
     },
@@ -8371,8 +11436,23 @@
       "kind": "import"
     },
     {
+      "source": "mobile/lib/core/storage.dart",
+      "target": "mobile/lib/core/json_cast.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/ai/ai_config_editor_dialog.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
       "source": "mobile/lib/features/ai/ai_config_editor_dialog.dart",
       "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/ai/ai_config_editor_dialog.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
       "kind": "import"
     },
     {
@@ -8638,6 +11718,11 @@
     {
       "source": "mobile/lib/features/home/home_screen.dart",
       "target": "mobile/lib/features/telegram_sessions/sessions_screen.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/log_policy_tab.dart",
+      "target": "mobile/lib/core/json_cast.dart",
       "kind": "import"
     },
     {
@@ -9586,6 +12671,11 @@
       "kind": "import"
     },
     {
+      "source": "website/src/components/Footer.astro",
+      "target": "website/src/components/Logo.astro",
+      "kind": "import"
+    },
+    {
       "source": "website/src/components/Header.astro",
       "target": "website/src/data/site.ts",
       "kind": "import"
@@ -9598,6 +12688,21 @@
     {
       "source": "website/src/components/Header.astro",
       "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/Header.astro",
+      "target": "website/src/components/Logo.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/PipelineRail.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/PipelineRail.astro",
+      "target": "website/src/utils/paths.ts",
       "kind": "import"
     },
     {
@@ -9623,6 +12728,16 @@
     {
       "source": "website/src/components/SpecTable.astro",
       "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/StatusBoard.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/StatusBoard.astro",
+      "target": "website/src/utils/paths.ts",
       "kind": "import"
     },
     {
@@ -9686,6 +12801,11 @@
       "kind": "import"
     },
     {
+      "source": "website/src/layouts/BaseLayout.astro",
+      "target": "website/src/components/Motion.astro",
+      "kind": "import"
+    },
+    {
       "source": "website/src/layouts/DocsLayout.astro",
       "target": "website/src/layouts/BaseLayout.astro",
       "kind": "import"
@@ -9722,6 +12842,36 @@
     },
     {
       "source": "website/src/pages/404.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/authentication/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/authentication/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/authentication/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/authentication/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/authentication/index.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/authentication/index.astro",
       "target": "website/src/utils/paths.ts",
       "kind": "import"
     },
@@ -9942,6 +13092,11 @@
     },
     {
       "source": "website/src/pages/features/index.astro",
+      "target": "website/src/components/StatusBoard.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/features/index.astro",
       "target": "website/src/data/features.ts",
       "kind": "import"
     },
@@ -10001,6 +13156,41 @@
       "kind": "import"
     },
     {
+      "source": "website/src/pages/features/task-creation/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/features/task-creation/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/features/task-creation/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/features/task-creation/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/features/task-creation/index.astro",
+      "target": "website/src/components/Steps.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/features/task-creation/index.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/features/task-creation/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
       "source": "website/src/pages/features/text-cleaner.astro",
       "target": "website/src/layouts/DocsLayout.astro",
       "kind": "import"
@@ -10017,6 +13207,41 @@
     },
     {
       "source": "website/src/pages/features/whitelist-blacklist-filters.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/account-linking/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/account-linking/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/account-linking/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/account-linking/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/account-linking/index.astro",
+      "target": "website/src/components/Steps.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/account-linking/index.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/account-linking/index.astro",
       "target": "website/src/utils/paths.ts",
       "kind": "import"
     },
@@ -10086,6 +13311,41 @@
       "kind": "import"
     },
     {
+      "source": "website/src/pages/getting-started/quickstart/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/quickstart/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/quickstart/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/quickstart/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/quickstart/index.astro",
+      "target": "website/src/components/Steps.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/quickstart/index.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/getting-started/quickstart/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
       "source": "website/src/pages/getting-started/telegram-bot-setup.astro",
       "target": "website/src/layouts/DocsLayout.astro",
       "kind": "import"
@@ -10113,6 +13373,21 @@
     {
       "source": "website/src/pages/index.astro",
       "target": "website/src/components/QuickstartCard.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/index.astro",
+      "target": "website/src/components/DeliveryConsole.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/index.astro",
+      "target": "website/src/components/PipelineRail.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/index.astro",
+      "target": "website/src/components/StatusBoard.astro",
       "kind": "import"
     },
     {
@@ -10181,6 +13456,41 @@
       "kind": "import"
     },
     {
+      "source": "website/src/pages/operations/ai-providers/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/ai-providers/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/ai-providers/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/ai-providers/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/ai-providers/index.astro",
+      "target": "website/src/components/Steps.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/ai-providers/index.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/ai-providers/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
       "source": "website/src/pages/operations/index.astro",
       "target": "website/src/layouts/DocsLayout.astro",
       "kind": "import"
@@ -10207,6 +13517,41 @@
     },
     {
       "source": "website/src/pages/operations/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/troubleshooting/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/troubleshooting/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/troubleshooting/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/troubleshooting/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/troubleshooting/index.astro",
+      "target": "website/src/components/Accordion.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/troubleshooting/index.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/operations/troubleshooting/index.astro",
       "target": "website/src/utils/paths.ts",
       "kind": "import"
     },
@@ -10282,6 +13627,26 @@
     },
     {
       "source": "website/src/pages/security/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/status/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/status/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/status/index.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/status/index.astro",
       "target": "website/src/utils/paths.ts",
       "kind": "import"
     },
@@ -10422,10 +13787,10 @@
       "label": "entities",
       "subsystem": "core",
       "lang": "python",
-      "loc": 1441,
-      "fanIn": 51,
-      "fanOut": 2,
-      "score": 104
+      "loc": 1611,
+      "fanIn": 75,
+      "fanOut": 4,
+      "score": 154
     },
     {
       "id": "website/src/utils/paths.ts",
@@ -10433,9 +13798,19 @@
       "subsystem": "website",
       "lang": "typescript",
       "loc": 28,
-      "fanIn": 40,
+      "fanIn": 49,
       "fanOut": 0,
-      "score": 80
+      "score": 98
+    },
+    {
+      "id": "core/infrastructure/persistence/database.py",
+      "label": "database",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 827,
+      "fanIn": 48,
+      "fanOut": 0,
+      "score": 96
     },
     {
       "id": "core/domain/value_objects.py",
@@ -10443,9 +13818,19 @@
       "subsystem": "core",
       "lang": "python",
       "loc": 102,
-      "fanIn": 37,
+      "fanIn": 44,
       "fanOut": 0,
-      "score": 74
+      "score": 88
+    },
+    {
+      "id": "core/infrastructure/persistence/sqlite_repositories.py",
+      "label": "sqlite_repositories",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 2134,
+      "fanIn": 38,
+      "fanOut": 7,
+      "score": 83
     },
     {
       "id": "website/src/layouts/DocsLayout.astro",
@@ -10453,9 +13838,9 @@
       "subsystem": "website",
       "lang": "astro",
       "loc": 260,
-      "fanIn": 30,
+      "fanIn": 37,
       "fanOut": 5,
-      "score": 65
+      "score": 79
     },
     {
       "id": "website/src/components/Icon.astro",
@@ -10463,39 +13848,49 @@
       "subsystem": "website",
       "lang": "astro",
       "loc": 89,
-      "fanIn": 27,
+      "fanIn": 36,
       "fanOut": 0,
-      "score": 54
+      "score": 72
+    },
+    {
+      "id": "core/infrastructure/telegram/pro_bot_ui.py",
+      "label": "pro_bot_ui",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 10152,
+      "fanIn": 22,
+      "fanOut": 25,
+      "score": 69
     },
     {
       "id": "mobile/lib/l10n/app_messages.dart",
       "label": "app_messages",
       "subsystem": "mobile",
       "lang": "dart",
-      "loc": 692,
-      "fanIn": 20,
+      "loc": 758,
+      "fanIn": 21,
       "fanOut": 10,
-      "score": 50
+      "score": 52
     },
     {
-      "id": "core/infrastructure/persistence/database.py",
-      "label": "database",
+      "id": "core/application/repositories.py",
+      "label": "repositories",
       "subsystem": "core",
       "lang": "python",
-      "loc": 664,
+      "loc": 585,
       "fanIn": 25,
-      "fanOut": 0,
-      "score": 50
+      "fanOut": 1,
+      "score": 51
     },
     {
-      "id": "core/infrastructure/persistence/sqlite_repositories.py",
-      "label": "sqlite_repositories",
+      "id": "core/main.py",
+      "label": "main",
       "subsystem": "core",
       "lang": "python",
-      "loc": 1608,
-      "fanIn": 20,
-      "fanOut": 7,
-      "score": 47
+      "loc": 694,
+      "fanIn": 3,
+      "fanOut": 42,
+      "score": 48
     },
     {
       "id": "atfcli/commands/_shared.py",
@@ -10508,13 +13903,23 @@
       "score": 47
     },
     {
-      "id": "core/infrastructure/telegram/pro_bot_ui.py",
-      "label": "pro_bot_ui",
+      "id": "core/domain/services.py",
+      "label": "services",
       "subsystem": "core",
       "lang": "python",
-      "loc": 9107,
-      "fanIn": 16,
-      "fanOut": 14,
+      "loc": 1084,
+      "fanIn": 21,
+      "fanOut": 4,
+      "score": 46
+    },
+    {
+      "id": "core/application/use_cases.py",
+      "label": "use_cases",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 668,
+      "fanIn": 20,
+      "fanOut": 6,
       "score": 46
     },
     {
@@ -10528,24 +13933,54 @@
       "score": 46
     },
     {
-      "id": "mobile/lib/core/app_state.dart",
-      "label": "app_state",
+      "id": "core/infrastructure/telegram/i18n.py",
+      "label": "i18n",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 38,
+      "fanIn": 22,
+      "fanOut": 0,
+      "score": 44
+    },
+    {
+      "id": "mobile/lib/core/api_client.dart",
+      "label": "api_client",
       "subsystem": "mobile",
       "lang": "dart",
-      "loc": 200,
+      "loc": 1212,
       "fanIn": 19,
       "fanOut": 4,
       "score": 42
     },
     {
-      "id": "core/main.py",
-      "label": "main",
+      "id": "mobile/lib/core/app_state.dart",
+      "label": "app_state",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "loc": 198,
+      "fanIn": 19,
+      "fanOut": 4,
+      "score": 42
+    },
+    {
+      "id": "core/proto/__init__.py",
+      "label": "__init__",
       "subsystem": "core",
       "lang": "python",
-      "loc": 560,
-      "fanIn": 3,
-      "fanOut": 34,
-      "score": 40
+      "loc": 8,
+      "fanIn": 20,
+      "fanOut": 2,
+      "score": 42
+    },
+    {
+      "id": "website/src/components/Callout.astro",
+      "label": "Callout",
+      "subsystem": "website",
+      "lang": "astro",
+      "loc": 25,
+      "fanIn": 20,
+      "fanOut": 1,
+      "score": 41
     },
     {
       "id": "atfcli/errors.py",
@@ -10558,104 +13993,34 @@
       "score": 40
     },
     {
-      "id": "mobile/lib/core/api_client.dart",
-      "label": "api_client",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "loc": 1101,
-      "fanIn": 18,
-      "fanOut": 3,
-      "score": 39
-    },
-    {
       "id": "mobile/lib/core/models.dart",
       "label": "models",
       "subsystem": "mobile",
       "lang": "dart",
-      "loc": 1493,
+      "loc": 1737,
       "fanIn": 18,
-      "fanOut": 1,
-      "score": 37
-    },
-    {
-      "id": "core/domain/services.py",
-      "label": "services",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 1061,
-      "fanIn": 17,
       "fanOut": 2,
-      "score": 36
+      "score": 38
     },
     {
-      "id": "core/infrastructure/telegram/i18n.py",
-      "label": "i18n",
+      "id": "core/infrastructure/security/crypto.py",
+      "label": "crypto",
       "subsystem": "core",
       "lang": "python",
-      "loc": 38,
-      "fanIn": 16,
+      "loc": 18,
+      "fanIn": 19,
       "fanOut": 0,
-      "score": 32
+      "score": 38
     },
     {
-      "id": "atfcli/context.py",
-      "label": "context",
-      "subsystem": "cli",
-      "lang": "python",
-      "loc": 326,
-      "fanIn": 14,
-      "fanOut": 2,
-      "score": 30
-    },
-    {
-      "id": "core/proto/__init__.py",
-      "label": "__init__",
+      "id": "core/infrastructure/telegram/durable_queue.py",
+      "label": "durable_queue",
       "subsystem": "core",
       "lang": "python",
-      "loc": 8,
-      "fanIn": 14,
-      "fanOut": 2,
-      "score": 30
-    },
-    {
-      "id": "core/application/pipeline.py",
-      "label": "pipeline",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 919,
-      "fanIn": 11,
+      "loc": 1145,
+      "fanIn": 15,
       "fanOut": 7,
-      "score": 29
-    },
-    {
-      "id": "core/application/repositories.py",
-      "label": "repositories",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 396,
-      "fanIn": 14,
-      "fanOut": 1,
-      "score": 29
-    },
-    {
-      "id": "website/src/components/Callout.astro",
-      "label": "Callout",
-      "subsystem": "website",
-      "lang": "astro",
-      "loc": 25,
-      "fanIn": 13,
-      "fanOut": 1,
-      "score": 27
-    },
-    {
-      "id": "mobile/lib/core/theme.dart",
-      "label": "theme",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "loc": 435,
-      "fanIn": 13,
-      "fanOut": 0,
-      "score": 26
+      "score": 37
     }
   ],
   "largest": [
@@ -10665,19 +14030,19 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 9107,
-      "fanIn": 16,
-      "fanOut": 14
+      "loc": 10152,
+      "fanIn": 22,
+      "fanOut": 25
     },
     {
       "id": "api/internal/handlers",
       "label": "handlers",
       "subsystem": "api",
       "lang": "go",
-      "files": 21,
-      "loc": 7095,
+      "files": 34,
+      "loc": 9810,
       "fanIn": 1,
-      "fanOut": 4
+      "fanOut": 5
     },
     {
       "id": "web/frontend/src/App.tsx",
@@ -10685,9 +14050,9 @@
       "subsystem": "web-frontend",
       "lang": "typescript",
       "files": 1,
-      "loc": 4244,
+      "loc": 4698,
       "fanIn": 1,
-      "fanOut": 8
+      "fanOut": 13
     },
     {
       "id": "core/proto/autoforward_pb2_grpc.py",
@@ -10695,9 +14060,19 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 2663,
-      "fanIn": 3,
-      "fanOut": 2
+      "loc": 3333,
+      "fanIn": 4,
+      "fanOut": 0
+    },
+    {
+      "id": "api/internal/ratelimit",
+      "label": "ratelimit",
+      "subsystem": "api",
+      "lang": "go",
+      "files": 13,
+      "loc": 2790,
+      "fanIn": 2,
+      "fanOut": 0
     },
     {
       "id": "web/frontend/src/components/TaskOverviewModal.tsx",
@@ -10715,9 +14090,9 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 1724,
-      "fanIn": 6,
-      "fanOut": 9
+      "loc": 2140,
+      "fanIn": 11,
+      "fanOut": 14
     },
     {
       "id": "core/infrastructure/persistence/sqlite_repositories.py",
@@ -10725,8 +14100,8 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 1608,
-      "fanIn": 20,
+      "loc": 2134,
+      "fanIn": 38,
       "fanOut": 7
     },
     {
@@ -10735,29 +14110,9 @@
       "subsystem": "mobile",
       "lang": "dart",
       "files": 1,
-      "loc": 1493,
+      "loc": 1737,
       "fanIn": 18,
-      "fanOut": 1
-    },
-    {
-      "id": "core/domain/entities.py",
-      "label": "entities",
-      "subsystem": "core",
-      "lang": "python",
-      "files": 1,
-      "loc": 1441,
-      "fanIn": 51,
       "fanOut": 2
-    },
-    {
-      "id": "mobile/lib/features/rules/rule_editor_screen.dart",
-      "label": "rule_editor_screen",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "files": 1,
-      "loc": 1359,
-      "fanIn": 2,
-      "fanOut": 11
     },
     {
       "id": "core/infrastructure/persistence/postgres_repositories.py",
@@ -10765,8 +14120,38 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 1147,
-      "fanIn": 7,
+      "loc": 1693,
+      "fanIn": 9,
+      "fanOut": 4
+    },
+    {
+      "id": "core/domain/entities.py",
+      "label": "entities",
+      "subsystem": "core",
+      "lang": "python",
+      "files": 1,
+      "loc": 1611,
+      "fanIn": 75,
+      "fanOut": 4
+    },
+    {
+      "id": "mobile/lib/features/rules/rule_editor_screen.dart",
+      "label": "rule_editor_screen",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "files": 1,
+      "loc": 1419,
+      "fanIn": 2,
+      "fanOut": 11
+    },
+    {
+      "id": "mobile/lib/features/rules/rule_settings_sheet.dart",
+      "label": "rule_settings_sheet",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "files": 1,
+      "loc": 1218,
+      "fanIn": 2,
       "fanOut": 4
     },
     {
@@ -10775,9 +14160,29 @@
       "subsystem": "mobile",
       "lang": "dart",
       "files": 1,
-      "loc": 1101,
-      "fanIn": 18,
-      "fanOut": 3
+      "loc": 1212,
+      "fanIn": 19,
+      "fanOut": 4
+    },
+    {
+      "id": "core/infrastructure/telegram/durable_queue.py",
+      "label": "durable_queue",
+      "subsystem": "core",
+      "lang": "python",
+      "files": 1,
+      "loc": 1145,
+      "fanIn": 15,
+      "fanOut": 7
+    },
+    {
+      "id": "api/internal/middleware",
+      "label": "middleware",
+      "subsystem": "api",
+      "lang": "go",
+      "files": 9,
+      "loc": 1102,
+      "fanIn": 3,
+      "fanOut": 2
     },
     {
       "id": "core/domain/services.py",
@@ -10785,9 +14190,9 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 1061,
-      "fanIn": 17,
-      "fanOut": 2
+      "loc": 1084,
+      "fanIn": 21,
+      "fanOut": 4
     },
     {
       "id": "atf.py",
@@ -10798,69 +14203,30 @@
       "loc": 1057,
       "fanIn": 1,
       "fanOut": 2
-    },
-    {
-      "id": "api/internal/middleware",
-      "label": "middleware",
-      "subsystem": "api",
-      "lang": "go",
-      "files": 8,
-      "loc": 1032,
-      "fanIn": 3,
-      "fanOut": 2
-    },
-    {
-      "id": "mobile/lib/features/logs/logs_screen.dart",
-      "label": "logs_screen",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "files": 1,
-      "loc": 1026,
-      "fanIn": 2,
-      "fanOut": 6
-    },
-    {
-      "id": "website/src/data/features.ts",
-      "label": "features",
-      "subsystem": "website",
-      "lang": "typescript",
-      "files": 1,
-      "loc": 987,
-      "fanIn": 6,
-      "fanOut": 0
-    },
-    {
-      "id": "core/infrastructure/telegram/durable_queue.py",
-      "label": "durable_queue",
-      "subsystem": "core",
-      "lang": "python",
-      "files": 1,
-      "loc": 975,
-      "fanIn": 9,
-      "fanOut": 6
     }
   ],
   "orphans": [],
   "cycles": [
     [
+      "core/domain/branding.py",
       "core/domain/content_policy.py",
       "core/domain/entities.py",
       "core/domain/services.py"
     ],
     [
-      "core/proto/__init__.py",
-      "core/proto/autoforward_pb2_grpc.py"
-    ],
-    [
       "atfcli/__init__.py",
       "atfcli/cli.py"
+    ],
+    [
+      "web/frontend/src/api.ts",
+      "web/frontend/src/session.ts"
     ]
   ],
   "crossSubsystem": [
     {
       "from": "core",
       "to": "atfcli",
-      "count": 13
+      "count": 15
     },
     {
       "from": "core",
@@ -10887,10 +14253,11 @@
       "protocol": "gRPC :50051",
       "detail": "Every rule, session and delivery command crosses this boundary as a protobuf RPC.",
       "evidence": [
+        "api/internal/grpcclient/grpcclient.go",
+        "api/internal/grpcclient/rpc_auth_test.go",
         "api/internal/handlers/system.go",
-        "api/internal/handlers/system_test.go",
-        "api/main.go",
         "core/infrastructure/grpc_server/account_servicer.py",
+        "core/infrastructure/grpc_server/internal_auth.py",
         "core/infrastructure/grpc_server/servicers.py"
       ]
     },
@@ -11012,7 +14379,7 @@
       "evidence": [
         "core/infrastructure/grpc_server/account_servicer.py",
         "core/infrastructure/grpc_server/admin_servicer.py",
-        "core/infrastructure/grpc_server/servicers.py"
+        "core/infrastructure/grpc_server/internal_auth.py"
       ]
     },
     {
@@ -11079,7 +14446,7 @@
       "evidence": [
         "core/infrastructure/telegram/auth_state.py",
         "core/infrastructure/telegram/bot_manager.py",
-        "core/infrastructure/telegram/channel_catchup.py"
+        "core/infrastructure/telegram/bot_transport.py"
       ],
       "external": true
     },
@@ -11091,8 +14458,8 @@
       "tech": "Pyrogram client pool",
       "role": "Authorised user/bot sessions, update stream, album aggregation",
       "color": "#38bdf8",
-      "files": 18,
-      "loc": 14191,
+      "files": 25,
+      "loc": 17403,
       "langs": [
         "python"
       ],
@@ -11112,8 +14479,8 @@
       "tech": "Python · domain model",
       "role": "Policy resolution, cleaning, shortcodes, replacements, AI pass",
       "color": "#22d3ee",
-      "files": 14,
-      "loc": 6517,
+      "files": 22,
+      "loc": 8858,
       "langs": [
         "python"
       ],
@@ -11121,7 +14488,7 @@
         "core/domain/entities.py",
         "core/domain/services.py",
         "core/application/pipeline.py",
-        "core/application/backup_service.py"
+        "core/application/use_cases.py"
       ],
       "external": false
     },
@@ -11133,15 +14500,15 @@
       "tech": "SQLite-backed queue",
       "role": "Ordered delivery, retries with backoff, dead-letter control",
       "color": "#818cf8",
-      "files": 15,
-      "loc": 6963,
+      "files": 22,
+      "loc": 9998,
       "langs": [
         "python"
       ],
       "evidence": [
+        "core/application/backup_service.py",
         "core/application/repositories.py",
-        "core/config.py",
-        "core/domain/entities.py",
+        "core/application/user_task_worker.py",
         "core/infrastructure/persistence/sqlite_repositories.py"
       ],
       "external": false
@@ -11154,8 +14521,8 @@
       "tech": "SQLite WAL · PostgreSQL",
       "role": "Tasks, queue, sessions, audit outbox",
       "color": "#a3e635",
-      "files": 8,
-      "loc": 4047,
+      "files": 9,
+      "loc": 5375,
       "langs": [
         "python"
       ],
@@ -11175,8 +14542,8 @@
       "tech": "grpc.aio :50051",
       "role": "Eleven servicers exposing the engine to the control plane",
       "color": "#34d399",
-      "files": 7,
-      "loc": 5369,
+      "files": 9,
+      "loc": 6813,
       "langs": [
         "python"
       ],
@@ -11197,7 +14564,7 @@
       "role": "Optional LLM pass driven by per-task prompts",
       "color": "#f472b6",
       "files": 5,
-      "loc": 786,
+      "loc": 966,
       "langs": [
         "python"
       ],
@@ -11253,16 +14620,16 @@
       "tech": "Go net/http :8080",
       "role": "Auth, tenant scoping, rules, delivery, logs, diagnostics",
       "color": "#34d399",
-      "files": 22,
-      "loc": 7239,
+      "files": 35,
+      "loc": 10012,
       "langs": [
         "go"
       ],
       "evidence": [
         "api/internal/handlers/handlers.go",
-        "api/internal/handlers/log_control_api_test.go",
-        "api/internal/handlers/handlers_test.go",
-        "api/internal/handlers/admin.go"
+        "api/internal/handlers/logging_policy.go",
+        "api/internal/handlers/logging_policy_test.go",
+        "api/internal/handlers/log_control_api_test.go"
       ],
       "external": false
     },
@@ -11274,16 +14641,16 @@
       "tech": "Go middleware",
       "role": "Correlation ids, audit trail, log-policy gate, access log",
       "color": "#6ee7b7",
-      "files": 12,
-      "loc": 1601,
+      "files": 13,
+      "loc": 1671,
       "langs": [
         "python",
         "go"
       ],
       "evidence": [
+        "api/internal/middleware/access_log_gate_test.go",
         "api/internal/middleware/access_log_test.go",
         "api/internal/middleware/audit.go",
-        "api/internal/middleware/audit_test.go",
         "api/internal/logpolicy/policy.go"
       ],
       "external": false
@@ -11314,8 +14681,8 @@
       "tech": "React · TypeScript",
       "role": "Tasks, log explorer, diagnostics, admin",
       "color": "#fb923c",
-      "files": 13,
-      "loc": 10852,
+      "files": 20,
+      "loc": 13003,
       "langs": [
         "typescript"
       ],
@@ -11335,8 +14702,8 @@
       "tech": "Flutter · Dart",
       "role": "Same contract, native surfaces, 10 locales",
       "color": "#a78bfa",
-      "files": 43,
-      "loc": 19344,
+      "files": 44,
+      "loc": 20982,
       "langs": [
         "dart"
       ],
@@ -11357,7 +14724,7 @@
       "role": "Install, validate, diagnose, upgrade",
       "color": "#22d3ee",
       "files": 37,
-      "loc": 6845,
+      "loc": 6892,
       "langs": [
         "python"
       ],
@@ -11450,7 +14817,7 @@
       "kind": "event",
       "label": "Commands in",
       "protocol": "in-process",
-      "metric": "62 RPCs"
+      "metric": "78 RPCs"
     },
     {
       "source": "core-grpc",
@@ -11498,7 +14865,7 @@
       "kind": "grpc",
       "label": "Control calls",
       "protocol": "gRPC",
-      "metric": "62 RPCs"
+      "metric": "78 RPCs"
     },
     {
       "source": "api-rest",
@@ -11766,6 +15133,22 @@
   ],
   "services": [
     {
+      "name": "redis",
+      "container": "atf-redis",
+      "dockerfile": null,
+      "image": "redis:7.4.11-alpine3.21",
+      "dependsOn": [],
+      "networks": [
+        "atf-net"
+      ],
+      "envKeys": [
+        "ATF_REDIS_PASSWORD"
+      ],
+      "ports": [],
+      "profile": null,
+      "healthcheck": true
+    },
+    {
       "name": "logger",
       "container": "atf-logger",
       "dockerfile": "Dockerfile.logger-rust",
@@ -11794,6 +15177,7 @@
         "atf-net"
       ],
       "envKeys": [
+        "ATF_DISABLE_BOT",
         "ATF_API_ID",
         "ATF_API_HASH",
         "ATF_BOT_TOKEN",
@@ -11801,14 +15185,23 @@
         "ADMIN_IDS",
         "ATF_ADMIN_USER_ID",
         "ATF_MASTER_KEY",
+        "ATF_JWT_SECRET",
+        "ATF_ALLOW_PRIVATE_AI_ENDPOINTS",
         "ATF_WEB_URL",
         "ATF_GRPC_PORT",
+        "ATF_CORE_RPC_TOKEN",
+        "ATF_TASK_RETENTION_SECONDS",
         "ATF_DB_PATH",
-        "ATF_LOGGER_ADDR"
+        "ATF_LOGGER_ADDR",
+        "ATF_RAW_API_TRACE",
+        "ATF_BUTTON_STYLES",
+        "ATF_BUTTON_STYLE_PROBE",
+        "ATF_REDIS_ADDR",
+        "ATF_REDIS_PASSWORD"
       ],
       "ports": [],
       "profile": null,
-      "healthcheck": false
+      "healthcheck": true
     },
     {
       "name": "api",
@@ -11823,16 +15216,20 @@
       ],
       "envKeys": [
         "ATF_CORE_GRPC",
+        "ATF_CORE_RPC_TOKEN",
         "ATF_LOGGER_GRPC",
         "ATF_API_ADDR",
         "ATF_API_KEY",
-        "ATF_WEB_HEALTH_URL"
+        "ATF_WEB_HEALTH_URL",
+        "ATF_REDIS_ADDR",
+        "ATF_REDIS_PASSWORD",
+        "ATF_RATELIMIT_ALGO"
       ],
       "ports": [
         "8080:8080"
       ],
       "profile": null,
-      "healthcheck": false
+      "healthcheck": true
     },
     {
       "name": "web",
@@ -11945,20 +15342,24 @@
           "UpdateAIConfig",
           "DeleteAIConfig",
           "TestAIRewrite",
+          "CheckProviderKey",
+          "ListAIProviders",
           "ListPromptTemplates",
           "SavePromptTemplate",
           "DeletePromptTemplate",
           "TestPrompt"
         ],
-        "count": 9,
+        "count": 11,
         "domain": "AI"
       },
       {
         "name": "SystemStatusControlService",
         "rpcs": [
-          "GetSystemStats"
+          "GetSystemStats",
+          "GetLogPolicy",
+          "SetLogPolicy"
         ],
-        "count": 1,
+        "count": 3,
         "domain": "SystemStatus"
       },
       {
@@ -11996,10 +15397,12 @@
           "LoginAccount",
           "ValidateToken",
           "IssueWebToken",
+          "ExchangeWebLoginCode",
+          "IssueLoginCode",
           "ChangePassword",
           "GetAccount"
         ],
-        "count": 6,
+        "count": 8,
         "domain": "Account"
       },
       {
@@ -12019,14 +15422,46 @@
         ],
         "count": 11,
         "domain": "Admin"
+      },
+      {
+        "name": "BotTokenControlService",
+        "rpcs": [
+          "ListBotTokens",
+          "CreateBotToken",
+          "DeleteBotToken",
+          "GetBotDefaults",
+          "SetBotDefaults"
+        ],
+        "count": 5,
+        "domain": "BotToken"
+      },
+      {
+        "name": "TaskControlService",
+        "rpcs": [
+          "CreateTask",
+          "GetTask",
+          "ListTasks",
+          "CancelTask",
+          "RetryTask"
+        ],
+        "count": 5,
+        "domain": "Task"
       }
     ],
-    "rpcCount": 62,
-    "messageCount": 112,
+    "rpcCount": 78,
+    "messageCount": 141,
     "path": "proto/autoforward.proto"
   },
   "pipeline": {
     "tags": [
+      {
+        "tag": "AI_REWRITE",
+        "count": 21
+      },
+      {
+        "tag": "BRANDING",
+        "count": 18
+      },
       {
         "tag": "DIALOG_FETCH",
         "count": 14
@@ -12040,11 +15475,23 @@
         "count": 8
       },
       {
-        "tag": "AI_REWRITE",
+        "tag": "DELIVERED",
+        "count": 7
+      },
+      {
+        "tag": "ROUTE",
         "count": 6
       },
       {
-        "tag": "DELIVERED",
+        "tag": "FILTER_DROP",
+        "count": 5
+      },
+      {
+        "tag": "TRANSFORM",
+        "count": 5
+      },
+      {
+        "tag": "DROP",
         "count": 4
       },
       {
@@ -12052,19 +15499,7 @@
         "count": 4
       },
       {
-        "tag": "ROUTE",
-        "count": 4
-      },
-      {
-        "tag": "DROP",
-        "count": 3
-      },
-      {
-        "tag": "FILTER_DROP",
-        "count": 3
-      },
-      {
-        "tag": "TRANSFORM",
+        "tag": "RESTRICTED_BYPASS",
         "count": 3
       },
       {
@@ -12076,11 +15511,23 @@
         "count": 2
       },
       {
+        "tag": "CLEAN",
+        "count": 2
+      },
+      {
         "tag": "CLEANER",
         "count": 2
       },
       {
+        "tag": "DISPATCH",
+        "count": 2
+      },
+      {
         "tag": "ENQUEUE",
+        "count": 2
+      },
+      {
+        "tag": "FLOODWAIT",
         "count": 2
       },
       {
@@ -12096,11 +15543,11 @@
         "count": 2
       },
       {
-        "tag": "POLICY_TARGET",
+        "tag": "PAUSED",
         "count": 2
       },
       {
-        "tag": "RESTRICTED_BYPASS",
+        "tag": "POLICY_TARGET",
         "count": 2
       },
       {
@@ -12113,10 +15560,6 @@
       },
       {
         "tag": "AUTO_DISABLE",
-        "count": 1
-      },
-      {
-        "tag": "CLEAN",
         "count": 1
       },
       {
@@ -12140,10 +15583,6 @@
         "count": 1
       },
       {
-        "tag": "DISPATCH",
-        "count": 1
-      },
-      {
         "tag": "DLQ",
         "count": 1
       },
@@ -12160,10 +15599,6 @@
         "count": 1
       },
       {
-        "tag": "FLOODWAIT",
-        "count": 1
-      },
-      {
         "tag": "INGEST",
         "count": 1
       },
@@ -12177,10 +15612,6 @@
       },
       {
         "tag": "NO_RULES",
-        "count": 1
-      },
-      {
-        "tag": "PAUSED",
         "count": 1
       },
       {
@@ -12204,7 +15635,15 @@
         "count": 1
       },
       {
+        "tag": "SYNC_DELETE_AMBIGUOUS",
+        "count": 1
+      },
+      {
         "tag": "SYNC_DELETE_FAIL",
+        "count": 1
+      },
+      {
+        "tag": "SYNC_DELETE_NO_CLIENT",
         "count": 1
       },
       {
@@ -12236,6 +15675,6 @@
         "count": 1
       }
     ],
-    "total": 110
+    "total": 160
   }
 }

@@ -1,0 +1,76 @@
+---
+import repoInfo from '../data/repo-info.json';
+
+/**
+ * The hero's product visual: a delivery console.
+ *
+ * Every line is an *example* of the trace the running stack emits — the state
+ * names are the pipeline's real lifecycle states (docs/feature_catalog.json),
+ * the log prefix is the real `[PIPELINE:...]` format, and the stage labels come
+ * from the pipeline the repository implements. It is labelled as an example in
+ * the UI and is never presented as a live reading from a running deployment.
+ */
+const states = repoInfo.lifecycleStates;
+
+const trace: Array<{ time: string; key: string; text: string; tone?: 'ok' | 'warn' | 'note' }> = [
+  { time: '14:00:07', key: 'RECEIVED', text: 'album of 3 · @MarketNews · update 4921' },
+  { time: '14:00:07', key: 'VALIDATING', text: 'duplicate fingerprint · fresh', tone: 'note' },
+  { time: '14:00:08', key: 'AUTHORIZED', text: 'session · write access to target', tone: 'note' },
+  { time: '14:00:08', key: 'TRANSFORM', text: 'cleaner 3 urls · header + footer rendered', tone: 'note' },
+  { time: '14:00:09', key: 'ACCEPTED', text: 'queued lane #4 · correlation 9f3c…' },
+  { time: '14:00:09', key: 'IN_PROGRESS', text: 'copy delivery → @MyBroadcast' },
+  { time: '14:00:11', key: 'SUCCEEDED', text: 'target_msg_id 8812 · 3/3 parts', tone: 'ok' },
+];
+
+const rail = [
+  'Telegram MTProto',
+  'policy gate',
+  'transforms + AI',
+  'durable queue',
+  'copy · forward · hop',
+];
+---
+
+<figure class="console m-0 reveal" data-console>
+  <figcaption class="console-head">
+    <span class="console-dot console-dot--live" aria-hidden="true"></span>
+    <span class="console-title">Example pipeline trace</span>
+    <span class="ml-auto console-title">v{repoInfo.version}</span>
+  </figcaption>
+
+  <div class="console-body">
+    {
+      trace.map((line) => (
+        <div class="console-line">
+          <span class="console-time">{line.time}</span>
+          <span class="console-key">{line.key.padEnd(12, ' ')}</span>
+          <span class={line.tone === 'ok' ? 'console-ok' : line.tone === 'warn' ? 'console-warn' : 'console-note'}>
+            {line.text}
+          </span>
+        </div>
+      ))
+    }
+    <div class="console-line">
+      <span class="console-time">14:00:11</span>
+      <span class="console-ok">[PIPELINE:DELIVERED]</span>
+      <span class="console-note">1 source in → 2 targets out · 0 retries</span>
+    </div>
+  </div>
+
+  <div class="px-3.5 pb-3.5 pt-1">
+    <ol class="flex flex-wrap gap-1.5 list-none p-0 m-0" aria-label="Pipeline stages">
+      {
+        rail.map((stage, index) => (
+          <li class="flex items-center gap-1.5">
+            {index > 0 && <span class="text-slate-600" aria-hidden="true">→</span>}
+            <span class="chip" style="font-size: 11px;">{stage}</span>
+          </li>
+        ))
+      }
+    </ol>
+    <p class="mt-2.5 mb-0 text-[11px] leading-relaxed text-slate-500">
+      Illustrative trace over the real lifecycle states — {states.join(' → ')}. Nothing on the site reads from
+      a running deployment.
+    </p>
+  </div>
+</figure>

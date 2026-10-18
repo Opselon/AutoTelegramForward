@@ -354,6 +354,7 @@ atf config list`,
       },
     ],
     related: [
+      { name: 'AI providers, keys and prompts in depth', path: '/operations/ai-providers/' },
       { name: 'Per-task content rules', path: '/features/per-task-content-rules/' },
       { name: 'Observability & log history', path: '/features/observability-and-logs/' },
       { name: 'REST API reference', path: '/api/' },
