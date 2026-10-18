@@ -68,6 +68,8 @@ from ...application.backup_service import (
 )
 from ...application.repositories import ConcurrencyError
 from ...application.effective_settings import describe_rule
+from .ui_state import UiState  # per-user UI flow state (dataclass)
+from .ui_state_manager import UiStateManager  # noqa: E402
 from ...application.use_cases import (
     AIConfigUseCases,
     FilterRuleUseCases,
@@ -292,77 +294,7 @@ ROUTE_PARSE_KEYS = {
 SEV_ICON = {"info": "ℹ️", "warn": "⚠️", "error": "❌", "auth": "🔐", "fatal": "💀"}
 
 
-@dataclass
-class UiState:
-    """Per-user UI flow state (FSM)."""
 
-    step: str = ""
-    lang: str = ""
-    user_id: int = 0
-    rule_source: str = ""
-    rule_target: str = ""
-    filter_id: Optional[str] = None
-    ai_field: str = ""
-    ai_name: str = ""
-    ai_provider: str = ""
-    ai_model: str = ""
-    ai_api_key: str = ""
-    ai_base_url: str = ""
-    login_phone: str = ""
-    cred_label: str = ""
-    cred_api_id: str = ""
-    cred_api_hash: str = ""
-    buffer: Dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        """Serialize the FSM for the durable ui_states table."""
-        return {
-            "step": self.step,
-            "lang": getattr(self, "lang", ""),
-            "user_id": getattr(self, "user_id", 0),
-            "rule_source": self.rule_source,
-            "rule_target": self.rule_target,
-            "ai_name": self.ai_name,
-            "ai_provider": self.ai_provider,
-            "ai_model": self.ai_model,
-            "ai_base_url": self.ai_base_url,
-            "login_phone": self.login_phone,
-            "cred_label": self.cred_label,
-            "cred_api_id": self.cred_api_id,
-            "buffer": {k: v for k, v in self.buffer.items()},
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "UiState":
-        if not data:
-            return cls()
-        # Unwrap any recursive wrapping from past persistence anomalies
-        cur = dict(data)
-        while isinstance(cur.get("buffer"), dict) and any(
-            k in cur["buffer"] for k in ("step", "login_phone", "cred_label", "rule_source")
-        ):
-            inner = cur.pop("buffer")
-            for k, v in inner.items():
-                if k != "buffer" and (not cur.get(k) or cur.get(k) == ""):
-                    cur[k] = v
-            cur["buffer"] = inner.get("buffer", {})
-
-        return cls(
-            step=cur.get("step", ""),
-            lang=cur.get("lang", ""),
-            user_id=int(cur.get("user_id", 0) or 0),
-            rule_source=cur.get("rule_source", ""),
-            rule_target=cur.get("rule_target", ""),
-            filter_id=cur.get("filter_id"),
-            ai_name=cur.get("ai_name", ""),
-            ai_provider=cur.get("ai_provider", ""),
-            ai_model=cur.get("ai_model", ""),
-            ai_base_url=cur.get("ai_base_url", ""),
-            login_phone=cur.get("login_phone", ""),
-            cred_label=cur.get("cred_label", ""),
-            cred_api_id=str(cur.get("cred_api_id", "")),
-            buffer=cur.get("buffer", {}) or {},
-        )
 
 
 class ProBotUI:
@@ -446,6 +378,13 @@ class ProBotUI:
         self._backup = backup_service
         self._settings = settings  # ISettingsRepository, optional
         self._states: Dict[int, UiState] = {}
+        # Pro state manager (durable, validated, single-writer): the plain
+        # dict above stays as the sync render cache the ~250 handlers read,
+        # while every DURABLE write now flows through the manager so the
+        # step namespace, buffer bounds and screen stack cannot regress.
+        self._ui_manager = UiStateManager(
+            repo=ui_state_repo, logger=log_client,
+        )
         self._register()
 
     # ------------------------------------------------------------------ #
@@ -624,13 +563,27 @@ class ProBotUI:
         return {"step": row["step"] or "", "buffer": db.loads(row["buffer"], {})}
 
     async def _persist(self, uid: int, st: UiState) -> None:
-        if self._ui_state_repo is None:
+        """Durable save through the pro state manager.
+
+        The manager validates the step namespace and bounds the buffer, so a
+        broken flow can never persist a value a render cannot survive — the
+        dead-button class of bug — and persists a versioned payload that the
+        next process resumes against the same screen stack.
+        """
+        # Mirror the (already validated, bounded) write back into the render
+        # cache so sync read paths see exactly what the durable store has.
+        from .ui_state_manager import _safe_buffer, _safe_step
+        try:
+            stn = st if isinstance(st, UiState) else UiState.from_dict(
+                st if isinstance(st, dict) else {})
+            stn.step = _safe_step(stn.step or "")
+            stn.buffer = _safe_buffer(stn.buffer)
+            st.user_id = int(uid)
+        except Exception:
+            logger.debug("ui state mirror failed", exc_info=True)
             return
         try:
-            if st.step:
-                await self._ui_state_repo.save(uid, st.step, st.to_dict())
-            else:
-                await self._ui_state_repo.clear(uid)
+            await self._ui_manager.absorb(uid, stn)
         except Exception:
             logger.debug("ui state persist failed", exc_info=True)
 
@@ -4007,6 +3960,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_sessions(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            await self._ui_manager.enter_screen(uid, CB["sessions"])
             logger.info("Executing _cb_sessions for uid=%s", uid)
             try:
                 sessions = await self._sessions.list_by_owner(uid) if uid else []
@@ -4033,6 +3987,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_rules(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            await self._ui_manager.enter_screen(uid, CB["rules"])
             rules = await self._rules.list_by_owner(uid) if uid else []
             text, kbd = self._render_rules_list(rules, page=0)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -4105,6 +4060,10 @@ class ProBotUI:
             row that names an unowned rule is dropped rather than summarised.
             """
             uid = cq.from_user.id if cq.from_user else 0
+            await self._ui_manager.enter_screen(uid, CB["diag"])
+            await self._ui_manager.enter_screen(uid, CB["stats"])
+            await self._ui_manager.enter_screen(uid, CB["ai"])
+            await self._ui_manager.enter_screen(uid, CB["filters"])
             owned: list[str] = []
             try:
                 owned = diagnostics.owned_ids_of(
@@ -4402,16 +4361,62 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_back(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            # Pro state manager: Back means "the screen before this one",
+            # not "the main menu" — the screen stack survives restarts.
+            _dropped, _st = await self._ui_manager.pop_screen(uid)
+            stack = await self._ui_manager.current_stack(uid)
+            target = stack[-1] if stack else ""
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
-            if not sessions:
-                text, kbd = self._render_welcome_onboarding(uid, user=cq.from_user)
-                await self._safe_edit(cq, text, reply_markup=kbd)
-            else:
-                await self._safe_edit(
-                    cq,
-                    await self._main_text(uid, user=cq.from_user),
-                    reply_markup=self._main_menu(),
-                )
+            # Re-render whatever the stack says the user was on; anything the
+            # stack does not know (fresh restart mid-menu, unknown screen)
+            # falls back to the main menu — the same behaviour as before, no
+            # worse, and now logged instead of guessy.
+            try:
+                if not sessions:
+                    text, kbd = self._render_welcome_onboarding(uid, user=cq.from_user)
+                    await self._safe_edit(cq, text, reply_markup=kbd)
+                elif target == CB["rules"] or target == CB["sessions"] or target == CB["filters"] or target == CB["stats"] or target == CB["settings"] or target == CB["ai"]:
+                    if target == CB["rules"]:
+                        rules = await self._rules.list_by_owner(uid) if uid else []
+                        text, kbd = self._render_rules_list(rules, page=0)
+                    elif target == CB["sessions"]:
+                        rules_or_sessions = await self._sessions.list_by_owner(uid) if uid else []
+                        lines = [self._t("ui_sessions_title"), ""]
+                        for s0 in rules_or_sessions:
+                            lines.append(f"`{s0.id[:8]}` +{s0.phone_number}")
+                        text, kbd = "\n".join(lines), self._sessions_menu()
+                    elif target == CB["filters"]:
+                        fs = await self._filters.list_by_owner(uid) if uid else []
+                        lines = [self._t("ui_filters_title"), ""]
+                        for f0 in fs:
+                            lines.append(f"🧹 `{f0.id[:8]}` {f0.name}")
+                        text, kbd = "\n".join(lines), self._filters_menu()
+                    elif target == CB["stats"]:
+                        stats_kbd = self._kbd([
+                            [("🔄 " + self._t("ui_refresh"), CB["refresh"])],
+                            [("⬅️ " + self._t("ui_back"), CB["back"])],
+                        ])
+                        text, kbd = await self._dashboard_body(), stats_kbd
+                    elif target == CB["settings"]:
+                        lang = self._resolve_lang(uid)
+                        role_key = "ui_settings_role_admin" if self._is_admin(uid) else "ui_settings_role_user"
+                        text = self._t("ui_settings_body", lang=lang, uid=uid, role=self._t(role_key, lang=lang))
+                        kbd = self._client_settings_menu(uid)
+                    else:
+                        cfgs = await self._ai.list_by_owner(uid) if uid else []
+                        lines = [self._t("ui_ai_title"), ""]
+                        for c0 in cfgs:
+                            lines.append(f"`{c0.id[:8]}` {c0.name}")
+                        text, kbd = "\n".join(lines), self._ai_menu(cfgs)
+                    await self._safe_edit(cq, text, reply_markup=kbd)
+                else:
+                    text, kbd = self._render_welcome_onboarding(uid, user=cq.from_user)
+                    body = await self._main_text(uid, user=cq.from_user)
+                    await self._safe_edit(cq, body, reply_markup=self._main_menu())
+            except Exception as exc:
+                logger.exception("back navigation failed for uid=%s: %s", uid, exc)
+                body = await self._main_text(uid, user=cq.from_user)
+                await self._safe_edit(cq, body, reply_markup=self._main_menu())
             await cq.answer()
 
         # ---------------- client settings & personal credentials ----------------
@@ -4419,6 +4424,7 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_settings(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            await self._ui_manager.enter_screen(uid, CB["settings"])
             lang = self._resolve_lang(uid)
             role_key = "ui_settings_role_admin" if self._is_admin(uid) else "ui_settings_role_user"
             text = self._t("ui_settings_body", lang=lang, uid=uid, role=self._t(role_key, lang=lang))
