@@ -55,6 +55,11 @@ services:
     # bots. The .env.example documents generating one; a blank value keeps the
     # generate-once default below honest.
     # (redis ignores an empty requirepass, so the guidance is in the docs.)
+    # The probe runs inside the container, so the password must be present in
+    # its environment for `redis-cli -a` — and this is the ONLY place the value
+    # is exposed within the service, never to other services.
+    environment:
+      ATF_REDIS_PASSWORD: ${ATF_REDIS_PASSWORD:-}
     networks:
       - atf-net
     # Deliberately NO ports: nothing outside the stack's network may reach this.

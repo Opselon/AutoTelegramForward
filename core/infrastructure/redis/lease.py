@@ -134,6 +134,12 @@ class LeaseCoordinator:
         self._leases: Dict[str, Lease] = {}
         self._warned = False
         self._available = False
+        # A transient failure at connect time (DNS not ready, store still
+        # starting) must not disable coordination for the process's lifetime:
+        # try_hold re-probes the store at this interval, bounded so a dead
+        # store is never hammered per call.
+        self._reconnect_every = 30.0
+        self._last_probe = 0.0
 
     # ---------------------------------------------------------------- setup
     @classmethod
@@ -181,13 +187,25 @@ class LeaseCoordinator:
             self._available = True
             self._log.info("redis coordination enabled (%s)", _redact(self.url))
         except Exception as exc:  # noqa: BLE001
+            # The failed client is discarded so a later probe does not reuse a
+            # socket pool nobody is maintaining.
+            stale, self._client = self._client, None
+            if stale is not None:
+                with contextlib.suppress(Exception):
+                    await stale.aclose()
+            self._available = False
             self._log.warning(
                 "redis coordination unreachable at %s (%s): the Core will assume it is the only replica",
                 _redact(self.url),
                 exc,
             )
-            self._available = False
         return self._available
+
+    def _probe_due(self) -> bool:
+        if time.monotonic() - self._last_probe < self._reconnect_every:
+            return False
+        self._last_probe = time.monotonic()
+        return True
 
     async def close(self) -> None:
         for lease in list(self._leases.values()):
@@ -216,14 +234,21 @@ class LeaseCoordinator:
         answer, not an error, and never blocks.
         """
         if not self.available:
-            # Single-replica assumption (or Redis down): run the work. See the
-            # outage policy in the package docstring.
-            if not self._warned and self.enabled:
-                self._log.warning(
-                    "redis coordination is unavailable: singleton loops run on every replica"
-                )
-                self._warned = True
-            return True
+            # Re-probe a store that failed once (bounded, never per call): a
+            # store that was briefly unreachable at startup must not leave
+            # coordination off until the process is restarted.
+            if self.enabled and self._probe_due():
+                if await self.connect():
+                    self._log.info("redis coordination recovered: leases are enforced again")
+            if not self.available:
+                # Single-replica assumption (or Redis down): run the work. See
+                # the outage policy in the package docstring.
+                if not self._warned and self.enabled:
+                    self._log.warning(
+                        "redis coordination is unavailable: singleton loops run on every replica"
+                    )
+                    self._warned = True
+                return True
 
         held = self._leases.get(name)
         if held is not None:

@@ -296,3 +296,62 @@ async def test_the_status_report_never_carries_credentials():
     snap = coord.snapshot()
     assert secret not in snap["url"]
     await coord.close()
+
+
+# ---------------------------------------------------------------------------
+# Recovery without a restart: a store that failed at connect time must be
+# rejoined when it comes back — coordination cannot stay off for the process's
+# lifetime because of one transient failure (this happened on the live
+# deployment's first boot after the integration: DNS was not ready when the
+# Core connected).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_probe_backoff_is_bounded():
+    probe_coord = LeaseCoordinator(url="redis://127.0.0.1:1", socket_timeout=0.05)
+    if await probe_coord.connect():
+        pytest.skip("something is listening on port 1")
+    # Two consecutive probes: one attempts (interval elapsed), the next is
+    # suppressed by the backoff even right after the first.
+    assert probe_coord._probe_due() is True
+    assert probe_coord._probe_due() is False
+    probe_coord._reconnect_every = 0.0
+    assert probe_coord._probe_due() is True
+
+
+@pytest.mark.skipif(not redis_addr(), reason="ATF_TEST_REDIS_ADDR is not set")
+@pytest.mark.asyncio
+async def test_a_store_that_was_briefly_unreachable_is_rejoined(caplog):
+    coord = LeaseCoordinator(url=redis_url(), prefix="atf:test:lease8:", socket_timeout=0.2)
+    # First connect against a dead port: the deployment's start-of-life race.
+    coord.url = "redis://127.0.0.1:1"
+    assert await coord.connect() is False
+    assert coord.available is False
+    assert await coord.try_hold("poller", ttl=5.0) is True  # outage policy
+    # Force the next probe to be due, and the url to the one that works now.
+    coord._reconnect_every = 0.0
+    coord.url = redis_url()
+    assert await coord.try_hold("poller", ttl=5.0) is True
+    assert coord.available is True  # recovered without a restart
+    # And leases are really enforced again: a second coordinator is excluded.
+    other = LeaseCoordinator(url=redis_url(), prefix="atf:test:lease8:")
+    assert await other.connect()
+    try:
+        assert await other.try_hold("poller", ttl=5.0) is False
+    finally:
+        await other.close()
+    await coord.close()
+
+
+@pytest.mark.skipif(not redis_addr(), reason="ATF_TEST_REDIS_ADDR is not set")
+@pytest.mark.asyncio
+async def test_backoff_holds_through_repeated_calls():
+    coord = LeaseCoordinator(url="redis://127.0.0.1:1", socket_timeout=0.05, connect_timeout=0.05)
+    logging.getLogger("core.infrastructure.redis.lease").setLevel(logging.CRITICAL)
+    assert await coord.try_hold("p", ttl=5.0) is True
+    first = coord._last_probe
+    assert await coord.try_hold("p", ttl=5.0) is True
+    assert await coord.try_hold("p", ttl=5.0) is True
+    # The two extra calls did not re-probe (bounded: no hammering).
+    assert coord._last_probe == first
+    await coord.close()
