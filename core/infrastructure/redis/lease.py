@@ -115,6 +115,7 @@ class LeaseCoordinator:
     def __init__(
         self,
         url: str = "",
+        password: str = "",
         prefix: str = DEFAULT_PREFIX,
         *,
         enabled: bool = True,
@@ -124,6 +125,10 @@ class LeaseCoordinator:
         log: Optional[logging.Logger] = None,
     ) -> None:
         self.url = (url or "").strip()
+        # The credential is kept OUT of the URL string: it reaches the client
+        # as a client option, so no code path ever has to remember to redact
+        # an address.
+        self.password = (password or "").strip()
         self.prefix = prefix or DEFAULT_PREFIX
         self.enabled = bool(enabled) and bool(self.url)
         self.socket_timeout = socket_timeout
@@ -147,6 +152,7 @@ class LeaseCoordinator:
         """Build from the canonical configuration object (never a second source)."""
         return cls(
             url=getattr(cfg, "redis_url", "") or "",
+            password=getattr(cfg, "redis_password", "") or "",
             prefix=getattr(cfg, "redis_prefix", DEFAULT_PREFIX) or DEFAULT_PREFIX,
             enabled=bool(getattr(cfg, "redis_coordination", True)),
             socket_timeout=float(getattr(cfg, "redis_timeout_seconds", 1.0) or 1.0),
@@ -177,6 +183,7 @@ class LeaseCoordinator:
         try:
             self._client = aioredis.from_url(
                 self.url,
+                password=self.password or None,
                 socket_timeout=self.socket_timeout,
                 socket_connect_timeout=self.connect_timeout,
                 max_connections=self.max_connections,
