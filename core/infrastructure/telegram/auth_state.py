@@ -22,6 +22,7 @@ half-dead session is still usable.
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -29,6 +30,8 @@ from enum import Enum
 from typing import Optional
 
 from core.application.repositories import IAuthFlowRepository
+
+logger = logging.getLogger(__name__)
 
 
 class AuthState(str, Enum):
@@ -219,12 +222,36 @@ class AuthStateMachine:
 
     Duplicate updates (a double-fired handler, the user pressing an old button,
     a retry) are absorbed: the same target state from the same source state is
-    a no-op rather than a second side effect.
+    a no-op rather than a second side effect. Concurrent updates are refused by
+    the version guard and re-applied to the revision that won, so neither
+    writer loses its side effect.
     """
+
+    # A refused write re-reads and re-applies. Three attempts is enough for the
+    # realistic case (two handlers for one user); past that the flow is being
+    # rewritten continuously and giving up loudly beats spinning.
+    MAX_WRITE_ATTEMPTS = 3
 
     def __init__(self, repo: IAuthFlowRepository, ttl_seconds: int = 3600) -> None:
         self._repo = repo
         self._ttl = int(ttl_seconds)
+
+    # ------------------------------------------------------------------ #
+    # Internals
+    # ------------------------------------------------------------------ #
+    async def _persist(self, flow: AuthFlow) -> bool:
+        """Write ``flow`` one revision ahead of the one it was read at.
+
+        False means another writer committed first: the row now holds their
+        revision and this call wrote nothing. The caller decides what that
+        means — re-apply (a transition) or stand down (a reset).
+        """
+        row = flow.to_row()
+        row["version"] = flow.version + 1
+        if await self._repo.save(row):
+            flow.version = row["version"]
+            return True
+        return False
 
     # ------------------------------------------------------------------ #
     # Reads
@@ -236,9 +263,9 @@ class AuthStateMachine:
         flow = AuthFlow.from_row(row)
         if flow.expired and flow.state != AuthState.AUTH_EXPIRED:
             # expiry is itself a transition, so it is recorded rather than
-            # merely observed in memory
-            await self.transition(user_id, AuthState.AUTH_EXPIRED, flow=flow)
-            flow.state = AuthState.AUTH_EXPIRED
+            # merely observed in memory. The returned flow is the revision that
+            # was actually written — this object may have been superseded.
+            flow = await self.transition(user_id, AuthState.AUTH_EXPIRED, flow=flow)
         return flow
 
     async def is_blocked(self, user_id: int) -> bool:
@@ -263,7 +290,56 @@ class AuthStateMachine:
         bump_password: bool = False,
         extend: Optional[int] = None,
     ) -> AuthFlow:
-        """Move a flow to ``target``. Idempotent; raises on an illegal jump."""
+        """Move a flow to ``target``. Idempotent; raises on an illegal jump.
+
+        The write is version-guarded, so a transition that races another writer
+        is refused rather than silently overwriting it. A refusal is not an
+        error here: the flow is re-read and the same transition re-applied to
+        the current revision, which is what keeps two concurrent callbacks from
+        losing one of their side effects. If the other writer moved the flow
+        somewhere this transition may not go, the usual InvalidTransition is
+        raised — for the state it is actually in, not the stale one.
+        """
+        latest: Optional[AuthFlow] = flow
+        refusal: Optional[_StaleFlowWrite] = None
+        for _attempt in range(self.MAX_WRITE_ATTEMPTS):
+            try:
+                return await self._transition_once(
+                    user_id,
+                    target,
+                    flow=latest,
+                    phone_number=phone_number,
+                    phone_code_hash=phone_code_hash,
+                    credential_id=credential_id,
+                    last_error=last_error,
+                    bump_code=bump_code,
+                    bump_password=bump_password,
+                    extend=extend,
+                )
+            except _StaleFlowWrite as exc:
+                # another writer committed first: start over from what it wrote
+                refusal = exc
+                latest = None
+        raise ConcurrentFlowUpdate(
+            f"auth flow for user {user_id} was rewritten by another writer on "
+            f"every one of {self.MAX_WRITE_ATTEMPTS} attempts"
+        ) from refusal
+
+    async def _transition_once(
+        self,
+        user_id: int,
+        target: AuthState,
+        *,
+        flow: Optional[AuthFlow] = None,
+        phone_number: Optional[str] = None,
+        phone_code_hash: Optional[str] = None,
+        credential_id: Optional[str] = None,
+        last_error: Optional[str] = None,
+        bump_code: bool = False,
+        bump_password: bool = False,
+        extend: Optional[int] = None,
+    ) -> AuthFlow:
+        """One guarded read-modify-write; raises ``_StaleFlowWrite`` if refused."""
         flow = flow if flow is not None else await self.current(user_id)
         if flow is None:
             if target in (AuthState.NEW, AuthState.WELCOME, AuthState.AUTH_PHONE_REQUIRED):
@@ -288,10 +364,8 @@ class AuthStateMachine:
                 flow.expires_at = _now() + int(extend)
             if bump_code or bump_password or last_error is not None or extend is not None:
                 flow.updated_at = _now()
-                row = flow.to_row()
-                row["version"] = flow.version + 1
-                await self._repo.save(row)
-                flow.version = row["version"]
+                if not await self._persist(flow):
+                    raise _StaleFlowWrite(f"stale write for user {user_id}")
             return flow
 
         if not flow.can_go(target):
@@ -316,10 +390,8 @@ class AuthStateMachine:
         flow.updated_at = _now()
         flow.expires_at = _now() + int(extend or self._ttl)
 
-        row = flow.to_row()
-        row["version"] = flow.version + 1
-        await self._repo.save(row)
-        flow.version = row["version"]
+        if not await self._persist(flow):
+            raise _StaleFlowWrite(f"stale write for user {user_id}")
         return flow
 
     async def reset(self, user_id: int, *, keep_counters: bool = False) -> None:
@@ -327,18 +399,34 @@ class AuthStateMachine:
 
         Idempotent: resetting a user with no flow is not an error, because the
         caller's intent — "no live flow for this user" — already holds.
+
+        Both forms are revision-guarded, because the flow this call read may
+        have been superseded: a plain delete would remove a login the user
+        started in the meantime, and a plain re-state would roll it back.
         """
         flow = await self.current(user_id)
         if flow is None:
             return
         if keep_counters:
-            row = flow.to_row()
-            row["state"] = AuthState.NEW.value
-            row["version"] = flow.version + 1
-            row["updated_at"] = _now()
-            await self._repo.save(row)
-        else:
-            await self._repo.delete(user_id)
+            for _attempt in range(self.MAX_WRITE_ATTEMPTS):
+                flow.state = AuthState.NEW
+                flow.updated_at = _now()
+                if await self._persist(flow):
+                    return
+                flow = await self.current(user_id)
+                if flow is None:
+                    return
+            logger.warning(
+                "auth flow for user %s kept changing while being reset; left the "
+                "newer revision in place",
+                user_id,
+            )
+            return
+        if not await self._repo.delete(user_id, version=flow.version):
+            logger.debug(
+                "auth flow for user %s superseded while resetting; nothing deleted",
+                user_id,
+            )
 
     async def sweep_expired(self) -> int:
         """Expire every ttl-lapsed flow. Called on startup and on a timer."""
@@ -371,3 +459,16 @@ class AuthStateMachine:
 
 class InvalidTransition(Exception):
     """A state jump the machine refuses to make."""
+
+
+class ConcurrentFlowUpdate(InvalidTransition):
+    """Another writer rewrote the flow on every attempt.
+
+    Subclasses InvalidTransition on purpose: callers that already treat "this
+    flow moved on without you" as a non-event keep working, and nothing is left
+    half-applied — the newer revision stays exactly as the other writer wrote it.
+    """
+
+
+class _StaleFlowWrite(Exception):
+    """Internal: a revision-guarded write was refused because a newer one exists."""
