@@ -96,8 +96,10 @@ def _dlq_retry(ctx, args) -> None:
     # The core answers with the documented result codes, not just success.
     # `not_found`/`already_pending`/`already_sent`/`replay_failed` each mean the
     # entry was *not* re-queued, and saying otherwise here would hide it.
-    if isinstance(res, dict) and res.get("success") is False:
-        code = res.get("error_code") or res.get("message") or "refused"
+    # Only an explicit `true` is a replay. The API states `success` in both
+    # directions; a body that omits it is not evidence that anything happened.
+    if not isinstance(res, dict) or res.get("success") is not True:
+        code = (res or {}).get("error_code") or (res or {}).get("message") or "refused"
         ctx.out.line(f"  retry refused ({code}); message stays in the dead-letter queue")
         return
     ctx.out.emit(res, f"Replaying message {mid[:8]} from DLQ")
@@ -107,8 +109,8 @@ def _dlq_purge(ctx, args) -> None:
     sh.confirm_or_fail(ctx, "Purge all messages in dead letter queue?")
     res = ctx.api.delete("/api/dlq")
     msg = res.get("message", "") if isinstance(res, dict) else ""
-    if isinstance(res, dict) and res.get("success") is False:
-        ctx.out.line(f"  purge failed ({res.get('error_code') or msg or 'refused'})")
+    if not isinstance(res, dict) or res.get("success") is not True:
+        ctx.out.line(f"  purge failed ({(res or {}).get('error_code') or msg or 'refused'})")
         return
     ctx.out.emit(res, f"Purged dead letter queue{f' ({msg})' if msg else ''}")
 

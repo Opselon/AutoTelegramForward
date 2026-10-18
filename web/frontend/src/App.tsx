@@ -40,6 +40,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 import { api } from './api'
+import { isAccepted, purgedCount, refusalReason } from './actionResult'
 import { AdminPanel } from './components/AdminPanel'
 import { AuditEventsPanel } from './components/AuditEventsPanel'
 import { ClientSettings } from './components/ClientSettings'
@@ -878,11 +879,13 @@ export function App() {
   const handleRetryDLQ = async (id: string) => {
     try {
       const resp: any = await api.retryDLQ(id)
-      if (resp && resp.success === false) {
-        // The core refuses honestly: `not_found`, `already_pending`,
-        // `already_sent`, `replay_failed`. Removing the row and claiming
-        // success here would hide the reason the delivery is still dead.
-        showToast(`${isRtl ? 'تلاش مجدد رد شد' : 'Retry refused'} (${resp.message || resp.error_code || 'refused'})`)
+      // Only an explicit `true` is a replay. A refusal — `not_found`,
+      // `already_pending`, `already_sent`, `replay_failed` — must keep the row
+      // and say why; testing `success === false` would treat a response that
+      // omits the field as a replay that happened. The decision lives in
+      // `actionResult.ts`, which the CI job compiles and asserts on.
+      if (!isAccepted(resp)) {
+        showToast(`${isRtl ? 'تلاش مجدد رد شد' : 'Retry refused'} (${refusalReason(resp)})`)
         await loadData()
         return
       }
@@ -898,18 +901,18 @@ export function App() {
     if (!confirm(isRtl ? 'آیا از پاک‌سازی کامل صف خطاهای ناموفق اطمینان دارید؟' : 'Purge all DLQ entries?')) return
     try {
       const resp: any = await api.purgeDLQ()
-      if (resp && resp.success === false) {
-        showToast(`${isRtl ? 'تخلیه انجام نشد' : 'Purge failed'} (${resp.error_code || 'purge_failed'})`)
+      if (!isAccepted(resp)) {
+        showToast(`${isRtl ? 'تخلیه انجام نشد' : 'Purge failed'} (${refusalReason(resp, 'purge_failed')})`)
         return
       }
       setDlqJobs([])
-      // The core answers with the number it removed; showing that number is
-      // what distinguishes a real purge from a purge that matched nothing.
-      const removed = typeof resp?.message === 'string' ? resp.message : ''
+      // The core answers with the number it removed; showing that number is what
+      // distinguishes a real purge from a purge that matched nothing.
+      const count = purgedCount(resp)
       showToast(
-        removed
-          ? (isRtl ? `صف خطاهای DLQ تخلیه شد (${removed})` : `DLQ purged (${removed})`)
-          : (isRtl ? 'صف خطاهای DLQ تخلیه شد' : 'DLQ purged successfully'),
+        count !== null
+          ? (isRtl ? `صف DLQ تخلیه شد (${count})` : `DLQ purged (${count})`)
+          : (isRtl ? 'صف DLQ تخلیه شد' : 'DLQ purged'),
       )
       await loadData()
     } catch (e: any) {

@@ -198,6 +198,16 @@ jobs:
             --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
           node tests/settingProvenance.test.mjs
 
+      - name: Action result rules
+        # A refusal must not read as a success. The API used to omit `success`
+        # on a refused replay, and `success === false` never fired.
+        working-directory: web/frontend
+        run: |
+          node node_modules/typescript/bin/tsc src/actionResult.ts \
+            --ignoreConfig --outDir .actions-build \
+            --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
+          node tests/actionResult.test.mjs
+
       - name: Build
         working-directory: web/frontend
         run: npm run build

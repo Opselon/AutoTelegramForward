@@ -161,6 +161,32 @@ def test_a_refused_replay_is_reported_not_narrated_as_success() -> None:
         )
 
 
+def test_a_refusal_without_a_success_field_is_still_a_refusal() -> None:
+    """The live shape: the API omitted `success` on a refused replay.
+
+    Reading `.get("success") is False` saw `None`, not False, and the CLI
+    announced a replay that the core had refused.
+    """
+    ctx = _Ctx(_Api(post=lambda path, payload=None: {
+        "message": "not_found", "error_code": "not_found",
+    }))
+    cli_data._dlq_retry(ctx, _Args(id="dlq_job-42"))
+
+    printed = "\n".join(ctx.out.lines)
+    assert "not_found" in printed
+    assert "Replaying message" not in printed, (
+        "a body without a result flag was narrated as a replay"
+    )
+
+
+def test_a_body_without_a_result_flag_is_not_a_purge() -> None:
+    ctx = _Ctx(_Api(delete=lambda path: {"message": "purge_failed"}))
+    cli_data._dlq_purge(ctx, _Args())
+    printed = "\n".join(ctx.out.lines)
+    assert "purge failed" in printed
+    assert "Purged dead letter queue" not in printed
+
+
 def test_an_accepted_replay_still_narrates_the_replay() -> None:
     ctx = _Ctx(_Api(post=lambda path, payload=None: {"success": True, "message": "requeued"}))
     cli_data._dlq_retry(ctx, _Args(id="dlq_job-42"))

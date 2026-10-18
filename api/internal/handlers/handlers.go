@@ -1757,6 +1757,35 @@ func (h *Handlers) TestRule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// actionResponse is the wire shape of a control-plane action result.
+//
+// `pb.RuleActionResponse` cannot be written directly: protobuf marks every
+// proto3 scalar `json:"name,omitempty"`, so a *refusal* arrives at the client as
+// `{"message":"not_found"}` with no `success` field at all. A client that asks
+// "did this succeed?" by testing `resp.success === false` therefore never sees
+// the refusal, while one testing truthiness sees the string "not_found" and
+// reads it as success. Both mistakes were live: the CLI printed "Replaying
+// message …" for a replay the core had refused, and the dashboard and the
+// Android app removed the row they had just failed to re-queue.
+//
+// The projection states success explicitly in both directions, so "no" is on
+// the wire as its own word.
+type actionResponse struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	ErrorCode string `json:"error_code,omitempty"`
+}
+
+func writeAction(w http.ResponseWriter, resp *pb.RuleActionResponse) {
+	out := actionResponse{}
+	if resp != nil {
+		out.Success = resp.Success
+		out.Message = resp.Message
+		out.ErrorCode = resp.ErrorCode
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (h *Handlers) PauseRule(w http.ResponseWriter, r *http.Request) {
 	id := identity(r)
 	ctx, cancel := withTimeout(r)
@@ -1778,7 +1807,7 @@ func (h *Handlers) PauseRule(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeAction(w, resp)
 }
 
 func (h *Handlers) ResumeRule(w http.ResponseWriter, r *http.Request) {
@@ -1797,7 +1826,7 @@ func (h *Handlers) ResumeRule(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeAction(w, resp)
 }
 
 // ownsRule reports whether the given rule id belongs to owner. Keeps the
@@ -1984,7 +2013,7 @@ func (h *Handlers) ReplayDeadLetter(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeAction(w, resp)
 }
 
 func (h *Handlers) PurgeDeadLetter(w http.ResponseWriter, r *http.Request) {
@@ -2007,7 +2036,7 @@ func (h *Handlers) PurgeDeadLetter(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeAction(w, resp)
 }
 
 // --------------------------------------------------------------- filters
