@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -301,6 +302,28 @@ func (h *Handlers) SetupReport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// readContractFallback locates the shipped contract relative to the process
+// working directory (repo root in production, api/ under `go test`).
+func readContractFallback() ([]byte, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	dir := cwd
+	for depth := 0; depth < 4; depth++ {
+		candidate := filepath.Join(dir, "docs", "openapi.yaml")
+		if b, rerr := os.ReadFile(candidate); rerr == nil {
+			return b, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return nil, os.ErrNotExist
+}
+
 // OpenAPIDoc serves the API's own contract at /api/openapi.yaml. The file is
 // baked into the image next to the code that serves it, so the published
 // document cannot drift from the binary (a copy in the website was exactly
@@ -312,8 +335,10 @@ func (h *Handlers) OpenAPIDoc(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		// Tests and dev runs read the repo copy relative to CWD.
-		data, err = os.ReadFile("docs/openapi.yaml")
+		// Tests and dev runs read the repo copy relative to CWD; walk up a
+		// couple of levels so the doc resolves whether CWD is the repo root
+		// or the api module directory.
+		data, err = readContractFallback()
 	}
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
