@@ -259,8 +259,18 @@ jobs:
     # Pages), but nothing tested it in CI: a broken link, a duplicate element id
     # or a colour utility with no light-theme counterpart only surfaced after
     # deploy. This job runs the same suite the maintainers run locally.
+    #
+    # astro.config.mjs makes `CI=true` default the base path to
+    # /AutoTelegramForward, the prefix the site is deployed under. The whole
+    # suite (Playwright's webServer, the contrast report's route enumeration,
+    # the SEO audit's absolute paths) is written against the site root, so the
+    # root build must be pinned explicitly — an empty BASE_PATH falls through
+    # to the CI default, which is exactly the silent mismatch that made the
+    # preview server appear dead here.
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      BASE_PATH: /
     steps:
       - uses: actions/checkout@v4
 
@@ -276,7 +286,7 @@ jobs:
         working-directory: website
         run: npm ci --legacy-peer-deps
 
-      - name: Build
+      - name: Build (site root)
         working-directory: website
         run: npm run build
 
@@ -303,12 +313,25 @@ jobs:
       - name: WCAG AA contrast report (both themes, every page)
         working-directory: website
         run: |
-          npx astro preview --port 4321 &
+          # Playwright has stopped its own preview server by the time this runs,
+          # but it leaves a lock file behind, so this instance opts out of the
+          # lock (`--ignore-lock`) and uses its own port; the report is pointed
+          # at that port explicitly instead of assuming 4321.
+          npx astro preview --port 4322 --ignore-lock &
           for i in $(seq 1 30); do
-            curl -sf -o /dev/null http://localhost:4321/ && break
+            curl -sf -o /dev/null http://localhost:4322/ && break
             sleep 1
           done
-          node tests/contrast-report.mjs
+          PREVIEW_URL=http://localhost:4322 node tests/contrast-report.mjs
+
+      - name: Production base path (canonical, sitemap, links)
+        # Finally rebuild the way GitHub Pages serves it and re-run the audit
+        # that knows about the /AutoTelegramForward prefix on every canonical.
+        working-directory: website
+        run: |
+          SITE_URL="https://opselon.github.io" BASE_PATH="/AutoTelegramForward" npm run build
+          npm run test:seo | tee /tmp/seo-basepath.log
+          grep -q "canonical base-prefix assertion skipped" /tmp/seo-basepath.log && exit 1 || exit 0
 
   flutter:
     runs-on: ubuntu-latest
