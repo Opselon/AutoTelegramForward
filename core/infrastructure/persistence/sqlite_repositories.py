@@ -5,11 +5,14 @@ swapped in the DI container — domain and application layers are untouched.
 """
 
 import json
+import logging
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from .coercion import enum_str
+
+logger = logging.getLogger(__name__)
 
 from ...application.repositories import (
     ApiCredential,
@@ -1709,22 +1712,7 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             # v14: route the exhausted job to the dead-letter queue instead of
             # silently leaving it FAILED. The insert keeps the payload so an
             # operator can inspect or replay it.
-            try:
-                self._db.execute(
-                    """
-                    INSERT OR REPLACE INTO dead_letter_queue (
-                        id, job_id, rule_id, source_chat_id, source_message_id,
-                        target_chat_id, payload_json, attempts, last_error,
-                        error_category, dead_lettered_at
-                    )
-                    SELECT ?, id, rule_id, source_chat_id, source_message_id,
-                           target_chat_id, payload_json, attempts, ?, ?, ?
-                    FROM delivery_jobs WHERE id = ?
-                    """,
-                    (f"dlq_{job_id}", error, "DELIVERY_EXHAUSTED", int(now), job_id),
-                )
-            except Exception:
-                pass
+            self._dead_letter_row(job_id, error, "DELIVERY_EXHAUSTED", now, attempts)
             cur = self._db.execute(
                 """
                 UPDATE delivery_jobs
@@ -1778,23 +1766,55 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
         except Exception:
             return False
 
-    async def mark_dead_letter(self, job_id: str, error: str, category: str = "DELIVERY_EXHAUSTED") -> bool:
-        now = _now()
+    def _dead_letter_row(self, job_id: str, error: str, category: str, now: float, attempts: int = 0) -> bool:
+        """Write the dead-letter entry for a job and report whether it landed.
+
+        The ONLY producer: every path that gives up on a job calls this, so the
+        entry cannot be written with one set of column names by one caller and a
+        different set by another. (It used to be two copies, and the copy in
+        ``mark_dead_letter`` named `error_message` — a column this schema does
+        not have — inside a bare ``except: pass``, so that path lost the entry
+        and said nothing. Callers that cannot fail silently must not swallow
+        this: a lost entry is a job nobody can see or retry.)
+
+        ``attempts`` is the number of attempts the delivery actually made. It is
+        passed in rather than copied from the row because the row is updated
+        *after* the entry is written, so copying it recorded one attempt fewer
+        than the delivery had really used.
+        """
         try:
             self._db.execute(
                 """
                 INSERT OR REPLACE INTO dead_letter_queue (
                     id, job_id, rule_id, source_chat_id, source_message_id,
-                    target_chat_id, payload_json, error_message, error_category, dead_lettered_at
+                    target_chat_id, payload_json, attempts, last_error,
+                    error_category, dead_lettered_at
                 )
                 SELECT ?, id, rule_id, source_chat_id, source_message_id,
-                       target_chat_id, payload_json, ?, ?, ?
+                       target_chat_id, payload_json, ?, ?, ?, ?
                 FROM delivery_jobs WHERE id = ?
                 """,
-                (f"dlq_{job_id}", error, category, now, job_id),
+                (f"dlq_{job_id}", int(attempts), error, category, int(now), job_id),
             )
-        except Exception:
-            pass
+            row = self._db.query_one("SELECT 1 AS ok FROM dead_letter_queue WHERE id = ?", (f"dlq_{job_id}",))
+            if row is None:
+                # The job row is gone (cleanup, or a replay that already
+                # consumed it): the SELECT inserted nothing.
+                logger.warning(
+                    "dead-letter entry for job %s was not written: no such delivery_jobs row",
+                    job_id,
+                )
+                return False
+            return True
+        except Exception as exc:
+            logger.warning("dead-letter entry for job %s failed: %s", job_id, exc)
+            return False
+
+    async def mark_dead_letter(self, job_id: str, error: str, category: str = "DELIVERY_EXHAUSTED") -> bool:
+        now = _now()
+        current = self._db.query_one("SELECT attempts FROM delivery_jobs WHERE id = ?", (job_id,))
+        attempts = int(current["attempts"]) if current is not None else 0
+        recorded = self._dead_letter_row(job_id, error, category, now, attempts)
         cur = self._db.execute(
             """
             UPDATE delivery_jobs
@@ -1803,16 +1823,229 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             """,
             (error, now, job_id),
         )
-        return cur.rowcount > 0
+        if cur.rowcount > 0:
+            self._pending_estimate = max(0, self._pending_estimate - 1)
+        return recorded
 
-    async def get_dead_letter_jobs(self, limit: int = 50) -> List[Dict[str, Any]]:
+    # ------------------------------------------------------------------ #
+    # Dead-letter queue (owner-scoped read / replay / purge)
+    # ------------------------------------------------------------------ #
+
+    def _dlq_scope_clause(self, rule_ids: Optional[Sequence[str]]) -> tuple:
+        """``(sql_fragment, params)`` for a tenant scope.
+
+        ``None`` is unscoped for an internal caller that already resolved its
+        authority. An empty scope is NOT "no filter": it matches nothing, so a
+        tenant that owns no rules sees no entries.
+        """
+        if rule_ids is None:
+            return "", ()
+        ids = [str(r) for r in rule_ids if r]
+        if not ids:
+            return " AND 1=0", ()
+        return f" AND rule_id IN ({','.join('?' for _ in ids)})", tuple(ids)
+
+    async def list_dead_letters(
+        self,
+        rule_ids: Optional[Sequence[str]] = None,
+        limit: int = 20,
+        rule_id: str = "",
+        since: int = 0,
+    ) -> List[Dict[str, Any]]:
+        scope_sql, scope_params = self._dlq_scope_clause(rule_ids)
+        params: tuple = scope_params
+        # Narrow within the scope, in SQL. A LIMIT that truncates the page first
+        # would turn "older than this page" into "does not exist".
+        if rule_id:
+            scope_sql += " AND rule_id=?"
+            params = params + (str(rule_id),)
+        if since:
+            scope_sql += " AND dead_lettered_at>=?"
+            params = params + (int(since),)
         try:
             rows = self._db.query_all(
-                "SELECT * FROM dead_letter_queue ORDER BY dead_lettered_at DESC LIMIT ?", (int(limit),)
+                "SELECT * FROM dead_letter_queue WHERE 1=1" + scope_sql
+                + " ORDER BY dead_lettered_at DESC LIMIT ?",
+                params + (max(int(limit), 1),),
             )
             return [dict(r) for r in rows]
-        except Exception:
+        except Exception as exc:
+            logger.warning("dead-letter list failed: %s", exc)
             return []
+
+    async def count_dead_letters(self, rule_ids: Optional[Sequence[str]] = None) -> int:
+        scope_sql, scope_params = self._dlq_scope_clause(rule_ids)
+        try:
+            row = self._db.query_one(
+                "SELECT COUNT(*) AS n FROM dead_letter_queue WHERE 1=1" + scope_sql,
+                scope_params,
+            )
+            return int((dict(row) if row else {}).get("n", 0) or 0)
+        except Exception as exc:
+            logger.warning("dead-letter count failed: %s", exc)
+            return 0
+
+    async def replay_dead_letter(
+        self, entry_id: str, rule_ids: Optional[Sequence[str]] = None
+    ) -> str:
+        scope_sql, scope_params = self._dlq_scope_clause(rule_ids)
+        rows = self._db.query_all(
+            "SELECT * FROM dead_letter_queue WHERE id=?" + scope_sql,
+            (str(entry_id),) + scope_params,
+        )
+        if not rows:
+            # Unknown id and another tenant's id answer identically, on
+            # purpose: an id must not be usable to probe for existence.
+            return "not_found"
+        entry = dict(rows[0])
+
+        rule_id = str(entry.get("rule_id") or "")
+        src_chat = str(entry.get("source_chat_id") or "")
+        src_msg = int(entry.get("source_message_id") or 0)
+        tgt_chat = str(entry.get("target_chat_id") or "")
+        job_id = str(entry.get("job_id") or "")
+        payload = entry.get("payload_json") or "{}"
+        if isinstance(payload, dict):
+            payload = SqliteDatabase.dumps(payload)
+
+        # `delivery_jobs` is UNIQUE(rule_id, source_chat_id, source_message_id,
+        # target_chat_id): one delivery per source message per target is a
+        # deliberate dedup, not an accident. So a replay can never be a second
+        # row — it either wakes the existing one up or is refused. That
+        # constraint is also why a replay cannot double-post.
+        original = None
+        if job_id:
+            original = self._db.query_one("SELECT * FROM delivery_jobs WHERE id=?", (job_id,))
+        if original is None:
+            original = self._db.query_one(
+                "SELECT * FROM delivery_jobs WHERE rule_id=? AND source_chat_id=?"
+                " AND source_message_id=? AND target_chat_id=?",
+                (rule_id, src_chat, src_msg, tgt_chat),
+            )
+
+        now = _now()
+        if original is not None:
+            status = str(dict(original).get("status") or "").upper()
+            if status in ("PENDING", "CLAIMED", "RETRY_WAIT", "PROCESSING"):
+                # Already on its way: replaying would deliver twice.
+                return "already_pending"
+            if status == "SENT":
+                # The store says this message reached the target. Re-queueing it
+                # would repost something the channel already has.
+                return "already_sent"
+            row = dict(original)
+            was_attempts = int(row.get("attempts") or 0)
+            max_attempts = int(row.get("max_attempts") or 0) or DeliveryJob().max_attempts
+
+            def _unit(conn) -> bool:
+                cur = conn.execute(
+                    """
+                    UPDATE delivery_jobs
+                    SET status = 'PENDING', attempts = 0, max_attempts = ?,
+                        next_retry_at = 0, lease_until = 0, worker_id = '',
+                        error_detail = '', updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (max(1, max_attempts), now, row.get("id")),
+                )
+                if cur.rowcount <= 0:
+                    return False
+                conn.execute("DELETE FROM dead_letter_queue WHERE id=?", (str(entry_id),))
+                return True
+
+            try:
+                reset = self._db.run_in_transaction(_unit)
+            except Exception as exc:
+                logger.warning("replay of dead letter %s failed: %s", entry_id, exc)
+                return "replay_failed"
+            if not reset:
+                return "replay_failed"
+        else:
+            # The terminal job row has already been purged (cleanup keeps a
+            # window, not forever). Rebuild it from the entry, which carries the
+            # ids and the payload, and give it the entry's own attempt count as
+            # its ceiling rather than inventing a budget.
+            max_attempts = max(1, int(entry.get("attempts") or 0) or DeliveryJob().max_attempts)
+            job = DeliveryJob(
+                id=job_id or f"replay_{entry_id}",
+                rule_id=rule_id,
+                source_chat_id=src_chat,
+                source_message_id=src_msg,
+                target_chat_id=tgt_chat,
+                payload_data=SqliteDatabase.loads(payload, {}),
+                status=DeliveryStatus.PENDING,
+                attempts=0,
+                max_attempts=max_attempts,
+                next_retry_at=0.0,
+                lease_until=0.0,
+                created_at=now,
+                updated_at=now,
+            )
+            was_attempts = int(entry.get("attempts") or 0)
+
+            def _unit(conn) -> bool:
+                cur = conn.execute(
+                    """
+                    INSERT OR IGNORE INTO delivery_jobs (
+                        id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                        payload_json, status, attempts, max_attempts, next_retry_at,
+                        lease_until, worker_id, error_detail, created_at, updated_at,
+                        intermediate_chat_id, intermediate_message_id, delivery_stage
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, 0, 0, '', '', ?, ?, NULL, NULL, 'DIRECT')
+                    """,
+                    (
+                        job.id, job.rule_id, str(job.source_chat_id), int(job.source_message_id),
+                        str(job.target_chat_id), SqliteDatabase.dumps(job.payload_data),
+                        int(job.max_attempts), int(job.created_at), int(job.updated_at),
+                    ),
+                )
+                if cur.rowcount <= 0:
+                    # The unique key answered after all: a row for this
+                    # delivery already exists (someone replayed it first).
+                    return False
+                conn.execute("DELETE FROM dead_letter_queue WHERE id=?", (str(entry_id),))
+                return True
+
+            try:
+                inserted = self._db.run_in_transaction(_unit)
+            except Exception as exc:
+                logger.warning("replay of dead letter %s failed: %s", entry_id, exc)
+                return "replay_failed"
+            if not inserted:
+                return "already_pending"
+
+        # The replayed delivery rejoins the pending set; the counter must follow
+        # it, or backpressure reads low until the next restart recounts.
+        self._pending_estimate += 1
+        # Ids only — never the payload, which is message content.
+        logger.info(
+            "dead letter %s replayed (rule=%s target=%s attempts_used=%s)",
+            entry_id, rule_id, tgt_chat, was_attempts,
+        )
+        return "requeued"
+
+    async def purge_dead_letters(
+        self,
+        rule_ids: Optional[Sequence[str]] = None,
+        rule_id: str = "",
+        older_than: int = 0,
+    ) -> int:
+        scope_sql, params = self._dlq_scope_clause(rule_ids)
+        sql = "DELETE FROM dead_letter_queue WHERE 1=1" + scope_sql
+        if rule_id:
+            sql += " AND rule_id=?"
+            params = params + (str(rule_id),)
+        if older_than:
+            sql += " AND dead_lettered_at<?"
+            params = params + (int(older_than),)
+        try:
+            cur = self._db.execute(sql, params)
+            return int(cur.rowcount or 0)
+        except Exception:
+            return 0
+
+    async def get_dead_letter_jobs(self, limit: int = 50) -> List[Dict[str, Any]]:
+        return await self.list_dead_letters(None, limit)
 
     async def mark_unknown(self, job_id: str, error: str) -> bool:
         now = _now()

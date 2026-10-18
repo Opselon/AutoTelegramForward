@@ -1800,11 +1800,11 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
                 detail=str(row[5] or "")[:500], chat_id=str(row[6] or ""),
             ))
 
-        dlq_total = 0
-        dlq_sql = "SELECT COUNT(*) FROM dead_letter_queue WHERE 1=1" + owner_clause
-        for row in await self._query_queue(dlq_sql, owner_params):
-            val = row[0] if isinstance(row, (tuple, list)) else list(row.values())[0] if hasattr(row, "values") else (row["count"] if isinstance(row, dict) else 0)
-            dlq_total = int(val or 0)
+        # v14: the count comes from the same owner-scoped read the list uses,
+        # so the badge and the list cannot disagree about what is stuck.
+        dlq_total = await self._queue_repo.count_dead_letters(
+            list(scope) if scope is not None else None
+        )
 
         return pb.DeliveryStatsResponse(
             processed_total=processed, forwarded_total=forwarded, failed_total=failed,
@@ -1814,128 +1814,65 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
         )
 
     async def ListDeadLetter(self, request, context):
+        # v14: read through the repository's owner-scoped contract, so this
+        # surface cannot drift from the queue backend's column names again (the
+        # previous hand-rolled SELECT re-created the projection here, and it
+        # even fell back to this backend's legacy `error_message` column).
         limit = int(request.limit or 50)
         if limit <= 0 or limit > 500:
             limit = 50
-        params: tuple = ()
-        sql = (
-            "SELECT id, rule_id, source_chat_id, source_message_id, target_chat_id, "
-            "attempts, last_error, error_category, dead_lettered_at "
-            "FROM dead_letter_queue"
-        )
-        where = []
-        if request.rule_id:
-            where.append("rule_id=?")
-            params = (request.rule_id,)
-        if request.since:
-            where.append("dead_lettered_at>=?")
-            params = params + (int(request.since),)
-        # v12: scope to the caller's rules.
         scope = await self._owner_rule_ids(int(request.owner_user_id or 0))
-        if scope is not None:
-            if not scope:
-                return pb.ListDeadLetterResponse(entries=[], total=0)
-            placeholders = ",".join("?" for _ in scope)
-            where.append(f"rule_id IN ({placeholders})")
-            params = params + tuple(scope)
-        if where:
-            sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY dead_lettered_at DESC LIMIT ?"
-        params = params + (limit,)
-
+        rows = await self._queue_repo.list_dead_letters(
+            list(scope) if scope is not None else None,
+            limit=limit,
+            rule_id=str(request.rule_id or ""),
+            since=int(request.since or 0),
+        )
         entries = []
-        for r in await self._query_queue(sql, params):
-            if isinstance(r, (tuple, list)):
-                entries.append(pb.DeadLetterEntry(
-                    id=str(r[0]), rule_id=str(r[1]), source_chat_id=str(r[2]),
-                    source_message_id=int(r[3] or 0), target_chat_id=str(r[4]),
-                    attempts=int(r[5] or 0), last_error=str(r[6] or "")[:500],
-                    error_category=str(r[7] or ""), dead_lettered_at=int(r[8] or 0),
-                ))
-            elif hasattr(r, "keys"):
-                d = dict(r)
-                entries.append(pb.DeadLetterEntry(
-                    id=str(d.get("id", "")), rule_id=str(d.get("rule_id", "")),
-                    source_chat_id=str(d.get("source_chat_id", "")),
-                    source_message_id=int(d.get("source_message_id", 0) or 0),
-                    target_chat_id=str(d.get("target_chat_id", "")),
-                    attempts=int(d.get("attempts", 0) or 0),
-                    last_error=str(d.get("last_error") or d.get("error_message") or "")[:500],
-                    error_category=str(d.get("error_category", "")),
-                    dead_lettered_at=int(d.get("dead_lettered_at", 0) or 0),
-                ))
+        for d in rows:
+            entries.append(pb.DeadLetterEntry(
+                id=str(d.get("id", "")), rule_id=str(d.get("rule_id", "")),
+                source_chat_id=str(d.get("source_chat_id", "")),
+                source_message_id=int(d.get("source_message_id", 0) or 0),
+                target_chat_id=str(d.get("target_chat_id", "")),
+                attempts=int(d.get("attempts", 0) or 0),
+                last_error=str(d.get("last_error") or "")[:500],
+                error_category=str(d.get("error_category") or ""),
+                dead_lettered_at=int(d.get("dead_lettered_at", 0) or 0),
+            ))
         return pb.ListDeadLetterResponse(entries=entries, total=len(entries))
 
     async def ReplayDeadLetter(self, request, context):
-        rows = await self._query_queue("SELECT * FROM dead_letter_queue WHERE id=?", (request.id,))
-        if not rows:
-            return pb.RuleActionResponse(success=False, message="not_found", error_code="not_found")
-        r = rows[0]
-        if isinstance(r, (tuple, list)):
-            row_id = r[0]
-            rule_id = r[2] if len(r) > 2 else ""
-            src_chat = r[3] if len(r) > 3 else ""
-            src_msg = r[4] if len(r) > 4 else 0
-            tgt_chat = r[5] if len(r) > 5 else ""
-            payload_json = r[6] if len(r) > 6 else "{}"
-        else:
-            d = dict(r) if hasattr(r, "keys") else r
-            row_id = d.get("id", "")
-            rule_id = d.get("rule_id", "")
-            src_chat = d.get("source_chat_id", "")
-            src_msg = d.get("source_message_id", 0)
-            tgt_chat = d.get("target_chat_id", "")
-            payload_json = d.get("payload_json", "{}")
-
-        # v12: a tenant may only replay entries whose rule it owns.
+        # v14: delegate to the repository's owner-scoped contract instead of
+        # hand-rolling the SQL here. The old inline path had two defects that
+        # the contract fixes: it inserted a *second* `delivery_jobs` row that
+        # the UNIQUE(rule_id, source, message, target) constraint silently
+        # ignored, so the dead letter was dropped and nothing was retried; and
+        # it hardcoded max_attempts=3, discarding the rule's retry budget.
         scope = await self._owner_rule_ids(int(request.owner_user_id or 0))
-        if scope is not None and rule_id not in scope:
-            logger.warning(
-                "ReplayDeadLetter: owner=%s denied replay of entry=%s rule=%s",
-                request.owner_user_id, request.id, rule_id,
-            )
+        if scope is not None and not scope:
             return pb.RuleActionResponse(success=False, message="not_found", error_code="not_found")
-        try:
-            import json as _json
-            import time as _time
-            payload_str = payload_json if isinstance(payload_json, str) else _json.dumps(payload_json or {})
-            now = int(_time.time())
-            await self._execute_queue(
-                "INSERT OR IGNORE INTO delivery_jobs "
-                "(id, rule_id, source_chat_id, source_message_id, target_chat_id, payload_json, "
-                "status, attempts, max_attempts, next_retry_at, lease_until, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, 3, 0, 0, ?, ?)",
-                (f"replay-{row_id}", str(rule_id), str(src_chat),
-                 int(src_msg or 0), str(tgt_chat), payload_str, now, now),
-            )
-            await self._execute_queue("DELETE FROM dead_letter_queue WHERE id=?", (request.id,))
+        result = await self._queue_repo.replay_dead_letter(
+            request.id, list(scope) if scope is not None else None
+        )
+        if result == "requeued":
             return pb.RuleActionResponse(success=True, message="requeued")
-        except Exception as exc:
-            return pb.RuleActionResponse(success=False, message=str(exc)[:200], error_code="replay_failed")
+        # `not_found` also covers another tenant's entry: the two are
+        # deliberately indistinguishable so an id cannot probe for existence.
+        return pb.RuleActionResponse(success=False, message=result, error_code=result)
 
     async def PurgeDeadLetter(self, request, context):
-        params: tuple = ()
-        sql = "DELETE FROM dead_letter_queue"
-        where = []
-        if request.rule_id:
-            where.append("rule_id=?")
-            params = (request.rule_id,)
-        if request.older_than:
-            where.append("dead_lettered_at<?")
-            params = params + (int(request.older_than),)
-        # v12: purge only the caller's own rules.
+        # v14: same contract owner as list/replay. An empty scope purges
+        # nothing, and the caller learns how many entries were removed instead
+        # of an unqualified "purged".
         scope = await self._owner_rule_ids(int(request.owner_user_id or 0))
-        if scope is not None:
-            if not scope:
-                return pb.RuleActionResponse(success=True, message="purged 0")
-            placeholders = ",".join("?" for _ in scope)
-            where.append(f"rule_id IN ({placeholders})")
-            params = params + tuple(scope)
-        if where:
-            sql += " WHERE " + " AND ".join(where)
         try:
-            await self._execute_queue(sql, params)
-            return pb.RuleActionResponse(success=True, message="purged")
+            removed = await self._queue_repo.purge_dead_letters(
+                list(scope) if scope is not None else None,
+                rule_id=str(request.rule_id or ""),
+                older_than=int(request.older_than or 0),
+            )
+            return pb.RuleActionResponse(success=True, message=f"purged {removed}")
         except Exception as exc:
             return pb.RuleActionResponse(success=False, message=str(exc)[:200], error_code="purge_failed")
 

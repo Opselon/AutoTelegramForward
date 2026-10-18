@@ -42,6 +42,37 @@ within a major API version):
 an operator can reconcile a deployed server against the mobile build
 without querying it.
 
+## Dead-letter queue contract
+
+A message that exhausts its retry budget lands in the dead-letter queue as one
+row per `(rule, source, message, target)`. Every client — the dashboard, the
+Android app, the CLI and the bot — reaches it through the same owner-scoped
+repository contract, so the count a badge shows and the rows a list returns
+cannot disagree:
+
+- `GET /api/dlq` — list, newest first, with `rule_id`, `since`, `limit`
+  filters applied **before** the limit.
+- `POST /api/dlq/{id}/retry` — replay. The job's existing `delivery_jobs` row is
+  **reset** (status `PENDING`, `attempts` back to 0, full retry budget
+  restored); a second row is never inserted.
+- `DELETE /api/dlq` — purge, answering with the number of entries removed.
+
+Replay answers with a documented result code rather than an unqualified
+success:
+
+| `error_code` | meaning |
+| --- | --- |
+| `requeued` | the job is back in the queue |
+| `not_found` | no such entry **in the caller's scope** (a foreign id and an unknown id are indistinguishable) |
+| `already_pending` | the job is already queued or in flight |
+| `already_sent` | the job has already been delivered |
+| `replay_failed` | the entry exists but could not be woken |
+
+Scope is a set of rule ids resolved server-side from the caller identity. An
+empty set means the caller owns nothing and therefore sees nothing; an id that
+is not in the set is `not_found`, never `forbidden` — the API does not confirm
+the existence of another tenant's entries.
+
 ## Migration strategy
 
 1. **Additive first**: new endpoints/fields are added without removing old
