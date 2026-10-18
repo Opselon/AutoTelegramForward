@@ -1,0 +1,400 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import Callout from '../../../components/Callout.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Steps from '../../../components/Steps.astro';
+import Icon from '../../../components/Icon.astro';
+import repoInfo from '../../../data/repo-info.json';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'Quickstart';
+const pageDesc =
+  'From an empty host to a delivered forward: the three install routes, the guided wizard, your first task and the checks that prove it serves.';
+
+const toc = [
+  { id: 'before-you-start', title: 'Before you start' },
+  { id: 'routes', title: 'Pick an install route' },
+  { id: 'wizard', title: 'The guided wizard' },
+  { id: 'first-run', title: 'First run' },
+  { id: 'first-task', title: 'Your first task' },
+  { id: 'success', title: 'What success looks like' },
+  { id: 'failures', title: 'Common first-run failures' },
+];
+
+const requirements = [
+  [
+    'Container path',
+    'Docker Engine with the Compose v2 plugin — <code>docker compose version</code> has to answer. <code>atf platform</code> prints the exact install command for this specific distribution.',
+  ],
+  [
+    'Native path',
+    'Python 3.11+ and either Bash (Linux, macOS, WSL) or PowerShell (Windows). <code>scripts/setup.sh</code> walks <code>python3</code>, <code>python3.13</code>, <code>python3.12</code>, <code>python3.11</code> and refuses to continue when none of them is 3.11+.',
+  ],
+  [
+    'Telegram',
+    'A bot token from @BotFather, and your own numeric Telegram user id for <code>ADMIN_USER_ID</code>.',
+  ],
+  [
+    'Hardware',
+    '1 vCPU and 512 MB RAM is enough to start four services; media staging is the only thing that wants more disk.',
+  ],
+  [
+    'Network',
+    'Outbound access to Telegram. Ports <code>8088</code> (dashboard) and <code>8080</code> (REST API) must be free; core and logger gRPC stay inside the compose network on <code>50051</code> and <code>50052</code>.',
+  ],
+];
+
+const routes = [
+  {
+    name: 'Docker Compose',
+    badge: 'Recommended',
+    tone: 'chip-success',
+    icon: 'server',
+    line: 'cp .env.example .env  →  docker compose up -d',
+    what: 'Four containers from one file: atf-core, atf-logger, atf-api, atf-web. Nothing else is installed on the host.',
+    when: 'A host you control with docker already present.',
+  },
+  {
+    name: 'Native script',
+    badge: 'Bare metal',
+    tone: 'chip-accent',
+    icon: 'terminal',
+    line: './scripts/setup.sh',
+    what: 'Creates .venv, installs dependencies, puts <code>atf</code> on PATH and hands over to the wizard. Same program on Windows: <code>python scripts\\bootstrap.py</code>.',
+    when: 'A VPS or home server where you want the CLI and native services.',
+  },
+  {
+    name: 'Zero prerequisite',
+    badge: 'One file',
+    tone: 'chip',
+    icon: 'download',
+    line: 'curl -fsSL .../install.sh | bash',
+    what: 'Installs git and Python when missing, clones the repository and ends in the same wizard. The portable build (<code>atf release portable</code> → <code>dist/atf.pyz</code>) needs no checkout at all.',
+    when: 'A machine you do not want to prepare by hand.',
+  },
+];
+
+const wizardSteps = [
+  {
+    title: 'Detect the host',
+    body: 'Reads the OS, distribution and architecture, then probes <code>docker</code>, the daemon and <code>docker compose version</code>. On a machine without docker it offers source mode instead of failing.',
+    code: 'atf setup',
+    note: 'Every path — installer, <code>setup.sh</code>, or <code>python3 atf.pyz setup</code> — lands in this one wizard.',
+  },
+  {
+    title: 'Ask only what it cannot work out',
+    body: 'Run mode, Telegram credentials, admin id, dashboard URL, TLS and the boot-service questions. Each answer is validated as you type it; a malformed value is refused rather than stored.',
+    code: 'atf setup --check        # read-only readiness report\natf setup --print-answers # emit the answers template',
+    note: 'Secrets are typed blind and echoed back masked in a review panel before anything is written.',
+  },
+  {
+    title: 'Write .env',
+    body: 'The answers become <code>.env</code> with mode <code>0600</code>. The keys the stack cannot run without are <code>ATF_API_ID</code>, <code>ATF_API_HASH</code>, <code>ATF_BOT_TOKEN</code>, <code>ADMIN_USER_ID</code> and <code>ATF_MASTER_KEY</code>.',
+    note: 'A placeholder left in a required key is treated as missing, not as a value.',
+  },
+  {
+    title: 'Build and start',
+    body: 'Runs the static validator first, then builds and starts the four services in order: logger → core → api → web.',
+    code: 'atf up        # build + start the whole stack (validator-gated)\natf setup --no-build --no-start   # prepare .env only',
+    note: 'Use --force only when you have read the validator failure and accepted it.',
+  },
+  {
+    title: 'Prove each service is serving',
+    body: 'Inspects every service and reports container, status, state, reachability, endpoint and version. A container that started but cannot answer is reported as not serving.',
+    code: 'atf system services        # colourised table + fix hints; exit 1 if something is down\natf system services --json # {services:[...], healthy:N, total:4, failing:[...]}',
+    note: '"docker compose returned 0" is not evidence; this probe is.',
+  },
+];
+
+const asks = [
+  ['Run mode', '<code>docker</code>, <code>source</code> or <code>portable</code> — anything else is refused.'],
+  ['Bot token (@BotFather)', 'Must match <code>&lt;digits&gt;:&lt;35+ chars&gt;</code>. Typed blind, stored in <code>.env</code> as <code>0600</code>.'],
+  ['<code>api_id</code>', 'Numeric and ≥ 1. Defaults to the public Telegram Desktop value when you press enter.'],
+  ['<code>api_hash</code>', 'Exactly 32 hex characters, from my.telegram.org.'],
+  ['Admin user id', 'Numeric and ≥ 1 — your own Telegram id, not a username.'],
+  ['Dashboard URL', 'Must start with <code>http://</code> or <code>https://</code>.'],
+  ['TLS domain', 'Optional; if you set one, a valid domain <em>and</em> a contact email become required.'],
+  ['Boot service / start now / mint token', 'Explicit yes/no answers. The boot service is a systemd unit that starts the stack at boot.'],
+];
+
+const confirm = [
+  '<code>atf status</code> — the live board: services, ports, reachability, task counts and the dashboard URL.',
+  '<code>atf system services</code> — all four services <strong>OK</strong>, <strong>running</strong>, reachable, with their endpoints.',
+  'The dashboard answers on <code>http://localhost:8088</code> (the value of <code>ATF_WEB_URL</code> in <code>.env</code>).',
+  '<code>atf rules list</code> shows your task, with state <code>on</code>.',
+  'A real post from the source lands in the target and <code>atf logs tail --follow</code> shows <code>[PIPELINE:DISPATCH]</code> followed by <code>[PIPELINE:DELIVERED]</code> for it.',
+];
+
+const failures = [
+  [
+    '<code>docker is not usable here</code>',
+    'No docker, or the daemon is down.',
+    'Run <code>atf platform</code> for this host&rsquo;s exact install command, start the daemon, or take the no-docker path with <code>atf setup --source-wizard</code>.',
+  ],
+  [
+    '<code>port 8088 is already in use</code>',
+    'Another process owns the dashboard port.',
+    '<code>atf validate --runtime</code> names the owner through its <code>ports</code> check; free it or change the published port in the compose file.',
+  ],
+  [
+    'The bot says it is unconfigured although <code>.env</code> is filled',
+    'The container was started before the <code>.env</code> change, so it never received the value.',
+    '<code>atf system restart</code>. The <code>container-env</code> check detects exactly this condition.',
+  ],
+  [
+    'The first task forwards nothing; logs say the upstream is disconnected',
+    'The Telegram account session was never authorised.',
+    '<code>atf sessions list</code> to see it, then link the account from the bot (see below) and retry the task.',
+  ],
+];
+
+const faq = [
+  {
+    q: 'How long does this actually take?',
+    a: 'Budget 10–15 minutes end to end on a warm machine. The install and the wizard are about a minute each; the first build of the four services dominates the rest, and the answer probes at the end are seconds.',
+  },
+  {
+    q: 'Do I need Docker?',
+    a: 'No. Docker Compose is the recommended route, but <code>atf setup --source-wizard</code> installs a source-mode stack with supervised local processes, and the portable <code>atf.pyz</code> needs nothing but Python 3.11+.',
+  },
+  {
+    q: 'Can the wizard run unattended?',
+    a: 'Yes: <code>atf setup --yes</code> takes every default without prompting, and <code>atf setup --answers answers.json</code> replays a known-good configuration. Use <code>--print-answers</code> to emit the template first.',
+  },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/getting-started/quickstart/"
+  breadcrumbs={[
+    { name: 'Getting started', href: url('/getting-started/') },
+    { name: 'Quickstart', href: url('/getting-started/quickstart/') },
+  ]}
+  toc={toc}
+  faq={faq}
+  keywords={['AutoTelegramForward quickstart', 'install Telegram forwarder', 'atf setup wizard']}
+>
+  <div class="space-y-6">
+    <p>
+      This is the shortest honest path from an empty host to a message that actually lands in a destination chat.
+      Every route below ends in the same place — one guided wizard, the same four services, the same CLI afterwards — so
+      the install choice does not lock you in.
+    </p>
+
+    <h2 id="before-you-start">Before you start</h2>
+    <p>
+      Have the bot token and your numeric Telegram id ready; the wizard asks for nothing else you cannot press enter
+      through.
+    </p>
+    <SpecTable
+      headers={['Requirement', 'Details']}
+      rows={requirements}
+      caption={`v${repoInfo.version} — what the quickstart assumes`}
+    />
+
+    <Callout type="warn" title="Two Python floors in the same repository">
+      <p>
+        The checkout wizard (<code>scripts/setup.sh</code>, <code>scripts/bootstrap.py</code>) and the portable
+        <code>atf.pyz</code> require <strong>Python 3.11+</strong> and stop otherwise. The standalone installers
+        (<code>install.sh</code>, <code>install.ps1</code>) accept <strong>3.10</strong> and install a newer interpreter
+        themselves when none is present. Use 3.11 or newer and the two never disagree.
+      </p>
+    </Callout>
+
+    <h2 id="routes">Pick an install route</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 not-prose my-4">
+      {
+        routes.map((route) => (
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <Icon name={route.icon} class="w-4 h-4 text-sky-400" />
+              <span class="font-bold text-white text-sm">{route.name}</span>
+              <span class={`chip ${route.tone}`}>{route.badge}</span>
+            </div>
+            <p class="text-[13px] text-slate-300 mb-2">
+              <code>{route.line}</code>
+            </p>
+            <p class="text-xs text-slate-400 mb-2" set:html={route.what} />
+            <p class="text-xs text-slate-500">
+              <strong class="text-slate-400">Best when:</strong> {route.when}
+            </p>
+          </div>
+        ))
+      }
+    </div>
+
+    <p>
+      The container route is the one most operators should take. It is also the shortest: two commands after a clone.
+    </p>
+
+    <CodeBlock
+      label="bash"
+      content={`git clone ${repoInfo.repoUrl}.git
+cd AutoTelegramForward
+
+# route 1 — containers only
+cp .env.example .env          # fill ATF_API_ID, ATF_API_HASH, ATF_BOT_TOKEN, ADMIN_USER_ID
+docker compose up -d
+docker compose ps             # atf-core, atf-logger, atf-api, atf-web
+
+# route 2 — native script (same wizard, no docker)
+./scripts/setup.sh            # venv + deps + atf on PATH + guided setup
+./scripts/setup.sh --check    # read-only readiness report, changes nothing
+
+# route 3 — zero prerequisite, or the single-file build
+curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash
+atf release portable          # -> dist/atf.pyz, standard library only
+python3 atf.pyz setup         # the same wizard, no checkout needed`}
+    />
+
+    <h2 id="wizard">The guided wizard</h2>
+    <p>
+      <code>atf setup</code> is one command for a machine that has never run ATF. It asks, validates, builds, then
+      verifies — in that order, and it refuses a wrong answer instead of storing it.
+    </p>
+
+    <Steps steps={wizardSteps} class="mt-4" />
+
+    <h3 class="text-base font-bold text-white mt-6 mb-2">What it asks, and how each answer is checked</h3>
+    <SpecTable
+      headers={['Question', 'Validator — a wrong answer is refused, never written']}
+      rows={asks}
+      caption="Answers accepted by the wizard"
+    />
+
+    <p>
+      For automation, drive the same wizard without a terminal:
+    </p>
+    <CodeBlock
+      label="bash"
+      content={`atf setup --check                       # read-only readiness report (safe before anything exists)
+atf setup --yes                         # take every default, never prompt (CI / cron)
+atf setup --answers answers.json        # non-interactive answers
+atf setup --print-answers               # emit the answers template
+atf setup --no-build --no-start         # prepare .env only
+atf setup --source-wizard               # bare-metal path for a machine without docker`}
+    />
+
+    <h2 id="first-run">First run</h2>
+    <p>
+      Two things must be true before a single message can move: the bot credentials are in <code>.env</code>, and the
+      stack is up. Nothing about the token is echoed back — the CLI redacts it from every line it prints.
+    </p>
+
+    <CodeBlock
+      label=".env"
+      content={`ATF_API_ID=17349
+ATF_API_HASH=344583e45741c457fe1862106095a5eb
+ATF_BOT_TOKEN=123456:ABC-DEF...        # from @BotFather — never a real token in a ticket or a chat
+ADMIN_USER_ID=123456789                # your numeric Telegram id
+ATF_MASTER_KEY=<long random string>
+ATF_WEB_URL=http://localhost:8088`}
+    />
+
+    <p>
+      <code>ATF_MASTER_KEY</code> is what encrypts session strings, bot tokens and AI keys at rest, so generate it and
+      keep it. Then bring the stack up and look at the board:
+    </p>
+
+    <CodeBlock
+      label="bash"
+      content={`atf up            # build + start all four services (docker path)
+atf status        # per-service state, ports, reachability, task counts, dashboard URL
+atf validate --strict   # static checks: env, compose, catalog parity, secrets, database, ports
+atf doctor --fix  # deeper diagnosis; repairs what it can`}
+    />
+
+    <p>
+      The dashboard is the Rust gateway plus React SPA on <a class="text-sky-400" href={url('/getting-started/telegram-bot-setup/')}>
+        port 8088
+      </a>. The REST API answers on <code>8080</code>. Open the dashboard at{' '}
+      <code>http://localhost:8088</code> and sign in with the credential the wizard minted (or with a single-use login
+      link the bot issues — the link carries a short-lived code, never a session token).
+    </p>
+
+    <h3 class="text-base font-bold text-white mt-6 mb-2">Link your Telegram account</h3>
+    <p>
+      Forwarding happens as <em>some</em> Telegram account, so one has to be authorised before the first task can
+      deliver. Open the bot in Telegram, send <code>/start</code> and use <strong>Login</strong>: enter the phone number
+      in international format, then the OTP Telegram sends you, then your 2FA password if the account has one. The
+      resulting session is encrypted with <code>ATF_MASTER_KEY</code> and stored in <code>data/atf.db</code>; the bot
+      deletes the message that carried the credentials. The same login is available from the dashboard and the REST API.
+      The full walkthrough, including what to do when the OTP never arrives, is in{' '}
+      <a class="text-sky-400" href={url('/getting-started/account-linking/')}>account linking</a>.
+    </p>
+
+    <h2 id="first-task">Your first task</h2>
+    <p>
+      A task is one source list plus one target list. The bot can create it (<code>/settings</code> → Create task), and
+      the CLI can create it with the same fields:
+    </p>
+
+    <CodeBlock
+      label="bash"
+      content={`atf rules create --name "News mirror" --source @MarketNews --target @MyBroadcast
+atf rules list                                          # confirm it exists and is on
+atf rules show <id>                                     # the full task as the server sees it
+
+# prove the pipeline before you trust it with live traffic
+atf rules simulate <id> --text "Breaking: market surge t.me/spam @admin"
+atf logs tail --follow -n 20                            # then watch the first real delivery
+atf logs stats                                          # delivered / dropped / retried counts`}
+    />
+
+    <Callout type="warn" title="Check what a simulation returns">
+      <p>
+        <code>POST /api/simulate</code> reads <code>rule_id</code> plus <code>sample_text</code> and answers with
+        <code>matched</code>, <code>match_reason</code>, <code>forward_mode</code>, <code>rendered_text</code> and
+        <code>delivery_targets</code>. The CLI&rsquo;s <code>rules simulate</code> verb sends the message under the key
+        <code>text</code> instead, so confirm you get a <code>matched</code> verdict back; if you do not, post the
+        request directly:
+      </p>
+      <CodeBlock
+        label="bash"
+        content={`curl -s -X POST localhost:8080/api/simulate \\
+  -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' \\
+  -d '{"rule_id":"<id>","sample_text":"Breaking: market surge"}' | jq`}
+      />
+    </Callout>
+
+    <h2 id="success">What success looks like</h2>
+    <p>An install is finished when all of these hold — not when a build command returns zero.</p>
+    <ul class="grid gap-2 list-none p-0 m-0 not-prose">
+      {
+        confirm.map((item) => (
+          <li class="flex gap-2.5 text-[14.5px] leading-relaxed text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] shrink-0 text-emerald-400" strokeWidth={2.4} />
+            <span set:html={item} />
+          </li>
+        ))
+      }
+    </ul>
+
+    <Callout type="success" title="The health gate">
+      <p>
+        <code>atf system services</code> exits non-zero when any of the four is not serving, which makes it the right
+        command for a deploy gate or a cron check. <code>atf validate --runtime</code> goes further and also proves the
+        compose network aliases, the API&rsquo;s <code>/healthz</code> and its upstream session, and TLS expiry.
+      </p>
+    </Callout>
+
+    <h2 id="failures">Common first-run failures</h2>
+    <p>
+      These four cover almost every first install. Each fix is a command you can run right now.
+    </p>
+    <SpecTable
+      headers={['Symptom', 'Cause', 'Fix']}
+      rows={failures}
+      caption="First-run failure catalogue"
+    />
+    <p>
+      The rest of the catalogue — stale containers, missing network aliases, a wizard waiting on a piped stdin, TLS and
+      certificate renewal — lives in the{' '}
+      <a class="text-sky-400" href={url('/operations/troubleshooting/')}>Operations &amp; troubleshooting</a> runbook, and{' '}
+      <code>atf doctor</code> names the failing check and its own fix line for each one.
+    </p>
+  </div>
+</DocsLayout>

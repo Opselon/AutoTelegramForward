@@ -1,0 +1,455 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import Callout from '../../../components/Callout.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Icon from '../../../components/Icon.astro';
+import repoInfo from '../../../data/repo-info.json';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'API authentication';
+const pageDesc =
+  'Authenticating against the control plane: the bearer JWT, which routes stay public, the rate-limit classes, correlation ids and the gRPC credential.';
+
+const toc = [
+  { id: 'overview', title: 'Overview' },
+  { id: 'obtain', title: 'Obtaining a token' },
+  { id: 'send', title: 'Sending the token' },
+  { id: 'routes', title: 'Public vs authenticated' },
+  { id: 'ratelimit', title: 'Rate limits' },
+  { id: 'correlation', title: 'Correlation ids' },
+  { id: 'errors', title: 'Error model' },
+  { id: 'grpc', title: 'Internal gRPC credential' },
+  { id: 'examples', title: 'Copy-paste examples' },
+];
+
+const authRoutes = repoInfo.apiRoutes.filter((route: { group: string }) => route.group === 'Authentication').length;
+const bearerRoutes = repoInfo.apiRoutes.filter((route: { auth: string }) => route.auth === 'bearer').length;
+
+const obtain = [
+  [
+    '<code>GET /api/auth/bot-login-link</code>',
+    '<code>Authorization: Bearer &lt;expiring session&gt;</code>',
+    'Mints the caller\'s own single-use code and answers <code>{code, expires_at, link}</code>. This is the re-authentication path: a client whose stored session is dead asks the bot side for one fresh link instead of looping the user through a login form.',
+  ],
+  [
+    '<code>POST /api/auth/exchange-bot-token</code>',
+    '<code>{login_code}</code>',
+    'Trades that code for the 7-day session. The body carries no user id — a Telegram id is public, so the code is the only thing that names the account.',
+  ],
+  [
+    '<code>POST /api/auth/login</code>',
+    '<code>{username, password}</code>',
+    'The username/password path for accounts that registered without Telegram (or alongside it). A password login never creates or moves a Telegram binding.',
+  ],
+  [
+    '<code>POST /api/auth/tma</code>',
+    '<code>{init_data}</code>',
+    'The Telegram Mini App path. The signed <code>initData</code> is verified (HMAC-SHA256 over the sorted data-check-string, duplicate and stale <code>auth_date</code> refused) before a token is issued for the numeric user id inside it.',
+  ],
+];
+
+const limitClasses = [
+  [
+    '<code>auth</code>',
+    '<code>30/min</code>, burst 10',
+    'Peer address',
+    '<strong>fail closed.</strong> The unauthenticated login/register/exchange surface, where brute force is cheap.',
+  ],
+  [
+    '<code>shield</code>',
+    '<code>600/min</code>, burst 120',
+    'Peer address',
+    '<strong>fail closed.</strong> The outer per-address guard, which runs before any token is validated so a flood of bogus tokens cannot make the API hammer the core.',
+  ],
+  [
+    '<code>read</code>',
+    '<code>600/min</code>, burst 120',
+    'Verified user id',
+    'fail local: an in-process limiter keeps enforcing, reported as degraded.',
+  ],
+  [
+    '<code>write</code>',
+    '<code>120/min</code>, burst 30',
+    'Verified user id',
+    'fail local. Writes reach the core and Telegram, and are legitimately rare.',
+  ],
+  [
+    '<code>admin</code>',
+    '<code>300/min</code>, burst 60',
+    'Verified user id',
+    'fail local. Still limited: an admin token in the wrong hands is the most valuable one.',
+  ],
+  [
+    '<code>probe</code>',
+    '<code>1200/min</code>, burst 300',
+    'Peer address',
+    'fail local. Liveness and version polling, so a monitoring loop is never refused by a broken accelerator.',
+  ],
+];
+
+const errorCodes = [
+  ['<code>401</code>', '<code>UNAUTHENTICATED</code>, <code>TOKEN_INVALID</code>, <code>LOGIN_CODE_REQUIRED</code>', 'No credential, a rejected scheme, or a token the core would not validate. A missing login code is its own code so a client can prompt for a new one.'],
+  ['<code>403</code>', '<code>FORBIDDEN</code>', 'The request is legitimate but names something that is not yours — an admin route without admin rights, or a password-change body carrying another account\'s id.'],
+  ['<code>400</code>', '<code>invalid_request</code>, <code>unknown_task_kind</code>, <code>invalid_argument</code>, <code>loop_detected</code>, <code>endpoint_blocked</code>', 'The body or query was refused by the core. The core\'s own refusal token is passed through verbatim so a client can translate it.'],
+  ['<code>404</code>', '<code>not_found</code>', 'Missing — or simply not yours: an ownership failure answers exactly like a missing row.'],
+  ['<code>429</code>', '<code>COOLDOWN</code> or <code>rate_limited</code>', 'Two different budgets: the per-account login-link mint cooldown (<code>retry_after</code> in the body, <code>Retry-After</code> in the header) and the rate limiter itself.'],
+  ['<code>502</code>', 'grpc status <code>Unavailable</code>', 'The core is unreachable. Check <code>/api/health/services</code> before suspecting the token.'],
+  ['<code>503</code>', '<code>rate_limit_unavailable</code>, <code>session_not_connected</code>', 'The limit could not be evaluated at all and the class fails closed — or a session exists but has no live Telegram client.'],
+];
+
+const examples = [
+  {
+    label: 'Log in, then read your own rules',
+    language: 'bash',
+    content: `TOKEN=$(curl -s -X POST https://your-host/api/auth/login \\
+  -H 'Content-Type: application/json' \\
+  -d '{"username":"tg_5094837833","password":"…"}' | jq -r .token)
+
+curl -s https://your-host/api/rules \\
+  -H "Authorization: Bearer $TOKEN" | jq '.rules[0]'`,
+  },
+  {
+    label: 'Mint a fresh link, then spend its code',
+    language: 'bash',
+    content: `curl -s https://your-host/api/auth/bot-login-link \\
+  -H "Authorization: Bearer $TOKEN" | jq
+# { "code": "…", "expires_at": 1780000600, "link": "/?code=…" }
+
+curl -s -X POST https://your-host/api/auth/exchange-bot-token \\
+  -H 'Content-Type: application/json' \\
+  -d '{"login_code":"<code from the bot>"}' | jq -r .token`,
+  },
+  {
+    label: 'Public readiness route — no token, ever',
+    language: 'bash',
+    content: `curl -s https://your-host/api/health/services | jq
+# {
+#   "status": "healthy",
+#   "time": "2026-01-01T00:00:00Z",
+#   "services": [ { "name": "core", "ok": true, … } ]
+# }`,
+  },
+  {
+    label: 'Who is this token, and how long does it last',
+    language: 'bash',
+    content: `curl -s https://your-host/api/auth/me \\
+  -H "Authorization: Bearer $TOKEN" | jq
+# { "user_id": 5094837833, "username": "tg_5094837833",
+#   "is_admin": false, "now": "2026-01-01T00:00:00Z" }`,
+  },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/api/authentication/"
+  breadcrumbs={[
+    { name: 'Reference', href: url('/api/') },
+    { name: 'Authentication', href: url('/api/authentication/') },
+  ]}
+  toc={toc}
+  keywords={['AutoTelegramForward API authentication', 'bearer JWT control plane', 'API key auth', 'gRPC shared credential']}
+  faq={[
+    {
+      q: 'Which header does the API read the token from?',
+      a: 'A single <code>Authorization: Bearer &lt;token&gt;</code> header. The Go control plane never signs a token — it validates the one the Python core issued, over gRPC, and turns the answer into the request identity.',
+    },
+    {
+      q: 'Is /api/health/services authenticated?',
+      a: 'No. The service-health route is registered ahead of authentication so a monitor needs no credential, and the bearer middleware carries an explicit bypass for it. It is rate limited as a probe (1200 requests/minute), so a monitoring loop cannot become a self-inflicted flood.',
+    },
+    {
+      q: 'What does an unlinked account see?',
+      a: 'Nothing. The verified id in the token is the only key any tenant-scoped query uses, so an account that has no Telegram id (a web-only registration is stored under a negative synthetic id) matches no rules, sessions, logs or queue entries and is answered an empty collection.',
+    },
+    {
+      q: 'What happens when the limit cannot be evaluated?',
+      a: 'It depends on the class, and the difference is deliberate. The unauthenticated classes (<code>auth</code>, <code>shield</code>) fail <strong>closed</strong> with <code>503</code> and <code>rate_limit_unavailable</code>; authenticated traffic falls back to a bounded in-process limiter and says so with <code>X-RateLimit-Degraded: 1</code>. Nothing is ever silently let through unmeasured.',
+    },
+    {
+      q: 'Does the internal gRPC surface require a credential?',
+      a: 'It can. When <code>ATF_CORE_RPC_TOKEN</code> is set on both the core and the API, every RPC must carry <code>authorization: Bearer &lt;token&gt;</code> and a missing or wrong credential is refused with <code>UNAUTHENTICATED</code>. When it is unset the surface behaves as before — with a startup warning that says the boundary is not enforced.',
+    },
+    {
+      q: 'How do I trace one API call to its delivery?',
+      a: 'Every response carries <code>X-Correlation-ID</code> and <code>X-Request-ID</code>, the same value is attached to the outgoing gRPC calls, and the access trail records it — so an API request and the delivery it caused can be joined on one id.',
+    },
+  ]}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      The Python core owns identity: it issues the seven-day session token and answers "is this token valid, and for
+      whom?". The Go control plane owns enforcement: it presents the token to the core on every request and scopes the
+      call to the identity that comes back. There is no path where a client asserts who it is.
+    </p>
+    <p class="not-prose flex flex-wrap gap-2">
+      <span class="chip">{repoInfo.apiRoutes.length} routes parsed from api/main.go</span>
+      <span class="chip chip-success">{bearerRoutes} require a token</span>
+      <span class="chip">{authRoutes} on the public auth mux</span>
+    </p>
+    <p>
+      One consequence is worth stating early, because it explains most of the behaviour on this page: the token is a
+      <em>tenant key</em>, not a role. Everything tenant-scoped is filtered by the verified user id server-side, and an
+      ownership failure looks exactly like a missing row.
+    </p>
+
+    <h2 id="obtain">Obtaining a token</h2>
+    <p>
+      Two routes mint a session, and neither of them is a user id you can post. The bot link is the usual one; the
+      password and Mini App paths exist alongside it for clients that have their own proof.
+    </p>
+    <div class="not-prose my-4">
+      <SpecTable
+        headers={['Route', 'Credential it takes', 'What it gives back']}
+        rows={obtain}
+        caption="The three ways to obtain a 7-day session (all of them end at the same JWT)"
+      />
+    </div>
+    <Callout type="info" title="Read the session, do not decode it">
+      <p>
+        A JWT payload is readable by anyone holding the token, so it is not a place to keep a secret — but decoding it is
+        still not verification. Clients are expected to prove the token against the API (below) rather than trust the
+        claims they can read out of it.
+      </p>
+    </Callout>
+
+    <h2 id="send">Sending the token</h2>
+    <p>
+      One header, on every authenticated request. The middleware validates it before the handler runs, and the handler
+      only ever sees the verified identity — never a header or body field that claims one.
+    </p>
+    <div class="not-prose my-4">
+      <CodeBlock
+        label="The only header that carries a session"
+        language="bash"
+        content={`curl -s https://your-host/api/rules \\
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# A rejected credential never reaches a handler:
+#   401 {"error": "invalid or expired token"}
+#   (ValidateToken consults the core, and the core also checks the
+#    account still exists, so a deleted account cannot keep a session)`}
+      />
+    </div>
+    <ul class="grid gap-2 list-none p-0 m-0">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>
+          <strong class="text-slate-100">A shared key can replace it for machines.</strong> When the operator sets
+          <code>ATF_API_KEY</code>, any request that does not carry a bearer credential must present the same value in
+          <code>X-API-Key</code>; anything else is <code>401</code> <code>&#123;"error":"unauthorized"&#125;</code>. The health routes,
+          <code>/api/version</code>, <code>/api/openapi.yaml</code> and the whole <code>/api/auth/</code> surface are exempt,
+          and a bearer request is passed straight to the JWT path — the key is a machine gate, not a second factor.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="lock" class="w-4 h-4 mt-[3px] text-violet-300 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">Store it once, treat it like a password.</strong> The shipped clients keep the
+          session in one place, check the token's own expiry before rendering, and prove it against the API on load, so a
+          revoked session produces one login prompt instead of a page that dies mid-render.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="info" class="w-4 h-4 mt-[3px] text-sky-400 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100"><code>GET /api/auth/me</code> is the cheap probe.</strong> It is the intended way to
+          answer "is this token still a session?": it returns the verified identity or a refusal. A client that stores a
+          token should call it on mount and treat a refusal as one session transition, not as a per-request retry loop.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="shield" class="w-4 h-4 mt-[3px] text-sky-400 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">The token is a credential, not a preference.</strong> It identifies a tenant, so
+          anything that holds it — a browser, a phone, a CLI — should hold it the way it would hold a password: no logging,
+          no URLs that end up in chat history, no copies left in build artefacts.
+        </span>
+      </li>
+    </ul>
+
+    <h2 id="routes">Public vs authenticated</h2>
+    <p>
+      The muxes are the contract. <code>/api/auth/</code> is mounted without a bearer wrapper (each of its handlers decides
+      for itself), the service-health and system routes are public, and everything else under <code>/api/</code> is
+      wrapped in <code>RequireAuth</code>. The administration plane adds a second gate,
+      <code>RequireAdmin</code>, on top of it.
+    </p>
+    <div class="not-prose my-4">
+      <SpecTable
+        headers={['Mux', 'Wrapped in', 'What it means']}
+        rows={[
+          ['<code>authMux</code> → <code>/api/auth/</code>', 'rate limit only (<code>auth</code> class)', 'Public surface. Its handlers do their own work: <code>GET /bot-login-link</code> and <code>PATCH /change-password</code> read the bearer token themselves, because their authorisation is "the caller\'s own account" rather than "some valid session".'],
+          ['<code>dashMux</code> → <code>/api/</code>', '<code>RequireAuth</code>', 'Everything tenant-scoped: rules, sessions, filters, tasks, queue, dead letters, logs, prompts, diagnostics, backup. A missing or invalid token is refused before the handler is entered.'],
+          ['<code>adminMux</code> → <code>/api/admin/</code>', '<code>RequireAuth</code> + <code>RequireAdmin</code>', 'Administration. Without server-verified admin rights the route set is unreachable, not merely hidden.'],
+          ['<code>mux</code> → health, version, system', 'none', 'Public by design: <code>/healthz</code>, <code>/health</code>, <code>/api/version</code>, <code>/api/health/services</code> (and its <code>/api/v1/</code> alias), <code>/api/system/setup</code>, <code>/api/system/env</code>, <code>/api/openapi.yaml</code>.'],
+        ]}
+        caption="Registered in api/main.go; auth rules in api/internal/handlers/middleware.go"
+      />
+    </div>
+    <Callout type="warn" title="The generated route table marks the auth mux as unauthenticated">
+      <p>
+        The build-time scan of <code>api/main.go</code> sees <code>/api/auth/*</code> mounted outside the bearer wrapper,
+        so it lists every route there — including <code>GET /api/auth/bot-login-link</code> — as public. That is true of the
+        mux and false of the handler: the handler refuses a request without a valid bearer token. Treat the table as a map
+        of the muxes, and this page as the authority on which routes need a credential.
+      </p>
+    </Callout>
+
+    <h2 id="ratelimit">Rate limits</h2>
+    <p>
+      The limiter is a Redis-backed token bucket with a circuit breaker, keyed on the verified identity — never on a
+      client-supplied field — so <code>?user_id=</code>, <code>X-User-Id</code> or a body field cannot move a caller into
+      another tenant's budget. Requests that have not been authenticated yet are keyed on the peer address, and only a
+      proxy the operator declared trusted may move that address.
+    </p>
+    <div class="not-prose my-4">
+      <SpecTable
+        headers={['Class', 'Default budget', 'Keyed on', 'When the backend is gone']}
+        rows={limitClasses}
+        caption="Class defaults from api/internal/ratelimit/policy.go — operators can move them per class"
+      />
+    </div>
+    <ul class="grid gap-2 list-none p-0 m-0">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>
+          <strong class="text-slate-100">The quota is published, not discovered.</strong> Every answer carries
+          <code>X-RateLimit-Limit</code> and <code>X-RateLimit-Remaining</code> (on by default; an operator can turn the
+          headers off with <code>ATF_RATELIMIT_HEADERS</code>); a refusal adds <code>Retry-After</code> and
+          <code>X-RateLimit-Reset</code>, and the degraded path adds <code>X-RateLimit-Degraded: 1</code>.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="alert" class="w-4 h-4 mt-[3px] text-amber-400 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">A refusal is a 429 with a body, not an empty one.</strong>
+          <code>&#123;"error":"rate limit exceeded","code":"rate_limited","retry_after_seconds":…,"limit":…,"scope":…&#125;</code>.
+          The limiter names itself with <code>code</code>, as the rest of the API does with <code>error_code</code>.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="shield" class="w-4 h-4 mt-[3px] text-sky-400 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">Login-link minting has its own cooldown.</strong> A second mint inside 60
+          seconds is refused by the account-level cooldown — <code>429</code> with <code>error_code: "COOLDOWN"</code> and a
+          <code>retry_after</code> — before the limiter is even the interesting reason. See
+          <a href={url('/getting-started/account-linking/')}>account linking</a>.
+        </span>
+      </li>
+    </ul>
+
+    <h2 id="correlation">Correlation ids</h2>
+    <p>
+      Every request ends up with one correlation id, whether the caller supplied one or not. It is echoed on the response,
+      attached to the outgoing gRPC metadata, and recorded in the access trail, so an API call and the delivery it caused
+      can be joined without guessing at timestamps.
+    </p>
+    <div class="not-prose my-4">
+      <SpecTable
+        headers={['Detail', 'Value']}
+        rows={[
+          ['Accepted inbound headers', '<code>X-Correlation-ID</code>, <code>X-Request-ID</code>, then <code>traceparent</code> — first non-empty wins'],
+          ['Accepted format', '8–128 characters of <code>a–z A–Z 0–9 _ - . :</code>; anything else is discarded'],
+          ['Generated when absent or invalid', '<code>corr-</code> + 16 random bytes in hex'],
+          ['Always on the response', '<code>X-Correlation-ID</code> and <code>X-Request-ID</code>, both carrying the effective id'],
+          ['Downstream', 'Appended to every outgoing gRPC call as the <code>x-correlation-id</code> metadata key'],
+        ]}
+        caption="api/internal/middleware/correlation.go"
+      />
+    </div>
+    <Callout type="warn" title="One documented header has no implementation">
+      <p>
+        The shipped <code>docs/openapi.yaml</code> describes an optional signed-session binding via <code>X-Session-Id</code>.
+        No code in the repository reads that header — the bearer middleware is the only credential check — so do not build a
+        client against it. The document is descriptive prose there, not a contract the binary enforces.
+      </p>
+    </Callout>
+
+    <h2 id="errors">Error model</h2>
+    <p>
+      Refusals are JSON with an <code>error</code> string a human can read and, where the failure has a machine meaning, a
+      code a client can translate. Two families exist and they are not interchangeable: handlers answer
+      <code>error_code</code> (and the core's own refusal token is passed through verbatim), while the rate limiter answers
+      <code>code</code>. Some early refusals — a missing bearer header, an unparseable body, a gRPC failure mapped by
+      <code>grpcError</code> — carry only <code>error</code>, so a client should treat the code as optional and the status
+      line as authoritative.
+    </p>
+    <div class="not-prose my-4">
+      <SpecTable
+        headers={['Status', 'Codes seen in the repository', 'When']}
+        rows={errorCodes}
+        caption="api/internal/handlers (error_code), api/internal/ratelimit (code)"
+      />
+    </div>
+    <div class="not-prose my-4">
+      <CodeBlock
+        label="The authentication failure a client should handle first"
+        language="bash"
+        content={`curl -s -o /dev/null -w '%{http_code}\\n' https://your-host/api/rules
+# 401
+
+curl -s https://your-host/api/rules | jq
+# { "error": "authentication required" }`}
+      />
+    </div>
+
+    <h2 id="grpc">Internal gRPC credential</h2>
+    <p>
+      The control plane talks to the Python core over gRPC, and every servicer there takes the acting tenant from a
+      request field (<code>owner_user_id</code>) — which the API stamps from the identity it verified. That contract alone
+      could not tell the API from any other process that can open a socket to the core, so the surface can additionally
+      require a shared credential.
+    </p>
+    <ul class="grid gap-2 list-none p-0 m-0">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="lock" class="w-4 h-4 mt-[3px] text-violet-300 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">One variable, both sides.</strong> <code>ATF_CORE_RPC_TOKEN</code> is read by the
+          core's server interceptor and by the Go client, which attaches <code>authorization: Bearer &lt;token&gt;</code> to
+          every unary and streaming call. A deployment cannot enable it on one side by accident: a mismatch fails every RPC
+          loudly at deploy time.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>
+          <strong class="text-slate-100">Unset is the old behaviour, said out loud.</strong> With no token configured the
+          interceptor is not installed and the core logs a warning explaining that anything on the network can act as any
+          tenant. Nothing is silently assumed to be fine.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="shield" class="w-4 h-4 mt-[3px] text-sky-400 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">Refusals keep their shape.</strong> A missing, malformed or wrong credential is
+          <code>UNAUTHENTICATED</code> before the servicer runs; the comparison is constant-time, the value is never logged,
+          and the refusal preserves the method's cardinality so a streaming call does not turn into an internal error.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="alert" class="w-4 h-4 mt-[3px] text-amber-400 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">The logger is a separate trust domain.</strong> It is dialled without the
+          credential on purpose: the secret authenticates this API to the core, and the logger does not need it.
+        </span>
+      </li>
+    </ul>
+
+    <h2 id="examples">Copy-paste examples</h2>
+    <p>Three worked calls against a real deployment: obtain a session, use it, and read the public readiness route.</p>
+    <div class="not-prose space-y-4">
+      {examples.map((example) => <CodeBlock label={example.label} language={example.language} content={example.content} />)}
+    </div>
+    <Callout type="tip" title="Where the rest of the surface is">
+      <p>
+        The complete {repoInfo.apiRoutes.length}-route table, with the verb, handler and auth rule for each entry, is on the{' '}
+        <a class="text-sky-400" href={url('/api/')}>REST API reference</a>; the login-link flow it depends on is documented in{' '}
+        <a class="text-sky-400" href={url('/getting-started/account-linking/')}>account linking</a>. Version {repoInfo.version}.
+      </p>
+    </Callout>
+  </div>
+</DocsLayout>

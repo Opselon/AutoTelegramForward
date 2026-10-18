@@ -1,0 +1,39 @@
+---
+/**
+ * The product mark: a bot-and-rails glyph. Two source rails converge into one
+ * delivery line, which is the whole product idea in a 28px square. Drawn inline
+ * because a raster logo would be a second asset to keep in sync with the theme.
+ */
+interface Props {
+  class?: string;
+  /** 'mark' renders the glyph only; 'full' adds the wordmark. */
+  variant?: 'mark' | 'full';
+}
+
+const { class: cls = '', variant = 'full' } = Astro.props;
+const size = variant === 'full' ? 'w-9 h-9' : 'w-8 h-8';
+---
+
+<span class={`inline-flex items-center gap-2.5 ${cls}`}>
+  <span class={`${size} relative grid place-items-center rounded-xl bg-gradient-to-tr from-tg-blue to-brand-500 shadow-lg shadow-sky-500/20`}>
+    <svg viewBox="0 0 24 24" class="w-[18px] h-[18px]" fill="none" aria-hidden="true">
+      <path d="M3 6.5h6.2c1.4 0 2.2.6 3 1.7l1.1 1.5c.8 1.1 1.6 1.7 3 1.7H21"
+        stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" />
+      <path d="M3 17.5h6.2c1.4 0 2.2-.6 3-1.7l1.1-1.5c.8-1.1 1.6-1.7 3-1.7H21"
+        stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" opacity="0.75" />
+      <path d="M17.6 5.2 21 8.9l-3.4 3.7" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round"
+        stroke-linejoin="round" />
+      <circle cx="3.4" cy="6.5" r="1.4" fill="#ffffff" />
+      <circle cx="3.4" cy="17.5" r="1.4" fill="#ffffff" opacity="0.75" />
+    </svg>
+    <span class="absolute inset-0 rounded-xl ring-1 ring-inset ring-white/20"></span>
+  </span>
+  {
+    variant === 'full' && (
+      <span class="font-bold text-[15px] sm:text-lg tracking-tight text-white flex items-center gap-2">
+        <span class="hidden xs:inline">AutoTelegramForward</span>
+        <span class="xs:hidden">ATF</span>
+      </span>
+    )
+  }
+</span>

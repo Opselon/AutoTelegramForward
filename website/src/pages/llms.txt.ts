@@ -35,16 +35,23 @@ export const GET: APIRoute = () => {
   lines.push('## Start here');
   lines.push('');
   for (const entry of [
+    ['Quickstart: verified stack in one pass', '/getting-started/quickstart/'],
     ['Installation overview', '/getting-started/'],
     ['Docker Compose deployment', '/getting-started/docker/'],
     ['Configuration reference', '/getting-started/configuration/'],
     ['Verification checklist', '/getting-started/verification/'],
+    ['Account linking and login codes', '/getting-started/account-linking/'],
     ['Feature overview', '/features/'],
+    ['Creating a forwarding task', '/features/task-creation/'],
     ['Architecture', '/architecture/'],
     ['Security model and tenant isolation', '/security/'],
     ['REST API reference', '/api/'],
+    ['API authentication', '/api/authentication/'],
     ['CLI reference', '/cli/'],
     ['Operations and diagnostics', '/operations/'],
+    ['Troubleshooting runbook', '/operations/troubleshooting/'],
+    ['AI providers, keys and prompts in depth', '/operations/ai-providers/'],
+    ['Status board: implemented, partial, planned', '/status/'],
     ['Interactive transformation playground', '/tools/playground/'],
     ['Release notes', '/releases/'],
     ['FAQ', '/faq/'],

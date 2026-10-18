@@ -29,6 +29,8 @@ export default defineConfig({
     command: 'npx astro preview --port 4321 --host',
     url: 'http://localhost:4321',
     reuseExistingServer: !process.env.CI,
-    timeout: 15000,
+    // A cold CI runner spends the first run resolving the CLI and starting the
+    // server; 15s was enough locally and not in Actions.
+    timeout: 120000,
   },
 });

@@ -1,0 +1,86 @@
+---
+import Icon from './Icon.astro';
+import { url } from '../utils/paths';
+import repoInfo from '../data/repo-info.json';
+
+/**
+ * "How a message travels" — the five stages the repository actually implements.
+ * Stage names, state names and the failure behaviour are taken from the
+ * pipeline, the durable queue and the policy engine; nothing here is a promise
+ * about a feature that does not exist.
+ */
+const stages = [
+  {
+    icon: 'cloud',
+    title: 'Ingest',
+    text: 'A session polls every source chat of every enabled task. Albums are aggregated into a single job and the channel cursor is committed atomically, so the poller cannot race the connection or replay a batch.',
+  },
+  {
+    icon: 'filter',
+    title: 'Gate',
+    text: 'The policy engine decides cheapest-first: length gates, media allow/deny, Unicode-folded word-boundary blacklists and whitelists, then ReDoS-refused regex patterns. A SHA-256 fingerprint drops content already delivered.',
+  },
+  {
+    icon: 'wand',
+    title: 'Transform',
+    text: 'The cleaner strips URLs, mentions, hashtags, phone numbers and emojis while UTF-16 entity offsets keep bold and italic spans intact. Literal and regex replacements run in one deterministic pass, then shortcodes render the header and footer, and the optional AI pass rewrites the body.',
+  },
+  {
+    icon: 'database',
+    title: 'Queue',
+    text: 'The delivery is persisted as a job and picked up by a lease-based worker with exponential backoff and jitter. Ordered lanes keep a burst in posted order; a failing job retries, then lands in the dead-letter queue where it can be inspected and replayed.',
+  },
+  {
+    icon: 'target',
+    title: 'Deliver',
+    text: 'Copy mode posts the content as your own message, direct forward keeps the native quote header, and the branding hop posts through an intermediate channel before the target. Edit and delete events follow the message; a Telegram timeout is recorded as OUTCOME_UNCONFIRMED rather than guessed at.',
+  },
+];
+
+const stages_note = `Every state a delivery passes through is recorded: ${repoInfo.lifecycleStates.join(' · ')}.`;
+---
+
+<section class="section" id="how-it-works">
+  <div class="container-x">
+    <header class="max-w-2xl mb-8 reveal">
+      <p class="micro mb-2">How it works</p>
+      <h2 class="display-2 text-white mb-3">One message, five stages, no silent failures</h2>
+      <p class="lede m-0">
+        Ingest, gate, transform, queue, deliver. Each stage is inspectable from the CLI and the dashboard, and each
+        one has a defined answer for failure instead of hope.
+      </p>
+    </header>
+
+    <ol class="rail list-none p-0 m-0">
+      {
+        stages.map((stage, index) => (
+          <li class="rail-stage reveal" style={`--reveal-delay:${Math.min(index, 3) * 50}ms`}>
+            <span class="rail-node">
+              <span class="rail-index">{index + 1}</span>
+              <Icon name={stage.icon} class="w-4 h-4" strokeWidth={2} />
+            </span>
+            <h3 class="rail-title">{stage.title}</h3>
+            <p class="rail-text">{stage.text}</p>
+          </li>
+        ))
+      }
+    </ol>
+
+    <div class="mt-5 flex flex-col sm:flex-row sm:items-center gap-3 justify-between reveal">
+      <p class="m-0 text-[13px] text-slate-400">{stages_note}</p>
+      <div class="flex flex-wrap gap-3">
+        <a href={url('/architecture/')} class="btn btn-secondary btn-sm">
+          <Icon name="layers" class="w-4 h-4" />
+          Architecture reference
+        </a>
+        <a
+          href={url('/features/observability-and-logs/')}
+          class="btn btn-ghost btn-sm"
+        >
+          Observability deep dive
+          <Icon name="arrow-right" class="w-3.5 h-3.5" />
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

@@ -12,6 +12,7 @@ const pageDesc =
 
 const toc = [
   { id: 'product', title: 'Product & scope' },
+  { id: 'access', title: 'Accounts & access' },
   { id: 'routing', title: 'Routing & rules' },
   { id: 'limits', title: 'Telegram limits' },
   { id: 'security', title: 'Security & privacy' },
@@ -41,8 +42,42 @@ const sections = [
         a: 'A Telegram bot control panel, a web dashboard, a Flutter mobile app and the REST API — all four are checked against each other for capability parity.',
       },
       {
+        q: 'How do I know which features are actually finished?',
+        a: 'The status board is generated from the repository own feature catalog on every build, and lists each capability as implemented, partial or planned with the entry points behind it. Nothing is presented as done unless the catalog says so.',
+      },
+      {
         q: 'How do I update it?',
         a: 'atf system upgrade pulls, rebuilds through the gated path and verifies the stack. atf validate --strict tells you whether the configuration is still valid before you deploy.',
+      },
+    ],
+  },
+  {
+    id: 'access',
+    title: 'Accounts & access',
+    items: [
+      {
+        q: 'How do I log into the dashboard for the first time?',
+        a: 'You do not create a password. Open the bot, ask it for the dashboard, and it mints a single-use login code and gives you the link. Opening the link exchanges the code for a session exactly once.',
+      },
+      {
+        q: 'How long is a login link valid, and how many times can it be used?',
+        a: 'Ten minutes, once. The code is random, stored only as a SHA-256 hash, and burned in the same database update that matches it — two tabs racing one link produce exactly one session.',
+      },
+      {
+        q: 'Why did asking for a second link give me an error?',
+        a: 'A mint cooldown protects the link that is already live: a repeat request answers HTTP 429 with a Retry-After header and the previous unused link keeps working. Wait for the cooldown rather than expecting a new code.',
+      },
+      {
+        q: 'Can a link be reused to sign in as someone else?',
+        a: 'No. The exchange endpoint accepts only the code — never a user id — because a Telegram id is public and accepting one unauthenticated would let any caller sign in as any account. A missing code is refused with LOGIN_CODE_REQUIRED.',
+      },
+      {
+        q: 'What happens when my session dies while I am using the dashboard?',
+        a: 'The client asks for a fresh dashboard link instead of looping: GET /api/auth/bot-login-link issues a new single-use code for the caller own verified identity and surfaces the bot once, in your language.',
+      },
+      {
+        q: 'Which tokens are accepted by the REST API?',
+        a: 'A bearer JWT for the authenticated control plane, or Telegram Mini App initData at POST /api/auth/tma. Service-health routes are the only public ones. Details and curl examples are on the API authentication page.',
       },
     ],
   },
@@ -141,6 +176,10 @@ const sections = [
         a: 'They land in the dead-letter queue with their last error. Inspect them with atf data dlq, then replay with atf data dlq --replay or POST /api/dlq/{id}/retry once the cause is fixed.',
       },
       {
+        q: 'A task exists but nothing is being forwarded. Where do I start?',
+        a: 'Simulate first: atf rules simulate <id> --text \"hello\" shows whether the policy admits the text, then confirm the bot is an administrator in the source and the target, that the id you stored is the numeric one, and that the task is not paused. The troubleshooting runbook walks the whole tree.',
+      },
+      {
         q: 'How do I move an installation to another server?',
         a: 'Export an encrypted bundle (atf data backup-export or POST /api/backup/export), copy it, then import on the target. Configuration can be exported without secrets when you only need the shape.',
       },
@@ -184,7 +223,7 @@ const allFaq = sections.flatMap((section) => section.items);
   keywords={['AutoTelegramForward FAQ', 'Telegram forward bot questions', 'Telegram forwarding limits']}
 >
   <p>
-    Twenty-plus questions grouped by what you are actually trying to decide. If an answer here contradicts the code, the
+    Questions grouped by what you are actually trying to decide. If an answer here contradicts the code, the
     code wins — and the page is wrong, so report it.
   </p>
 
@@ -214,7 +253,7 @@ const allFaq = sections.flatMap((section) => section.items);
   <Callout type="info" class="not-prose" title="Still stuck?">
     <p>
       Open an issue on <a class="text-sky-400" href={`${repoInfo.repoUrl}/issues`}>GitHub</a>, read the{' '}
-      <a class="text-sky-400" href={url('/operations/')}>operations runbook</a>, or check the{' '}
+      <a class="text-sky-400" href={url('/operations/troubleshooting/')}>troubleshooting runbook</a>, or check the{' '}
       <a class="text-sky-400" href={url('/security/')}>security model</a> for isolation details. Maintainer:{' '}
       <a class="text-sky-400" href={repoInfo.maintainer.url}>{repoInfo.maintainer.handle}</a>.
     </p>

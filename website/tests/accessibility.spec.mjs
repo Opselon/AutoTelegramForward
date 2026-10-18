@@ -21,6 +21,13 @@ const PAGES = [
   '/system/',
   '/system/dependencies/',
   '/system/connections/',
+  // The v3 product surface added new painted panels (hero console, stage rail,
+  // status board, documentation hub) on both the landing page and the new docs.
+  '/status/',
+  '/operations/troubleshooting/',
+  '/operations/ai-providers/',
+  '/getting-started/account-linking/',
+  '/api/authentication/',
 ];
 
 const setTheme = async (page, theme) => {

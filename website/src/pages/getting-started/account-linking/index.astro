@@ -1,0 +1,362 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import Callout from '../../../components/Callout.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Steps from '../../../components/Steps.astro';
+import Icon from '../../../components/Icon.astro';
+import repoInfo from '../../../data/repo-info.json';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'Account linking and dashboard sign-in';
+const pageDesc =
+  'How one Telegram account becomes one dashboard session: the bot mints a single-use login code and the client exchanges it for a 7-day JWT.';
+
+const toc = [
+  { id: 'overview', title: 'Overview' },
+  { id: 'flow', title: 'The linking flow' },
+  { id: 'login-code', title: 'The single-use login code' },
+  { id: 'exchange', title: 'Exchanging the code' },
+  { id: 'cooldown', title: 'Cooldown & re-authentication' },
+  { id: 'other-paths', title: 'Passwords & Mini App' },
+  { id: 'session', title: 'Session lifetime' },
+  { id: 'troubleshooting', title: 'Troubleshooting' },
+];
+
+const authRoutes = repoInfo.apiRoutes.filter((route: { group: string }) => route.group === 'Authentication').length;
+
+const codeColumns = [
+  ['<code>code_hash</code>', '<code>TEXT PRIMARY KEY</code>', 'SHA-256 of the login code. The plaintext exists only in the bot\'s reply — a database read yields no working link.'],
+  ['<code>user_id</code>', '<code>INTEGER NOT NULL</code>', 'The Telegram account the code was minted for. This is the only thing that names the account; the exchange accepts no user id.'],
+  ['<code>created_at</code>', '<code>INTEGER NOT NULL</code>', 'Unix seconds. Also the anchor for the mint cooldown and for pruning.'],
+  ['<code>expires_at</code>', '<code>INTEGER NOT NULL</code>', 'Unix seconds, <code>created_at + 600</code>.'],
+  ['<code>used_at</code>', '<code>INTEGER</code>', 'Set by the single UPDATE that consumes the code. Non-null means the code is spent.'],
+  ['<code>purpose</code>', "<code>TEXT NOT NULL DEFAULT 'dashboard'</code>", 'Why the code was minted, so a future second purpose cannot be confused with a dashboard login.'],
+];
+
+const authSurfaces = [
+  ['<code>POST /api/auth/register</code>', '<code>{user_id?, username, password}</code>', '<code>201</code> with the account; <code>INVALID_USERNAME</code>, <code>WEAK_PASSWORD</code>, <code>USERNAME_TAKEN</code>, <code>ALREADY_REGISTERED</code>'],
+  ['<code>POST /api/auth/login</code>', '<code>{username, password}</code>', '<code>200</code> with <code>token</code>, <code>expires_at</code> and the account; <code>INVALID_CREDENTIALS</code>, <code>PASSWORD_REQUIRED</code>'],
+  ['<code>POST /api/auth/tma</code>', '<code>{init_data}</code>', 'A verified Mini App session; refuses a future-dated or older-than-24h <code>auth_date</code>'],
+  ['<code>POST /api/auth/exchange-bot-token</code>', '<code>{login_code}</code>', 'The 7-day session for a bot-issued code; <code>LOGIN_CODE_REQUIRED</code>, <code>INVALID_LOGIN_CODE</code>'],
+  ['<code>PATCH /api/auth/change-password</code>', '<code>{old_password, new_password}</code> plus the caller\'s own Bearer token', '<code>200</code>; <code>FORBIDDEN</code> if the body names another account'],
+  ['<code>GET /api/auth/me</code>', 'Bearer token', 'The verified identity: <code>user_id</code>, <code>username</code>, <code>is_admin</code>, <code>now</code>'],
+  ['<code>GET /api/auth/bot-login-link</code>', 'Bearer token', 'A fresh single-use link for the caller\'s own id; <code>429</code> + <code>COOLDOWN</code> inside the mint window'],
+];
+
+const troubleshooting = [
+  ['<code>401</code> <code>LOGIN_CODE_REQUIRED</code>', 'The request body carried no <code>login_code</code>.', 'Ask the bot for the dashboard again; the link it answers with carries the code.'],
+  ['<code>401</code> <code>INVALID_LOGIN_CODE</code>', 'Unknown, expired (past 600s) or already used. All three answer identically on purpose, so the response cannot be used to probe which codes existed.', 'Mint a new link from the bot with <code>/reauth</code>.'],
+  ['<code>429</code> <code>COOLDOWN</code>', 'A link was minted for this account less than 60 seconds ago and is still valid.', 'Open the link already in the chat, or wait the <code>Retry-After</code> seconds. Nothing was invalidated.'],
+  ['<code>403</code> <code>FORBIDDEN</code>', 'The password-change body named a user id that is not yours.', 'Drop <code>user_id</code> from the body — the token already says who you are.'],
+  ['Login screen after seven days', 'The 7-day JWT expired. The dashboard drops an over-age token before it renders rather than letting the panel die on its first 401.', 'Send <code>/reauth</code> to the bot for one fresh link.'],
+  ['<code>502</code> on every auth route', 'The core service is unreachable, so no token can be issued or validated.', 'Check <code>/api/health/services</code>, then the core container logs.'],
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/getting-started/account-linking/"
+  breadcrumbs={[
+    { name: 'Getting started', href: url('/getting-started/') },
+    { name: 'Account linking', href: url('/getting-started/account-linking/') },
+  ]}
+  toc={toc}
+  keywords={['AutoTelegramForward account linking', 'Telegram dashboard login', 'single-use login code', 'bot login link']}
+  faq={[
+    {
+      q: 'Does the dashboard link contain my session token?',
+      a: 'No. The link carries a single-use <code>login_code</code>, not the session. The 7-day JWT is minted only when the client exchanges that code, and the database stores just a SHA-256 digest of the code — so a link that leaks from a chat history is a code that expires in ten minutes, not a live session.',
+    },
+    {
+      q: 'How long is a dashboard login link valid?',
+      a: '600 seconds, and exactly once. The code is consumed by the same <code>UPDATE</code> that matches it, so two tabs racing on one link produce one session; the second exchange is refused.',
+    },
+    {
+      q: 'Why did a second click on the dashboard button answer HTTP 429?',
+      a: 'That is the mint cooldown: 60 seconds per account. It exists so a double click cannot invalidate the link the first request returned. The response is <code>COOLDOWN</code> with a <code>Retry-After</code> header, and the first link is still usable.',
+    },
+    {
+      q: 'How long does a dashboard session last?',
+      a: 'Seven days. The Python core issues it (<code>_TOKEN_TTL = 7 * 24 * 3600</code>) and the Go control plane only validates it over gRPC, so there is a single issuer and a single verifier. When it expires, <code>/reauth</code> in the bot mints one fresh link.',
+    },
+    {
+      q: 'Can I sign in as my Telegram user id instead of using the link?',
+      a: 'No. <code>POST /api/auth/exchange-bot-token</code> deliberately refuses a <code>user_id</code> field: a Telegram id is public, so accepting one would let anyone sign in as anyone. Only the single-use code names the account.',
+    },
+    {
+      q: 'I registered a username and password — is my Telegram account linked?',
+      a: 'Not by the password login. A password login never moves the Telegram binding: the only paths that create one are the bot-issued proof paths (<code>IssueWebToken</code> and the login-code exchange). A web-only account keeps the account row it was registered with and owns no Telegram-scoped rows.',
+    },
+  ]}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      The dashboard and the mobile client authenticate with the same credential: a seven-day JWT that the Python core
+      issues. The Go control plane never signs a token — it validates one over gRPC and turns the answer into the
+      request's identity, so a session that both sides disagree about cannot exist.
+    </p>
+    <ul class="grid gap-2 list-none p-0 m-0">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>
+          <strong class="text-slate-100">One issuer.</strong> <code>core/infrastructure/grpc_server/account_servicer.py</code>
+          signs the token (HS256) with a seven-day TTL, and carries the signing key itself: <code>ATF_JWT_SECRET</code> when
+          the operator set one, otherwise a random key generated once and kept in the database so a redeploy does not
+          log everybody out.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>
+          <strong class="text-slate-100">One verifier.</strong> Every authenticated request re-validates the token —
+          <code>api/internal/handlers/middleware.go#authMiddleware</code> calls <code>ValidateToken</code> and stores the
+          verified <code>Identity</code> in the request context; the Python core also confirms the account still exists, so
+          a deleted account cannot keep a session alive on the strength of a signature.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>
+          <strong class="text-slate-100">A link carries a code, never a token.</strong> A link in a Telegram chat lives in
+          the chat history, in backups and in forwarded messages. So the bot puts a random single-use code in the link and
+          the client trades that code for a session once.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>
+          <strong class="text-slate-100">Linking is an explicit action.</strong> A link is minted only on an explicit
+          request — the dashboard button in the bot, <code>/reauth</code>, or <code>GET /api/auth/bot-login-link</code> from a
+          client that still holds a valid session. On genuine expiry the client shows the login screen — one explanation,
+          one action — instead of looping or auto-opening a chat.
+        </span>
+      </li>
+    </ul>
+
+    <h2 id="flow">The linking flow</h2>
+    <p>
+      End to end, from a Telegram id that has never seen the dashboard to a browser that is signed in. The
+      <a href={url('/api/authentication/')}>API authentication reference</a> covers the wire format of each step.
+    </p>
+    <Steps
+      steps={[
+        {
+          title: 'Open the bot and ask for the dashboard',
+          body: 'The bot resolves your Telegram id, provisions an account row the first time it sees you, and mints one dashboard login code for that id. Nothing else is required — no username, no password, no email.',
+          note: 'The account is created on first use (<code>_ensure_account</code> / <code>get_or_create_credentials</code>), so there is no separate sign-up step for a Telegram user.',
+        },
+        {
+          title: 'The bot answers with a one-tap link',
+          code: 'https://<your-host>/?code=<single-use code>',
+          body: 'The code is the only secret in the link. It is random, single-use, valid for 600 seconds, and the bot reply is the only place its plaintext ever appears.',
+          note: 'If you already have a live link, the bot reuses it rather than minting a second one — see the cooldown below.',
+        },
+        {
+          title: 'The page spends the code',
+          body: 'The dashboard reads <code>?code=</code> once at load and exchanges it immediately for a session token. Because a code is single-use, the exchange happens exactly once even if the page renders its root component twice.',
+          code: 'POST /api/auth/exchange-bot-token  {"login_code": "<code>"}',
+          note: 'A missing code is <code>401 LOGIN_CODE_REQUIRED</code>; an unknown, expired or already-used code is <code>401 INVALID_LOGIN_CODE</code>.',
+        },
+        {
+          title: 'You are signed in for seven days',
+          body: 'The answer carries the JWT and its expiry. The client stores it, checks the expiry itself before rendering, and proves the token against <code>GET /api/auth/me</code> so a revoked or stale session never renders a panel that dies on its first request.',
+        },
+        {
+          title: 'Later: re-authenticate, do not re-register',
+          body: 'When the session has expired, <code>/reauth</code> in the bot answers with one localized message and one fresh link. There is no password to remember and no second account to create.',
+        },
+      ]}
+    />
+
+    <h2 id="login-code">The single-use login code</h2>
+    <p>
+      Codes live in <code>web_login_codes</code> and are minted and burned by one service
+      (<code>core/application/web_login_codes.py#WebLoginCodeService</code>). The row is deliberately small, because
+      everything that matters about a code is one of these six columns:
+    </p>
+    <div class="not-prose my-4">
+      <SpecTable
+        headers={['Column', 'Type', 'Meaning']}
+        rows={codeColumns}
+        caption="web_login_codes — core/infrastructure/persistence/database.py (and the Postgres bootstrap)"
+      />
+    </div>
+    <ul class="grid gap-2 list-none p-0 m-0">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="bolt" class="w-4 h-4 mt-[3px] text-sky-400 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">Ten minutes, then dead.</strong> The TTL is <code>LOGIN_CODE_TTL_SECONDS = 600</code>,
+          long enough for a slow human and short enough that a leaked link stops working on its own.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="lock" class="w-4 h-4 mt-[3px] text-violet-300 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">Stored hashed.</strong> The code is <code>secrets.token_urlsafe(32)</code> and the
+          row holds only its SHA-256 digest, so a database read yields no working link.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="shield" class="w-4 h-4 mt-[3px] text-sky-400 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">Burned in the same statement that matches it.</strong>
+          <code>UPDATE web_login_codes SET used_at=? WHERE code_hash=? AND used_at IS NULL AND expires_at&gt;?</code> is the
+          gate: a racing second exchange matches zero rows and is refused, so one link opens one session.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="activity" class="w-4 h-4 mt-[3px] text-sky-400 shrink-0" strokeWidth={2.2} />
+        <span>
+          <strong class="text-slate-100">Pruned, never accumulated.</strong> Rows older than the TTL plus an hour are
+          deleted opportunistically when the next code is issued, and a failed prune never fails the issue.
+        </span>
+      </li>
+    </ul>
+
+    <h2 id="exchange">Exchanging the code</h2>
+    <p>
+      The exchange is the only route where an unauthenticated client can end up holding a session, so it is deliberately
+      narrow: one field in, a session or a refusal out.
+    </p>
+    <div class="not-prose my-4">
+      <CodeBlock
+        label="Exchange a bot-issued code for a session"
+        language="bash"
+        content={`curl -s -X POST https://your-host/api/auth/exchange-bot-token \\
+  -H 'Content-Type: application/json' \\
+  -d '{"login_code":"<code from the bot>"}' | jq
+
+# {
+#   "success": true,
+#   "token": "eyJhbGciOiJIUzI1NiIs…",
+#   "expires_at": 1780000000,
+#   "account": { "user_id": 5094837833, "username": "tg_5094837833" }
+# }`}
+      />
+    </div>
+    <Callout type="warn" title="There is no 'sign in as user N' endpoint">
+      <p>
+        The endpoint forwards <code>login_code</code> and nothing else. A <code>user_id</code> field is bound only so it can
+        never be honoured — it is not forwarded to the core, and a Telegram id is public, so minting a session for one on
+        request would let any caller sign in as any account. The code — and the bot that proved the user is who they say —
+        is the whole authorisation.
+      </p>
+    </Callout>
+    <div class="not-prose my-4">
+      <CodeBlock
+        label="A missing code is a 401, not a 500"
+        language="bash"
+        content={`curl -s -X POST https://your-host/api/auth/exchange-bot-token \\
+  -H 'Content-Type: application/json' -d '{}'
+
+# {"error":"login_code required: open the dashboard from the bot",
+#  "error_code":"LOGIN_CODE_REQUIRED"}`}
+      />
+    </div>
+
+    <h2 id="cooldown">Cooldown &amp; re-authentication</h2>
+    <p>
+      Minting is rate-limited per account: <code>WebLoginCodeService.try_issue(uid, cooldown_seconds=60)</code> refuses to
+      issue a second code while an unused one minted in the last 60 seconds is still valid, and the API turns that refusal
+      into <code>429</code>. The point is not to throttle the user — it is that re-issuing would only invalidate the link
+      the first click already gave them.
+    </p>
+    <div class="not-prose my-4">
+      <CodeBlock
+        label="A second mint inside the cooldown"
+        language="bash"
+        content={`curl -s -D- -o- https://your-host/api/auth/bot-login-link \\
+  -H "Authorization: Bearer $TOKEN"
+
+# HTTP/1.1 429 Too Many Requests
+# Retry-After: 42
+# {"error":"a valid login link is already active",
+#  "error_code":"COOLDOWN","retry_after":42}`}
+      />
+    </div>
+    <p>
+      Two paths mint a link, both with the same cooldown: the bot's <code>/reauth</code> command and
+      <code>GET /api/auth/bot-login-link</code> (Bearer token, and only ever for the token's own user id). The link the
+      first request returned stays valid for its full ten minutes — a repeat click answers with a countdown, it does not
+      replace anything.
+    </p>
+
+    <h2 id="other-paths">Passwords &amp; Mini App</h2>
+    <p>
+      The bot link is the usual way in, but the same session can be obtained from three other places. All of them end at
+      the identical seven-day JWT — there is no second, weaker kind of session.
+    </p>
+    <div class="not-prose my-4">
+      <SpecTable
+        headers={['Route', 'Body', 'Answers']}
+        rows={authSurfaces}
+        caption="The authentication surface, as registered in api/main.go (authMux, mounted at /api/auth/)"
+      />
+    </div>
+    <ul class="grid gap-2 list-none p-0 m-0">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>
+          <strong class="text-slate-100">A password login never moves the Telegram binding.</strong> Only the bot-issued
+          proof paths may create one, because <code>telegram_user_id</code> on a public password route is
+          attacker-controlled; the field is ignored unless it already agrees with the stored binding.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>
+          <strong class="text-slate-100">The Mini App proves itself cryptographically.</strong>
+          <code>POST /api/auth/tma</code> verifies the HMAC-SHA256 signature of Telegram's <code>initData</code> against the
+          configured bot token, refuses a duplicate <code>hash</code>, a future <code>auth_date</code> or one older than 24
+          hours, and only then extracts the numeric user id.
+        </span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+        <span>
+          <strong class="text-slate-100">A web-only account owns nothing Telegram-side.</strong> Registering without a
+          Telegram id stores the account under a synthetic negative id, so every rule, session, log and queue query —
+          all filtered by the verified id — answers an empty collection rather than another tenant's data.
+        </span>
+      </li>
+    </ul>
+
+    <h2 id="session">Session lifetime</h2>
+    <p>
+      A session is valid for seven days (<code>_TOKEN_TTL = 7 * 24 * 3600</code>). The core also refuses a token whose
+      expiry is more than a day beyond that (<code>_TOKEN_MAX_TTL</code>) or whose <code>iat</code> is more than five
+      minutes in the future, so a forged decade-long token is not a decade of access even if a signing key leaks.
+    </p>
+    <p>
+      On the client side one component owns the session: the stored token's <code>exp</code> is checked before any request,
+      the token is proved against <code>GET /api/auth/me</code> on mount, and a burst of concurrent <code>401</code>s
+      produces exactly one session transition and one prompt rather than a redirect loop.
+    </p>
+    <p>
+      The bot-side login flow carries a revision guard of its own. The persisted flow row in <code>auth_flows</code> is
+      written with the optimistic-concurrency comparison inside the statement
+      (<code>ON CONFLICT(user_id) DO UPDATE … WHERE excluded.version &gt; auth_flows.version</code>), so a late callback
+      belonging to a flow that has already moved on cannot overwrite newer state and cannot silently lose an attempt
+      count. The transition re-reads the winning revision and re-applies itself, bounded to three attempts.
+    </p>
+
+    <h2 id="troubleshooting">Troubleshooting</h2>
+    <div class="not-prose my-4">
+      <SpecTable
+        headers={['What you see', 'Why', 'What to do']}
+        rows={troubleshooting}
+        caption="Every status code here is traceable to api/internal/handlers/auth.go"
+      />
+    </div>
+    <Callout type="tip" title="The route table is the source of truth">
+      <p>
+        All {authRoutes} authentication routes on this page are parsed out of <code>api/main.go</code> at build time — see
+        the <a class="text-sky-400" href={url('/api/')}>REST API reference</a> for the complete {repoInfo.apiRoutes.length}
+        -route table, including which of them require a token. Version {repoInfo.version}.
+      </p>
+    </Callout>
+  </div>
+</DocsLayout>

@@ -1,0 +1,408 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import Callout from '../../../components/Callout.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Steps from '../../../components/Steps.astro';
+import Icon from '../../../components/Icon.astro';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'Creating a task';
+const pageDesc =
+  'Field-by-field task creation: the source and target lists, copy versus native forward, forum topics, priority, pause versus disable and per-task content rules.';
+
+const toc = [
+  { id: 'model', title: 'The task model' },
+  { id: 'fields', title: 'Task fields' },
+  { id: 'modes', title: 'Copy mode vs direct forward' },
+  { id: 'topics', title: 'Topics and delivery' },
+  { id: 'order', title: 'Priority and execution order' },
+  { id: 'lifecycle', title: 'Pause vs disable vs stop' },
+  { id: 'content-policy', title: 'Content rules and overrides' },
+  { id: 'editor', title: 'The settings-schema editor' },
+  { id: 'save', title: 'What happens on save' },
+  { id: 'examples', title: 'Three worked examples' },
+  { id: 'mistakes', title: 'Common mistakes' },
+];
+
+const fields = [
+  ['id', 'string', 'Server-generated task id. Every CLI verb that takes a reference accepts a full id, a unique id prefix or the task name.'],
+  ['name', 'string', 'Human label. Defaults to nothing, and the id is used in listings.'],
+  ['session_id', 'string', 'The authorised Telegram account the task forwards with. Empty means the caller&rsquo;s default session.'],
+  ['source_chat_id', 'string', 'Primary source. Always mirrors <code>source_chat_ids[0]</code> — the setter keeps the two in step.'],
+  ['source_chat_ids', 'string[]', 'Every source the task reads. One task may aggregate several channels without duplicating its settings.'],
+  ['source_chat_names', 'string[]', 'Display names aligned with <code>source_chat_ids</code> (may be shorter).'],
+  ['target_chat_id', 'string', 'Primary destination. Mirrors <code>target_chat_ids[0]</code> and is read first by <code>all_targets</code>, so it stays authoritative for legacy clients.'],
+  ['target_chat_ids', 'string[]', 'Every destination: the fan-out list. Written through the sanctioned <code>set_targets()</code> path, which dedupes and re-mirrors the primary.'],
+  ['forward_mode', 'enum', '<code>COPY_MESSAGE</code> (default), <code>DIRECT_FORWARD</code> or <code>CUSTOM_HEADER_COPY</code>. See the mode table below.'],
+  ['content_mode', 'enum', 'What reaches the target: <code>AUTO</code> (default), <code>TEXT_ONLY</code>, <code>MEDIA_ONLY</code>, <code>TEXT_AND_MEDIA</code>.'],
+  ['routing_type', 'enum', 'Shape of the route hint: <code>CHANNEL_TO_CHANNEL</code>, <code>CHANNEL_TO_PV</code>, <code>PV_TO_CHANNEL</code>, <code>PV_TO_PV</code>.'],
+  ['priority', 'int', 'Evaluation priority, default <code>10</code>. A higher number is evaluated first.'],
+  ['execution_order', 'int', 'Tie-break between tasks with the same priority; then the older <code>created_at</code> wins.'],
+  ['multi_route', 'bool', 'Default <code>false</code>. When true, evaluation continues past the first match so several tasks can consume the same message.'],
+  ['is_active', 'bool', 'Enabled or disabled. A disabled task does not match new messages, and its queued jobs are dropped.'],
+  ['is_paused', 'bool', 'Paused or not. A paused task keeps its queued jobs and retries them (see <code>paused_until</code>).'],
+  ['topic_id', 'string', 'One forum topic id for the whole task; the dispatcher sends it as <code>message_thread_id</code>. <code>0</code> or unset means no topic.'],
+  ['delay_seconds', 'float', 'Per-task delay before sending, independent of the rate limit.'],
+  ['skip_history', 'bool', 'Default <code>true</code>: do not backfill messages that predate the task.'],
+  ['since_ts', 'int', 'Unix timestamp floor; <code>0</code> means no floor.'],
+  ['ignore_edits', 'bool', 'Do not re-forward edited messages.'],
+  ['sync_edits / sync_deletes', 'bool', 'Mirror later edits or deletions from the source into the target.'],
+  ['trigger_events', 'string[]', 'Which events fire the task: <code>NEW_MESSAGE</code> (default), <code>EDITED_MESSAGE</code>, <code>CHANNEL_POST</code>, <code>EDITED_CHANNEL_POST</code>.'],
+  ['media_handling', 'enum', '<code>AUTO</code> (default), <code>TEXT_ONLY</code>, <code>MEDIA_ONLY</code>, <code>TEXT_AND_MEDIA</code>, <code>SPLIT_LONG_CAPTION</code>.'],
+  ['dedupe_policy', 'enum', '<code>STRICT</code> (default), <code>RELAXED</code> or <code>DISABLED</code>.'],
+  ['max_retries / rate_limit_per_minute', 'int', 'Delivery retry budget (default <code>3</code>) and the per-task send ceiling (default <code>25</code>/minute).'],
+  ['use_intermediate / intermediate_channel_id', 'bool / string', 'The branding hop: deliver through an intermediate channel so the destination header names that channel, never the original source.'],
+  ['version', 'int', 'Optimistic-concurrency counter. Every stored write increments it; it is returned on every read.'],
+  ['settings', 'object', 'Read-only snapshot of every per-task setting the server knows about. Write through the settings endpoints so values are validated against the registry.'],
+];
+
+const modes = [
+  ['COPY_MESSAGE', 'Default', 'chip-success', 'Re-posts the content through the cleaner/shortcode pipeline as a new publication. No "Forwarded from" header; text and media can both be modified.'],
+  ['DIRECT_FORWARD', 'Native', 'chip-accent', 'Calls Telegram&rsquo;s own <code>forward_messages()</code>. Fastest, keeps the original author header, and cannot rewrite the text. Fails outright on channels that restrict forwarding.'],
+  ['CUSTOM_HEADER_COPY', 'Branded', 'chip', 'A copy with the task&rsquo;s own header — the mode behind the header/footer shortcode templates.'],
+];
+
+const pauses = [
+  ['Disable (<code>toggle</code> / <code>stop</code>)', '<code>is_active = false</code>', 'The task stops matching new messages <strong>and</strong> the worker drops jobs already queued for it — the log line is <code>[PIPELINE:DROP] … Rule is disabled</code>. Nothing is held for later.'],
+  ['Pause (<code>pause</code>)', '<code>is_paused = true</code>, optional <code>paused_until</code>', 'Queued jobs are <strong>postponed</strong>, not discarded: the worker re-queues them with a backoff capped by <code>paused_until</code> and logs <code>[PIPELINE:PAUSED] … Postponing job</code>. Use pause for maintenance; use disable to stop the task outright.'],
+  ['Restart (<code>restart</code>)', '<code>is_active = true</code>, <code>is_paused = false</code>, <code>paused_until = 0</code>', 'A clean start: enabled and unpaused in one write.'],
+  ['Resume (<code>resume</code>)', '<code>is_paused = false</code>, <code>paused_until = 0</code>', 'Clears the pause and re-queues any job the pause had postponed.'],
+];
+
+const lifecycleApi = [
+  ['POST /api/rules/&#123;id&#125;/toggle', 'Flips <code>is_active</code>. The CLI&rsquo;s <code>enable</code>/<code>disable</code> verbs are built on this and correct the result client-side, so they are idempotent in intent.'],
+  ['POST /api/rules/&#123;id&#125;/pause', 'Accepts an optional <code>{"until": unix_ts}</code> body for a timed pause.'],
+  ['POST /api/rules/&#123;id&#125;/resume', 'Clears the pause.'],
+  ['POST /api/rules/&#123;id&#125;/stop', 'Sets <code>is_active = false</code> outright.'],
+  ['POST /api/rules/&#123;id&#125;/restart', 'Sets <code>is_active = true</code> and clears any pause.'],
+  ['POST /api/rules/&#123;id&#125;/duplicate', 'Clones the whole task, including its settings and content policy, under a new id.'],
+];
+
+const contentRules = [
+  ['content_policy_enabled', 'Master switch for the task&rsquo;s content rules.'],
+  ['blacklist_words', 'Never forward a message that contains one of these words.'],
+  ['whitelist_words + whitelist_mode', 'Forward only matching messages. <code>whitelist_mode</code> is <code>any</code> (at least one word), <code>all</code> (every word) or <code>phrase</code> (the words in order).'],
+  ['regex_block / regex_require', 'Block on a pattern match, or require one. Hostile patterns (nested quantifiers) are refused rather than executed.'],
+  ['block_links / remove_links', 'Drop messages containing a link, or forward them with the links stripped.'],
+  ['strip_words / replacements', 'Remove words from the text, or apply ordered find → replace pairs — literal, or a regex when the find side is prefixed <code>re:</code>.'],
+  ['source_policies / target_policies', 'Per-chat overrides keyed by chat id, matched on the normalised id so <code>-100123</code> as a number and as a string are the same chat.'],
+];
+
+const faq = [
+  {
+    q: 'Can one task have several sources and several targets?',
+    a: 'Yes — that is the v2.0 model. <code>source_chat_ids</code> and <code>target_chat_ids</code> hold the lists, while <code>source_chat_id</code> and <code>target_chat_id</code> mirror the first entry so every legacy reader and the dispatcher see a correct primary.',
+  },
+  {
+    q: 'Does copy mode work on protected channels?',
+    a: 'It is the only mode that does. When Telegram blocks a server-side copy, the delivery falls through a ladder: the media reference is re-sent directly, then the file is downloaded and re-uploaded, and as a last resort the text body alone is delivered rather than dropping the message.',
+  },
+  {
+    q: 'How do I stop a task without losing queued work?',
+    a: 'Pause it. Disabling or stopping a task drops jobs already queued for it, while pause postpones them and retries after the pause window.',
+  },
+];
+
+const examples = [
+  {
+    title: '1 · One source into one destination, as a clean copy',
+    code: `atf rules create --name news-mirror --source @MarketNews --target @MyBroadcast
+atf rules update news-mirror --set forward_mode=COPY_MESSAGE --set priority=10
+atf rules simulate news-mirror --text "Breaking: market surge" --show`,
+    note: 'The same thing over REST: <code>POST /api/rules</code> with <code>{"name":"news-mirror","source_chat_id":"@MarketNews","target_chat_id":"@MyBroadcast"}</code>. Handles are resolved to numeric ids as the task is written, so <code>@MarketNews</code> is accepted here and stored canonically; <code>PUT /api/rules/&#123;id&#125;</code> carries later edits. Every CLI verb that takes a reference accepts the full id, a unique id prefix or the task name.',
+  },
+  {
+    title: '2 · Aggregate three channels into two targets, one on a forum topic',
+    code: `atf rules create --name market-desk --source -1001111111111 --target -1003333333333
+atf rules sources market-desk add -1002222222222
+atf rules sources market-desk add -1004444444444
+atf rules sources market-desk list
+
+# the second target and the thread id go on the rule itself
+curl -s -X PATCH localhost:8080/api/rules/<id> \\
+  -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' \\
+  -d '{"target_chat_ids":["-1003333333333","-1005555555555"],"topic_id":"42"}'`,
+    note: 'The merged list is deduped server-side and <code>target_chat_id</code> is re-mirrored to its first entry. <code>topic_id</code> is a string on the wire and belongs to the task, not to one destination — see the topic note above.',
+  },
+  {
+    title: '3 · Scrub a feed, then tighten one source only',
+    code: `atf rules settings set market-desk content_policy_enabled=true \\
+  blacklist_words='["sponsored","airdrop"]' \\
+  whitelist_words='["breaking","report"]' whitelist_mode=any \\
+  remove_links=true regex_block='["(?i)join (our|the) vip"]'
+
+atf rules settings set market-desk \\
+  source_policies='{"-1002222222222":{"blacklist_words":["promo"]}}'
+
+atf rules settings get market-desk
+atf rules simulate market-desk --text "Sponsored airdrop - join the VIP list t.me/spam" --show`,
+    note: 'Overrides are additive: the per-source policy is one more gate in the chain (task → source → target) and every policy in the chain has to allow the message, so a source override can tighten a task but never relax it.',
+  },
+];
+
+const mistakes = [
+  ['The target rejects the post', 'The bot or the forwarding account is not an administrator with post rights in the destination. Telegram answers <code>ChatAdminRequired</code> (<code>err_admin_required</code>) or <code>ChatWriteForbidden</code> (<code>err_write_forbidden</code>).', 'Add the account to the destination with permission to post, then restart the task so the client re-resolves it.'],
+  ['A task saves but never delivers', 'A username was stored where an id was expected. The dispatcher converts the id with <code>int(chat_id)</code>, so a raw <code>@handle</code> cannot be sent.', 'Store numeric ids. The REST API resolves <code>@username</code>, <code>t.me/…</code> and bare ids to numeric ids on create and update, so creating the task through the API or the CLI is the fix.'],
+  ['Native forward silently becomes a copy', 'The source channel restricts forwarding, so <code>forward_messages()</code> is refused and delivery falls back to the copy path.', 'That is the designed behaviour — make sure <code>forward_mode</code> is <code>COPY_MESSAGE</code> so the fallback is the intended mode rather than a surprise. Protected media additionally needs the re-upload ladder.'],
+  ['A setting appears to save but does nothing', 'A misspelt or unregistered setting name.', 'The server rejects unknown names (<code>unknown_setting</code>) instead of storing them. List what this build actually supports with <code>atf rules settings schema</code>, or <code>GET /api/rules/settings/schema</code>.'],
+  ['The task is refused with a route error', 'A source that is also a target, or a duplicated entry in one list.', 'The API refuses self-loops (<code>source_target_overlap</code>, <code>loop_detected</code>) and duplicates (<code>duplicate_target:</code>) with HTTP 400 and the reason in <code>code</code>. Fix the list rather than retrying.'],
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/features/task-creation/"
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Task creation', href: url('/features/task-creation/') },
+  ]}
+  toc={toc}
+  faq={faq}
+  keywords={['create Telegram forwarding task', 'forwarding rule fields', 'multi-target forwarding']}
+>
+  <div class="space-y-6">
+    <p>
+      A task — a <code>ForwardRule</code> in the domain, a rule in the dashboard — is the unit that decides what is
+      read, where it goes and how it is transformed. This page is the field-by-field reference for creating one; the
+      bot, the dashboard, the CLI and the REST API all write the same object.
+    </p>
+
+    <h2 id="model">The task model</h2>
+    <p>
+      One task is <strong>one source list plus one target list</strong>. The lists carry the real work
+      (<code>source_chat_ids</code> and <code>target_chat_ids</code>), and the single-value fields
+      (<code>source_chat_id</code>, <code>target_chat_id</code>) mirror the <em>first</em> entry of each list. That
+      mirroring is not cosmetic: <code>all_targets</code> reads the primary first, so any reader that only knows the
+      scalar — including older clients and parts of the dispatcher — would otherwise see an empty route.
+    </p>
+    <ul class="grid gap-2 list-none p-0 m-0 not-prose">
+      {
+        [
+          'Sources enforce the mirror in their setter; targets go through the sanctioned <code>set_targets()</code> path, which dedupes the list and re-mirrors the first entry.',
+          'On write the API resolves every entry of both lists — a handle becomes the canonical numeric id — and then mirrors <code>resolved[0]</code> back onto the scalar.',
+          'Because both spellings are resolved, a list-only or scalar-only payload is accepted, and a partial update that names only the list also updates the scalar the masked write would otherwise leave stale.',
+        ].map((item) => (
+          <li class="flex gap-2.5 text-[14.5px] leading-relaxed text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] shrink-0 text-emerald-400" strokeWidth={2.4} />
+            <span set:html={item} />
+          </li>
+        ))
+      }
+    </ul>
+
+    <h2 id="fields">Task fields</h2>
+    <p>
+      These are the fields the REST API round-trips. Anything not listed here is a per-task <em>setting</em>, written
+      through the settings endpoints described further down.
+    </p>
+    <SpecTable
+      headers={['Field', 'Type', 'What it does']}
+      rows={fields}
+      caption="The task object, as returned by GET /api/rules/{id}"
+    />
+
+    <h2 id="modes">Copy mode vs direct forward</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 not-prose my-4">
+      {
+        modes.map((mode) => (
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <span class="font-bold text-white text-xs"><code>{mode[0]}</code></span>
+              <span class={`chip ${mode[2]}`}>{mode[1]}</span>
+            </div>
+            <p class="text-xs text-slate-400 m-0" set:html={mode[3]} />
+          </div>
+        ))
+      }
+    </div>
+    <p>
+      <code>fallback_mode</code> exists alongside <code>forward_mode</code> and it is deliberately constrained: it may be
+      a copy or a drop, never a native forward. When a direct forward is refused, delivery falls back to a clean copy
+      rather than escalating to something the source channel forbade.
+    </p>
+    <Callout type="info" title="Which mode did the copies come from?">
+      <p>
+        <code>show_forward_header</code> is a convenience flag that maps straight onto the mode: on means
+        <code>DIRECT_FORWARD</code>, off means <code>COPY_MESSAGE</code>. Setting either field sets the same fact.
+      </p>
+    </Callout>
+
+    <h2 id="topics">Topics and delivery</h2>
+    <p>
+      A forum supergroup accepts a thread id per message, and the dispatcher passes the task&rsquo;s <code>topic_id</code>
+      as Telegram&rsquo;s <code>message_thread_id</code>. A zero or missing value is never sent — Telegram would reject a
+      zero thread id.
+    </p>
+    <Callout type="warn" title="One topic per task, not per target">
+      <p>
+        <code>topic_id</code> is a single field on the task and the same thread id is applied to every delivery. A task
+        that fans out to several forum targets therefore cannot address a different topic on each one today; give the
+        targets separate tasks if they need distinct threads.
+      </p>
+    </Callout>
+
+    <h2 id="order">Priority and execution order</h2>
+    <p>
+      Matching tasks are ordered by <code>priority</code> descending (default <code>10</code>, so a higher number wins),
+      then by <code>execution_order</code>, then by creation time. Evaluation stops at the first match unless the task
+      sets <code>multi_route</code>, in which case the remaining matches run too. Raise a task above a more general one
+      with <code>atf rules update &lt;id&gt; --set priority=50</code>.
+    </p>
+
+    <h2 id="lifecycle">Pause vs disable vs stop</h2>
+    <p>
+      Two different intentions, two different behaviours, and the difference is what happens to work already queued.
+    </p>
+    <SpecTable
+      headers={['Control', 'State it sets', 'Effect on in-flight work']}
+      rows={pauses}
+      caption="Lifecycle controls"
+    />
+    <SpecTable
+      headers={['Endpoint', 'Behaviour']}
+      rows={lifecycleApi}
+      caption="The same controls over REST"
+    />
+
+    <h2 id="content-policy">Content rules and overrides</h2>
+    <p>
+      A task can carry its own content policy, which decides whether a message goes out at all and how its text is
+      rewritten on the way. The policy lives in the task&rsquo;s metadata JSON under <code>content_policy</code>, so it
+      travels with the task through backup, restore and clone.
+    </p>
+    <SpecTable
+      headers={['Setting', 'What it decides']}
+      rows={contentRules}
+      caption="Per-task content rules"
+    />
+    <Callout type="warn" title="Overrides only ever tighten">
+      <p>
+        A per-source or per-target override is an <em>additional</em> constraint, never a relaxation. The policies form a
+        chain — task, then the matching source override, then the matching target override — and every policy in the
+        chain has to allow the message; text transforms apply in chain order. So one task can route
+        <code>A,B → X,Y</code> with <code>Y</code> filtered more strictly than <code>X</code>, but no override can switch
+        off a rule the task itself set.
+      </p>
+    </Callout>
+
+    <h2 id="editor">The settings-schema editor</h2>
+    <p>
+      Everything that is not one of the task fields above is a registered setting, and the registry is declared
+      server-side — that is what keeps the dashboard, the mobile app and the Telegram bot from drifting apart.
+    </p>
+    <CodeBlock
+      label="bash"
+      content={`atf rules settings schema                      # every registered key, with kind, default, group
+atf rules settings schema --group cleanup      # one group at a time
+atf rules settings get <id>                    # this task's own values
+atf rules settings set <id> clean_buttons=true forward_delay_seconds=30
+
+# hand a value back to its inherited default — the reset list, not a null
+curl -s -X PATCH localhost:8080/api/rules/<id>/settings \\
+  -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' \\
+  -d '{"reset":["forward_delay_seconds"]}'`}
+    />
+    <Callout type="warn" title="Resetting a setting uses the reset list">
+      <p>
+        A setting is cleared by naming it in the request&rsquo;s <code>reset</code> list — the dashboard sends exactly
+        that. Sending an explicit <code>null</code> for it is refused: the core raises
+        <code>invalid_type</code> for any setting whose spec is not nullable, which is most of them. That also means the
+        CLI&rsquo;s <code>atf rules settings reset &lt;id&gt; &lt;key&gt;</code> verb, which transmits nulls rather than a
+        reset list, currently fails on those keys — use the reset list above or the dashboard&rsquo;s
+        <em>reset to default</em> control until the verb is aligned.
+      </p>
+    </Callout>
+    <p>
+      The schema endpoint needs no task, so a client can build the whole editor before the user owns anything:
+      <code>GET /api/rules/settings/schema</code> returns <code>version</code>, <code>count</code>,
+      <code>groups</code> and a <code>settings</code> array whose entries carry <code>key</code>, <code>kind</code>,
+      <code>default</code>, <code>group</code>, <code>label</code>, <code>choices</code>, <code>minimum</code>,
+      <code>maximum</code> and <code>inheritable</code>. <code>GET /api/rules/&#123;id&#125;/settings</code> answers with four
+      things that matter:
+    </p>
+    <SpecTable
+      headers={['Key', 'Meaning']}
+      rows={[
+        ['settings', 'What <strong>this task</strong> stores. Echoing it back cannot pin a value the task merely inherits.'],
+        ['effective', 'The values the forwarder will actually use, with bot defaults applied.'],
+        ['sources', 'Where each value came from — <code>task</code>, <code>bot</code> (an inherited default) or <code>default</code> (the registry).'],
+        ['schema', 'The same field specs as the schema endpoint, so one request renders a complete panel.'],
+      ]}
+      caption="The four parts of a settings response"
+    />
+    <p>
+      Settings that name a chat, a route or a schedule — <code>bot_token_id</code>, <code>source_policies</code>,
+      <code>target_policies</code>, the automation blocks — are marked <code>inheritable: false</code>, so a bot default
+      can never point another task&rsquo;s forwards at someone else&rsquo;s chats.
+    </p>
+
+    <h2 id="save">What happens on save</h2>
+    <Steps
+      steps={[
+        {
+          title: 'The write is validated before it is stored',
+          body: 'Unknown setting names, wrong types, out-of-range numbers and invalid choices are rejected before any mutation, so a refused request never leaves a task half-updated. A rejected settings write answers with the error code in the body and a non-2xx status, not a 200 carrying <code>success: false</code>.',
+        },
+        {
+          title: 'Endpoints are resolved and the route is checked',
+          body: 'Every source and target is canonicalised to a numeric id, duplicates inside a list are refused, and a source that is also a target is refused as a self-loop.',
+          code: 'HTTP 400  {"error":"Invalid rule endpoints: loop_detected","code":"loop_detected"}',
+        },
+        {
+          title: 'The update mask decides what may change',
+          body: 'A masked update (the dashboard sends one) applies only the named fields; without a mask the legacy present-only behaviour applies. Fields the mask does not name are cleared in the gateway so they never even reach the core, and the mirror fields are added to the mask automatically when a list is changed.',
+        },
+        {
+          title: 'The stored version is bumped',
+          body: 'Every persisted write increments <code>version</code> and updates <code>updated_at</code>. The response is the whole task as stored, so a caller can see exactly what was written.',
+          code: 'GET /api/rules/{id}  ->  { "version": 4, "updated_at": 1750000000, ... }',
+        },
+      ]}
+    />
+    <Callout type="warn" title="Concurrency: the counter is exposed, the precondition is not">
+      <p>
+        <code>version</code> is a real optimistic-concurrency counter and every write increments it, but this checkout&rsquo;s
+        rule endpoints do not accept an expected-version precondition: <code>UpdateRuleRequest</code> carries an
+        <code>update_mask</code> and no expected version, so two editors on one task resolve last-write-wins rather than
+        answering a conflict. The paths that <em>do</em> enforce optimistic concurrency — pinned AI prompt templates and
+        bot-token attachment — answer HTTP 409 with a conflict code. Until the rule path gains the same guard, read the
+        task back after a save and compare <code>version</code> if more than one person may be editing it.
+      </p>
+    </Callout>
+
+    <h2 id="examples">Three worked examples</h2>
+    <p>
+      Each one is a complete, runnable sequence — create, adjust, then prove the result before it touches live traffic.
+    </p>
+    {
+      examples.map((example) => (
+        <div class="card space-y-3">
+          <h3 class="text-sm font-bold text-white mt-0 mb-2">{example.title}</h3>
+          <CodeBlock label="bash" content={example.code} />
+          <p class="text-[13.5px] leading-relaxed text-slate-300 m-0" set:html={example.note} />
+        </div>
+      ))
+    }
+    <p>
+      The REST equivalents are <code>POST /api/rules</code> to create, <code>PUT /api/rules/&#123;id&#125;</code> (or
+      <code>PATCH</code>) to update, <code>POST /api/rules/&#123;id&#125;/duplicate</code> to clone,
+      <code>PUT</code>/<code>PATCH /api/rules/&#123;id&#125;/settings</code> to write settings, and <code>POST /api/simulate</code>
+      to dry-run a message through the live engine.
+    </p>
+
+    <h2 id="mistakes">Common mistakes</h2>
+    <SpecTable
+      headers={['Symptom', 'Cause', 'Fix']}
+      rows={mistakes}
+      caption="What actually goes wrong when a task is created"
+    />
+    <p>
+      Deeper failure handling — flood waits, migrated chats, protected media, dead-letter replay — is covered in{' '}
+      <a class="text-sky-400" href={url('/operations/troubleshooting/')}>Operations &amp; troubleshooting</a>; the log
+      vocabulary the engine uses for each decision is on the{' '}
+      <a class="text-sky-400" href={url('/features/observability-and-logs/')}>observability page</a>.
+    </p>
+  </div>
+</DocsLayout>

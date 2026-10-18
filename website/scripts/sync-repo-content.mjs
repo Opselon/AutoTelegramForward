@@ -79,10 +79,33 @@ try {
 
 let featureCatalogCount = 0;
 let featureCatalogNames = [];
+// The catalog is the project's own statement of what is finished, partial and
+// still planned. The status page renders it verbatim rather than paraphrasing
+// it, so the site can never claim more than the repository does.
+let featureCatalogDetail = [];
+let featureCatalogStatus = { implemented: 0, partial: 0, planned: 0 };
+const STATUS_BUCKET = {
+  IMPLEMENTED: 'implemented',
+  PARTIALLY_IMPLEMENTED: 'partial',
+  NOT_IMPLEMENTED: 'planned',
+};
 try {
   const catalog = JSON.parse(read('docs/feature_catalog.json'));
   featureCatalogCount = catalog.features.length;
   featureCatalogNames = catalog.features.map((f) => f.name);
+  featureCatalogDetail = catalog.features.map((f) => ({
+    id: f.id,
+    name: f.name,
+    status: f.implementation_status || 'IMPLEMENTED',
+    bucket: STATUS_BUCKET[f.implementation_status] || 'implemented',
+    clients: f.clients || [],
+    dbTables: f.db_tables || [],
+    completionCondition: f.completion_condition || '',
+    entryPoints: f.entry_points || [],
+  }));
+  for (const entry of featureCatalogDetail) {
+    featureCatalogStatus[entry.bucket] += 1;
+  }
 } catch (e) {
   console.warn('feature catalog read skipped:', e.message);
 }
@@ -567,8 +590,14 @@ const repoInfo = {
     services: 4,
     locales: locales.length,
     i18nKeys: i18nKeyCount,
+    implementedFeatures: featureCatalogStatus.implemented,
+    partialFeatures: featureCatalogStatus.partial,
+    plannedFeatures: featureCatalogStatus.planned,
+    apiRoutes: apiRoutes.length,
   },
   featureCatalog: featureCatalogNames,
+  featureCatalogDetail,
+  featureCatalogStatus,
   verifiedFeatures,
   supportedMediaTypes,
   supportedShortcodes,

@@ -1,0 +1,84 @@
+---
+/**
+ * Reveal-on-scroll and count-up, in one tiny island.
+ *
+ * Content is rendered visible by default: this script only adds motion. If the
+ * observer never runs — JS disabled, an old browser, a crawler — the page is
+ * complete, because the `reveal` class is inert until `is-in` is added. Motion
+ * is skipped entirely when the visitor asks for reduced motion.
+ */
+---
+
+<script>
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (!reduced) {
+    const nodes = Array.from(document.querySelectorAll('.reveal'));
+    if (nodes.length && 'IntersectionObserver' in window) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            entry.target.classList.add('is-in');
+            observer.unobserve(entry.target);
+          }
+        },
+        // Any part of the element inside the viewport counts: a negative
+        // bottom margin would leave content inside the last few pixels of the
+        // screen unrevealed, which reads as a blank page.
+        { rootMargin: '0px', threshold: 0 },
+      );
+      nodes.forEach((node) => observer.observe(node));
+
+      // Anything already in the first viewport animates immediately rather than
+      // waiting for a scroll that may never happen.
+      requestAnimationFrame(() => {
+        nodes.forEach((node) => {
+          const box = node.getBoundingClientRect();
+          if (box.top < window.innerHeight) {
+            node.classList.add('is-in');
+            observer.unobserve(node);
+          }
+        });
+      });
+    } else {
+      nodes.forEach((node) => node.classList.add('is-in'));
+    }
+
+    // Count-up for stat figures. The final value is already in the DOM, so the
+    // animation only ever writes the same number back.
+    const counters = Array.from(document.querySelectorAll<HTMLElement>('[data-count-to]'));
+    if (counters.length && 'IntersectionObserver' in window) {
+      const run = (node: HTMLElement) => {
+        const target = Number(node.dataset.countTo || '0');
+        const suffix = node.dataset.countSuffix || '';
+        if (!Number.isFinite(target) || target === 0) return;
+        const start = performance.now();
+        const duration = 900;
+        const tick = (now: number) => {
+          const progress = Math.min(1, (now - start) / duration);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          node.textContent = `${Math.round(target * eased)}${suffix}`;
+          if (progress < 1) requestAnimationFrame(tick);
+          else node.textContent = `${target}${suffix}`;
+        };
+        requestAnimationFrame(tick);
+      };
+      const counterObserver = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            run(entry.target as HTMLElement);
+            counterObserver.unobserve(entry.target);
+          }
+        },
+        { threshold: 0.4 },
+      );
+      counters.forEach((node) => counterObserver.observe(node));
+    }
+  }
+
+  // The no-JS fallback class is only meaningful while JS is absent; remove it as
+  // soon as this runs so the reveal styles apply.
+  document.documentElement.classList.remove('no-js');
+</script>

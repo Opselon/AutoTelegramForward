@@ -1,6 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import QuickstartCard from '../components/QuickstartCard.astro';
+import DeliveryConsole from '../components/DeliveryConsole.astro';
+import PipelineRail from '../components/PipelineRail.astro';
+import StatusBoard from '../components/StatusBoard.astro';
 import ArchitectureDiagram from '../components/ArchitectureDiagram.astro';
 import Playground from '../components/Playground.astro';
 import CapabilityMatrix from '../components/CapabilityMatrix.astro';
@@ -17,13 +20,122 @@ const pageTitle = 'AutoTelegramForward — Telegram Forwarding & Routing';
 const pageDesc =
   'Self-hosted Telegram routing: many sources to many targets per task, per-task content rules, optional AI rewriting and ordered, fail-closed delivery.';
 
+const counts = repoInfo.featureCatalogStatus;
+
+/** Every number here is read out of the checkout by scripts/sync-repo-content.mjs. */
 const stats = [
-  { value: `${site.stats.services}`, label: 'Microservices' },
-  { value: `${site.stats.locales}`, label: 'UI languages' },
-  { value: `${site.stats.i18nKeys}`, label: 'Localized strings' },
-  { value: `${site.stats.cliGroups}`, label: 'CLI command groups' },
-  { value: `${site.stats.grpcRpcCount}`, label: 'gRPC methods' },
-  { value: '100%', label: 'Fail-closed isolation' },
+  { value: repoInfo.stats.services, label: 'Microservices' },
+  { value: repoInfo.stats.locales, label: 'UI languages' },
+  { value: repoInfo.stats.i18nKeys, label: 'Localized strings' },
+  { value: repoInfo.stats.cliGroups, label: 'CLI command groups' },
+  { value: repoInfo.stats.grpcRpcCount, label: 'gRPC methods' },
+  { value: repoInfo.stats.apiRoutes, label: 'REST routes' },
+];
+
+/** The four install paths the repository actually ships. */
+const installPaths = [
+  {
+    icon: 'terminal',
+    title: 'Guided setup script',
+    tag: 'Recommended',
+    body: 'Clones, creates the virtualenv, puts atf on PATH and starts the wizard that detects the platform, validates each answer and proves every service is serving.',
+    code: './scripts/setup.sh',
+  },
+  {
+    icon: 'devices',
+    title: 'Zero-prerequisite installer',
+    tag: 'Linux · macOS · Windows',
+    body: 'Installs Python and git when they are missing, clones the checkout and hands over to the same wizard. Nothing to prepare first.',
+    code: 'curl -fsSL .../install.sh | bash',
+  },
+  {
+    icon: 'stack',
+    title: 'Docker Compose',
+    tag: 'Container first',
+    body: 'Four containers from one compose file: Python core, Rust logger, Go API and Rust web gateway. Fill .env, bring it up, read the status board.',
+    code: 'docker compose up -d',
+  },
+  {
+    icon: 'archive',
+    title: 'Portable single file',
+    tag: 'No install at all',
+    body: 'Build dist/atf.pyz and carry the whole CLI to a host with only Python 3.11+ on it. Standard library only — no venv, no checkout.',
+    code: 'atf release portable',
+  },
+];
+
+/** Interfaces that share one contract-gated system surface. */
+const clients = [
+  { icon: 'bot', name: 'Telegram bot', note: 'Button-driven panels and FSM wizards inside the chat' },
+  { icon: 'monitor', name: 'Web dashboard', note: 'React SPA served by the Rust gateway' },
+  { icon: 'phone', name: 'Mobile app', note: 'Flutter client exposing the same system surface' },
+  {
+    icon: 'code',
+    name: 'REST API & CLI',
+    note: `${repoInfo.stats.apiRoutes} routes · ${repoInfo.stats.cliGroups} CLI command groups`,
+  },
+];
+
+const securityPoints = [
+  {
+    icon: 'lock',
+    title: 'Fail-closed tenancy',
+    body: 'Every read and write is scoped to the authenticated numeric Telegram user id across bot, dashboard, mobile, REST and gRPC. An unproven scope denies instead of widening.',
+  },
+  {
+    icon: 'key',
+    title: 'Encrypted at rest',
+    body: 'AES-256-GCM for sessions, bot tokens, AI keys and backup bundles. Secrets are field-aware redacted in log lines and error traces.',
+  },
+  {
+    icon: 'server',
+    title: 'Private internals',
+    body: 'Core and logger bind to internal interfaces only, and the internal gRPC surface requires a shared credential — it is not a public port.',
+  },
+  {
+    icon: 'shield',
+    title: 'Single-use login links',
+    body: 'A dashboard link carries a random, hashed code with a ten-minute TTL that is burned on first use — never a session token — so a link that outlives its click is worthless.',
+  },
+];
+
+const guideCards = [
+  {
+    icon: 'rocket',
+    title: 'Quickstart',
+    desc: 'From nothing to a verified stack and a first delivered message.',
+    href: url('/getting-started/quickstart/'),
+  },
+  {
+    icon: 'list',
+    title: 'Create a task',
+    desc: 'Field by field: sources, targets, modes, policies and simulate.',
+    href: url('/features/task-creation/'),
+  },
+  {
+    icon: 'users',
+    title: 'Account linking',
+    desc: 'Login codes, the exchange endpoint, cooldowns and re-authentication.',
+    href: url('/getting-started/account-linking/'),
+  },
+  {
+    icon: 'wand',
+    title: 'AI rewriting',
+    desc: 'Providers, prompt templates, per-task toggles and failure behaviour.',
+    href: url('/features/ai-rewriting/'),
+  },
+  {
+    icon: 'key',
+    title: 'API authentication',
+    desc: 'Tokens, bearer headers, rate limits, error codes and curl recipes.',
+    href: url('/api/authentication/'),
+  },
+  {
+    icon: 'alert',
+    title: 'Troubleshooting',
+    desc: 'Symptom, cause and fix — plus what to collect before asking for help.',
+    href: url('/operations/troubleshooting/'),
+  },
 ];
 
 const homeFaq = [
@@ -34,6 +146,10 @@ const homeFaq = [
   {
     q: 'Can one task read several channels and post to several destinations?',
     a: 'Yes. Sources and targets are lists, so a single task can route many channels into many destinations. The primary source and target are derived from the lists and always kept consistent.',
+  },
+  {
+    q: 'How do I link my Telegram account to the dashboard?',
+    a: 'Ask the bot for the dashboard. It mints a single-use login code, the link opens the dashboard once, and the code is burned on first use with a ten-minute TTL. No password is created and no Telegram id is ever accepted in the exchange.',
   },
   {
     q: 'Do I need an AI provider to use it?',
@@ -48,12 +164,18 @@ const homeFaq = [
     a: 'Yes, and isolation is fail-closed: every read and write is scoped to the authenticated numeric Telegram user id, across the bot, dashboard, mobile app, REST API and gRPC services.',
   },
   {
+    q: 'How do I know which features are actually finished?',
+    a: `The <a href="${url('/status/')}">status board</a> is generated from the repository's own feature catalog on every build: ${counts.implemented} implemented, ${counts.partial} partial and ${counts.planned} planned. Nothing is presented as done unless the catalog says so.`,
+  },
+  {
     q: 'Which Telegram content types are supported?',
     a: 'Text, photos, albums, video, documents, audio, voice notes, video notes, stickers, polls, locations, contacts and copy-protected content that is re-uploaded rather than forwarded.',
   },
 ];
 
 const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
+/** A short marquee band; duplicated in the markup so the loop has no seam. */
+const marqueeItems = repoInfo.featureCatalog.slice(0, 8);
 ---
 
 <BaseLayout
@@ -69,120 +191,190 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
     })),
   }}
 >
-  <!-- Hero -->
+  <!-- ======================================================================= hero -->
   <section class="relative overflow-hidden">
-    <div class="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(60%_60%_at_50%_0%,rgba(36,161,222,0.18),transparent_70%)] pointer-events-none"></div>
+    <div class="aurora"></div>
+    <div class="grid-veil"></div>
 
-    <div class="container-x relative pt-10 pb-12 sm:pt-16 sm:pb-16 lg:pt-20 text-center">
-      <a
-        href={url('/releases/')}
-        class="inline-flex items-center gap-2 px-3.5 py-1.5 min-h-[36px] rounded-full text-xs font-semibold bg-slate-900/90 border border-slate-800 text-slate-300 hover:border-sky-700 transition-colors mb-6"
-      >
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        v{repoInfo.version} — multi-source routing, per-task policies, full observability
-        <Icon name="arrow-right" class="w-3.5 h-3.5 text-sky-400" />
-      </a>
+    <div class="container-x relative pt-10 pb-4 sm:pt-14 lg:pt-16">
+      <div class="grid gap-10 lg:grid-cols-12 lg:gap-8 items-center">
+        <div class="lg:col-span-6">
+          <a href={url('/status/')} class="pill-live mb-6 hover:border-sky-600 transition-colors">
+            <span class="pill-live-dot" aria-hidden="true"></span>
+            v{repoInfo.version} · {counts.implemented} implemented · {counts.partial} partial · {counts.planned} planned
+            <Icon name="arrow-right" class="w-3.5 h-3.5 text-sky-400" />
+          </a>
 
-      <h1 class="display-1 text-white mx-auto max-w-4xl mb-5">
-        Self-hosted Telegram{' '}
-        <br class="hidden sm:block" />
-        <span class="text-gradient">Message Forwarding</span>{' '}
-        built for scale
-      </h1>
+          <h1 class="display-1 text-white mb-5">
+            Self-hosted Telegram{' '}
+            <span class="text-gradient">Message Forwarding</span>{' '}
+            built for scale
+          </h1>
 
-      <p class="lede mx-auto max-w-2xl mb-8">
-        One task, many sources, many targets. Per-task content rules, validated shortcodes, optional AI rewriting,
-        ordered durable delivery and fail-closed multi-tenancy — running on your own infrastructure.
-      </p>
+          <p class="lede mb-7 max-w-xl">
+            One task, many sources, many targets. Per-task content rules, validated shortcodes, optional AI rewriting,
+            ordered durable delivery and fail-closed multi-tenancy — running on your own infrastructure.
+          </p>
 
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 mb-8 max-w-3xl mx-auto">
-        <a href={url('/getting-started/')} class="btn btn-primary w-full sm:w-auto px-7">
-          Get Started Free
-          <Icon name="arrow-right" class="w-4 h-4" strokeWidth={2.4} />
-        </a>
-        <a href={url('/tools/playground/')} class="btn btn-secondary w-full sm:w-auto px-7">
-          <Icon name="beaker" class="w-4 h-4" />
-          Interactive Playground
-        </a>
-        <a
-          href={repoInfo.repoUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn btn-ghost w-full sm:w-auto px-6 border border-slate-800"
-        >
-          <Icon name="github" class="w-4 h-4" />
-          Star on GitHub
-        </a>
-      </div>
+          <div class="flex flex-col sm:flex-row gap-3 mb-6">
+            <a href={url('/getting-started/')} class="btn btn-primary btn-sheen px-7">
+              Get Started Free
+              <Icon name="arrow-right" class="w-4 h-4" strokeWidth={2.4} />
+            </a>
+            <a href={url('/tools/playground/')} class="btn btn-secondary px-7">
+              <Icon name="beaker" class="w-4 h-4" />
+              Interactive Playground
+            </a>
+            <a
+              href={repoInfo.repoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn btn-ghost px-5 border border-slate-800"
+            >
+              <Icon name="github" class="w-4 h-4" />
+              Star on GitHub
+            </a>
+          </div>
 
-      <ul class="flex flex-wrap items-center justify-center gap-2 mb-10 list-none p-0">
-        <li class="chip"><Icon name="lock" class="w-3.5 h-3.5" /> Fail-closed tenant isolation</li>
-        <li class="chip"><Icon name="globe" class="w-3.5 h-3.5" /> {site.stats.locales} languages, 1:1 parity</li>
-        <li class="chip"><Icon name="shield" class="w-3.5 h-3.5" /> AES-256-GCM at rest</li>
-        <li class="chip"><Icon name="scale" class="w-3.5 h-3.5" /> MIT licensed</li>
-      </ul>
+          <ul class="flex flex-wrap items-center gap-2 mb-7 list-none p-0">
+            <li class="chip"><Icon name="lock" class="w-3.5 h-3.5" /> Fail-closed isolation</li>
+            <li class="chip"><Icon name="globe" class="w-3.5 h-3.5" /> {site.stats.locales} languages, 1:1 parity</li>
+            <li class="chip"><Icon name="shield" class="w-3.5 h-3.5" /> AES-256-GCM at rest</li>
+            <li class="chip"><Icon name="scale" class="w-3.5 h-3.5" /> MIT licensed</li>
+          </ul>
 
-      <div class="max-w-3xl mx-auto text-left">
-        <QuickstartCard />
+          <dl class="grid grid-cols-3 gap-3 m-0 max-w-md">
+            {
+              [
+                { value: repoInfo.stats.services, label: 'Services' },
+                { value: repoInfo.stats.grpcRpcCount, label: 'gRPC methods' },
+                { value: repoInfo.stats.pythonTests + repoInfo.stats.goTests, label: 'Test suites' },
+              ].map((item) => (
+                <div>
+                  <dd class="m-0 text-xl font-extrabold text-white tabular" data-count-to={item.value}>
+                    {item.value}
+                  </dd>
+                  <dt class="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-slate-500">{item.label}</dt>
+                </div>
+              ))
+            }
+          </dl>
+        </div>
+
+        <div class="lg:col-span-6 min-w-0">
+          <DeliveryConsole />
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Numbers that come from the checkout -->
+  <!-- ======================================================= capability marquee -->
+  <section class="pt-6 pb-8 sm:pb-10" aria-label="Catalogued capabilities">
+    <div class="container-x mb-4">
+      <p class="micro m-0">Catalogued capabilities · read from the repository, not typed here</p>
+    </div>
+    <div class="marquee">
+      <div class="marquee-track">
+        {
+          [...marqueeItems, ...marqueeItems].map((name) => (
+            <span class="chip whitespace-nowrap">
+              <Icon name="check" class="w-3.5 h-3.5 text-emerald-400" strokeWidth={2.6} />
+              {name}
+            </span>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================== numbers -->
   <section class="section-tight border-y border-slate-900 bg-slate-950/60">
     <div class="container-x">
       <dl class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 m-0">
-        <div class="stat">
-          <dt class="stat-label">Microservices</dt>
-          <dd class="stat-value m-0">{site.stats.services}</dd>
-        </div>
-        <div class="stat">
-          <dt class="stat-label">UI languages</dt>
-          <dd class="stat-value m-0">{site.stats.locales}</dd>
-        </div>
-        <div class="stat">
-          <dt class="stat-label">Localized strings</dt>
-          <dd class="stat-value m-0">{site.stats.i18nKeys}</dd>
-        </div>
-        <div class="stat">
-          <dt class="stat-label">CLI groups</dt>
-          <dd class="stat-value m-0">{site.stats.cliGroups}</dd>
-        </div>
-        <div class="stat">
-          <dt class="stat-label">gRPC methods</dt>
-          <dd class="stat-value m-0">{site.stats.grpcRpcCount}</dd>
-        </div>
-        <div class="stat">
-          <dt class="stat-label">Cross-tenant leaks</dt>
-          <dd class="stat-value m-0 text-emerald-400">0</dd>
-        </div>
+        {
+          stats.map((stat) => (
+            <div class="stat reveal">
+              <dt class="stat-label">{stat.label}</dt>
+              <dd class="stat-value m-0 tabular" data-count-to={stat.value}>
+                {stat.value}
+              </dd>
+            </div>
+          ))
+        }
       </dl>
+      <p class="mt-4 mb-0 text-center text-[12px] text-slate-500">
+        Counted from this checkout during the build — {number(atlas.totals.sourceFiles)} source files and{' '}
+        {number(atlas.totals.nodes)} modules across {atlas.subsystems.length} subsystems.
+      </p>
     </div>
   </section>
 
-  <!-- New in v2.0 -->
+  <!-- ============================================================== how it works -->
+  <PipelineRail />
+
+  <!-- ========================================================= one-command setup -->
+  <section class="section bg-slate-900/20 border-y border-slate-900" id="quickstart">
+    <div class="container-x">
+      <header class="max-w-2xl mb-7 reveal">
+        <p class="micro mb-2">Install</p>
+        <h2 class="display-2 text-white mb-3">Running in one command, proven before it says done</h2>
+        <p class="lede m-0">
+          The wizard detects the machine, asks only what it cannot work out itself, builds the four services and then
+          probes each one before it reports success.
+        </p>
+      </header>
+
+      <div class="max-w-4xl mb-6">
+        <QuickstartCard />
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          installPaths.map((path, index) => (
+            <a
+              href={url('/getting-started/')}
+              class="panel panel--lit panel--flush panel-hover block no-underline reveal"
+              style={`--reveal-delay:${Math.min(index, 3) * 50}ms`}
+            >
+              <span class="rail-node mb-3">
+                <Icon name={path.icon} class="w-4 h-4" strokeWidth={2} />
+                <span>{path.tag}</span>
+              </span>
+              <h3 class="text-white text-[15px] font-bold mb-1.5">{path.title}</h3>
+              <p class="text-[13px] leading-relaxed text-slate-400 mb-3">{path.body}</p>
+              <code class="block font-mono text-[11.5px] text-sky-300 break-all">{path.code}</code>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ feature deep dives -->
   <section class="section" id="whats-new">
     <div class="container-x">
-      <header class="max-w-2xl mb-8">
-        <p class="eyebrow">New in v{repoInfo.version}</p>
-        <h2 class="display-2 text-white mt-2 mb-3">Nine upgrades that change how you run channels</h2>
+      <header class="max-w-2xl mb-8 reveal">
+        <p class="micro mb-2">What changed</p>
+        <h2 class="display-2 text-white mb-3">Routing became a model, rules moved onto the task</h2>
         <p class="lede m-0">
-          Routing became a first-class model, rules moved onto the task, AI became switchable, and the whole stack
-          became observable and scriptable.
+          Each capability below has a deep dive that states how it works, what it does under load, and where its limits
+          are.
         </p>
       </header>
 
       <div class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-        {featurePages.map((feature) => (
-          <FeatureCard
-            title={feature.cardTitle}
-            desc={feature.description}
-            href={url(`/features/${feature.slug}/`)}
-            icon={feature.icon}
-            badge={feature.category}
-            isNew={feature.isNew}
-          />
-        ))}
+        {
+          featurePages.map((feature) => (
+            <FeatureCard
+              title={feature.cardTitle}
+              desc={feature.description}
+              href={url(`/features/${feature.slug}/`)}
+              icon={feature.icon}
+              badge={feature.category}
+              isNew={feature.isNew}
+            />
+          ))
+        }
       </div>
 
       <div class="mt-6 flex flex-wrap gap-3">
@@ -195,27 +387,64 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
     </div>
   </section>
 
-  <!-- Capability matrix -->
+  <!-- ========================================================== capability matrix -->
   <section class="section-tight bg-slate-900/30 border-y border-slate-900">
     <div class="container-x">
       <CapabilityMatrix />
     </div>
   </section>
 
-  <!-- Architecture -->
+  <!-- ================================================================ architecture -->
   <section class="section">
     <div class="container-x">
       <ArchitectureDiagram />
     </div>
   </section>
 
+  <!-- ================================================================== interfaces -->
+  <section class="section-tight bg-slate-900/20 border-y border-slate-900">
+    <div class="container-x">
+      <header class="max-w-2xl mb-7 reveal">
+        <p class="micro mb-2">Four surfaces, one contract</p>
+        <h2 class="display-2 text-white mb-3">Drive it from wherever you already are</h2>
+        <p class="lede m-0">
+          The bot, the dashboard, the mobile app and the API expose the same surface, and a contract gate fails the
+          build when they drift apart.
+        </p>
+      </header>
 
-  <!-- System atlas -->
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          clients.map((client, index) => (
+            <div class="panel panel--flush panel-hover reveal" style={`--reveal-delay:${Math.min(index, 3) * 50}ms`}>
+              <span class="feature-card-icon mb-3">
+                <Icon name={client.icon} class="w-[18px] h-[18px]" strokeWidth={2} />
+              </span>
+              <h3 class="text-white text-[15px] font-bold mb-1.5">{client.name}</h3>
+              <p class="text-[13px] leading-relaxed text-slate-400 m-0">{client.note}</p>
+            </div>
+          ))
+        }
+      </div>
+
+      <div class="mt-5">
+        <a href={url('/features/clients-and-interfaces/')} class="link-arrow text-sm">
+          How the shared surface is kept honest
+          <Icon name="arrow-right" class="w-3.5 h-3.5" />
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== status -->
+  <StatusBoard />
+
+  <!-- =============================================================== system atlas -->
   <section class="section bg-slate-900/20 border-y border-slate-900" id="system-atlas">
     <div class="container-x">
-      <header class="max-w-2xl mb-8">
-        <p class="eyebrow">Derived from the source</p>
-        <h2 class="display-2 text-white mt-2 mb-3">See the whole system, then watch it run</h2>
+      <header class="max-w-2xl mb-8 reveal">
+        <p class="micro mb-2">Derived from the source</p>
+        <h2 class="display-2 text-white mb-3">See the whole system, then watch it run</h2>
         <p class="lede m-0">
           The architecture below is computed from this repository on every build: {number(atlas.totals.sourceFiles)}
           source files, {number(atlas.totals.nodes)} modules, {number(atlas.totals.edges)} import links and{' '}
@@ -224,7 +453,7 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
         </p>
       </header>
 
-      <div class="rounded-3xl border border-slate-800 bg-slate-950/60 p-4 sm:p-7 overflow-hidden">
+      <div class="panel p-4 sm:p-7 overflow-hidden reveal">
         <ol class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 list-none p-0 m-0">
           {
             [
@@ -257,12 +486,24 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
         <div class="mt-5 grid gap-3 sm:grid-cols-3">
           {
             [
-              { label: 'Subsystems', value: `${atlas.subsystems.length}`, note: `${compact(atlas.totals.loc)} lines of source` },
-              { label: 'gRPC surface', value: `${atlas.proto.rpcCount}`, note: `${atlas.proto.services.length} services · ${atlas.proto.messageCount} messages` },
-              { label: 'Verified connections', value: `${atlas.componentEdges.length}`, note: `${atlas.verifiedAbsences.length} checked absences` },
+              {
+                label: 'Subsystems',
+                value: `${atlas.subsystems.length}`,
+                note: `${compact(atlas.totals.loc)} lines of source`,
+              },
+              {
+                label: 'gRPC surface',
+                value: `${atlas.proto.rpcCount}`,
+                note: `${atlas.proto.services.length} services · ${atlas.proto.messageCount} messages`,
+              },
+              {
+                label: 'Verified connections',
+                value: `${atlas.componentEdges.length}`,
+                note: `${atlas.verifiedAbsences.length} checked absences`,
+              },
             ].map((item) => (
               <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-3.5">
-                <p class="m-0 font-mono text-xl font-bold text-white">{item.value}</p>
+                <p class="m-0 font-mono text-xl font-bold text-white tabular">{item.value}</p>
                 <p class="m-0 text-[12px] text-slate-400">
                   <strong class="text-slate-300">{item.label}</strong> — {item.note}
                 </p>
@@ -272,7 +513,7 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
         </div>
 
         <div class="mt-5 flex flex-wrap gap-3">
-          <a href={url('/system/')} class="btn btn-primary btn-sm">
+          <a href={url('/system/')} class="btn btn-primary btn-sm btn-sheen">
             <Icon name="route" class="w-4 h-4" />
             Open the system atlas
           </a>
@@ -289,12 +530,12 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
     </div>
   </section>
 
-  <!-- Playground -->
-  <section class="section bg-slate-900/20 border-y border-slate-900">
+  <!-- ================================================================= playground -->
+  <section class="section" id="playground">
     <div class="container-x">
-      <header class="text-center max-w-2xl mx-auto mb-8">
-        <p class="eyebrow">Try it in the browser</p>
-        <h2 class="display-2 text-white mt-2 mb-3">See the transformation before you install</h2>
+      <header class="text-center max-w-2xl mx-auto mb-8 reveal">
+        <p class="micro mb-2">Try it in the browser</p>
+        <h2 class="display-2 text-white mb-3">See the transformation before you install</h2>
         <p class="lede m-0">
           Paste a real post, toggle the cleaner, write a header and footer with shortcodes, and watch the delivery
           preview update instantly. Nothing leaves your browser.
@@ -304,13 +545,103 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
     </div>
   </section>
 
-  <!-- Content coverage -->
-  <section class="section">
+  <!-- =================================================================== security -->
+  <section class="section-tight bg-slate-900/20 border-y border-slate-900" id="security">
     <div class="container-x">
-      <header class="max-w-2xl mb-7">
-        <p class="eyebrow">Coverage</p>
-        <h2 class="display-2 text-white mt-2 mb-3">Every Telegram message class, handled</h2>
-        <p class="lede m-0">Verified against the Telegram layer, including the awkward cases: albums, video notes and protected content.</p>
+      <header class="max-w-2xl mb-7 reveal">
+        <p class="micro mb-2">Security</p>
+        <h2 class="display-2 text-white mb-3">Isolation you can hand to a customer</h2>
+        <p class="lede m-0">
+          Multi-tenant from the database up, with the failure mode chosen deliberately: an unproven scope denies
+          instead of widening.
+        </p>
+      </header>
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        {
+          securityPoints.map((point, index) => (
+            <div class="panel panel--flush panel-hover reveal" style={`--reveal-delay:${Math.min(index, 3) * 50}ms`}>
+              <div class="flex items-start gap-3">
+                <span class="feature-card-icon shrink-0">
+                  <Icon name={point.icon} class="w-[18px] h-[18px]" strokeWidth={2} />
+                </span>
+                <div>
+                  <h3 class="text-white text-[15px] font-bold mb-1.5">{point.title}</h3>
+                  <p class="text-[13px] leading-relaxed text-slate-400 m-0">{point.body}</p>
+                </div>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+
+      <div class="mt-5 flex flex-wrap gap-3">
+        <a href={url('/security/')} class="btn btn-secondary btn-sm">
+          <Icon name="shield" class="w-4 h-4" />
+          Security model
+        </a>
+        <a href={url('/getting-started/account-linking/')} class="btn btn-ghost btn-sm">
+          How account linking works
+          <Icon name="arrow-right" class="w-3.5 h-3.5" />
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================== docs hub -->
+  <section class="section" id="docs">
+    <div class="container-x">
+      <header class="max-w-2xl mb-7 reveal">
+        <p class="micro mb-2">Documentation</p>
+        <h2 class="display-2 text-white mb-3">Read the page you actually need</h2>
+        <p class="lede m-0">
+          Every guide below is written against this repository's implementation, with commands and endpoints you can
+          paste as they are.
+        </p>
+      </header>
+
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {
+          guideCards.map((card, index) => (
+            <a
+              href={card.href}
+              class="panel panel--lit panel--flush panel-hover block no-underline reveal"
+              style={`--reveal-delay:${Math.min(index, 3) * 50}ms`}
+            >
+              <span class="rail-node mb-3">
+                <Icon name={card.icon} class="w-4 h-4" strokeWidth={2} />
+                <span>Guide</span>
+              </span>
+              <h3 class="text-white text-[15px] font-bold mb-1.5 link-arrow">
+                {card.title}
+                <Icon name="arrow-right" class="w-3 h-3" />
+              </h3>
+              <p class="text-[13px] leading-relaxed text-slate-400 m-0">{card.desc}</p>
+            </a>
+          ))
+        }
+      </div>
+
+      <div class="mt-5 flex flex-wrap gap-3">
+        <a href={url('/tutorials/')} class="btn btn-primary btn-sm btn-sheen">
+          <Icon name="book" class="w-4 h-4" />
+          Tutorials & recipes
+        </a>
+        <a href={url('/api/')} class="btn btn-secondary btn-sm">REST API reference</a>
+        <a href={url('/cli/')} class="btn btn-ghost btn-sm">CLI reference</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================== coverage -->
+  <section class="section-tight bg-slate-900/20 border-y border-slate-900">
+    <div class="container-x">
+      <header class="max-w-2xl mb-7 reveal">
+        <p class="micro mb-2">Coverage</p>
+        <h2 class="display-2 text-white mb-3">Every Telegram message class, handled</h2>
+        <p class="lede m-0">
+          Verified against the Telegram layer, including the awkward cases: albums, video notes and protected content.
+        </p>
       </header>
 
       <ul class="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 list-none p-0">
@@ -371,12 +702,12 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
     </div>
   </section>
 
-  <!-- FAQ -->
-  <section class="section-tight bg-slate-900/30 border-y border-slate-900">
+  <!-- ======================================================================== faq -->
+  <section class="section" id="faq">
     <div class="container-x container-narrow" style="padding-inline: 0;">
-      <header class="mb-6">
-        <p class="eyebrow">Answers</p>
-        <h2 class="display-2 text-white mt-2 mb-3">Questions people actually ask</h2>
+      <header class="mb-6 reveal">
+        <p class="micro mb-2">Answers</p>
+        <h2 class="display-2 text-white mb-3">Questions people actually ask</h2>
       </header>
       <Accordion items={homeFaq} openFirst={false} />
       <a href={url('/faq/')} class="btn btn-secondary btn-sm mt-5">
@@ -386,18 +717,18 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
     </div>
   </section>
 
-  <!-- CTA -->
-  <section class="section">
+  <!-- ======================================================================== cta -->
+  <section class="section pt-0">
     <div class="container-x">
-      <div class="rounded-3xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 p-7 sm:p-12 text-center relative overflow-hidden">
-        <div class="absolute -right-20 -top-20 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <h2 class="display-2 text-white mb-4">Ship your routing in one command</h2>
-        <p class="lede mx-auto max-w-xl mb-8">
+      <div class="panel relative overflow-hidden p-7 sm:p-12 text-center reveal">
+        <div class="aurora"></div>
+        <h2 class="display-2 text-white mb-4 relative">Ship your routing in one command</h2>
+        <p class="lede mx-auto max-w-xl mb-8 relative">
           The setup wizard detects your platform, validates every answer, builds the four services and then proves each
           one is serving before it says done.
         </p>
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <a href={url('/getting-started/')} class="btn btn-primary w-full sm:w-auto px-8">
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3 relative">
+          <a href={url('/getting-started/')} class="btn btn-primary btn-sheen w-full sm:w-auto px-8">
             <Icon name="download" class="w-4 h-4" />
             Installation guide
           </a>
@@ -406,8 +737,9 @@ const shortcodePreview = repoInfo.supportedShortcodes.slice(0, 6);
             CLI reference
           </a>
         </div>
-        <p class="mt-6 mb-0 text-xs text-slate-500">
-          MIT licensed · {site.stats.services} services · {site.stats.locales} languages · {site.stats.grpcRpcCount} gRPC methods
+        <p class="mt-6 mb-0 text-xs text-slate-500 relative">
+          MIT licensed · {site.stats.services} services · {site.stats.locales} languages · {site.stats.grpcRpcCount} gRPC
+          methods · {repoInfo.stats.apiRoutes} REST routes
         </p>
       </div>
     </div>

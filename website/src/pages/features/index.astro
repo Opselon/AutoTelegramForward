@@ -5,6 +5,7 @@ import FeatureCard from '../../components/FeatureCard.astro';
 import Callout from '../../components/Callout.astro';
 import SpecTable from '../../components/SpecTable.astro';
 import Icon from '../../components/Icon.astro';
+import StatusBoard from '../../components/StatusBoard.astro';
 import { featureHub, featurePages } from '../../data/features';
 import repoInfo from '../../data/repo-info.json';
 import { url } from '../../utils/paths';
@@ -15,6 +16,7 @@ const pageDesc =
 
 const toc = [
   { id: 'new', title: 'New in v2.0' },
+  { id: 'status', title: 'Implemented, partial, planned' },
   { id: 'deep-dives', title: 'All features' },
   { id: 'matrix', title: 'Capability parity' },
   { id: 'capabilities', title: 'Verified capability list' },
@@ -45,6 +47,8 @@ const toc = [
     should go out, rewrites what needs rewriting, and delivers it durably to one or many targets. This page lists every
     capability, grouped by the subsystem that owns it.
   </p>
+
+  <StatusBoard />
 
   <section class="not-prose scroll-mt-24" id="new">
     <h2 class="display-3 text-white mb-2 scroll-mt-24">New in v{repoInfo.version}</h2>

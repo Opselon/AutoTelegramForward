@@ -3,6 +3,7 @@ import repoInfo from '../data/repo-info.json';
 import { footerColumns, localeLabels, site } from '../data/site';
 import { url } from '../utils/paths';
 import Icon from './Icon.astro';
+import Logo from './Logo.astro';
 
 const year = new Date().getFullYear();
 const localeCount = repoInfo.locales.length;
@@ -12,11 +13,8 @@ const localeCount = repoInfo.locales.length;
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-8 lg:gap-10">
       <div class="lg:col-span-2">
-        <a href={url('/')} class="flex items-center gap-2.5 mb-4" aria-label="AutoTelegramForward home">
-          <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-tg-blue to-brand-500 flex items-center justify-center">
-            <Icon name="bolt" class="w-4 h-4 text-white" strokeWidth={2.2} />
-          </span>
-          <span class="font-bold text-white text-base">AutoTelegramForward</span>
+        <a href={url('/')} class="inline-flex mb-4" aria-label="AutoTelegramForward home">
+          <Logo />
         </a>
         <p class="text-slate-400 text-sm leading-relaxed max-w-md mb-5">
           Self-hosted Telegram routing: many sources to many targets, per-task content rules, optional AI rewriting,
@@ -91,10 +89,17 @@ const localeCount = repoInfo.locales.length;
     </div>
 
     <div class="mt-10 pt-8 border-t border-slate-900/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-slate-400">
-      <p class="m-0">© {year} Opselon. Released under the open-source MIT license.</p>
+      <p class="m-0">
+        © {year} Opselon. Released under the open-source MIT license.
+        <span class="block mt-1 font-mono text-[11px] text-slate-500">
+          Built from v{repoInfo.version} · commit {repoInfo.gitCommit} · content synced {repoInfo.syncTimestamp.slice(0, 10)}
+        </span>
+      </p>
       <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
         <a href={url('/architecture/')} class="hover:text-slate-200">Architecture</a>
         <a href={url('/security/')} class="hover:text-slate-200">Security</a>
+        <a href={url('/status/')} class="hover:text-slate-200">Status</a>
+        <a href={url('/operations/troubleshooting/')} class="hover:text-slate-200">Troubleshooting</a>
         <a href={url('/api/')} class="hover:text-slate-200">API</a>
         <a href={url('/cli/')} class="hover:text-slate-200">CLI</a>
         <a href={repoInfo.maintainer.url} target="_blank" rel="noopener noreferrer" class="hover:text-slate-200">

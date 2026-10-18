@@ -18,10 +18,12 @@ export const docsNav: DocSection[] = [
   {
     category: 'Getting started',
     items: [
+      { title: 'Quickstart', path: '/getting-started/quickstart/', desc: 'Zilch to a verified stack and a first delivered message, in one pass.', isNew: true },
       { title: 'Install overview', path: '/getting-started/', desc: 'Choose docker, source or portable mode and know what each gives you.' },
       { title: 'Docker Compose deployment', path: '/getting-started/docker/', desc: 'Run the four services with one compose file and verify the stack.' },
       { title: 'Linux & Windows setup', path: '/getting-started/linux-windows/', desc: 'Native installers, virtualenv setup and boot persistence.' },
       { title: 'Telegram bot configuration', path: '/getting-started/telegram-bot-setup/', desc: 'BotFather token, admin id, first login and the panel.' },
+      { title: 'Account linking', path: '/getting-started/account-linking/', desc: 'Single-use login codes, the exchange endpoint and re-authentication.', isNew: true },
       { title: 'Configuration & environment', path: '/getting-started/configuration/', desc: 'Every environment key, with its default and secret status.' },
       { title: 'Verifying the installation', path: '/getting-started/verification/', desc: 'Prove each service is serving before you trust it.' },
     ],
@@ -44,6 +46,7 @@ export const docsNav: DocSection[] = [
     category: 'Feature deep dives',
     items: [
       { title: 'Feature overview', path: '/features/', desc: 'Everything the platform does, grouped by subsystem.' },
+      { title: 'Creating a task', path: '/features/task-creation/', desc: 'Field by field: sources, targets, modes, policies and simulate.', isNew: true },
       { title: 'Automated forwarding modes', path: '/features/automated-forwarding/', desc: 'Copy versus direct forward, topics and priority.' },
       { title: 'Tasks & destinations', path: '/features/rules-and-destinations/', desc: 'Create, edit, clone, pause and delete tasks.' },
       { title: 'Text cleaner', path: '/features/text-cleaner/', desc: 'URL, mention, hashtag, emoji and phone cleaning.' },
@@ -68,10 +71,14 @@ export const docsNav: DocSection[] = [
     category: 'Reference',
     items: [
       { title: 'REST API', path: '/api/', desc: 'Control-plane endpoints, authentication and error model.' },
+      { title: 'API authentication', path: '/api/authentication/', desc: 'Tokens, bearer headers, rate limits, error codes and curl recipes.', isNew: true },
       { title: 'CLI reference', path: '/cli/', desc: 'Every command group, with examples.' },
       { title: 'Architecture', path: '/architecture/', desc: 'Services, pipeline stages, queues and storage.' },
       { title: 'Security model', path: '/security/', desc: 'Tenant isolation, encryption and redaction.' },
       { title: 'Operations & diagnostics', path: '/operations/', desc: 'Runbooks for the failures you will actually meet.' },
+      { title: 'Troubleshooting', path: '/operations/troubleshooting/', desc: 'Symptom, cause, fix — and what to collect before asking for help.', isNew: true },
+      { title: 'AI providers & prompts', path: '/operations/ai-providers/', desc: 'Keys, check-key probes, the endpoint guard, failover and what a broken provider does to delivery.', isNew: true },
+      { title: 'Status board', path: '/status/', desc: 'Implemented, partial and planned, straight from the feature catalog.', isNew: true },
     ],
   },
   {
