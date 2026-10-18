@@ -561,6 +561,23 @@ MIGRATIONS = {
     -- exists so schema_version records the upgrade.
     SELECT 1;
     """,
+    22: """
+    -- v22: dashboard links carry a single-use login code, not a session token.
+    -- The row is the whole mechanism: `code_hash` is SHA-256 of the code (never
+    -- the code itself), `used_at` makes it single-use, `expires_at` bounds it.
+    -- The exchange UPDATE matches `used_at IS NULL AND expires_at > now`, so one
+    -- link opens exactly one session even under a race.
+    CREATE TABLE IF NOT EXISTS web_login_codes (
+        code_hash TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        used_at INTEGER,
+        purpose TEXT NOT NULL DEFAULT 'dashboard'
+    );
+    CREATE INDEX IF NOT EXISTS idx_web_login_codes_user ON web_login_codes(user_id);
+    CREATE INDEX IF NOT EXISTS idx_web_login_codes_created ON web_login_codes(created_at);
+    """,
     19: """
     -- v19: bot tokens are per-owner. The column + index are added by
     -- _apply_additive_columns (which runs after this script and is idempotent);

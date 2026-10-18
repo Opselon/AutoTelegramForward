@@ -58,18 +58,44 @@ func (h *Handlers) AuthLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // AuthBotExchange lets an already-authenticated Telegram bot user log into the
-// web dashboard without typing credentials (the bot mints a short-lived token
-// which is exchanged here for a 7-day JWT).
+// web dashboard without typing credentials.
+//
+// It exchanges a single-use login code — minted by the bot for the Telegram
+// user it just authenticated — for a 7-day JWT. It deliberately does NOT accept
+// a user id: a Telegram id is public, so minting for one here would let any
+// caller sign in as any account.
 func (h *Handlers) AuthBotExchange(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
-	var req pb.IssueWebTokenRequest
-	if !bind(w, r, &req) {
+	var body struct {
+		LoginCode string `json:"login_code"`
+		// Accepted only to reject it explicitly: older clients posted a user id.
+		UserID int64 `json:"user_id"`
+	}
+	if !bind(w, r, &body) {
 		return
 	}
-	resp, err := h.c.Account.IssueWebToken(ctx, &req)
+	code := strings.TrimSpace(body.LoginCode)
+	if code == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error":      "login_code required: open the dashboard from the bot",
+			"error_code": "LOGIN_CODE_REQUIRED",
+		})
+		return
+	}
+	resp, err := h.c.Account.ExchangeWebLoginCode(ctx, &pb.ExchangeWebLoginCodeRequest{
+		LoginCode: code,
+	})
 	if err != nil {
 		grpcError(w, err)
+		return
+	}
+	if !resp.Success {
+		// A used, expired or unknown code is one answer for the caller.
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error":      resp.Message,
+			"error_code": resp.ErrorCode,
+		})
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -218,20 +244,47 @@ func (h *Handlers) AuthChangePassword(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
 
+	// The password being changed is the caller's own, and only the token says
+	// who the caller is. The body used to carry the user id, which let any
+	// unauthenticated caller drive another account's password change.
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error":      "authentication required",
+			"error_code": "UNAUTHENTICATED",
+		})
+		return
+	}
+	who, err := h.c.Account.ValidateToken(ctx, &pb.ValidateTokenRequest{Token: auth[len("Bearer "):]})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if !who.Valid || who.UserId <= 0 {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error":      "invalid or expired token",
+			"error_code": "UNAUTHENTICATED",
+		})
+		return
+	}
+
 	var body struct {
-		UserId      int64  `json:"user_id"`
+		UserID      int64  `json:"user_id"`
 		OldPassword string `json:"old_password"`
 		NewPassword string `json:"new_password"`
 	}
 	if !bind(w, r, &body) {
 		return
 	}
-	if body.UserId == 0 {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "user_id required"})
+	if body.UserID != 0 && body.UserID != who.UserId {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error":      "you can only change your own password",
+			"error_code": "FORBIDDEN",
+		})
 		return
 	}
 	resp, err := h.c.Account.ChangePassword(ctx, &pb.ChangePasswordRequest{
-		UserId:      body.UserId,
+		UserId:      who.UserId,
 		OldPassword: body.OldPassword,
 		NewPassword: body.NewPassword,
 	})

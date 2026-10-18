@@ -73,6 +73,27 @@ empty set means the caller owns nothing and therefore sees nothing; an id that
 is not in the set is `not_found`, never `forbidden` — the API does not confirm
 the existence of another tenant's entries.
 
+## Dashboard login contract
+
+A dashboard session is opened by a **single-use login code**, never by a
+Telegram user id:
+
+- `POST /api/auth/exchange-bot-token` — body `{"login_code": "<code>"}`. Answers
+  `200` with the session, or `401` with `error_code` `LOGIN_CODE_REQUIRED` (no
+  code supplied) / `INVALID_LOGIN_CODE` (unknown, expired or already used —
+  deliberately indistinguishable). Posting a `user_id` is refused: a Telegram id
+  is public, so minting from one would let any caller open any account.
+- `POST /api/auth/tma` — Mini App `init_data`, verified against the bot token by
+  HMAC-SHA256 before the origin is read. This is the only path where a user id
+  mints a session, and only because Telegram signed it.
+- `?code=` on the dashboard URL is the bot's 1-tap link: 10-minute lifetime,
+  burned on first use, stored only as a SHA-256 digest, and stripped from the
+  address bar on arrival. `?token=` (a legacy session link) still works for its
+  own 7-day life and is also stripped.
+- `PATCH /api/auth/change-password` — requires a `Bearer` token; the subject of
+  the change is the token's user, and a body `user_id` naming anybody else is
+  `403`.
+
 ## Migration strategy
 
 1. **Additive first**: new endpoints/fields are added without removing old
