@@ -28,6 +28,7 @@ from core.infrastructure.telegram.pro_bot_ui import ProBotUI
 class _FakeRepo:
     def __init__(self):
         self.saved: list[AIConfig] = []
+        self.existing: AIConfig | None = None
 
     async def add(self, cfg: AIConfig) -> AIConfig:
         self.saved.append(cfg)
@@ -36,6 +37,9 @@ class _FakeRepo:
     async def update(self, cfg: AIConfig) -> AIConfig:
         self.saved.append(cfg)
         return cfg
+
+    async def get_by_id(self, config_id: str):
+        return self.existing
 
 
 def _cfg(base_url: str, provider: AIProviderType = AIProviderType.OPENAI) -> AIConfig:
@@ -106,6 +110,19 @@ async def test_a_self_hosted_private_endpoint_is_refused_by_default():
     # The operator's escape hatch is a server-side env flag, deliberately not
     # something a tenant can set from a form.
     assert endpoint_guard("http://192.168.1.50:1234/v1") == "endpoint_blocked"
+
+
+@pytest.mark.asyncio
+async def test_update_owned_applies_the_same_gate():
+    # The bot's edit steps go through update_owned, which used to write to the
+    # repository directly: a URL must not become storable by walking a wizard.
+    use_cases, repo = _use_cases()
+    repo.existing = _cfg("https://api.openai.com/v1")
+    edited = _cfg("http://169.254.169.254/")
+    edited.id = "cfg-1"
+    with pytest.raises(ValueError, match="endpoint refused"):
+        await use_cases.update_owned(edited, 5094837833)
+    assert repo.saved == []
 
 
 # --------------------------------------------------------------------------- #

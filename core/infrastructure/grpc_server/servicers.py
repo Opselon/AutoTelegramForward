@@ -1995,7 +1995,16 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
             target_language=c.target_language or "en",
             owner_user_id=int(c.owner_user_id or 0),
         )
-        created = await self._ai.create(entity)
+        try:
+            created = await self._ai.create(entity)
+        except ValueError as exc:
+            # "endpoint refused: endpoint_blocked" -> INVALID_ARGUMENT so the
+            # API answers 400 with a code the clients can translate, instead of
+            # a 500 named "Unexpected ValueError".
+            code = str(exc).rsplit(":", 1)[-1].strip() or "endpoint_blocked"
+            if "endpoint refused" in str(exc):
+                await context.abort(grpc.StatusCode.INVALID_ARGUMENT, code)
+            raise
         return _ai_pb(created)
 
     async def UpdateAIConfig(self, request, context):
@@ -2023,7 +2032,13 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         if c.target_language:
             existing.target_language = c.target_language
         existing.owner_user_id = int(c.owner_user_id or existing.owner_user_id or 0)
-        updated = await self._ai.update(existing)
+        try:
+            updated = await self._ai.update(existing)
+        except ValueError as exc:
+            code = str(exc).rsplit(":", 1)[-1].strip() or "endpoint_blocked"
+            if "endpoint refused" in str(exc):
+                await context.abort(grpc.StatusCode.INVALID_ARGUMENT, code)
+            raise
         return _ai_pb(updated)
 
     async def DeleteAIConfig(self, request, context):

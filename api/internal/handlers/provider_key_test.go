@@ -12,6 +12,8 @@ import (
 	pb "autoforward/proto"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // fakeKeyCheckAI records what the provider-key path asked the core, and answers
@@ -189,5 +191,25 @@ func TestListAIProvidersProjectsTheCatalogue(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"default_base_url":""`) {
 		t.Fatalf("empty endpoint must still be present: %s", rec.Body.String())
+	}
+}
+
+// A refused endpoint is the operator's message to the tenant, so it must arrive
+// as 400 with the core's own code — not as a 500 named "Unexpected ValueError".
+func TestGrpcErrorNamesAnEndpointRefusal(t *testing.T) {
+	rec := httptest.NewRecorder()
+	grpcError(rec, status.Error(codes.InvalidArgument, "endpoint_blocked"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body is not JSON: %v", err)
+	}
+	if body["code"] != "endpoint_blocked" {
+		t.Fatalf("code = %q, want endpoint_blocked", body["code"])
+	}
+	if body["error"] != "endpoint_blocked" {
+		t.Fatalf("error = %q, want the core's message", body["error"])
 	}
 }

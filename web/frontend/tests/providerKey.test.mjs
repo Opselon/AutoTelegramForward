@@ -7,7 +7,11 @@
 //   node tests/providerKey.test.mjs
 
 import assert from 'node:assert/strict'
-import { describeKeyCheck, KEY_CHECK_REASONS } from '../.actions-build/providerKey.js'
+import {
+  describeKeyCheck,
+  describeSaveFailure,
+  KEY_CHECK_REASONS,
+} from '../.actions-build/providerKey.js'
 
 let failures = 0
 const check = (name, fn) => {
@@ -83,6 +87,21 @@ check('an unidentified code still shows the code rather than nothing', () => {
 check('the server-side detail is passed through, trimmed', () => {
   const view = describeKeyCheck({ success: false, healthy: false, latency_ms: 5, detail: '  HTTP 500  ', error_code: 'provider_error' }, false)
   assert.equal(view.detail, 'HTTP 500')
+})
+
+check('a saved-but-refused endpoint is explained, not printed as a code', () => {
+  const view = describeSaveFailure('endpoint_blocked', false)
+  assert.equal(view, KEY_CHECK_REASONS.endpoint_blocked.en)
+  assert.ok(!view.includes('endpoint_blocked'), `a raw code reached the user: ${view}`)
+  assert.equal(
+    describeSaveFailure('endpoint_blocked', true),
+    KEY_CHECK_REASONS.endpoint_blocked.fa,
+  )
+})
+
+check('an unrecognized save failure is passed through unchanged', () => {
+  assert.equal(describeSaveFailure('boom', false), 'boom')
+  assert.equal(describeSaveFailure('', false), '')
 })
 
 if (failures) {

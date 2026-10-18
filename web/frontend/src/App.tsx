@@ -41,7 +41,7 @@ import {
 } from 'lucide-react'
 import { api } from './api'
 import { isAccepted, purgedCount, refusalReason } from './actionResult'
-import { describeKeyCheck } from './providerKey'
+import { describeKeyCheck, describeSaveFailure } from './providerKey'
 import { AdminPanel } from './components/AdminPanel'
 import { AuditEventsPanel } from './components/AuditEventsPanel'
 import { ClientSettings } from './components/ClientSettings'
@@ -833,7 +833,8 @@ export function App() {
       setIsAiModalOpen(false)
       showToast(isRtl ? 'پیکربندی هوش مصنوعی ذخیره شد' : 'AI Config saved successfully')
     } catch (e: any) {
-      showToast(e.message)
+      // A refused endpoint arrives as its code; say what it means.
+      showToast(describeSaveFailure(e?.message || '', isRtl))
     }
   }
 

@@ -1013,6 +1013,18 @@ class KeyCheckResult {
   };
 }
 
+/// The catalog key that names a *save* refusal, when the API states one.
+///
+/// The server answers a stored-but-blocked endpoint with its code
+/// (`{"error":"endpoint_blocked"}`), which on its own is not something a tenant
+/// can act on. Returns '' when the message is not a code, so the caller shows
+/// what the server said instead of swallowing it.
+String aiSaveFailureKey(String message) {
+  final code = message.trim();
+  const known = {'endpoint_blocked', 'endpoint_invalid'};
+  return known.contains(code) ? 'ai_check_$code' : '';
+}
+
 /// ---- Dashboard / operations --------------------------------------------
 
 @immutable

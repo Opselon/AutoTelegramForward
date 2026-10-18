@@ -76,3 +76,17 @@ export function describeKeyCheck(
   }
   return { ok: false, text, detail: (result.detail || '').trim() }
 }
+
+/**
+ * The reason a *save* was refused, said in the tenant's language.
+ *
+ * A blocked endpoint comes back from the API as `{"error":"endpoint_blocked"}`.
+ * Printing that verbatim tells the user nothing they can act on, and it is the
+ * one refusal they can fix themselves.
+ */
+export function describeSaveFailure(message: string, isRtl: boolean): string {
+  const code = (message || '').trim()
+  const reason = KEY_CHECK_REASONS[code]
+  if (reason) return isRtl ? reason.fa : reason.en
+  return code
+}
