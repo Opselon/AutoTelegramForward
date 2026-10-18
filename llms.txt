@@ -1,32 +1,39 @@
 # AutoTelegramForward
 
-> AutoTelegramForward v2.0.0 is a self-hosted Telegram message routing platform: one task fans out from M source chats to N target chats with per-task content rules, optional AI rewriting, durable ordered delivery and a fail-closed multi-tenant control plane. It ships as four microservices (bot, core, logger, web) plus a REST API, CLI, dashboard and Flutter client.
+> AutoTelegramForward v2.2.4 is a self-hosted Telegram message routing platform: one task fans out from M source chats to N target chats with per-task content rules, optional AI rewriting, durable ordered delivery and a fail-closed multi-tenant control plane. It ships as four microservices (bot, core, logger, web) plus a REST API, CLI, dashboard and Flutter client.
 
 Key facts, all derived from the repository at build time:
 
-- Version: 2.0.0 (v2.0.0, 2026-10-16)
+- Version: 2.2.4 (v2.2.4, 2026-10-16)
 - Source: https://github.com/Opselon/AutoTelegramForward
 - License: MIT
 - Services: 4 (core, logger, api/web gateway, bot UI)
-- UI languages: 10 (en, fa, ru, zh, pt, uz, id, es, fr, it) with enforced 1:1 catalog parity and strict English fallback
-- Localized strings: 1168
+- UI languages: 10 (en, es, fa, fr, id, it, pt, ru, uz, zh) with enforced 1:1 catalog parity and strict English fallback
+- Localized strings: 1318
 - CLI command groups: 24
-- gRPC RPCs: 62
-- Registered REST routes parsed from api/main.go: 82
+- gRPC RPCs: 78
+- Registered REST routes parsed from api/main.go: 97
 - Media classes handled: 12
 
 ## Start here
 
+- [Quickstart: verified stack in one pass](https://opselon.github.io/AutoTelegramForward/getting-started/quickstart/)
 - [Installation overview](https://opselon.github.io/AutoTelegramForward/getting-started/)
 - [Docker Compose deployment](https://opselon.github.io/AutoTelegramForward/getting-started/docker/)
 - [Configuration reference](https://opselon.github.io/AutoTelegramForward/getting-started/configuration/)
 - [Verification checklist](https://opselon.github.io/AutoTelegramForward/getting-started/verification/)
+- [Account linking and login codes](https://opselon.github.io/AutoTelegramForward/getting-started/account-linking/)
 - [Feature overview](https://opselon.github.io/AutoTelegramForward/features/)
+- [Creating a forwarding task](https://opselon.github.io/AutoTelegramForward/features/task-creation/)
 - [Architecture](https://opselon.github.io/AutoTelegramForward/architecture/)
 - [Security model and tenant isolation](https://opselon.github.io/AutoTelegramForward/security/)
 - [REST API reference](https://opselon.github.io/AutoTelegramForward/api/)
+- [API authentication](https://opselon.github.io/AutoTelegramForward/api/authentication/)
 - [CLI reference](https://opselon.github.io/AutoTelegramForward/cli/)
 - [Operations and diagnostics](https://opselon.github.io/AutoTelegramForward/operations/)
+- [Troubleshooting runbook](https://opselon.github.io/AutoTelegramForward/operations/troubleshooting/)
+- [AI providers, keys and prompts in depth](https://opselon.github.io/AutoTelegramForward/operations/ai-providers/)
+- [Status board: implemented, partial, planned](https://opselon.github.io/AutoTelegramForward/status/)
 - [Interactive transformation playground](https://opselon.github.io/AutoTelegramForward/tools/playground/)
 - [Release notes](https://opselon.github.io/AutoTelegramForward/releases/)
 - [FAQ](https://opselon.github.io/AutoTelegramForward/faq/)
@@ -47,10 +54,12 @@ Key facts, all derived from the repository at build time:
 
 ### Getting started
 
+- [Quickstart](https://opselon.github.io/AutoTelegramForward/getting-started/quickstart/): Zilch to a verified stack and a first delivered message, in one pass.
 - [Install overview](https://opselon.github.io/AutoTelegramForward/getting-started/): Choose docker, source or portable mode and know what each gives you.
 - [Docker Compose deployment](https://opselon.github.io/AutoTelegramForward/getting-started/docker/): Run the four services with one compose file and verify the stack.
 - [Linux & Windows setup](https://opselon.github.io/AutoTelegramForward/getting-started/linux-windows/): Native installers, virtualenv setup and boot persistence.
 - [Telegram bot configuration](https://opselon.github.io/AutoTelegramForward/getting-started/telegram-bot-setup/): BotFather token, admin id, first login and the panel.
+- [Account linking](https://opselon.github.io/AutoTelegramForward/getting-started/account-linking/): Single-use login codes, the exchange endpoint and re-authentication.
 - [Configuration & environment](https://opselon.github.io/AutoTelegramForward/getting-started/configuration/): Every environment key, with its default and secret status.
 - [Verifying the installation](https://opselon.github.io/AutoTelegramForward/getting-started/verification/): Prove each service is serving before you trust it.
 
@@ -69,6 +78,7 @@ Key facts, all derived from the repository at build time:
 ### Feature deep dives
 
 - [Feature overview](https://opselon.github.io/AutoTelegramForward/features/): Everything the platform does, grouped by subsystem.
+- [Creating a task](https://opselon.github.io/AutoTelegramForward/features/task-creation/): Field by field: sources, targets, modes, policies and simulate.
 - [Automated forwarding modes](https://opselon.github.io/AutoTelegramForward/features/automated-forwarding/): Copy versus direct forward, topics and priority.
 - [Tasks & destinations](https://opselon.github.io/AutoTelegramForward/features/rules-and-destinations/): Create, edit, clone, pause and delete tasks.
 - [Text cleaner](https://opselon.github.io/AutoTelegramForward/features/text-cleaner/): URL, mention, hashtag, emoji and phone cleaning.
@@ -89,10 +99,14 @@ Key facts, all derived from the repository at build time:
 ### Reference
 
 - [REST API](https://opselon.github.io/AutoTelegramForward/api/): Control-plane endpoints, authentication and error model.
+- [API authentication](https://opselon.github.io/AutoTelegramForward/api/authentication/): Tokens, bearer headers, rate limits, error codes and curl recipes.
 - [CLI reference](https://opselon.github.io/AutoTelegramForward/cli/): Every command group, with examples.
 - [Architecture](https://opselon.github.io/AutoTelegramForward/architecture/): Services, pipeline stages, queues and storage.
 - [Security model](https://opselon.github.io/AutoTelegramForward/security/): Tenant isolation, encryption and redaction.
 - [Operations & diagnostics](https://opselon.github.io/AutoTelegramForward/operations/): Runbooks for the failures you will actually meet.
+- [Troubleshooting](https://opselon.github.io/AutoTelegramForward/operations/troubleshooting/): Symptom, cause, fix — and what to collect before asking for help.
+- [AI providers & prompts](https://opselon.github.io/AutoTelegramForward/operations/ai-providers/): Keys, check-key probes, the endpoint guard, failover and what a broken provider does to delivery.
+- [Status board](https://opselon.github.io/AutoTelegramForward/status/): Implemented, partial and planned, straight from the feature catalog.
 
 ### Learn
 
