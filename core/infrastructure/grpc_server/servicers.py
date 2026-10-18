@@ -2520,6 +2520,19 @@ class BackupControlServicer(pb_grpc.BackupControlServiceServicer):
     async def BackupExport(self, request, context):
         try:
             owner = int(request.owner_user_id or 0)
+            # 0 is documented as "everything" (single-box installs), so it is
+            # also what a caller that never resolved an owner sends. The API
+            # refuses an account-less caller before it gets here; the scope is
+            # logged either way, so an installation-wide export of every
+            # tenant's rules, sessions and API keys is a line in the record
+            # rather than something a log reader has to infer.
+            if owner:
+                logger.info("[PIPELINE:backup] export scope owner=%d", owner)
+            else:
+                logger.warning(
+                    "[PIPELINE:backup] export scope ALL_TENANTS: the bundle will "
+                    "contain every tenant's records and live credentials"
+                )
             doc = await self._backup.create_snapshot(owner or None)
             text = serialize_bundle(doc)
             if request.passphrase:
@@ -2538,6 +2551,16 @@ class BackupControlServicer(pb_grpc.BackupControlServiceServicer):
             text = decrypt_bundle(request.bundle, request.passphrase)
             doc = deserialize_bundle(text)
             target = int(request.target_owner_user_id or 0)
+            # As above: 0 does not mean "nobody", it means "keep the owner ids
+            # found inside the uploaded bundle", which is a whole-installation
+            # restore. Log which of the two it is.
+            if target:
+                logger.info("[PIPELINE:backup] import scope owner=%d", target)
+            else:
+                logger.warning(
+                    "[PIPELINE:backup] import scope FROM_BUNDLE: owner ids inside "
+                    "the uploaded bundle decide which tenant each record lands in"
+                )
             stats = await self._backup.restore_snapshot(
                 doc,
                 target or None,

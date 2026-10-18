@@ -41,6 +41,24 @@ func (h *Handlers) authMiddleware(next http.Handler) http.Handler {
 			})
 			return
 		}
+		// An account-less identity must not reach a dashboard handler. Every
+		// handler below scopes its work by the owner it passes to the core, and
+		// owner 0 is not a tenant: for the ordinary reads it is the shared,
+		// unattributed bucket, and for a backup export it means the WHOLE
+		// installation. The core issues such a token only for an account that
+		// has no Telegram id yet (a synthetic negative id), so refusing it here
+		// is refusing an account that cannot own data - the same rule the
+		// single-handler guards (ListChats, CreateBotToken, RequireAdmin)
+		// already apply one by one. Onboarding is unaffected: /api/auth/* is
+		// mounted OUTSIDE this middleware, so /auth/me still answers an
+		// unlinked caller and can still explain that they must link.
+		if resp.UserId <= 0 {
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"error": "this account must be linked to a Telegram id first",
+				"code":  "account_not_linked",
+			})
+			return
+		}
 		r = r.WithContext(context.WithValue(r.Context(), identityKey{}, &Identity{
 			UserID:   resp.UserId,
 			Username: resp.Username,

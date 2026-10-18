@@ -2942,9 +2942,20 @@ func (h *Handlers) BackupExport(w http.ResponseWriter, r *http.Request) {
 		Passphrase  string `json:"passphrase"`
 	}
 	_ = bind(w, r, &body)
-	// Non-admins can only ever export their own tenant; an admin (or a
-	// single-tenant box with no identity) may pass owner_user_id explicitly.
 	id := identity(r)
+	// This route is mounted under the auth middleware, but it must not depend on
+	// that: the branch below maps an owner of 0 to an UNSCOPED snapshot (every
+	// tenant's rules, sessions and API keys), so a request that arrived without a
+	// verified account would be an installation-wide credential export. Refuse an
+	// account-less caller here as well, so the escalation is closed on both
+	// sides.
+	if id.UserID <= 0 {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": "this account must be linked to a Telegram id first",
+			"code":  "account_not_linked",
+		})
+		return
+	}
 	// v12 hardening: a non-admin caller can only ever export their own tenant.
 	// owner_user_id from the body is only honoured for admins; any other value
 	// (including a 0 from an unauthenticated reach) is forced to the caller's id.
@@ -2999,6 +3010,17 @@ func (h *Handlers) BackupImport(w http.ResponseWriter, r *http.Request) {
 	// explicitly redirects it. Importing into another tenant would let a
 	// non-admin write rules/credentials into someone else's scope.
 	id := identity(r)
+	// Same reasoning as the export beside it, in the other direction: an owner of
+	// 0 tells the core to keep the owner ids found INSIDE the uploaded bundle, so
+	// an account-less caller could name any tenant in the payload and have the
+	// credentials land there.
+	if id.UserID <= 0 {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": "this account must be linked to a Telegram id first",
+			"code":  "account_not_linked",
+		})
+		return
+	}
 	target := id.UserID
 	if id.IsAdmin {
 		target = body.TargetOwnerUserID
