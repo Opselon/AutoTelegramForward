@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..domain.entities import (
     AIConfig,
@@ -688,6 +688,27 @@ class ISettingsRepository(ABC):
         ...
 
 
+def kind_filter_sql(kinds: Optional[Sequence[str]], placeholder: str = "?") -> Tuple[str, tuple]:
+    """Build the ``AND kind IN (…)`` clause for a task claim query.
+
+    Bounded and parameterized (no string interpolation of caller data), shared
+    by both engines so SQLite and PostgreSQL cannot diverge on which kinds a
+    replica is willing to claim.
+
+    ``None`` means "no restriction". An EXPLICIT EMPTY sequence means "this
+    replica can execute nothing" and must claim nothing — never fall back to
+    claiming every kind, which is how a replica without executors would starve
+    the ones that have them.
+    """
+    if kinds is None:
+        return "", ()
+    cleaned = [str(k) for k in kinds if str(k)]
+    if not cleaned:
+        return " AND 1=0", ()
+    placeholders = ",".join([placeholder] * len(cleaned))
+    return f" AND kind IN ({placeholders})", tuple(cleaned)
+
+
 class ITaskRepository(ABC):
     """Durable per-user task store. Ownership is part of every row."""
 
@@ -727,11 +748,17 @@ class ITaskRepository(ABC):
     @abstractmethod
     async def acquire_next(
         self, lease_token: str, lease_until: int, now: int,
+        kinds: Optional[Sequence[str]] = None,
     ) -> Optional[Any]:
         """Atomically claim one runnable task (PENDING/RETRY_WAIT, run_at due).
 
         Sets status=RUNNING and stamps the lease in the same statement so two
         workers can never hold the same task.
+
+        ``kinds`` restricts the candidate set to the kinds this replica can
+        actually execute. Without it a replica that lacks an executor still
+        claims the task, rewrites the row to push it back and repeats every
+        poll cycle — write amplification for a task it can never run.
         """
 
     @abstractmethod
@@ -762,7 +789,40 @@ class ITaskRepository(ABC):
     @abstractmethod
     async def cancel_queued(self, task_id: str, owner_user_id: int,
                             now: int) -> bool:
-        """CANCELLED while still PENDING. One conditional UPDATE against the
-        owner wins the race with a worker's claim: whoever commits first,
-        the other sees the new state."""
+        """CANCELLED while the task is still queue-bound (PENDING/RETRY_WAIT).
+
+        One conditional UPDATE against the owner wins the race with a worker's
+        claim: whoever commits first, the other sees the new state. The bool
+        return is the commit result and MUST be honored by the caller — a
+        False means nothing was cancelled (the task was claimed first), never
+        a task that was cancelled. RETRY_WAIT is included because that state
+        is queue-bound too: a task waiting for its next attempt runs later, so
+        refusing to cancel it there would tell the owner it cannot stop work
+        that has not happened yet.
+        """
+
+    @abstractmethod
+    async def retry_failed(self, task_id: str, owner_user_id: int,
+                           now: int) -> Optional[Any]:
+        """Return a FAILED task to PENDING — atomically, or not at all.
+
+        A conditional UPDATE (``WHERE owner_user_id=? AND status='FAILED'``)
+        replaces the read-modify-write that used to rewrite every column with
+        no owner or state predicate. Returns the requeued row, or None when
+        the task was not FAILED (or not the caller's) so the caller can refuse
+        with the truth instead of reporting a retry that did not happen.
+        ``result_json`` is cleared: a requeued task must not serve its previous
+        attempt's result.
+        """
+
+    @abstractmethod
+    async def requeue_unclaimed(self, task_id: str, token: str, run_at: int,
+                                now: int) -> bool:
+        """Hand a claimed task back for someone else to run (holder-checked).
+
+        Used when a replica has no executor for the kind it just claimed. The
+        lease is cleared and the run_at nudged, so the row does not sit in
+        RETRY_WAIT holding this worker's lease_token. False means the lease was
+        already lost — the caller must not assume it still owns the row.
+        """
 
