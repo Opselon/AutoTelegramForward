@@ -54,7 +54,7 @@ async def test_step_namespace_is_validated_and_fails_closed():
 def test_buffer_bounds_enforced():
     ok = _safe_buffer({"k": "v"})
     assert ok == {"k": "v"}
-    # oversized value dropped
+    # oversized values are truncated to fit, never dropped outright
     big = {f"big_{i}": "x" * 3000 for i in range(MAX_BUFFER_KEYS + 5)}
     assert len(_safe_buffer(big)) < MAX_BUFFER_KEYS
     # non-JSON-safe value is stringified rather than corrupting the row

@@ -565,19 +565,24 @@ class ProBotUI:
     async def _persist(self, uid: int, st: UiState) -> None:
         """Durable save through the pro state manager.
 
-        The manager validates the step namespace and bounds the buffer, so a
-        broken flow can never persist a value a render cannot survive — the
-        dead-button class of bug — and persists a versioned payload that the
-        next process resumes against the same screen stack.
+        The manager validates the step namespace and bounds the buffer of the
+        payload it stores, so a runaway flow cannot grow the `ui_states` row
+        forever, while the object the screen renders from keeps every value the
+        screen needs. The stored payload is versioned, so the next process
+        resumes against the same screen stack.
         """
-        # Mirror the (already validated, bounded) write back into the render
-        # cache so sync read paths see exactly what the durable store has.
-        from .ui_state_manager import _safe_buffer, _safe_step
+        # The manager bounds its own durable copy (absorb() and the v2 payload
+        # both run _safe_buffer); it keeps the caller's object as the live
+        # render state. Bounding the live object here emptied the very buffer
+        # the screen is rendered from: a fetched dialog list (~16 KiB for 100
+        # chats) is larger than the per-value cap, so the picker rendered
+        # "dialog list not found" on the same press that had just fetched 100
+        # chats. Validate the step namespace only; leave the buffer alone.
+        from .ui_state_manager import _safe_step
         try:
             stn = st if isinstance(st, UiState) else UiState.from_dict(
                 st if isinstance(st, dict) else {})
             stn.step = _safe_step(stn.step or "")
-            stn.buffer = _safe_buffer(stn.buffer)
             st.user_id = int(uid)
         except Exception:
             logger.debug("ui state mirror failed", exc_info=True)
