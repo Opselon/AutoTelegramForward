@@ -3,23 +3,7 @@
 # is not stable across insertions, so the audit matches on the text and
 # treats the locator as a hint. Shrink-only: convert a line to a catalog
 # key and delete its entry; never add one without explaining why in review.
-core/infrastructure/telegram/pro_bot_ui.py:86|"fa": "فارسی 🇮🇷",
-core/infrastructure/telegram/pro_bot_ui.py:1920|("🇮🇷 فارسی (FA)", f"rtr_set:{rule.id}:fa"),
-core/infrastructure/telegram/pro_bot_ui.py:8407|if raw.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8498|if raw.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8610|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8676|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8708|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8740|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8774|if clean.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8814|if raw_input.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8883|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8916|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8928|if raw in ("حذف", "پاک", "none", "clear", "حذف همه"):
-core/infrastructure/telegram/pro_bot_ui.py:8962|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:8974|if raw in ("حذف", "پاک", "none", "clear"):
-core/infrastructure/telegram/pro_bot_ui.py:9013|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:9166|if url.lower() in ("default", "none", "-", "پیش‌فرض", "پیش فرض"):
-core/infrastructure/telegram/pro_bot_ui.py:9249|if new_url.lower() in ("default", "none", "-", "پیش‌فرض", "پیش فرض"):
-core/infrastructure/telegram/pro_bot_ui.py:9336|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
-core/infrastructure/telegram/pro_bot_ui.py:9358|if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+#
+# EMPTY as of the button-style/i18n pass: every hardcoded Persian alias
+# (21 cancel/clear/default matchers) was replaced by catalog keys
+# (ui_input_*_aliases), so there is nothing left to pin.
