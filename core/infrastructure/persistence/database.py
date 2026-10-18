@@ -5,6 +5,7 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -688,6 +689,50 @@ _ADDITIVE_COLUMNS = (
 )
 
 
+class Row(dict):
+    """A result row that is both a mapping and a positional sequence.
+
+    SQLite hands back ``sqlite3.Row``, which supports ``row["col"]`` and
+    ``row[0]`` but **not** ``row.get(...)``, ``row.values()`` or ``row in``.
+    PostgreSQL hands back a dict. Code written against one engine therefore broke
+    on the other, and broke quietly: the reads sat inside ``except Exception:
+    pass`` blocks, so a user's stored language preference resolved as English
+    instead of raising. Making the two engines agree on the shape is the only fix
+    that cannot be defeated by the next row read somebody writes.
+
+    The name lookup keeps ``sqlite3.Row``'s error: a key that is not a column
+    raises ``IndexError``, which existing handlers already catch.
+    """
+
+    __slots__ = ("_values",)
+
+    def __init__(self, columns: Sequence[str], values: Sequence[Any]) -> None:
+        super().__init__(zip(columns, values))
+        self._values: Tuple[Any, ...] = tuple(values)
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._values[key]
+        try:
+            return super().__getitem__(key)
+        except KeyError as exc:  # sqlite3.Row semantics
+            raise IndexError(key) from exc
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """A plain ``dict`` copy, for code that wants to mutate it."""
+        return dict(self.items())
+
+
+def _row_factory(cursor: sqlite3.Cursor, values: Sequence[Any]) -> Row:
+    return Row([column[0] for column in cursor.description or ()], values)
+
+
 class SqliteDatabase:
     """Thread-safe async-friendly SQLite connection holder.
 
@@ -702,7 +747,10 @@ class SqliteDatabase:
         self._conn: sqlite3.Connection = sqlite3.connect(
             db_path, check_same_thread=False
         )
-        self._conn.row_factory = sqlite3.Row
+        # Rows are mappings on both engines (see `Row`): PostgreSQL returns a
+        # dict, and `sqlite3.Row` does not, which silently broke every read that
+        # used `.get(...)` on this side of the boundary.
+        self._conn.row_factory = _row_factory
         self._lock = threading.Lock()
         self._apply_pragmas()
         self._migrate()
