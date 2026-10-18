@@ -301,6 +301,7 @@ func APIKeyAuth(key string, next http.Handler) http.Handler {
 		if r.URL.Path == "/healthz" || r.URL.Path == "/health" ||
 			r.URL.Path == "/api/version" || r.URL.Path == "/api/v1/health/services" ||
 			r.URL.Path == "/api/health/services" ||
+			r.URL.Path == "/api/openapi.yaml" ||
 			strings.HasPrefix(r.URL.Path, "/api/auth/") {
 			next.ServeHTTP(w, r)
 			return
