@@ -128,6 +128,15 @@ class Config:
             val = os.environ.get(env_key)
             if val:
                 setattr(cfg, attr, cast(val))
+        # The deployment password rides its own variable (never inside the
+        # address): one .env line, read by both layers. An explicit
+        # ATF_REDIS_URL that already carries credentials is left alone; a bare
+        # host:port (the compose form) has the password spliced in here so the
+        # Core authenticates exactly like the API does.
+        redis_password = os.environ.get("ATF_REDIS_PASSWORD", "").strip()
+        if redis_password and "://" in cfg.redis_url and "@" not in cfg.redis_url:
+            scheme, rest = cfg.redis_url.split("://", 1)
+            cfg.redis_url = f"{scheme}://default:{redis_password}@{rest}"
         admins = os.environ.get("ATF_ADMIN_IDS") or os.environ.get("ADMIN_IDS")
         if admins:
             parsed_admins = []

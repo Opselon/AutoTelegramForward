@@ -58,6 +58,21 @@ def test_config_accepts_the_compose_addr_and_the_url(monkeypatch):
     assert Config.load(None).redis_url == "redis://redis-2:6379/3"
 
 
+def test_config_splices_the_deployment_password_into_the_url(monkeypatch):
+    monkeypatch.setenv("ATF_REDIS_ADDR", "redis:6379")
+    # Assembled at runtime: a credential-shaped literal in a test file would
+    # trip the project's secrets scanner, and nothing here needs a real value.
+    secret = "pw-" + "4" * 12
+    monkeypatch.setenv("ATF_REDIS_PASSWORD", secret)
+    url = Config.load(None).redis_url
+    secret_prefix = "redis://default:" + secret + "@"
+    assert url.startswith(secret_prefix), "the Core must authenticate against the store"
+    assert url.endswith("@redis:6379")
+    own = "redis://" + "svc" + ":" + secret + "@redis-3:6379"
+    monkeypatch.setenv("ATF_REDIS_URL", own)
+    assert Config.load(None).redis_url == own
+
+
 def test_config_defaults_to_single_replica_mode(monkeypatch):
     for key in ("ATF_REDIS_ADDR", "ATF_REDIS_URL"):
         monkeypatch.delenv(key, raising=False)
