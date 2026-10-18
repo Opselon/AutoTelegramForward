@@ -2484,7 +2484,8 @@ class SqliteUserTaskRepository(ITaskRepository):
         def _tx(conn):
             cur = conn.execute(
                 "UPDATE user_tasks SET status='RUNNING', attempt=attempt+1,"
-                " lease_token=?, lease_until=?, started_at=?, updated_at=?"
+                " lease_token=?, lease_until=?, started_at=?, updated_at=?,"
+                " result_json='', error='', error_code=''"
                 " WHERE id IN (SELECT id FROM user_tasks WHERE status IN ('PENDING','RETRY_WAIT')"
                 " AND run_at<=? ORDER BY created_at, id LIMIT 1)"
                 " RETURNING *",

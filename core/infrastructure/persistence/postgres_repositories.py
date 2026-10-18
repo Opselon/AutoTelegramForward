@@ -93,6 +93,67 @@ def _format_sql(query: str, db: Any) -> str:
 _CONN_LOCKS: dict = {}
 
 
+def _split_sql_script(script: str) -> List[str]:
+    """Split a DDL script into runnable statements, ignoring comments.
+
+    Splitting on ";" alone is wrong: the schema scripts carry `--` commentary,
+    and two of those comment lines contain a semicolon ("... the contract is
+    `last_error` on both backends." / "... ; used_at makes it single-use.").
+    The naive split cut the following CREATE TABLE in half and shipped the
+    fragments to the server as statements, so `dead_letter_queue` and
+    `web_login_codes` were never created on PostgreSQL deployments while the
+    error was swallowed by the caller. Strings are tracked so a semicolon
+    inside a quoted default is not treated as a statement boundary either.
+    """
+    statements: List[str] = []
+    buf: List[str] = []
+    i, n = 0, len(script)
+    in_string = False
+    while i < n:
+        ch = script[i]
+        nxt = script[i + 1] if i + 1 < n else ""
+        if in_string:
+            buf.append(ch)
+            if ch == "'":
+                if nxt == "'":  # escaped quote
+                    buf.append(nxt)
+                    i += 2
+                    continue
+                in_string = False
+            i += 1
+            continue
+        if ch == "'":
+            in_string = True
+            buf.append(ch)
+            i += 1
+            continue
+        if ch == "-" and nxt == "-":  # line comment
+            while i < n and script[i] != "\n":
+                i += 1
+            buf.append("\n")
+            continue
+        if ch == "/" and nxt == "*":  # block comment
+            i += 2
+            while i + 1 < n and not (script[i] == "*" and script[i + 1] == "/"):
+                i += 1
+            i += 2
+            buf.append("\n")
+            continue
+        if ch == ";":
+            stmt = "".join(buf).strip()
+            if stmt:
+                statements.append(stmt)
+            buf = []
+            i += 1
+            continue
+        buf.append(ch)
+        i += 1
+    tail = "".join(buf).strip()
+    if tail:
+        statements.append(tail)
+    return statements
+
+
 def _get_db_lock(db: Any) -> asyncio.Lock:
     db_id = id(db)
     if db_id not in _CONN_LOCKS:
@@ -1544,17 +1605,58 @@ async def initialize_postgres_schema(db: Any) -> None:
             value TEXT NOT NULL,
             created_at BIGINT NOT NULL
         );
+        -- v24 (mirror of the SQLite migration): the per-user task lifecycle.
+        -- main.py binds PostgresUserTaskRepository whenever ATF_DATABASE_URL is
+        -- set, so without this DDL every task operation on a PostgreSQL
+        -- deployment fails with UndefinedTableError on first use. Types mirror
+        -- the SQLite columns (BIGINT for the epoch timestamps and the owner id,
+        -- TEXT with NOT NULL defaults elsewhere) so the repository SQL runs
+        -- unchanged against either engine.
+        CREATE TABLE IF NOT EXISTS user_tasks (
+            id TEXT PRIMARY KEY,
+            owner_user_id BIGINT NOT NULL,
+            kind TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            idempotency_key TEXT NOT NULL DEFAULT '',
+            attempt INTEGER NOT NULL DEFAULT 0,
+            max_attempts INTEGER NOT NULL DEFAULT 3,
+            lease_token TEXT NOT NULL DEFAULT '',
+            lease_until BIGINT NOT NULL DEFAULT 0,
+            run_at BIGINT NOT NULL DEFAULT 0,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            result_json TEXT NOT NULL DEFAULT '',
+            error TEXT NOT NULL DEFAULT '',
+            error_code TEXT NOT NULL DEFAULT '',
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            started_at BIGINT NOT NULL DEFAULT 0,
+            finished_at BIGINT NOT NULL DEFAULT 0
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_user_tasks_idem
+            ON user_tasks (owner_user_id, kind, idempotency_key)
+            WHERE idempotency_key != '';
+        CREATE INDEX IF NOT EXISTS idx_user_tasks_owner
+            ON user_tasks (owner_user_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_user_tasks_pick
+            ON user_tasks (status, run_at, created_at, id);
         """,
     ]
 
     for stmt in ddl_statements:
-        for query in stmt.strip().split(";"):
+        for query in _split_sql_script(stmt):
             cleaned = query.strip()
             if cleaned:
                 try:
                     await _execute_db(db, cleaned)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Not fatal: "already exists" style races between replicas
+                    # are expected. Anything else must still be visible — a
+                    # swallowed CREATE TABLE is how the user_tasks table went
+                    # missing on PostgreSQL deployments without a single
+                    # warning. The statement text (never the data) is logged.
+                    logger.warning(
+                        "PostgreSQL schema statement failed (%s): %s",
+                        type(exc).__name__, cleaned.split("\n", 1)[0][:160])
 
 
 
@@ -1674,13 +1776,34 @@ class PostgresUserTaskRepository(ITaskRepository):
 
     async def acquire_next(self, lease_token: str, lease_until: int,
                            now: int) -> Optional[UserTask]:
+        """Claim one runnable task, locking the candidate before the UPDATE.
+
+        The previous form selected the candidate in an InitPlan subquery and
+        relied on the status predicate living inside it. Under READ COMMITTED a
+        worker that waits on a row another worker just claimed re-evaluates
+        ONLY the outer quals (id equality) — the status predicate inside the
+        subquery is never rechecked, so the loser overwrote the winner's
+        lease_token and both executors ran the same task (attempt inflated).
+
+        `FOR UPDATE SKIP LOCKED` puts the lock in the same statement as the
+        candidate selection: a concurrent worker skips the locked row and takes
+        the next candidate instead of waiting for it, and the outer status/run_at
+        quals are rechecked after the lock is acquired.
+        """
         row = await _fetch_one_db(
             self._db,
             "UPDATE user_tasks SET status='RUNNING', attempt=attempt+1, lease_token=%s,"
-            " lease_until=%s, started_at=%s, updated_at=%s WHERE id IN ("
+            " lease_until=%s, started_at=%s, updated_at=%s, result_json='',"
+            " error='', error_code=''"
+            " WHERE id IN ("
+            " SELECT id FROM ("
             " SELECT id FROM user_tasks WHERE status IN ('PENDING','RETRY_WAIT')"
-            " AND run_at<=%s ORDER BY created_at, id LIMIT 1) RETURNING *",
-            (lease_token, int(lease_until), int(now), int(now), int(now)),
+            " AND run_at<=%s ORDER BY created_at, id LIMIT 1"
+            " FOR UPDATE SKIP LOCKED"
+            " ) AS candidate)"
+            " AND status IN ('PENDING','RETRY_WAIT') AND run_at<=%s"
+            " RETURNING *",
+            (lease_token, int(lease_until), int(now), int(now), int(now), int(now)),
         )
         return self._row_to_entity(row) if row else None
 
