@@ -124,7 +124,9 @@ class AccountControlServicer(pb_grpc.AccountControlServiceServicer):
             try:
                 return bytes.fromhex(str(row["value"]))
             except ValueError:
-                logger.error("app_secrets.%s is not hex; generating a new secret", _SECRET_ROW)
+                # Deliberately carries no value and no key name: the only thing
+                # worth saying is that the stored key was unreadable.
+                logger.error("the stored signing key could not be read; generating a new one")
         generated = secrets.token_bytes(DEPLOYMENT_SECRET_MIN_BYTES)
         self._db.execute(
             "INSERT OR IGNORE INTO app_secrets(key, value, created_at) VALUES(?, ?, ?)",
