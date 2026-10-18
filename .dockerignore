@@ -35,7 +35,12 @@
 **/.dart_tool
 mobile/
 website/
-docs/
+# docs/* (not docs/) so the file-negation below actually re-includes it
+# (dockerignore cannot traverse into a fully excluded directory). The API's
+# own contract ships inside the api image: GET /api/openapi.yaml copies it
+# next to the binary, so the published doc cannot drift from the serving code.
+docs/*
+!docs/openapi.yaml
 k8s/
 logger/
 scripts/
