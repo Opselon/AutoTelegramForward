@@ -31,6 +31,7 @@ from core.infrastructure.persistence.postgres_repositories import (  # noqa: E40
     PostgresForwardRuleRepository,
     PostgresMessageMapRepository,
     PostgresPromptRepository,
+    PostgresUserTaskRepository,
     initialize_postgres_schema,
 )
 from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
@@ -48,6 +49,7 @@ from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
     SqlitePromptRepository,
     SqliteRuleStatsRepository,
     SqliteSessionRepository,
+    SqliteUserTaskRepository,
     SqliteSettingsRepository,
     SqliteUiStateRepository,
     SqliteUserRepository,
@@ -192,6 +194,17 @@ def build_container(cfg: Config) -> dict:
     else:
         msg_map_repo = SqliteMessageMapRepository(db)
         queue_repo = SqliteDeliveryQueueRepository(db)
+    # Per-user task lifecycle (API-first phase 2): the authoritative state
+    # machine lives beside every other tenant resource, whichever engine is in
+    # use. Same deferred-pool rebinding rules as the other pg repos.
+    from core.application.user_tasks import UserTaskUseCases  # noqa: E402
+    if pg_pool is not None:
+        task_repo = PostgresUserTaskRepository(pg_pool)
+    else:
+        task_repo = SqliteUserTaskRepository(db)
+    tasks = UserTaskUseCases(task_repo)
+    if asyncio.iscoroutine(task_repo._db):
+        task_repo._db = pg_pool
     factory = AIProviderFactory()
 
     prompt_service = PromptService(prompt_repo)
@@ -348,6 +361,8 @@ def build_container(cfg: Config) -> dict:
         "msg_map": msg_map_repo,
         "audit_repo": audit_repo,
         "queue_repo": queue_repo,
+        "task_repo": task_repo,
+        "tasks": tasks,
         "queue_manager": queue_manager,
         "lease_coordinator": lease_coordinator,
         "sync_engine": sync_engine,
@@ -403,7 +418,8 @@ async def _resolve_pg_pool(container: dict) -> None:
         return
     resolved = await pool
     # Rebind every repo that was constructed against the coroutine.
-    for key in ("rule_repo", "prompt_repo", "msg_map_repo", "queue_repo"):
+    for key in ("rule_repo", "prompt_repo", "msg_map_repo", "queue_repo",
+                "task_repo"):
         obj = container.get(key)
         if obj is not None and asyncio.iscoroutine(getattr(obj, "_db", None)):
             obj._db = resolved
@@ -494,6 +510,11 @@ async def serve_grpc(container: dict, cfg: Config):
         pb_grpc.add_AdminControlServiceServicer_to_server(
             container["admin_servicer"], server,
         )
+    # Per-user task lifecycle (API-first phase 2) — creation/control surface.
+    from core.infrastructure.grpc_server.task_servicer import TaskControlServicer  # noqa: E402
+    pb_grpc.add_TaskControlServiceServicer_to_server(
+        TaskControlServicer(container["tasks"]), server,
+    )
     addr = f"{cfg.grpc_host}:{cfg.grpc_port}"
     server.add_insecure_port(addr)
     await server.start()
@@ -536,6 +557,38 @@ async def sync_pool_credentials(container: dict) -> None:
             logger.warning("bad credential %s skipped", c.id[:8])
 
 
+async def _start_task_worker(container: dict) -> None:
+    """Start the per-user task worker. It is NOT a startup gate: if the build
+    fails the process continues without task execution and logs the reason."""
+    from core.application.user_task_worker import UserTaskWorker, build_executors  # noqa: E402
+    try:
+        executors = build_executors(container)
+        worker = UserTaskWorker(container["tasks"], executors,
+                                container=container,
+                                max_concurrent=getattr(container["config"],
+                                                       "task_worker_concurrency", 4))
+        container["task_worker"] = worker
+        container["task_worker_handle"] = asyncio.create_task(worker.run_forever())
+        logger.info("User task worker started (%d executor kinds)", len(executors))
+    except Exception:
+        logger.exception("user task worker failed to start; task creation "
+                         "remains enabled and tasks stay PENDING")
+
+
+async def _stop_task_worker(container: dict) -> None:
+    worker = container.get("task_worker")
+    if worker is None:
+        return
+    worker.stop()
+    handle = container.get("task_worker_handle")
+    if handle is not None and not handle.done():
+            handle.cancel()
+            try:
+                await handle
+            except (asyncio.CancelledError, Exception):
+                pass
+
+
 async def _connect_lease_coordinator(container: dict) -> None:
     """Connect the optional lease store before any coordinated loop starts.
 
@@ -565,6 +618,7 @@ async def main() -> None:
             container = await container
         await _resolve_pg_pool(container)
         await _connect_lease_coordinator(container)
+        await _start_task_worker(container)
         grpc_server = await serve_grpc(container, cfg)
         await seed_default_credential(container, cfg)
         await sync_pool_credentials(container)
@@ -573,6 +627,7 @@ async def main() -> None:
         try:
             await asyncio.Event().wait()
         finally:
+            await _stop_task_worker(container)
             mgr = container.get("boot_manager")
             if mgr:
                 await mgr.stop_reconciler()
@@ -658,6 +713,7 @@ async def main() -> None:
     if queue_mgr:
         await queue_mgr.start()
     logger.info("Bot started and durable queue workers active. Core is running.")
+    await _start_task_worker(container)
 
     # Restore saved sessions + bind real-time handlers (the actual forwarder).
     from core.infrastructure.telegram.session_boot import restore_all_sessions  # noqa: E402

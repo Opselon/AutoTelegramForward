@@ -658,6 +658,68 @@ class ApiClient {
   // Authenticated dashboard surface (`/api/*` in api/main.go)
   // ------------------------------------------------------------------ //
 
+  // ------------------------------------------------------------------ //
+  // Task lifecycle (`api/main.go`: /api/tasks, authenticated)
+  // ------------------------------------------------------------------ //
+
+  /// Lists the caller's async jobs. Owned rows only — the server scopes the
+  /// query to the JWT identity.
+  Future<TasksPage> listTasks({String? status, String? kind, int limit = 50, int offset = 0}) =>
+      _request<TasksPage>(
+        method: 'GET',
+        path: '/api/tasks',
+        query: {
+          if (status != null && status.isNotEmpty) 'status': status,
+          if (kind != null && kind.isNotEmpty) 'kind': kind,
+          'limit': '$limit',
+          'offset': '$offset',
+        },
+        fromJson: TasksPage.fromJson,
+        retryable: true,
+      );
+
+  /// Submits an async job. Same (kind, idempotency_key) returns the original
+  /// task — safe to retry over an unstable network.
+  Future<CreateTaskResult> createTask({
+    required String kind,
+    Map<String, Object?> payload = const {},
+    String idempotencyKey = '',
+    int maxAttempts = 0,
+  }) =>
+      _request<CreateTaskResult>(
+        method: 'POST',
+        path: '/api/tasks',
+        body: <String, dynamic>{
+          'kind': kind,
+          'payload': payload,
+          if (idempotencyKey.isNotEmpty) 'idempotency_key': idempotencyKey,
+          if (maxAttempts > 0) 'max_attempts': maxAttempts,
+        },
+        fromJson: CreateTaskResult.fromJson,
+        retryable: false,
+      );
+
+  Future<UserTask> getTask(String id) => _request<UserTask>(
+        method: 'GET',
+        path: '/api/tasks/$id',
+        fromJson: (json) => UserTask.fromJson((json['task'] as Map).cast<String, dynamic>()),
+        retryable: true,
+      );
+
+  Future<UserTask> cancelTask(String id) => _request<UserTask>(
+        method: 'POST',
+        path: '/api/tasks/$id/cancel',
+        fromJson: (json) => UserTask.fromJson((json['task'] as Map).cast<String, dynamic>()),
+        retryable: false,
+      );
+
+  Future<UserTask> retryTask(String id) => _request<UserTask>(
+        method: 'POST',
+        path: '/api/tasks/$id/retry',
+        fromJson: (json) => UserTask.fromJson((json['task'] as Map).cast<String, dynamic>()),
+        retryable: false,
+      );
+
   Future<SystemStats> stats() => _request(
     method: 'GET',
     path: '/api/stats',

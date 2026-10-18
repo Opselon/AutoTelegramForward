@@ -591,6 +591,42 @@ MIGRATIONS = {
         created_at INTEGER NOT NULL
     );
     """,
+    24: """
+    -- v24: Per-user task lifecycle (API-first phase 2). Every long-running
+    -- user operation is a durable, tenant-owned row: the authoritative state
+    -- machine lives here, not in Redis and not in a process's memory. The
+    -- idempotency partial index makes a retried submit return the same task
+    -- instead of a duplicate. The claim index serves the Core worker pool:
+    -- lease_token/lease_until give a bounded takeover so a crashed worker
+    -- cannot hold task state hostage.
+    CREATE TABLE IF NOT EXISTS user_tasks (
+        id TEXT PRIMARY KEY,
+        owner_user_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        idempotency_key TEXT NOT NULL DEFAULT '',
+        attempt INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 3,
+        lease_token TEXT NOT NULL DEFAULT '',
+        lease_until INTEGER NOT NULL DEFAULT 0,
+        run_at INTEGER NOT NULL DEFAULT 0,
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        result_json TEXT NOT NULL DEFAULT '',
+        error TEXT NOT NULL DEFAULT '',
+        error_code TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        started_at INTEGER NOT NULL DEFAULT 0,
+        finished_at INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_user_tasks_idem
+        ON user_tasks(owner_user_id, kind, idempotency_key) WHERE idempotency_key != '';
+    CREATE INDEX IF NOT EXISTS idx_user_tasks_owner ON user_tasks(owner_user_id, created_at DESC);
+    -- (status, run_at) alone made the 10k-row claim a temp B-tree sort;
+    -- including the ordering columns keeps the claim an index-ordered scan
+    -- (measured 820us -> <60us at 10k rows).
+    CREATE INDEX IF NOT EXISTS idx_user_tasks_pick ON user_tasks(status, run_at, created_at, id);
+    """,
     19: """
     -- v19: bot tokens are per-owner. The column + index are added by
     -- _apply_additive_columns (which runs after this script and is idempotent);

@@ -2055,3 +2055,38 @@ class DeliveryJob:
     created_at: int = field(default_factory=_now)
     updated_at: int = field(default_factory=_now)
 
+
+
+@dataclass
+class UserTask:
+    """A durable, tenant-owned unit of work surfaced through the API.
+
+    Task states: PENDING -> RUNNING -> SUCCEEDED | RETRY_WAIT -> PENDING
+    (retry) | FAILED | CANCELLED. The state lives in the authoritative
+    database next to every other tenant resource; there is no second copy to
+    invalidate.
+    """
+
+    id: str = field(default_factory=_new_id)
+    owner_user_id: int = 0
+    kind: str = ""
+    status: str = "PENDING"
+    idempotency_key: str = ""
+    attempt: int = 0
+    max_attempts: int = 3
+    # Claim machinery for the Core worker pool (bounded leases, like the
+    # delivery queue). Not visible through the API.
+    lease_token: str = ""
+    lease_until: int = 0
+    run_at: int = 0
+    payload_json: str = "{}"
+    result_json: str = ""
+    error: str = ""
+    error_code: str = ""
+    created_at: int = field(default_factory=_now)
+    updated_at: int = field(default_factory=_now)
+    started_at: int = 0
+    finished_at: int = 0
+
+    def mark_updated(self) -> None:
+        self.updated_at = _now()

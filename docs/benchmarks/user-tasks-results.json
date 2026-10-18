@@ -1,0 +1,39 @@
+{
+  "engine": "sqlite",
+  "results": [
+    {
+      "submit_p50": 34.514450235292315,
+      "list_p50": 165.61851953156292,
+      "list_p99": 347.13902277871966,
+      "acquire_us_per_op": 23.213011445477605,
+      "acquire_p99": 34.03994778636843,
+      "claims": 100,
+      "distinct_tasks_claimed": 1,
+      "load": 100,
+      "setup_db_s": 0.0157
+    },
+    {
+      "submit_p50": 54.188955982681364,
+      "list_p50": 357.16351703740656,
+      "list_p99": 1228.0449736863375,
+      "acquire_us_per_op": 59.98299457132816,
+      "acquire_p99": 87.1898781042546,
+      "claims": 200,
+      "distinct_tasks_claimed": 1,
+      "load": 1000,
+      "setup_db_s": 0.0134
+    },
+    {
+      "submit_p50": 74.66067879577167,
+      "list_p50": 2244.0130123868585,
+      "list_p99": 3345.199045725167,
+      "acquire_us_per_op": 469.2419897764921,
+      "acquire_p99": 819.9544652597979,
+      "claims": 200,
+      "distinct_tasks_claimed": 1,
+      "load": 10000,
+      "setup_db_s": 0.042
+    }
+  ],
+  "spec": "2 vCPU host (see docs/api-phase2.md for exact hardware)"
+}

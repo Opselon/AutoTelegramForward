@@ -65,6 +65,8 @@ func main() {
 	mux.HandleFunc("GET /healthz", h.Health)
 	mux.HandleFunc("GET /health", h.Health)
 	mux.HandleFunc("GET /api/version", h.Version)
+	// The API's own machine-readable contract (ships in the image).
+	mux.HandleFunc("GET /api/openapi.yaml", h.OpenAPIDoc)
 	mux.HandleFunc("GET /api/v1/health/services", h.ServicesHealth)
 	mux.HandleFunc("GET /api/health/services", h.ServicesHealth)
 	// Setup/readiness surface: what this deployment is configured with (booleans
@@ -138,6 +140,14 @@ func main() {
 	dashMux.HandleFunc("POST /filters", h.CreateFilter)
 	dashMux.HandleFunc("PUT /filters/{id}", h.UpdateFilter)
 	dashMux.HandleFunc("DELETE /filters/{id}", h.DeleteFilter)
+	// Per-user task lifecycle (API-first phase 2): creation, progress,
+	// cancellation and retry. Every route scopes to the verified identity.
+	dashMux.HandleFunc("GET /tasks", h.ListTasks)
+	dashMux.HandleFunc("POST /tasks", h.CreateTask)
+	dashMux.HandleFunc("GET /tasks/{id}", h.GetTask)
+	dashMux.HandleFunc("POST /tasks/{id}/cancel", h.CancelTask)
+	dashMux.HandleFunc("POST /tasks/{id}/retry", h.RetryTask)
+
 	dashMux.HandleFunc("GET /queue", h.DeliveryStats)
 	dashMux.HandleFunc("GET /dlq", h.ListDeadLetter)
 	dashMux.HandleFunc("POST /dlq/{id}/retry", h.ReplayDeadLetter)

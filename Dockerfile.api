@@ -25,6 +25,10 @@ COPY --from=builder /atf-api /usr/local/bin/atf-api
 # file (the CLI does the same from the repo root). Without it the shipped
 # API answered "dev" to a question the mobile client displays.
 COPY VERSION /etc/atf/VERSION
+# The machine-readable API contract ships with the binary that serves it:
+# GET /api/openapi.yaml returns exactly this document (no second copy in the
+# website can drift from it).
+COPY docs/openapi.yaml /etc/atf/openapi.yaml
 
 EXPOSE 8080
 ENV ATF_CORE_GRPC=core:50051 \

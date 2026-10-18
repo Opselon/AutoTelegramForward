@@ -1,0 +1,201 @@
+openapi: 3.1.0
+info:
+  title: AutoTelegramForward API
+  version: "2.3.0"
+  description: |
+    The Go API is the single authoritative entry point for every
+    client-facing operation (web dashboard, Telegram bot surface, Telegram
+    Mini App, Flutter mobile clients, CLI). Identity is verified once
+    (Bearer JWT or Telegram TMA exchange) and every request is scoped to that
+    verified tenant server-side — client-supplied owner fields are ignored.
+
+    Identity binding (per network transport):
+    - HTT> requests: `Authorization: Bearer <JWT>`; optional signed-session
+      binding via `X-Session-Id` (the Go API verifies the signed session
+      header before proxying the request to gRPC with the verified session
+      attached).
+    - Telegram: TMA `initData` (signature-verified) exchanged at
+      `/api/auth/tma` for the same JWT; the Task lifecycle does NOT accept
+      `owner_user_id` in any request body — it is derived strictly from the
+      verified identity at the gRPC boundary and echoed in the response
+      envelope (`X-Request-Id` per Correlation from middleware/correlation.go).
+
+    The per-user task lifecycle (`/api/tasks`) gives every long-running user
+    operation a durable, tenant-owned state machine in the authoritative
+    database. States: `PENDING → RUNNING → SUCCEEDED | RETRY_WAIT →
+    PENDING (retry) | FAILED | CANCELLED`.
+
+externalDocs:
+  description: Phase 2 architecture notes
+  url: https://github.com/Opselon/AutoTelegramForward/blob/master/docs/api-phase2.md
+
+servers:
+  - url: /api
+    description: Current deployment (proxied by atf-web with HTTPS)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    taskId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    UserTask:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        owner_user_id: { type: integer, format: int64, description: "Owner resolved from the verified token; echoed for client-side checks" }
+        kind:
+          type: string
+          enum: [session.backup, dlq.replay, dlq.purge, backup.export]
+        status:
+          type: string
+          enum: [PENDING, RUNNING, RETRY_WAIT, SUCCEEDED, FAILED, CANCELLED]
+        idempotency_key: { type: string }
+        attempt: { type: integer }
+        max_attempts: { type: integer, maximum: 8 }
+        payload_json: { type: object, description: "Bounded to 64 KiB server-side" }
+        result_json: { type: object }
+        error: { type: string }
+        error_code: { type: string }
+        created_at: { type: integer, description: "epoch seconds" }
+        updated_at: { type: integer }
+        started_at: { type: integer }
+        finished_at: { type: integer }
+    TaskEnvelope:
+      type: object
+      required: [task]
+      properties:
+        task: { $ref: '#/components/schemas/UserTask' }
+    CreateTaskReply:
+      type: object
+      properties:
+        task: { $ref: '#/components/schemas/UserTask' }
+        already_existed:
+          type: boolean
+          description: "true → the idempotency key matched an existing task (HTTP 200); false → created (HTTP 201)"
+        id: { type: string }
+        status: { type: string }
+    TaskPage:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items: { $ref: '#/components/schemas/UserTask' }
+        total: { type: integer }
+        limit: { type: integer, maximum: 200 }
+        offset: { type: integer, minimum: 0 }
+    Refusal:
+      type: object
+      properties:
+        error: { type: string }
+        error_code: { type: string }
+
+  responses:
+    NotFound: { description: "Not found (a foreign task is deliberately indistinguishable from a missing one)", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
+    BadRequest: { description: "Refused: unknown kind, malformed payload, invalid state transition", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
+    Unauthorized: { description: "No verified identity", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
+
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Password login → JWT (also /auth/register, /auth/exchange-bot-token, /auth/tma)
+      responses: { "200": { description: OK } }
+
+  /tasks:
+    get:
+      tags: [tasks]
+      summary: List the caller's async jobs
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, RUNNING, RETRY_WAIT, SUCCEEDED, FAILED, CANCELLED] } }
+        - { name: kind, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TaskPage' } } } }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [tasks]
+      summary: Submit an async job (idempotent)
+      description: |
+        The identity is taken from the verified token; `owner_user_id` in
+        the body is ignored. Resubmitting with the same `idempotency_key`
+        returns the original task with HTTP 200 + `already_existed: true`.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [session.backup, dlq.replay, dlq.purge, backup.export] }
+                payload: { type: object, description: "kind-specific; bounded to 64 KiB" }
+                idempotency_key: { type: string, maxLength: 200 }
+                max_attempts: { type: integer, minimum: 1, maximum: 8 }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/CreateTaskReply' } } } }
+        "200": { description: "Idempotent replay of an existing task", content: { application/json: { schema: { $ref: '#/components/schemas/CreateTaskReply' } } } }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+
+  /tasks/{id}:
+    get:
+      tags: [tasks]
+      summary: Poll one job (state, attempt, structured error)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TaskEnvelope' } } } }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+
+  /tasks/{id}/cancel:
+    post:
+      tags: [tasks]
+      summary: Cancel a queued job (before a worker claims it)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200": { description: Cancelled (or already cancelled — idempotent) }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "404": { $ref: '#/components/responses/NotFound' }
+
+  /tasks/{id}/retry:
+    post:
+      tags: [tasks]
+      summary: Re-queue a FAILED job (attempt budget resets)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200": { description: Re-queued as PENDING (or already queued — idempotent) }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "404": { $ref: '#/components/responses/NotFound' }
+
+  /rules:
+    get: { tags: [rules], summary: "List the caller's forwarding rules (tenant-scoped)", security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
+    post: { tags: [rules], summary: Create a rule, security: [{ bearerAuth: [] }], responses: { "201": { description: Created } } }
+
+  /sessions:
+    get: { tags: [sessions], summary: "List the caller's Telegram sessions", security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
+
+  /queue:
+    get: { tags: [queue], summary: Delivery queue statistics, security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
+
+  /dlq:
+    get: { tags: [queue], summary: List dead letters (owner rule-scope enforced in Core), security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
+
+  /logs:
+    get: { tags: [logs], summary: Query the tenant's audit/observability logs, security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
+
+  /admin/overview:
+    get: { tags: [admin], summary: Administrator control plane (RequireAdmin + audited), security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }

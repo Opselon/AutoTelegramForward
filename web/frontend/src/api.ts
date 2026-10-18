@@ -1,5 +1,8 @@
 import type {
   AIConfig,
+  TaskKind,
+  UserTask,
+  UserTaskPage,
   AIProviderInfo,
   AuthResponse,
   BotTokenInfo,
@@ -676,6 +679,33 @@ export const api = {
       method: 'DELETE',
     }),
   adminListExtensions: () => fetchJson<{ extensions: any[] }>(`${API_BASE}/admin/extensions`),
+
+  // ------------------------------------------------- Per-user task lifecycle
+  // Tenant identity travels as the bearer token only; no owner field is ever
+  // sent (the server derives it from the verified JWT and ignores any that
+  // appear in a body).
+  listTasks: (limit = 50, offset = 0) =>
+    fetchJson<UserTaskPage>(`${API_BASE}/tasks?limit=${limit}&offset=${offset}`),
+  getTask: (taskId: string) =>
+    fetchJson<{ task: UserTask }>(`${API_BASE}/tasks/${encodeURIComponent(taskId)}`),
+  createTask: (kind: TaskKind, payload: Record<string, any>, idempotencyKey?: string) =>
+    fetchJson<{ task: UserTask; already_existed: boolean; id: string; status: string }>(
+      `${API_BASE}/tasks`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          kind,
+          // The task store dedupes on (owner, kind, key) — a browser retry of
+          // the SAME submission must never double-submit.
+          idempotency_key: idempotencyKey ?? `web-${crypto.randomUUID()}`,
+          ...(payload ? { payload } : {}),
+        }),
+      },
+    ),
+  cancelTask: (taskId: string) =>
+    fetchJson<{ task: UserTask }>(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' }),
+  retryTask: (taskId: string) =>
+    fetchJson<{ task: UserTask }>(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/retry`, { method: 'POST' }),
 
   // ------------------------------------------------------------ Diagnostics
   diagnostics: () => fetchJson<DiagnosticsResponse>(`${API_BASE}/diagnostics`),

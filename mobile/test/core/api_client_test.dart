@@ -146,4 +146,83 @@ void main() {
       expect(rules, isEmpty);
     });
   });
+  group('Task lifecycle api (phase 2)', () {
+    test('createTask posts kind + idempotency key, parses already_existed', () async {
+      Uri? uri;
+      Object? sentBody;
+      final client = ApiClient(
+        baseUrl: 'https://atf.test/',
+        tokenStore: MemoryTokenStore(),
+        transport: (url, {headers, body, required method, required timeout}) async {
+          uri = url;
+          sentBody = body;
+          return http.Response(
+            jsonEncode({
+              'task': {
+                'id': 't1',
+                'kind': 'dlq.replay',
+                'status': 'PENDING',
+                'max_attempts': 3,
+              },
+              'already_existed': false,
+            }),
+            201,
+          );
+        },
+      );
+      final result = await client.createTask(
+        kind: 'dlq.replay',
+        payload: {'delivery_id': 'dead-1'},
+        idempotencyKey: 'submit-1',
+      );
+      expect(uri?.path, '/api/tasks');
+      final encoded = jsonEncode(sentBody);
+      expect(encoded, contains('dlq.replay'));
+      expect(encoded, contains('idempotency_key'));
+      expect(result.task.id, 't1');
+      expect(result.task.isTerminal, isFalse);
+      expect(result.alreadyExisted, isFalse);
+    });
+
+    test('listTasks parses the page and clamps nothing client-side', () async {
+      final client = ApiClient(
+        baseUrl: 'https://atf.test/',
+        tokenStore: MemoryTokenStore(),
+        transport: (url, {headers, body, required method, required timeout}) async {
+          return http.Response(
+            jsonEncode({
+              'tasks': [
+                {'id': 'a', 'kind': 'session.backup', 'status': 'SUCCEEDED'},
+                {'id': 'b', 'kind': 'dlq.purge', 'status': 'FAILED',
+                 'error': 'purge failed', 'error_code': 'purge_failed'},
+              ],
+              'total': 2,
+            }),
+            200,
+          );
+        },
+      );
+      final page = await client.listTasks(status: 'FAILED');
+      expect(page.total, 2);
+      expect(page.tasks[1].isTerminal, isTrue);
+      expect(page.tasks[1].errorCode, 'purge_failed');
+    });
+
+    test('cancelTask and getTask parse the task envelope', () async {
+      final client = ApiClient(
+        baseUrl: 'https://atf.test/',
+        tokenStore: MemoryTokenStore(),
+        transport: (url, {headers, body, required method, required timeout}) async {
+          return http.Response(
+            jsonEncode({'task': {'id': 'a', 'kind': 'session.backup',
+                                 'status': 'CANCELLED'}}),
+            200,
+          );
+        },
+      );
+      final cancelled = await client.cancelTask('a');
+      expect(cancelled.status, 'CANCELLED');
+      expect(cancelled.isTerminal, isTrue);
+    });
+  });
 }
