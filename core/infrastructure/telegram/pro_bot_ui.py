@@ -1015,6 +1015,20 @@ class ProBotUI:
         ])
         return InlineKeyboardMarkup(rows)
 
+    def _cancelled_connect_texts(self, lang: str) -> Tuple[str, str, str]:
+        """The cancelled-connect screen: (message, retry label, menu label).
+
+        These three lines were hardcoded per language, which meant Russian and
+        Chinese lived in the source and the other six supported languages were
+        served English. They are catalog keys like everything else, so every
+        locale renders its own text.
+        """
+        return (
+            self._t("ui_cancelled", lang=lang),
+            self._t("ui_retry_connect", lang=lang),
+            self._t("ui_back_main_menu", lang=lang),
+        )
+
     def _upgrade_text(self, uid: int = 0) -> str:
         """Render upgrade information in the account's selected language."""
         return self._t("ui_upgrade_body", lang=self._resolve_lang(uid))
@@ -3646,7 +3660,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_pv_menu(self, uid: int = 0, lang: Optional[str] = None) -> Tuple[str, InlineKeyboardMarkup]:
-        lang = self._lang_for(uid=uid) if (lang is None or lang == "fa") else lang
+        lang = lang or self._lang_for(uid=uid)
         resp = getattr(self, "_pv_responder", None)
         if not resp:
             return self._t("ui_pv_not_loaded", lang=lang), self._kbd([[("⬅️ " + self._t("ui_back", lang=lang), CB["ai"])]])
@@ -3677,7 +3691,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_pv_persona_menu(self, lang: Optional[str] = None, uid: int = 0) -> Tuple[str, InlineKeyboardMarkup]:
-        lang = self._lang_for(uid=uid) if (lang is None or lang == "fa") else lang
+        lang = lang or self._lang_for(uid=uid)
         text = self._t("ui_pv_p_title", lang=lang)
         rows = [
             [(self._t("ui_pv_p_casual", lang=lang), "pv:set_p:casual")],
@@ -3689,7 +3703,7 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_pv_delays_menu(self, lang: Optional[str] = None, uid: int = 0) -> Tuple[str, InlineKeyboardMarkup]:
-        lang = self._lang_for(uid=uid) if (lang is None or lang == "fa") else lang
+        lang = lang or self._lang_for(uid=uid)
         text = self._t("ui_pv_d_title", lang=lang)
         rows = [
             [(self._t("ui_pv_d_fast", lang=lang), "pv:set_d:fast")],
@@ -3868,22 +3882,7 @@ class ProBotUI:
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
             if not sessions:
                 lang = await self._get_user_lang(uid)
-                if lang == "fa":
-                    c_text = self._t("ui_cancelled")
-                    btn_connect = self._t("ui_retry_connect")
-                    btn_menu = self._t("ui_back_main_menu")
-                elif lang == "ru":
-                    c_text = "❌ Операция отменена."
-                    btn_connect = "🚀 Подключить снова"
-                    btn_menu = "🏚️ Главное меню"
-                elif lang == "zh":
-                    c_text = "❌ 操作已取消。"
-                    btn_connect = "🚀 重新连接"
-                    btn_menu = "🏚️ 主菜单"
-                else:
-                    c_text = "❌ Operation cancelled."
-                    btn_connect = "🚀 Connect Again"
-                    btn_menu = "🏚️ Main Menu"
+                c_text, btn_connect, btn_menu = self._cancelled_connect_texts(lang)
                 kbd = self._kbd([
                     [(btn_connect, CB["login"])],
                     [(btn_menu, CB["main"])],
@@ -4438,7 +4437,6 @@ class ProBotUI:
         async def _cb_upgrade(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             text = self._upgrade_text(uid)
-            is_fa = self._resolve_lang(uid) == "fa"
             btn_buy = self._t("ui_buy_btn", lang=self._resolve_lang(uid))
             btn_back = "⬅️ " + self._t("ui_back")
             kbd = InlineKeyboardMarkup([
@@ -4978,22 +4976,7 @@ class ProBotUI:
                 sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
                 if not sessions:
                     lang = await self._get_user_lang(uid)
-                    if lang == "fa":
-                        c_text = self._t("ui_cancelled")
-                        btn_connect = self._t("ui_retry_connect")
-                        btn_menu = self._t("ui_back_main_menu")
-                    elif lang == "ru":
-                        c_text = "❌ Операция отменена."
-                        btn_connect = "🚀 Подключить снова"
-                        btn_menu = "🏚️ Главное меню"
-                    elif lang == "zh":
-                        c_text = "❌ 操作已取消。"
-                        btn_connect = "🚀 重新连接"
-                        btn_menu = "🏚️ 主菜单"
-                    else:
-                        c_text = "❌ Operation cancelled."
-                        btn_connect = "🚀 Connect Again"
-                        btn_menu = "🏚️ Main Menu"
+                    c_text, btn_connect, btn_menu = self._cancelled_connect_texts(lang)
                     kbd = self._kbd([
                         [(btn_connect, CB["login"])],
                         [(btn_menu, CB["main"])],

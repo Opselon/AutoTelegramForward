@@ -57,12 +57,20 @@ class AdminControlServicer(pb_grpc.AdminControlServiceServicer):
         if self._i18n is None:
             return key
         try:
-            table = getattr(self._i18n, "_catalog", {}).get(self._i18n_lang(uid)) or {}
-            template = table.get(key)
+            catalog = getattr(self._i18n, "_catalog", {}) or {}
+            lang = self._i18n_lang(uid)
+            template = (catalog.get(lang) or {}).get(key)
             if template is None:
+                # A notification the recipient cannot read is a support ticket;
+                # English is the documented fallback, and a key that exists
+                # nowhere is a bug the log has to show.
+                template = (catalog.get("en") or {}).get(key)
+            if template is None:
+                logger.error("no catalog entry for notification %r (language %r)", key, lang)
                 return key
             return template.format(**kw) if kw else template
         except Exception:
+            logger.exception("could not localize notification %r for uid=%s", key, uid)
             return key
 
     def _i18n_lang(self, uid: int) -> str:
@@ -269,7 +277,7 @@ class AdminControlServicer(pb_grpc.AdminControlServiceServicer):
 
         if self._bot and initiator_id > 0:
             try:
-                msg = self._localized("ui_broadcast_done", initiator_id,
+                msg = self._localized("ui_admin_broadcast_done", initiator_id,
                                       sent=sent, failed=failed, total=len(recipients))
                 await self._bot.send_message(initiator_id, msg)
             except Exception:
