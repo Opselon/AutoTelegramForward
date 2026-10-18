@@ -578,6 +578,19 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_web_login_codes_user ON web_login_codes(user_id);
     CREATE INDEX IF NOT EXISTS idx_web_login_codes_created ON web_login_codes(created_at);
     """,
+    23: """
+    -- v23: the deployment's own secrets, starting with the session signing key.
+    -- A signing key derived from something public (a path, a default name) is
+    -- not a secret: the old fallback hashed the database path, which is in the
+    -- compose file, so anyone could sign a token for any account. The generated
+    -- key lives here instead — random, one row, shared by every process that
+    -- reads this database, and never part of an image or a config file.
+    CREATE TABLE IF NOT EXISTS app_secrets (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+    );
+    """,
     19: """
     -- v19: bot tokens are per-owner. The column + index are added by
     -- _apply_additive_columns (which runs after this script and is idempotent);
