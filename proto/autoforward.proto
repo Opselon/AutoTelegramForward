@@ -1037,6 +1037,15 @@ message IssueWebTokenRequest {
   int64 user_id = 1;          // bot -> core: mint a dashboard token for this user
 }
 
+// A login code is a single-use, short-lived secret the bot hands to the
+// Telegram user in a link. The API exchanges it for a session token, so the
+// link stops working the moment it is used (or after ten minutes). Exchanging
+// a Telegram user id is NOT possible: only the code names the account, and
+// only the core that minted it can burn it.
+message ExchangeWebLoginCodeRequest {
+  string login_code = 1;
+}
+
 message ChangePasswordRequest {
   int64 user_id = 1;
   string old_password = 2;
@@ -1048,6 +1057,9 @@ service AccountControlService {
   rpc LoginAccount(LoginAccountRequest) returns (LoginAccountResponse);
   rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
   rpc IssueWebToken(IssueWebTokenRequest) returns (LoginAccountResponse);
+  // Single-use exchange: the only way an unauthenticated client can turn a
+  // bot-issued link into a session. There is deliberately no "mint for user X".
+  rpc ExchangeWebLoginCode(ExchangeWebLoginCodeRequest) returns (LoginAccountResponse);
   rpc ChangePassword(ChangePasswordRequest) returns (StatusResponse);
   rpc GetAccount(GetAccountRequest) returns (WebAccount);
 }

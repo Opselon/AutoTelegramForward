@@ -26,6 +26,7 @@ import uuid
 from functools import wraps
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 from pyrogram import Client, filters
 from pyrogram.errors import MessageNotModified
@@ -850,22 +851,15 @@ class ProBotUI:
         # Server info
         server_name = "VIP 995"
 
-        # Web Token
-        token_str = "None"
+        # Web access is provisioned here so the Dashboard button always has an
+        # account to hand a login code to. Nothing is minted or shown: the old
+        # menu printed the first 24 characters of the session token, which put a
+        # live credential in a message body.
         if self._accounts is not None:
             try:
-                _, _, tok = await self._accounts.get_or_create_credentials(
+                await self._accounts.get_or_create_credentials(
                     uid, display_name=display_name, force_reset=False
                 )
-                if tok:
-                    token_str = tok[:24] if len(tok) > 24 else tok
-            except Exception:
-                pass
-        if token_str == "None":
-            try:
-                minted = await self._mint_web_token(uid)
-                if minted:
-                    token_str = minted[:24] if len(minted) > 24 else minted
             except Exception:
                 pass
 
@@ -912,7 +906,6 @@ class ProBotUI:
             _t("ui_main_user_id", id=uid_str),
             _t("ui_main_phone", p=connected_phone),
             _t("ui_main_server", s=server_name),
-            _t("ui_main_token", t=token_str),
             "",
             _t("ui_main_plan_header"),
             sep,
@@ -9505,21 +9498,6 @@ class ProBotUI:
             except Exception:
                 pass
 
-    async def _mint_web_token(self, user_id: int) -> Optional[str]:
-        """Mint a JWT for this Telegram user via the Account servicer."""
-        if self._accounts is None:
-            return None
-        try:
-            from core.proto import pb
-            resp = await self._accounts.IssueWebToken(
-                pb.IssueWebTokenRequest(user_id=user_id), None
-            )
-            if getattr(resp, "success", False):
-                return resp.token
-        except Exception:
-            return None
-        return None
-
     async def _show_dashboard(self, cq: CallbackQuery, force_reset: bool = False) -> None:
         """Dashboard button: delivers secure Username, Password, and 1-tap Login button."""
         uid = cq.from_user.id
@@ -9528,17 +9506,23 @@ class ProBotUI:
 
         username = f"tg_{uid}"
         password = ""
-        token = ""
+        code = ""
         if self._accounts:
             try:
-                username, password, token = await self._accounts.get_or_create_credentials(
+                username, password, _token = await self._accounts.get_or_create_credentials(
                     uid, display_name=first_name, force_reset=force_reset
                 )
             except Exception as e:
                 logger.error("Failed to provision credentials for %s: %s", uid, e)
-                token = await self._mint_web_token(uid) or ""
+            try:
+                # The link carries a single-use code (10 minutes), never the
+                # 7-day session token: a link lives in the chat history, so it
+                # must stop working the moment it is used.
+                code, _exp = self._accounts.issue_login_code(uid)
+            except Exception as e:
+                logger.error("Failed to mint a login code for %s: %s", uid, e)
 
-        magic_link = f"{base}/?token=" + token if token else base
+        magic_link = f"{base}/?code={quote(code, safe='')}" if code else base
 
         lines = [
             self._t("ui_dashboard_body"),

@@ -1522,6 +1522,18 @@ async def initialize_postgres_schema(db: Any) -> None:
         ALTER TABLE dead_letter_queue ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
         UPDATE dead_letter_queue SET last_error = error_message WHERE last_error = '' AND error_message <> '';
         CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
+        -- v22: single-use dashboard login codes (mirror of the SQLite table).
+        -- code_hash is SHA-256 of the code; used_at makes it single-use.
+        CREATE TABLE IF NOT EXISTS web_login_codes (
+            code_hash TEXT PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            created_at BIGINT NOT NULL,
+            expires_at BIGINT NOT NULL,
+            used_at BIGINT,
+            purpose TEXT NOT NULL DEFAULT 'dashboard'
+        );
+        CREATE INDEX IF NOT EXISTS idx_pg_web_login_codes_user ON web_login_codes (user_id);
+        CREATE INDEX IF NOT EXISTS idx_pg_web_login_codes_created ON web_login_codes (created_at);
         """,
     ]
 

@@ -5,7 +5,7 @@ import warnings
 
 from . import autoforward_pb2 as autoforward__pb2
 
-GRPC_GENERATED_VERSION = '1.84.0'
+GRPC_GENERATED_VERSION = '1.68.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in autoforward_pb2_grpc.py depends on'
+        + f' but the generated code in autoforward_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class SessionControlServiceStub:
+class SessionControlServiceStub(object):
     """-----------------------------------------------------------------------------
     gRPC Services Definition
     -----------------------------------------------------------------------------
@@ -85,7 +85,7 @@ class SessionControlServiceStub:
                 _registered_method=True)
 
 
-class SessionControlServiceServicer:
+class SessionControlServiceServicer(object):
     """-----------------------------------------------------------------------------
     gRPC Services Definition
     -----------------------------------------------------------------------------
@@ -203,7 +203,7 @@ def add_SessionControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class SessionControlService:
+class SessionControlService(object):
     """-----------------------------------------------------------------------------
     gRPC Services Definition
     -----------------------------------------------------------------------------
@@ -454,7 +454,7 @@ class SessionControlService:
             _registered_method=True)
 
 
-class ForwardRuleControlServiceStub:
+class ForwardRuleControlServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -520,7 +520,7 @@ class ForwardRuleControlServiceStub:
                 _registered_method=True)
 
 
-class ForwardRuleControlServiceServicer:
+class ForwardRuleControlServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def ListRules(self, request, context):
@@ -657,7 +657,7 @@ def add_ForwardRuleControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class ForwardRuleControlService:
+class ForwardRuleControlService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -958,7 +958,7 @@ class ForwardRuleControlService:
             _registered_method=True)
 
 
-class DeliveryControlServiceStub:
+class DeliveryControlServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -989,7 +989,7 @@ class DeliveryControlServiceStub:
                 _registered_method=True)
 
 
-class DeliveryControlServiceServicer:
+class DeliveryControlServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def GetDeliveryStats(self, request, context):
@@ -1047,7 +1047,7 @@ def add_DeliveryControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class DeliveryControlService:
+class DeliveryControlService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -1159,7 +1159,7 @@ class DeliveryControlService:
             _registered_method=True)
 
 
-class FilterControlServiceStub:
+class FilterControlServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -1190,7 +1190,7 @@ class FilterControlServiceStub:
                 _registered_method=True)
 
 
-class FilterControlServiceServicer:
+class FilterControlServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def ListFilters(self, request, context):
@@ -1248,7 +1248,7 @@ def add_FilterControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class FilterControlService:
+class FilterControlService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -1360,7 +1360,7 @@ class FilterControlService:
             _registered_method=True)
 
 
-class AIControlServiceStub:
+class AIControlServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -1416,7 +1416,7 @@ class AIControlServiceStub:
                 _registered_method=True)
 
 
-class AIControlServiceServicer:
+class AIControlServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def ListAIConfigs(self, request, context):
@@ -1531,7 +1531,7 @@ def add_AIControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class AIControlService:
+class AIControlService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -1778,7 +1778,7 @@ class AIControlService:
             _registered_method=True)
 
 
-class SystemStatusControlServiceStub:
+class SystemStatusControlServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -1804,7 +1804,7 @@ class SystemStatusControlServiceStub:
                 _registered_method=True)
 
 
-class SystemStatusControlServiceServicer:
+class SystemStatusControlServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def GetSystemStats(self, request, context):
@@ -1856,7 +1856,7 @@ def add_SystemStatusControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class SystemStatusControlService:
+class SystemStatusControlService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -1941,7 +1941,7 @@ class SystemStatusControlService:
             _registered_method=True)
 
 
-class AuditControlServiceStub:
+class AuditControlServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -1957,7 +1957,7 @@ class AuditControlServiceStub:
                 _registered_method=True)
 
 
-class AuditControlServiceServicer:
+class AuditControlServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def QueryAuditEvents(self, request, context):
@@ -1982,7 +1982,7 @@ def add_AuditControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class AuditControlService:
+class AuditControlService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -2013,7 +2013,7 @@ class AuditControlService:
             _registered_method=True)
 
 
-class LogControlServiceStub:
+class LogControlServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -2044,7 +2044,7 @@ class LogControlServiceStub:
                 _registered_method=True)
 
 
-class LogControlServiceServicer:
+class LogControlServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def Log(self, request, context):
@@ -2102,7 +2102,7 @@ def add_LogControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class LogControlService:
+class LogControlService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -2214,7 +2214,7 @@ class LogControlService:
             _registered_method=True)
 
 
-class BackupControlServiceStub:
+class BackupControlServiceStub(object):
     """-----------------------------------------------------------------------------
     Backup & Restore — migrate a full installation (or one tenant) between
     servers. The snapshot is a JSON document containing LIVE CREDENTIALS, so
@@ -2241,7 +2241,7 @@ class BackupControlServiceStub:
                 _registered_method=True)
 
 
-class BackupControlServiceServicer:
+class BackupControlServiceServicer(object):
     """-----------------------------------------------------------------------------
     Backup & Restore — migrate a full installation (or one tenant) between
     servers. The snapshot is a JSON document containing LIVE CREDENTIALS, so
@@ -2285,7 +2285,7 @@ def add_BackupControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class BackupControlService:
+class BackupControlService(object):
     """-----------------------------------------------------------------------------
     Backup & Restore — migrate a full installation (or one tenant) between
     servers. The snapshot is a JSON document containing LIVE CREDENTIALS, so
@@ -2349,7 +2349,7 @@ class BackupControlService:
             _registered_method=True)
 
 
-class AccountControlServiceStub:
+class AccountControlServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -2378,6 +2378,11 @@ class AccountControlServiceStub:
                 request_serializer=autoforward__pb2.IssueWebTokenRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.LoginAccountResponse.FromString,
                 _registered_method=True)
+        self.ExchangeWebLoginCode = channel.unary_unary(
+                '/autoforward.AccountControlService/ExchangeWebLoginCode',
+                request_serializer=autoforward__pb2.ExchangeWebLoginCodeRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.LoginAccountResponse.FromString,
+                _registered_method=True)
         self.ChangePassword = channel.unary_unary(
                 '/autoforward.AccountControlService/ChangePassword',
                 request_serializer=autoforward__pb2.ChangePasswordRequest.SerializeToString,
@@ -2390,7 +2395,7 @@ class AccountControlServiceStub:
                 _registered_method=True)
 
 
-class AccountControlServiceServicer:
+class AccountControlServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def RegisterAccount(self, request, context):
@@ -2413,6 +2418,14 @@ class AccountControlServiceServicer:
 
     def IssueWebToken(self, request, context):
         """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ExchangeWebLoginCode(self, request, context):
+        """Single-use exchange: the only way an unauthenticated client can turn a
+        bot-issued link into a session. There is deliberately no "mint for user X".
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -2452,6 +2465,11 @@ def add_AccountControlServiceServicer_to_server(servicer, server):
                     request_deserializer=autoforward__pb2.IssueWebTokenRequest.FromString,
                     response_serializer=autoforward__pb2.LoginAccountResponse.SerializeToString,
             ),
+            'ExchangeWebLoginCode': grpc.unary_unary_rpc_method_handler(
+                    servicer.ExchangeWebLoginCode,
+                    request_deserializer=autoforward__pb2.ExchangeWebLoginCodeRequest.FromString,
+                    response_serializer=autoforward__pb2.LoginAccountResponse.SerializeToString,
+            ),
             'ChangePassword': grpc.unary_unary_rpc_method_handler(
                     servicer.ChangePassword,
                     request_deserializer=autoforward__pb2.ChangePasswordRequest.FromString,
@@ -2470,7 +2488,7 @@ def add_AccountControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class AccountControlService:
+class AccountControlService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -2582,6 +2600,33 @@ class AccountControlService:
             _registered_method=True)
 
     @staticmethod
+    def ExchangeWebLoginCode(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AccountControlService/ExchangeWebLoginCode',
+            autoforward__pb2.ExchangeWebLoginCodeRequest.SerializeToString,
+            autoforward__pb2.LoginAccountResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def ChangePassword(request,
             target,
             options=(),
@@ -2636,7 +2681,7 @@ class AccountControlService:
             _registered_method=True)
 
 
-class AdminControlServiceStub:
+class AdminControlServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -2702,7 +2747,7 @@ class AdminControlServiceStub:
                 _registered_method=True)
 
 
-class AdminControlServiceServicer:
+class AdminControlServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def GetOverview(self, request, context):
@@ -2837,7 +2882,7 @@ def add_AdminControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class AdminControlService:
+class AdminControlService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -3138,7 +3183,7 @@ class AdminControlService:
             _registered_method=True)
 
 
-class BotTokenControlServiceStub:
+class BotTokenControlServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -3174,7 +3219,7 @@ class BotTokenControlServiceStub:
                 _registered_method=True)
 
 
-class BotTokenControlServiceServicer:
+class BotTokenControlServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def ListBotTokens(self, request, context):
@@ -3243,7 +3288,7 @@ def add_BotTokenControlServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class BotTokenControlService:
+class BotTokenControlService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod

@@ -575,7 +575,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(req),
     }),
-  exchangeBotToken: (req: { user_id: number }) =>
+  exchangeBotToken: (req: { login_code: string }) =>
     fetchJson<AuthResponse>(`${API_BASE}/auth/exchange-bot-token`, {
       method: 'POST',
       body: JSON.stringify(req),

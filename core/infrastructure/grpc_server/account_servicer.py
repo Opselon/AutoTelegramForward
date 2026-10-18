@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 from ...proto import pb
 from ...proto import autoforward_pb2_grpc as pb_grpc
+from ...application.web_login_codes import WebLoginCodeService
 
 _JWT_ITER = 240_000
 _TOKEN_TTL = 7 * 24 * 3600
@@ -59,6 +60,7 @@ class AccountControlServicer(pb_grpc.AccountControlServiceServicer):
         self._admin_ids = set(is_admin_user or [])
         secret = os.environ.get("ATF_JWT_SECRET", "")
         self._secret = secret.encode("utf-8") if secret else None
+        self._login_codes = WebLoginCodeService(db)
 
     def _is_user_admin(self, uid: int) -> bool:
         if self._admin_service is not None:
@@ -302,23 +304,69 @@ class AccountControlServicer(pb_grpc.AccountControlServiceServicer):
         token, _ = self._jwt_issue(int(row["user_id"]), row["username"], bool(row["is_admin"]))
         return (row["username"], plain_secret, token)
 
+    async def _ensure_account(self, uid: int, context):
+        """Find the account for ``uid``, provisioning it on first use."""
+        row = self._find_by_uid(uid)
+        if row is not None:
+            return row, None
+        reg = await self.RegisterAccount(
+            pb.RegisterAccountRequest(user_id=uid, username="", password="",
+                                      display_name="", is_admin=False),
+            context)
+        if not reg.success:
+            return None, pb.LoginAccountResponse(
+                success=False, message=reg.message, error_code=reg.error_code)
+        return self._find_by_uid(uid), None
+
     async def IssueWebToken(self, request, context):
         """Bot -> core: mint a dashboard token for an authenticated Telegram user.
-        Auto-provisions the account on first use (passwordless until they set one)."""
+
+        In-process only. The bot has already verified the Telegram user before it
+        calls this; there is no wire RPC that mints for an arbitrary id (the API
+        exchanges a login code instead).
+        """
         uid = int(request.user_id or 0)
         if uid <= 0:
             return pb.LoginAccountResponse(success=False, message="user_id required",
                                            error_code="INVALID_USER")
+        row, failed = await self._ensure_account(uid, context)
+        if failed is not None:
+            return failed
+        return self._login_success(row)
+
+    def issue_login_code(self, user_id: int, ttl_seconds: int | None = None) -> tuple[str, int]:
+        """Mint a single-use dashboard code for a user the bot just authenticated.
+
+        Returns ``(code, expires_at)``. The code goes into the link and nowhere
+        else: it is not logged and only its digest is stored.
+        """
+        uid = int(user_id)
+        if uid <= 0:
+            raise ValueError("user_id is required")
         row = self._find_by_uid(uid)
         if row is None:
-            reg = await self.RegisterAccount(
-                pb.RegisterAccountRequest(user_id=uid, username="", password="",
-                                          display_name="", is_admin=False),
-                context)
-            if not reg.success:
-                return pb.LoginAccountResponse(success=False, message=reg.message,
-                                               error_code=reg.error_code)
-            row = self._find_by_uid(uid)
+            raise ValueError(f"no account for user_id={uid}")
+        return self._login_codes.issue(uid, purpose="dashboard")
+
+    async def ExchangeWebLoginCode(self, request, context):
+        """Unauthenticated: trade one bot-issued code for one session token."""
+        code = (request.login_code or "").strip()
+        if not code:
+            return pb.LoginAccountResponse(
+                success=False, message="login_code required",
+                error_code="LOGIN_CODE_REQUIRED")
+        uid = self._login_codes.burn(code)
+        if not uid:
+            # Unknown, expired and already-used all look the same on purpose.
+            return pb.LoginAccountResponse(
+                success=False,
+                message="This login link is invalid, expired, or was already used. "
+                        "Open the dashboard from the bot again.",
+                error_code="INVALID_LOGIN_CODE")
+        row = self._find_by_uid(uid)
+        if row is None:
+            return pb.LoginAccountResponse(
+                success=False, message="Account not found", error_code="INVALID_USER")
         return self._login_success(row)
 
     async def ChangePassword(self, request, context):
