@@ -20,7 +20,7 @@ import json
 import logging
 import secrets
 import time
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from .repositories import ITaskRepository
 
@@ -190,9 +190,17 @@ class UserTaskUseCases:
         return tasks, int(total)
 
     async def cancel_owned(self, task_id: str, owner_user_id: int) -> Any:
-        """Cancel while the task is still queue-bound. A RUNNING task is not
-        yanked mid-flight (its executor owns the row through its lease); the
-        client sees the current state and must poll."""
+        """Cancel while the task is still queue-bound.
+
+        Queue-bound means PENDING or RETRY_WAIT: a task waiting for its next
+        attempt has not run yet, so its owner can still stop it. A RUNNING task
+        is not yanked mid-flight (its executor owns the row through its lease);
+        the client sees the current state and must poll.
+
+        The conditional UPDATE is the authority: if it commits nothing, the
+        caller is told what actually happened instead of being handed a
+        CANCELLED task that is still queued or already executing.
+        """
         task = await self.get_owned(task_id, owner_user_id)
         if not task:
             raise TaskError("not_found")
@@ -208,9 +216,26 @@ class UserTaskUseCases:
         # and the owner sees RUNNING on the next poll.
         committed = await self._repo.cancel_queued(task.id, int(task.owner_user_id),
                                                    int(time.time()))
+        if not committed:
+            # Nothing was cancelled. Reporting CANCELLED here would be a lie
+            # the owner acts on: re-read and answer with what actually
+            # happened — a worker claimed it between the read and the UPDATE,
+            # or a concurrent operation settled it.
+            current = await self.get_owned(task_id, owner_user_id)
+            if current is None:
+                raise TaskError("not_found")
+            if current.status == RUNNING:
+                raise TaskError("running_not_cancellable",
+                                "task is executing; poll until it settles")
+            if current.status in TERMINAL_STATES:
+                raise TaskError("not_cancellable", f"task already {current.status}")
+            raise TaskError("not_cancellable",
+                            "task could not be cancelled in its current state")
         task.status = CANCELLED
         task.finished_at = task.finished_at or int(time.time())
-        task.error_code = "cancelled" if committed else task.error_code
+        task.error_code = "cancelled"
+        task.lease_token = ""
+        task.lease_until = 0
         task.mark_updated()
         return task
 
@@ -223,24 +248,30 @@ class UserTaskUseCases:
             return task
         if task.status != FAILED:
             raise TaskError("not_retryable", f"task is {task.status}")
-        fresh = dict(
-            status=PENDING, attempt=0, error="", error_code="",
-            lease_token="", lease_until=0, run_at=0,
-            started_at=0, finished_at=0,
-        )
-        for attr, value in fresh.items():
-            setattr(task, attr, value)
-        task.mark_updated()
-        return await self._repo.replace(task)
+        # One conditional UPDATE against the owner AND the FAILED state: the
+        # retry either happens atomically or not at all. The old path mutated a
+        # local snapshot and rewrote every column with no predicate, so a
+        # concurrent writer's change could be silently overwritten and the
+        # caller still saw a requeued task.
+        requeued = await self._repo.retry_failed(
+            task_id, int(task.owner_user_id), int(time.time()))
+        if requeued is None:
+            current = await self.get_owned(task_id, owner_user_id)
+            if current is None:
+                raise TaskError("not_found")
+            raise TaskError("not_retryable", f"task is {current.status}")
+        return requeued
 
     # ------------------------------------------------------------------ #
     # Worker-side operations (NOT exposed to clients)
     # ------------------------------------------------------------------ #
 
-    async def acquire_for_work(self, lease_seconds: float = 120.0) -> Optional[Any]:
+    async def acquire_for_work(self, lease_seconds: float = 120.0,
+                               kinds: Optional[Sequence[str]] = None) -> Optional[Any]:
         token = secrets.token_hex(16)
         until = int(time.time() + lease_seconds)
-        return await self._repo.acquire_next(token, until, int(time.time()))
+        return await self._repo.acquire_next(token, until, int(time.time()),
+                                            kinds=kinds)
 
     async def renew_work_lease(self, task: Any, lease_seconds: float = 120.0) -> bool:
         return await self._repo.renew_lease(
@@ -319,9 +350,3 @@ class UserTaskUseCases:
     def _assert_holder(task: Any) -> None:
         if not task or not task.lease_token:
             raise TaskError("not_claimed", "task is not currently claimed for work")
-
-
-def refresh_stale_leases(repo: ITaskRepository) -> int:
-    """One-shot reclaim (used by the worker each cycle)."""
-    import asyncio
-    return asyncio.get_event_loop().run_until_complete(repo.reclaim_expired(int(time.time())))

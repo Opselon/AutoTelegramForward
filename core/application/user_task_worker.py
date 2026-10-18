@@ -166,17 +166,26 @@ class UserTaskWorker:
 
     async def _claim_one(self) -> Optional[tuple]:
         for _ in range(8):
-            task = await self._tasks.acquire_for_work(LeaseSeconds)
+            # Only claim what this replica can actually execute: a replica
+            # without an executor for a kind used to claim it anyway, rewrite
+            # the row to push it back, and repeat that every poll cycle.
+            task = await self._tasks.acquire_for_work(
+                LeaseSeconds, kinds=sorted(self._available))
             if task is None:
                 return None
             if task.kind not in self._available:
-                # No executor for this kind on this process: hand it back
-                # instead of spinning. Run-at is nudged so the claim loop
-                # does not pick it again immediately.
-                task.status = "RETRY_WAIT"
-                task.attempt = max(0, task.attempt - 1)
-                task.run_at = int(time.time() + RETRY_BACKOFF_CAP / 10)
-                await self._tasks._repo.replace(task)
+                # Defensive: an executor set that changed after the claim, or a
+                # backend that ignored the kind filter. Hand the task back with
+                # a holder-checked UPDATE that also clears the lease — the old
+                # path rewrote every column from a stale entity and left this
+                # worker's lease_token on a row it had given up.
+                handed_back = await self._tasks._repo.requeue_unclaimed(
+                    task.id, task.lease_token,
+                    int(time.time() + RETRY_BACKOFF_CAP / 10), int(time.time()))
+                if not handed_back:
+                    logger.warning(
+                        "task %s could not be handed back (lease no longer held)",
+                        task.id)
                 continue
             try:
                 payload = json.loads(task.payload_json or "{}")
@@ -223,17 +232,42 @@ class UserTaskWorker:
             executor = self._executors[task.kind]
             started = time.monotonic()
             last_renew = started
+            lease_lost = False
             holder = asyncio.current_task()
 
             async def _watchdog() -> None:
-                nonlocal last_renew
+                nonlocal last_renew, lease_lost
                 while holder is not None and not holder.done():
                     await asyncio.sleep(LEASE_RENEW_INTERVAL)
+                    renew_error = False
                     try:
-                        await self._tasks.renew_work_lease(task, LeaseSeconds)
-                        last_renew = time.monotonic()
-                    except Exception:
-                        logger.warning("lease renewal failed for task %s", task.id)
+                        renewed = await self._tasks.renew_work_lease(task, LeaseSeconds)
+                    except Exception as exc:
+                        # The store is briefly unreachable: this says nothing
+                        # about who holds the lease, so do not abort on it.
+                        logger.warning("lease renewal failed for task %s: %s",
+                                       task.id, type(exc).__name__)
+                        renewed, renew_error = False, True
+                    if not renewed:
+                        if renew_error and (time.monotonic() - last_renew) < LeaseSeconds:
+                            # Still inside the lease window another worker would
+                            # have to honor: keep trying, keep executing.
+                            continue
+                        # Definitive (a holder-checked UPDATE affected no row) or
+                        # a full lease period with no successful renewal: the
+                        # lease is no longer ours — reclaimed as expired, or
+                        # another worker owns the row. The executor must STOP:
+                        # continuing applies side effects for a task someone
+                        # else owns, and its later complete()/fail() is refused
+                        # anyway, leaving a duplicated run recorded as
+                        # RETRY_WAIT/FAILED.
+                        lease_lost = True
+                        logger.error(
+                            "task %s lost its lease (%s); aborting the executor",
+                            task.id, task.kind)
+                        holder.cancel()
+                        return
+                    last_renew = time.monotonic()
 
             watchdog = asyncio.ensure_future(_watchdog())
             try:
@@ -253,6 +287,18 @@ class UserTaskWorker:
                 else:
                     await self._tasks.complete(task, json.dumps(result or {}))
                     await self._audit(task, "succeeded")
+            except asyncio.CancelledError:
+                # Either our own watchdog (lease lost) or worker shutdown. In
+                # both cases the lease is not ours to write, so no terminal
+                # state is attempted; a lease loss is recorded as such.
+                if lease_lost:
+                    await self._audit(task, "lease_lost", reason_code="lease_lost",
+                                      severity="WARN",
+                                      result_summary="execution aborted: lease lost")
+                    logger.warning("task %s aborted after losing its lease", task.id)
+                else:
+                    logger.info("task %s cancelled during shutdown", task.id)
+                raise
             except Exception as exc:
                 await self._tasks.fail(task, str(exc)[:2000], "executor_error")
                 await self._audit(task, "failed", reason_code="executor_error",

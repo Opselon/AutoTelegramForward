@@ -36,6 +36,7 @@ from ...application.repositories import (
     ISettingsRepository,
     IUiStateRepository,
     IUserRepository,
+    kind_filter_sql,
 )
 from ...domain.entities import (
     AIConfig,
@@ -2480,16 +2481,20 @@ class SqliteUserTaskRepository(ITaskRepository):
         return task
 
     async def acquire_next(self, lease_token: str, lease_until: int,
-                           now: int) -> Optional[UserTask]:
+                           now: int,
+                           kinds: Optional[Sequence[str]] = None) -> Optional[UserTask]:
+        kind_clause, kind_params = kind_filter_sql(kinds)
+        params = (lease_token, int(lease_until), int(now), int(now), int(now)) + kind_params
+
         def _tx(conn):
             cur = conn.execute(
                 "UPDATE user_tasks SET status='RUNNING', attempt=attempt+1,"
                 " lease_token=?, lease_until=?, started_at=?, updated_at=?,"
                 " result_json='', error='', error_code=''"
                 " WHERE id IN (SELECT id FROM user_tasks WHERE status IN ('PENDING','RETRY_WAIT')"
-                " AND run_at<=? ORDER BY created_at, id LIMIT 1)"
+                " AND run_at<=?" + kind_clause + " ORDER BY created_at, id LIMIT 1)"
                 " RETURNING *",
-                (lease_token, int(lease_until), int(now), int(now), int(now)),
+                params,
             )
             row = cur.fetchone()
             return self._row_to_entity(row) if row else None
@@ -2553,7 +2558,32 @@ class SqliteUserTaskRepository(ITaskRepository):
         cur = self._db.execute(
             "UPDATE user_tasks SET status='CANCELLED', finished_at=?, updated_at=?,"
             " error='', error_code='cancelled', lease_token='', lease_until=0"
-            " WHERE id=? AND owner_user_id=? AND status='PENDING'",
+            " WHERE id=? AND owner_user_id=? AND status IN ('PENDING','RETRY_WAIT')",
             (int(now), int(now), task_id, int(owner_user_id)))
+        return cur.rowcount > 0
+
+    async def retry_failed(self, task_id: str, owner_user_id: int,
+                           now: int) -> Optional[UserTask]:
+        def _tx(conn):
+            cur = conn.execute(
+                "UPDATE user_tasks SET status='PENDING', attempt=0, error='',"
+                " error_code='', lease_token='', lease_until=0, run_at=0,"
+                " started_at=0, finished_at=0, result_json='', updated_at=?"
+                " WHERE id=? AND owner_user_id=? AND status='FAILED'"
+                " RETURNING *",
+                (int(now), task_id, int(owner_user_id)),
+            )
+            row = cur.fetchone()
+            return self._row_to_entity(row) if row else None
+
+        return self._db.run_in_transaction(_tx)
+
+    async def requeue_unclaimed(self, task_id: str, token: str, run_at: int,
+                                now: int) -> bool:
+        cur = self._db.execute(
+            "UPDATE user_tasks SET status='RETRY_WAIT', error='', error_code='',"
+            " run_at=?, lease_token='', lease_until=0, updated_at=?"
+            " WHERE id=? AND lease_token=? AND status='RUNNING'",
+            (int(run_at), int(now), task_id, token))
         return cur.rowcount > 0
 

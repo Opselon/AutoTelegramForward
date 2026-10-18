@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence
 
@@ -24,6 +25,7 @@ from ...application.repositories import (
     IForwardRuleRepository,
     IMessageMapRepository,
     IPromptRepository,
+    kind_filter_sql,
 )
 from ...domain.entities import (
     ContentMode,
@@ -152,6 +154,48 @@ def _split_sql_script(script: str) -> List[str]:
     if tail:
         statements.append(tail)
     return statements
+
+
+def _affected(result: Any) -> int:
+    """Rows affected by a write, across the driver shapes used in this module.
+
+    asyncpg returns a status string ("UPDATE 1", "INSERT 0 1"), psycopg-style
+    wrappers return an int, and some wrappers return None or a bool. Reading
+    this wrong is not cosmetic: a False "0 rows" turns a lease-loss into
+    "lease still held", so parse defensively and treat anything unparseable as
+    0 rather than as success.
+    """
+    if result is None:
+        return 0
+    if isinstance(result, bool):
+        return int(result)
+    if isinstance(result, int):
+        return result
+    numbers = re.findall(r"\d+", str(result))
+    return int(numbers[-1]) if numbers else 0
+
+
+_UNIQUE_VIOLATION_SQLSTATE = "23505"
+
+
+def _is_unique_violation(exc: BaseException) -> bool:
+    """True only for a unique-constraint violation (SQLSTATE 23505).
+
+    The previous check was a substring match on the message ("duplicate key" /
+    "already exists"). Any other error whose text happens to contain those
+    words — a different constraint, a message change between driver versions,
+    a localized message — was then routed into the "return the pre-existing
+    row" path, handing the caller a row that has nothing to do with its
+    submit. Prefer the structured signal, then the exception type, and only
+    then a precise phrase.
+    """
+    if getattr(exc, "sqlstate", None) == _UNIQUE_VIOLATION_SQLSTATE:
+        return True
+    if type(exc).__name__ in ("UniqueViolationError", "IntegrityError"):
+        return True
+    text = str(exc).lower()
+    return ("duplicate key value violates unique constraint" in text
+            or "unique constraint failed" in text)
 
 
 def _get_db_lock(db: Any) -> asyncio.Lock:
@@ -1716,7 +1760,7 @@ class PostgresUserTaskRepository(ITaskRepository):
         try:
             return await self.add(task)
         except Exception as exc:  # unique violation on the partial idempotency index
-            if "already exists" in str(exc) or "duplicate key" in str(exc):
+            if _is_unique_violation(exc):
                 row = await _fetch_one_db(
                     self._db,
                     "SELECT * FROM user_tasks WHERE owner_user_id=%s AND kind=%s"
@@ -1775,7 +1819,8 @@ class PostgresUserTaskRepository(ITaskRepository):
         return task
 
     async def acquire_next(self, lease_token: str, lease_until: int,
-                           now: int) -> Optional[UserTask]:
+                           now: int,
+                           kinds: Optional[Sequence[str]] = None) -> Optional[UserTask]:
         """Claim one runnable task, locking the candidate before the UPDATE.
 
         The previous form selected the candidate in an InitPlan subquery and
@@ -1790,6 +1835,7 @@ class PostgresUserTaskRepository(ITaskRepository):
         the next candidate instead of waiting for it, and the outer status/run_at
         quals are rechecked after the lock is acquired.
         """
+        kind_clause, kind_params = kind_filter_sql(kinds, placeholder="%s")
         row = await _fetch_one_db(
             self._db,
             "UPDATE user_tasks SET status='RUNNING', attempt=attempt+1, lease_token=%s,"
@@ -1798,12 +1844,13 @@ class PostgresUserTaskRepository(ITaskRepository):
             " WHERE id IN ("
             " SELECT id FROM ("
             " SELECT id FROM user_tasks WHERE status IN ('PENDING','RETRY_WAIT')"
-            " AND run_at<=%s ORDER BY created_at, id LIMIT 1"
+            " AND run_at<=%s" + kind_clause + " ORDER BY created_at, id LIMIT 1"
             " FOR UPDATE SKIP LOCKED"
             " ) AS candidate)"
             " AND status IN ('PENDING','RETRY_WAIT') AND run_at<=%s"
             " RETURNING *",
-            (lease_token, int(lease_until), int(now), int(now), int(now), int(now)),
+            (lease_token, int(lease_until), int(now), int(now), int(now))
+            + kind_params + (int(now),),
         )
         return self._row_to_entity(row) if row else None
 
@@ -1814,7 +1861,7 @@ class PostgresUserTaskRepository(ITaskRepository):
             " AND status='RUNNING'",
             (int(lease_until), task_id, token),
         )
-        return "UPDATE 1" in str(result) if isinstance(result, str) else bool(result)
+        return _affected(result) > 0
 
     async def reclaim_expired(self, now: int) -> int:
         result = await _execute_db(
@@ -1829,12 +1876,7 @@ class PostgresUserTaskRepository(ITaskRepository):
             " WHERE status='RUNNING' AND lease_until>0 AND lease_until<=%s",
             (int(now), int(now), int(now), int(now)),
         )
-        if isinstance(result, str) and "UPDATE " in result:
-            try:
-                return int(result.split("UPDATE ")[1])
-            except (IndexError, ValueError):
-                pass
-        return 0
+        return _affected(result)
 
     async def finish_succeeded(self, task_id: str, token: str, result_json: str,
                                now: int) -> bool:
@@ -1844,7 +1886,7 @@ class PostgresUserTaskRepository(ITaskRepository):
             " updated_at=%s, lease_token='', lease_until=0"
             " WHERE id=%s AND lease_token=%s AND status='RUNNING'",
             (result_json, int(now), int(now), task_id, token))
-        return "UPDATE 1" in str(result) if isinstance(result, str) else bool(result)
+        return _affected(result) > 0
 
     async def finish_failed(self, task_id: str, token: str, error: str,
                             error_code: str, now: int) -> bool:
@@ -1854,7 +1896,7 @@ class PostgresUserTaskRepository(ITaskRepository):
             " finished_at=%s, updated_at=%s, lease_token='', lease_until=0"
             " WHERE id=%s AND lease_token=%s AND status='RUNNING'",
             (error, error_code, int(now), int(now), task_id, token))
-        return "UPDATE 1" in str(result) if isinstance(result, str) else bool(result)
+        return _affected(result) > 0
 
     async def pause_for_retry(self, task_id: str, token: str, run_at: int,
                               error: str, error_code: str, now: int) -> bool:
@@ -1864,7 +1906,7 @@ class PostgresUserTaskRepository(ITaskRepository):
             " run_at=%s, lease_token='', lease_until=0, updated_at=%s"
             " WHERE id=%s AND lease_token=%s AND status='RUNNING'",
             (error, error_code, int(run_at), int(now), task_id, token))
-        return "UPDATE 1" in str(result) if isinstance(result, str) else bool(result)
+        return _affected(result) > 0
 
     async def cancel_queued(self, task_id: str, owner_user_id: int,
                             now: int) -> bool:
@@ -1872,7 +1914,30 @@ class PostgresUserTaskRepository(ITaskRepository):
             self._db,
             "UPDATE user_tasks SET status='CANCELLED', finished_at=%s, updated_at=%s,"
             " error='', error_code='cancelled', lease_token='', lease_until=0"
-            " WHERE id=%s AND owner_user_id=%s AND status='PENDING'",
+            " WHERE id=%s AND owner_user_id=%s AND status IN ('PENDING','RETRY_WAIT')",
             (int(now), int(now), task_id, int(owner_user_id)))
-        return "UPDATE 1" in str(result) if isinstance(result, str) else bool(result)
+        return _affected(result) > 0
+
+    async def retry_failed(self, task_id: str, owner_user_id: int,
+                           now: int) -> Optional[UserTask]:
+        row = await _fetch_one_db(
+            self._db,
+            "UPDATE user_tasks SET status='PENDING', attempt=0, error='',"
+            " error_code='', lease_token='', lease_until=0, run_at=0,"
+            " started_at=0, finished_at=0, result_json='', updated_at=%s"
+            " WHERE id=%s AND owner_user_id=%s AND status='FAILED'"
+            " RETURNING *",
+            (int(now), task_id, int(owner_user_id)),
+        )
+        return self._row_to_entity(row) if row else None
+
+    async def requeue_unclaimed(self, task_id: str, token: str, run_at: int,
+                                now: int) -> bool:
+        result = await _execute_db(
+            self._db,
+            "UPDATE user_tasks SET status='RETRY_WAIT', error='', error_code='',"
+            " run_at=%s, lease_token='', lease_until=0, updated_at=%s"
+            " WHERE id=%s AND lease_token=%s AND status='RUNNING'",
+            (int(run_at), int(now), task_id, token))
+        return _affected(result) > 0
 
