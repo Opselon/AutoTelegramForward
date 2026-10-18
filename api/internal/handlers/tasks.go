@@ -3,8 +3,8 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
-	"strconv"
 	"time"
 
 	pb "autoforward/proto"
@@ -117,17 +117,16 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) ListTasks(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	if limit <= 0 {
+	// Query values are parsed through boundedQueryInt: the clamp happens on the
+	// int64 BEFORE the narrowing conversion, so int32() cannot wrap an
+	// out-of-range value (CodeQL incorrect-integer-conversion, and the honest
+	// truth about Atoi's architecture-dependent int). Same pattern admin.go
+	// already uses.
+	limit, ok := boundedQueryInt(q.Get("limit"), 1, maxTasksPage)
+	if !ok || limit <= 0 {
 		limit = 50
 	}
-	if limit > maxTasksPage {
-		limit = maxTasksPage
-	}
-	offset, _ := strconv.Atoi(q.Get("offset"))
-	if offset < 0 {
-		offset = 0
-	}
+	offset, _ := boundedQueryInt(q.Get("offset"), 0, math.MaxInt32)
 	owner := identity(r)
 	if owner.UserID <= 0 {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{
