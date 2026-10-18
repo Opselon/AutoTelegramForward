@@ -1352,6 +1352,8 @@ const (
 	AIControlService_UpdateAIConfig_FullMethodName       = "/autoforward.AIControlService/UpdateAIConfig"
 	AIControlService_DeleteAIConfig_FullMethodName       = "/autoforward.AIControlService/DeleteAIConfig"
 	AIControlService_TestAIRewrite_FullMethodName        = "/autoforward.AIControlService/TestAIRewrite"
+	AIControlService_CheckProviderKey_FullMethodName     = "/autoforward.AIControlService/CheckProviderKey"
+	AIControlService_ListAIProviders_FullMethodName      = "/autoforward.AIControlService/ListAIProviders"
 	AIControlService_ListPromptTemplates_FullMethodName  = "/autoforward.AIControlService/ListPromptTemplates"
 	AIControlService_SavePromptTemplate_FullMethodName   = "/autoforward.AIControlService/SavePromptTemplate"
 	AIControlService_DeletePromptTemplate_FullMethodName = "/autoforward.AIControlService/DeletePromptTemplate"
@@ -1367,6 +1369,8 @@ type AIControlServiceClient interface {
 	UpdateAIConfig(ctx context.Context, in *UpdateAIConfigRequest, opts ...grpc.CallOption) (*AIConfig, error)
 	DeleteAIConfig(ctx context.Context, in *DeleteAIConfigRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 	TestAIRewrite(ctx context.Context, in *TestAIRewriteRequest, opts ...grpc.CallOption) (*TestAIRewriteResponse, error)
+	CheckProviderKey(ctx context.Context, in *CheckProviderKeyRequest, opts ...grpc.CallOption) (*CheckProviderKeyResponse, error)
+	ListAIProviders(ctx context.Context, in *ListAIProvidersRequest, opts ...grpc.CallOption) (*ListAIProvidersResponse, error)
 	// Prompt template management (AI Rewrite prompts) — shared surface for the
 	// Telegram bot and the web dashboard.
 	ListPromptTemplates(ctx context.Context, in *ListPromptTemplatesRequest, opts ...grpc.CallOption) (*ListPromptTemplatesResponse, error)
@@ -1433,6 +1437,26 @@ func (c *aIControlServiceClient) TestAIRewrite(ctx context.Context, in *TestAIRe
 	return out, nil
 }
 
+func (c *aIControlServiceClient) CheckProviderKey(ctx context.Context, in *CheckProviderKeyRequest, opts ...grpc.CallOption) (*CheckProviderKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckProviderKeyResponse)
+	err := c.cc.Invoke(ctx, AIControlService_CheckProviderKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIControlServiceClient) ListAIProviders(ctx context.Context, in *ListAIProvidersRequest, opts ...grpc.CallOption) (*ListAIProvidersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAIProvidersResponse)
+	err := c.cc.Invoke(ctx, AIControlService_ListAIProviders_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *aIControlServiceClient) ListPromptTemplates(ctx context.Context, in *ListPromptTemplatesRequest, opts ...grpc.CallOption) (*ListPromptTemplatesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListPromptTemplatesResponse)
@@ -1482,6 +1506,8 @@ type AIControlServiceServer interface {
 	UpdateAIConfig(context.Context, *UpdateAIConfigRequest) (*AIConfig, error)
 	DeleteAIConfig(context.Context, *DeleteAIConfigRequest) (*StatusResponse, error)
 	TestAIRewrite(context.Context, *TestAIRewriteRequest) (*TestAIRewriteResponse, error)
+	CheckProviderKey(context.Context, *CheckProviderKeyRequest) (*CheckProviderKeyResponse, error)
+	ListAIProviders(context.Context, *ListAIProvidersRequest) (*ListAIProvidersResponse, error)
 	// Prompt template management (AI Rewrite prompts) — shared surface for the
 	// Telegram bot and the web dashboard.
 	ListPromptTemplates(context.Context, *ListPromptTemplatesRequest) (*ListPromptTemplatesResponse, error)
@@ -1512,6 +1538,12 @@ func (UnimplementedAIControlServiceServer) DeleteAIConfig(context.Context, *Dele
 }
 func (UnimplementedAIControlServiceServer) TestAIRewrite(context.Context, *TestAIRewriteRequest) (*TestAIRewriteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TestAIRewrite not implemented")
+}
+func (UnimplementedAIControlServiceServer) CheckProviderKey(context.Context, *CheckProviderKeyRequest) (*CheckProviderKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckProviderKey not implemented")
+}
+func (UnimplementedAIControlServiceServer) ListAIProviders(context.Context, *ListAIProvidersRequest) (*ListAIProvidersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAIProviders not implemented")
 }
 func (UnimplementedAIControlServiceServer) ListPromptTemplates(context.Context, *ListPromptTemplatesRequest) (*ListPromptTemplatesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPromptTemplates not implemented")
@@ -1636,6 +1668,42 @@ func _AIControlService_TestAIRewrite_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIControlService_CheckProviderKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckProviderKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIControlServiceServer).CheckProviderKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIControlService_CheckProviderKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIControlServiceServer).CheckProviderKey(ctx, req.(*CheckProviderKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIControlService_ListAIProviders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAIProvidersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIControlServiceServer).ListAIProviders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIControlService_ListAIProviders_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIControlServiceServer).ListAIProviders(ctx, req.(*ListAIProvidersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AIControlService_ListPromptTemplates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListPromptTemplatesRequest)
 	if err := dec(in); err != nil {
@@ -1734,6 +1802,14 @@ var AIControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TestAIRewrite",
 			Handler:    _AIControlService_TestAIRewrite_Handler,
+		},
+		{
+			MethodName: "CheckProviderKey",
+			Handler:    _AIControlService_CheckProviderKey_Handler,
+		},
+		{
+			MethodName: "ListAIProviders",
+			Handler:    _AIControlService_ListAIProviders_Handler,
 		},
 		{
 			MethodName: "ListPromptTemplates",

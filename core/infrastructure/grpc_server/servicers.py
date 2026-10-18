@@ -2051,6 +2051,49 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         )
         return pb.TestAIRewriteResponse(success=ok, rewritten_text=text if ok else "", error_message="" if ok else text)
 
+    async def ListAIProviders(self, request, context):
+        """The provider catalogue the dashboards and the mobile app both render."""
+        rows = self._ai.provider_catalog() if hasattr(self._ai, "provider_catalog") else []
+        providers = [
+            pb.AIProviderInfo(
+                id=r.get("id", ""),
+                label=r.get("label", "") or r.get("id", ""),
+                default_base_url=r.get("default_base_url", ""),
+                models=list(r.get("models") or []),
+            )
+            for r in rows
+        ]
+        return pb.ListAIProvidersResponse(providers=providers)
+
+    async def CheckProviderKey(self, request, context):
+        """Probes a tenant's endpoint + key before it is saved.
+
+        The probe reaches a host the caller named and spends credentials the
+        caller supplied (or owns), so `owner_user_id` decides: a foreign
+        `ai_config_id` and a missing owner are the same refusal, and a refusal
+        is `success=False` rather than an error — every client renders the same
+        five fields whether the answer came from the network or from the guard.
+        """
+        from ..ai.providers import ProbeResult
+
+        result = await self._ai.check_provider_key_owned(
+            provider=request.provider,
+            model=request.model,
+            base_url=request.base_url,
+            api_key=request.api_key,
+            config_id=request.ai_config_id,
+            owner_user_id=int(request.owner_user_id or 0) or None,
+        )
+        if not isinstance(result, ProbeResult):  # pragma: no cover - defensive
+            result = ProbeResult(False, False, 0.0, "", "probe_failed")
+        return pb.CheckProviderKeyResponse(
+            success=result.ran,
+            healthy=result.healthy,
+            latency_ms=float(result.latency_ms or 0.0),
+            detail=result.detail or "",
+            error_code=result.error_code or "",
+        )
+
     # ------------------------------------------------------------------
     # Prompt templates (AI Rewrite) — shared by bot & web dashboard
     # ------------------------------------------------------------------

@@ -1,6 +1,9 @@
 /// AI rewriting configuration screen.
 ///
 /// Security: The mobile client never receives or stores raw provider API keys.
+/// A key typed into the editor is sent once, on save; the check action probes
+/// the endpoint and key on the server, so the key never leaves this device
+/// towards the provider directly.
 library;
 
 import 'package:flutter/material.dart';
@@ -21,6 +24,11 @@ class AiScreen extends StatefulWidget {
 
 class _AiScreenState extends State<AiScreen> {
   List<AiConfig> _configs = const [];
+
+  /// The provider catalogue from the core. An older server (or a failed fetch)
+  /// leaves this empty and the editor falls back to its static list — an
+  /// optional surface must never blank the screen.
+  List<AiProviderInfo> _providers = const [];
   bool _loading = false;
   String? _error;
 
@@ -50,8 +58,12 @@ class _AiScreenState extends State<AiScreen> {
 
     try {
       final list = await client.listAiConfigs();
+      final providers = await _providersOrEmpty(client);
       if (!mounted) return;
-      setState(() => _configs = list);
+      setState(() {
+        _configs = list;
+        _providers = providers;
+      });
     } on ApiException catch (exc) {
       if (!mounted) return;
       if (exc.error.kind == ErrorKind.unauthorized) {
@@ -76,21 +88,32 @@ class _AiScreenState extends State<AiScreen> {
     }
   }
 
+  /// Fetching the catalogue is advisory: its failure yields an empty list so the
+  /// saved configs still render.
+  Future<List<AiProviderInfo>> _providersOrEmpty(ApiClient client) async {
+    try {
+      return await client.listAiProviders();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> _delete(AiConfig config) async {
+    final t = AppMessages.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete AI configuration?'),
+        title: Text(t.get('ai_delete_title')),
         content: Text('${config.provider} • ${config.model}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(t.get('ai_cancel')),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text(t.get('ai_delete_action')),
           ),
         ],
       ),
@@ -112,7 +135,8 @@ class _AiScreenState extends State<AiScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Delete failed (${exc.toString().split('(').first.trim()})',
+            '${t.get('ai_delete_failed')} '
+            '(${exc.toString().split('(').first.trim()})',
           ),
         ),
       );
@@ -120,13 +144,18 @@ class _AiScreenState extends State<AiScreen> {
   }
 
   Future<void> _openEditor(AiConfig? existing) async {
+    final client = context.read<AppState>().buildApiClient();
     final result = await showDialog<AiConfig>(
       context: context,
-      builder: (_) => AiConfigEditorDialog(existing: existing),
+      builder: (_) => AiConfigEditorDialog(
+        existing: existing,
+        providers: _providers,
+        client: client,
+      ),
     );
     if (result == null || !mounted) return;
 
-    final client = context.read<AppState>().buildApiClient();
+    final t = AppMessages.of(context);
     try {
       if (existing == null) {
         await client.createAiConfig(result);
@@ -138,7 +167,7 @@ class _AiScreenState extends State<AiScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            existing == null ? 'AI config created' : 'AI config updated',
+            t.get(existing == null ? 'ai_saved_created' : 'ai_saved_updated'),
           ),
         ),
       );
@@ -151,7 +180,8 @@ class _AiScreenState extends State<AiScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Save failed (${exc.toString().split('(').first.trim()})',
+            '${t.get('ai_save_failed')} '
+            '(${exc.toString().split('(').first.trim()})',
           ),
         ),
       );
@@ -174,7 +204,7 @@ class _AiScreenState extends State<AiScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),
-        label: const Text('New AI config'),
+        label: Text(t.get('ai_form_new')),
         onPressed: () => _openEditor(null),
       ),
       body: RefreshIndicator(
@@ -251,8 +281,13 @@ class _AiScreenState extends State<AiScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      'Target: ${c.targetLanguage.isNotEmpty ? c.targetLanguage : 'same'} • Active: ${c.isEnabled ? "yes" : "no"}',
+                      '${t.get('ai_target_label')}: '
+                      '${c.targetLanguage.isNotEmpty ? c.targetLanguage : t.get('ai_target_same')}'
+                      ' • ${c.isEnabled ? t.get('ai_active_yes') : t.get('ai_active_no')}'
+                      '\n${t.get('ai_endpoint_label')}: '
+                      '${c.baseUrl.isNotEmpty ? c.baseUrl : t.get('ai_endpoint_none')}',
                     ),
+                    isThreeLine: true,
                     onTap: () => _openEditor(c),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, color: Colors.red),

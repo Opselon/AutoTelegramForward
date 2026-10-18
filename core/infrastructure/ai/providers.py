@@ -10,11 +10,13 @@ import json
 import logging
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Dict, Type
 
 import httpx
 
 from ...domain.entities import AIConfig
+from ...domain.value_objects import AIProviderType
 
 logger = logging.getLogger(__name__)
 
@@ -299,3 +301,249 @@ class AIProviderFactory:
         if cls is None:
             raise ValueError(f"Unknown AI provider: {key}")
         return cls()
+
+
+# --------------------------------------------------------------------------- #
+# Credential probe — "can this endpoint and key be used at all?"
+#
+# The control plane lets a tenant name their own provider endpoint and key, so
+# the request that leaves the core is aimed at a host the tenant chose.  A probe
+# is therefore two things at once: the answer to "did I paste this correctly?",
+# and a server-side request that must not be usable as a port scanner into the
+# network the core runs on.  It answers with a status class, never with a body
+# that could carry another service's content.
+# --------------------------------------------------------------------------- #
+
+#: a person is waiting on a form, so a probe is far tighter than a rewrite
+PROBE_TIMEOUT = 12.0
+#: how much of the provider's own message is useful to show back
+PROBE_DETAIL_LIMIT = 300
+
+#: hostnames that resolve to cloud instance metadata, never a model provider
+_BLOCKED_HOSTNAMES = {
+    "localhost", "metadata", "metadata.google.internal", "instance-data",
+    "metadata.azure.com", "metadata.aws.internal",
+}
+
+
+@dataclass(frozen=True)
+class ProbeResult:
+    """Outcome of a credential probe.
+
+    `ran` distinguishes "we reached an answer" from "we refused to ask" — a
+    blocked endpoint never touched the network, and must not be reported as a
+    provider failure.
+    """
+
+    ran: bool
+    healthy: bool
+    latency_ms: float
+    detail: str
+    error_code: str
+
+    def as_tuple(self) -> tuple[bool, bool, float, str, str]:
+        return (self.ran, self.healthy, self.latency_ms, self.detail, self.error_code)
+
+
+def _secret_from_detail(text: str, secret: str) -> str:
+    """Never echo the credential back, whatever the provider says about it."""
+    out = text or ""
+    if secret and secret in out:
+        out = out.replace(secret, "[REDACTED]")
+    return out[:PROBE_DETAIL_LIMIT].strip()
+
+
+def _allow_private_endpoints() -> bool:
+    """Self-hosted deployments may point at a model server on their own LAN.
+
+    Off by default: on a shared deployment an unchecked URL would let one tenant
+    probe the private network (and the stack's own services) from the core
+    process, which is a port scan with a status code in the reply.
+    """
+    import os
+
+    return (os.getenv("ATF_ALLOW_PRIVATE_AI_ENDPOINTS") or "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
+def endpoint_guard(url: str, *, allow_private: bool | None = None,
+                   resolver=None) -> str:
+    """Returns "" when the URL is acceptable to probe, else an error code.
+
+    Refuses anything that is not plain http(s), the hostnames that only ever
+    mean "the machine you are standing on", and (when `resolver` is given) any
+    name that resolves inside the host's own networks — a tenant-supplied URL is
+    a request the core makes, so `localhost.evil.example` must not become a port
+    scan of the stack.  Passing no resolver keeps this a pure syntax check.
+    """
+    import ipaddress
+    from urllib.parse import urlparse
+
+    raw = (url or "").strip()
+    if not raw:
+        return "missing_endpoint"
+    parsed = urlparse(raw)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return "endpoint_invalid"
+    host = parsed.hostname.strip("[]").lower()
+    if host in _BLOCKED_HOSTNAMES:
+        return "endpoint_blocked"
+
+    if allow_private is None:
+        allow_private = _allow_private_endpoints()
+
+    def _bad(addr: ipaddress._BaseAddress) -> bool:
+        if addr.is_loopback or addr.is_link_local or addr.is_unspecified or addr.is_multicast:
+            return True
+        if addr.is_private or addr.is_reserved:
+            return not allow_private
+        return False
+
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        return "endpoint_blocked" if _bad(literal) else ""
+    if resolver is None:
+        return ""
+    try:
+        addresses = resolver(host)
+    except OSError:
+        return "endpoint_unreachable"
+    for address in addresses:
+        try:
+            addr = ipaddress.ip_address(str(address))
+        except ValueError:
+            continue
+        if _bad(addr):
+            return "endpoint_blocked"
+    return ""
+
+
+def _resolve(host: str) -> list:
+    """Every address a name resolves to, so one private answer is enough."""
+    import socket
+
+    return [info[4][0] for info in socket.getaddrinfo(host, None)]
+
+
+def _probe_target(provider: str, config: AIConfig) -> tuple[str, dict, dict]:
+    """(url, headers, payload) for the cheapest call that proves the key works."""
+    key = provider.lower()
+    if key == "anthropic":
+        base = (config.base_url or AnthropicProvider.DEFAULT_URL).rstrip("/")
+        return (
+            f"{base}/messages",
+            {"x-api-key": config.api_key, "anthropic-version": "2023-06-01"},
+            {
+                "model": config.model,
+                "max_tokens": 1,
+                "messages": [{"role": "user", "content": "ping"}],
+            },
+        )
+    if key == "gemini":
+        base = (config.base_url or GeminiProvider.DEFAULT_URL).rstrip("/")
+        return (
+            f"{base}/models/{config.model}:generateContent?key={config.api_key}",
+            {},
+            {
+                "contents": [{"parts": [{"text": "ping"}]}],
+                "generationConfig": {"maxOutputTokens": 1},
+            },
+        )
+    adapter = OpenAICompatibleProvider()
+    base = adapter.base_url(config)
+    if not base:
+        return "", {}, {}
+    return (
+        f"{base}/chat/completions",
+        adapter.headers(config),
+        {
+            "model": config.model,
+            "temperature": 0,
+            "max_tokens": 1,
+            "messages": [{"role": "user", "content": "ping"}],
+            "stream": False,
+        },
+    )
+
+
+def _classify(status: int, body: str, api_key: str) -> tuple[bool, str, str]:
+    """(healthy, detail, error_code) for a provider's answering status."""
+    detail = _secret_from_detail(body, api_key)
+    if 200 <= status < 300:
+        return True, "", ""
+    if status in (401, 403):
+        # "Incorrect API key provided: sk-..." is the most useful thing a person
+        # can read here — with the key itself already redacted out of it.
+        return False, detail, "invalid_key"
+    if status == 404:
+        return False, detail, "endpoint_not_found"
+    if status == 429:
+        return False, detail, "rate_limited"
+    if status >= 500:
+        # A 5xx body is the provider's internals talking; the status is enough.
+        return False, f"HTTP {status}", "provider_error"
+    return False, detail, "probe_rejected"
+
+
+def _short_body(resp) -> str:
+    try:
+        return (resp.text or "")[:PROBE_DETAIL_LIMIT]
+    except Exception:  # pragma: no cover - defensive
+        return ""
+
+
+async def probe_credentials(provider: str, model: str, base_url: str, api_key: str,
+                            *, timeout: float = PROBE_TIMEOUT,
+                            transport=None, resolver=None) -> ProbeResult:
+    """Asks the provider for one token, and reports whether the key was accepted.
+
+    Never returns the key, never returns more of the provider's body than is
+    needed to explain a refusal, and never touches a host the endpoint guard
+    refuses.
+    """
+    key = (provider or "").strip().lower()
+    if not key:
+        return ProbeResult(False, False, 0.0, "", "missing_provider")
+    if key not in AIProviderFactory().providers():
+        return ProbeResult(False, False, 0.0, "", "unknown_provider")
+    if not (api_key or "").strip():
+        return ProbeResult(False, False, 0.0, "", "missing_key")
+
+    config = AIConfig(name="probe", provider=AIProviderType(key), model=model or "",
+                      api_key=api_key, base_url=base_url or "")
+    url, headers, payload = _probe_target(key, config)
+    if not url:
+        return ProbeResult(False, False, 0.0, "", "missing_endpoint")
+    guard = endpoint_guard(url, resolver=resolver if resolver is not None else _resolve)
+    if guard:
+        return ProbeResult(False, False, 0.0, "", guard)
+
+    t0 = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=timeout, transport=transport,
+                                     follow_redirects=False) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code == 400 and key not in ("anthropic", "gemini"):
+                # Newer OpenAI models replaced `max_tokens`; retry once so a
+                # correct key is not reported as broken over one parameter name.
+                if "max_tokens" in (resp.text or ""):
+                    payload = {k: v for k, v in payload.items() if k != "max_tokens"}
+                    payload["max_completion_tokens"] = 1
+                    resp = await client.post(url, json=payload, headers=headers)
+    except httpx.TimeoutException:
+        return ProbeResult(True, False, (time.perf_counter() - t0) * 1000,
+                           f"no answer within {timeout:.0f}s", "timeout")
+    except httpx.HTTPError as exc:
+        # Type name only: a connection error message can carry an internal host.
+        return ProbeResult(True, False, (time.perf_counter() - t0) * 1000, type(exc).__name__,
+                           "endpoint_unreachable")
+
+    elapsed = (time.perf_counter() - t0) * 1000
+    healthy, detail, error_code = _classify(resp.status_code, _short_body(resp), api_key)
+    if not healthy and not detail:
+        detail = f"HTTP {resp.status_code}"
+    return ProbeResult(True, healthy, elapsed, detail, error_code)

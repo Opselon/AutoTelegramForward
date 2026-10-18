@@ -1,5 +1,6 @@
 import type {
   AIConfig,
+  AIProviderInfo,
   AuthResponse,
   BotTokenInfo,
   BackupExportRequest,
@@ -33,6 +34,8 @@ import type {
   RoutePathQuickSetRequest,
   RuleLiveStat,
   RuleSettingsResponse,
+  CheckProviderKeyRequest,
+  CheckProviderKeyResponse,
   SaveAIConfigRequest,
   SaveFilterRuleRequest,
   SavePromptTemplateRequest,
@@ -273,6 +276,19 @@ export const api = {
         body: JSON.stringify(req),
       },
     ),
+  // What the core can call, with the endpoint each provider defaults to.
+  getAIProviders: async (): Promise<AIProviderInfo[]> => {
+    const res = await fetchJson<any>(`${API_BASE}/ai-configs/providers`)
+    if (Array.isArray(res?.providers)) return res.providers
+    return []
+  },
+  // Ask the provider before the key is saved: the answer is what makes an
+  // endpoint addable instead of a guess.
+  checkProviderKey: (req: CheckProviderKeyRequest) =>
+    fetchJson<CheckProviderKeyResponse>(`${API_BASE}/ai-configs/check-key`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
   deleteAIConfig: (id: string) =>
     fetchJson<{ success: boolean; id: string }>(`${API_BASE}/ai-configs/${id}`, {
       method: 'DELETE',

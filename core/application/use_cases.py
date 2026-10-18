@@ -334,6 +334,44 @@ class AIConfigUseCases:
         from ..domain.value_objects import AIProviderType
         return [p.value for p in AIProviderType]
 
+    #: display names for the providers the factory knows.  English only — a
+    #: client localizes from its own catalog when it has keys for them.
+    PROVIDER_LABELS = {
+        "openai": "OpenAI", "anthropic": "Anthropic", "gemini": "Google Gemini",
+        "groq": "Groq", "deepseek": "DeepSeek", "openrouter": "OpenRouter",
+        "9router": "9Router", "ninerouter": "9Router", "xai": "xAI",
+        "mistral": "Mistral", "together": "Together AI", "fireworks": "Fireworks",
+        "custom": "Custom (OpenAI-compatible)",
+    }
+
+    def provider_catalog(self) -> List[dict]:
+        """Providers this deployment can call, with their default endpoints.
+
+        The catalogue comes from the same registry the rewrite path resolves a
+        provider through, so a client never keeps a second copy that can drift
+        — a provider that can be chosen here is one that can actually be called.
+        """
+        from ..infrastructure.ai.providers import AIProviderFactory, OpenAICompatibleProvider
+
+        factory = self._factory if self._factory is not None else AIProviderFactory()
+        try:
+            names = list(factory.providers())
+        except Exception:  # pragma: no cover - a broken factory must not blank the UI
+            names = list(AIProviderFactory().providers())
+        catalog = []
+        for name in names:
+            try:
+                models = list(factory.models_for(name) or [])
+            except Exception:  # pragma: no cover - defensive
+                models = []
+            catalog.append({
+                "id": name,
+                "label": self.PROVIDER_LABELS.get(name, name),
+                "default_base_url": OpenAICompatibleProvider.default_base_urls.get(name, ""),
+                "models": models,
+            })
+        return catalog
+
     def models_for(self, provider: str) -> list:
         """Curated model list for a provider (falls back to free text)."""
         factory = self._factory
@@ -344,10 +382,30 @@ class AIConfigUseCases:
                 pass
         return []
 
+    @staticmethod
+    def _guard_endpoint(cfg: AIConfig) -> None:
+        """Refuse an endpoint this server must not be made to call.
+
+        The guard sits at the write, not only at the probe: a stored endpoint is
+        replayed on every rewrite, so an address checked only when a key is
+        tested would still be called forever afterwards. Empty means "the
+        provider's own default" and is left alone.
+        """
+        from ..infrastructure.ai.providers import endpoint_guard
+
+        url = str(getattr(cfg, "base_url", "") or "").strip()
+        if not url:
+            return
+        problem = endpoint_guard(url)
+        if problem and problem != "missing_endpoint":
+            raise ValueError(f"endpoint refused: {problem}")
+
     async def create(self, cfg: AIConfig) -> AIConfig:
+        self._guard_endpoint(cfg)
         return await self._repo.add(cfg)
 
     async def update(self, cfg: AIConfig) -> AIConfig:
+        self._guard_endpoint(cfg)
         return await self._repo.update(cfg)
 
     async def update_owned(self, cfg: AIConfig, owner_user_id: Optional[int]) -> AIConfig:
@@ -429,6 +487,55 @@ class AIConfigUseCases:
             return True, res, elapsed
         except Exception as exc:  # pragma: no cover - network path
             return False, f"{type(exc).__name__}: {exc}", 0.0
+
+    async def check_provider_key_owned(self, *, provider: str = "", model: str = "",
+                                       base_url: str = "", api_key: str = "",
+                                       config_id: str = "",
+                                       owner_user_id: Optional[int] = None):
+        """Probe an endpoint + key the tenant wants to add, before it is saved.
+
+        `config_id` names a config already stored: whatever the caller leaves
+        blank is filled from it, so a UI can re-check a saved key without ever
+        receiving it.  A masked key (`***abcd`) is treated as "unchanged", the
+        same convention the update path uses.
+
+        The probe spends the tenant's own credentials against the tenant's own
+        endpoint, so ownership is required in both directions: a foreign
+        `config_id` and a missing owner are the same refusal.
+        """
+        from ..infrastructure.ai.providers import ProbeResult, probe_credentials
+
+        if not owner_user_id:
+            # No tenant named: the probe would be nobody's. Same answer as a
+            # config that is not theirs, so the caller learns nothing extra.
+            return ProbeResult(False, False, 0.0, "", "config_not_found")
+        stored = None
+        if config_id:
+            stored = await self.get_owned(config_id, owner_user_id)
+            if stored is None:
+                return ProbeResult(False, False, 0.0, "", "config_not_found")
+
+        def _provider_of(value) -> str:
+            # AIProviderType is an enum: its `.value` is what the wire carries.
+            return str(getattr(value, "value", value) or "").strip()
+
+        def _value(given: str, field: str) -> str:
+            if given and given.strip():
+                return given.strip()
+            if stored is None:
+                return ""
+            if field == "provider":
+                return _provider_of(getattr(stored, field, ""))
+            return str(getattr(stored, field, "") or "").strip()
+
+        provider_id = _value(provider, "provider")
+        model_id = _value(model, "model")
+        endpoint = _value(base_url, "base_url")
+        # A masked key is the value we sent to the client, not the key itself.
+        key_value = api_key.strip() if api_key and not api_key.startswith("***") else ""
+        if not key_value:
+            key_value = str(getattr(stored, "api_key", "") or "") if stored else ""
+        return await probe_credentials(provider_id, model_id, endpoint, key_value)
 
     async def health_check_owned(self, config_id: str,
                                  owner_user_id: Optional[int]) -> tuple[bool, str, float]:

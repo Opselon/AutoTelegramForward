@@ -318,6 +318,33 @@ export interface AIConfig {
   target_language: string
 }
 
+// The provider catalogue the core serves (GET /api/ai-configs/providers), so the
+// dashboard never keeps its own table of providers and default endpoints.
+export interface AIProviderInfo {
+  id: string
+  label: string
+  default_base_url: string
+  models: string[]
+}
+
+export interface CheckProviderKeyRequest {
+  provider?: string
+  model?: string
+  base_url?: string
+  api_key?: string
+  ai_config_id?: string
+}
+
+// `success` means the probe ran and reached an answer; `healthy` means the
+// endpoint accepted the credentials. Both are always present, including false.
+export interface CheckProviderKeyResponse {
+  success: boolean
+  healthy: boolean
+  latency_ms: number
+  detail: string
+  error_code: string
+}
+
 export interface SaveAIConfigRequest {
   id?: string
   name: string

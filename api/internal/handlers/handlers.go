@@ -2368,6 +2368,106 @@ func (h *Handlers) TestAIRewrite(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// ----------------------------------------------------------------- provider keys
+//
+// A tenant's own endpoint + key, checked before it is saved.  This is the half
+// of the control plane that makes "add your provider" possible: the same call
+// the rewrite path makes, asked once, with the answer shown to the person who
+// typed the key.
+
+type checkProviderKeyReq struct {
+	Provider   string `json:"provider"`
+	Model      string `json:"model"`
+	BaseURL    string `json:"base_url"`
+	APIKey     string `json:"api_key"`
+	AIConfigID string `json:"ai_config_id"`
+}
+
+// checkProviderKeyResp is projected field by field, never marshalled from the
+// protobuf struct: proto3 scalars marshal as `omitempty`, which drops exactly
+// the `false` that carries the answer.  A client must never have to read a
+// missing field as a refusal (#149).
+type checkProviderKeyResp struct {
+	Success   bool    `json:"success"`
+	Healthy   bool    `json:"healthy"`
+	LatencyMs float64 `json:"latency_ms"`
+	Detail    string  `json:"detail"`
+	ErrorCode string  `json:"error_code"`
+}
+
+func (h *Handlers) CheckProviderKey(w http.ResponseWriter, r *http.Request) {
+	var req checkProviderKeyReq
+	if !bind(w, r, &req) {
+		return
+	}
+	ctx, cancel := withAITimeout(r)
+	defer cancel()
+	owner := identity(r).UserID
+	// A named config must be the caller's: the probe would spend its key.
+	if req.AIConfigID != "" && !h.ownsAIConfig(ctx, req.AIConfigID, owner) {
+		writeJSON(w, http.StatusOK, checkProviderKeyResp{
+			ErrorCode: "config_not_found", Detail: "AI config not found",
+		})
+		return
+	}
+	resp, err := h.c.AI.CheckProviderKey(ctx, &pb.CheckProviderKeyRequest{
+		Provider:    req.Provider,
+		Model:       req.Model,
+		BaseUrl:     req.BaseURL,
+		ApiKey:      req.APIKey,
+		AiConfigId:  req.AIConfigID,
+		OwnerUserId: owner,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	// resp.GetDetail() is already redacted by the core, and the key itself is
+	// never part of an answer.
+	writeJSON(w, http.StatusOK, checkProviderKeyResp{
+		Success:   resp.GetSuccess(),
+		Healthy:   resp.GetHealthy(),
+		LatencyMs: resp.GetLatencyMs(),
+		Detail:    resp.GetDetail(),
+		ErrorCode: resp.GetErrorCode(),
+	})
+}
+
+type aiProviderInfo struct {
+	ID             string   `json:"id"`
+	Label          string   `json:"label"`
+	DefaultBaseURL string   `json:"default_base_url"`
+	Models         []string `json:"models"`
+}
+
+// ListAIProviders serves the catalogue the clients render, so neither the web
+// dashboard nor the mobile app keeps its own provider table to drift.
+func (h *Handlers) ListAIProviders(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.AI.ListAIProviders(ctx, &pb.ListAIProvidersRequest{})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	providers := make([]aiProviderInfo, 0, len(resp.GetProviders()))
+	for _, p := range resp.GetProviders() {
+		// A repeated field with nothing in it marshals as null; a client that
+		// maps over the list must not have to defend against that.
+		models := p.GetModels()
+		if models == nil {
+			models = []string{}
+		}
+		providers = append(providers, aiProviderInfo{
+			ID:             p.GetId(),
+			Label:          p.GetLabel(),
+			DefaultBaseURL: p.GetDefaultBaseUrl(),
+			Models:         models,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"providers": providers})
+}
+
 // ----------------------------------------------------------------- stats
 func (h *Handlers) GetStats(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)

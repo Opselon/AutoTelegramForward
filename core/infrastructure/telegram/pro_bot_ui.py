@@ -3541,6 +3541,25 @@ class ProBotUI:
         rows.append([("⬅️ " + self._t("ui_back"), CB["main"])])
         return self._kbd(rows)
 
+    @staticmethod
+    def _endpoint_problem(url: str) -> str:
+        """Why the core must not be asked to call `url`, or "" when it may.
+
+        The bot's wizard is the tenant's own way to point the service at a
+        gateway, so the same guard the API applies has to run here too: without
+        it a chat message could aim the core's HTTP client at the machine it
+        runs on.
+        """
+        if not url:
+            return ""
+        try:
+            from core.infrastructure.ai.providers import endpoint_guard
+
+            return endpoint_guard(url) or ""
+        except Exception:
+            # A guard that cannot run must not accept the URL.
+            return "endpoint_blocked"
+
     def _render_ai_detail(self, cfg: AIConfig, health_info: Optional[dict] = None) -> Tuple[str, InlineKeyboardMarkup]:
         lang = self._lang_for(cfg)
         status_emoji = self._t("ui_ai_enabled", lang=lang) if cfg.is_enabled else self._t("ui_ai_disabled", lang=lang)
@@ -11118,6 +11137,17 @@ class ProBotUI:
             url = str(st.buffer.get("default_base_url", ""))
         elif not url.startswith("http://") and not url.startswith("https://"):
             url = "http://" + url
+        problem = self._endpoint_problem(url)
+        if problem:
+            # Stay on this step: the user is one message away from a working one.
+            kbd = self._kbd([
+                [(self._t("ui_btn_use_default_host"), "ai_url_default")],
+                [("❌ " + self._t("ui_cancel", lang=lang), CB["cancel"])],
+            ])
+            await self._persist(message.from_user.id, st)
+            await message.reply_text(
+                self._t("ui_ai_endpoint_blocked", lang=lang), reply_markup=kbd)
+            return
         st.ai_base_url = url
         st.step = "ai_model"
         kb = self._model_picker(st, st.ai_provider)
@@ -11175,6 +11205,13 @@ class ProBotUI:
         except Exception as exc:
             await self._record_error("ai", exc, user_id=user_id)
             cfgs = await (self._ai.list_all() if self._is_admin(user_id) else self._ai.list_by_owner(user_id))
+            if "endpoint refused" in str(exc):
+                # The core refused the URL: the generic failure banner would
+                # hide the one thing the user has to change.
+                await message.reply_text(
+                    self._t("ui_ai_endpoint_blocked", lang=lang),
+                    reply_markup=self._ai_menu(cfgs))
+                return
             await message.reply_text(
                 self._t("ui_ai_fail", lang=lang, error=tg_detail(exc)),
                 reply_markup=self._ai_menu(cfgs))
@@ -11201,11 +11238,19 @@ class ProBotUI:
             new_url = ""
         elif not new_url.startswith("http://") and not new_url.startswith("https://"):
             new_url = "http://" + new_url
+        if self._endpoint_problem(new_url):
+            await message.reply_text(self._t("ui_ai_endpoint_blocked", lang=lang))
+            text_prev, kbd_prev = self._render_ai_detail(cfg)
+            await message.reply_text(text_prev, reply_markup=kbd_prev)
+            return
         cfg.base_url = new_url
         try:
             await self._ai.update_owned(cfg, self._scope_uid(message.from_user.id if message.from_user else 0))
         except PermissionError:
             return await message.reply_text(self._t("ui_need_admin", lang=lang))
+        except ValueError:
+            # The use case applies the same guard; say so instead of a traceback.
+            return await message.reply_text(self._t("ui_ai_endpoint_blocked", lang=lang))
         ok, reply_or_err, latency = await self._ai.health_check_owned(cfg.id, self._scope_uid(message.from_user.id if message.from_user else 0))
         health_info = {
             "ok": ok,
