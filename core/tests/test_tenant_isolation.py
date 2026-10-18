@@ -635,20 +635,59 @@ def test_ai_and_credential_guards_deny_cross_tenant(tmp_path):
     assert asyncio.run(cred_uc.get_owned(cred.id, None)) is not None
 
 
-def test_bot_scope_uid_maps_admin_and_tenant():
-    """v12.1: the bot's owner-scope helper must keep the legacy global scope
-    for admins (None) and an explicit tenant id otherwise, so single-tenant
-    installs keep working while multi-tenant reads stay scoped."""
+def test_bot_scope_uid_fails_closed_and_maps_admin():
+    """``None`` is an admin privilege, never a default.
+
+    This test used to assert the opposite — that an install with no admin list
+    configured answered ``None`` (the whole install) for every caller. That is
+    precisely the cross-account leak: the bot routes every rule read through
+    ``_scope_uid``, so an unscoped answer serves one tenant's tasks to whoever
+    sent the id. Missing configuration must narrow access, not widen it.
+    """
     # imported at module level: pyrogram grabs the event loop on import,
     # which raises under pytest's asyncio mode when done lazily here.
     ui = ProBotUI.__new__(ProBotUI)
+
+    # no admin configuration at all => the caller is only themselves
     ui._admin_ids = set()
-    assert ui._scope_uid(5094837833) is None
+    ui._admin_service = None
+    assert ui._scope_uid(5094837833) == 5094837833
 
     # explicit admin list => admin keeps global scope, others are scoped
     ui._admin_ids = {5094837833}
     assert ui._scope_uid(5094837833) is None
     assert ui._scope_uid(999001) == 999001
+
+    # no identity => owns nothing, and certainly not everything
+    assert ui._scope_uid(0) == 0
+    assert ui._scope_uid(None) == 0
+
+
+def test_bot_scope_uid_treats_an_unreadable_admin_service_as_not_admin():
+    """An admin service that throws must not promote the caller."""
+    ui = ProBotUI.__new__(ProBotUI)
+    ui._admin_ids = set()
+
+    class Broken:
+        def is_admin(self, user_id):
+            raise RuntimeError("database is locked")
+
+    ui._admin_service = Broken()
+    assert ui._scope_uid(5094837833) == 5094837833
+
+
+def test_bot_scope_uid_uses_the_admin_service_when_it_answers():
+    ui = ProBotUI.__new__(ProBotUI)
+    ui._admin_ids = set()
+
+    class Admins:
+        def is_admin(self, user_id):
+            return int(user_id) == 42
+
+    ui._admin_service = Admins()
+    assert ui._scope_uid(42) is None
+    assert ui._scope_uid(43) == 43
+
 
 
 # ---------------------------------------------------------- v12.2 servicers

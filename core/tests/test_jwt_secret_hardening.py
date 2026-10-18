@@ -187,3 +187,75 @@ def test_a_token_issued_in_the_future_is_refused(tmp_path, monkeypatch):
     claims["iat"] = future
     claims["exp"] = future + 7 * 24 * 3600
     assert svc.jwt_validate(_sign(svc._get_secret(), claims)) is None
+
+
+# --------------------------------------------------------------------------- #
+# a token that is not a token must be refused, not crash the validator
+# --------------------------------------------------------------------------- #
+
+def _validate_shapes(svc) -> None:
+    """Every malformed shape answers "invalid", and none of them raises."""
+    secret = svc._get_secret()
+    good = _sign(secret, _claims())
+
+    malformed = [
+        "",
+        "   ",
+        "not-a-token",
+        "a.b",                        # two segments
+        "a.b.c.d",                    # four segments
+        good.rsplit(".", 1)[0] + ".",  # empty signature
+        "..",
+        good.replace(".", "", 1)[:20],
+        "Bearer " + good,              # a header, not a token
+        good[:-1],                     # a truncated signature
+    ]
+    for token in malformed:
+        assert svc.jwt_validate(token) is None, repr(token)
+
+    # A correctly signed token is still accepted, so the loop above is not
+    # passing because everything is refused.
+    assert svc.jwt_validate(good) is not None
+
+
+def test_malformed_tokens_are_refused_without_raising(tmp_path, monkeypatch):
+    monkeypatch.delenv("ATF_JWT_SECRET", raising=False)
+    _validate_shapes(_servicer(tmp_path))
+
+
+def test_a_tampered_payload_breaks_the_signature(tmp_path, monkeypatch):
+    """The one attack a signature exists for: edit the claims, keep the sig."""
+    monkeypatch.delenv("ATF_JWT_SECRET", raising=False)
+    svc = _servicer(tmp_path)
+    token = _sign(svc._get_secret(), _claims(uid=OTHER_UID))
+    header_b64, payload_b64, sig_b64 = token.split(".")
+
+    forged_claims = _claims(uid=UID)          # same signature, our user id now
+    payload_b64 = _b64url(json.dumps(forged_claims).encode())
+
+    assert svc.jwt_validate(f"{header_b64}.{payload_b64}.{sig_b64}") is None
+
+
+def test_alg_none_is_not_a_signature(tmp_path, monkeypatch):
+    """`alg` is attacker-controlled data; only the HMAC over the parts counts."""
+    monkeypatch.delenv("ATF_JWT_SECRET", raising=False)
+    svc = _servicer(tmp_path)
+    header = _b64url(json.dumps({"alg": "none", "typ": "JWT"}).encode())
+    payload = _b64url(json.dumps(_claims(uid=OTHER_UID)).encode())
+
+    assert svc.jwt_validate(f"{header}.{payload}.") is None
+    # and the same claims signed properly are the only way through
+    assert svc.jwt_validate(_sign(svc._get_secret(), _claims(uid=OTHER_UID))) is not None
+
+
+async def test_a_signed_token_without_a_subject_is_not_a_session(tmp_path, monkeypatch):
+    """A valid signature over `{}` must not resolve to an account, let alone uid 0."""
+    monkeypatch.delenv("ATF_JWT_SECRET", raising=False)
+    svc = _servicer(tmp_path)
+    now = int(time.time())
+    token = _sign(svc._get_secret(), {"username": "tg_nobody", "iat": now, "exp": now + 3600})
+
+    resp = await svc.ValidateToken(type("R", (), {"token": token})(), None)
+
+    assert resp.valid is False
+    assert resp.error == "ACCOUNT_NOT_FOUND"

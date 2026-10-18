@@ -479,11 +479,31 @@ class ProBotUI:
             return False
 
     def _scope_uid(self, user_id: int) -> Optional[int]:
-        if not getattr(self, "_admin_ids", None) and getattr(self, "_admin_service", None) is None:
-            return None
-        if self._is_admin(user_id):
-            return None
-        return int(user_id) if user_id else 0
+        """The owner scope for a bot-side read or write.
+
+        ``None`` means "the whole install" — every tenant's tasks — so it is an
+        ADMIN privilege and is returned only when the caller is *positively*
+        known to be an admin. Anything else returns the caller's own id.
+
+        The old version inverted that: with no admin list configured it answered
+        ``None`` for everyone, because "single-tenant install" was assumed. That
+        made an unconfigured deployment the least safe one — `_owned_rule` would
+        hand any Telegram user any rule id, which is the cross-account leak users
+        reported. Missing configuration, an unreadable admin service and an
+        absent identity all now fail closed to "you own only what is yours", and
+        a user we cannot name owns nothing at all.
+        """
+        uid = int(user_id or 0)
+        if uid <= 0:
+            # No identity => no ownership. An unscoped read is never the fallback.
+            return 0
+        try:
+            if self._is_admin(uid):
+                return None
+        except Exception:
+            # An admin service that cannot answer is not an admin.
+            return uid
+        return uid
 
     async def _owned_rule(self, rule_id: str, user_id: int):
         # v12.2: every rule read in the bot funnels through the use-case

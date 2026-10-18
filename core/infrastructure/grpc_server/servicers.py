@@ -892,6 +892,50 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         # token the caller actually owns.
         self._bot_tokens = bot_tokens
 
+    async def _guard_route_owner(self, entity, owner: int, context) -> bool:
+        """A task may only name a bot token that its own owner holds.
+
+        The route pair is stored in the rule's metadata, and until now only the
+        settings endpoint checked it: `CreateRule`/`UpdateRule` copied
+        `custom_metadata_json` straight in, so a payload naming another tenant's
+        bot was accepted. That attachment is not cosmetic — the forwarder reads
+        the bot's defaults from it and delivers through that bot's credential, so
+        a foreign id is both a configuration leak and an impersonation.
+
+        Unknown and foreign answer the same way, so an id cannot be probed for
+        existence. A rule with no attached bot is fine: it runs on the account
+        lane, exactly as before per-bot defaults existed.
+        """
+        token_id = str(getattr(entity, "bot_token_id", "") or "").strip()
+        if not token_id:
+            return True
+        if not owner:
+            await context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "bot_token_not_owned: a task that names a bot needs an owner",
+            )
+            return False
+        if self._bot_tokens is None:
+            # Fail closed: without the registry we cannot prove ownership.
+            await context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "bot_token_registry_unavailable",
+            )
+            return False
+        try:
+            record = await self._bot_tokens.get_owned(token_id, owner)
+        except Exception as exc:
+            logger.warning("[BOT ROUTE] bot-token ownership check failed: %s",
+                           type(exc).__name__)
+            record = None
+        if record is None:
+            await context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "bot_token_not_owned: bot token not found for this owner",
+            )
+            return False
+        return True
+
     async def ListRules(self, request, context):
         owner = int(request.owner_user_id or 0)
         if not owner:
@@ -989,6 +1033,8 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
                         entity.prompt_id = str(merged["prompt_id"])
             except Exception:
                 pass
+        if not await self._guard_route_owner(entity, int(entity.owner_user_id or 0), context):
+            return pb.ForwardRule()
         try:
             created = await self._rules.create(entity)
         except ValueError as exc:
@@ -1021,6 +1067,8 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             # disagree about where the message goes.
             _sync_mirrored_endpoints(existing, applied)
             existing.mark_updated()
+            if not await self._guard_route_owner(existing, caller, context):
+                return pb.ForwardRule()
             try:
                 updated = await self._rules.update(existing)
             except ValueError as exc:
@@ -1141,6 +1189,8 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             existing.ai_timeout_seconds = float(r.ai_timeout_seconds)
 
         existing.mark_updated()
+        if not await self._guard_route_owner(existing, caller, context):
+            return pb.ForwardRule()
         try:
             updated = await self._rules.update(existing)
         except ValueError as exc:

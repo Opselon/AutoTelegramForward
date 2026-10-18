@@ -1,7 +1,7 @@
 name: autoforward_mobile
 description: "AutoTelegramForward — production mobile client for the AutoTelegramForward forwarding engine."
 publish_to: "none"
-version: 2.2.3+7
+version: 2.2.4+8
 environment:
   sdk: ^3.13.0
 
