@@ -33,6 +33,7 @@ Two conventions matter for correctness:
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ...domain.rule_settings import (
@@ -42,6 +43,9 @@ from ...domain.rule_settings import (
     clear_setting,
     read_settings,
 )
+
+
+logger = logging.getLogger("atf.botui.registry")
 
 __all__ = ["RegistryEditor", "PAGE_SIZE"]
 
@@ -80,9 +84,11 @@ class RegistryEditor:
         translate: Callable[..., str],
         save: Callable[[Any], Any],
         describe: Optional[Callable[[Any], Any]] = None,
+        contains: Optional[Callable[[str], bool]] = None,
         page_size: int = PAGE_SIZE,
     ) -> None:
         self._t = translate
+        self._has = contains or (lambda key: self._t(key) != key)
         self._save = save
         #: Awaited with the rule, returns ``{key: {value, source, ...}}``.
         self._describe = describe
@@ -91,6 +97,24 @@ class RegistryEditor:
     # ------------------------------------------------------------------ #
     # helpers
     # ------------------------------------------------------------------ #
+    def _group_label(self, group: str, **params: Any) -> str:
+        """A group title that can never be a raw key.
+
+        `I18n.t` answers an unknown key with the key itself, which is right for a
+        log and wrong on a button: a registry group added without a translation
+        would put `ui_reg_group_media2` on screen. The group slug is the honest
+        fallback — it is the name the setting's own description uses — and the
+        operator gets an ERROR line saying a title is missing.
+        """
+        key = f"ui_reg_group_{group}"
+        params.setdefault("group", group)
+        if self._has(key):
+            return self._t(key, **params)
+        logger.error("no catalog entry for the registry group title %r", key)
+        # The slug is what a setting's own description calls the group, so it is
+        # still meaningful on a button; a raw catalog key is not.
+        return str(group).replace("_", " ").title()
+
     def _keys_of(self, st: Any) -> List[str]:
         buf = getattr(st, "buffer", None)
         if not isinstance(buf, dict):
@@ -256,8 +280,8 @@ class RegistryEditor:
         for group, keys in self._groups():
             changed = sum(1 for k in keys if self._owned(k, values, sources))
             mark = f" • {changed}" if changed else ""
-            lines.append(f"• {self._t(f'ui_reg_group_{group}')}{mark}")
-            rows.append([(self._t(f"ui_reg_group_{group}"), f"rge:G:{rule.id}:{group}:0")])
+            lines.append(f"• {self._group_label(group)}{mark}")
+            rows.append([(self._group_label(group), f"rge:G:{rule.id}:{group}:0")])
         rows.append([(self._t("ui_reg_btn_search"), f"rge:s:{rule.id}")])
         rows.append([(self._t("ui_rule_back_rule"), f"radv:{rule.id}")])
         return "\n".join(lines), rows
@@ -281,7 +305,7 @@ class RegistryEditor:
         window = keys[start : start + self.page_size]
 
         lines = [
-            self._t("ui_reg_group_title", group=self._t(f"ui_reg_group_{group}"),
+            self._t("ui_reg_group_title", group=self._group_label(group),
                     count=len(keys)),
             "",
         ]

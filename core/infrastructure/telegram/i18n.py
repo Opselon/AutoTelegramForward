@@ -47,3 +47,13 @@ class I18n:
         except (KeyError, IndexError, ValueError):
             # Preserve a usable message if a caller has incomplete parameters.
             return template
+
+    def contains(self, key: str) -> bool:
+        """True when the English catalog defines ``key``.
+
+        Callers that build a key from a variable (a result code, a status) use
+        this to choose a fallback *before* rendering: `t()` answers a missing
+        key with the key itself, which is helpful to a developer reading a log
+        and is the raw-key leak the user sees in the chat.
+        """
+        return key in self._catalog.get(_FALLBACK, {})
