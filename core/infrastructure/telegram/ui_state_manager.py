@@ -40,10 +40,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.infrastructure.telegram.ui_state import UiState  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 # The documented UI steps. Any step value handed to enter()/write_state() that
 # is not here fails closed to "" — a typo in a new step cannot then crash the
@@ -112,6 +115,62 @@ def _safe_step(step: Optional[str]) -> str:
     return STEP_FALLBACK
 
 
+def _bounded_value(value: Any, cap: int) -> Tuple[Any, str]:
+    """The largest usable part of `value` that fits `cap` bytes.
+
+    Truncation beats dropping: a dropped key is invisible to every later reader
+    (an emptied dialog list renders as "no dialogs found", which is exactly how
+    a working fetch looked broken), while a truncated one still answers the
+    screen it was stored for. Returns (projection, note); (None, reason) when
+    nothing usable fits.
+    """
+    if isinstance(value, str):
+        lo, hi = 0, len(value)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if len(json.dumps(value[:mid], default=str)) <= cap:
+                lo = mid
+            else:
+                hi = mid - 1
+        if lo:
+            return value[:lo], f"string {lo}/{len(value)} chars"
+        return None, "string cannot fit the cap"
+
+    if isinstance(value, (list, tuple)):
+        lo, hi = 0, len(value)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            try:
+                fits = len(json.dumps(value[:mid], default=str)) <= cap
+            except (TypeError, ValueError, RecursionError):
+                return None, "list is not JSON-encodable"
+            if fits:
+                lo = mid
+            else:
+                hi = mid - 1
+        if lo:
+            return list(value[:lo]), f"list {lo}/{len(value)} items"
+        return None, "first list item cannot fit the cap"
+
+    if isinstance(value, dict):
+        out: Dict[Any, Any] = {}
+        for key, item in value.items():
+            probe = dict(out)
+            probe[key] = item
+            try:
+                fits = len(json.dumps(probe, default=str)) <= cap
+            except (TypeError, ValueError, RecursionError):
+                continue
+            if not fits:
+                break
+            out[key] = item
+        if out:
+            return out, f"mapping {len(out)}/{len(value)} keys"
+        return None, "first mapping entry cannot fit the cap"
+
+    return None, "value is not JSON-encodable"
+
+
 def _safe_buffer(buf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Deep-copy a buffer within bounds, favouring truncation over failure."""
     out: Dict[str, Any] = {}
@@ -126,9 +185,24 @@ def _safe_buffer(buf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         except (TypeError, ValueError, RecursionError):
             continue
         if len(encoded) > MAX_BUFFER_VALUE:
-            continue
+            projection, note = _bounded_value(value, MAX_BUFFER_VALUE)
+            if projection is None:
+                logger.warning(
+                    "[UI_STATE:BUFFER_PRUNED] key=%s dropped: %s", key[:64], note
+                )
+                continue
+            value = projection
+            encoded = json.dumps(value, default=str)
+            logger.warning(
+                "[UI_STATE:BUFFER_TRUNCATED] key=%s kept %s (%d bytes, cap %d)",
+                key[:64], note, len(encoded), MAX_BUFFER_VALUE,
+            )
         total += len(key) + len(encoded)
         if total > MAX_BUFFER_TOTAL:
+            logger.warning(
+                "[UI_STATE:BUFFER_TOTAL_CAP] kept %d of %d keys (%d bytes, cap %d)",
+                len(out), len(buf), total, MAX_BUFFER_TOTAL,
+            )
             break
         try:
             out[key[:64]] = json.loads(encoded)
@@ -235,15 +309,30 @@ class UiStateManager:
             return st
 
     async def write_buffer(self, uid: int, key: str, value: Any) -> UiState:
-        """Bounded per-user buffer write (field drafts, page indices)."""
+        """Bounded per-user buffer write (field drafts, page indices).
+
+        An oversized value fails closed: the caller asked for a write that
+        cannot be stored, and handing back a truncated buffer would mean the
+        state is not what was written. (Persistence still projects a bounded
+        copy - see _safe_buffer - but it never rewrites the caller's value
+        behind its back.)
+        """
         async with self._lock(uid):
             await self._ensure_loaded(uid)
             st = self._states.setdefault(uid, UiState())
+            try:
+                requested = json.dumps(value, default=str)
+            except (TypeError, ValueError, RecursionError) as exc:
+                raise UiBufferError(
+                    f"buffer value at {key!r} is not storable: {exc}") from exc
             trial = dict(st.buffer or {})
             trial[key] = value
             bounded = _safe_buffer(trial)
-            if key not in bounded and value not in (None, ""):
-                raise UiBufferError(f"buffer overflow at key {key!r}")
+            if value not in (None, ""):
+                stored = (json.dumps(bounded[key], default=str)
+                          if key in bounded else None)
+                if stored != requested:
+                    raise UiBufferError(f"buffer overflow at key {key!r}")
             st.buffer = bounded
             st.user_id = int(uid)
             await self._persist(uid)
