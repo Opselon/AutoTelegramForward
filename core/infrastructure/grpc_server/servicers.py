@@ -1,5 +1,6 @@
 """gRPC servicers implementing the shared proto contract over the use cases."""
 
+import sqlite3
 import time
 
 import logging
@@ -936,6 +937,27 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             return False
         return True
 
+    async def _refuse_reference_failure(self, context, exc: Exception) -> bool:
+        """Turn a storage constraint failure into a refusal a client can act on.
+
+        A task has to name a session that exists, so a payload naming an unknown
+        session violates a foreign key. Letting sqlite's ``IntegrityError``
+        escape answered HTTP 500 with the raw driver message: the user learned
+        nothing about which field was wrong, and the API published an internal
+        error. Whether the reference is real is the caller's business, so this is
+        an INVALID_ARGUMENT (400) with a nameable code — and anything else stays
+        an internal error.
+        """
+        if isinstance(exc, sqlite3.IntegrityError):
+            await context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "invalid_reference: the session or referenced row does not exist for this owner",
+            )
+            return True
+        logger.warning("[RULE WRITE] storage failure: %s", type(exc).__name__)
+        await context.abort(grpc.StatusCode.INTERNAL, "storage_error")
+        return True
+
     async def ListRules(self, request, context):
         owner = int(request.owner_user_id or 0)
         if not owner:
@@ -1040,6 +1062,9 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         except ValueError as exc:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
             return pb.ForwardRule()
+        except Exception as exc:  # a storage constraint is a refusal, not a 500
+            await self._refuse_reference_failure(context, exc)
+            return pb.ForwardRule()
         return _rule_pb(created)
 
     async def UpdateRule(self, request, context):
@@ -1073,6 +1098,9 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
                 updated = await self._rules.update(existing)
             except ValueError as exc:
                 await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+                return pb.ForwardRule()
+            except Exception as exc:
+                await self._refuse_reference_failure(context, exc)
                 return pb.ForwardRule()
             return _rule_pb(updated)
         # ---- legacy present-only path (no mask): unchanged behaviour ----
@@ -1195,6 +1223,9 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
             updated = await self._rules.update(existing)
         except ValueError as exc:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+            return pb.ForwardRule()
+        except Exception as exc:
+            await self._refuse_reference_failure(context, exc)
             return pb.ForwardRule()
         return _rule_pb(updated)
 
