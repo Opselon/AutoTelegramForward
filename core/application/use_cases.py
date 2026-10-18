@@ -416,6 +416,9 @@ class AIConfigUseCases:
             raise KeyError("config_not_found")
         if not self._owns(getattr(existing, "owner_user_id", 0), owner_user_id):
             raise PermissionError("not_owner")
+        # Same gate as update(): this is the path the bot's edit steps take, and
+        # a URL must not become storable by walking through a wizard.
+        self._guard_endpoint(cfg)
         return await self._repo.update(cfg)
 
     async def get(self, config_id: str) -> Optional[AIConfig]:

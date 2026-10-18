@@ -3032,8 +3032,14 @@ func grpcError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "core unavailable: " + st.Message()})
 	case codes.InvalidArgument:
 		code := "invalid_argument"
-		if strings.Contains(st.Message(), "loop_detected") {
+		// The message *is* the code for refusals the core names itself: keep it
+		// verbatim so a client can translate it instead of printing an
+		// identifier it does not know.
+		switch {
+		case strings.Contains(st.Message(), "loop_detected"):
 			code = "loop_detected"
+		case st.Message() == "endpoint_blocked" || strings.Contains(st.Message(), "endpoint_"):
+			code = st.Message()
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": st.Message(), "code": code})
 	default:

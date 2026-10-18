@@ -66,6 +66,13 @@ services:
       # the database path (the old fallback) let anyone sign a token for any
       # account, because the path is in this file.
       ATF_JWT_SECRET: ${ATF_JWT_SECRET:-}
+      # A tenant can point its own rewrite config at an endpoint it runs. The
+      # core refuses an address it must not be made to call (loopback, cloud
+      # metadata, this host's own networks) unless the operator declares the
+      # private network theirs — set this when the AI provider lives beside the
+      # stack on the compose network. Loopback and metadata stay refused either
+      # way, so it is never a blanket "trust the tenant's URL".
+      ATF_ALLOW_PRIVATE_AI_ENDPOINTS: ${ATF_ALLOW_PRIVATE_AI_ENDPOINTS:-}
       # Public dashboard URL the bot shows in its panel (e.g. https://panel.example.com
       # or http://203.0.113.10:8088). Inside Docker the container cannot detect
       # the host's public address, so set it here — or leave blank and configure

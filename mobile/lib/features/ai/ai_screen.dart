@@ -173,8 +173,16 @@ class _AiScreenState extends State<AiScreen> {
       );
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(exc.error.message)));
+      // A refused endpoint must name itself: `endpoint_blocked` is not a
+      // sentence, and it is the one refusal the user can fix.
+      final reasonKey = aiSaveFailureKey(exc.error.message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            reasonKey.isNotEmpty ? t.get(reasonKey) : exc.error.message,
+          ),
+        ),
+      );
     } catch (exc) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
