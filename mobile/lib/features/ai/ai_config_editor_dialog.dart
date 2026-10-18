@@ -77,9 +77,24 @@ class _AiConfigEditorDialogState extends State<AiConfigEditorDialog> {
     super.dispose();
   }
 
+  /// The provider the form would submit.
+  ///
+  /// The select shows the first catalogue entry when nothing was chosen, so an
+  /// untouched form must send *that* — reading `_provider` alone would post an
+  /// empty provider and the server would fall back to its own default, a
+  /// different provider from the one on screen.
+  String get _effectiveProvider {
+    final chosen = _provider.trim().toLowerCase();
+    final options = _options;
+    if (chosen.isNotEmpty && options.any((o) => o.id.toLowerCase() == chosen)) {
+      return chosen;
+    }
+    return options.isEmpty ? chosen : options.first.id.toLowerCase();
+  }
+
   AiConfig _build() => AiConfig(
     id: widget.existing?.id ?? '',
-    provider: _provider.isEmpty ? 'openai' : _provider,
+    provider: _effectiveProvider,
     model: _model.text.trim(),
     targetLanguage: _language.text.trim(),
     prompt: _prompt.text,
@@ -119,7 +134,7 @@ class _AiConfigEditorDialogState extends State<AiConfigEditorDialog> {
     try {
       final result = await client.checkProviderKey(
         aiConfigId: widget.existing?.id ?? '',
-        provider: _provider,
+        provider: _effectiveProvider,
         model: _model.text.trim(),
         baseUrl: _baseUrl.text.trim(),
         apiKey: _apiKey.text.trim(),

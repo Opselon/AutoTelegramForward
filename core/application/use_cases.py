@@ -382,10 +382,30 @@ class AIConfigUseCases:
                 pass
         return []
 
+    @staticmethod
+    def _guard_endpoint(cfg: AIConfig) -> None:
+        """Refuse an endpoint this server must not be made to call.
+
+        The guard sits at the write, not only at the probe: a stored endpoint is
+        replayed on every rewrite, so an address checked only when a key is
+        tested would still be called forever afterwards. Empty means "the
+        provider's own default" and is left alone.
+        """
+        from ..infrastructure.ai.providers import endpoint_guard
+
+        url = str(getattr(cfg, "base_url", "") or "").strip()
+        if not url:
+            return
+        problem = endpoint_guard(url)
+        if problem and problem != "missing_endpoint":
+            raise ValueError(f"endpoint refused: {problem}")
+
     async def create(self, cfg: AIConfig) -> AIConfig:
+        self._guard_endpoint(cfg)
         return await self._repo.add(cfg)
 
     async def update(self, cfg: AIConfig) -> AIConfig:
+        self._guard_endpoint(cfg)
         return await self._repo.update(cfg)
 
     async def update_owned(self, cfg: AIConfig, owner_user_id: Optional[int]) -> AIConfig:
