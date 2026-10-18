@@ -52,6 +52,7 @@ import type {
   TestPromptRequest,
   TestPromptResponse,
 } from './types'
+import { clearSession, getToken } from './session'
 
 const API_BASE = '/api'
 
@@ -75,12 +76,13 @@ async function getDeliveryStatsAny(): Promise<any> {
 
 /** Bearer header for raw fetches (downloads, blobs) outside fetchJson. */
 function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('auth_token')
+  const token = getToken()
   return token ? { Authorization: `Bearer ${token}` } : {}
+
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('auth_token')
+  const token = getToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(init?.headers as Record<string, string>),
@@ -93,9 +95,11 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     headers,
   })
   if (res.status === 401 && !url.includes('/api/auth/')) {
-    try {
-      localStorage.removeItem('auth_token')
-    } catch {}
+    // ONE session transition per burst of 401s: clearSession is idempotent
+    // (local storage remove + the same event), and auth_required is a
+    // level signal — the one listener reads it as "go to the login screen",
+    // so a 5-request burst landing at once still renders exactly one prompt.
+    clearSession()
     window.dispatchEvent(new Event('auth_required'))
     throw new Error('Authentication required')
   }
@@ -621,9 +625,7 @@ export const api = {
 
   // ------------------------------------------------- Logout
   logout: () => {
-    try {
-      localStorage.removeItem('auth_token')
-    } catch {}
+    clearSession()
   },
 
   // ------------------------------------------------- Backup & Restore

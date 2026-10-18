@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import { api } from '../api'
 
+import { applySession } from '../session'
+
 export default function Auth({ onLogin }: { onLogin: () => void }) {
   const [lang, setLang] = useState<'fa' | 'en'>('fa')
   const [isRegister, setIsRegister] = useState(false)
@@ -28,7 +30,7 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
         // Auto-login immediately upon registration
         const loginResp = await api.login({ username, password })
         if (loginResp.success && loginResp.token) {
-          localStorage.setItem('auth_token', loginResp.token)
+          applySession(loginResp.token)
           onLogin()
           return
         }
@@ -44,7 +46,7 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
         }
         const token = resp.token
         if (!token) throw new Error(isRtl ? 'توکن ورود دریافت نشد' : 'No token received')
-        localStorage.setItem('auth_token', token)
+        applySession(token)
         onLogin()
       }
     } catch (err: any) {

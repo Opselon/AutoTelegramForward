@@ -76,7 +76,9 @@ import type {
   ServicesHealthResponse,
   PVResponderConfig,
   DiagnosticsResponse,
+  MeInfo,
 } from './types'
+import { getToken, applySession } from './session'
 
 // ---------------------------------------------------------------------------
 // Branding hop (A → C → B)
@@ -191,7 +193,7 @@ function brandingHopSummary(isRtl: boolean, hop: BrandingHopConfig, route: strin
   return `${route}: ${scope} ${parts.join(joiner)} · ${delivery}${gate}`
 }
 
-export function App() {
+export function App({ me }: { me?: MeInfo } = {}) {
   // Language follows the user, not a hardcoded default:
   // previously this defaulted to 'fa' so every user's first dashboard render
   // was Persian even when their account language was English.
@@ -208,7 +210,10 @@ export function App() {
     try { localStorage.setItem('atf_lang', lang) } catch { /* ignore */ }
   }, [lang])
   const [activeTab, setActiveTab] = useState<'system' | 'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'jobs' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('system')
-  const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(null)
+  // Identity starts from the session-core's verified answer when mounted with one.
+  const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(
+    me ? { user_id: me.user_id, username: me.username, is_admin: me.is_admin } : null,
+  )
   const [rules, setRules] = useState<ForwardRule[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
@@ -564,11 +569,13 @@ export function App() {
         tg.ready?.()
         tg.expand?.()
       } catch {}
-      if (tg.initData && !localStorage.getItem('auth_token')) {
+      if (tg.initData && !getToken()) {
         api.authTMA(tg.initData).then((auth: any) => {
           if (auth && auth.token) {
-            localStorage.setItem('auth_token', auth.token)
-            api.me().then(setCurrentUser).catch(() => {})
+            applySession(auth.token)
+            api.me().then((info) => {
+              setCurrentUser(info)
+            }).catch(() => {})
             loadData()
             showToast(isRtl ? 'ورود خودکار مینی‌اپ تلگرام انجام شد' : 'Telegram Mini App auto-authenticated')
           }
@@ -578,7 +585,9 @@ export function App() {
 
     loadData()
     refreshDiagnostics()
-    api.me().then(setCurrentUser).catch(() => {})
+    api.me().then((info) => {
+      setCurrentUser(info)
+    }).catch(() => {})
     const timer = setInterval(() => {
       api.getStats().then(setStats).catch(() => {})
       api.getGatewayInfo().then(setGatewayInfo).catch(() => {})

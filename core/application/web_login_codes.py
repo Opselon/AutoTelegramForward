@@ -117,3 +117,47 @@ class WebLoginCodeService:
             self._db.execute("DELETE FROM web_login_codes WHERE created_at < ?", (cutoff,))
         except Exception as exc:  # pruning must never fail an issue
             logger.warning("[LOGIN-CODE] prune failed: %s", exc)
+
+    # ------------------------------------------------------- issue-with-cooldown
+    def try_issue(self, user_id: int, cooldown_seconds: int = 60) -> Optional[tuple[str, int]]:
+        """Issue a code unless one is already active for this user.
+
+        Returns ``(code, expires_at)`` on success, or ``None`` when a valid
+        unused code was minted for this user inside ``cooldown_seconds``.
+        Refusing there means a double click (or two concurrent /reauth) cannot
+        invalidate the link the first request returned: the older, still
+        usable one simply wins.
+        """
+        uid = int(user_id)
+        if uid <= 0:
+            return None
+        now = int(self._clock())
+        if self._active_within(uid, cooldown_seconds, now) is not None:
+            logger.info("[LOGIN-CODE] cooldown user_id=%s", uid)
+            return None
+        return self.issue(uid, purpose="dashboard")
+
+    def cooldown_remaining(self, user_id: int, cooldown_seconds: int = 60) -> int:
+        """Seconds until this user may mint a new code; 0 means now."""
+        uid = int(user_id)
+        if uid <= 0:
+            return 0
+        created = self._active_within(uid, cooldown_seconds, int(self._clock()))
+        if created is None:
+            return 0
+        return max(0, cooldown_seconds - (int(self._clock()) - created))
+
+    def _active_within(self, user_id: int, cooldown_seconds: int, now: int) -> Optional[int]:
+        """``created_at`` of the newest unused code minted inside the window."""
+        row = self._db.query_one(
+            "SELECT created_at FROM web_login_codes "
+            "WHERE user_id=? AND used_at IS NULL AND expires_at>? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (user_id, now),
+        )
+        if row is None:
+            return None
+        created = int(row["created_at"] or 0)
+        if now - created < cooldown_seconds:
+            return created
+        return None

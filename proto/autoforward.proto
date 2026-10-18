@@ -1077,6 +1077,18 @@ message IssueWebTokenRequest {
   int64 user_id = 1;          // bot -> core: mint a dashboard token for this user
 }
 
+// Mint a single-use login code for an ALREADY-VERIFIED account (the Go API
+// calls this only after ValidateToken proved the caller's JWT names the id).
+// There is no "mint for user X" path from an unauthenticated wire caller.
+message IssueLoginCodeRequest {
+  int64 user_id = 1;
+}
+
+message IssueLoginCodeResponse {
+  string login_code = 1;
+  int64 expires_at = 2;
+}
+
 // A login code is a single-use, short-lived secret the bot hands to the
 // Telegram user in a link. The API exchanges it for a session token, so the
 // link stops working the moment it is used (or after ten minutes). Exchanging
@@ -1100,6 +1112,8 @@ service AccountControlService {
   // Single-use exchange: the only way an unauthenticated client can turn a
   // bot-issued link into a session. There is deliberately no "mint for user X".
   rpc ExchangeWebLoginCode(ExchangeWebLoginCodeRequest) returns (LoginAccountResponse);
+  // Regenerate a single-use login code for the CALLER's own verified identity.
+  rpc IssueLoginCode(IssueLoginCodeRequest) returns (IssueLoginCodeResponse);
   rpc ChangePassword(ChangePasswordRequest) returns (StatusResponse);
   rpc GetAccount(GetAccountRequest) returns (WebAccount);
 }

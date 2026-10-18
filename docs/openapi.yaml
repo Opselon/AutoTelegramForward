@@ -109,6 +109,24 @@ paths:
       summary: Password login → JWT (also /auth/register, /auth/exchange-bot-token, /auth/tma)
       responses: { "200": { description: OK } }
 
+  /auth/bot-login-link:
+    get:
+      tags: [auth]
+      summary: Mint the caller's own single-use dashboard login link
+      description: |
+        Requires a valid Bearer JWT. The core mints one one-time code for the
+        verified identity and the reply carries a relative URL the client can
+        open. A short cooldown (60 s) applies per user: while a code is still
+        live and unused, the endpoint answers 429 + Retry-After instead of
+        minting another, so double clicks never invalidate the live link.
+        Codes self-destruct after 10 minutes or one single use.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK, content: { application/json: { schema: { type: object, properties: { code: { type: string }, expires_at: { type: integer }, link: { type: string } } } } }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "429": { description: Inside the mint cooldown; Retry-After carries seconds }
+
   /tasks:
     get:
       tags: [tasks]
