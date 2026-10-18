@@ -61,6 +61,13 @@ class Config:
     redis_prefix: str = "atf:rl:"
     redis_coordination: bool = True
     redis_timeout_seconds: float = 1.0
+    # Shared credential required on the core's internal gRPC surface (see
+    # core/infrastructure/grpc_server/internal_auth.py). Empty = the surface is
+    # unauthenticated and the core says so at startup: every servicer takes the
+    # tenant from owner_user_id, so anything that can reach this port can act as
+    # any tenant. Set the same value on the API (ATF_CORE_RPC_TOKEN) to enforce
+    # it. Never logged.
+    core_rpc_token: str = ""
 
     @classmethod
     def load(cls, config_path: str = None) -> "Config":
@@ -85,7 +92,8 @@ class Config:
                     "queue_lease_seconds", "queue_max_per_minute_per_target",
                     "database_url", "channel_poll_interval",
                     "redis_url", "redis_password", "redis_prefix",
-                    "redis_coordination", "redis_timeout_seconds"):
+                    "redis_coordination", "redis_timeout_seconds",
+                    "core_rpc_token"):
             if key in yaml_data:
                 setattr(cfg, key, yaml_data[key])
         if "admin_ids" in yaml_data:
@@ -116,6 +124,7 @@ class Config:
             # v16 Redis coordination (the API's limiter reads the same names).
             # The plain address first, the explicit URL last: a deployment that
             # sets both gets the full URL it wrote literally.
+            "ATF_CORE_RPC_TOKEN": ("core_rpc_token", str),
             "ATF_REDIS_ADDR": ("redis_url", _redis_url_from_addr),
             "ATF_REDIS_URL": ("redis_url", str),
             "ATF_RATELIMIT_PREFIX": ("redis_prefix", str),
