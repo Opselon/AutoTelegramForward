@@ -21,6 +21,7 @@ import (
 
 	"autoforward/internal/grpcclient"
 	"autoforward/internal/logpolicy"
+	"autoforward/internal/ratelimit"
 	pb "autoforward/proto"
 )
 
@@ -37,6 +38,12 @@ type Handlers struct {
 	// set by main.go to the same sink the access trail uses, so a policy change
 	// cannot silence the record of itself.
 	LogAudit func(actor int64, action, reasonCode string, detail map[string]any)
+
+	// RateLimit is the API boundary's rate limiter, set by main.go when the
+	// deployment configures a Redis store (and by tests that exercise the
+	// middleware). nil means "no limiter wired", never "unlimited by accident":
+	// the middleware is only installed when this is non-nil.
+	RateLimit *ratelimit.Runtime
 
 	// diagMu guards lastDiagStart: the diagnostic window is per-process state
 	// mutated from concurrent HTTP handlers.

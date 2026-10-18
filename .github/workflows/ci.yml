@@ -12,6 +12,19 @@ jobs:
   python-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      # The lease coordination (core/infrastructure/redis) is tested against a
+      # real server, not a mock: its whole contract is TTL expiry and
+      # token-checked scripts, which is exactly the part a mock would fake.
+      redis:
+        image: redis:7.4.11-alpine3.21
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +51,12 @@ jobs:
           ruff check core scripts atfcli
 
       - name: Run Python tests
+        # ATF_TEST_REDIS_ADDR arms the real-Redis suites (lease coordination
+        # and the API's limiter when its Go numbers carry over). Suites without
+        # the variable skip, so a fork running this job without the service
+        # still goes green on everything else.
+        env:
+          ATF_TEST_REDIS_ADDR: 127.0.0.1:6379
         run: python -m pytest -q core/tests scripts/tests
 
       - name: Telegram UI hardcoded-string guard
@@ -63,6 +82,18 @@ jobs:
   go-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      # Real Redis for the limiter's Lua semantics (scripts, TTLs, the atomic
+      # counters a mock cannot reproduce). The miniredis suite runs regardless.
+      redis:
+        image: redis:7.4.11-alpine3.21
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -80,7 +111,14 @@ jobs:
 
       - name: Test
         working-directory: api
-        run: go test ./...
+        env:
+          ATF_TEST_REDIS_ADDR: 127.0.0.1:6379
+        run: |
+          # The whole tree unchanged, plus the rate limiter under the race
+          # detector (it is the only Go code that will run on N replicas, so it
+          # is the only Go code whose data races matter today).
+          go test ./... -timeout 300s
+          go test ./internal/ratelimit/ -race -timeout 300s
 
   docker-build:
     runs-on: ubuntu-latest

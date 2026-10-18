@@ -8,6 +8,66 @@ x-logging: &default-logging
     max-file: "3"
 
 services:
+  # Optional shared Redis: the API boundary's rate-limit store and the Core's
+  # worker-coordination leases. Internal-only networking (no published port on
+  # the host), bounded memory, and no persistence on purpose — this instance
+  # holds limits, leases and nothing durable: a value that survives a restart
+  # would be a stale limit, so the store restarts empty and everyone re-buckets
+  # from their current allowance. See docs/redis.md.
+  #
+  # Everything still works if you delete this service: the classes fall back
+  # per policy (auth refuses, ordinary traffic degrades to a per-process
+  # limit), the Core assumes it is the only replica. Removing the SERVICE is
+  # the documented way to disable the integration.
+  redis:
+    image: redis:7.4.11-alpine3.21
+    container_name: atf-redis
+    # Rotation: see the x-logging anchor at the top of this file.
+    logging: *default-logging
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - ${ATF_REDIS_MAXMEMORY:-256mb}
+      # noeviction rather than allkeys-lru: silently evicting a token bucket
+      # resets that scope's allowance, which a client can provoke by inventing
+      # scopes until the cache churns. Refusing a write on pressure is a
+      # limiter problem (it fails per the outage policy); evicting one is a
+      # silent bypass.
+      - --maxmemory-policy
+      - ${ATF_REDIS_MAXMEMORY_POLICY:-noeviction}
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      # Hard-bound the expiry housekeeping: 4000 keys per tick keeps eviction
+      # from ever starving the command loop that the limiter runs on.
+      - --hz
+      - "20"
+      - --notify-keyspace-events
+      - ""
+      # AUTH when a password is configured; the Go client and the Core pass the
+      # same value through ATF_REDIS_PASSWORD.
+      - --requirepass
+      - ${ATF_REDIS_PASSWORD:-}
+    # A credential is not optional here: an empty --requirepass upgrades every
+    # connection to unauthenticated, and this network also carries the stack's
+    # bots. The .env.example documents generating one; a blank value keeps the
+    # generate-once default below honest.
+    # (redis ignores an empty requirepass, so the guidance is in the docs.)
+    networks:
+      - atf-net
+    # Deliberately NO ports: nothing outside the stack's network may reach this.
+    healthcheck:
+      # redis-cli needs no extra package in the image. With a password set,
+      # PING still works for authenticated clients; the check uses the
+      # password via ATF_REDIS_PASSWORD when present.
+      test: ["CMD-SHELL", "ATF_REDIS_PASSWORD=$$ATF_REDIS_PASSWORD redis-cli ${ATF_REDIS_PASSWORD:+-a $$ATF_REDIS_PASSWORD} ${ATF_REDIS_PASSWORD:+--no-auth-warning} ping | grep -q PONG"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # Production logging engine (Rust, rust/logger). Promoted over the legacy
   # Python logger: the service name and the `logger:50052` address consumers use
   # are unchanged, so core/api needed no client change. Owns its own store
@@ -88,6 +148,11 @@ services:
       ATF_RAW_API_TRACE: ${ATF_RAW_API_TRACE:-}
       ATF_BUTTON_STYLES: ${ATF_BUTTON_STYLES:-}
       ATF_BUTTON_STYLE_PROBE: ${ATF_BUTTON_STYLE_PROBE:-}
+      # Worker coordination: which loop runs on which replica when the stack is
+      # scaled out. Empty keeps the single-replica behaviour (nothing is
+      # coordinated, nothing else changes).
+      ATF_REDIS_ADDR: ${ATF_REDIS_ADDR:-redis:6379}
+      ATF_REDIS_PASSWORD: ${ATF_REDIS_PASSWORD:-}
     volumes:
       - atf-data:/app/data
     networks:
@@ -123,6 +188,12 @@ services:
       # there inside the api container, and /api/v1/health/services would
       # otherwise report the gateway as down).
       ATF_WEB_HEALTH_URL: http://web:8088/healthz
+      # Rate limiting at this process's boundary (same store the Core
+      # coordinates through). Effective only when the redis service is up;
+      # remove the redis service and the classes fall back per their policy.
+      ATF_REDIS_ADDR: ${ATF_REDIS_ADDR:-redis:6379}
+      ATF_REDIS_PASSWORD: ${ATF_REDIS_PASSWORD:-}
+      ATF_RATELIMIT_ALGO: ${ATF_RATELIMIT_ALGO:-tb}
     ports:
       - "8080:8080"
     networks:

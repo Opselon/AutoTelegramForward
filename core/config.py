@@ -7,6 +7,20 @@ from pathlib import Path
 import yaml
 
 
+def _redis_url_from_addr(value: str) -> str:
+    """Accept the compose form (``redis:6379``) as well as a full URL.
+
+    The API and the Core must read the same variable — an operator sets one
+    address for the deployment, not one per service — so the Core accepts the
+    bare ``host:port`` the compose file passes and turns it into the URL its
+    client wants. A value that already carries a scheme is left alone.
+    """
+    raw = (value or "").strip()
+    if not raw or "://" in raw:
+        return raw
+    return "redis://" + raw
+
+
 @dataclass
 class Config:
     api_id: int = 0
@@ -38,6 +52,14 @@ class Config:
     # Postgres repositories (FOR UPDATE SKIP LOCKED); otherwise SQLite.
     database_url: str = ""
     postgres_all: bool = False
+    # v16 Redis (optional). The API uses the same address for its rate limiter;
+    # the Core uses it to coordinate its singleton loops across replicas (see
+    # core/infrastructure/redis). Empty = single-replica mode, which is what
+    # every deployment was before this existed.
+    redis_url: str = ""
+    redis_prefix: str = "atf:rl:"
+    redis_coordination: bool = True
+    redis_timeout_seconds: float = 1.0
 
     @classmethod
     def load(cls, config_path: str = None) -> "Config":
@@ -60,7 +82,9 @@ class Config:
                     "logger_addr", "web_url", "jwt_secret",
                     "queue_num_workers", "queue_batch_size", "queue_max_size",
                     "queue_lease_seconds", "queue_max_per_minute_per_target",
-                    "database_url", "channel_poll_interval"):
+                    "database_url", "channel_poll_interval",
+                    "redis_url", "redis_prefix", "redis_coordination",
+                    "redis_timeout_seconds"):
             if key in yaml_data:
                 setattr(cfg, key, yaml_data[key])
         if "admin_ids" in yaml_data:
@@ -88,6 +112,17 @@ class Config:
             "ATF_POSTGRES_ALL": ("postgres_all", lambda v: str(v).lower() in ("1", "true", "yes")),
             # v15 channel polling
             "ATF_CHANNEL_POLL_INTERVAL": ("channel_poll_interval", float),
+            # v16 Redis coordination (the API's limiter reads the same names).
+            # The plain address first, the explicit URL last: a deployment that
+            # sets both gets the full URL it wrote literally.
+            "ATF_REDIS_ADDR": ("redis_url", _redis_url_from_addr),
+            "ATF_REDIS_URL": ("redis_url", str),
+            "ATF_RATELIMIT_PREFIX": ("redis_prefix", str),
+            "ATF_REDIS_COORDINATION": (
+                "redis_coordination",
+                lambda v: str(v).lower() in ("1", "true", "yes"),
+            ),
+            "ATF_REDIS_TIMEOUT_MS": ("redis_timeout_seconds", lambda v: float(v) / 1000.0),
         }
         for env_key, (attr, cast) in env_map.items():
             val = os.environ.get(env_key)

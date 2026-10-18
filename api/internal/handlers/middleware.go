@@ -56,6 +56,20 @@ func (h *Handlers) authMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// IdentityOf exposes the VERIFIED identity of a request to middleware that
+// cannot import this package (the rate limiter is one: importing handlers from
+// it, or it from handlers, would be a cycle). It is set deliberately narrow — a
+// user id, an admin flag and "was this request authenticated at all" — and no
+// caller-supplied value can influence it: the fields come from the core's
+// ValidateToken answer, not from a header.
+func (h *Handlers) IdentityOf(r *http.Request) (int64, bool, bool) {
+	id := identity(r)
+	if id == nil {
+		return 0, false, false
+	}
+	return id.UserID, id.IsAdmin, true
+}
+
 // RequireAuth mounts a dashboard sub-mux under authentication.
 func (h *Handlers) RequireAuth(inner http.Handler) http.Handler {
 	return h.authMiddleware(http.StripPrefix("/api", inner))
