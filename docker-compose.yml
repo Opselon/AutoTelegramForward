@@ -60,6 +60,12 @@ services:
       ADMIN_IDS: ${ADMIN_IDS:-5094837833}
       ATF_ADMIN_USER_ID: ${ATF_ADMIN_USER_ID:-5094837833}
       ATF_MASTER_KEY: ${ATF_MASTER_KEY}
+      # Session signing key.  Left unset, the core generates a random one and
+      # keeps it in the database; set it to share sessions across a deployment
+      # or to rotate.  It must never be a value anybody else can read: hashing
+      # the database path (the old fallback) let anyone sign a token for any
+      # account, because the path is in this file.
+      ATF_JWT_SECRET: ${ATF_JWT_SECRET:-}
       # Public dashboard URL the bot shows in its panel (e.g. https://panel.example.com
       # or http://203.0.113.10:8088). Inside Docker the container cannot detect
       # the host's public address, so set it here — or leave blank and configure

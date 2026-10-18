@@ -1534,6 +1534,14 @@ async def initialize_postgres_schema(db: Any) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_pg_web_login_codes_user ON web_login_codes (user_id);
         CREATE INDEX IF NOT EXISTS idx_pg_web_login_codes_created ON web_login_codes (created_at);
+        -- v23: the deployment's own secrets (mirror of the SQLite table). The
+        -- session signing key lives here when no ATF_JWT_SECRET is configured:
+        -- random, once, and never derived from anything public.
+        CREATE TABLE IF NOT EXISTS app_secrets (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            created_at BIGINT NOT NULL
+        );
         """,
     ]
 
