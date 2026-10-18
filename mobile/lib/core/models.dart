@@ -2165,19 +2165,19 @@ class UserTask {
       status == 'SUCCEEDED' || status == 'FAILED' || status == 'CANCELLED';
 
   factory UserTask.fromJson(Map<String, dynamic> json) => UserTask(
-        id: json['id'] as String? ?? '',
-        kind: json['kind'] as String? ?? '',
-        status: json['status'] as String? ?? 'PENDING',
-        attempt: jsonInt(json['attempt']),
-        maxAttempts: jsonInt(json['max_attempts'], 3),
-        idempotencyKey: json['idempotency_key'] as String? ?? '',
-        error: json['error'] as String? ?? '',
-        errorCode: json['error_code'] as String? ?? '',
-        createdAt: jsonInt(json['created_at']),
-        updatedAt: jsonInt(json['updated_at']),
-        startedAt: jsonInt(json['started_at']),
-        finishedAt: jsonInt(json['finished_at']),
-      );
+    id: json['id'] as String? ?? '',
+    kind: json['kind'] as String? ?? '',
+    status: json['status'] as String? ?? 'PENDING',
+    attempt: jsonInt(json['attempt']),
+    maxAttempts: jsonInt(json['max_attempts'], 3),
+    idempotencyKey: json['idempotency_key'] as String? ?? '',
+    error: json['error'] as String? ?? '',
+    errorCode: json['error_code'] as String? ?? '',
+    createdAt: jsonInt(json['created_at']),
+    updatedAt: jsonInt(json['updated_at']),
+    startedAt: jsonInt(json['started_at']),
+    finishedAt: jsonInt(json['finished_at']),
+  );
 }
 
 /// The list page for the task lifecycle endpoint.
@@ -2188,11 +2188,11 @@ class TasksPage {
   final int total;
 
   factory TasksPage.fromJson(Map<String, dynamic> json) => TasksPage(
-        tasks: (json['tasks'] as List? ?? const [])
-            .map((e) => UserTask.fromJson((e as Map).cast<String, dynamic>()))
-            .toList(growable: false),
-        total: jsonInt(json['total']),
-      );
+    tasks: (json['tasks'] as List? ?? const [])
+        .map((e) => UserTask.fromJson((e as Map).cast<String, dynamic>()))
+        .toList(growable: false),
+    total: jsonInt(json['total']),
+  );
 }
 
 /// The create-task reply: `already_existed` is the idempotency signal clients
