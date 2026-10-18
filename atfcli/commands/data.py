@@ -55,18 +55,34 @@ def _backup_import(ctx, args) -> None:
 
 def _dlq_list(ctx, args) -> None:
     data = ctx.api.get("/api/dlq")
-    items = sh.list_of(data, "dlq")
+    # The handler answers `{"jobs": [...], "entries": [...], "total": N}`. Asking
+    # for a "dlq" key matched nothing, so the list helper fell through to
+    # returning the whole envelope as a single row — the table showed one bogus
+    # entry whose id, rule and error were all placeholders.
+    items = sh.list_of(data, "jobs")
     if args.json:
         ctx.out.json({"count": len(items), "dlq": items})
         return
     rows = []
     for item in items:
+        # The API projects `last_error` and `attempts` (the same columns the
+        # queue repository's contract defines on both backends). The old column
+        # names — `error` and `retry_count` — matched neither, so the table
+        # silently rendered "—" and 0 for every row.
         rows.append(
             [
                 str(item.get("id") or "—")[:8],
                 str(item.get("rule_id") or "—")[:8],
-                sh.truncate(str(item.get("error") or "—"), 40),
-                str(item.get("retry_count") or 0),
+                sh.truncate(
+                    str(
+                        item.get("last_error")
+                        or item.get("error")
+                        or item.get("error_message")
+                        or "—"
+                    ),
+                    40,
+                ),
+                str(item.get("attempts", item.get("retry_count") or 0) or 0),
             ]
         )
     ctx.out.table(("ID", "RULE", "ERROR", "RETRIES"), rows, empty="dead letter queue is empty")
@@ -77,13 +93,24 @@ def _dlq_list(ctx, args) -> None:
 def _dlq_retry(ctx, args) -> None:
     mid = args.id
     res = ctx.api.post(f"/api/dlq/{mid}/retry")
+    # The core answers with the documented result codes, not just success.
+    # `not_found`/`already_pending`/`already_sent`/`replay_failed` each mean the
+    # entry was *not* re-queued, and saying otherwise here would hide it.
+    if isinstance(res, dict) and res.get("success") is False:
+        code = res.get("error_code") or res.get("message") or "refused"
+        ctx.out.line(f"  retry refused ({code}); message stays in the dead-letter queue")
+        return
     ctx.out.emit(res, f"Replaying message {mid[:8]} from DLQ")
 
 
 def _dlq_purge(ctx, args) -> None:
     sh.confirm_or_fail(ctx, "Purge all messages in dead letter queue?")
     res = ctx.api.delete("/api/dlq")
-    ctx.out.emit(res, "Purged dead letter queue")
+    msg = res.get("message", "") if isinstance(res, dict) else ""
+    if isinstance(res, dict) and res.get("success") is False:
+        ctx.out.line(f"  purge failed ({res.get('error_code') or msg or 'refused'})")
+        return
+    ctx.out.emit(res, f"Purged dead letter queue{f' ({msg})' if msg else ''}")
 
 
 def _queue(ctx, args) -> None:

@@ -411,12 +411,16 @@ export const api = {
     if (Array.isArray(res?.entries)) return res.entries
     return []
   },
+  // The core answers a replay with the full RuleActionResponse: success plus a
+  // message/error_code pairing from the documented result codes
+  // (requeued / not_found / already_pending / already_sent / replay_failed).
+  // Typing it as the whole body keeps the caller honest about refusals.
   retryDLQ: (id: string) =>
-    fetchJson<{ success: boolean; retried_id: string }>(`${API_BASE}/dlq/${id}/retry`, {
+    fetchJson<{ success: boolean; message: string; error_code?: string }>(`${API_BASE}/dlq/${id}/retry`, {
       method: 'POST',
     }),
   purgeDLQ: () =>
-    fetchJson<{ success: boolean; purged_count: number }>(`${API_BASE}/dlq`, {
+    fetchJson<{ success: boolean; message: string; purged_count?: number }>(`${API_BASE}/dlq`, {
       method: 'DELETE',
     }),
 

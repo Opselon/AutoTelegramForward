@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from ..domain.entities import (
     AIConfig,
@@ -588,6 +588,86 @@ class IDeliveryQueueRepository(ABC):
     async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 7) -> int:
         """Purge terminal jobs (SENT, FAILED) older than retention_seconds."""
         ...
+
+    # ------------------------------------------------------------------ #
+    # Dead-letter queue
+    #
+    # A dead letter is a delivery that exhausted its retry budget. It is the
+    # one queue state a user can act on, so both clients (the Telegram bot and
+    # the dashboard) must read and replay it through the same owner-scoped
+    # contract rather than each rolling its own SQL over `dead_letter_queue`.
+    #
+    # ``rule_ids`` is the caller's tenant scope in every method below:
+    # ``None`` means unscoped (an internal/admin caller that has already
+    # resolved its authority), while an EMPTY sequence means the caller owns
+    # nothing and must therefore see nothing. An empty scope never degrades
+    # into "no filter".
+    # ------------------------------------------------------------------ #
+
+    async def list_dead_letters(
+        self,
+        rule_ids: Optional[Sequence[str]] = None,
+        limit: int = 20,
+        rule_id: str = "",
+        since: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Dead-lettered deliveries, newest first, scoped to ``rule_ids``.
+
+        ``rule_ids`` is the tenant scope: ``None`` is unscoped (internal
+        callers), and an **empty** sequence means the caller owns nothing, so it
+        sees nothing — never "no filter". ``rule_id`` and ``since`` narrow
+        within that scope. They are filters rather than post-processing because
+        ``limit`` applies after them: filtering an already-truncated page would
+        answer "no such entry" for an entry that is simply older than the page.
+        """
+        return []
+
+    async def count_dead_letters(self, rule_ids: Optional[Sequence[str]] = None) -> int:
+        """How many dead letters the scope holds. Same scope rules as above.
+
+        A count is a read: it belongs here with the other reads so every caller
+        answers "is anything stuck?" from one implementation.
+        """
+        return 0
+    async def replay_dead_letter(
+        self, entry_id: str, rule_ids: Optional[Sequence[str]] = None
+    ) -> str:
+        """Re-queue one dead letter and drop its entry.
+
+        Returns a result code rather than raising:
+
+        * ``requeued`` — a fresh PENDING job now exists for it.
+        * ``not_found`` — no such entry, or it belongs to another tenant. The
+          two are deliberately indistinguishable so an id cannot be probed.
+        * ``already_pending`` — the delivery is live right now; replaying would
+          deliver the message twice.
+        * ``already_sent`` — the store records this message as delivered, so
+          re-queueing it would repost something the target already has.
+        * ``replay_failed`` — the store refused the write.
+
+        A replay never adds a second delivery: it wakes the one that failed,
+        which is why the result codes can promise at-most-once. The woken job
+        goes back to PENDING with its attempt budget restored — `attempts` to
+        zero and `max_attempts` to the rule's full budget — so a retried message
+        gets the same room to succeed as it had the first time, and the entry
+        disappears only once that write has succeeded.
+        """
+        return "not_found"
+
+    async def purge_dead_letters(
+        self,
+        rule_ids: Optional[Sequence[str]] = None,
+        rule_id: str = "",
+        older_than: int = 0,
+    ) -> int:
+        """Delete scoped dead letters and return how many were removed.
+
+        Deleting is irreversible and cross-tenant by accident, so the scope is
+        the whole guard: an empty ``rule_ids`` removes nothing (it is *not* "no
+        filter"), ``rule_id`` narrows to one rule, and ``older_than`` keeps
+        recent entries for the tenant that needs them.
+        """
+        return 0
 
 
 

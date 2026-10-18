@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence
 
 from .coercion import enum_str
+
+logger = logging.getLogger(__name__)
 
 from ...application.repositories import (
     ConcurrencyError,
@@ -855,20 +858,7 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
 
         if attempts >= max_attempts:
             # v14: route the exhausted job to the dead-letter queue.
-            dlq_query = """
-            INSERT INTO dead_letter_queue (
-                id, job_id, rule_id, source_chat_id, source_message_id,
-                target_chat_id, payload_json, error_message, error_category, dead_lettered_at
-            )
-            SELECT %s, id, rule_id, source_chat_id, source_message_id,
-                   target_chat_id, payload_json, %s, %s, %s
-            FROM delivery_jobs WHERE id = %s
-            ON CONFLICT (job_id) DO NOTHING
-            """
-            try:
-                await _execute_db(self._db, dlq_query, (f"dlq_{job_id}", error, "DELIVERY_EXHAUSTED", int(now), job_id))
-            except Exception:
-                pass
+            await self._dead_letter_row(job_id, error, "DELIVERY_EXHAUSTED", now, attempts)
             query = """
             UPDATE delivery_jobs
             SET status = 'FAILED', attempts = %s, error_detail = %s, lease_until = 0, updated_at = %s
@@ -903,32 +893,222 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
         res = await _execute_db(self._db, query, (str(inter_chat), int(inter_msg_id), now, job_id))
         return True
 
-    async def mark_dead_letter(self, job_id: str, error: str, category: str = "DELIVERY_EXHAUSTED") -> bool:
-        now = int(time.time())
+    async def _dead_letter_row(
+        self, job_id: str, error: str, category: str, now: float, attempts: int = 0
+    ) -> bool:
+        """Write the dead-letter entry for a job; the ONLY producer.
+
+        Mirrors `SqliteDeliveryQueueRepository._dead_letter_row` column for
+        column. `attempts` is passed in rather than copied from the job row,
+        which is updated after this runs — copying it recorded one attempt fewer
+        than the delivery had used.
+        """
         try:
             ins_query = """
             INSERT INTO dead_letter_queue (
                 id, job_id, rule_id, source_chat_id, source_message_id,
-                target_chat_id, payload_json, error_message, error_category, dead_lettered_at
+                target_chat_id, payload_json, attempts, last_error,
+                error_category, dead_lettered_at
             )
             SELECT %s, id, rule_id, source_chat_id, source_message_id,
-                   target_chat_id, payload_json, %s, %s, %s
+                   target_chat_id, payload_json, %s, %s, %s, %s
             FROM delivery_jobs WHERE id = %s
-            ON CONFLICT (id) DO UPDATE SET error_message = EXCLUDED.error_message, dead_lettered_at = EXCLUDED.dead_lettered_at
+            ON CONFLICT (id) DO UPDATE SET
+                last_error = EXCLUDED.last_error,
+                attempts = EXCLUDED.attempts,
+                error_category = EXCLUDED.error_category,
+                dead_lettered_at = EXCLUDED.dead_lettered_at
             """
-            await _execute_db(self._db, ins_query, (f"dlq_{job_id}", error, category, now, job_id))
-        except Exception:
-            pass
+            await _execute_db(
+                self._db,
+                ins_query,
+                (f"dlq_{job_id}", int(attempts), error, category, int(now), job_id),
+            )
+            row = await self._fetch_one(
+                "SELECT 1 AS ok FROM dead_letter_queue WHERE id = %s", (f"dlq_{job_id}",)
+            )
+            if row is None:
+                logger.warning(
+                    "dead-letter entry for job %s was not written: no such delivery_jobs row",
+                    job_id,
+                )
+                return False
+            return True
+        except Exception as exc:
+            logger.warning("dead-letter entry for job %s failed: %s", job_id, exc)
+            return False
+
+    async def mark_dead_letter(self, job_id: str, error: str, category: str = "DELIVERY_EXHAUSTED") -> bool:
+        now = int(time.time())
+        current = await self._fetch_one("SELECT attempts FROM delivery_jobs WHERE id = %s", (job_id,))
+        attempts = int(dict(current).get("attempts", 0)) if current is not None else 0
+        recorded = await self._dead_letter_row(job_id, error, category, now, attempts)
         query = "UPDATE delivery_jobs SET status = 'DEAD_LETTER', error_detail = %s, lease_until = 0, updated_at = %s WHERE id = %s"
         await _execute_db(self._db, query, (error, now, job_id))
-        return True
+        return recorded
+
+    # ------------------------------------------------------------------ #
+    # Dead-letter queue (owner-scoped read / replay / purge)
+    #
+    # Same contract and same result codes as the SQLite implementation; the
+    # callers (bot, servicer) do not know which backend they are on.
+    # ------------------------------------------------------------------ #
+
+    def _dlq_scope_clause(self, rule_ids: Optional[Sequence[str]]) -> tuple:
+        """``(sql_fragment, params)`` for a tenant scope.
+
+        ``None`` is unscoped for an internal caller; an empty scope matches
+        nothing rather than degrading into "no filter".
+        """
+        if rule_ids is None:
+            return "", ()
+        ids = [str(r) for r in rule_ids if r]
+        if not ids:
+            return " AND 1=0", ()
+        return f" AND rule_id IN ({','.join(['%s'] * len(ids))})", tuple(ids)
+
+    async def list_dead_letters(
+        self,
+        rule_ids: Optional[Sequence[str]] = None,
+        limit: int = 20,
+        rule_id: str = "",
+        since: int = 0,
+    ) -> List[Dict[str, Any]]:
+        scope_sql, scope_params = self._dlq_scope_clause(rule_ids)
+        params: tuple = scope_params
+        if rule_id:
+            scope_sql += " AND rule_id=%s"
+            params = params + (str(rule_id),)
+        if since:
+            scope_sql += " AND dead_lettered_at>=%s"
+            params = params + (int(since),)
+        try:
+            rows = await self._fetch_all(
+                "SELECT * FROM dead_letter_queue WHERE 1=1" + scope_sql
+                + " ORDER BY dead_lettered_at DESC LIMIT %s",
+                params + (max(int(limit), 1),),
+            )
+            return [dict(r) for r in rows]
+        except Exception as exc:
+            logger.warning("dead-letter list failed: %s", exc)
+            return []
+
+    async def count_dead_letters(self, rule_ids: Optional[Sequence[str]] = None) -> int:
+        scope_sql, scope_params = self._dlq_scope_clause(rule_ids)
+        try:
+            row = await self._fetch_one(
+                "SELECT COUNT(*) AS n FROM dead_letter_queue WHERE 1=1" + scope_sql,
+                scope_params,
+            )
+            return int((dict(row) if row else {}).get("n", 0) or 0)
+        except Exception as exc:
+            logger.warning("dead-letter count failed: %s", exc)
+            return 0
+
+    async def replay_dead_letter(
+        self, entry_id: str, rule_ids: Optional[Sequence[str]] = None
+    ) -> str:
+        scope_sql, scope_params = self._dlq_scope_clause(rule_ids)
+        try:
+            rows = await self._fetch_all(
+                "SELECT * FROM dead_letter_queue WHERE id=%s" + scope_sql,
+                (str(entry_id),) + scope_params,
+            )
+        except Exception as exc:
+            logger.warning("dead letter %s could not be read: %s", entry_id, exc)
+            return "replay_failed"
+        if not rows:
+            return "not_found"
+        entry = dict(rows[0])
+
+        rule_id = str(entry.get("rule_id") or "")
+        src_chat = str(entry.get("source_chat_id") or "")
+        src_msg = int(entry.get("source_message_id") or 0)
+        tgt_chat = str(entry.get("target_chat_id") or "")
+        job_id = str(entry.get("job_id") or "")
+
+        # delivery_jobs is UNIQUE(rule_id, source_chat_id, source_message_id,
+        # target_chat_id), so a replay wakes the one delivery up instead of
+        # adding a second: that is what makes it unable to double-post.
+        original = None
+        if job_id:
+            original = await self._fetch_one("SELECT * FROM delivery_jobs WHERE id=%s", (job_id,))
+        if original is None:
+            original = await self._fetch_one(
+                "SELECT * FROM delivery_jobs WHERE rule_id=%s AND source_chat_id=%s"
+                " AND source_message_id=%s AND target_chat_id=%s",
+                (rule_id, src_chat, src_msg, tgt_chat),
+            )
+
+        now = int(time.time())
+        try:
+            if original is not None:
+                row = dict(original)
+                status = str(row.get("status") or "").upper()
+                if status in ("PENDING", "CLAIMED", "RETRY_WAIT", "PROCESSING"):
+                    return "already_pending"
+                if status == "SENT":
+                    return "already_sent"
+                max_attempts = int(row.get("max_attempts") or 0) or DeliveryJob().max_attempts
+                await _execute_db(
+                    self._db,
+                    "UPDATE delivery_jobs SET status = 'PENDING', attempts = 0, max_attempts = %s,"
+                    " next_retry_at = 0, lease_until = 0, worker_id = '', error_detail = '',"
+                    " updated_at = %s WHERE id = %s",
+                    (max(1, max_attempts), now, row.get("id")),
+                )
+            else:
+                max_attempts = max(1, int(entry.get("attempts") or 0) or DeliveryJob().max_attempts)
+                payload = entry.get("payload_json") or "{}"
+                if isinstance(payload, (dict, list)):
+                    payload = json.dumps(payload)
+                await _execute_db(
+                    self._db,
+                    "INSERT INTO delivery_jobs ("
+                    " id, rule_id, source_chat_id, source_message_id, target_chat_id,"
+                    " payload_json, status, attempts, max_attempts, next_retry_at,"
+                    " lease_until, worker_id, error_detail, created_at, updated_at"
+                    ") VALUES (%s, %s, %s, %s, %s, %s, 'PENDING', 0, %s, 0, 0, '', '', %s, %s)"
+                    " ON CONFLICT (rule_id, source_chat_id, source_message_id, target_chat_id) DO NOTHING",
+                    (
+                        job_id or f"replay_{entry_id}", rule_id, src_chat, src_msg, tgt_chat,
+                        payload, max(1, max_attempts), now, now,
+                    ),
+                )
+            await _execute_db(self._db, "DELETE FROM dead_letter_queue WHERE id=%s", (str(entry_id),))
+        except Exception as exc:
+            logger.warning("replay of dead letter %s failed: %s", entry_id, exc)
+            return "replay_failed"
+        logger.info(
+            "dead letter %s replayed (rule=%s target=%s)", entry_id, rule_id, tgt_chat
+        )
+        return "requeued"
+
+    async def purge_dead_letters(
+        self,
+        rule_ids: Optional[Sequence[str]] = None,
+        rule_id: str = "",
+        older_than: int = 0,
+    ) -> int:
+        scope_sql, params = self._dlq_scope_clause(rule_ids)
+        sql = "DELETE FROM dead_letter_queue WHERE 1=1" + scope_sql
+        if rule_id:
+            sql += " AND rule_id=%s"
+            params = params + (str(rule_id),)
+        if older_than:
+            sql += " AND dead_lettered_at<%s"
+            params = params + (int(older_than),)
+        try:
+            res = await _execute_db(self._db, sql, params)
+            if isinstance(res, str) and res.upper().startswith("DELETE"):
+                return int(res.split()[-1])
+            count = getattr(res, "rowcount", None)
+            return int(count) if count is not None else 0
+        except Exception:
+            return 0
 
     async def get_dead_letter_jobs(self, limit: int = 50) -> List[Dict[str, Any]]:
-        try:
-            rows = await self._fetch_all("SELECT * FROM dead_letter_queue ORDER BY dead_lettered_at DESC LIMIT %s", (int(limit),))
-            return [dict(r) for r in rows]
-        except Exception:
-            return []
+        return await self.list_dead_letters(None, limit)
 
     async def mark_unknown(self, job_id: str, error: str) -> bool:
         now = int(time.time())
@@ -1268,9 +1448,14 @@ async def initialize_postgres_schema(db: Any) -> None:
             source_message_id BIGINT NOT NULL,
             target_chat_id TEXT NOT NULL,
             payload_json JSONB NOT NULL DEFAULT '{}',
-            error_message TEXT NOT NULL DEFAULT '',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT NOT NULL DEFAULT '',
             error_category TEXT NOT NULL DEFAULT '',
-            dead_lettered_at BIGINT NOT NULL
+            dead_lettered_at BIGINT NOT NULL,
+            -- Legacy: this backend's older name for `last_error`, kept so no
+            -- deployed row loses its error text. Nothing reads or writes it any
+            -- more; the contract is `last_error` on both backends.
+            error_message TEXT NOT NULL DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS idx_dlq_rule ON dead_letter_queue (rule_id, dead_lettered_at);
         CREATE INDEX IF NOT EXISTS idx_dlq_ts ON dead_letter_queue (dead_lettered_at);
@@ -1330,6 +1515,12 @@ async def initialize_postgres_schema(db: Any) -> None:
         CREATE INDEX IF NOT EXISTS idx_pg_fwd_session_owner ON forward_rules (session_id, owner_user_id);
         ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS owner_user_id BIGINT NOT NULL DEFAULT 0;
         CREATE INDEX IF NOT EXISTS idx_pg_prompt_templates_owner ON prompt_templates (owner_user_id);
+        -- Dead-letter contract (must match the SQLite schema exactly: the same
+        -- repository code writes both, so a column named differently on one
+        -- backend is a write that silently does nothing on that backend).
+        ALTER TABLE dead_letter_queue ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT '';
+        ALTER TABLE dead_letter_queue ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
+        UPDATE dead_letter_queue SET last_error = error_message WHERE last_error = '' AND error_message <> '';
         CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
         """,
     ]

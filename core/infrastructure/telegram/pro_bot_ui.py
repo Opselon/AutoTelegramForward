@@ -189,6 +189,14 @@ CB = {
     "settings": "stg",
     "client_creds": "clc",
     "client_cred_reset": "clcr",
+    # Dead-letter queue: list it from the diagnostics screen, then replay one
+    # entry or purge the lot. Entry ids are long, so the payload is an index
+    # into a per-user page held in memory — never the id itself.
+    "diag_dlq": "dgd",
+    "diag_dlq_refresh": "dgdr",
+    "diag_dlq_replay": "dgdp",
+    "diag_dlq_purge": "dgdl",
+    "diag_dlq_purge_confirm": "dgdlc",
     # Administrator Control Plane
     "admin": "adm",
     "adm_stats": "admst",
@@ -425,6 +433,9 @@ class ProBotUI:
         #: The delivery queue, so the diagnostics screen can report what is
         #: waiting, retrying or stuck rather than only what has been sent.
         self._delivery_queue = delivery_queue
+        # Dead-letter pages, keyed by user: the index in a callback payload
+        # resolves against this. Bounded because a page is at most a screen.
+        self._dlq_page: Dict[int, List[Dict[str, Any]]] = {}
         self._users = users
         self._prompts = prompt_service
         self._ai_transformer = ai_transformer
@@ -4078,11 +4089,184 @@ class ProBotUI:
                 rule_stats=self._rule_stats,
                 owned_rule_ids=owned,
             )
-            kbd = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 " + self._t("ui_refresh"), callback_data=CB["diag"])],
-                [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])],
+            # A dead letter is the one queue state a user can act on: offer the
+            # list only when there is one, so a healthy account is not offered a
+            # button that answers "nothing".
+            stuck = 0
+            try:
+                stuck = await diagnostics.count_dead_letters(
+                    queue=self._delivery_queue, owned_rule_ids=owned
+                ) if self._delivery_queue is not None else 0
+            except Exception:
+                stuck = 0
+            rows = [
+                [InlineKeyboardButton("🔄 " + self._t("ui_refresh"), callback_data=CB["diag"])]
+            ]
+            if stuck > 0:
+                rows.insert(0, [
+                    InlineKeyboardButton(
+                        self._t("ui_dlq_open", count=stuck),
+                        callback_data=CB["diag_dlq"],
+                    )
+                ])
+            kbd = InlineKeyboardMarkup(rows + [
+                [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])]
             ])
             await self._safe_edit(cq, body, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["diag_dlq"] + "$"))
+        @b.on_callback_query(filters.regex("^" + CB["diag_dlq_refresh"] + "$"))
+        @self._localized_handler
+        async def _cb_diag_dlq(_, cq: CallbackQuery):
+            """The entries behind the badge, for this user only.
+
+            The list lives in the diagnostics module so the read goes through
+            the repository's owner-scoped contract, not a query of our own;
+            `owned` is what keeps another tenant's failed delivery off this
+            screen.
+            """
+            uid = cq.from_user.id if cq.from_user else 0
+            owned: list[str] = []
+            try:
+                owned = diagnostics.owned_ids_of(
+                    await self._rules.list_by_owner(uid)
+                ) if uid else []
+            except Exception:
+                owned = []
+            lang = self._resolve_lang(uid)
+            collected = await diagnostics.collect_dead_letters(
+                queue=self._delivery_queue, owned_rule_ids=owned
+            )
+            self._dlq_page[uid] = collected["entries"]
+            text = diagnostics.render_dead_letters(
+                lambda key, **params: self._t(key, lang=lang, **params), collected
+            )
+            rows = []
+            for idx, entry in enumerate(collected["entries"]):
+                rows.append([InlineKeyboardButton(
+                    self._t("ui_dlq_retry_one", n=idx + 1),
+                    callback_data=f"{CB['diag_dlq_replay']}:{uid}:{idx}",
+                )])
+            rows.append([InlineKeyboardButton(
+                "🔄 " + self._t("ui_refresh"), callback_data=CB["diag_dlq_refresh"]
+            )])
+            if collected["entries"]:
+                rows.append([InlineKeyboardButton(
+                    self._t("ui_dlq_purge_all"), callback_data=CB["diag_dlq_purge"]
+                )])
+            rows.append([InlineKeyboardButton(
+                "⬅️ " + self._t("ui_back"), callback_data=CB["diag"]
+            )])
+            await self._safe_edit(cq, text, reply_markup=InlineKeyboardMarkup(rows))
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["diag_dlq_replay"] + r":\d+:\d+$"))
+        @self._localized_handler
+        async def _cb_diag_dlq_replay(_, cq: CallbackQuery):
+            """Re-queue one entry by its index on this user's page.
+
+            The index, not the id, travels in the payload. The id is looked up
+            in this user's own page, so a payload cannot name another tenant's
+            entry — and a stale index (page refreshed, message old) is a
+            no-op rather than a guess.
+            """
+            uid = cq.from_user.id if cq.from_user else 0
+            parts = cq.data.split(":", 2)
+            page_owner = int(parts[1]) if len(parts) > 1 and str(parts[1]).isdigit() else 0
+            idx = int(parts[2]) if len(parts) > 2 and str(parts[2]).isdigit() else -1
+            lang = self._resolve_lang(uid)
+            entries = self._dlq_page.get(page_owner) or []
+            if page_owner != uid or not (0 <= idx < len(entries)):
+                # Not this user's page, or an index that is no longer on it.
+                await cq.answer(self._t("ui_dlq_not_found", lang=lang), show_alert=True)
+                return
+            entry = entries[idx]
+            result = await diagnostics.replay_dead_letter(
+                queue=self._delivery_queue,
+                entry_id=str(entry.get("id") or ""),
+                owned_rule_ids=diagnostics.owned_ids_of(
+                    await self._rules.list_by_owner(uid)
+                ) if uid else [],
+            )
+            key = diagnostics.result_code_key(result) or "ui_dlq_replay_failed"
+            await cq.answer(self._t(key, lang=lang), show_alert=not (
+                result == "requeued"
+            ))
+            # Refresh the page in place: a successful replay drops its entry and
+            # a refused one tells the user why it is still there.
+            collected = await diagnostics.collect_dead_letters(
+                queue=self._delivery_queue,
+                owned_rule_ids=diagnostics.owned_ids_of(
+                    await self._rules.list_by_owner(uid)
+                ) if uid else [],
+            )
+            self._dlq_page[uid] = collected["entries"]
+            text = diagnostics.render_dead_letters(
+                lambda key, **params: self._t(key, lang=lang, **params), collected
+            )
+            rows = []
+            for i, e in enumerate(collected["entries"]):
+                rows.append([InlineKeyboardButton(
+                    self._t("ui_dlq_retry_one", n=i + 1),
+                    callback_data=f"{CB['diag_dlq_replay']}:{uid}:{i}",
+                )])
+            rows.append([InlineKeyboardButton(
+                "🔄 " + self._t("ui_refresh"), callback_data=CB["diag_dlq_refresh"]
+            )])
+            if collected["entries"]:
+                rows.append([InlineKeyboardButton(
+                    self._t("ui_dlq_purge_all"), callback_data=CB["diag_dlq_purge"]
+                )])
+            rows.append([InlineKeyboardButton(
+                "⬅️ " + self._t("ui_back"), callback_data=CB["diag"]
+            )])
+            await self._safe_edit(cq, text, reply_markup=InlineKeyboardMarkup(rows))
+
+        @b.on_callback_query(filters.regex("^" + CB["diag_dlq_purge_confirm"] + "$"))
+        @self._localized_handler
+        async def _cb_diag_dlq_purge_confirm(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            lang = self._resolve_lang(uid)
+            owned = diagnostics.owned_ids_of(
+                await self._rules.list_by_owner(uid)
+            ) if uid else []
+            removed = await diagnostics.purge_dead_letters(
+                queue=self._delivery_queue, owned_rule_ids=owned
+            )
+            self._dlq_page[uid] = []
+            await self._safe_edit(
+                cq,
+                self._t("ui_dlq_purged", count=removed, lang=lang),
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton(
+                        "⬅️ " + self._t("ui_back", lang=lang),
+                        callback_data=CB["diag"],
+                    )
+                ]]),
+            )
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex("^" + CB["diag_dlq_purge"] + "$"))
+        @self._localized_handler
+        async def _cb_diag_dlq_purge(_, cq: CallbackQuery):
+            """Purge is irreversible, so it gets a confirm step."""
+            uid = cq.from_user.id if cq.from_user else 0
+            lang = self._resolve_lang(uid)
+            await self._safe_edit(
+                cq,
+                self._t("ui_dlq_purge_confirm", lang=lang),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        "🗑 " + self._t("ui_dlq_purge_yes", lang=lang),
+                        callback_data=CB["diag_dlq_purge_confirm"],
+                    )],
+                    [InlineKeyboardButton(
+                        "⬅️ " + self._t("ui_dlq_back_to_list", lang=lang),
+                        callback_data=CB["diag_dlq"],
+                    )],
+                ]),
+            )
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["perf"] + "$"))

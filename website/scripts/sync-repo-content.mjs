@@ -355,6 +355,7 @@ const apiGroups = [
       ['GET', '/api/queue', 'Queue depth and in-flight jobs'],
       ['GET', '/api/dlq', 'Dead-lettered jobs'],
       ['POST', '/api/dlq/{id}/retry', 'Replay a dead-lettered job'],
+      ['DELETE', '/api/dlq', 'Purge dead-lettered jobs for the caller scope (answers with the number removed)'],
     ],
   },
 ];

@@ -877,9 +877,18 @@ export function App() {
   // DLQ Handlers
   const handleRetryDLQ = async (id: string) => {
     try {
-      await api.retryDLQ(id)
+      const resp: any = await api.retryDLQ(id)
+      if (resp && resp.success === false) {
+        // The core refuses honestly: `not_found`, `already_pending`,
+        // `already_sent`, `replay_failed`. Removing the row and claiming
+        // success here would hide the reason the delivery is still dead.
+        showToast(`${isRtl ? 'تلاش مجدد رد شد' : 'Retry refused'} (${resp.message || resp.error_code || 'refused'})`)
+        await loadData()
+        return
+      }
       setDlqJobs((prev) => prev.filter((j) => j.id !== id))
       showToast(isRtl ? 'پیام برای تلاش مجدد به صف بازگردانده شد' : 'Job requeued for retry')
+      await loadData()
     } catch (e: any) {
       showToast(e.message)
     }
@@ -888,9 +897,21 @@ export function App() {
   const handlePurgeDLQ = async () => {
     if (!confirm(isRtl ? 'آیا از پاک‌سازی کامل صف خطاهای ناموفق اطمینان دارید؟' : 'Purge all DLQ entries?')) return
     try {
-      await api.purgeDLQ()
+      const resp: any = await api.purgeDLQ()
+      if (resp && resp.success === false) {
+        showToast(`${isRtl ? 'تخلیه انجام نشد' : 'Purge failed'} (${resp.error_code || 'purge_failed'})`)
+        return
+      }
       setDlqJobs([])
-      showToast(isRtl ? 'صف خطاهای DLQ تخلیه شد' : 'DLQ purged successfully')
+      // The core answers with the number it removed; showing that number is
+      // what distinguishes a real purge from a purge that matched nothing.
+      const removed = typeof resp?.message === 'string' ? resp.message : ''
+      showToast(
+        removed
+          ? (isRtl ? `صف خطاهای DLQ تخلیه شد (${removed})` : `DLQ purged (${removed})`)
+          : (isRtl ? 'صف خطاهای DLQ تخلیه شد' : 'DLQ purged successfully'),
+      )
+      await loadData()
     } catch (e: any) {
       showToast(e.message)
     }

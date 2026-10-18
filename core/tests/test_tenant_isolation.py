@@ -28,6 +28,7 @@ from core.infrastructure.persistence.sqlite_repositories import (
     SqliteSessionRepository,
     SqliteFilterRuleRepository,
     SqliteAIConfigRepository,
+    SqliteDeliveryQueueRepository,
 )
 from core.infrastructure.security.crypto import CryptoService
 from core.application.backup_service import BackupService, serialize_bundle, deserialize_bundle
@@ -54,6 +55,11 @@ def _build(path):
         "sessions": SqliteSessionRepository(db, crypto),
         "filters": SqliteFilterRuleRepository(db),
         "ai": SqliteAIConfigRepository(db, crypto),
+        # The delivery servicer reads the queue through this repository. It used
+        # to fall back to its own raw SQL when no repo was passed, which is how
+        # its queries drifted from what the repository writes; building it the
+        # way `main.py` does keeps these isolation tests on the real path.
+        "queue": SqliteDeliveryQueueRepository(db),
     }
 
 
@@ -248,7 +254,7 @@ def test_delivery_stats_scoped_by_owner(tmp_path):
     p = str(tmp_path / "iso.db")
     db, crypto, repos = _seed_dlq(p, "rule-a", TENANT_A)
     # Give the servicer the repos it needs
-    servicer = DeliveryControlServicer(db, repos["rules"])
+    servicer = DeliveryControlServicer(db, repos["rules"], queue_repo=repos["queue"])
 
     # Tenant B asks for stats: must not see any of A's rules or error text
     resp = asyncio.run(servicer.GetDeliveryStats(
@@ -269,7 +275,7 @@ def test_dlq_list_scoped_by_owner(tmp_path):
 
     p = str(tmp_path / "iso.db")
     db, crypto, repos = _seed_dlq(p, "rule-a", TENANT_A)
-    servicer = DeliveryControlServicer(db, repos["rules"])
+    servicer = DeliveryControlServicer(db, repos["rules"], queue_repo=repos["queue"])
 
     resp_b = asyncio.run(servicer.ListDeadLetter(
         pb.ListDeadLetterRequest(owner_user_id=TENANT_B), None))
@@ -286,7 +292,7 @@ def test_dlq_replay_denied_for_other_owner(tmp_path):
 
     p = str(tmp_path / "iso.db")
     db, crypto, repos = _seed_dlq(p, "rule-a", TENANT_A)
-    servicer = DeliveryControlServicer(db, repos["rules"])
+    servicer = DeliveryControlServicer(db, repos["rules"], queue_repo=repos["queue"])
 
     resp = asyncio.run(servicer.ReplayDeadLetter(
         pb.ReplayDeadLetterRequest(id="dlq-rule-a", owner_user_id=TENANT_B), None))
@@ -301,13 +307,84 @@ def test_dlq_replay_denied_for_other_owner(tmp_path):
     assert resp_a.success
 
 
+def test_replay_says_already_sent_instead_of_claiming_success(tmp_path):
+    """A replay the store refuses must not be reported as a requeue.
+
+    The old inline replay inserted a second `delivery_jobs` row that the
+    UNIQUE(rule_id, source, message, target) constraint silently ignored, then
+    deleted the dead letter and answered success:true — the entry and the
+    message were both gone, and the caller was told it had been requeued. The
+    existing row's status is now the answer.
+    """
+    from core.infrastructure.grpc_server.servicers import DeliveryControlServicer
+    from core.proto import autoforward_pb2 as pb
+
+    p = str(tmp_path / "iso.db")
+    db, crypto, repos = _seed_dlq(p, "rule-a", TENANT_A)
+    # The same delivery, already recorded as delivered.
+    db.execute(
+        "INSERT OR REPLACE INTO delivery_jobs "
+        "(id, rule_id, source_chat_id, source_message_id, target_chat_id, payload_json,"
+        " status, attempts, max_attempts, next_retry_at, lease_until, worker_id,"
+        " error_detail, created_at, updated_at)"
+        " VALUES ('job-rule-a', 'rule-a', '-1', 1, '-2', '{}', 'SENT', 1, 5, 0, 0, '', '', 0, 0)"
+    )
+    servicer = DeliveryControlServicer(db, repos["rules"], queue_repo=repos["queue"])
+
+    resp = asyncio.run(servicer.ReplayDeadLetter(
+        pb.ReplayDeadLetterRequest(id="dlq-rule-a", owner_user_id=TENANT_A), None))
+
+    assert not resp.success, "a refused replay was reported as success"
+    assert resp.error_code == "already_sent"
+    # Refused means untouched: the entry is still there to look at.
+    rows = db.query_all("SELECT id FROM dead_letter_queue WHERE id=?", ("dlq-rule-a",))
+    assert len(rows) == 1, "the refused replay consumed the entry anyway"
+
+
+def test_purge_reports_how_many_it_removed(tmp_path):
+    """`purged` with no number cannot be distinguished from a no-op."""
+    from core.infrastructure.grpc_server.servicers import DeliveryControlServicer
+    from core.proto import autoforward_pb2 as pb
+
+    p = str(tmp_path / "iso.db")
+    db, crypto, repos = _seed_dlq(p, "rule-a", TENANT_A)
+    servicer = DeliveryControlServicer(db, repos["rules"], queue_repo=repos["queue"])
+
+    resp = asyncio.run(servicer.PurgeDeadLetter(
+        pb.PurgeDeadLetterRequest(owner_user_id=TENANT_A), None))
+    assert resp.success and "1" in resp.message, resp.message
+
+    again = asyncio.run(servicer.PurgeDeadLetter(
+        pb.PurgeDeadLetterRequest(owner_user_id=TENANT_A), None))
+    assert again.success and "0" in again.message, "a second purge claimed to remove rows"
+
+
+def test_dlq_list_narrows_by_rule_inside_the_scope(tmp_path):
+    """The `rule_id` filter must not widen the tenant scope it narrows."""
+    from core.infrastructure.grpc_server.servicers import DeliveryControlServicer
+    from core.proto import autoforward_pb2 as pb
+
+    p = str(tmp_path / "iso.db")
+    db, crypto, repos = _seed_dlq(p, "rule-a", TENANT_A)
+    servicer = DeliveryControlServicer(db, repos["rules"], queue_repo=repos["queue"])
+
+    # Ask for rule-a while claiming to be tenant B: the scope wins.
+    resp = asyncio.run(servicer.ListDeadLetter(
+        pb.ListDeadLetterRequest(rule_id="rule-a", owner_user_id=TENANT_B), None))
+    assert list(resp.entries) == [], "a rule_id filter leaked another tenant's entry"
+
+    mine = asyncio.run(servicer.ListDeadLetter(
+        pb.ListDeadLetterRequest(rule_id="rule-a", owner_user_id=TENANT_A), None))
+    assert any(e.rule_id == "rule-a" for e in mine.entries)
+
+
 def test_dlq_purge_denied_for_other_owner(tmp_path):
     from core.infrastructure.grpc_server.servicers import DeliveryControlServicer
     from core.proto import autoforward_pb2 as pb
 
     p = str(tmp_path / "iso.db")
     db, crypto, repos = _seed_dlq(p, "rule-a", TENANT_A)
-    servicer = DeliveryControlServicer(db, repos["rules"])
+    servicer = DeliveryControlServicer(db, repos["rules"], queue_repo=repos["queue"])
 
     asyncio.run(servicer.PurgeDeadLetter(
         pb.PurgeDeadLetterRequest(owner_user_id=TENANT_B), None))

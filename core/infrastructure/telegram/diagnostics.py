@@ -306,3 +306,114 @@ def owned_ids_of(rules: Optional[Iterable[Any]]) -> List[str]:
         if rule_id:
             out.append(str(rule_id))
     return out
+
+
+# ------------------------------------------------------------------------- #
+# Dead-letter queue: the one queue state a user can act on
+#
+# A dead letter waits for a person: nothing else will touch a delivery that
+# exhausted its budget. The screen below reads it through the repository's
+# owner-scoped contract (`list_dead_letters`/`replay_dead_letter`/
+# `purge_dead_letters`), never raw SQL — the column names are that repository's
+# business, and having them here is how two backends drifted apart before.
+# ------------------------------------------------------------------------- #
+
+#: Error text shown per entry, truncated like the API's own projection.
+_DEAD_LETTER_ERROR_MAX = 96
+
+_RESULT_CODE_KEYS = {
+    "requeued": "ui_dlq_requeued",
+    "not_found": "ui_dlq_not_found",
+    "already_pending": "ui_dlq_already_pending",
+    "already_sent": "ui_dlq_already_sent",
+    "replay_failed": "ui_dlq_replay_failed",
+}
+
+
+async def collect_dead_letters(
+    *,
+    queue: Any = None,
+    owned_rule_ids: Sequence[str] = (),
+    limit: int = 8,
+) -> Dict[str, Any]:
+    """The caller's dead letters, newest first, plus whether the list went on.
+
+    ``owned_rule_ids`` is the tenant scope passed straight to the repository: an
+    empty sequence means this user has no tasks, so they own no dead letters —
+    never "everyone's".
+    """
+    scope = [str(r) for r in owned_rule_ids]
+    # One row past the page declares "more instead of a false total".
+    rows = await _call(queue, "list_dead_letters", scope, limit=limit + 1) or []
+    entries = [r for r in (dict(r) for r in rows)][:limit]
+    return {
+        "total": None if len(rows) > limit else len(entries),
+        "more": len(rows) > limit,
+        "entries": entries,
+    }
+
+
+def render_dead_letters(t, collected: Dict[str, Any]) -> str:
+    """One entry per line: what failed, where it was going, how often."""
+    entries = list(collected.get("entries") or [])
+    if not entries:
+        return t("ui_dlq_empty")
+
+    lines = [t("ui_dlq_title", count=len(entries))]
+    for row in entries:
+        rule_id = str(row.get("rule_id") or "")[:8]
+        target = str(row.get("target_chat_id") or "")
+        error = str(row.get("last_error") or "")[:_DEAD_LETTER_ERROR_MAX]
+        lines.append(
+            t(
+                "ui_dlq_entry",
+                rule=rule_id or "?",
+                target=target or "?",
+                attempts=_as_int(row.get("attempts")),
+                error=error or "?",
+            )
+        )
+    if collected.get("more"):
+        lines.append(t("ui_dlq_more"))
+    return "\n".join(lines)
+
+
+async def count_dead_letters(
+    *, queue: Any = None, owned_rule_ids: Sequence[str] = ()
+) -> int:
+    """How many entries the scope holds — the number the badge shows.
+
+    Same scope as the list, from the same repository, so the badge and the list
+    cannot disagree.
+    """
+    scope = [str(r) for r in owned_rule_ids]
+    return _as_int(await _call(queue, "count_dead_letters", scope))
+
+
+async def replay_dead_letter(
+    *, queue: Any, entry_id: str, owned_rule_ids: Sequence[str] = ()
+) -> str:
+    """Re-queue one entry through the repository's scoped contract.
+
+    Returns one of the repository's documented result codes so the caller can
+    translate it (`_RESULT_CODE_KEYS`); unknown codes pass through as-is.
+    """
+    scope = [str(r) for r in owned_rule_ids]
+    result = await _call(queue, "replay_dead_letter", str(entry_id), scope)
+    if not isinstance(result, str) or not result:
+        return "replay_failed"
+    return result
+
+
+async def purge_dead_letters(
+    *, queue: Any, owned_rule_ids: Sequence[str] = ()
+) -> int:
+    """Remove every entry in the scope; the repository returns how many."""
+    scope = [str(r) for r in owned_rule_ids]
+    removed = await _call(queue, "purge_dead_letters", scope)
+    return _as_int(removed)
+
+
+def result_code_key(result: str) -> Optional[str]:
+    """The i18n key for a repository result code, else None."""
+    return _RESULT_CODE_KEYS.get(result)
