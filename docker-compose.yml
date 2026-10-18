@@ -144,6 +144,12 @@ services:
       # it from the bot's "Dashboard URL" button.
       ATF_WEB_URL: ${ATF_WEB_URL:-}
       ATF_GRPC_PORT: 50051
+      # Shared credential on the core's gRPC surface. Every servicer takes the
+      # acting tenant from owner_user_id in the request, so without it anything
+      # that can reach core:50051 can act as any tenant. The API sends the same
+      # value; set it in the env file (or both stay unset and the core warns at
+      # startup). A mismatch fails every RPC with UNAUTHENTICATED, on purpose.
+      ATF_CORE_RPC_TOKEN: ${ATF_CORE_RPC_TOKEN:-}
       ATF_DB_PATH: /app/data/atf.db
       ATF_LOGGER_ADDR: logger:50052
       # Diagnostics, empty = off: ATF_RAW_API_TRACE dumps per-request MTProto
@@ -185,6 +191,8 @@ services:
       - core
     environment:
       ATF_CORE_GRPC: core:50051
+      # Same value as the core's ATF_CORE_RPC_TOKEN (see the core service above).
+      ATF_CORE_RPC_TOKEN: ${ATF_CORE_RPC_TOKEN:-}
       ATF_LOGGER_GRPC: logger:50052
       ATF_API_ADDR: ":8080"
       ATF_API_KEY: ${ATF_API_KEY:-}

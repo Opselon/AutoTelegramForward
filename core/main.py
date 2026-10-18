@@ -433,8 +433,11 @@ async def _resolve_pg_pool(container: dict) -> None:
 async def serve_grpc(container: dict, cfg: Config):
     import grpc
     from core.proto import pb_grpc
+    from core.infrastructure.grpc_server.internal_auth import build_interceptors
 
-    server = grpc.aio.server()
+    addr = f"{cfg.grpc_host}:{cfg.grpc_port}"
+    interceptors = build_interceptors(getattr(cfg, "core_rpc_token", ""))
+    server = grpc.aio.server(interceptors=interceptors)
     pb_grpc.add_SessionControlServiceServicer_to_server(
         servicers.SessionControlServicer(container["sessions"], container["pool"]), server
     )
@@ -515,10 +518,18 @@ async def serve_grpc(container: dict, cfg: Config):
     pb_grpc.add_TaskControlServiceServicer_to_server(
         TaskControlServicer(container["tasks"]), server,
     )
-    addr = f"{cfg.grpc_host}:{cfg.grpc_port}"
     server.add_insecure_port(addr)
     await server.start()
-    logger.info("gRPC server listening on %s", addr)
+    if interceptors:
+        # Say *that* it is enforced, never the credential itself.
+        logger.info("gRPC server listening on %s (internal rpc credential required)", addr)
+    else:
+        logger.warning(
+            "gRPC server listening on %s WITHOUT an internal rpc credential: every servicer "
+            "trusts the owner_user_id in its request, so anything that can reach this port can "
+            "act as any tenant. Set ATF_CORE_RPC_TOKEN (same value on the API) to enforce one.",
+            addr,
+        )
     return server
 
 

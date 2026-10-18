@@ -31,7 +31,10 @@ func main() {
 	defer conn.Close()
 
 	clients := grpcclient.NewClients(conn)
-	if loggerConn, lerr := grpcclient.Dial(loggerAddr); lerr == nil {
+	// No credential for the logger: the shared secret authenticates this API to
+	// the core, and the logger is a separate trust domain (see
+	// grpcclient.DialWithoutCredential).
+	if loggerConn, lerr := grpcclient.DialWithoutCredential(loggerAddr); lerr == nil {
 		grpcclient.AttachLogger(clients, loggerConn)
 		log.Printf("connected to logger service at %s", loggerAddr)
 	} else {
