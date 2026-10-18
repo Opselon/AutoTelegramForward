@@ -37,9 +37,17 @@ This document defines mandatory engineering standards and rules for AI coding ag
 - **Dynamic Catalog Lookup:** All UI text must be fetched dynamically using `self._t(key, user_id=...)` or `self._t(key, lang=...)`.
 - **No Hardcoded Language Branching:** Never use ternary or conditional branching on language codes for UI text (e.g., `is_fa ? "بله" : "Yes"` or `if self._resolve_lang(uid) == "fa": ...`). All variants must be resolved through catalog keys.
 - **Allowed Source Non-English Strings:** The only permitted RTL/Persian characters in source files are:
-  - User input command aliases in parsers (e.g., `if text in ("/cancel", "انصراف", "لغو"):`)
   - Language picker native display endonyms (e.g., `"fa": "فارسی 🇮🇷"`)
   - Explicit multi-lingual unit tests
+- **User Input Aliases Are Catalog Keys, Not Literals:** a word a user may *type*
+  (cancel, clear, default, "back") is UI contract, not a technical token: the panel
+  offers that word in the user's language, so the parser must accept it in that
+  language too. Put the words in a comma-separated catalog key
+  (`ui_input_cancel_aliases`, `ui_input_clear_aliases`, `ui_input_default_aliases`)
+  and match with the shared helper (`cancel_aliases()`, `_input_aliases(key)`) — never
+  a per-site tuple. A tuple covered only `en`/`fa` (so 8 locales could not cancel
+  a flow by typing) and 21 call sites drifted into three different word lists; the
+  audit now fails on any new literal, escaped (`"\u0627…"`) or not.
 
 ### 1.3 Per-User & Owner Language Resolution
 - **Telegram Numeric User ID:** Always resolve language using the immutable numeric Telegram User ID (`uid = cq.from_user.id`), never usernames or global state.
@@ -72,6 +80,23 @@ Inside parenthesized multiline strings `(...)` in Python:
   )
   ```
 
+### 1.5 Button Styles Live in One Layer
+- **Where:** `core/infrastructure/telegram/ui_styles.py` owns the style vocabulary —
+  the canonical leading glyph and the layer-225 background colour of a semantic
+  action class (`primary`, `success`, `danger`, `warning`, `nav`, `refresh`, `info`,
+  `open`, `neutral`).
+- **Never hand-roll a glyph.** A prefix like `"❌ " + self._t(key)` rendered as
+  `"❌ ❌ Cancel"` once the catalog value carried its own glyph, and drifted between
+  `"✖"`, `"✗"` and `"❌"`; `_btn("key")` applies the canonical glyph exactly once,
+  after the catalog lookup, in every locale.
+- **Style derives from the catalog key, never from the language** — there is no
+  `lang == "fa"` branching anywhere in the style layer, and a test enforces that.
+- **Colour is semantic, not decorative.** Only destructive/positive/primary classes
+  are painted; `_kbd()` derives the colour from the rendered glyph and an explicit
+  third tuple element `(label, data, "danger")` always wins.
+- **Two style layers exist and must not be confused:** `button_style.py` is the raw
+  `keyboardButtonStyle` wire encoder; `ui_styles.py` is the vocabulary on top of it.
+
 ---
 
 ## 🔒 2. Multi-Tenant Isolation & Security Rules
@@ -94,7 +119,15 @@ Before pushing changes or submitting PRs, agents must run and pass the following
    ```bash
    python scripts/audit_cross_language.py
    ```
-   *Validates 1:1 catalog parity across all 10 locales, placeholder consistency, zero RTL in English, and verifies the Persian source baseline.*
+   *Validates, in order: (1) 1:1 catalog parity across all 10 locales, (2) placeholder
+   parity, (3) no cross-language leak in the reference locale, (4) no hardcoded
+   copy in **any** non-reference script (Persian, Cyrillic, Han, Kana, Hangul,
+   Hebrew, Thai, Devanagari) beyond the pinned baseline, (5) no language-code
+   branching, (6) every button label resolves through the catalog, (7) button
+   decoration parity — one canonical glyph, identical in all 10 locales — (8) no
+   literal callback/toast copy, (9) locale isolation on every registered handler,
+   (10) every static `_t()`/`_btn()` key exists. `--report` prints the button-label
+   inventory per file (labels / catalog-resolved / hardcoded).*
 
 2. **Telegram UI Literal Guard:**
    ```bash

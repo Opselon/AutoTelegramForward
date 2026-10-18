@@ -58,6 +58,11 @@ from .button_style import (
     plain_markup,
     styles_enabled,
 )
+from .ui_styles import (
+    color_for_label,
+    decorate as decorate_button_label,
+    style_label as style_button_label,
+)
 
 from ...application.backup_service import (
     decrypt_bundle,
@@ -252,15 +257,50 @@ ROUTE_RESOLVED = "resolved"
 ROUTE_FAILED = "failed"
 ROUTE_UNCHECKED = "unchecked"
 
-#: Cancel words accepted inside the route screens: the ASCII command plus the
-#: same Persian synonyms the rule editor already accepts. Spelled as escapes so
-#: this file carries no literal non-ASCII, and never a new hardcoded string.
-ROUTE_CANCEL_WORDS = (
-    "/cancel",
-    "\u0627\u0646\u0635\u0631\u0627\u0641",
-    "\u0644\u063a\u0648",
-    "\u0628\u0627\u0632\u06af\u0634\u062a",
-)
+#: Per-key caches of catalog-resolved input aliases.
+_ALIAS_CACHE: Dict[str, Optional[frozenset]] = {}
+
+#: Cancel aliases resolved from the catalog (see ``cancel_aliases``).
+_CANCEL_ALIASES: Optional[frozenset] = None
+
+
+def _input_aliases(key: str) -> frozenset:
+    """Every word a user may type to mean the value of ``key``.
+
+    ``ui_input_*_aliases`` is one comma-separated list per locale, so a user
+    typing Russian or Chinese is understood exactly as well as one typing
+    Persian — the hardcoded tuples this replaces only ever covered English
+    and Persian, and carried literal non-ASCII no audit could see.
+    """
+    cached = _ALIAS_CACHE.get(key)
+    if cached is None:
+        i18n = I18n()
+        words = set()
+        for code in SUPPORTED_LANGUAGES:
+            raw = i18n.t(key, lang=code) or ""
+            words.update(w.strip().lower() for w in raw.split(",") if w.strip())
+        cached = _ALIAS_CACHE[key] = frozenset(words)
+    return cached
+
+
+def cancel_aliases() -> frozenset:
+    """Every word a user may type to stop the current step.
+
+    Built from ``ui_input_cancel_aliases`` — one comma-separated list per
+    locale — instead of a hardcoded tuple. The panel offers the cancel word in
+    the user's own language, so that language's word has to be understood as
+    input too: the tuple this replaces accepted Persian in all 10 locales, so a
+    Russian or Chinese speaker could only escape with ``/cancel``. Escaped
+    Persian literals were also invisible to the cross-language audit, which is
+    how 21 call sites drifted apart (two accepted different words).
+
+    Cached at module level: the catalog is a ~1 MB JSON and this runs on every
+    text message a multi-step flow receives.
+    """
+    global _CANCEL_ALIASES
+    if _CANCEL_ALIASES is None:
+        _CANCEL_ALIASES = _input_aliases("ui_input_cancel_aliases") | {"/cancel"}
+    return _CANCEL_ALIASES
 
 #: Clear words accepted inside the branding-filter screens: the neutral ASCII
 #: tokens plus the Persian synonyms the editor already accepts, spelled as
@@ -600,6 +640,33 @@ class ProBotUI:
         cur_lang = lang or _BOT_RENDER_LANGUAGE.get() or "en"
         return self.i18n.t(key, lang=cur_lang, **kw)
 
+    def _btn(self, key: str, lang: Optional[str] = None, style: Optional[str] = None, **kw) -> str:
+        """A localized button label with its canonical style glyph.
+
+        The glyph is applied *after* the catalog lookup, so every locale
+        renders the same decoration, exactly once — no call site needs to
+        hand-roll a prefix, and a catalog value that already carries one
+        is never doubled.
+        """
+        return decorate_button_label(key, self._t(key, lang=lang, **kw), style=style)
+
+    def _addon_label(self, key: str, lang: Optional[str] = None, enabled: Optional[bool] = None) -> str:
+        """Catalog label for an add-on row, optionally carrying its state.
+
+        The add-on grid used hardcoded English labels ("🔒 Outbound
+        Webhooks", "🔒 Keyword Confirma...") for every locale; the state
+        suffix is composed from the shared `ui_toggle_addon` template so
+        all 10 catalogs render "<label>: <state>".
+        """
+        if enabled is None:
+            return self._t(key, lang=lang)
+        return self._t(
+            "ui_toggle_addon",
+            lang=lang,
+            addon=self._t(key, lang=lang),
+            state=self._t("ui_status_on" if enabled else "ui_status_off", lang=lang),
+        )
+
     def _login_fail_text(self, code: str, detail: str = "", lang: Optional[str] = None) -> str:
         """The user-facing line for a LoginFlowManager failure code.
 
@@ -677,6 +744,13 @@ class ProBotUI:
                     text, data, style = item
                 else:
                     text, data = item
+                # One style pass for every button in the bot: the label is
+                # trimmed of a doubled or drifted glyph, and the background
+                # colour follows the action class (an explicit third tuple
+                # element always wins).
+                text = style_button_label(text)
+                if style is None:
+                    style = color_for_label(text)
                 sdata = str(data)
                 if sdata.startswith("webapp:"):
                     built_row.append(InlineKeyboardButton(text, web_app=WebAppInfo(url=sdata[7:])))
@@ -691,7 +765,7 @@ class ProBotUI:
         return InlineKeyboardMarkup(built_rows)
 
     def _cancel_kbd(self) -> InlineKeyboardMarkup:
-        return self._kbd([[("❌ " + self._t("ui_cancel"), CB["cancel"])]])
+        return self._kbd([[(self._btn("ui_cancel"), CB["cancel"])]])
 
     def _code_keypad(self, st: UiState) -> InlineKeyboardMarkup:
         lang = self._lang_for(st)
@@ -699,7 +773,7 @@ class ProBotUI:
             [("1", "k:1"), ("2", "k:2"), ("3", "k:3")],
             [("4", "k:4"), ("5", "k:5"), ("6", "k:6")],
             [("7", "k:7"), ("8", "k:8"), ("9", "k:9")],
-            [("⌫", "k:del"), ("0", "k:0"), ("❌ " + self._t("ui_cancel", lang=lang), CB["cancel"])],
+            [("⌫", "k:del"), ("0", "k:0"), (self._btn("ui_cancel", lang=lang), CB["cancel"])],
         ])
 
     def _login_code_text(self, st: UiState) -> str:
@@ -1115,18 +1189,18 @@ class ProBotUI:
 
     def _migrate_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
-            [("📤 " + self._t("ui_migrate_export"), CB["migrate_export"])],
-            [("🔒 " + self._t("ui_migrate_export_enc"), CB["migrate_export_enc"])],
-            [("📥 " + self._t("ui_migrate_import"), CB["migrate_import"])],
-            [("ⓘ " + self._t("ui_migrate_help"), CB["migrate_help"])],
-            [("↩ " + self._t("ui_back"), CB["back"])],
+            [(self._btn("ui_migrate_export"), CB["migrate_export"])],
+            [(self._btn("ui_migrate_export_enc"), CB["migrate_export_enc"])],
+            [(self._btn("ui_migrate_import"), CB["migrate_import"])],
+            [(self._btn("ui_migrate_help"), CB["migrate_help"])],
+            [(self._btn("ui_back"), CB["back"])],
         ])
 
     def _sessions_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
-            [("➕ " + self._t("ui_login"), CB["login"])],
-            [("💾 " + self._t("ui_backup"), CB["backup"])],
-            [("⬅️ " + self._t("ui_back"), CB["main"])],
+            [(self._btn("ui_login"), CB["login"])],
+            [(self._btn("ui_backup"), CB["backup"])],
+            [(self._btn("ui_back"), CB["main"])],
         ])
 
     def _rules_menu(
@@ -1138,7 +1212,7 @@ class ProBotUI:
     ) -> InlineKeyboardMarkup:
         cur_lang = lang or _BOT_RENDER_LANGUAGE.get() or "en"
         rows: List[List[Tuple[str, str]]] = [
-            [("➕ " + self._t("ui_rule_add", lang=cur_lang), CB["rule_add"])],
+            [(self._btn("ui_rule_add", lang=cur_lang), CB["rule_add"])],
             # Start a route by listing its sources and targets; the task is
             # created on save and carries as many of each as the user sends.
             [
@@ -1169,13 +1243,13 @@ class ProBotUI:
             if total_pages > 1:
                 nav_row: List[Tuple[str, str]] = []
                 if page > 0:
-                    nav_row.append((f"◀️ {self._t('ui_prev', lang=cur_lang)}", f"r_pg:{page - 1}"))
+                    nav_row.append((self._btn('ui_prev', lang=cur_lang), f"r_pg:{page - 1}"))
                 nav_row.append((f"📄 {page + 1} / {total_pages}", "noop"))
                 if page < total_pages - 1:
                     nav_row.append((f"{self._t('ui_next', lang=cur_lang)} ▶️", f"r_pg:{page + 1}"))
                 rows.append(nav_row)
 
-        rows.append([("⬅️ " + self._t("ui_back", lang=cur_lang), CB["main"])])
+        rows.append([(self._btn("ui_back", lang=cur_lang), CB["main"])])
         return self._kbd(rows)
 
     def _render_rules_list(
@@ -1353,7 +1427,7 @@ class ProBotUI:
                 (f"● {chips['content']}" if grp == "content" else chips["content"], f"rgrp:{rule.id}:content"),
             ],
             [
-                (f"🔙 {self._t('ui_rule_back_rules')}", CB["rules"]),
+                (self._btn('ui_rule_back_rules'), CB["rules"]),
             ],
         ]
 
@@ -1374,28 +1448,28 @@ class ProBotUI:
             ak_on = rule.affiliate_kit.get("enabled", False)
             rows.extend([
                 [
-                    ("🔗 Affiliate Kit: " + ("ON" if ak_on else "OFF"), f"rafl:{rule.id}"),
-                    ("🔒 Outbound Webhooks", f"radon:{rule.id}:webhook"),
+                    (self._t("ui_toggle_affiliate_kit", lang=lang, state=self._t("ui_status_on" if ak_on else "ui_status_off", lang=lang)), f"rafl:{rule.id}"),
+                    (self._addon_label("ui_rule_addon_webhook", lang), f"radon:{rule.id}:webhook"),
                 ],
                 [
-                    ("🔗 Link Buttons", f"rbtn:{rule.id}"),
-                    ("🔒 Auto Delete Messages", f"radon:{rule.id}:auto_del"),
+                    (self._t("ui_adv_btn_link_buttons", lang=lang, count=len(rule.link_buttons)), f"rbtn:{rule.id}"),
+                    (self._addon_label("ui_addon_auto_del", lang), f"radon:{rule.id}:auto_del"),
                 ],
             ])
         elif grp == "content":
             c_comm = addons.get("channel_comments", False)
             rows.extend([
                 [
-                    ("★ Channel Comments: " + ("ON" if c_comm else "OFF"), f"radon:{rule.id}:comments"),
-                    ("🔒 Forward Every N", f"radon:{rule.id}:every_n"),
+                    (self._addon_label("ui_addon_comments", lang, c_comm), f"radon:{rule.id}:comments"),
+                    (self._addon_label("ui_addon_every_n", lang), f"radon:{rule.id}:every_n"),
                 ],
                 [
-                    ("🔒 Keyword Confirm", f"radon:{rule.id}:kw_confirm"),
-                    ("🔒 Keyword Reply Thr", f"radon:{rule.id}:kw_reply"),
+                    (self._addon_label("ui_addon_kw_confirm", lang), f"radon:{rule.id}:kw_confirm"),
+                    (self._addon_label("ui_addon_kw_reply", lang), f"radon:{rule.id}:kw_reply"),
                 ],
                 [
-                    ("🔒 Auto Delete Msg", f"radon:{rule.id}:auto_del"),
-                    ("🖼 Watermark", f"rwm:{rule.id}"),
+                    (self._addon_label("ui_addon_auto_del", lang), f"radon:{rule.id}:auto_del"),
+                    (self._addon_label("ui_rule_addon_watermark", lang), f"rwm:{rule.id}"),
                 ],
             ])
         else:  # "all" (matches Image 4 exactly)
@@ -1408,16 +1482,16 @@ class ProBotUI:
 
             rows.extend([
                 [
-                    ("★ Channel Comments: " + ("ON" if c_comm else "OFF"), f"radon:{rule.id}:comments"),
-                    ("🔒 Forward Every N: " + ("ON" if ev_n else "OFF"), f"radon:{rule.id}:every_n"),
+                    (self._addon_label("ui_addon_comments", lang, c_comm), f"radon:{rule.id}:comments"),
+                    (self._addon_label("ui_addon_every_n", lang, ev_n), f"radon:{rule.id}:every_n"),
                 ],
                 [
-                    ("🔒 Keyword Confirma... " + ("ON" if kw_c else "OFF"), f"radon:{rule.id}:kw_confirm"),
-                    ("🔒 Keyword Reply Thr... " + ("ON" if kw_r else "OFF"), f"radon:{rule.id}:kw_reply"),
+                    (self._addon_label("ui_addon_kw_confirm", lang, kw_c), f"radon:{rule.id}:kw_confirm"),
+                    (self._addon_label("ui_addon_kw_reply", lang, kw_r), f"radon:{rule.id}:kw_reply"),
                 ],
                 [
-                    ("🔒 Auto Delete Messa... " + ("ON" if a_del else "OFF"), f"radon:{rule.id}:auto_del"),
-                    ("🔒 Outbound Webhoo... " + ("ON" if wh else "OFF"), f"radon:{rule.id}:webhook"),
+                    (self._addon_label("ui_addon_auto_del", lang, a_del), f"radon:{rule.id}:auto_del"),
+                    (self._addon_label("ui_rule_addon_webhook", lang, wh), f"radon:{rule.id}:webhook"),
                 ],
             ])
 
@@ -1425,7 +1499,7 @@ class ProBotUI:
             (self._t("ui_rule_addon_all", lang=lang), f"radon_all:{rule.id}"),
         ])
         rows.append([
-            (f"⬅️ {self._t('ui_rule_back_rules')}", CB["rules"]),
+            (self._btn('ui_rule_back_rules'), CB["rules"]),
         ])
 
         return text, self._kbd(rows)
@@ -1623,7 +1697,7 @@ class ProBotUI:
         rows.append([(self._t("ui_route_token_add", lang=lang), f"rbta:{rule.id}")])
         for idx, rec in enumerate(records):
             rows.append([(f"{self._t('ui_route_token_remove', lang=lang)} {str(rec.label)[:20]}", f"rbtd:{rule.id}:{idx}")])
-        rows.append([(f"🔙 {self._t('ui_rule_back_rules')}", f"rbtb:{rule.id}")])
+        rows.append([(self._btn('ui_rule_back_rules'), f"rbtb:{rule.id}")])
         return "\n".join(lines), self._kbd(rows)
 
     def _route_token_choice(self, st: "UiState", rule_id: str, idx: int) -> str:
@@ -2322,7 +2396,7 @@ class ProBotUI:
         uid = int(message.from_user.id if message.from_user else 0)
         lang = self._lang_for(st, message.from_user, uid=uid)
         raw = (text or "").strip()
-        if raw.lower() in ROUTE_CANCEL_WORDS:
+        if raw.lower() in cancel_aliases():
             await self._route_back(uid, st, lang, message=message)
             return
         fix = re.match(r"^\s*(\d+)\s*=\s*(.*)$", raw, re.S)
@@ -2351,7 +2425,7 @@ class ProBotUI:
         uid = int(message.from_user.id if message.from_user else 0)
         lang = self._lang_for(st, message.from_user, uid=uid)
         raw = (text or "").strip()
-        if raw.lower() in ROUTE_CANCEL_WORDS:
+        if raw.lower() in cancel_aliases():
             await self._route_back(uid, st, lang, message=message)
             return
         fix = re.match(r"^\s*(\d+)\s*=\s*(.*)$", raw, re.S)
@@ -2593,7 +2667,7 @@ class ProBotUI:
                 pair.append((f"{lbl2} {on2}", f"radon_tg:{rule.id}:{k2}"))
             rows.append(pair)
 
-        rows.append([(f"🔙 {self._t('ui_rule_back_task')}", f"rd:{rule.id}")])
+        rows.append([(self._btn('ui_rule_back_task'), f"rd:{rule.id}")])
         return text, self._kbd(rows)
 
     def _draft_ai_badge(self, draft: Dict[str, Any], lang: str) -> str:
@@ -2758,7 +2832,7 @@ class ProBotUI:
                 rows.append(del_row)
             rows.append([(self._t("ui_rep_btn_clear", lang=lang), f"rtxc:{rule.id}")])
 
-        rows.append([(f"⬅️ {self._t('ui_rule_back_rule')}", f"rd:{rule.id}")])
+        rows.append([(self._btn('ui_rule_back_rule'), f"rd:{rule.id}")])
         return "\n".join(lines), self._kbd(rows)
 
     def _render_header_footer_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
@@ -2789,7 +2863,7 @@ class ProBotUI:
                 (self._t("ui_hf_btn_set_ftr", lang=lang), f"rf_s:{rule.id}"),
                 (self._t("ui_hf_btn_del_ftr", lang=lang), f"rf_d:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
         return "\n".join(lines), self._kbd(rows)
 
@@ -2846,7 +2920,7 @@ class ProBotUI:
                 (self._t("ui_clean_btn_empty_lines", lang=lang, status=spc_b), f"rcl_spc:{rule.id}"),
                 (self._t("ui_clean_btn_custom_words", lang=lang, status=wrd_b), f"rcl_wrd:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -2892,7 +2966,7 @@ class ProBotUI:
                 (self._t("ui_fl_btn_text", lang=lang, status=txt_b), f"rfl_txt:{rule.id}"),
                 (self._t("ui_fl_btn_voice", lang=lang, status=voc_b), f"rfl_voc:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -2925,7 +2999,7 @@ class ProBotUI:
                 (self._t("ui_mte_btn_unlimited", lang=lang), f"rmte_s:{rule.id}:0"),
                 (self._t("ui_mte_btn_custom", lang=lang), f"rmte_c:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -2961,7 +3035,7 @@ class ProBotUI:
             [
                 (self._t("ui_dly_btn_custom", lang=lang), f"rdly_c:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -2991,7 +3065,7 @@ class ProBotUI:
                 (self._t("ui_bl_btn_add", lang=lang), f"rfl_bl_add:{rule.id}"),
                 (self._t("ui_bl_btn_clear", lang=lang), f"rfl_bl_clr:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -3021,7 +3095,7 @@ class ProBotUI:
                 (self._t("ui_wl_btn_add", lang=lang), f"rfl_wl_add:{rule.id}"),
                 (self._t("ui_wl_btn_clear", lang=lang), f"rfl_wl_clr:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -3046,7 +3120,7 @@ class ProBotUI:
                 (self._t("ui_wm_btn_set", lang=lang), f"rwm_set:{rule.id}"),
                 (self._t("ui_wm_btn_del", lang=lang), f"rwm_del:{rule.id}"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -3089,7 +3163,7 @@ class ProBotUI:
             [
                 ("🇮🇹 Italiano (IT)", f"rtr_set:{rule.id}:it"),
             ],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
         return text, self._kbd(rows)
 
@@ -3232,7 +3306,7 @@ class ProBotUI:
                 (self._t("ui_smart_btn_prio_down", lang=lang), f"rsmpd:{rule.id}"),
             ],
             [(self._t("ui_smart_btn_dryrun", lang=lang), f"rsmtst:{rule.id}")],
-            [(f"⬅️ {self._t('ui_rule_back_rule', lang=lang)}", f"rd:{rule.id}")],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
         return "\n".join(lines), self._kbd(rows)
 
@@ -3304,7 +3378,7 @@ class ProBotUI:
 
             nav_row: List[Tuple[str, str]] = []
             if page > 0:
-                nav_row.append((f"◀️ {self._t('ui_prev', lang=cur_lang)}", f"pg:{rc}:{page - 1}"))
+                nav_row.append((self._btn('ui_prev', lang=cur_lang), f"pg:{rc}:{page - 1}"))
             nav_row.append((f"📄 {page + 1} / {total_pages}", "noop"))
             if page < total_pages - 1:
                 nav_row.append((f"{self._t('ui_next', lang=cur_lang)} ▶️", f"pg:{rc}:{page + 1}"))
@@ -3466,7 +3540,7 @@ class ProBotUI:
             err_text = self._t("ui_loop_detected_title", lang=cur_lang)
             markup = self._kbd([
                 [(self._t("ui_retry", lang=cur_lang), CB["rule_add"])],
-                [(f"🏠 {self._t('ui_main_title', lang=cur_lang)}", CB["main"])],
+                [(self._btn('ui_main_title', lang=cur_lang), CB["main"])],
             ])
             if hasattr(event, "edit_message_text"):
                 await self._safe_edit(event, err_text, reply_markup=markup)
@@ -3535,7 +3609,7 @@ class ProBotUI:
             markup = self._kbd([
                 [(self._t("ui_rule_adv_settings", lang=cur_lang), f"rd:{rule.id}")],
                 [(self._t("ui_rule_add_new", lang=cur_lang), CB["rule_add"]), (self._t("ui_rule_view_all", lang=cur_lang), CB["rules"])],
-                [(f"🏠 {self._t('ui_main_title', lang=cur_lang)}", CB["main"])],
+                [(self._btn('ui_main_title', lang=cur_lang), CB["main"])],
             ])
 
             if hasattr(event, "edit_message_text"):
@@ -3553,8 +3627,8 @@ class ProBotUI:
 
     def _filters_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
-            [("➕ " + self._t("ui_filter_add"), CB["filter_add"])],
-            [("⬅️ " + self._t("ui_back"), CB["main"])],
+            [(self._btn("ui_filter_add"), CB["filter_add"])],
+            [(self._btn("ui_back"), CB["main"])],
         ])
 
     def _ai_menu(self, cfgs: Optional[list] = None) -> InlineKeyboardMarkup:
@@ -3567,8 +3641,8 @@ class ProBotUI:
                 label = f"{status} {c.name or 'AI'} [{prov} • {c.model}]"
                 rows.append([(label, f"aid:{c.id}")])
         rows.append([(self._t("ui_btn_ai_pv_assistant"), "pv:menu")])
-        rows.append([("➕ " + self._t("ui_ai_add"), CB["ai_add"])])
-        rows.append([("⬅️ " + self._t("ui_back"), CB["main"])])
+        rows.append([(self._btn("ui_ai_add"), CB["ai_add"])])
+        rows.append([(self._btn("ui_back"), CB["main"])])
         return self._kbd(rows)
 
     @staticmethod
@@ -3660,10 +3734,12 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_pv_menu(self, uid: int = 0, lang: Optional[str] = None) -> Tuple[str, InlineKeyboardMarkup]:
+        # An explicit lang wins for EVERY locale — re-resolving a caller's
+        # "fa" against the database silently substituted another language.
         lang = lang or self._lang_for(uid=uid)
         resp = getattr(self, "_pv_responder", None)
         if not resp:
-            return self._t("ui_pv_not_loaded", lang=lang), self._kbd([[("⬅️ " + self._t("ui_back", lang=lang), CB["ai"])]])
+            return self._t("ui_pv_not_loaded", lang=lang), self._kbd([[(self._btn("ui_back", lang=lang), CB["ai"])]])
 
         cfg = resp.get_config_for_user(uid) if hasattr(resp, "get_config_for_user") else resp.config
         persona_preview = (cfg.persona_prompt[:140] + "...") if len(cfg.persona_prompt) > 140 else cfg.persona_prompt
@@ -3686,11 +3762,13 @@ class ProBotUI:
             [(self._t("ui_pv_btn_persona", lang=lang), "pv:persona")],
             [(self._t("ui_pv_btn_delays", lang=lang), "pv:delays")],
             [(self._t("ui_pv_btn_test", lang=lang), "pv:test")],
-            [("⬅️ " + self._t("ui_back", lang=lang), CB["ai"])],
+            [(self._btn("ui_back", lang=lang), CB["ai"])],
         ]
         return text, self._kbd(rows)
 
     def _render_pv_persona_menu(self, lang: Optional[str] = None, uid: int = 0) -> Tuple[str, InlineKeyboardMarkup]:
+        # An explicit lang wins for EVERY locale — re-resolving a caller's
+        # "fa" against the database silently substituted another language.
         lang = lang or self._lang_for(uid=uid)
         text = self._t("ui_pv_p_title", lang=lang)
         rows = [
@@ -3703,6 +3781,8 @@ class ProBotUI:
         return text, self._kbd(rows)
 
     def _render_pv_delays_menu(self, lang: Optional[str] = None, uid: int = 0) -> Tuple[str, InlineKeyboardMarkup]:
+        # An explicit lang wins for EVERY locale — re-resolving a caller's
+        # "fa" against the database silently substituted another language.
         lang = lang or self._lang_for(uid=uid)
         text = self._t("ui_pv_d_title", lang=lang)
         rows = [
@@ -3715,19 +3795,19 @@ class ProBotUI:
 
     def _logs_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
-            [("🕘 " + self._t("ui_logs_recent"), CB["logs_recent"]),
-             ("⚠️ " + self._t("ui_logs_errors"), CB["logs_errors"])],
-            [("📈 " + self._t("ui_logs_stats"), CB["logs_stats"])],
-            [("⬅️ " + self._t("ui_back"), CB["main"])],
+            [(self._btn("ui_logs_recent"), CB["logs_recent"]),
+             (self._btn("ui_logs_errors"), CB["logs_errors"])],
+            [(self._btn("ui_logs_stats"), CB["logs_stats"])],
+            [(self._btn("ui_back"), CB["main"])],
         ])
 
     def _debug_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
-            [("🕘 " + self._t("ui_logs_recent"), CB["logs_recent"]),
-             ("⚠️ " + self._t("ui_logs_errors"), CB["logs_errors"])],
-            [("📈 " + self._t("ui_perf"), CB["perf"])],
-            [("🔄 " + self._t("ui_refresh"), CB["refresh"])],
-            [("⬅️ " + self._t("ui_back"), CB["main"])],
+            [(self._btn("ui_logs_recent"), CB["logs_recent"]),
+             (self._btn("ui_logs_errors"), CB["logs_errors"])],
+            [(self._btn("ui_perf"), CB["perf"])],
+            [(self._btn("ui_refresh"), CB["refresh"])],
+            [(self._btn("ui_back"), CB["main"])],
         ])
 
     def _lang_menu(self) -> InlineKeyboardMarkup:
@@ -3741,10 +3821,10 @@ class ProBotUI:
     # ------------------------------------------------------------------ #
     def _creds_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
-            [("➕ " + self._t("ui_cred_add"), CB["cred_add"])],
-            [("🗄 " + self._t("ui_migrate"), CB["migrate"]), ("🛠 " + self._t("ui_debug"), CB["debug"])],
-            [("🔗 " + self._t("ui_weburl"), CB["weburl"])],
-            [("⬅️ " + self._t("ui_back"), CB["main"])],
+            [(self._btn("ui_cred_add"), CB["cred_add"])],
+            [(self._btn("ui_migrate"), CB["migrate"]), (self._btn("ui_debug"), CB["debug"])],
+            [(self._btn("ui_weburl"), CB["weburl"])],
+            [(self._btn("ui_back"), CB["main"])],
         ])
 
     def _provider_label(self, key: str) -> str:
@@ -3769,7 +3849,7 @@ class ProBotUI:
                 row = []
         if row:
             rows.append(row)
-        rows.append([("❌ " + self._t("ui_cancel"), CB["cancel"])])
+        rows.append([(self._btn("ui_cancel"), CB["cancel"])])
         return self._kbd(rows)
 
     def _model_picker(self, st: UiState, provider: str) -> InlineKeyboardMarkup | None:
@@ -3783,7 +3863,7 @@ class ProBotUI:
         rows: list = []
         for i, model in enumerate(models):
             rows.append([(model, f'{CB["ai_model_pick"]}:{i}')])
-        rows.append([("❌ " + self._t("ui_cancel", lang=lang), CB["cancel"])])
+        rows.append([(self._btn("ui_cancel", lang=lang), CB["cancel"])])
         return self._kbd(rows)
 
     # ------------------------------------------------------------------ #
@@ -3931,8 +4011,8 @@ class ProBotUI:
                     logger.error("reauth cooldown memo failed for %s: %s", uid, e)
                 return
             text = self._t("ui_reauth_required")
-            btn_open = "🌐 " + self._t("ui_dashboard_open")
-            btn_menu = "⬅️ " + self._t("ui_back")
+            btn_open = self._btn("ui_dashboard_open")
+            btn_menu = self._btn("ui_back")
             kbd = InlineKeyboardMarkup([
                 [InlineKeyboardButton(btn_open, url=magic_link)],
                 [InlineKeyboardButton(btn_menu, callback_data=CB["main"])],
@@ -4132,8 +4212,8 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_stats(_, cq: CallbackQuery):
             kbd = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 " + self._t("ui_refresh"), callback_data=CB["refresh"])],
-                [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])],
+                [InlineKeyboardButton(self._btn("ui_refresh"), callback_data=CB["refresh"])],
+                [InlineKeyboardButton(self._btn("ui_back"), callback_data=CB["main"])],
             ])
             await self._safe_edit(cq, 
                 await self._dashboard_body(), reply_markup=kbd)
@@ -4181,7 +4261,7 @@ class ProBotUI:
             except Exception:
                 stuck = 0
             rows = [
-                [InlineKeyboardButton("🔄 " + self._t("ui_refresh"), callback_data=CB["diag"])]
+                [InlineKeyboardButton(self._btn("ui_refresh"), callback_data=CB["diag"])]
             ]
             if stuck > 0:
                 rows.insert(0, [
@@ -4191,7 +4271,7 @@ class ProBotUI:
                     )
                 ])
             kbd = InlineKeyboardMarkup(rows + [
-                [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])]
+                [InlineKeyboardButton(self._btn("ui_back"), callback_data=CB["main"])]
             ])
             await self._safe_edit(cq, body, reply_markup=kbd)
             await cq.answer()
@@ -4230,14 +4310,14 @@ class ProBotUI:
                     callback_data=f"{CB['diag_dlq_replay']}:{uid}:{idx}",
                 )])
             rows.append([InlineKeyboardButton(
-                "🔄 " + self._t("ui_refresh"), callback_data=CB["diag_dlq_refresh"]
+                self._btn("ui_refresh"), callback_data=CB["diag_dlq_refresh"]
             )])
             if collected["entries"]:
                 rows.append([InlineKeyboardButton(
                     self._t("ui_dlq_purge_all"), callback_data=CB["diag_dlq_purge"]
                 )])
             rows.append([InlineKeyboardButton(
-                "⬅️ " + self._t("ui_back"), callback_data=CB["diag"]
+                self._btn("ui_back"), callback_data=CB["diag"]
             )])
             await self._safe_edit(cq, text, reply_markup=InlineKeyboardMarkup(rows))
             await cq.answer()
@@ -4293,14 +4373,14 @@ class ProBotUI:
                     callback_data=f"{CB['diag_dlq_replay']}:{uid}:{i}",
                 )])
             rows.append([InlineKeyboardButton(
-                "🔄 " + self._t("ui_refresh"), callback_data=CB["diag_dlq_refresh"]
+                self._btn("ui_refresh"), callback_data=CB["diag_dlq_refresh"]
             )])
             if collected["entries"]:
                 rows.append([InlineKeyboardButton(
                     self._t("ui_dlq_purge_all"), callback_data=CB["diag_dlq_purge"]
                 )])
             rows.append([InlineKeyboardButton(
-                "⬅️ " + self._t("ui_back"), callback_data=CB["diag"]
+                self._btn("ui_back"), callback_data=CB["diag"]
             )])
             await self._safe_edit(cq, text, reply_markup=InlineKeyboardMarkup(rows))
 
@@ -4321,7 +4401,7 @@ class ProBotUI:
                 self._t("ui_dlq_purged", count=removed, lang=lang),
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton(
-                        "⬅️ " + self._t("ui_back", lang=lang),
+                        self._btn("ui_back", lang=lang),
                         callback_data=CB["diag"],
                     )
                 ]]),
@@ -4339,11 +4419,11 @@ class ProBotUI:
                 self._t("ui_dlq_purge_confirm", lang=lang),
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(
-                        "🗑 " + self._t("ui_dlq_purge_yes", lang=lang),
+                        self._btn("ui_dlq_purge_yes", lang=lang),
                         callback_data=CB["diag_dlq_purge_confirm"],
                     )],
                     [InlineKeyboardButton(
-                        "⬅️ " + self._t("ui_dlq_back_to_list", lang=lang),
+                        self._btn("ui_dlq_back_to_list", lang=lang),
                         callback_data=CB["diag_dlq"],
                     )],
                 ]),
@@ -4360,8 +4440,8 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_refresh(_, cq: CallbackQuery):
             kbd = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 " + self._t("ui_refresh"), callback_data=CB["refresh"])],
-                [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])],
+                [InlineKeyboardButton(self._btn("ui_refresh"), callback_data=CB["refresh"])],
+                [InlineKeyboardButton(self._btn("ui_back"), callback_data=CB["main"])],
             ])
             await self._safe_edit(cq, 
                 await self._dashboard_body(), reply_markup=kbd)
@@ -4406,7 +4486,7 @@ class ProBotUI:
         @b.on_callback_query(filters.regex("^" + CB["help"] + "$"))
         @self._localized_handler
         async def _cb_help(_, cq: CallbackQuery):
-            btn_back = "⬅️ " + self._t("ui_back")
+            btn_back = self._btn("ui_back")
             btn_sup = self._t("ui_support_btn", lang=self._resolve_lang(cq.from_user.id))
             kbd = InlineKeyboardMarkup([
                 [InlineKeyboardButton(btn_sup, url="https://t.me/Capxi")],
@@ -4438,7 +4518,7 @@ class ProBotUI:
             uid = cq.from_user.id if cq.from_user else 0
             text = self._upgrade_text(uid)
             btn_buy = self._t("ui_buy_btn", lang=self._resolve_lang(uid))
-            btn_back = "⬅️ " + self._t("ui_back")
+            btn_back = self._btn("ui_back")
             kbd = InlineKeyboardMarkup([
                 [InlineKeyboardButton(btn_buy, url="https://t.me/Capxi")],
                 [InlineKeyboardButton(btn_back, callback_data=CB["main"])],
@@ -4482,8 +4562,8 @@ class ProBotUI:
                         text, kbd = "\n".join(lines), self._filters_menu()
                     elif target == CB["stats"]:
                         stats_kbd = self._kbd([
-                            [("🔄 " + self._t("ui_refresh"), CB["refresh"])],
-                            [("⬅️ " + self._t("ui_back"), CB["back"])],
+                            [(self._btn("ui_refresh"), CB["refresh"])],
+                            [(self._btn("ui_back"), CB["back"])],
                         ])
                         text, kbd = await self._dashboard_body(), stats_kbd
                     elif target == CB["settings"]:
@@ -4576,7 +4656,7 @@ class ProBotUI:
             msg = self._t("ui_client_credentials_api_id_prompt", lang=self._resolve_lang(uid))
             await self._safe_edit(
                 cq, msg,
-                reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]])
+                reply_markup=self._kbd([[(self._btn("ui_cancel"), CB["cancel"])]])
             )
             await cq.answer()
 
@@ -4724,7 +4804,7 @@ class ProBotUI:
             st.step = "admin_broadcast_text"
             await self._persist(uid, st)
             msg = self._t("ui_admin_broadcast_prompt", lang=self._resolve_lang(uid))
-            await self._safe_edit(cq, msg, reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+            await self._safe_edit(cq, msg, reply_markup=self._kbd([[(self._btn("ui_cancel"), CB["cancel"])]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["adm_bcast_confirm"] + "$"))
@@ -4841,7 +4921,7 @@ class ProBotUI:
             st.step = "admin_forcesub_channel"
             await self._persist(uid, st)
             msg = self._t("ui_admin_force_prompt", lang=self._resolve_lang(uid))
-            await self._safe_edit(cq, msg, reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+            await self._safe_edit(cq, msg, reply_markup=self._kbd([[(self._btn("ui_cancel"), CB["cancel"])]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex("^" + CB["adm_admins"] + "$"))
@@ -4880,7 +4960,7 @@ class ProBotUI:
             st.step = "admin_add_id"
             await self._persist(uid, st)
             msg = self._t("ui_admin_add_prompt", lang=self._resolve_lang(uid))
-            await self._safe_edit(cq, msg, reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+            await self._safe_edit(cq, msg, reply_markup=self._kbd([[(self._btn("ui_cancel"), CB["cancel"])]]))
             await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^" + CB["adm_admin_del"] + r"_(\d+)$"))
@@ -6539,7 +6619,7 @@ class ProBotUI:
             await self._safe_edit(
                 cq,
                 self._t("ui_route_token_prompt", lang=lang),
-                reply_markup=self._kbd([[(f"🔙 {self._t('ui_rule_back_rules')}", f"rbt:{rule.id}")]]),
+                reply_markup=self._kbd([[(self._btn('ui_rule_back_rules'), f"rbt:{rule.id}")]]),
             )
 
         @b.on_callback_query(filters.regex(r"^rbts:(.+):(\d+)$"))
@@ -7193,9 +7273,9 @@ class ProBotUI:
                 f"⏱ {self._t('ui_ai_timeout_label')}: {tmo}s",
             ]
             toggle_btn = (
-                (f"🔴 {self._t('ui_ai_btn_disable')}", f"r_aitoggle:{rule_id}:off")
+                (self._btn('ui_ai_btn_disable'), f"r_aitoggle:{rule_id}:off")
                 if cfg_id
-                else (f"🟢 {self._t('ui_ai_btn_enable')}", f"r_aitoggle:{rule_id}:on")
+                else (self._btn('ui_ai_btn_enable'), f"r_aitoggle:{rule_id}:on")
             )
             rows: List[List[Tuple[str, str]]] = [
                 [toggle_btn],
@@ -7463,7 +7543,7 @@ class ProBotUI:
             rows: List[List[Tuple[str, str]]] = [
                 [(self._t("ui_ai_policy_send_orig"), f"r_aifset:{rule_id}:SEND_ORIGINAL")],
                 [(self._t("ui_ai_policy_drop"), f"r_aifset:{rule_id}:DROP")],
-                [("🔁 " + self._t("ui_retry"), f"r_aifset:{rule_id}:RETRY")],
+                [(self._btn("ui_retry"), f"r_aifset:{rule_id}:RETRY")],
                 [(self._t("ui_ai_policy_quarantine"), f"r_aifset:{rule_id}:QUARANTINE")],
                 [(self._t("ui_back"), f"r_ai:{rule_id}")],
             ]
@@ -7534,7 +7614,7 @@ class ProBotUI:
             else:
                 body = f"❌ **Error:**\n`{result.get('error_message') or 'unknown'}`"
             await self._safe_edit(cq, body, reply_markup=self._kbd([
-                [("🔄 " + self._t("ui_retry"), f"r_ai_test:{rule_id}")],
+                [(self._btn("ui_retry"), f"r_ai_test:{rule_id}")],
                 [(self._t("ui_back"), f"r_ai:{rule_id}")],
             ]))
             await cq.answer()
@@ -8374,7 +8454,7 @@ class ProBotUI:
             prompt_text = self._t("ui_prompt_enter_base_url", provider=self._provider_label(provider), default_url=default_url or self._t("ui_none_manual"))
             kbd = self._kbd([
                 [(self._t("ui_btn_use_default_host"), "ai_url_default")],
-                [("❌ " + self._t("ui_cancel"), CB["cancel"])],
+                [(self._btn("ui_cancel"), CB["cancel"])],
             ])
             await self._persist(cq.from_user.id, st)
             await self._safe_edit(cq, prompt_text, reply_markup=kbd)
@@ -8530,7 +8610,7 @@ class ProBotUI:
             current = cfg.base_url or "(default)"
             text = self._t("ui_prompt_change_base_url", current=current)
             kbd = self._kbd([
-                [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
+                [(self._btn("ui_cancel"), f"aid:{aid}")],
             ])
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -8548,7 +8628,7 @@ class ProBotUI:
             await self._persist(cq.from_user.id, st)
             text = self._t("ui_prompt_change_model", model=cfg.model)
             kbd = self._kbd([
-                [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
+                [(self._btn("ui_cancel"), f"aid:{aid}")],
             ])
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -8566,7 +8646,7 @@ class ProBotUI:
             await self._persist(cq.from_user.id, st)
             text = self._t("ui_prompt_change_api_key")
             kbd = self._kbd([
-                [("❌ " + self._t("ui_cancel"), f"aid:{aid}")],
+                [(self._btn("ui_cancel"), f"aid:{aid}")],
             ])
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -8647,7 +8727,7 @@ class ProBotUI:
                 st.step = "pv_persona_input"
                 await self._persist(uid, st)
                 prompt_text = self._t("ui_pv_custom_prompt_intro")
-                await self._safe_edit(cq, prompt_text, reply_markup=self._kbd([[("❌ " + self._t("ui_cancel"), "pv:persona")]]))
+                await self._safe_edit(cq, prompt_text, reply_markup=self._kbd([[(self._btn("ui_cancel"), "pv:persona")]]))
                 await cq.answer()
 
         @b.on_callback_query(filters.regex(r"^pv:delays$"))
@@ -8718,7 +8798,7 @@ class ProBotUI:
                 cq,
                 self._t("ui_migrate_ask_passphrase"),
                 reply_markup=self._kbd(
-                    [[("✖ " + self._t("ui_cancel"), CB["cancel"])]]
+                    [[(self._btn("ui_cancel"), CB["cancel"])]]
                 ),
             )
             await cq.answer()
@@ -8798,7 +8878,7 @@ class ProBotUI:
             await self._persist(cq.from_user.id, st)
             await self._safe_edit(cq, self._t("ui_migrate_ask_passphrase"),
                                   reply_markup=self._kbd(
-                                      [[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+                                      [[(self._btn("ui_cancel"), CB["cancel"])]]))
 
         @b.on_callback_query(filters.regex("^" + CB["migrate_import"] + "$"))
         @self._localized_handler
@@ -8812,8 +8892,8 @@ class ProBotUI:
             await self._persist(cq.from_user.id, st)
             await self._safe_edit(cq, self._t("ui_migrate_await_file"),
                                   reply_markup=self._kbd(
-                                      [[("⚡ " + self._t("ui_migrate_overwrite"), CB["migrate_overwrite"])],
-                                       [("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+                                      [[(self._btn("ui_migrate_overwrite"), CB["migrate_overwrite"])],
+                                       [(self._btn("ui_cancel"), CB["cancel"])]]))
 
         @b.on_callback_query(filters.regex("^" + CB["migrate_overwrite"] + "$"))
         @self._localized_handler
@@ -8831,8 +8911,8 @@ class ProBotUI:
                     + ("\n\n⚠️ " + self._t("ui_migrate_overwrite_on")
                        if st.buffer.get("migrate_overwrite") else ""),
                     reply_markup=self._kbd(
-                        [[("⚡ " + self._t("ui_migrate_overwrite"), CB["migrate_overwrite"])],
-                         [("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+                        [[(self._btn("ui_migrate_overwrite"), CB["migrate_overwrite"])],
+                         [(self._btn("ui_cancel"), CB["cancel"])]]))
 
         @b.on_callback_query(filters.regex("^" + CB["migrate_help"] + "$"))
         @self._localized_handler
@@ -9212,9 +9292,9 @@ class ProBotUI:
 
     def _weburl_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
-            [(("✏️ " + self._t("ui_weburl_set")), CB["weburl_set"])],
-            [(("🗑 " + self._t("ui_weburl_clear")), "weburl_clear")],
-            [(("⬅️ " + self._t("ui_back")), CB["main"])],
+            [((self._btn("ui_weburl_set")), CB["weburl_set"])],
+            [((self._btn("ui_weburl_clear")), "weburl_clear")],
+            [((self._btn("ui_back")), CB["main"])],
         ])
 
     def _weburl_body(self) -> str:
@@ -9400,9 +9480,9 @@ class ProBotUI:
                 f"⏱ {self._t('ui_ai_timeout_label')}: {tmo}s",
             ]
             toggle_btn = (
-                (f"🔴 {self._t('ui_ai_btn_disable')}", f"r_aitoggle:{rule_id}:off")
+                (self._btn('ui_ai_btn_disable'), f"r_aitoggle:{rule_id}:off")
                 if cfg_id
-                else (f"🟢 {self._t('ui_ai_btn_enable')}", f"r_aitoggle:{rule_id}:on")
+                else (self._btn('ui_ai_btn_enable'), f"r_aitoggle:{rule_id}:on")
             )
             rows = [
                 [toggle_btn],
@@ -9660,9 +9740,9 @@ class ProBotUI:
 
         text = "\n".join(lines)
         buttons = [
-            [InlineKeyboardButton("🌐 " + self._t("ui_dashboard_open"), url=magic_link)],
-            [InlineKeyboardButton("🔄 " + self._t("ui_webpass_reset_btn"), callback_data=CB["webpass_reset"])],
-            [InlineKeyboardButton("⬅️ " + self._t("ui_back"), callback_data=CB["main"])],
+            [InlineKeyboardButton(self._btn("ui_dashboard_open"), url=magic_link)],
+            [InlineKeyboardButton(self._btn("ui_webpass_reset_btn"), callback_data=CB["webpass_reset"])],
+            [InlineKeyboardButton(self._btn("ui_back"), callback_data=CB["main"])],
         ]
         kbd = InlineKeyboardMarkup(buttons)
         try:
@@ -9856,7 +9936,7 @@ class ProBotUI:
             await self._persist(uid, st)
             return await message.reply_text(
                 self._t("ui_migrate_ask_passphrase"),
-                reply_markup=self._kbd([[("✖ " + self._t("ui_cancel"), CB["cancel"])]]))
+                reply_markup=self._kbd([[(self._btn("ui_cancel"), CB["cancel"])]]))
 
         await self._finish_migration_import(message, st, blob, "")
 
@@ -10222,7 +10302,7 @@ class ProBotUI:
             if isinstance(st.buffer, dict):
                 st.buffer.pop("code_digits", None)
             await self._persist(uid, st)
-            retry_btn = self._kbd([[("🔄 " + self._t("ui_login_retry", lang=lang), CB["login_retry"])]]) if phone else self._cancel_kbd()
+            retry_btn = self._kbd([[(self._btn("ui_login_retry", lang=lang), CB["login_retry"])]]) if phone else self._cancel_kbd()
             if result == "code_expired":
                 text = self._t("ui_login_code_expired_prompt")
                 await message.reply_text(text, reply_markup=retry_btn)
@@ -10421,7 +10501,7 @@ class ProBotUI:
         if in_draft and not isinstance(draft_obj, dict) and isinstance(st.buffer, dict):
             st.buffer["draft"] = draft
 
-        if raw.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if raw.lower() in cancel_aliases():
             st.step = "rule_editing_draft" if in_draft else ""
             if not in_draft and isinstance(st.buffer, dict):
                 st.buffer = {}
@@ -10492,7 +10572,7 @@ class ProBotUI:
         if in_draft and not isinstance(draft_obj, dict) and isinstance(st.buffer, dict):
             st.buffer["draft"] = draft
 
-        if raw.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if raw.lower() in cancel_aliases():
             st.step = "rule_editing_draft" if in_draft else ""
             if not in_draft and isinstance(st.buffer, dict):
                 st.buffer = {}
@@ -10554,7 +10634,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if raw.lower() in ("/cancel", "انصراف", "لغو", "خروج"):
+        if raw.lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(uid, st)
@@ -10583,7 +10663,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if text.strip().lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -10649,7 +10729,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if text.strip().lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -10681,7 +10761,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if text.strip().lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -10713,7 +10793,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if text.strip().lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -10747,7 +10827,7 @@ class ProBotUI:
             return
 
         clean = text.strip()
-        if clean.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if clean.lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -10788,7 +10868,7 @@ class ProBotUI:
             return
 
         raw_input = text.strip()
-        if raw_input.lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if raw_input.lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -10857,7 +10937,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if text.strip().lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -10890,7 +10970,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if text.strip().lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -10902,7 +10982,7 @@ class ProBotUI:
         if not isinstance(rule.detection_criteria, dict):
             rule.detection_criteria = {}
 
-        if raw in ("حذف", "پاک", "none", "clear", "حذف همه"):
+        if raw.lower() in _input_aliases("ui_input_clear_aliases"):
             rule.detection_criteria.pop("text_contains", None)
             rule.detection_criteria.pop("keywords", None)
             ans = self._t("ui_step_keywords_removed")
@@ -10941,7 +11021,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if text.strip().lower() in ROUTE_CANCEL_WORDS:
+        if text.strip().lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -10993,7 +11073,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if text.strip().lower() in ROUTE_CANCEL_WORDS:
+        if text.strip().lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -11034,7 +11114,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if text.strip().lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -11046,7 +11126,7 @@ class ProBotUI:
         if not isinstance(rule.detection_criteria, dict):
             rule.detection_criteria = {}
 
-        if raw in ("حذف", "پاک", "none", "clear"):
+        if raw.lower() in _input_aliases("ui_input_clear_aliases"):
             rule.detection_criteria.pop("regex_pattern", None)
             rule.detection_criteria.pop("text_regex", None)
             ans = self._t("ui_step_regex_removed")
@@ -11085,7 +11165,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
             return
 
-        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if text.strip().lower() in cancel_aliases():
             st.step = ""
             st.buffer = {}
             await self._persist(message.from_user.id, st)
@@ -11230,7 +11310,7 @@ class ProBotUI:
         prompt_text = self._t("ui_step_prompt_server_url", provider=self._provider_label(provider), default_url=default_url or self._t("ui_none_manual"))
         kbd = self._kbd([
             [(self._t("ui_btn_use_default_host"), "ai_url_default")],
-            [("❌ " + self._t("ui_cancel", lang=lang), CB["cancel"])],
+            [(self._btn("ui_cancel", lang=lang), CB["cancel"])],
         ])
         await self._persist(message.from_user.id, st)
         await message.reply_text(prompt_text, reply_markup=kbd)
@@ -11238,7 +11318,7 @@ class ProBotUI:
     async def _step_ai_base_url(self, message: Message, st: UiState, text: str) -> None:
         lang = self._lang_for(st)
         url = text.strip()
-        if url.lower() in ("default", "none", "-", "پیش‌فرض", "پیش فرض"):
+        if url.lower() in _input_aliases("ui_input_default_aliases"):
             url = str(st.buffer.get("default_base_url", ""))
         elif not url.startswith("http://") and not url.startswith("https://"):
             url = "http://" + url
@@ -11247,7 +11327,7 @@ class ProBotUI:
             # Stay on this step: the user is one message away from a working one.
             kbd = self._kbd([
                 [(self._t("ui_btn_use_default_host"), "ai_url_default")],
-                [("❌ " + self._t("ui_cancel", lang=lang), CB["cancel"])],
+                [(self._btn("ui_cancel", lang=lang), CB["cancel"])],
             ])
             await self._persist(message.from_user.id, st)
             await message.reply_text(
@@ -11339,7 +11419,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_ai_config_not_found"), reply_markup=self._ai_menu(cfgs))
             return
         new_url = text.strip()
-        if new_url.lower() in ("default", "none", "-", "پیش‌فرض", "پیش فرض"):
+        if new_url.lower() in _input_aliases("ui_input_default_aliases"):
             new_url = ""
         elif not new_url.startswith("http://") and not new_url.startswith("https://"):
             new_url = "http://" + new_url
@@ -11434,7 +11514,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_step_pv_module_not_found"), reply_markup=self._main_menu())
             return
         lang = await self._get_user_lang(uid)
-        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if text.strip().lower() in cancel_aliases():
             text_out, kbd = self._render_pv_menu(uid, lang=lang)
             await message.reply_text(self._t("ui_pv_prompt_cancelled"), reply_markup=kbd)
             return
@@ -11456,7 +11536,7 @@ class ProBotUI:
             await message.reply_text(self._t("ui_step_pv_module_not_found"), reply_markup=self._main_menu())
             return
         lang = await self._get_user_lang(uid)
-        if text.strip().lower() in ("/cancel", "انصراف", "لغو", "بازگشت"):
+        if text.strip().lower() in cancel_aliases():
             text_out, kbd = self._render_pv_menu(uid, lang=lang)
             await message.reply_text(self._t("ui_pv_test_cancelled"), reply_markup=kbd)
             return
