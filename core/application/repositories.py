@@ -709,6 +709,12 @@ def kind_filter_sql(kinds: Optional[Sequence[str]], placeholder: str = "?") -> T
     return f" AND kind IN ({placeholders})", tuple(cleaned)
 
 
+#: How long terminal per-user tasks are kept before the retention sweep
+#: deletes them (30 days), and how many rows one sweep removes, so a large
+#: backlog is drained in bounded batches instead of one long write lock.
+TASK_RETENTION_SECONDS = 60 * 60 * 24 * 30
+TASK_PURGE_BATCH = 500
+
 class ITaskRepository(ABC):
     """Durable per-user task store. Ownership is part of every row."""
 
@@ -769,6 +775,22 @@ class ITaskRepository(ABC):
     async def reclaim_expired(self, now: int) -> int:
         """Return expired RUNNING leases to RETRY_WAIT so a crashed worker
         cannot hold task state hostage."""
+
+    @abstractmethod
+    async def cleanup(self, retention_seconds: int = TASK_RETENTION_SECONDS) -> int:
+        """Delete terminal tasks that finished outside the retention window.
+
+        Only SUCCEEDED/FAILED/CANCELLED rows are eligible. PENDING, RETRY_WAIT
+        and RUNNING are live work no matter how old the row is — a queued task
+        its owner is still waiting for, or one a worker is executing right now —
+        so the predicate starts with the status and the sweep can never drop
+        them. `retention_seconds <= 0` means keep everything (explicitly
+        unbounded, not "purge immediately").
+
+        At most TASK_PURGE_BATCH rows are removed per call so the delete holds
+        the write lock briefly and a large backlog is drained over several
+        sweeps. Returns the number of rows deleted.
+        """
 
     @abstractmethod
     async def finish_succeeded(self, task_id: str, token: str, result_json: str,

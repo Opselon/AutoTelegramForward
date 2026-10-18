@@ -32,6 +32,13 @@ POLL_INTERVAL = 1.0
 # running (the executor calls the use-case's renew through the runner).
 LEASE_RENEW_INTERVAL = 60.0
 
+#: How often the terminal-task retention sweep runs, and how long to back off
+#: after a failed sweep. Housekeeping is slow on purpose: the sweep is a
+#: bounded batch, so a backlog drains over several passes rather than in one
+#: long write lock.
+RETENTION_INTERVAL = 3600.0
+RETENTION_RETRY_INTERVAL = 300.0
+
 
 def build_executors(container: Dict[str, Any]) -> Dict[str, Callable[[int, Dict[str, Any]], Awaitable[Dict[str, Any]]]]:
     """Map each task kind to the existing domain implementation.
@@ -118,6 +125,7 @@ class UserTaskWorker:
         container: Optional[Dict[str, Any]] = None,
         max_concurrent: int = 4,
         poll_interval: float = POLL_INTERVAL,
+        retention_seconds: int = 0,
     ) -> None:
         self._tasks = tasks
         self._executors = executors
@@ -131,6 +139,13 @@ class UserTaskWorker:
         self._available: set = {k for k in executors}
         self._stopping = asyncio.Event()
         self._children: set = set()
+        # Terminal-task retention. 0 = keep terminal tasks forever (the
+        # pre-existing behavior); the sweep is then never attempted.
+        self._retention = max(0, int(retention_seconds or 0))
+        self._next_retention = time.monotonic()
+        # Distinguishes "the claim found nothing" from "the claim is broken":
+        # both used to look like an empty queue.
+        self._claim_failed = False
 
     def stop(self) -> None:
         self._stopping.set()
@@ -143,7 +158,19 @@ class UserTaskWorker:
             try:
                 claimed = await asyncio.wait_for(
                     self._claim_one(), timeout=self._poll)
-            except (asyncio.TimeoutError, Exception):
+                self._claim_failed = False
+            except asyncio.TimeoutError:
+                claimed = None
+            except Exception as exc:
+                # A broken claim and an empty queue are not the same thing, and
+                # the old `except (asyncio.TimeoutError, Exception): claimed =
+                # None` reported them identically: a storage fault looked like
+                # "no work to do" forever. Record the first failure of a run,
+                # then stay quiet until a claim succeeds, so the fault is
+                # visible without one log line per poll cycle.
+                if not self._claim_failed:
+                    self._claim_failed = True
+                    logger.exception("task claim failed (treated as no work): %s", exc)
                 claimed = None
             if claimed is None:
                 # Reclaim tasks whose worker lease expired while nothing else
@@ -151,7 +178,8 @@ class UserTaskWorker:
                 try:
                     await self._tasks._repo.reclaim_expired(int(time.time()))
                 except Exception:
-                    pass
+                    logger.exception("reclaiming expired task leases failed")
+                await self._maybe_purge()
                 try:
                     await asyncio.wait_for(self._stopping.wait(), timeout=self._poll)
                     break
@@ -163,6 +191,33 @@ class UserTaskWorker:
             t.add_done_callback(self._children.discard)
         for child in list(self._children):
             child.cancel()
+
+    async def _maybe_purge(self) -> None:
+        """Delete terminal tasks outside the retention window, at most hourly.
+
+        Self-gated by time rather than scheduled so every replica can call it
+        from its idle path: the sweep is a bounded (TASK_PURGE_BATCH),
+        terminal-only, idempotent DELETE — whoever gets there first drains the
+        batch, and a replica that runs it twice does nothing the second time.
+        """
+        if self._retention <= 0:
+            return
+        now = time.monotonic()
+        if now < self._next_retention:
+            return
+        try:
+            deleted = await self._tasks.purge_terminal(self._retention)
+        except Exception:
+            # Back off rather than retrying every poll cycle; a failed sweep is
+            # housekeeping, not a reason to spin.
+            self._next_retention = now + RETENTION_RETRY_INTERVAL
+            logger.exception("task retention sweep failed")
+            return
+        self._next_retention = now + RETENTION_INTERVAL
+        if deleted:
+            logger.info(
+                "task retention sweep deleted %d terminal task(s) older than %ds",
+                deleted, self._retention)
 
     async def _claim_one(self) -> Optional[tuple]:
         for _ in range(8):

@@ -68,6 +68,11 @@ class Config:
     # any tenant. Set the same value on the API (ATF_CORE_RPC_TOKEN) to enforce
     # it. Never logged.
     core_rpc_token: str = ""
+    # Terminal per-user task retention (seconds). The worker deletes
+    # SUCCEEDED/FAILED/CANCELLED task rows older than this in bounded batches;
+    # PENDING/RETRY_WAIT/RUNNING rows are live work and are never swept. 0 (or
+    # negative) keeps terminal tasks forever.
+    task_retention_seconds: int = 60 * 60 * 24 * 30
 
     @classmethod
     def load(cls, config_path: str = None) -> "Config":
@@ -93,7 +98,7 @@ class Config:
                     "database_url", "channel_poll_interval",
                     "redis_url", "redis_password", "redis_prefix",
                     "redis_coordination", "redis_timeout_seconds",
-                    "core_rpc_token"):
+                    "core_rpc_token", "task_retention_seconds"):
             if key in yaml_data:
                 setattr(cfg, key, yaml_data[key])
         if "admin_ids" in yaml_data:
@@ -125,6 +130,7 @@ class Config:
             # The plain address first, the explicit URL last: a deployment that
             # sets both gets the full URL it wrote literally.
             "ATF_CORE_RPC_TOKEN": ("core_rpc_token", str),
+            "ATF_TASK_RETENTION_SECONDS": ("task_retention_seconds", int),
             "ATF_REDIS_ADDR": ("redis_url", _redis_url_from_addr),
             "ATF_REDIS_URL": ("redis_url", str),
             "ATF_RATELIMIT_PREFIX": ("redis_prefix", str),

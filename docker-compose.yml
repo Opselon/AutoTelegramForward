@@ -150,6 +150,9 @@ services:
       # value; set it in the env file (or both stay unset and the core warns at
       # startup). A mismatch fails every RPC with UNAUTHENTICATED, on purpose.
       ATF_CORE_RPC_TOKEN: ${ATF_CORE_RPC_TOKEN:-}
+      # Terminal per-user task retention, seconds (default 30 days, 0 = keep
+      # forever). The worker deletes only finished rows, in bounded batches.
+      ATF_TASK_RETENTION_SECONDS: ${ATF_TASK_RETENTION_SECONDS:-2592000}
       ATF_DB_PATH: /app/data/atf.db
       ATF_LOGGER_ADDR: logger:50052
       # Diagnostics, empty = off: ATF_RAW_API_TRACE dumps per-request MTProto
