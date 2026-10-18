@@ -37,6 +37,8 @@ from ...application.repositories import (
     IUiStateRepository,
     IUserRepository,
     kind_filter_sql,
+    TASK_PURGE_BATCH,
+    TASK_RETENTION_SECONDS,
 )
 from ...domain.entities import (
     AIConfig,
@@ -2508,6 +2510,27 @@ class SqliteUserTaskRepository(ITaskRepository):
             (int(lease_until), task_id, token),
         )
         return cur.rowcount > 0
+
+    async def cleanup(self, retention_seconds: int = TASK_RETENTION_SECONDS) -> int:
+        # Terminal-only, batch-bounded (see ITaskRepository.cleanup). Ordered by
+        # finished_at so the oldest rows go first and the index on
+        # (status, finished_at) serves the subquery in insertion order.
+        SUCCEEDED, FAILED, CANCELLED = "SUCCEEDED", "FAILED", "CANCELLED"
+        if int(retention_seconds) <= 0:
+            return 0
+        cutoff = _now() - int(retention_seconds)
+        cur = self._db.execute(
+            "DELETE FROM user_tasks WHERE id IN ("
+            " SELECT id FROM user_tasks WHERE status IN (?, ?, ?)"
+            " AND finished_at > 0 AND finished_at < ?"
+            " ORDER BY finished_at LIMIT ?)",
+            # Literal terminal states, not an import: user_tasks imports this
+            # module, so importing its constants here would be a cycle. The
+            # values are pinned to core.application.user_tasks.TERMINAL_STATES by
+            # test_task_retention.py::test_the_sweep_set_is_exactly_the_terminal_states.
+            (SUCCEEDED, FAILED, CANCELLED, int(cutoff), int(TASK_PURGE_BATCH)),
+        )
+        return int(cur.rowcount or 0) if cur is not None else 0
 
     async def reclaim_expired(self, now: int) -> int:
         # The attempt budget is respected on takeover too: a task whose

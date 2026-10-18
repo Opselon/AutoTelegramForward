@@ -627,6 +627,16 @@ MIGRATIONS = {
     -- (measured 820us -> <60us at 10k rows).
     CREATE INDEX IF NOT EXISTS idx_user_tasks_pick ON user_tasks(status, run_at, created_at, id);
     """,
+    25: """
+    -- v25: Retention sweep for the per-user task ledger. Terminal rows are kept
+    -- for a bounded window and then deleted (core/application/user_task_worker
+    -- drives it); without an index on (status, finished_at) that sweep is a full
+    -- scan of every terminal row ever written, which grows without bound. The
+    -- index is additive and reversible: dropping it changes only the cost of the
+    -- sweep, never the data. PENDING/RETRY_WAIT/RUNNING rows are live work and
+    -- are never eligible, so the sweep's predicate starts with status.
+    CREATE INDEX IF NOT EXISTS idx_user_tasks_finished ON user_tasks(status, finished_at);
+    """,
     19: """
     -- v19: bot tokens are per-owner. The column + index are added by
     -- _apply_additive_columns (which runs after this script and is idempotent);

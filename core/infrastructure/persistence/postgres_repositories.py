@@ -26,6 +26,8 @@ from ...application.repositories import (
     IMessageMapRepository,
     IPromptRepository,
     kind_filter_sql,
+    TASK_PURGE_BATCH,
+    TASK_RETENTION_SECONDS,
 )
 from ...domain.entities import (
     ContentMode,
@@ -1683,6 +1685,10 @@ async def initialize_postgres_schema(db: Any) -> None:
             ON user_tasks (owner_user_id, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_user_tasks_pick
             ON user_tasks (status, run_at, created_at, id);
+            -- v25 parity: the retention sweep (status, finished_at). Additive and
+            -- reversible; only the cost of the sweep changes, never the data.
+            CREATE INDEX IF NOT EXISTS idx_user_tasks_finished
+                ON user_tasks(status, finished_at);
         """,
     ]
 
@@ -1862,6 +1868,27 @@ class PostgresUserTaskRepository(ITaskRepository):
             (int(lease_until), task_id, token),
         )
         return _affected(result) > 0
+
+    async def cleanup(self, retention_seconds: int = TASK_RETENTION_SECONDS) -> int:
+        # Terminal-only, batch-bounded (see ITaskRepository.cleanup). SKIP LOCKED
+        # keeps a purge running on one replica from blocking a concurrent claim
+        # on the rows it is not deleting; the status prefix means live work is
+        # never in the candidate set at all. Literal terminal states, not an
+        # import from user_tasks (which imports this module) — pinned to
+        # user_tasks.TERMINAL_STATES by test_task_retention.py.
+        SUCCEEDED, FAILED, CANCELLED = "SUCCEEDED", "FAILED", "CANCELLED"
+        if int(retention_seconds) <= 0:
+            return 0
+        cutoff = int(time.time()) - int(retention_seconds)
+        result = await _execute_db(
+            self._db,
+            "DELETE FROM user_tasks WHERE id IN ("
+            " SELECT id FROM user_tasks WHERE status IN (%s, %s, %s)"
+            " AND finished_at > 0 AND finished_at < %s"
+            " ORDER BY finished_at LIMIT %s FOR UPDATE SKIP LOCKED)",
+            (SUCCEEDED, FAILED, CANCELLED, int(cutoff), int(TASK_PURGE_BATCH)),
+        )
+        return _affected(result)
 
     async def reclaim_expired(self, now: int) -> int:
         result = await _execute_db(

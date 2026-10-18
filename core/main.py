@@ -577,7 +577,9 @@ async def _start_task_worker(container: dict) -> None:
         worker = UserTaskWorker(container["tasks"], executors,
                                 container=container,
                                 max_concurrent=getattr(container["config"],
-                                                       "task_worker_concurrency", 4))
+                                                       "task_worker_concurrency", 4),
+                                retention_seconds=getattr(container["config"],
+                                                          "task_retention_seconds", 0))
         container["task_worker"] = worker
         container["task_worker_handle"] = asyncio.create_task(worker.run_forever())
         logger.info("User task worker started (%d executor kinds)", len(executors))

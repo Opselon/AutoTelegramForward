@@ -189,6 +189,19 @@ class UserTaskUseCases:
         total = await self._repo.count_for_owner(owner, status=status, kind=kind)
         return tasks, int(total)
 
+    async def purge_terminal(self, retention_seconds: int) -> int:
+        """Delete terminal tasks older than the retention window.
+
+        System maintenance, not a tenant operation: it is deliberately not
+        owner-scoped (it deletes every tenant's expired *terminal* rows) and it
+        is not reachable from any request. Live work — PENDING, RETRY_WAIT,
+        RUNNING — is never eligible, so a queued or executing task cannot be
+        swept away by age. Retention <= 0 keeps terminal tasks forever.
+        """
+        if int(retention_seconds) <= 0:
+            return 0
+        return int(await self._repo.cleanup(int(retention_seconds)))
+
     async def cancel_owned(self, task_id: str, owner_user_id: int) -> Any:
         """Cancel while the task is still queue-bound.
 
