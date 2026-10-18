@@ -78,7 +78,7 @@ import type {
   DiagnosticsResponse,
   MeInfo,
 } from './types'
-import { getToken, applySession, clearSession } from './session'
+import { getToken, applySession } from './session'
 
 // ---------------------------------------------------------------------------
 // Branding hop (A → C → B)
@@ -194,7 +194,6 @@ function brandingHopSummary(isRtl: boolean, hop: BrandingHopConfig, route: strin
 }
 
 export function App({ me }: { me?: MeInfo } = {}) {
-  const [meState, setMeState] = useState<MeInfo | undefined>(me)
   // Language follows the user, not a hardcoded default:
   // previously this defaulted to 'fa' so every user's first dashboard render
   // was Persian even when their account language was English.
@@ -211,7 +210,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
     try { localStorage.setItem('atf_lang', lang) } catch { /* ignore */ }
   }, [lang])
   const [activeTab, setActiveTab] = useState<'system' | 'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'jobs' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('system')
-  const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(null)
+  // Identity starts from the session-core's verified answer when mounted with one.
+  const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(
+    me ? { user_id: me.user_id, username: me.username, is_admin: me.is_admin } : null,
+  )
   const [rules, setRules] = useState<ForwardRule[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
@@ -573,7 +575,6 @@ export function App({ me }: { me?: MeInfo } = {}) {
             applySession(auth.token)
             api.me().then((info) => {
               setCurrentUser(info)
-              setMeState(info)
             }).catch(() => {})
             loadData()
             showToast(isRtl ? 'ورود خودکار مینی‌اپ تلگرام انجام شد' : 'Telegram Mini App auto-authenticated')
@@ -586,7 +587,6 @@ export function App({ me }: { me?: MeInfo } = {}) {
     refreshDiagnostics()
     api.me().then((info) => {
       setCurrentUser(info)
-      setMeState(info)
     }).catch(() => {})
     const timer = setInterval(() => {
       api.getStats().then(setStats).catch(() => {})

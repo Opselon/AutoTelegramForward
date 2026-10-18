@@ -8,7 +8,6 @@ import {
   verifySession,
   applySession,
   clearSession,
-  getToken,
   setToken,
   isTokenJwtExpired,
   type SessionState,
