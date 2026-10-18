@@ -624,6 +624,21 @@ class ProBotUI:
             logger.debug("login failure detail for code %r: %s", code, detail)
         return self._t("ui_login_fail", lang=lang)
 
+    def _ai_policy_text(self, policy: str, lang: Optional[str] = None) -> str:
+        """The human label for a stored AI fallback policy, or "".
+
+        The policy comes from a draft in the UI state, which is a JSON blob that
+        outlives the build that wrote it, so it can hold a value this catalog does
+        not know. Returning "" is deliberate: the caller already prints the policy
+        token itself, so an unknown value reads as the token alone rather than as
+        the raw key `ui_ai_policy_short_<value>`.
+        """
+        key = f"ui_ai_policy_short_{str(policy).lower()}"
+        if self.i18n.contains(key):
+            return self._t(key, lang=lang)
+        logger.error("no catalog entry for AI fallback policy label %r", policy)
+        return ""
+
     @staticmethod
     async def _safe_edit(target, text: str, reply_markup=None, **kw) -> None:
         """edit_message_text without the MESSAGE_NOT_MODIFIED traceback spam.
@@ -1528,6 +1543,10 @@ class ProBotUI:
         lang = self._lang_for(rule)
         return RegistryEditor(
             translate=lambda key, **params: self._t(key, lang=lang, **params),
+            # A group is defined by the registry, so its title is normally in the
+            # catalog; `contains` lets `label` prove that instead of rendering the
+            # key when a registry grows a group nobody has translated yet.
+            contains=self.i18n.contains,
             save=lambda r: self._save_owned_rule(
                 r, uid, getattr(r, "version", None)
             ),
@@ -7184,9 +7203,10 @@ class ProBotUI:
             else:
                 lines.append(f"📝 {self._t('ui_ai_prompt_label')}: {self._t('ui_ai_prompt_default')}")
 
-            pol_desc = self._t(f"ui_ai_policy_short_{pol.lower()}")
+            pol_desc = self._ai_policy_text(pol)
             lines += [
-                f"⚠️ {self._t('ui_ai_policy_label')}: `{pol}` ({pol_desc})",
+                f"⚠️ {self._t('ui_ai_policy_label')}: `{pol}`"
+                + (f" ({pol_desc})" if pol_desc else ""),
                 f"⏱ {self._t('ui_ai_timeout_label')}: {tmo}s",
             ]
             toggle_btn = (
@@ -9390,9 +9410,10 @@ class ProBotUI:
             else:
                 lines.append(f"📝 {self._t('ui_ai_prompt_label')}: {self._t('ui_ai_prompt_default')}")
 
-            pol_desc = self._t(f"ui_ai_policy_short_{pol.lower()}")
+            pol_desc = self._ai_policy_text(pol)
             lines += [
-                f"⚠️ {self._t('ui_ai_policy_label')}: `{pol}` ({pol_desc})",
+                f"⚠️ {self._t('ui_ai_policy_label')}: `{pol}`"
+                + (f" ({pol_desc})" if pol_desc else ""),
                 f"⏱ {self._t('ui_ai_timeout_label')}: {tmo}s",
             ]
             toggle_btn = (
