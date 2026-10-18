@@ -333,11 +333,26 @@ class IAuthFlowRepository(ABC):
         ...
 
     @abstractmethod
-    async def save(self, row: dict) -> None:
+    async def save(self, row: dict) -> bool:
+        """Upsert one flow, but only if ``row["version"]`` beats what is stored.
+
+        Returns True when the row was written and False when it was dropped
+        because a *newer* revision is already persisted — the caller was
+        holding a stale copy (a late callback for a flow that has moved on).
+        The version is enforced in the statement, not merely carried in the
+        column: without that, two concurrent transitions both write the same
+        next version and the last writer wins.
+        """
         ...
 
     @abstractmethod
-    async def delete(self, user_id: int) -> None:
+    async def delete(self, user_id: int, *, version: Optional[int] = None) -> bool:
+        """Remove a flow. With ``version``, only that exact revision is removed.
+
+        Returns True when a row was deleted. The version is what keeps a stale
+        ``reset()`` (based on a finished flow) from deleting a newer one that
+        the user has just started.
+        """
         ...
 
     @abstractmethod

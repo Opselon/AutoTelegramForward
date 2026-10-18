@@ -1028,19 +1028,43 @@ class SqliteAuthFlowRepository(IAuthFlowRepository):
             "SELECT * FROM auth_flows WHERE user_id=?", (int(user_id),)
         )
 
-    async def save(self, row: dict) -> None:
+    async def save(self, row: dict) -> bool:
+        """Upsert one flow, but only if it beats the stored revision.
+
+        The guard is in the statement because that is the only place it can be
+        atomic: `WHERE excluded.version > auth_flows.version` makes a stale
+        writer (a late callback for a flow that already moved on) a no-op
+        instead of a silent clobber. It also covers the INSERT branch racing an
+        existing row — the same version loses there too (1 > 1 is false).
+        """
         cols = [c for c in self._COLUMNS if c in row]
         placeholders = ",".join("?" for _ in cols)
         assignments = ",".join(f"{c}=excluded.{c}" for c in cols)
         values = [row[c] for c in cols]
-        self._db.execute(
+        cur = self._db.execute(
             f"INSERT INTO auth_flows ({','.join(cols)}) VALUES ({placeholders})"
-            f" ON CONFLICT(user_id) DO UPDATE SET {assignments}",
+            f" ON CONFLICT(user_id) DO UPDATE SET {assignments}"
+            f" WHERE excluded.version > auth_flows.version",
             tuple(values),
         )
+        return bool(cur.rowcount)
 
-    async def delete(self, user_id: int) -> None:
-        self._db.execute("DELETE FROM auth_flows WHERE user_id=?", (int(user_id),))
+    async def delete(self, user_id: int, *, version: Optional[int] = None) -> bool:
+        """Delete a flow; with ``version``, only that exact revision.
+
+        A conditional delete is what stops `reset()` — which runs off a copy it
+        read earlier — from removing a flow the user started in between.
+        """
+        if version is None:
+            cur = self._db.execute(
+                "DELETE FROM auth_flows WHERE user_id=?", (int(user_id),)
+            )
+        else:
+            cur = self._db.execute(
+                "DELETE FROM auth_flows WHERE user_id=? AND version=?",
+                (int(user_id), int(version)),
+            )
+        return bool(cur.rowcount)
 
     async def expired(self) -> list:
         # only flows that are still waiting on somebody can expire
