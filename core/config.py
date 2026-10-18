@@ -57,6 +57,7 @@ class Config:
     # core/infrastructure/redis). Empty = single-replica mode, which is what
     # every deployment was before this existed.
     redis_url: str = ""
+    redis_password: str = ""
     redis_prefix: str = "atf:rl:"
     redis_coordination: bool = True
     redis_timeout_seconds: float = 1.0
@@ -83,8 +84,8 @@ class Config:
                     "queue_num_workers", "queue_batch_size", "queue_max_size",
                     "queue_lease_seconds", "queue_max_per_minute_per_target",
                     "database_url", "channel_poll_interval",
-                    "redis_url", "redis_prefix", "redis_coordination",
-                    "redis_timeout_seconds"):
+                    "redis_url", "redis_password", "redis_prefix",
+                    "redis_coordination", "redis_timeout_seconds"):
             if key in yaml_data:
                 setattr(cfg, key, yaml_data[key])
         if "admin_ids" in yaml_data:
@@ -128,6 +129,20 @@ class Config:
             val = os.environ.get(env_key)
             if val:
                 setattr(cfg, attr, cast(val))
+        # The credential never rides inside the address string this Core logs
+        # about: it lives in its own field and the client receives it as a
+        # client option, exactly the way the Go layer does. An operator URL
+        # that carries credentials is decomposed here — nothing keeps a
+        # password-bearing URL in memory at all.
+        if "@" in cfg.redis_url and "://" in cfg.redis_url:
+            scheme, rest = cfg.redis_url.split("://", 1)
+            userinfo, _, hostport = rest.partition("@")
+            cfg.redis_url = f"{scheme}://{hostport}"
+            cfg.redis_password = userinfo.partition(":")[2] or cfg.redis_password
+        else:
+            env_password = os.environ.get("ATF_REDIS_PASSWORD", "").strip()
+            if env_password:
+                cfg.redis_password = env_password
         admins = os.environ.get("ATF_ADMIN_IDS") or os.environ.get("ADMIN_IDS")
         if admins:
             parsed_admins = []

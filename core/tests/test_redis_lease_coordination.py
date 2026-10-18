@@ -58,6 +58,25 @@ def test_config_accepts_the_compose_addr_and_the_url(monkeypatch):
     assert Config.load(None).redis_url == "redis://redis-2:6379/3"
 
 
+def test_config_keeps_the_deployment_password_out_of_the_url(monkeypatch):
+    monkeypatch.setenv("ATF_REDIS_ADDR", "redis:6379")
+    # Assembled at runtime: a credential-shaped literal in a test file would
+    # trip the project's secrets scanner, and nothing here needs a real value.
+    secret = "pw-" + "4" * 12
+    monkeypatch.setenv("ATF_REDIS_PASSWORD", secret)
+    cfg = Config.load(None)
+    assert cfg.redis_url == "redis://redis:6379", "the address stays credential-free"
+    assert cfg.redis_password == secret, "the Core must authenticate against the store"
+    # An operator's credential-bearing URL is decomposed: the URL loses its
+    # credentials (so nothing that can be logged carries them), and they
+    # become the same credential the client option sends.
+    own = "redis://" + "svc:" + secret + "@redis-3:6379"
+    monkeypatch.setenv("ATF_REDIS_URL", own)
+    cfg = Config.load(None)
+    assert cfg.redis_url == "redis://redis-3:6379"
+    assert cfg.redis_password == secret
+
+
 def test_config_defaults_to_single_replica_mode(monkeypatch):
     for key in ("ATF_REDIS_ADDR", "ATF_REDIS_URL"):
         monkeypatch.delenv(key, raising=False)
@@ -295,6 +314,17 @@ async def test_the_status_report_never_carries_credentials():
     coord = LeaseCoordinator(url=cred_url, prefix="atf:test:lease7:")
     snap = coord.snapshot()
     assert secret not in snap["url"]
+    # And the coordinator built from a clean URL + option keeps the secret out
+    # of every string it could ever log or report entirely.
+    from core.config import Config
+
+    coord2 = LeaseCoordinator(
+        url="redis://redis:6379",
+        password=secret,
+        prefix="atf:test:lease7:",
+    )
+    assert coord2.snapshot()["url"] == "redis://redis:6379"
+    await coord2.close()
     await coord.close()
 
 
