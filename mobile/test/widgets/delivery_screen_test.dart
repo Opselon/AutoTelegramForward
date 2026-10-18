@@ -69,6 +69,7 @@ HttpTransport _transport(
   bool queueOk = true,
   bool dlqOk = true,
   bool actionOk = true,
+  bool purgeOk = true,
 }) {
   var actioned = false;
   return (
@@ -104,8 +105,13 @@ HttpTransport _transport(
     }
     if (url.path.endsWith('/retry') && method == 'POST') {
       actioned = true;
+      // The refusal body is byte-for-byte what the live Go API used to send:
+      // `success` is absent, not false. A client that tests `success == false`
+      // reads this as a replay that worked — which is exactly what happened.
       return http.Response(
-        actionOk ? '{"success":true,"message":"requeued"}' : '{"success":false,"message":"not_found","error_code":"not_found"}',
+        actionOk
+            ? '{"success":true,"message":"requeued"}'
+            : '{"message":"not_found","error_code":"not_found"}',
         200,
         headers: _json,
       );
@@ -113,7 +119,9 @@ HttpTransport _transport(
     if (url.path.endsWith('/dlq') && method == 'DELETE') {
       actioned = true;
       return http.Response(
-        '{"success":true,"message":"purged"}',
+        purgeOk
+            ? '{"success":true,"message":"purged 2"}'
+            : '{"message":"purge_failed"}',
         200,
         headers: _json,
       );
@@ -127,6 +135,7 @@ AppState _state(
   bool queueOk = true,
   bool dlqOk = true,
   bool actionOk = true,
+  bool purgeOk = true,
 }) => AppState(
   env: _env,
   tokenStore: MemoryTokenStore(),
@@ -136,6 +145,7 @@ AppState _state(
     queueOk: queueOk,
     dlqOk: dlqOk,
     actionOk: actionOk,
+    purgeOk: purgeOk,
   ),
 );
 
@@ -300,5 +310,31 @@ void main() {
       findsOneWidget,
     );
     expect(find.text(t.get('delivery_dlq_empty')), findsOneWidget);
+  });
+
+  testWidgets('a refused purge is reported, not counted as removed', (
+    tester,
+  ) async {
+    final log = <_Sent>[];
+    await _pump(tester, _state(log, purgeOk: false));
+    await tester.tap(find.text(t.get('delivery_tab_dlq')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey<String>('delivery_purge')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(t.get('action_confirm')));
+    await tester.pumpAndSettle();
+
+    // The body carried no `success` field at all (the live shape). The screen
+    // names the refusal, reports no successful purge, and the rows are still
+    // there — the server still has them.
+    expect(find.textContaining('purge_failed'), findsOneWidget);
+    expect(
+      find.textContaining(t.get('delivery_purge_ok', params: {'n': '2'})),
+      findsNothing,
+      reason: 'a refused purge must not be narrated as a purge',
+    );
+    expect(find.text('rate_limit'), findsOneWidget);
+    expect(log.any((e) => e.method == 'DELETE'), isTrue);
   });
 }

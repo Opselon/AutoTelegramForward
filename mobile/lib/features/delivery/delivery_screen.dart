@@ -187,7 +187,10 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     try {
       final resp = await client.retryDeadLetter(job.id);
       if (!mounted) return;
-      if (resp['success'] == false) {
+      // Only an explicit `true` is a replay. The server states `success` in both
+      // directions; treating a missing field as success would remove the row we
+      // failed to re-queue.
+      if (resp['success'] != true) {
         setState(
           () => _actionError = t.get(
             'delivery_retry_failed',
@@ -263,7 +266,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     try {
       final resp = await client.purgeDeadLetter();
       if (!mounted) return;
-      if (resp['success'] == false) {
+      if (resp['success'] != true) {
         setState(
           () => _actionError = _failureDetail(resp, t.get('state_error')),
         );
