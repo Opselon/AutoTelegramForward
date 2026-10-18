@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"autoforward/internal/probes"
 )
 
 // IdentityFunc returns the VERIFIED identity of a request: the user id the core
@@ -194,14 +196,11 @@ func (rt *Runtime) WrapByRoute(id IdentityFunc, next http.Handler) http.Handler 
 	})
 }
 
-// isProbePath reports whether a path is liveness/version polling.
-func isProbePath(p string) bool {
-	switch p {
-	case "/healthz", "/health", "/api/version", "/api/health/services", "/api/v1/health/services":
-		return true
-	}
-	return false
-}
+// isProbePath reports whether a path is liveness/readiness/version polling. The
+// list lives in internal/probes (shared with the API-key gate and the access
+// logger) so the shield cannot spend a caller's budget on a probe the other two
+// layers already treat as unauthenticated machine traffic.
+func isProbePath(p string) bool { return probes.IsProbePath(p) }
 
 // classFor classifies an authenticated request.
 func classFor(r *http.Request) Class {

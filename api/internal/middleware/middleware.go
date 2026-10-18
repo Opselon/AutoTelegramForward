@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"autoforward/internal/logpolicy"
+	"autoforward/internal/probes"
 
 	pb "autoforward/proto"
 )
@@ -62,12 +63,12 @@ func Meta(ctx context.Context) *RequestMeta {
 
 var rulePathRe = regexp.MustCompile(`/rules/([^/]+)`)
 
-// probePaths are liveness/version probes: polling traffic that would drown the
-// archive without recording an operator action.
-var probePaths = map[string]bool{
-	"/healthz": true, "/health": true, "/api/version": true,
-	"/api/v1/health/services": true, "/api/health/services": true,
-}
+// probePaths are liveness/readiness probes: polling traffic that would drown the
+// archive without recording an operator action. The list itself lives in
+// internal/probes, shared with the API-key gate and the rate-limit shield, so a
+// new probe cannot be remembered in one of the three and forgotten in another
+// (see that package for why that matters).
+func isProbePath(p string) bool { return probes.IsProbePath(p) }
 
 // AccessLogger records EVERY API request into the central logger store, not just
 // the failures — so the log explorer is a complete history of what the system
@@ -101,7 +102,11 @@ func AccessLogger(sink *ErrorLogSink, next http.Handler) http.Handler {
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r.WithContext(context.WithValue(r.Context(), requestMetaKey{}, meta)))
 
-		if probePaths[r.URL.Path] {
+		if isProbePath(r.URL.Path) && rec.status < 400 {
+			// A probe that SUCCEEDED is polling noise and is not archived. A probe
+			// that failed is the incident — the whole point of a readiness endpoint
+			// is that its failure is visible — so it is recorded like any other
+			// failing request instead of being filtered out as routine traffic.
 			return
 		}
 		level := "INFO"
@@ -298,9 +303,13 @@ func RequestLogger(next http.Handler) http.Handler {
 
 func APIKeyAuth(key string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" || r.URL.Path == "/health" ||
-			r.URL.Path == "/api/version" || r.URL.Path == "/api/v1/health/services" ||
-			r.URL.Path == "/api/health/services" ||
+		// Probes are unauthenticated by necessity, not by convenience: the caller
+		// is a deploy gate, a container probe or a load balancer, none of which
+		// holds a session or a key. Refusing them makes a healthy stack look dead
+		// to the only observer that decides whether to deploy or roll back, so
+		// this set is shared with the deploy gate and checked against the routes
+		// main.go registers (internal/probes).
+		if probes.IsProbePath(r.URL.Path) ||
 			r.URL.Path == "/api/openapi.yaml" ||
 			strings.HasPrefix(r.URL.Path, "/api/auth/") {
 			next.ServeHTTP(w, r)
