@@ -66,3 +66,24 @@ func TestAccessLogger_RecordsOneEntryPerRejectedRequest(t *testing.T) {
 		t.Fatalf("one refused request must produce exactly one entry, got %d", got)
 	}
 }
+
+// The shipped contract describes the API to the world: it must never sit
+// behind the API-key gate (the gate guardrails data routes, not the "how do I
+// even authenticate" document). Regression for the 401 the operator saw on a
+// live deployment with ATF_API_KEY configured.
+func TestAPIKeyAuthallowsTheOpenAPIContract(t *testing.T) {
+	rec := httptest.NewRecorder()
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("openapi: 3.1.0"))
+	})
+	APIKeyAuth("the-right-key", inner).ServeHTTP(rec, httptest.NewRequest("GET", "/api/openapi.yaml", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("openapi must pass the key gate without a key, got %d: %s", rec.Code, rec.Body.String())
+	}
+	// But it must NOT become a data-route exception: a task or rules path still refuses.
+	rec2 := httptest.NewRecorder()
+	APIKeyAuth("the-right-key", inner).ServeHTTP(rec2, httptest.NewRequest("GET", "/api/rules", nil))
+	if rec2.Code != http.StatusUnauthorized {
+		t.Fatalf("data route without key must be refused 401, got %d", rec2.Code)
+	}
+}
