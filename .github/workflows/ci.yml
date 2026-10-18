@@ -254,6 +254,62 @@ jobs:
         working-directory: web/frontend
         run: npm run build
 
+  website:
+    # The product site in website/ is a deliverable (it is published to GitHub
+    # Pages), but nothing tested it in CI: a broken link, a duplicate element id
+    # or a colour utility with no light-theme counterpart only surfaced after
+    # deploy. This job runs the same suite the maintainers run locally.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        # The Astro 7 / Tailwind 3 toolchain carries peer ranges npm 10 refuses
+        # outright; --legacy-peer-deps makes the install match the lockfile.
+        working-directory: website
+        run: npm ci --legacy-peer-deps
+
+      - name: Build
+        working-directory: website
+        run: npm run build
+
+      - name: SEO, links and metadata
+        working-directory: website
+        run: npm run test:seo
+
+      - name: Theme parity
+        working-directory: website
+        run: npm run test:theme
+
+      - name: System atlas
+        working-directory: website
+        run: npm run test:system
+
+      - name: Install Playwright browsers
+        working-directory: website
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end, accessibility and premium-surface tests
+        working-directory: website
+        run: npx playwright test
+
+      - name: WCAG AA contrast report (both themes, every page)
+        working-directory: website
+        run: |
+          npx astro preview --port 4321 &
+          for i in $(seq 1 30); do
+            curl -sf -o /dev/null http://localhost:4321/ && break
+            sleep 1
+          done
+          node tests/contrast-report.mjs
+
   flutter:
     runs-on: ubuntu-latest
     timeout-minutes: 45
