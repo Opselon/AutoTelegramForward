@@ -67,6 +67,12 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.Health)
 	mux.HandleFunc("GET /health", h.Health)
+	// Readiness is a strictly stronger signal than liveness: a stack whose
+	// fail-closed dependencies cannot enforce their promises answers 503 here
+	// while /healthz still answers 200 (see handlers/readiness.go). The deploy
+	// script gates on this before it records a release as deployed.
+	mux.HandleFunc("GET /readyz", h.Ready)
+	mux.HandleFunc("GET /ready", h.Ready)
 	mux.HandleFunc("GET /api/version", h.Version)
 	// The API's own machine-readable contract (ships in the image).
 	mux.HandleFunc("GET /api/openapi.yaml", h.OpenAPIDoc)
