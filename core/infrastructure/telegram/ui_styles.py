@@ -47,6 +47,7 @@ __all__ = [
     "leading_glyph",
     "canonical_glyph",
     "registered_glyphs",
+    "GLYPH_TOKEN",
 ]
 
 
@@ -130,16 +131,27 @@ AUTHORED_PRIMARY_GLYPHS: frozenset[str] = frozenset(
     {"➕", "🔄", "🌐", "📤", "📥", "✏️", "💾", "🔗"}
 )
 
-_GLYPH_TOKEN = (
-    r"(?:[\U0001F000-\U0001FAFF\u2190-\u2BFF\u2600-\u27BF\u231A-\u23FF"
-    r"\u2705\u274C\u2B50\u2714\u2716\u20E3]\uFE0F?)"
+#: The characters that count as a leading glyph. Published because the
+#: cross-language audit matches exactly the same set — two private copies had
+#: already drifted and both missed U+2139 ("ℹ️"), so an "ℹ️ Settings" label
+#: read as undecorated copy and got a second glyph glued in front of it.
+#: Covers the pictographs/emoji planes, symbols, arrows and enclosed
+#: alphanumerics (U+203C-U+24FF plus U+2580-U+2BFF: ⓘ, ℹ, ✔, ⏻, ◀), each
+#: optionally followed by the emoji selector. Box drawing (U+2500-U+257F) is
+#: deliberately excluded: "━━━" is a separator rule, not a decoration, and
+#: treating it as one made every separator read as a doubled glyph.
+GLYPH_TOKEN = (
+    r"(?:[\U0001F000-\U0001FAFF\u203C-\u24FF\u2580-\u2BFF]\uFE0F?)"
 )
-#: A leading glyph plus its optional trailing space.
-LEADING_GLYPH = re.compile(rf"^({_GLYPH_TOKEN})\s*")
-#: The same glyph repeated ("❌ ❌ Cancel" — prefix + catalog glyph).
-REPEATED_GLYPH = re.compile(rf"^({_GLYPH_TOKEN})(?:\s*\1)+\s*")
+#: Optional leading whitespace, a glyph, then its optional trailing space.
+#: The whitespace is captured, not skipped: a catalog value may open with a
+#: newline (``"\n⚠️ *Reply, Edict …*"`` is appended to a bigger panel), and
+#: dropping it both moved the text and left the glyph looking absent.
+LEADING_GLYPH = re.compile(rf"^(\s*)({GLYPH_TOKEN})\s*")
+#: The same glyph repeated ("❌ ❌ Cancel" — style prefix + catalog glyph).
+REPEATED_GLYPH = re.compile(rf"^(\s*)({GLYPH_TOKEN})(?:\s*\2)+\s*")
 #: Any glyph anywhere, used by the style audit.
-ANY_GLYPH = re.compile(_GLYPH_TOKEN)
+ANY_GLYPH = re.compile(GLYPH_TOKEN)
 
 
 # --------------------------------------------------------------------------- #
@@ -171,7 +183,7 @@ def leading_glyph(label: str) -> str:
     match = LEADING_GLYPH.match(label or "")
     if not match:
         return ""
-    return GLYPH_ALIASES.get(match.group(1), match.group(1))
+    return GLYPH_ALIASES.get(match.group(2), match.group(2))
 
 
 def canonical_glyph(glyph: str) -> str:
@@ -213,15 +225,16 @@ def style_label(label: str) -> str:
         return label
     collapsed = REPEATED_GLYPH.match(label)
     if collapsed:
-        glyph = canonical_glyph(collapsed.group(1))
-        return f"{glyph} {label[collapsed.end():].lstrip()}".rstrip()
+        pad, glyph = collapsed.group(1), canonical_glyph(collapsed.group(2))
+        return f"{pad}{glyph} {label[collapsed.end():].lstrip()}"
     first = LEADING_GLYPH.match(label)
     if not first:
         return label
-    canonical = canonical_glyph(first.group(1))
-    if canonical == first.group(1):
+    pad, glyph = first.group(1), first.group(2)
+    canonical = canonical_glyph(glyph)
+    if canonical == glyph:
         return label
-    return f"{canonical} {label[first.end():].lstrip()}".rstrip()
+    return f"{pad}{canonical} {label[first.end():].lstrip()}"
 
 
 def decorate(key: str, label: str, style: str | None = None) -> str:
@@ -235,8 +248,10 @@ def decorate(key: str, label: str, style: str | None = None) -> str:
     glyph = STYLES.get(style or style_for_key(key), STYLES["neutral"]).glyph
     if not glyph:
         return styled
-    body = (styled or "").strip()
-    return f"{glyph} {body}" if body else glyph
+    if not styled:
+        return glyph
+    pad = styled[: len(styled) - len(styled.lstrip())]
+    return f"{pad}{glyph} {styled.lstrip()}"
 
 
 def registered_glyphs() -> frozenset[str]:

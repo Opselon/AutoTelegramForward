@@ -184,3 +184,109 @@ def test_colour_names_cannot_drift_from_the_wire_layer() -> None:
     style_source = Path(ui_styles.__file__).read_text(encoding="utf-8")
     assert "from .button_style import" not in style_source
     assert "import pyrogram" not in style_source
+
+
+# --------------------------------------------------------------------------- #
+# glyph class + catalog-wide invariants
+# --------------------------------------------------------------------------- #
+GLYPH_MATCH = re.compile(r"^(" + ui_styles.GLYPH_TOKEN + ")")
+REPEATED = re.compile(r"^(" + ui_styles.GLYPH_TOKEN + r")(?:\s*\1)+")
+
+
+def test_every_alias_glyph_is_matched_by_the_glyph_class() -> None:
+    """An alias the pattern cannot match is dead code — the drift it names
+    survives silently (U+2139 "ℹ" was exactly that)."""
+    for alias in ui_styles.GLYPH_ALIASES:
+        assert GLYPH_MATCH.match(alias), f"alias {alias!r} is not recognised as a glyph"
+
+
+def _typography(char: str) -> bool:
+    """True for punctuation the class deliberately ignores.
+
+    Bullets, ellipses, curly quotes, fullwidth brackets and box-drawing rules
+    are layout, not decoration: "• item" and "━━━━" must stay glyph-free.
+    """
+    code = ord(char)
+    return (
+        char.isalnum()
+        or code < 0x2000
+        or 0x2000 <= code <= 0x203B  # general punctuation
+        or 0x2500 <= code <= 0x257F  # box drawing (separator rules)
+        or 0xFF00 <= code <= 0xFFEF  # fullwidth and halfwidth forms
+    )
+
+
+def test_glyph_class_covers_every_catalog_authored_glyph() -> None:
+    """No catalog value may start with a glyph the class cannot see: that is
+    how "ⓘ How does this work?" ended up with a second glyph glued in front."""
+    invisible = []
+    for lang, table in _catalog().items():
+        for key, value in table.items():
+            if not isinstance(value, str) or not value.strip():
+                continue
+            head = value.lstrip()[0]
+            if _typography(head):
+                continue
+            if not GLYPH_MATCH.match(value.lstrip()):
+                invisible.append((lang, key, value[:40]))
+    assert invisible == [], f"undetected leading glyphs: {invisible[:5]}"
+
+
+def test_no_catalog_value_starts_with_two_glyphs() -> None:
+    doubled = [
+        (lang, key, value[:40])
+        for lang, table in _catalog().items()
+        for key, value in table.items()
+        if isinstance(value, str) and REPEATED.match(value.lstrip())
+    ]
+    assert doubled == [], f"doubled decoration in the catalog: {doubled[:5]}"
+
+
+def test_decoration_never_doubles_and_is_idempotent_catalog_wide() -> None:
+    """The whole catalog, all 10 locales: decorating a label can add at most
+    one glyph, and decorating its result again changes nothing."""
+    for lang, table in _catalog().items():
+        for key, value in table.items():
+            if not isinstance(value, str) or not value.strip():
+                continue
+            authored = ui_styles.leading_glyph(value)
+            once = ui_styles.decorate(key, value)
+            assert not REPEATED.match(once), f"{lang}/{key} doubles its glyph: {once[:40]!r}"
+            assert ui_styles.decorate(key, once) == once, f"{lang}/{key} is not idempotent"
+            # Only a glyph the style layer *added* has to be a registered one;
+            # an authored glyph may legitimately be any pictograph (🤖, 👋).
+            if not authored and once != value:
+                added = ui_styles.leading_glyph(once)
+                assert added in ui_styles.registered_glyphs(), (lang, key, added)
+
+
+def test_button_keys_have_one_glyph_in_every_locale() -> None:
+    """A key rendered as a button must look the same in all 10 locales."""
+    catalog = _catalog()
+    keys = sorted(k for k in catalog["en"] if k.endswith("_btn") or "_btn_" in k)
+    assert keys, "no button keys found"
+    for key in keys:
+        glyphs = {ui_styles.leading_glyph(catalog[lang].get(key, "")) for lang in SUPPORTED_LANGUAGES}
+        assert len(glyphs) == 1, f"{key} renders {glyphs} across locales"
+
+
+def test_a_label_opening_with_a_newline_keeps_it_and_is_not_doubled() -> None:
+    """Regression: "\n⚠️ *Reply … will not work*" is a message block appended to
+    a bigger panel. The glyph was invisible to the pattern, so a second one was
+    glued on *and* the leading newline was stripped away."""
+    label = "\n⚠️ *Reply, Edit, Replace, Translate will not work when show header*"
+    assert ui_styles.leading_glyph(label) == "⚠️"
+    assert ui_styles.style_label(label) == label
+    assert ui_styles.decorate("ui_rule_detail_header_warning", label) == label
+    plain = "\n**Nothing here yet**"
+    assert ui_styles.decorate("ui_rule_detail_header_warning", plain) == (
+        "\n⚠️ **Nothing here yet**"
+    )
+
+
+def test_a_separator_rule_is_not_decoration() -> None:
+    """Box drawing is layout: "━━━━" must not read as a repeated glyph."""
+    for rule in ("━━━━━━━━━━━━━━━━━━━━", "────────────────────"):
+        assert ui_styles.leading_glyph(rule) == ""
+        assert ui_styles.style_label(rule) == rule
+        assert ui_styles.decorate("ui_sep", rule) == rule

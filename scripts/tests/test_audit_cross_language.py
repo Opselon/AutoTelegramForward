@@ -194,7 +194,7 @@ def test_decoration_parity_across_locales_is_enforced() -> None:
         "fa": {"ui_cancel": "لغو"},
         "ru": {"ui_cancel": "❌ Отмена"},
     }
-    findings = AUDIT.decoration_parity_findings(catalog, {"ui_cancel"})
+    findings = AUDIT.decoration_parity_findings(catalog)
     assert len(findings) == 1
     assert "fa" in findings[0]
 
@@ -246,3 +246,69 @@ def test_repository_passes_the_gate() -> None:
 
 def test_repository_passes_the_gate_with_the_report() -> None:
     assert AUDIT.main(["--report"]) == 0
+
+
+# --------------------------------------------------------------------------- #
+# rule — decoration belongs to the key, in every locale
+# --------------------------------------------------------------------------- #
+def test_leading_glyph_sees_through_a_leading_newline() -> None:
+    assert AUDIT._leading_glyph("\n⚠️ *Reply …*") == "⚠️"
+
+
+def test_a_separator_rule_is_not_a_glyph() -> None:
+    assert AUDIT._leading_glyph("━━━━━━━━━━━━━━━━━━━━") == ""
+
+
+def test_glyph_missing_in_one_locale_fails_catalog_wide() -> None:
+    """Defect (uz): the greeting glyph sat at the end of the line instead of
+    in front, so that locale rendered an undecorated title."""
+    catalog = {
+        "en": {"start": "👋 Welcome", "ui_ok": "Fine"},
+        "fa": {"start": "👋 خوش آمدید", "ui_ok": "خوب"},
+        "uz": {"start": "**AutoTelegramForward** ga xush kelibsiz! 👋", "ui_ok": "Yaxshi"},
+    }
+    findings = AUDIT.decoration_parity_findings(catalog)
+    assert any("uz/start" in f for f in findings), findings
+    assert not any("ui_ok" in f for f in findings)
+
+
+def test_matching_decoration_passes_catalog_wide() -> None:
+    catalog = {
+        "en": {"ui_cancel": "❌ Cancel"},
+        "fa": {"ui_cancel": "❌ لغو"},
+        "ru": {"ui_cancel": "❌ Отмена"},
+    }
+    assert AUDIT.decoration_parity_findings(catalog) == []
+
+
+def test_mangled_character_fails() -> None:
+    """Defect (id): an emoji destroyed into U+FFFD by an encoding round-trip."""
+    catalog = {"en": {"ui_join_verified_alert": "✅ Welcome"}, "id": {"ui_join_verified_alert": "\ufffd\ufe0f Selamat datang"}}
+    findings = AUDIT.catalog_encoding_findings(catalog)
+    assert any("id/ui_join_verified_alert" in f and "U+FFFD" in f for f in findings), findings
+
+
+def test_clean_catalog_has_no_encoding_findings() -> None:
+    assert AUDIT.catalog_encoding_findings({"en": {"ui_ok": "Fine"}}) == []
+
+
+def test_doubled_glyph_in_a_catalog_value_fails() -> None:
+    findings = AUDIT.catalog_decoration_findings({"en": {"ui_cancel": "❌ ❌ Cancel"}})
+    assert any("doubled" in f for f in findings), findings
+
+
+def test_separator_rules_are_not_flagged_as_doubled() -> None:
+    catalog = {"en": {"ui_sep": "━━━━━━━━━━━━━━━━━━━━", "ui_sep2": "────────────────────"}}
+    assert AUDIT.catalog_decoration_findings(catalog) == []
+
+
+def test_real_catalog_passes_every_decoration_rule() -> None:
+    """The rules above must hold for the shipped catalog, not just fixtures."""
+    catalog = json.loads(
+        (REPO / "core/infrastructure/telegram/locales/translations.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert AUDIT.decoration_parity_findings(catalog) == []
+    assert AUDIT.catalog_encoding_findings(catalog) == []
+    assert AUDIT.catalog_decoration_findings(catalog) == []

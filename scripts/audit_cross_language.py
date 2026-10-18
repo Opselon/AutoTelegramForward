@@ -112,11 +112,8 @@ LANGUAGE_BRANCH = re.compile(
 
 I18N_MARKERS = ("_t(", "_btn(", ".t(", "i18n.", "translate(", "gettext(", "decorate(")
 
-#: A leading glyph plus its optional trailing space.
-GLYPH = re.compile(
-    r"^\s*((?:[\U0001F000-\U0001FAFF\u2190-\u2BFF\u2600-\u27BF\u231A-\u23FF"
-    r"\u2705\u274C\u2B50\u2714\u2716\u20E3]|\uFE0F)+)"
-)
+#: Cached leading-glyph matcher (see _glyph_matcher).
+_GLYPH_MATCHER: re.Pattern[str] | None = None
 
 #: Names of locals that accumulate keyboard rows: `rows.append([(label,
 #: data)])` is how most panels are built, and the callback-data element is
@@ -312,13 +309,26 @@ def _is_ui_copy(value: str) -> bool:
     return bool(re.search(r"[A-Za-zÀ-ž]{2,}", value))
 
 
+def _glyph_matcher() -> re.Pattern[str]:
+    """The leading-glyph matcher, taken from the style layer.
+
+    Shared rather than copied: the two private copies this replaces had
+    already drifted, and both missed U+2139, so an "ℹ️ Retry" label looked
+    undecorated to the audit while the style layer considered it decorated.
+    """
+    global _GLYPH_MATCHER
+    if _GLYPH_MATCHER is None:
+        _GLYPH_MATCHER = re.compile(r"^\s*(" + _style_module().GLYPH_TOKEN + ")")
+    return _GLYPH_MATCHER
+
+
 def _leading_glyph(value: str) -> str:
     """The literal leading glyph of a label, NOT canonicalised.
 
     Deliberately raw: canonicalising here would hide exactly the drift this
     audit exists to catch (``"✖ Cancel"`` rather than ``"❌ Cancel"``).
     """
-    match = GLYPH.match(value or "")
+    match = _glyph_matcher().match(value or "")
     return match.group(1) if match else ""
 
 
@@ -588,13 +598,16 @@ def button_style_findings(
     return findings
 
 
-def decoration_parity_findings(
-    catalog: dict[str, dict[str, str]], button_keys: set[str]
-) -> list[str]:
-    """A button key's leading glyph must match the reference in all locales."""
+def decoration_parity_findings(catalog: dict[str, dict[str, str]]) -> list[str]:
+    """Every key's leading glyph must match the reference in all locales.
+
+    Catalog-wide, not just for button keys: the glyph belongs to the key, so a
+    key wearing 👋 in nine locales and nothing in the tenth — or an emoji a bad
+    write mangled into U+FFFD — is the same defect wherever it is rendered.
+    """
     reference = catalog.get(REFERENCE, {})
     findings: list[str] = []
-    for key in sorted(button_keys):
+    for key in sorted(reference):
         reference_glyph = _leading_glyph(reference.get(key, ""))
         for lang in SUPPORTED_LANGUAGES:
             if lang == REFERENCE or key not in catalog.get(lang, {}):
@@ -604,6 +617,24 @@ def decoration_parity_findings(
                 findings.append(
                     f"bot/{lang}/{key}: decoration differs from the reference "
                     f"({REFERENCE}={reference_glyph!r}, {lang}={glyph!r})"
+                )
+    return findings
+
+
+def catalog_decoration_findings(catalog: dict[str, dict[str, str]]) -> list[str]:
+    """No catalog value may carry the same glyph twice ("❌ ❌ Cancel").
+
+    The render funnel collapses a doubled glyph for buttons, but the value is
+    still wrong: it loses its first characters wherever it is rendered as copy
+    (a message block is never re-run through the button funnel).
+    """
+    repeated = _style_module().REPEATED_GLYPH
+    findings: list[str] = []
+    for lang in SUPPORTED_LANGUAGES:
+        for key, value in sorted(catalog.get(lang, {}).items()):
+            if isinstance(value, str) and repeated.match(value):
+                findings.append(
+                    f"bot/{lang}/{key}: doubled leading glyph — {value[:40]!r}"
                 )
     return findings
 
@@ -627,14 +658,34 @@ def audit_bot_button_style() -> None:
         source = p.read_text(encoding="utf-8")
         findings.extend(button_style_findings(source, catalog, _relative(p)))
         button_keys |= button_keys_used(source)
-    findings.extend(decoration_parity_findings(catalog, button_keys))
+    findings.extend(decoration_parity_findings(catalog))
+    findings.extend(catalog_encoding_findings(catalog))
+    findings.extend(catalog_decoration_findings(catalog))
     if findings:
         failures.extend(findings)
         return
     print(
         f"PASS button style: {len(button_keys)} button keys, one canonical glyph "
-        f"in all {len(SUPPORTED_LANGUAGES)} locales"
+        f"per catalog key in all {len(SUPPORTED_LANGUAGES)} locales"
     )
+
+
+def catalog_encoding_findings(catalog: dict[str, dict[str, str]]) -> list[str]:
+    """No locale may carry the Unicode replacement character.
+
+    U+FFFD in a value means an emoji was destroyed by an encoding round-trip
+    somewhere upstream; it renders as a black diamond question mark for every
+    user of that language and no parity check on *keys* would notice.
+    """
+    findings: list[str] = []
+    for lang in SUPPORTED_LANGUAGES:
+        for key, value in sorted(catalog.get(lang, {}).items()):
+            if isinstance(value, str) and "\ufffd" in value:
+                findings.append(
+                    f"bot/{lang}/{key}: contains U+FFFD (mangled character) — "
+                    f"restore the intended glyph"
+                )
+    return findings
 
 
 # --------------------------------------------------------------------------- #

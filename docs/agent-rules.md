@@ -94,6 +94,19 @@ Inside parenthesized multiline strings `(...)` in Python:
 - **Colour is semantic, not decorative.** Only destructive/positive/primary classes
   are painted; `_kbd()` derives the colour from the rendered glyph and an explicit
   third tuple element `(label, data, "danger")` always wins.
+- **Decoration belongs to the key, not to the locale** — every locale must wear the
+  same leading glyph for the same key, catalog-wide (not only on buttons), and no
+  value may carry the same glyph twice or contain U+FFFD from a bad encoding
+  round-trip. A greeting emoji moved to the end of the line (`"… kelibsiz! 👋"`)
+  leaves that language with an undecorated title and is a defect.
+- **The glyph class is published, not copied.** `ui_styles.GLYPH_TOKEN` is the one
+  character class; the cross-language audit matches the same set. Two private copies
+  had drifted and both missed `ℹ` (U+2139), so `"ℹ️ Settings"` read as undecorated
+  copy and got a second glyph glued in front. Box drawing (`━━━`) is deliberately
+  excluded — a separator rule is layout, not decoration.
+- **Decoration preserves whitespace.** A value may open with a newline
+  (`"\n⚠️ *Reply … will not work*"`); the glyph is inserted *after* the leading
+  whitespace, never in front of it, and the body is never stripped.
 - **Two style layers exist and must not be confused:** `button_style.py` is the raw
   `keyboardButtonStyle` wire encoder; `ui_styles.py` is the vocabulary on top of it.
 
@@ -124,7 +137,8 @@ Before pushing changes or submitting PRs, agents must run and pass the following
    copy in **any** non-reference script (Persian, Cyrillic, Han, Kana, Hangul,
    Hebrew, Thai, Devanagari) beyond the pinned baseline, (5) no language-code
    branching, (6) every button label resolves through the catalog, (7) button
-   decoration parity — one canonical glyph, identical in all 10 locales — (8) no
+   decoration parity — one canonical glyph, identical in all 10 locales, for every
+   catalog key and not just buttons, with no doubled glyph and no U+FFFD — (8) no
    literal callback/toast copy, (9) locale isolation on every registered handler,
    (10) every static `_t()`/`_btn()` key exists. `--report` prints the button-label
    inventory per file (labels / catalog-resolved / hardcoded).*
