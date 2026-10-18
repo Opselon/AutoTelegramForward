@@ -16,6 +16,8 @@ assertions are about what the CLI actually prints.
 """
 from __future__ import annotations
 
+import io
+import json
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -24,6 +26,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from atfcli.commands import data as cli_data  # noqa: E402
+from atfcli.console import Console  # noqa: E402
 
 
 class _Out:
@@ -201,3 +204,60 @@ def test_purge_reports_the_count_or_the_failure() -> None:
     ctx = _Ctx(_Api(delete=lambda path: {"success": False, "error_code": "purge_failed"}))
     cli_data._dlq_purge(ctx, _Args())
     assert any("purge failed" in line for line in ctx.out.lines)
+
+
+def _json_ctx(api: _Api) -> Tuple[_Ctx, io.StringIO]:
+    """A context whose `out` is the real Console in --json mode.
+
+    `--json` promises exactly one JSON document on stdout. The refusal paths
+    reported through `out.line`, which the Console suppresses in JSON mode, so a
+    refused replay printed nothing at all — a script waiting for a result body
+    got an empty stream and a zero exit code.
+    """
+    ctx = _Ctx(api)
+    buffer = io.StringIO()
+    ctx.out = Console(json_mode=True, stream=buffer, color=False)
+    return ctx, buffer
+
+
+def test_a_refused_replay_still_emits_one_json_document() -> None:
+    ctx, buffer = _json_ctx(
+        _Api(post=lambda path, payload=None: {
+            "success": False, "message": "not_found", "error_code": "not_found",
+        }),
+    )
+    cli_data._dlq_retry(ctx, _Args(id="dlq_job-42"))
+
+    payload = json.loads(buffer.getvalue())  # exactly one document, or it raises
+    assert payload["success"] is False
+    assert payload["error_code"] == "not_found"
+
+
+def test_a_body_without_a_result_flag_still_emits_json() -> None:
+    ctx, buffer = _json_ctx(
+        _Api(post=lambda path, payload=None: {"message": "not_found"}),
+    )
+    cli_data._dlq_retry(ctx, _Args(id="dlq_job-42"))
+
+    payload = json.loads(buffer.getvalue())
+    assert payload == {"message": "not_found"}
+
+
+def test_a_refused_purge_still_emits_one_json_document() -> None:
+    ctx, buffer = _json_ctx(
+        _Api(delete=lambda path: {"success": False, "error_code": "purge_failed"}),
+    )
+    cli_data._dlq_purge(ctx, _Args())
+
+    payload = json.loads(buffer.getvalue())
+    assert payload["success"] is False
+
+
+def test_a_successful_replay_emits_one_json_document_too() -> None:
+    ctx, buffer = _json_ctx(
+        _Api(post=lambda path, payload=None: {"success": True, "message": "requeued"}),
+    )
+    cli_data._dlq_retry(ctx, _Args(id="dlq_job-42"))
+
+    payload = json.loads(buffer.getvalue())
+    assert payload["success"] is True
