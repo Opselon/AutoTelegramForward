@@ -600,6 +600,30 @@ class ProBotUI:
         cur_lang = lang or _BOT_RENDER_LANGUAGE.get() or "en"
         return self.i18n.t(key, lang=cur_lang, **kw)
 
+    def _login_fail_text(self, code: str, detail: str = "", lang: Optional[str] = None) -> str:
+        """The user-facing line for a LoginFlowManager failure code.
+
+        A `LoginFlowManager` result is `"<code>"` or `"<code>:<detail>"`, and the
+        code is an internal identifier. Two rules, both of which the old
+        `self._t(f"ui_login_fail_{key}")` broke:
+
+        * a failure the user cannot read is a failure they cannot act on — so a
+          code with no catalog entry falls back to the generic line, never to the
+          raw key; and
+        * no internal detail belongs on screen — `detail` carries exception text
+          (`send_failed:TimeoutError: ...`), so it goes to the log, not the chat.
+        """
+        key = f"ui_login_fail_{code}"
+        if self.i18n.contains(key):
+            # `error` is the one value a login message may show: the seconds of
+            # a cooldown or a flood wait. A key that does not use it ignores the
+            # argument, so nothing else can reach the screen through this.
+            return self._t(key, lang=lang, error=detail)
+        logger.error("no catalog entry for login failure code %r; using the generic line", code)
+        if detail:
+            logger.debug("login failure detail for code %r: %s", code, detail)
+        return self._t("ui_login_fail", lang=lang)
+
     @staticmethod
     async def _safe_edit(target, text: str, reply_markup=None, **kw) -> None:
         """edit_message_text without the MESSAGE_NOT_MODIFIED traceback spam.
@@ -4978,9 +5002,9 @@ class ProBotUI:
             result = await self._login.start(uid, LoginFlowManager.normalize_phone(phone))
             await cq.answer()
             if result != "send_code":
-                key, _, detail = result.partition(":")
+                code, _, detail = result.partition(":")
                 return await cq.message.edit_text(
-                    self._t(f"ui_login_fail_{key}", error=detail),
+                    self._login_fail_text(code, detail, lang=self._lang_for(st)),
                     reply_markup=self._cancel_kbd())
             st.step = "login_code"
             if not isinstance(st.buffer, dict):
@@ -10033,7 +10057,7 @@ class ProBotUI:
             except Exception:
                 pass
             await message.reply_text(
-                self._t("ui_login_code_error", lang=lang, error=f"{type(exc).__name__}: {exc}"),
+                self._t("ui_login_code_error", lang=lang),
                 reply_markup=self._cancel_kbd(),
             )
             return
@@ -10041,7 +10065,7 @@ class ProBotUI:
         logger.info("LoginFlow.start returned result=%r for uid=%s", result, uid)
 
         if result != "send_code":
-            key, _, detail = result.partition(":")
+            code, _, detail = result.partition(":")
             err_msg = f"send_code failed for {phone}: {result}"
             logger.error(err_msg)
             try:
@@ -10049,12 +10073,9 @@ class ProBotUI:
             except Exception:
                 pass
 
-            # Safe translation lookup with fallback
-            trans_key = f"ui_login_fail_{key}"
-            try:
-                fail_text = self._t(trans_key, error=detail)
-            except Exception:
-                fail_text = self._t("ui_login_send_fail", result=result)
+            # A code with no catalog entry gets the generic line, never the raw
+            # key; the detail is internal (exception text) and stays in the log.
+            fail_text = self._login_fail_text(code, detail, lang=lang)
 
             await message.reply_text(fail_text, reply_markup=self._cancel_kbd())
             return
@@ -10153,7 +10174,10 @@ class ProBotUI:
             result = await self._login.submit_code(uid, clean_code)
         except Exception as exc:
             logger.exception("submit_code failed for uid=%s: %s", uid, exc)
-            await message.reply_text(self._t("ui_login_code_verify_error", type=type(exc).__name__, exc=exc), reply_markup=self._cancel_kbd())
+            await message.reply_text(
+                self._t("ui_login_code_verify_error", lang=lang),
+                reply_markup=self._cancel_kbd(),
+            )
             return
 
         logger.info("submit_code result for uid=%s: %r", uid, result)
@@ -10174,7 +10198,10 @@ class ProBotUI:
             result = await self._login.submit_password(uid, text)
         except Exception as exc:
             logger.exception("submit_password failed for uid=%s: %s", uid, exc)
-            await message.reply_text(self._t("ui_login_2fa_verify_error", type=type(exc).__name__, exc=exc), reply_markup=self._cancel_kbd())
+            await message.reply_text(
+                self._t("ui_login_2fa_verify_error", lang=self._lang_for(st)),
+                reply_markup=self._cancel_kbd(),
+            )
             return
         await self._finish_login(message, st, result, uid=uid)
 
@@ -10223,9 +10250,9 @@ class ProBotUI:
                 reply_markup=self._main_menu(),
             )
         else:
-            key, _, detail = result.partition(":")
+            code, _, detail = result.partition(":")
             await message.reply_text(
-                self._t("ui_login_fail", lang=lang, error=detail or key),
+                self._login_fail_text(code, detail, lang=lang),
                 reply_markup=self._main_menu(),
             )
 
