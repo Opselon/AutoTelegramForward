@@ -33,6 +33,7 @@ import {
   HeartPulse,
   Cable,
   Database,
+  ListTodo,
   Download,
   Upload,
   ShieldAlert,
@@ -47,6 +48,7 @@ import { AuditEventsPanel } from './components/AuditEventsPanel'
 import { ClientSettings } from './components/ClientSettings'
 import { TaskOverviewModal } from './components/TaskOverviewModal'
 import { DiagnosticsPanel } from './components/DiagnosticsPanel'
+import { JobsPanel } from './components/JobsPanel'
 import { LogPolicyPanel } from './components/LogPolicyPanel'
 import { SystemPanel } from './components/SystemPanel'
 import type {
@@ -205,7 +207,7 @@ export function App() {
   useEffect(() => {
     try { localStorage.setItem('atf_lang', lang) } catch { /* ignore */ }
   }, [lang])
-  const [activeTab, setActiveTab] = useState<'system' | 'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('system')
+  const [activeTab, setActiveTab] = useState<'system' | 'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'jobs' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('system')
   const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(null)
   const [rules, setRules] = useState<ForwardRule[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
@@ -222,6 +224,8 @@ export function App() {
   const [ruleLiveStats, setRuleLiveStats] = useState<RuleLiveStat[]>([])
   const [recentErrors, setRecentErrors] = useState<RecentError[]>([])
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResponse | null>(null)
+  // Pending jobs badge for the "My Jobs" tab (from the panel's poll).
+  const [jobsPending, setJobsPending] = useState(0)
   const [diagLoading, setDiagLoading] = useState(false)
 
   const refreshDiagnostics = async () => {
@@ -1436,6 +1440,27 @@ export function App() {
           {dlqJobs.length > 0 && (
             <span style={{ background: '#ef4444', color: '#fff', borderRadius: '50%', padding: '1px 6px', fontSize: '0.7rem' }}>
               {dlqJobs.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('jobs')}
+          className="btn"
+          style={{
+            background: activeTab === 'jobs' ? 'rgba(20, 184, 166, 0.2)' : 'transparent',
+            color: activeTab === 'jobs' ? '#2dd4bf' : '#94a3b8',
+            border: '1px solid rgba(20, 184, 166, 0.4)',
+            fontWeight: activeTab === 'jobs' ? 700 : 500,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <ListTodo size={15} />
+          <span>{isRtl ? 'وظایف من' : 'My Jobs'}</span>
+          {jobsPending > 0 && (
+            <span style={{ background: '#14b8a6', color: '#fff', borderRadius: '50%', padding: '1px 6px', fontSize: '0.7rem' }}>
+              {jobsPending}
             </span>
           )}
         </button>
@@ -3742,6 +3767,13 @@ export function App() {
       )}
 
       {/* TAB 8: ADMIN CONTROL PLANE */}
+      {activeTab === 'jobs' && (
+        <JobsPanel
+          lang={lang}
+          onPendingChange={setJobsPending}
+        />
+      )}
+
       {activeTab === 'audit' && (
         <AuditEventsPanel lang={lang} />
       )}

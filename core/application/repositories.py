@@ -686,3 +686,83 @@ class ISettingsRepository(ABC):
     @abstractmethod
     async def set(self, key: str, value: str) -> None:
         ...
+
+
+class ITaskRepository(ABC):
+    """Durable per-user task store. Ownership is part of every row."""
+
+    @abstractmethod
+    async def add(self, task: Any) -> Any:
+        ...
+
+    @abstractmethod
+    async def insert_if_absent(self, task: Any) -> Optional[Any]:
+        """Insert honoring the (owner, kind, idempotency_key) uniqueness.
+
+        Returns the task that now owns that key — the freshly inserted one or
+        the pre-existing row under a duplicate-key race.
+        """
+
+    @abstractmethod
+    async def get(self, task_id: str) -> Optional[Any]:
+        ...
+
+    @abstractmethod
+    async def list_for_owner(
+        self, owner_user_id: int, status: str = "", kind: str = "",
+        limit: int = 50, offset: int = 0,
+    ) -> List[Any]:
+        ...
+
+    @abstractmethod
+    async def count_for_owner(
+        self, owner_user_id: int, status: str = "", kind: str = "",
+    ) -> int:
+        ...
+
+    @abstractmethod
+    async def replace(self, task: Any) -> Any:
+        ...
+
+    @abstractmethod
+    async def acquire_next(
+        self, lease_token: str, lease_until: int, now: int,
+    ) -> Optional[Any]:
+        """Atomically claim one runnable task (PENDING/RETRY_WAIT, run_at due).
+
+        Sets status=RUNNING and stamps the lease in the same statement so two
+        workers can never hold the same task.
+        """
+
+    @abstractmethod
+    async def renew_lease(self, task_id: str, token: str, lease_until: int) -> bool:
+        ...
+
+    @abstractmethod
+    async def reclaim_expired(self, now: int) -> int:
+        """Return expired RUNNING leases to RETRY_WAIT so a crashed worker
+        cannot hold task state hostage."""
+
+    @abstractmethod
+    async def finish_succeeded(self, task_id: str, token: str, result_json: str,
+                               now: int) -> bool:
+        """Commit SUCCEEDED ONLY for the lease holder (conditional UPDATE)."""
+
+    @abstractmethod
+    async def finish_failed(self, task_id: str, token: str, error: str,
+                            error_code: str, now: int) -> bool:
+        ...
+
+    @abstractmethod
+    async def pause_for_retry(self, task_id: str, token: str, run_at: int,
+                              error: str, error_code: str, now: int) -> bool:
+        """Return a RUNNING task to RETRY_WAIT (holder-checked), clearing the
+        lease so another worker can pick it up after the backoff."""
+
+    @abstractmethod
+    async def cancel_queued(self, task_id: str, owner_user_id: int,
+                            now: int) -> bool:
+        """CANCELLED while still PENDING. One conditional UPDATE against the
+        owner wins the race with a worker's claim: whoever commits first,
+        the other sees the new state."""
+

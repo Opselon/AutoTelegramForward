@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 from ...application.repositories import (
     ConcurrencyError,
+    ITaskRepository,
     IDeliveryQueueRepository,
     IForwardRuleRepository,
     IMessageMapRepository,
@@ -26,6 +27,7 @@ from ...application.repositories import (
 )
 from ...domain.entities import (
     ContentMode,
+    UserTask,
     DeliveryJob,
     DeliveryStatus,
     ForwardMode,
@@ -1556,4 +1558,198 @@ async def initialize_postgres_schema(db: Any) -> None:
 
 
 
+
+
+
+class PostgresUserTaskRepository(ITaskRepository):
+    """UserTask repository for the PostgreSQL engine (same contract as the
+    SQLite one: atomic claim via UPDATE ... RETURNING, partial idempotency
+    index)."""
+
+    def __init__(self, db: PostgresConnection) -> None:
+        self._db = db
+
+    @staticmethod
+    def _row_to_entity(row: Any) -> UserTask:
+        d = dict(row) if hasattr(row, "keys") else dict(zip(
+            ["id", "owner_user_id", "kind", "status", "idempotency_key", "attempt",
+             "max_attempts", "lease_token", "lease_until", "run_at", "payload_json",
+             "result_json", "error", "error_code", "created_at", "updated_at",
+             "started_at", "finished_at"], row)) if not hasattr(row, "keys") else dict(row)
+        return UserTask(
+            id=d["id"], owner_user_id=int(d["owner_user_id"]), kind=d["kind"],
+            status=d["status"], idempotency_key=d["idempotency_key"],
+            attempt=int(d["attempt"]), max_attempts=int(d["max_attempts"]),
+            lease_token=d.get("lease_token", ""), lease_until=int(d.get("lease_until") or 0),
+            run_at=int(d.get("run_at") or 0), payload_json=d.get("payload_json") or "{}",
+            result_json=d.get("result_json") or "", error=d.get("error") or "",
+            error_code=d.get("error_code") or "",
+            created_at=int(d["created_at"]), updated_at=int(d["updated_at"]),
+            started_at=int(d.get("started_at") or 0), finished_at=int(d.get("finished_at") or 0),
+        )
+
+    @staticmethod
+    def _params(task: UserTask) -> tuple:
+        return (
+            task.id, int(task.owner_user_id), task.kind, task.status,
+            task.idempotency_key, int(task.attempt), int(task.max_attempts),
+            task.lease_token, int(task.lease_until), int(task.run_at),
+            task.payload_json, task.result_json, task.error, task.error_code,
+            int(task.created_at), int(task.updated_at),
+            int(task.started_at), int(task.finished_at),
+        )
+
+    async def add(self, task: UserTask) -> UserTask:
+        await _execute_db(
+            self._db,
+            "INSERT INTO user_tasks (id, owner_user_id, kind, status, idempotency_key,"
+            " attempt, max_attempts, lease_token, lease_until, run_at, payload_json,"
+            " result_json, error, error_code, created_at, updated_at, started_at, finished_at)"
+            " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            self._params(task),
+        )
+        return task
+
+    async def insert_if_absent(self, task: UserTask) -> Optional[UserTask]:
+        try:
+            return await self.add(task)
+        except Exception as exc:  # unique violation on the partial idempotency index
+            if "already exists" in str(exc) or "duplicate key" in str(exc):
+                row = await _fetch_one_db(
+                    self._db,
+                    "SELECT * FROM user_tasks WHERE owner_user_id=%s AND kind=%s"
+                    " AND idempotency_key=%s",
+                    (int(task.owner_user_id), task.kind, task.idempotency_key),
+                )
+                return self._row_to_entity(row) if row else task
+            raise
+
+    async def get(self, task_id: str) -> Optional[UserTask]:
+        row = await _fetch_one_db(self._db, "SELECT * FROM user_tasks WHERE id=%s", (task_id,))
+        return self._row_to_entity(row) if row else None
+
+    async def list_for_owner(self, owner_user_id: int, status: str = "",
+                             kind: str = "", limit: int = 50,
+                             offset: int = 0) -> List[UserTask]:
+        conds, params = ["owner_user_id=%s"], [int(owner_user_id)]
+        if status:
+            conds.append("status=%s"); params.append(status)
+        if kind:
+            conds.append("kind=%s"); params.append(kind)
+        params += [max(1, min(int(limit), 200)), max(0, int(offset))]
+        rows = await _fetch_all_db(
+            self._db,
+            "SELECT * FROM user_tasks WHERE " + " AND ".join(conds) +
+            " ORDER BY created_at DESC, id LIMIT %s OFFSET %s",
+            tuple(params),
+        )
+        return [self._row_to_entity(r) for r in rows] if rows else []
+
+    async def count_for_owner(self, owner_user_id: int, status: str = "",
+                              kind: str = "") -> int:
+        conds, params = ["owner_user_id=%s"], [int(owner_user_id)]
+        if status:
+            conds.append("status=%s"); params.append(status)
+        if kind:
+            conds.append("kind=%s"); params.append(kind)
+        row = await _fetch_one_db(
+            self._db, "SELECT COUNT(*) AS n FROM user_tasks WHERE " + " AND ".join(conds),
+            tuple(params),
+        )
+        if row is None:
+            return 0
+        d = dict(row) if hasattr(row, "keys") else row
+        return int(d["n"] if hasattr(d, "__getitem__") else 0)
+
+    async def replace(self, task: UserTask) -> UserTask:
+        await _execute_db(
+            self._db,
+            "UPDATE user_tasks SET owner_user_id=%s, kind=%s, status=%s, idempotency_key=%s,"
+            " attempt=%s, max_attempts=%s, lease_token=%s, lease_until=%s, run_at=%s,"
+            " payload_json=%s, result_json=%s, error=%s, error_code=%s, created_at=%s,"
+            " updated_at=%s, started_at=%s, finished_at=%s WHERE id=%s",
+            self._params(task)[1:] + (task.id,),
+        )
+        return task
+
+    async def acquire_next(self, lease_token: str, lease_until: int,
+                           now: int) -> Optional[UserTask]:
+        row = await _fetch_one_db(
+            self._db,
+            "UPDATE user_tasks SET status='RUNNING', attempt=attempt+1, lease_token=%s,"
+            " lease_until=%s, started_at=%s, updated_at=%s WHERE id IN ("
+            " SELECT id FROM user_tasks WHERE status IN ('PENDING','RETRY_WAIT')"
+            " AND run_at<=%s ORDER BY created_at, id LIMIT 1) RETURNING *",
+            (lease_token, int(lease_until), int(now), int(now), int(now)),
+        )
+        return self._row_to_entity(row) if row else None
+
+    async def renew_lease(self, task_id: str, token: str, lease_until: int) -> bool:
+        result = await _execute_db(
+            self._db,
+            "UPDATE user_tasks SET lease_until=%s WHERE id=%s AND lease_token=%s"
+            " AND status='RUNNING'",
+            (int(lease_until), task_id, token),
+        )
+        return "UPDATE 1" in str(result) if isinstance(result, str) else bool(result)
+
+    async def reclaim_expired(self, now: int) -> int:
+        result = await _execute_db(
+            self._db,
+            "UPDATE user_tasks SET status=CASE WHEN attempt>=max_attempts THEN 'FAILED'"
+            " ELSE 'RETRY_WAIT' END,"
+            " lease_token='', lease_until=0,"
+            " run_at=CASE WHEN attempt>=max_attempts THEN run_at ELSE %s END,"
+            " finished_at=CASE WHEN attempt>=max_attempts THEN %s ELSE 0 END,"
+            " updated_at=%s,"
+            " error='reclaimed from an expired worker lease', error_code='lease_expired'"
+            " WHERE status='RUNNING' AND lease_until>0 AND lease_until<=%s",
+            (int(now), int(now), int(now), int(now)),
+        )
+        if isinstance(result, str) and "UPDATE " in result:
+            try:
+                return int(result.split("UPDATE ")[1])
+            except (IndexError, ValueError):
+                pass
+        return 0
+
+    async def finish_succeeded(self, task_id: str, token: str, result_json: str,
+                               now: int) -> bool:
+        result = await _execute_db(
+            self._db,
+            "UPDATE user_tasks SET status='SUCCEEDED', result_json=%s, finished_at=%s,"
+            " updated_at=%s, lease_token='', lease_until=0"
+            " WHERE id=%s AND lease_token=%s AND status='RUNNING'",
+            (result_json, int(now), int(now), task_id, token))
+        return "UPDATE 1" in str(result) if isinstance(result, str) else bool(result)
+
+    async def finish_failed(self, task_id: str, token: str, error: str,
+                            error_code: str, now: int) -> bool:
+        result = await _execute_db(
+            self._db,
+            "UPDATE user_tasks SET status='FAILED', error=%s, error_code=%s,"
+            " finished_at=%s, updated_at=%s, lease_token='', lease_until=0"
+            " WHERE id=%s AND lease_token=%s AND status='RUNNING'",
+            (error, error_code, int(now), int(now), task_id, token))
+        return "UPDATE 1" in str(result) if isinstance(result, str) else bool(result)
+
+    async def pause_for_retry(self, task_id: str, token: str, run_at: int,
+                              error: str, error_code: str, now: int) -> bool:
+        result = await _execute_db(
+            self._db,
+            "UPDATE user_tasks SET status='RETRY_WAIT', error=%s, error_code=%s,"
+            " run_at=%s, lease_token='', lease_until=0, updated_at=%s"
+            " WHERE id=%s AND lease_token=%s AND status='RUNNING'",
+            (error, error_code, int(run_at), int(now), task_id, token))
+        return "UPDATE 1" in str(result) if isinstance(result, str) else bool(result)
+
+    async def cancel_queued(self, task_id: str, owner_user_id: int,
+                            now: int) -> bool:
+        result = await _execute_db(
+            self._db,
+            "UPDATE user_tasks SET status='CANCELLED', finished_at=%s, updated_at=%s,"
+            " error='', error_code='cancelled', lease_token='', lease_until=0"
+            " WHERE id=%s AND owner_user_id=%s AND status='PENDING'",
+            (int(now), int(now), task_id, int(owner_user_id)))
+        return "UPDATE 1" in str(result) if isinstance(result, str) else bool(result)
 

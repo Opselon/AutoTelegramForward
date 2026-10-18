@@ -44,6 +44,8 @@ type Clients struct {
 	Audit    pb.AuditControlServiceClient
 	// Bot route credentials: the bots a tenant forwards *as*.
 	BotTokens pb.BotTokenControlServiceClient
+	// Per-user task lifecycle (API-first phase 2).
+	Tasks pb.TaskControlServiceClient
 }
 
 // NewClients bundles the core service stubs.
@@ -60,6 +62,7 @@ func NewClients(conn *grpc.ClientConn) *Clients {
 		Admin:     pb.NewAdminControlServiceClient(conn),
 		Audit:     pb.NewAuditControlServiceClient(conn),
 		BotTokens: pb.NewBotTokenControlServiceClient(conn),
+		Tasks:     pb.NewTaskControlServiceClient(conn),
 	}
 }
 

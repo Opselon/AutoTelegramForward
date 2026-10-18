@@ -973,3 +973,41 @@ export interface RuleSettingsResponse {
   sources?: Record<string, SettingSourceInfo>
   requested?: number
 }
+
+
+// ------------------------------------------------ Per-user task lifecycle
+// (server-driven; mirrors the proto UserTask — see docs/openapi.yaml)
+
+export type TaskKind = 'session.backup' | 'dlq.replay' | 'dlq.purge' | 'backup.export'
+
+export type TaskStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'RETRY_WAIT'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELLED'
+
+export interface UserTask {
+  id: string
+  kind: TaskKind
+  status: TaskStatus
+  idempotency_key: string
+  attempt: number
+  max_attempts: number
+  payload: Record<string, any>
+  result: Record<string, any>
+  error: string
+  error_code: string
+  created_at: number
+  updated_at: number
+  started_at: number
+  finished_at: number
+}
+
+export interface UserTaskPage {
+  tasks: UserTask[]
+  total: number
+  limit: number
+  offset: number
+}

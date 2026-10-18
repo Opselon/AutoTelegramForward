@@ -321,6 +321,16 @@ const apiGroups = [
     ],
   },
   {
+    group: 'Task lifecycle (async jobs)',
+    endpoints: [
+      ['GET', '/api/tasks', "List the caller's async jobs (state machine, tenant-scoped)"],
+      ['POST', '/api/tasks', 'Submit an async job (session backup, DLQ replay/purge, backup export); idempotent via idempotency_key'],
+      ['GET', '/api/tasks/{id}', 'Poll one job: state, attempt, timestamps, structured error details'],
+      ['POST', '/api/tasks/{id}/cancel', 'Cancel a queued job before a worker claims it'],
+      ['POST', '/api/tasks/{id}/retry', 'Re-queue a failed job (attempt budget reset)'],
+    ],
+  },
+  {
     group: 'Sessions',
     endpoints: [
       ['GET', '/api/sessions', "List the caller's Telegram sessions"],

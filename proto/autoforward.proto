@@ -1311,3 +1311,94 @@ service BotTokenControlService {
   rpc GetBotDefaults(GetBotDefaultsRequest) returns (BotDefaultsResponse);
   rpc SetBotDefaults(SetBotDefaultsRequest) returns (BotDefaultsResponse);
 }
+
+// -----------------------------------------------------------------------------
+// Per-user task lifecycle (API-first phase 2). The Go API owns creation and
+// control; Core executes the task through the same domain paths the
+// synchronous RPCs already use. The authoritative state lives in the
+// database (PostgreSQL/SQLite); Redis never holds task state.
+// -----------------------------------------------------------------------------
+
+message UserTask {
+  string id = 1;
+  int64 owner_user_id = 2;
+  string kind = 3;
+  string status = 4;          // PENDING RUNNING RETRY_WAIT SUCCEEDED FAILED CANCELLED
+  string idempotency_key = 5;
+  int32 attempt = 6;
+  int32 max_attempts = 7;
+  string payload_json = 8;
+  string result_json = 9;
+  string error = 10;
+  string error_code = 11;
+  int64 created_at = 12;
+  int64 updated_at = 13;
+  int64 started_at = 14;
+  int64 finished_at = 15;
+}
+
+message CreateTaskRequest {
+  // Tenant resolved from the verified JWT by the Go API. 0 = refuse.
+  int64 owner_user_id = 1;
+  string kind = 2;
+  string payload_json = 3;
+  // Optional client key: resubmitting the same (owner, kind, key) returns the
+  // already-created task instead of a duplicate.
+  string idempotency_key = 4;
+  int32 max_attempts = 5;    // 0 = service default (3); clamped server-side
+}
+
+message CreateTaskResponse {
+  bool success = 1;
+  string error = 2;
+  string error_code = 3;
+  UserTask task = 4;
+  // true when the key matched an existing task: callers dedupe on this.
+  bool already_existed = 5;
+}
+
+message GetTaskRequest {
+  string task_id = 1;
+  int64 owner_user_id = 2;   // fail-closed tenant scope (0 = refuse)
+}
+
+message TaskResponse {
+  bool success = 1;
+  string error = 2;
+  string error_code = 3;
+  UserTask task = 4;
+}
+
+message ListTasksRequest {
+  int64 owner_user_id = 1;   // fail-closed tenant scope (0 = refuse)
+  string status = 2;         // optional filter, must be a valid state
+  string kind = 3;           // optional filter, must be a known kind
+  int32 limit = 4;           // 1..200, default 50
+  int32 offset = 5;
+}
+
+message ListTasksResponse {
+  bool success = 1;
+  string error = 2;
+  string error_code = 3;
+  repeated UserTask tasks = 4;
+  int32 total = 5;
+}
+
+message CancelTaskRequest {
+  string task_id = 1;
+  int64 owner_user_id = 2;
+}
+
+message RetryTaskRequest {
+  string task_id = 1;
+  int64 owner_user_id = 2;
+}
+
+service TaskControlService {
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+  rpc GetTask(GetTaskRequest) returns (TaskResponse);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc CancelTask(CancelTaskRequest) returns (TaskResponse);
+  rpc RetryTask(RetryTaskRequest) returns (TaskResponse);
+}

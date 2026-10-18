@@ -300,3 +300,27 @@ func (h *Handlers) SetupReport(w http.ResponseWriter, r *http.Request) {
 		"next_steps":          nextSteps,
 	})
 }
+
+// OpenAPIDoc serves the API's own contract at /api/openapi.yaml. The file is
+// baked into the image next to the code that serves it, so the published
+// document cannot drift from the binary (a copy in the website was exactly
+// the drift the Phase-2 audit found).
+func (h *Handlers) OpenAPIDoc(w http.ResponseWriter, r *http.Request) {
+	path := os.Getenv("ATF_OPENAPI_PATH")
+	if path == "" {
+		path = "/etc/atf/openapi.yaml"
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// Tests and dev runs read the repo copy relative to CWD.
+		data, err = os.ReadFile("docs/openapi.yaml")
+	}
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "openapi document unavailable", "error_code": "openapi_missing"})
+		return
+	}
+	w.Header().Set("Content-Type", "application/yaml")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = w.Write(data)
+}

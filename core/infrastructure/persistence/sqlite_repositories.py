@@ -6,6 +6,7 @@ swapped in the DI container — domain and application layers are untouched.
 
 import json
 import logging
+import sqlite3
 import time
 import uuid
 from typing import Any, Dict, List, Optional, Sequence
@@ -27,6 +28,7 @@ from ...application.repositories import (
     IForwardRuleRepository,
     IMessageMapRepository,
     IMetricsRepository,
+    ITaskRepository,
     IProcessedMessageRepository,
     IPromptRepository,
     IRuleStatsRepository,
@@ -38,6 +40,7 @@ from ...application.repositories import (
 from ...domain.entities import (
     AIConfig,
     DeliveryJob,
+    UserTask,
     DeliveryStatus,
     FilterRule,
     ForwardRule,
@@ -2354,3 +2357,202 @@ class SqliteChannelCursorRepository:
         # commits on success and rolls back only when a transaction is open,
         # never replacing the original error.
         self._db.run_in_transaction(_write)
+
+
+# --------------------------------------------------------------------------- #
+# Per-user task lifecycle (API-first phase 2)
+# --------------------------------------------------------------------------- #
+
+class SqliteUserTaskRepository(ITaskRepository):
+    """User tasks in the same authoritative database as every other tenant
+    resource. The worker-claim path is one UPDATE ... RETURNING so two workers
+    can never hold the same row."""
+
+    _COLS = (
+        "id, owner_user_id, kind, status, idempotency_key, attempt, max_attempts,"
+        " lease_token, lease_until, run_at, payload_json, result_json, error,"
+        " error_code, created_at, updated_at, started_at, finished_at"
+    )
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    def _row_to_entity(self, row) -> UserTask:
+        return UserTask(
+            id=row["id"],
+            owner_user_id=int(row["owner_user_id"]),
+            kind=row["kind"],
+            status=row["status"],
+            idempotency_key=row["idempotency_key"],
+            attempt=int(row["attempt"]),
+            max_attempts=int(row["max_attempts"]),
+            lease_token=row["lease_token"],
+            lease_until=int(row["lease_until"]),
+            run_at=int(row["run_at"]),
+            payload_json=row["payload_json"],
+            result_json=row["result_json"],
+            error=row["error"],
+            error_code=row["error_code"],
+            created_at=int(row["created_at"]),
+            updated_at=int(row["updated_at"]),
+            started_at=int(row["started_at"]),
+            finished_at=int(row["finished_at"]),
+        )
+
+    async def add(self, task: UserTask) -> UserTask:
+        self._db.execute(
+            f"INSERT INTO user_tasks ({self._COLS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            self._params(task),
+        )
+        return task
+
+    async def insert_if_absent(self, task: UserTask) -> Optional[UserTask]:
+        def _tx(conn):
+            try:
+                conn.execute(
+                    f"INSERT INTO user_tasks ({self._COLS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    self._params(task),
+                )
+                return task
+            except sqlite3.IntegrityError:
+                # The idempotency race lost: return the row that owns the key.
+                row = conn.execute(
+                    "SELECT * FROM user_tasks WHERE owner_user_id=? AND kind=? AND idempotency_key=?",
+                    (int(task.owner_user_id), task.kind, task.idempotency_key),
+                ).fetchone()
+                return self._row_to_entity(row) if row else task
+
+        out = self._db.run_in_transaction(_tx)
+        return out
+
+    @staticmethod
+    def _params(task: UserTask) -> tuple:
+        return (
+            task.id, int(task.owner_user_id), task.kind, task.status,
+            task.idempotency_key, int(task.attempt), int(task.max_attempts),
+            task.lease_token, int(task.lease_until), int(task.run_at),
+            task.payload_json, task.result_json, task.error, task.error_code,
+            int(task.created_at), int(task.updated_at),
+            int(task.started_at), int(task.finished_at),
+        )
+
+    async def get(self, task_id: str) -> Optional[UserTask]:
+        row = self._db.query_one("SELECT * FROM user_tasks WHERE id=?", (task_id,))
+        return self._row_to_entity(row) if row else None
+
+    async def list_for_owner(self, owner_user_id: int, status: str = "",
+                             kind: str = "", limit: int = 50,
+                             offset: int = 0) -> List[UserTask]:
+        conds, params = ["owner_user_id=?"], [int(owner_user_id)]
+        if status:
+            conds.append("status=?"); params.append(status)
+        if kind:
+            conds.append("kind=?"); params.append(kind)
+        params += [max(1, min(int(limit), 200)), max(0, int(offset))]
+        rows = self._db.query_all(
+            "SELECT * FROM user_tasks WHERE " + " AND ".join(conds) +
+            " ORDER BY created_at DESC, id LIMIT ? OFFSET ?",
+            tuple(params),
+        )
+        return [self._row_to_entity(r) for r in rows]
+
+    async def count_for_owner(self, owner_user_id: int, status: str = "",
+                              kind: str = "") -> int:
+        conds, params = ["owner_user_id=?"], [int(owner_user_id)]
+        if status:
+            conds.append("status=?"); params.append(status)
+        if kind:
+            conds.append("kind=?"); params.append(kind)
+        row = self._db.query_one(
+            "SELECT COUNT(*) AS n FROM user_tasks WHERE " + " AND ".join(conds),
+            tuple(params),
+        )
+        return int(row["n"]) if row else 0
+
+    async def replace(self, task: UserTask) -> UserTask:
+        self._db.execute(
+            "UPDATE user_tasks SET owner_user_id=?, kind=?, status=?, idempotency_key=?,"
+            " attempt=?, max_attempts=?, lease_token=?, lease_until=?, run_at=?,"
+            " payload_json=?, result_json=?, error=?, error_code=?, created_at=?,"
+            " updated_at=?, started_at=?, finished_at=? WHERE id=?",
+            self._params(task)[1:] + (task.id,),
+        )
+        return task
+
+    async def acquire_next(self, lease_token: str, lease_until: int,
+                           now: int) -> Optional[UserTask]:
+        def _tx(conn):
+            cur = conn.execute(
+                "UPDATE user_tasks SET status='RUNNING', attempt=attempt+1,"
+                " lease_token=?, lease_until=?, started_at=?, updated_at=?"
+                " WHERE id IN (SELECT id FROM user_tasks WHERE status IN ('PENDING','RETRY_WAIT')"
+                " AND run_at<=? ORDER BY created_at, id LIMIT 1)"
+                " RETURNING *",
+                (lease_token, int(lease_until), int(now), int(now), int(now)),
+            )
+            row = cur.fetchone()
+            return self._row_to_entity(row) if row else None
+
+        return self._db.run_in_transaction(_tx)
+
+    async def renew_lease(self, task_id: str, token: str, lease_until: int) -> bool:
+        cur = self._db.execute(
+            "UPDATE user_tasks SET lease_until=? WHERE id=? AND lease_token=?"
+            " AND status='RUNNING'",
+            (int(lease_until), task_id, token),
+        )
+        return cur.rowcount > 0
+
+    async def reclaim_expired(self, now: int) -> int:
+        # The attempt budget is respected on takeover too: a task whose
+        # attempts are exhausted must NOT cycle forever between a crashed
+        # worker and this reclaim; it settles as FAILED instead.
+        cur = self._db.execute(
+            "UPDATE user_tasks SET status=CASE WHEN attempt>=max_attempts THEN 'FAILED'"
+            " ELSE 'RETRY_WAIT' END,"
+            " lease_token='', lease_until=0,"
+            " run_at=CASE WHEN attempt>=max_attempts THEN run_at ELSE ? END,"
+            " finished_at=CASE WHEN attempt>=max_attempts THEN ? ELSE 0 END,"
+            " updated_at=?,"
+            " error='reclaimed from an expired worker lease', error_code='lease_expired'"
+            " WHERE status='RUNNING' AND lease_until>0 AND lease_until<=?",
+            (int(now), int(now), int(now), int(now)),
+        )
+        return cur.rowcount
+
+    async def finish_succeeded(self, task_id: str, token: str, result_json: str,
+                               now: int) -> bool:
+        cur = self._db.execute(
+            "UPDATE user_tasks SET status='SUCCEEDED', result_json=?, finished_at=?,"
+            " updated_at=?, lease_token='', lease_until=0"
+            " WHERE id=? AND lease_token=? AND status='RUNNING'",
+            (result_json, int(now), int(now), task_id, token))
+        return cur.rowcount > 0
+
+    async def finish_failed(self, task_id: str, token: str, error: str,
+                            error_code: str, now: int) -> bool:
+        cur = self._db.execute(
+            "UPDATE user_tasks SET status='FAILED', error=?, error_code=?,"
+            " finished_at=?, updated_at=?, lease_token='', lease_until=0"
+            " WHERE id=? AND lease_token=? AND status='RUNNING'",
+            (error, error_code, int(now), int(now), task_id, token))
+        return cur.rowcount > 0
+
+    async def pause_for_retry(self, task_id: str, token: str, run_at: int,
+                              error: str, error_code: str, now: int) -> bool:
+        cur = self._db.execute(
+            "UPDATE user_tasks SET status='RETRY_WAIT', error=?, error_code=?,"
+            " run_at=?, lease_token='', lease_until=0, updated_at=?"
+            " WHERE id=? AND lease_token=? AND status='RUNNING'",
+            (error, error_code, int(run_at), int(now), task_id, token))
+        return cur.rowcount > 0
+
+    async def cancel_queued(self, task_id: str, owner_user_id: int,
+                            now: int) -> bool:
+        cur = self._db.execute(
+            "UPDATE user_tasks SET status='CANCELLED', finished_at=?, updated_at=?,"
+            " error='', error_code='cancelled', lease_token='', lease_until=0"
+            " WHERE id=? AND owner_user_id=? AND status='PENDING'",
+            (int(now), int(now), task_id, int(owner_user_id)))
+        return cur.rowcount > 0
+
