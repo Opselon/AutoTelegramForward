@@ -320,3 +320,63 @@ func (h *Handlers) AuthMe(w http.ResponseWriter, r *http.Request) {
 		"now":      time.Now().UTC().Format(time.RFC3339),
 	})
 }
+
+// AuthBotLoginLink issues a fresh single-use dashboard login code for the
+// CALLER's own verified identity and returns the one-tap URL for it. This is
+// the reauthentication hand-off: the web dashboard (or any client) calls it
+// when the stored session is dead so the bot can be surfaced once, in a
+// localized message, instead of dumping the user into a redirect loop.
+//
+// AuthZ: only the JWT's own user id (never a body/query id) reaches Core;
+// the identity chain is ValidateToken -> user_id -> Account.IssueLoginCode.
+func (h *Handlers) AuthBotLoginLink(w http.ResponseWriter, r *http.Request) {
+	auth := r.Header.Get("Authorization")
+	if len(auth) <= 7 || auth[:7] != "Bearer " {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error":      "authentication required",
+			"error_code": "UNAUTHENTICATED",
+		})
+		return
+	}
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	who, err := h.c.Account.ValidateToken(ctx, &pb.ValidateTokenRequest{Token: auth[len("Bearer "):]})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if !who.Valid || who.UserId <= 0 {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error":      "invalid or expired token",
+			"error_code": "TOKEN_INVALID",
+		})
+		return
+	}
+	code, err := h.c.Account.IssueLoginCode(ctx, &pb.IssueLoginCodeRequest{UserId: who.UserId})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	if code.LoginCode == "" {
+		// Core answers an empty code when the caller is inside the mint
+		// cooldown: an unused link from the last click is still live, and
+		// re-issuing would only invalidate it.
+		remaining := code.ExpiresAt - time.Now().Unix()
+		if remaining < 1 {
+			remaining = 1
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(int(remaining)))
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{
+			"error":       "a valid login link is already active",
+			"error_code":  "COOLDOWN",
+			"retry_after": remaining,
+		})
+		return
+	}
+	link := "/?code=" + url.QueryEscape(code.LoginCode)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"code":       code.LoginCode,
+		"expires_at": code.ExpiresAt,
+		"link":       link,
+	})
+}

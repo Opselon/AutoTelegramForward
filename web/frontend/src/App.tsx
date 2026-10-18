@@ -76,7 +76,9 @@ import type {
   ServicesHealthResponse,
   PVResponderConfig,
   DiagnosticsResponse,
+  MeInfo,
 } from './types'
+import { getToken, applySession, clearSession } from './session'
 
 // ---------------------------------------------------------------------------
 // Branding hop (A → C → B)
@@ -191,7 +193,8 @@ function brandingHopSummary(isRtl: boolean, hop: BrandingHopConfig, route: strin
   return `${route}: ${scope} ${parts.join(joiner)} · ${delivery}${gate}`
 }
 
-export function App() {
+export function App({ me }: { me?: MeInfo } = {}) {
+  const [meState, setMeState] = useState<MeInfo | undefined>(me)
   // Language follows the user, not a hardcoded default:
   // previously this defaulted to 'fa' so every user's first dashboard render
   // was Persian even when their account language was English.
@@ -564,11 +567,14 @@ export function App() {
         tg.ready?.()
         tg.expand?.()
       } catch {}
-      if (tg.initData && !localStorage.getItem('auth_token')) {
+      if (tg.initData && !getToken()) {
         api.authTMA(tg.initData).then((auth: any) => {
           if (auth && auth.token) {
-            localStorage.setItem('auth_token', auth.token)
-            api.me().then(setCurrentUser).catch(() => {})
+            applySession(auth.token)
+            api.me().then((info) => {
+              setCurrentUser(info)
+              setMeState(info)
+            }).catch(() => {})
             loadData()
             showToast(isRtl ? 'ورود خودکار مینی‌اپ تلگرام انجام شد' : 'Telegram Mini App auto-authenticated')
           }
@@ -578,7 +584,10 @@ export function App() {
 
     loadData()
     refreshDiagnostics()
-    api.me().then(setCurrentUser).catch(() => {})
+    api.me().then((info) => {
+      setCurrentUser(info)
+      setMeState(info)
+    }).catch(() => {})
     const timer = setInterval(() => {
       api.getStats().then(setStats).catch(() => {})
       api.getGatewayInfo().then(setGatewayInfo).catch(() => {})

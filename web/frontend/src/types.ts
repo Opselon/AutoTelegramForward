@@ -799,6 +799,15 @@ export interface ValidateTokenResponse {
   error?: string;
 }
 
+/** Shape of GET /api/auth/me — the verified identity of the CURRENT session.
+ *  Used by session.ts; every field is server-authoritative. */
+export interface MeInfo {
+  user_id: number;
+  username: string;
+  is_admin: boolean;
+  now: string;
+}
+
 export interface IssueWebTokenRequest {
   user_id: number;
 }

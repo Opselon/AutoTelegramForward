@@ -106,3 +106,83 @@ def test_the_exchange_never_reads_a_user_id_from_the_request(tmp_path):
     fields = {f.name for f in pb.ExchangeWebLoginCodeRequest.DESCRIPTOR.fields}
     assert fields == {"login_code"}
     assert "user_id" not in fields
+
+
+def test_issue_login_code_mints_for_the_caller_and_exchanges_cleanly(tmp_path):
+    """IssueLoginCode: a minted code belongs to the account the API verified.
+
+    The Go API calls this RPC only after ValidateToken proved the caller's
+    JWT names the id it passes on; the tenancy is decided by that chain, so
+    the core itself is the one that must refuse unknown ids.
+    """
+    db, ctx = _servicer(tmp_path)
+    base = AccountControlServicer(db, users=None, is_admin_user=[], admin_service=None)
+    # Seed the account TENANT_B will later be minted for.
+    reg = asyncio.run(base.IssueWebToken(pb.IssueWebTokenRequest(user_id=TENANT_B), None))
+    assert reg.success
+
+    class Ctx:
+        async def abort(self, *a, **k):
+            raise AssertionError("IssueLoginCode must not abort")
+
+    resp = asyncio.run(base.IssueLoginCode(pb.IssueLoginCodeRequest(user_id=TENANT_B), Ctx()))
+    assert resp.login_code, "a known user must get a code"
+    # the minted code immediately exchanges for that exact account
+    ex = asyncio.run(base.ExchangeWebLoginCode(pb.ExchangeWebLoginCodeRequest(login_code=resp.login_code), None))
+    assert ex.success
+    assert _claims(ex.token)["sub"] == str(TENANT_B)
+
+    # an unknown account (no user) must NOT mint
+    resp2 = asyncio.run(base.IssueLoginCode(pb.IssueLoginCodeRequest(user_id=1122334455), Ctx()))
+    assert resp2.login_code == "", "unknown account must not be minted a code"
+
+
+def test_issue_login_code_cooldown_prevents_duplicate_links(tmp_path):
+    """Two rapid mints for one account must not create two live links.
+
+    The first still-valid code stays usable; the second mint inside the
+    cooldown is refused so a double click cannot invalidate what the user
+    already received.
+    """
+    db, srv = _servicer(tmp_path)
+    base = AccountControlServicer(db, users=None, is_admin_user=[], admin_service=None)
+    reg = asyncio.run(base.IssueWebToken(pb.IssueWebTokenRequest(user_id=TENANT_A), None))
+    assert reg.success
+
+    class Ctx:
+        async def abort(self, *a, **k):
+            raise AssertionError("cooldown must not abort")
+
+    first = asyncio.run(base.IssueLoginCode(pb.IssueLoginCodeRequest(user_id=TENANT_A), Ctx()))
+    assert first.login_code, "first mint succeeds"
+    # Second attempt inside the cooldown answers empty code + retry time.
+    second = asyncio.run(base.IssueLoginCode(pb.IssueLoginCodeRequest(user_id=TENANT_A), Ctx()))
+    assert second.login_code == ""
+    assert second.expires_at > int(time.time()), "expires_at carries the retry time"
+
+    # The FIRST code still exchanges cleanly — the cooldown never broke it.
+    ex = asyncio.run(base.ExchangeWebLoginCode(pb.ExchangeWebLoginCodeRequest(login_code=first.login_code), None))
+    assert ex.success
+    assert _claims(ex.token)["sub"] == str(TENANT_A)
+
+
+def test_try_issue_reuses_clock_injection_for_deterministic_cooldown(tmp_path):
+    """Cooldown math is driven by the injected clock, so tests are exact."""
+    from core.application.web_login_codes import WebLoginCodeService
+
+    db, srv = _servicer(tmp_path)
+    clock = [1_000_000]
+    codes = WebLoginCodeService(db, clock=lambda: clock[0])
+    got = codes.try_issue(TENANT_A, cooldown_seconds=60)
+    assert got is not None, "first mint within cooldown succeeds"
+    code, _exp = got
+    clock[0] += 30
+    assert codes.try_issue(TENANT_A, cooldown_seconds=60) is None, "second mint inside 60s refused"
+    assert codes.cooldown_remaining(TENANT_A, cooldown_seconds=60) == 30
+    clock[0] += 61
+    assert codes.cooldown_remaining(TENANT_A, cooldown_seconds=60) == 0
+    again = codes.try_issue(TENANT_A, cooldown_seconds=60)
+    assert again is not None and again[0] != code
+    # Burn the first, then confirm the second still burns: single use holds.
+    assert codes.burn(code) == TENANT_A
+    assert codes.burn(code) is None, "already-used code must not redeem twice"

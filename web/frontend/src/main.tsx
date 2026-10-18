@@ -4,6 +4,15 @@ import './index.css'
 import App from './App.tsx'
 import Auth from './pages/Auth.tsx'
 import { api } from './api'
+import {
+  verifySession,
+  applySession,
+  clearSession,
+  getToken,
+  setToken,
+  isTokenJwtExpired,
+  type SessionState,
+} from './session'
 
 // Global error boundary to prevent any blank screen crash
 class ErrorBoundary extends React.Component<
@@ -49,7 +58,7 @@ class ErrorBoundary extends React.Component<
           </p>
           <button
             onClick={() => {
-              localStorage.removeItem('auth_token')
+              clearSession()
               window.location.href = '/'
             }}
             style={{
@@ -104,25 +113,33 @@ const codeExchange: ReturnType<typeof api.exchangeBotToken> | null = urlAuth.cod
   ? api.exchangeBotToken({ login_code: urlAuth.code })
   : null
 if (urlAuth.token) {
-  try {
-    localStorage.setItem('auth_token', urlAuth.token)
-  } catch {}
+  setToken(urlAuth.token)
+  // A link token older than its exp is not a session: drop it before the
+  // dashboard can render on it, the verify below reaches the same verdict.
+  if (isTokenJwtExpired(urlAuth.token)) {
+    clearSession()
+  }
 }
 
 function Root() {
-  const [authed, setAuthed] = useState<boolean>(() => {
-    // 1. A legacy link already carries the session token.
-    if (urlAuth.token) return true
-
-    // 2. Otherwise fall back to an existing stored session.
-    try {
-      return !!localStorage.getItem('auth_token')
-    } catch {
-      return false
-    }
-  })
+  // authority: session-core's settled state, null = verify not settled yet.
+  const [session, setSession] = useState<SessionState | null>(null)
+  const [settled, setSettled] = useState<boolean>(false)
   const [linkError, setLinkError] = useState<string | null>(null)
   const [exchanging, setExchanging] = useState<boolean>(!!codeExchange)
+
+  const onLogin = () => {
+    // The server just issued a token; prove it once and adopt the result.
+    verifySession()
+      .then((st) => {
+        setSession(st)
+        setSettled(true)
+      })
+      .catch(() => {
+        setSession(null)
+        setSettled(true)
+      })
+  }
 
   useEffect(() => {
     if (!codeExchange) return
@@ -137,10 +154,8 @@ function Root() {
             ? (resp as { token: string }).token
             : ''
         if (issued) {
-          try {
-            localStorage.setItem('auth_token', issued)
-          } catch {}
-          setAuthed(true)
+          applySession(issued)
+          onLogin()
         } else {
           // The core refuses used, expired and unknown codes alike.
           setLinkError('این لینک ورود منقضی شده یا قبلاً استفاده شده است. از ربات دوباره لینک بگیرید.')
@@ -161,9 +176,32 @@ function Root() {
     }
   }, [])
 
+  // BOOT REVALIDATION (root cause of the kick-out): a stored token is never
+  // trusted on its own — session-core proves it against /api/auth/me once
+  // per mount. The dashboard renders only after it settles.
+  useEffect(() => {
+    if (exchanging) return // the code exchange drives onLogin itself
+    let cancelled = false
+    verifySession()
+      .then((st) => {
+        if (cancelled) return
+        setSession(st)
+      })
+      .finally(() => {
+        if (!cancelled) setSettled(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [exchanging])
+
   useEffect(() => {
     const handleAuthRequired = () => {
-      setAuthed(false)
+      // session-core already wiped the dead token; this just leaves the
+      // dashboard for the login screen.
+      clearSession()
+      setSession(null)
+      setSettled(true)
     }
     window.addEventListener('auth_required', handleAuthRequired)
     return () => window.removeEventListener('auth_required', handleAuthRequired)
@@ -188,7 +226,7 @@ function Root() {
     )
   }
 
-  if (!authed) {
+  if (!session) {
     return (
       <>
         {linkError && (
@@ -205,12 +243,18 @@ function Root() {
             {linkError}
           </div>
         )}
-        <Auth onLogin={() => setAuthed(true)} />
+        <Auth onLogin={onLogin} />
       </>
     )
   }
 
-  return <App />
+  if (!settled) {
+    // Verifying the stored session: never render the login screen on a token
+    // that may still be valid (that was the false "log in again" prompt).
+    return null
+  }
+
+  return <App me={session.me} />
 }
 
 createRoot(document.getElementById('root')!).render(

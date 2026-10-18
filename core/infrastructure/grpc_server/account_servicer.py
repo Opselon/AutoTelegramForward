@@ -419,6 +419,36 @@ class AccountControlServicer(pb_grpc.AccountControlServiceServicer):
             return failed
         return self._login_success(row)
 
+    async def IssueLoginCode(self, request, context):
+        """Mint a single-use dashboard login code for the CALLER's own id.
+
+        Only the identity in the request body is used, and the Go API only
+        calls this after ValidateToken proved the caller's JWT names that
+        id — there is no wire path that mints for an arbitrary user id.
+        Force-reset of a web password is deliberately NOT here.
+        """
+        uid = int(request.user_id or 0)
+        if self._find_by_uid(uid) is None:
+            # No dashboard account for this id: an empty code with no retry
+            # time is the wire contract for "no access", same as the bot side.
+            return pb.IssueLoginCodeResponse(login_code="", expires_at=0)
+        # Same minting rules as the bot's own path (positive uid, an existing
+        # account row) PLUS a short cooldown so two accidental clicks cannot
+        # mint two links — the first one stays valid and unused codes from a
+        # private window are just noise, not extra sessions.
+        try:
+            issued = self._login_codes.try_issue(uid, cooldown_seconds=60)
+        except ValueError:
+            issued = None
+        if issued is None:
+            # Either an unknown identity or a still-valid link: an empty code
+            # with the retry time is the wire contract; the API maps one to
+            # "no access" and the other to 429 + Retry-After.
+            remaining = self._login_codes.cooldown_remaining(uid, cooldown_seconds=60)
+            return pb.IssueLoginCodeResponse(login_code="", expires_at=int(time.time()) + remaining)
+        code, expires_at = issued
+        return pb.IssueLoginCodeResponse(login_code=code, expires_at=expires_at)
+
     def issue_login_code(self, user_id: int, ttl_seconds: int | None = None) -> tuple[str, int]:
         """Mint a single-use dashboard code for a user the bot just authenticated.
 

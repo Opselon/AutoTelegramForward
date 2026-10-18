@@ -3849,6 +3849,54 @@ class ProBotUI:
             else:
                 await message.reply_text(self._t("ui_cancelled"), reply_markup=self._main_menu())
 
+        @b.on_message(filters.command("reauth") & filters.private)
+        @self._localized_handler
+        async def _reauth_cmd(_, message: Message):
+            """Explicit reauthentication: a fresh single-use dashboard link.
+
+            Root cause of the old 'logged out with no way back in' bug: the
+            7-day session token expired and no bot-side path minted another
+            one. /reauth answers exactly that.
+            """
+            uid = message.from_user.id if message.from_user else 0
+            if not uid:
+                return
+            base = self._web_base_url()
+            magic_link = ""
+            try:
+                # try_issue refuses a second mint inside the cooldown, so a
+                # rapid /reauth /reauth /reauth burst cannot generate three
+                # links or three messages — the first still-valid one wins.
+                issued = self._accounts._login_codes.try_issue(uid, cooldown_seconds=60)
+                if issued is not None:
+                    code, _exp = issued
+                    magic_link = f"{base}/?code={quote(code, safe='')}"
+            except Exception as e:
+                logger.error("reauth code mint failed for %s: %s", uid, e)
+            if not magic_link:
+                # Not an error on purpose: a still-valid link exists, so the
+                # short cooldown answer is the honest reply — no new link,
+                # no repeated Telegram prompt.
+                remaining = 60
+                try:
+                    remaining = self._accounts._login_codes.cooldown_remaining(uid, cooldown_seconds=60)
+                except Exception:
+                    pass
+                wait = max(1, remaining)
+                try:
+                    await message.reply_text(self._t("ui_reauth_cooldown").replace("{wait}", str(wait)))
+                except Exception as e:
+                    logger.error("reauth cooldown memo failed for %s: %s", uid, e)
+                return
+            text = self._t("ui_reauth_required")
+            btn_open = "🌐 " + self._t("ui_dashboard_open")
+            btn_menu = "⬅️ " + self._t("ui_back")
+            kbd = InlineKeyboardMarkup([
+                [InlineKeyboardButton(btn_open, url=magic_link)],
+                [InlineKeyboardButton(btn_menu, callback_data=CB["main"])],
+            ])
+            await message.reply_text(text, reply_markup=kbd)
+
         @b.on_message(filters.command(["menu", "panel"]) & filters.private)
         @self._localized_handler
         async def _menu(_, message: Message):

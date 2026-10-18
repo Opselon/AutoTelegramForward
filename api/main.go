@@ -84,6 +84,10 @@ func main() {
 	authMux.HandleFunc("POST /tma", h.AuthTMA)
 	authMux.HandleFunc("PATCH /change-password", h.AuthChangePassword)
 	authMux.HandleFunc("GET /me", h.AuthMe)
+	// Authenticated (Bearer JWT): hand the caller their own fresh single-use
+	// login code. Rate limited: the endpoint mints one-time secrets, so the
+	// brute-force budget belongs on it too, not just on the exchange path.
+	authMux.HandleFunc("GET /bot-login-link", h.AuthBotLoginLink)
 	// Unauthenticated surface: the brute-force budget belongs here, keyed on the
 	// peer address (and, because these routes each carry their own key group, on
 	// the endpoint as well).

@@ -22,6 +22,8 @@ type fakeAccountClient struct {
 	exchangedCodes []string
 	exchangeResp   *pb.LoginAccountResponse
 	validateResp   *pb.ValidateTokenResponse
+	mintedFor      []int64
+	mintedCode     string
 }
 
 func (f *fakeAccountClient) IssueWebToken(_ context.Context, req *pb.IssueWebTokenRequest, _ ...grpc.CallOption) (*pb.LoginAccountResponse, error) {
@@ -196,5 +198,98 @@ func TestChangePassword_RefusesForeignUserId(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("changing another account's password must 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// Extend the same test client with the new code-minting surface so tests can
+// forge only what the core would do, nothing more.
+var fake_issueLoginCode *pb.IssueLoginCodeResponse
+
+func (f *fakeAccountClient) IssueLoginCode(_ context.Context, req *pb.IssueLoginCodeRequest, _ ...grpc.CallOption) (*pb.IssueLoginCodeResponse, error) {
+	f.mintedFor = append(f.mintedFor, req.GetUserId())
+	if fake_issueLoginCode != nil {
+		return fake_issueLoginCode, nil
+	}
+	return &pb.IssueLoginCodeResponse{LoginCode: f.mintedCode, ExpiresAt: 999}, nil
+}
+
+// TestAuthBotLoginLink_RouteIssueCode tests the endpoint the dashboard uses
+// to fetch a fresh 1-tap login link: it must derive the identity from the
+// validated JWT only, not from the query/body.
+func TestAuthBotLoginLink_RoutesTheVerifiedUserId(t *testing.T) {
+	fake := &fakeAccountClient{
+		validateResp: &pb.ValidateTokenResponse{Valid: true, UserId: 999},
+		mintedCode:   "minted-code",
+	}
+	h := &Handlers{c: &grpcclient.Clients{Account: fake}}
+
+	req := httptest.NewRequest("GET", "/api/auth/bot-login-link?user_id=1", nil)
+	req.Header.Set("Authorization", "Bearer session-token")
+	rec := httptest.NewRecorder()
+	h.AuthBotLoginLink(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for a valid caller, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(fake.mintedFor) != 1 || fake.mintedFor[0] != 999 {
+		t.Fatalf("code must be minted for the JWT identity (999), got %v", fake.mintedFor)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("body: %s", rec.Body.String())
+	}
+	if resp["code"] != "minted-code" {
+		t.Fatalf("code: %v", resp["code"])
+	}
+	if link, _ := resp["link"].(string); !strings.HasPrefix(link, "/?code=") {
+		t.Fatalf("link: %v", resp["link"])
+	}
+}
+
+// An expired token must never reach the mint step.
+func TestAuthBotLoginLink_RefusesInvalidToken(t *testing.T) {
+	fake := &fakeAccountClient{}
+	h := &Handlers{c: &grpcclient.Clients{Account: fake}}
+	req := httptest.NewRequest("GET", "/api/auth/bot-login-link", nil)
+	req.Header.Set("Authorization", "Bearer dead-now")
+	rec := httptest.NewRecorder()
+	h.AuthBotLoginLink(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(fake.mintedFor) != 0 {
+		t.Fatalf("no token validation, no mint: %v", fake.mintedFor)
+	}
+}
+
+// A double click must not mint twice: core answers an empty code inside the
+// cooldown window and the handler turns that into 429 + Retry-After.
+func TestAuthBotLoginLink_CooldownReturns429NotANewCode(t *testing.T) {
+	fake := &fakeAccountClient{
+		validateResp: &pb.ValidateTokenResponse{Valid: true, UserId: 999},
+		mintedCode:   "", // core: "inside the cooldown window"
+	}
+	// The expiry IS the retry time by the wire contract.
+	fake_issueLoginCode = &pb.IssueLoginCodeResponse{LoginCode: "", ExpiresAt: 12345}
+	h := &Handlers{c: &grpcclient.Clients{Account: fake}}
+	req := httptest.NewRequest("GET", "/api/auth/bot-login-link", nil)
+	req.Header.Set("Authorization", "Bearer session-token")
+	rec := httptest.NewRecorder()
+	h.AuthBotLoginLink(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 on cooldown, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("body: %s", rec.Body.String())
+	}
+	if resp["error_code"] != "COOLDOWN" {
+		t.Fatalf("error_code: %v", resp["error_code"])
+	}
+	if ra, _ := resp["retry_after"].(float64); int(ra) <= 0 {
+		t.Fatalf("retry_after: %v", resp["retry_after"])
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Fatalf("Retry-After header missing")
 	}
 }
