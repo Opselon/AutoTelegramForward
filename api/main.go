@@ -1,15 +1,21 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"autoforward/internal/grpcclient"
 	"autoforward/internal/handlers"
 	"autoforward/internal/logpolicy"
 	"autoforward/internal/middleware"
+	"autoforward/internal/ratelimit"
 )
 
 func main() {
@@ -32,6 +38,20 @@ func main() {
 		log.Printf("warning: logger service (%s) unreachable — log endpoints return 502", loggerAddr)
 	}
 	h := handlers.New(clients)
+
+	// The API boundary's rate limiter. It is built from the environment like
+	// every other boundary service, it never blocks startup when Redis is
+	// unreachable (each route class applies its own outage policy), and it is
+	// nil-free: RateLimit is only installed when it actually enforces
+	// something, so "no limiter" is always visible as such rather than as an
+	// accidental unlimited path.
+	rlCfg := ratelimit.ConfigFromEnv(os.Getenv)
+	rl, rlErr := ratelimit.NewRuntime(context.Background(), rlCfg, log.Printf)
+	if rlErr != nil {
+		log.Fatalf("rate limiter configuration error: %v", rlErr)
+	}
+	defer rl.Close()
+	h.RateLimit = rl
 	// One policy instance per process. The access trail, the administrative audit
 	// trail and the control-plane routes must all observe the same effective
 	// configuration, or an operator could "turn collection off" and still have it
@@ -62,7 +82,10 @@ func main() {
 	authMux.HandleFunc("POST /tma", h.AuthTMA)
 	authMux.HandleFunc("PATCH /change-password", h.AuthChangePassword)
 	authMux.HandleFunc("GET /me", h.AuthMe)
-	mux.Handle("/api/auth/", h.StripPrefix(authMux))
+	// Unauthenticated surface: the brute-force budget belongs here, keyed on the
+	// peer address (and, because these routes each carry their own key group, on
+	// the endpoint as well).
+	mux.Handle("/api/auth/", rl.WrapClass(ratelimit.ClassAuth, nil, h.StripPrefix(authMux)))
 
 	// Authenticated dashboard endpoints — every caller is scoped to their own
 	// account via Identity.UserID (0 = unlinked web account => sees nothing).
@@ -178,9 +201,14 @@ func main() {
 	adminMux.HandleFunc("DELETE /admins/{id}", h.AdminRemoveAdmin)
 	adminMux.HandleFunc("GET /extensions", h.AdminListExtensions)
 	adminMux.HandleFunc("POST /extensions/{id}/toggle", h.AdminToggleExtension)
+	// The limiter's own control surface (same RequireAdmin gate as the rest of
+	// the administrator plane).
+	adminMux.HandleFunc("GET /ratelimit", h.RateLimitStatus)
 	dashMux.Handle("/admin/", http.StripPrefix("/admin", h.RequireAdmin(adminMux)))
 
-	mux.Handle("/api/", h.RequireAuth(dashMux))
+	// Authenticated surface: the key comes from the identity the core signed
+	// into the token (handlers.IdentityOf), never from a header or a body.
+	mux.Handle("/api/", h.RequireAuth(rl.WrapByRoute(h.IdentityOf, dashMux)))
 
 	var handler http.Handler = mux
 	handler = middleware.RequestLogger(handler)
@@ -201,13 +229,55 @@ func main() {
 	if apiKey != "" {
 		handler = middleware.APIKeyAuth(apiKey, handler)
 	}
+	// The outer, per-address shield sits INSIDE the access logger so a refusal
+	// is recorded like any other request, and outside authentication so a flood
+	// of bogus tokens is refused before this process dials the core to validate
+	// them.
+	handler = rl.WrapShield(handler)
 	handler = middleware.AccessLogger(logSink, handler)
 	// Extract, validate, or generate end-to-end Correlation ID
 	handler = middleware.CorrelationID(handler)
 
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: handler,
+		// Bounded so a wedged handler cannot hold a connection (and a pool
+		// checkout) forever.
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	// Graceful shutdown: a SIGTERM from the orchestrator stops accepting, lets
+	// in-flight requests finish, and only then releases the Redis pool. Dropping
+	// connections on a redeploy is what produces the "one 502 during a deploy"
+	// that operators learn to ignore.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
 	log.Printf("AutoTelegramForward API listening on %s (core: %s)", addr, coreAddr)
-	if err := http.ListenAndServe(addr, handler); err != nil {
+	errCh := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+	}()
+
+	select {
+	case err := <-errCh:
 		log.Fatalf("server error: %v", err)
+	case <-ctx.Done():
+		log.Printf("shutdown signal received — draining (10s)")
+		drainCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(drainCtx); err != nil {
+			log.Printf("shutdown: %v", err)
+		}
+		if err := rl.Close(); err != nil {
+			log.Printf("ratelimit close: %v", err)
+		}
+		log.Printf("shutdown complete")
 	}
 }
 

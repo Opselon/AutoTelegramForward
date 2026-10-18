@@ -18,6 +18,9 @@ func setRequiredEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("ATF_CORE_GRPC", "core:50051")
 	t.Setenv("ATF_LOGGER_GRPC", "logger:50052")
+	// The limiter's store is recommended, not required (a single-node install
+	// without it still serves), so a "complete" contract includes it.
+	t.Setenv("ATF_REDIS_ADDR", "redis:6379")
 }
 
 func TestEnvContractNeverLeaksValues(t *testing.T) {
@@ -58,7 +61,7 @@ func TestEnvContractNeverLeaksValues(t *testing.T) {
 	for _, check := range payload.Checks {
 		found[check.Key] = check.Set
 	}
-	for _, key := range []string{"ATF_CORE_GRPC", "ATF_LOGGER_GRPC", "ATF_API_KEY", "ATF_WEB_HEALTH_URL", "ATF_BOT_TOKEN"} {
+	for _, key := range []string{"ATF_CORE_GRPC", "ATF_LOGGER_GRPC", "ATF_API_KEY", "ATF_WEB_HEALTH_URL", "ATF_BOT_TOKEN", "ATF_REDIS_ADDR"} {
 		if !found[key] {
 			t.Fatalf("expected %s to read as set: %+v", key, payload.Checks)
 		}

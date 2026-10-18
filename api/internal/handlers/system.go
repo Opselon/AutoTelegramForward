@@ -162,7 +162,7 @@ func envAnySet(names ...string) bool {
 // compose mode the bot session lives in the core container, and listing it as
 // required would report a healthy stack as broken.
 func (h *Handlers) EnvContract() []EnvCheck {
-	return []EnvCheck{
+	checks := []EnvCheck{
 		{
 			Key:    "ATF_CORE_GRPC",
 			Level:  "required",
@@ -206,6 +206,7 @@ func (h *Handlers) EnvContract() []EnvCheck {
 			Hint:   "not needed with docker compose",
 		},
 	}
+	return append(checks, rateLimitEnvChecks()...)
 }
 
 // missingRequired returns the required keys that are not set.
@@ -275,8 +276,17 @@ func (h *Handlers) SetupReport(w http.ResponseWriter, r *http.Request) {
 		nextSteps = append(nextSteps, "atf validate --runtime — full health re-check of the live stack")
 	}
 
+	// Redis is reported but never gates readiness: the limiter degrades to a
+	// per-process fallback by design, and calling a deployment that is serving
+	// traffic "not ready" because an accelerator is down is how operators learn
+	// to ignore the readiness field.
+	rlCtx, cancelRL := context.WithTimeout(r.Context(), 2*time.Second)
+	rlSummary := h.rateLimitSummary(rlCtx)
+	cancelRL()
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ready":               ready,
+		"ratelimit":           rlSummary,
 		"time":                time.Now().UTC().Format(time.RFC3339),
 		"product_version":     resolveProductVersion(),
 		"api_version":         APIVersion,

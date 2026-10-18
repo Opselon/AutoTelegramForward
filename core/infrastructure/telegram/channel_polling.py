@@ -125,6 +125,7 @@ class ChannelPollingService:
         dispatcher,
         state_store=None,
         interval: float = POLL_INTERVAL_SECONDS,
+        lease_coordinator=None,
     ) -> None:
         self._pool = pool
         self._rules = rules
@@ -138,6 +139,10 @@ class ChannelPollingService:
         self._stop = asyncio.Event()
         self._last_top: Dict[str, int] = {}
         self._state_store = state_store
+        # Optional Redis lease coordinator (core/infrastructure/redis). With
+        # one, a single replica sweeps at a time; without one (or when Redis is
+        # unreachable) every replica sweeps, as before.
+        self._lease = lease_coordinator
         # Ordered replay lanes, keyed by (session_id, chat_id). One live lane per
         # polled channel is what guarantees a burst leaves in source order.
         self._lanes: Dict[Tuple[str, str], _OrderedReplayLane] = {}
@@ -168,7 +173,8 @@ class ChannelPollingService:
     async def _run(self) -> None:
         while not self._stop.is_set():
             try:
-                await self.sweep_all()
+                if await self._may_sweep():
+                    await self.sweep_all()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -178,6 +184,26 @@ class ChannelPollingService:
                 await asyncio.wait_for(self._stop.wait(), timeout=self._interval)
             except asyncio.TimeoutError:
                 continue
+
+    async def _may_sweep(self) -> bool:
+        """True when this replica is the one sweeping channels.
+
+        Two replicas polling the same channels read the same posts and push
+        them through the same dispatcher; the queue's duplicate guard catches
+        the delivery, but the wasted reads are the kind of traffic that gets an
+        account rate-limited by Telegram. One sweeper at a time is the fix, and
+        a deployment without a coordinator keeps the old behaviour.
+        """
+        if self._lease is None:
+            return True
+        try:
+            # TTL is three sweeps: long enough that a slow sweep does not lose
+            # the lease mid-pass, short enough that a crashed poller frees it
+            # quickly.
+            return bool(await self._lease.try_hold("channel-poll", ttl=max(30.0, self._interval * 3)))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("channel poll lease unavailable (%s): sweeping anyway", exc)
+            return True
 
     # ------------------------------------------------------------------ #
     # Sweeps

@@ -112,6 +112,9 @@ def test_the_parsers_find_the_real_sources():
         "missing_required",
         "missing_recommended",
         "next_steps",
+        # The setup report summarises the optional rate limiter's wiring and
+        # outage posture since the Redis integration (#158).
+        "ratelimit",
     }
     dart = audit.dart_class_keys(audit.read(audit.DART_MODELS), "EnvCheck")
     assert {"key", "level", "set", "reason", "hint"} <= dart

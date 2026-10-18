@@ -66,6 +66,7 @@ class DurableQueueManager:
         log_client: Any = None,
         batch_size: int = 8,
         bot_route: Optional[BotTransportCache] = None,
+        lease_coordinator: Any = None,
     ) -> None:
         self._queue = queue_repo
         self._map = message_map_repo
@@ -82,6 +83,14 @@ class DurableQueueManager:
         # route is unavailable in this process and a BOT job retries rather than
         # silently posting as the owner.
         self._bot_route_cache = bot_route
+        # Redis lease coordinator (optional, see core/infrastructure/redis).
+        # None means "this deployment is one replica": every maintenance action
+        # runs here, exactly as it did before coordination existed. With a
+        # coordinator, the periodic actions below run on one replica at a time.
+        # The delivery claim stays in the database either way — a lease can be
+        # lost while it is held, so it can never be what makes delivery
+        # idempotent.
+        self._lease = lease_coordinator
 
         self._workers: List[asyncio.Task] = []
         self._watchdog_task: Optional[asyncio.Task] = None
@@ -125,9 +134,14 @@ class DurableQueueManager:
         self._stop_event.clear()
         self._notify_event.clear()
 
-        # Immediate recovery of orphaned jobs on startup / restart
+        # Immediate recovery of orphaned jobs on startup / restart. On a
+        # multi-replica deployment this is a singleton action: N replicas
+        # recovering in parallel do N times the work and produce N conflicting
+        # log lines for one event.
         try:
-            initial_recovered = await self._queue.recover_expired_leases()
+            initial_recovered = 0
+            if await self._holds_singleton("queue-startup-recovery"):
+                initial_recovered = await self._queue.recover_expired_leases()
             if initial_recovered > 0:
                 self.recovered_after_restart_count += initial_recovered
                 logger.info("Startup recovery: restored %d claimed jobs from prior run.", initial_recovered)
@@ -140,10 +154,11 @@ class DurableQueueManager:
 
         self._watchdog_task = asyncio.create_task(self._watchdog_loop())
         logger.info(
-            "Durable queue started with %d workers (lease=%.1fs, max_capacity=%d)",
+            "Durable queue started with %d workers (lease=%.1fs, max_capacity=%d, coordination=%s)",
             self._num_workers,
             self._lease_duration,
             self._max_queue_size,
+            "redis" if self._lease is not None else "single-replica",
         )
 
     async def stop(self) -> None:
@@ -1313,12 +1328,35 @@ class DurableQueueManager:
         for tgt in stale:
             self._target_windows.pop(tgt, None)
 
+    async def _holds_singleton(self, name: str) -> bool:
+        """True when this replica may run a singleton maintenance action.
+
+        Without a coordinator this is always True, which is the behaviour every
+        single-replica deployment already had. With one, "another replica is
+        doing it" is a normal answer and the caller simply skips this round.
+        """
+        if self._lease is None:
+            return True
+        try:
+            return bool(
+                await self._lease.try_hold(
+                    name, ttl=max(60.0, float(self._lease_duration) * 2)
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - coordination must never break the loop
+            logger.warning("lease %s unavailable (%s): running the maintenance action", name, exc)
+            return True
+
     async def _watchdog_loop(self) -> None:
         """Periodically recovers expired leases and cleans up message maps."""
         cleanup_counter = 0
         while not self._stop_event.is_set():
             try:
                 await asyncio.sleep(10.0)
+                if not await self._holds_singleton("queue-watchdog"):
+                    # Another replica is the watchdog this round. The work is
+                    # not lost: it is skipped here and picked up by the holder.
+                    continue
                 recovered = await self._queue.recover_expired_leases()
                 if recovered > 0:
                     logger.warning("Lease watchdog recovered %d abandoned jobs.", recovered)

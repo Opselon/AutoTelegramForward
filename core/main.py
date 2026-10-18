@@ -245,6 +245,15 @@ def build_container(cfg: Config) -> dict:
     # neither the database nor a TLS handshake is repeated per message.
     bot_route = BotTransportCache(token_repo)
 
+    # Worker coordination (optional): one replica at a time for the singleton
+    # maintenance loops. The queues' own idempotency stays in the database; this
+    # only stops replicas from running the same maintenance pass concurrently.
+    from core.infrastructure.redis import LeaseCoordinator  # noqa: E402
+    # Built here, connected by the async entry points (main()); this function
+    # must stay synchronous — the whole container graph is constructed on the
+    # hot bootstrap path where there is no running loop yet.
+    lease_coordinator = LeaseCoordinator.from_config(cfg)
+
     queue_manager = DurableQueueManager(
         queue_repo=queue_repo,
         message_map_repo=msg_map_repo,
@@ -257,6 +266,7 @@ def build_container(cfg: Config) -> dict:
         max_per_minute_per_target=getattr(cfg, "queue_max_per_minute_per_target", 25),
         metrics_repo=metrics_repo,
         bot_route=bot_route,
+        lease_coordinator=lease_coordinator,
     )
     from core.application.pipeline import DurableMessagePipeline  # noqa: E402
     durable_pipeline = DurableMessagePipeline(
@@ -339,6 +349,7 @@ def build_container(cfg: Config) -> dict:
         "audit_repo": audit_repo,
         "queue_repo": queue_repo,
         "queue_manager": queue_manager,
+        "lease_coordinator": lease_coordinator,
         "sync_engine": sync_engine,
         "durable_pipeline": durable_pipeline,
         "prompt_repo": prompt_repo,
@@ -525,6 +536,18 @@ async def sync_pool_credentials(container: dict) -> None:
             logger.warning("bad credential %s skipped", c.id[:8])
 
 
+async def _connect_lease_coordinator(container: dict) -> None:
+    """Connect the optional lease store before any coordinated loop starts.
+
+    A store that cannot be reached is not an error: the coordinator records the
+    outage and the loops simply run un-coordinated (single-replica semantics)
+    until it recovers. See core/infrastructure/redis/lease.py.
+    """
+    coord = container.get("lease_coordinator")
+    if coord is not None:
+        await coord.connect()
+
+
 async def main() -> None:
     cfg = Config.load()
     try:
@@ -541,6 +564,7 @@ async def main() -> None:
         if asyncio.iscoroutine(container):
             container = await container
         await _resolve_pg_pool(container)
+        await _connect_lease_coordinator(container)
         grpc_server = await serve_grpc(container, cfg)
         await seed_default_credential(container, cfg)
         await sync_pool_credentials(container)
@@ -568,6 +592,7 @@ async def main() -> None:
     if asyncio.iscoroutine(container):
         container = await container
     await _resolve_pg_pool(container)
+    await _connect_lease_coordinator(container)
     grpc_server = await serve_grpc(container, cfg)
     await seed_default_credential(container, cfg)
     await sync_pool_credentials(container)
@@ -658,6 +683,7 @@ async def main() -> None:
             dispatcher=container["dispatcher"],
             state_store=cursor_repo,
             interval=getattr(cfg, "channel_poll_interval", 15.0),
+            lease_coordinator=container["lease_coordinator"],
         )
         await poller.start()
         container["channel_poller"] = poller
@@ -761,6 +787,12 @@ async def main() -> None:
             await mgr.stop_reconciler()
         await bot.stop()
         await container["pool"].stop_all()
+        # Release any lease still held (the polls/watchdog are stopped by now)
+        # before dropping the connection: an unreleased lease would keep every
+        # other replica waiting for its TTL.
+        coord = container.get("lease_coordinator")
+        if coord is not None:
+            await coord.close()
         await grpc_server.stop(grace=2)
         try:
             await log_client.close()
