@@ -430,6 +430,55 @@ class AIConfigUseCases:
         except Exception as exc:  # pragma: no cover - network path
             return False, f"{type(exc).__name__}: {exc}", 0.0
 
+    async def check_provider_key_owned(self, *, provider: str = "", model: str = "",
+                                       base_url: str = "", api_key: str = "",
+                                       config_id: str = "",
+                                       owner_user_id: Optional[int] = None):
+        """Probe an endpoint + key the tenant wants to add, before it is saved.
+
+        `config_id` names a config already stored: whatever the caller leaves
+        blank is filled from it, so a UI can re-check a saved key without ever
+        receiving it.  A masked key (`***abcd`) is treated as "unchanged", the
+        same convention the update path uses.
+
+        The probe spends the tenant's own credentials against the tenant's own
+        endpoint, so ownership is required in both directions: a foreign
+        `config_id` and a missing owner are the same refusal.
+        """
+        from ..infrastructure.ai.providers import ProbeResult, probe_credentials
+
+        if not owner_user_id:
+            # No tenant named: the probe would be nobody's. Same answer as a
+            # config that is not theirs, so the caller learns nothing extra.
+            return ProbeResult(False, False, 0.0, "", "config_not_found")
+        stored = None
+        if config_id:
+            stored = await self.get_owned(config_id, owner_user_id)
+            if stored is None:
+                return ProbeResult(False, False, 0.0, "", "config_not_found")
+
+        def _provider_of(value) -> str:
+            # AIProviderType is an enum: its `.value` is what the wire carries.
+            return str(getattr(value, "value", value) or "").strip()
+
+        def _value(given: str, field: str) -> str:
+            if given and given.strip():
+                return given.strip()
+            if stored is None:
+                return ""
+            if field == "provider":
+                return _provider_of(getattr(stored, field, ""))
+            return str(getattr(stored, field, "") or "").strip()
+
+        provider_id = _value(provider, "provider")
+        model_id = _value(model, "model")
+        endpoint = _value(base_url, "base_url")
+        # A masked key is the value we sent to the client, not the key itself.
+        key_value = api_key.strip() if api_key and not api_key.startswith("***") else ""
+        if not key_value:
+            key_value = str(getattr(stored, "api_key", "") or "") if stored else ""
+        return await probe_credentials(provider_id, model_id, endpoint, key_value)
+
     async def health_check_owned(self, config_id: str,
                                  owner_user_id: Optional[int]) -> tuple[bool, str, float]:
         # v12.1: same guard as test_rewrite_owned — a health check hits the
