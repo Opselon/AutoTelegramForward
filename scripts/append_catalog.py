@@ -43,10 +43,23 @@ def validate_and_append(new_keys: dict) -> int:
     for loc in locales:
         cat[loc] = dict(sorted(cat[loc].items()))
 
-    # indent=1 is the format the catalog file is kept in: a batch must be a pure
-    # addition, not a reformat of 12k lines nobody asked to review.
-    CAT_PATH.write_text(json.dumps(cat, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(f"PASS: appended {len(new_keys)} key(s) across {len(locales)} locales")
+    # The catalog on disk is the review surface: a batch has to be a pure
+    # addition. Detect the file's own formatting (indent width, trailing
+    # newline) instead of imposing one, or every append rewrites 13k lines
+    # and hides the fifteen that changed.
+    text = CAT_PATH.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    indent = 4
+    if len(lines) > 1:
+        width = len(lines[1]) - len(lines[1].lstrip(" "))
+        if width > 0:
+            indent = width
+    trailing = "\n" if text.endswith("\n") else ""
+    CAT_PATH.write_text(
+        json.dumps(cat, ensure_ascii=False, indent=indent) + trailing,
+        encoding="utf-8",
+    )
+    print(f"PASS: appended {len(new_keys)} key(s) across {len(locales)} locales (indent={indent})")
     return 0
 
 

@@ -913,11 +913,17 @@ async def test_dashboard_scoped_self_only_multi_lang():
         u.language_code = lang
         return u
 
+    # The "no phone connected" placeholder is UI copy: it used to be the
+    # English literal "None" interpolated into every locale's template, so a
+    # Persian tenant read "شماره متصل: None". Each locale must carry its own.
+    def none_label(lang: str) -> str:
+        return ui.i18n.t("ui_none_label", lang=lang)
+
     # In English
     text_en = await ui._main_text(TENANT_B, user=client("en"))
     assert "Bob Builder" in text_en
     assert str(TENANT_B) in text_en
-    assert "Connected phone: `None`" in text_en
+    assert f"Connected phone: `{none_label('en')}`" in text_en
     assert "Currently active tasks: **0**" in text_en
     assert "Scott" not in text_en
     assert "+989" not in text_en
@@ -925,15 +931,17 @@ async def test_dashboard_scoped_self_only_multi_lang():
     # In Persian
     text_fa = await ui._main_text(TENANT_B, user=client("fa"))
     assert "Bob Builder" in text_fa
-    assert "شماره متصل: `None`" in text_fa
+    assert f"شماره متصل: `{none_label('fa')}`" in text_fa
     assert "Scott" not in text_fa
+    assert none_label("fa") != none_label("en"), "fa must not fall back to the english placeholder"
+    assert f"`{none_label('en')}`" not in text_fa
 
     # In Russian
     text_ru = await ui._main_text(TENANT_B, user=client("ru"))
     assert "Bob Builder" in text_ru
-    assert "Подключенный номер: `None`" in text_ru
+    assert f"Подключенный номер: `{none_label('ru')}`" in text_ru
 
     # In Chinese
     text_zh = await ui._main_text(TENANT_B, user=client("zh"))
     assert "Bob Builder" in text_zh
-    assert "已绑手机：`None`" in text_zh
+    assert f"已绑手机：`{none_label('zh')}`" in text_zh
