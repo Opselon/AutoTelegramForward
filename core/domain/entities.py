@@ -348,6 +348,25 @@ class ForwardRule:
             self.metadata = {}
         self.metadata["header"] = self.custom_header
 
+    def clear_header(self) -> None:
+        """Remove the custom header from every key that can carry it.
+
+        The header is readable from two places — ``custom_header`` (the field the
+        panel writes) and ``metadata["header"]`` (which the setter mirrors for
+        rules restored from a backup or written by the older API) — while the
+        panel's clear button wrote a third, ``metadata["custom_header"]``.
+        Clearing one and reading another left the "deleted" header in the
+        outgoing message: with ``custom_header=""`` and ``metadata["header"]``
+        still holding the text, ``rule.header`` returned the old text and
+        ``transform_text`` kept prepending it. Clear all of them together so a
+        delete is a delete.
+        """
+        self.custom_header = ""
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["header"] = ""
+        self.metadata["custom_header"] = ""
+
     @property
     def footer(self) -> str:
         return self.custom_footer or (str(self.metadata.get("footer") or "") if isinstance(self.metadata, dict) else "")

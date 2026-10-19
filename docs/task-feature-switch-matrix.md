@@ -14,7 +14,7 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 01 | Edit ON/OFF | PASS (was PARTIAL) | `SyncEngine.handle_edit` via `MessageDispatcher._route_edit` | Six-row truth table on the deployed image; see below |
 | 02 | Delete ON/OFF | PASS | `SyncEngine.handle_delete` / `handle_delete_without_chat` via `MessageDispatcher` (DELETED_MESSAGES) | On/off, unmapped, cross-rule isolation, flood retry — `test_sync_switches_end_to_end.py` |
 | 03 | Reply ON/OFF | FAIL → fixed | `SyncEngine.handle_reply` via `MessageDispatcher._route_reply` (**new**) | The switch had **no production caller**; a reply was never mirrored |
-| 04 | Header NO/YES | PENDING | — | — |
+| 04 | Header NO/YES | FAIL → fixed | `FilterEngine.transform_text` → `apply_header_footer`; caption path `CaptionManagementEngine.format_caption` | Clear was inert (wrong metadata key); **17 owner-facing toggles were admin-gated while reading the rule unscoped** |
 | 05 | Duplicate Filters | PENDING | — | — |
 | 06 | Replace | PENDING | — | — |
 | 07 | Blacklist | PENDING | — | — |
@@ -108,3 +108,55 @@ Delivery is recorded in `message_map`, which makes a Telegram redelivery
 idempotent and makes the mirrored reply itself editable/delete-syncable like any
 other delivered copy. A failed reply send is logged and never blocks the
 forward.
+
+## 04 — Header NO/YES
+
+**Where the header lives.** `ForwardRule.header` is a getter over two keys —
+`custom_header` (the field the panel's edit step writes) and `metadata["header"]`
+(which `to_dict`/`apply_draft` write, and which backup restore populates). The
+pipeline applies it once via `FilterEngine.transform_text` →
+`apply_header_footer`, and for media through
+`CaptionManagementEngine.format_caption`, which shifts entity offsets past the
+inserted prefix.
+
+**Confirmed defect 1 — the clear button did not clear.** The panel's clear
+callback (`pro_bot_ui._cb_smart_clear_header`) emptied `custom_header` and
+`metadata["custom_header"]`, but the editor saves through the draft, which
+lands in `metadata["header"]`. A rule whose header had been saved that way kept
+rendering it after "delete": measured, `render()` still contained the text, and
+the same value came back in the next forwarded message. Fix:
+`ForwardRule.clear_header()` clears every key that can carry the header, and the
+handler calls it. Five regression tests fail on the pre-fix body (revert-proof
+run recorded); the old two-key clear is asserted to be inert, so a future
+partial clear cannot pass silently.
+
+**Confirmed defect 2 — the button was unreachable for its owner.** The same
+handler (and 16 sibling rule toggles) opened with
+`if not self._is_admin(cq.from_user.id)`, then loaded the rule with
+`self._rules.get(rule_id)` — the id straight from the callback payload. So a
+normal user pressing "clear header" was refused with an alert whose own text
+reads *not found or not owner*, while the rule was read and written
+install-wide by client-supplied id. The mandatory security rule is explicit that
+a client-provided task id is not proof of ownership.
+
+**Fix:** all 17 handlers now bind the caller's uid and go through the same
+guard the other ~200 rule reads/writes use — `_owned_rule(rule_id, uid)` and
+`_save_owned_rule(rule, uid)` (the draft save keeps passing
+`expected_version`). An owner reaches their own task; a foreign task id returns
+"not found"; the admin path (scope `None`) is unchanged. `test_header_switch_
+end_to_end.py` asserts the invariant structurally — no `_cb_*` handler may call
+`self._rules.update(` without both the scoped read and the scoped write — so the
+next toggle added cannot reintroduce the gap.
+
+**Recorded decision, not a defect:** `header_enabled` defaults to `False` and
+no surface writes it. Gating the header on it would silently switch the header
+off for every existing task, so `show_forward_header` plus the header text stay
+the authorities. A test pins that decision so it changes only deliberately.
+
+**Verified behaviour:** header and footer wrap the body once, in order;
+re-applying to already-rendered text does not stack a second header (retry/regen
+safe); the caption path prepends and shifts entities; Unicode and Persian RTL
+headers survive byte-for-byte; an empty or whitespace header adds nothing;
+replacements still run before the header and are not applied to it; one task's
+header never renders for another; the round trip (SQLite) keeps the header and
+the clear lands on disk.
