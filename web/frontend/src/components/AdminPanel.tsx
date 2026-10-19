@@ -104,7 +104,7 @@ export function AdminPanel({ lang }: Props) {
       loadUsers()
       loadOverview()
     } catch (e: any) {
-      alert(e?.message || 'Error updating user status')
+      alert(e?.message || t('ui_error_updating_user_status'))
     }
   }
 
@@ -117,7 +117,7 @@ export function AdminPanel({ lang }: Props) {
       setBcastResult(res)
       setBcastText('')
     } catch (e: any) {
-      alert(e?.message || 'Broadcast error')
+      alert(e?.message || t('ui_broadcast_error'))
     } finally {
       setBcastSending(false)
     }
@@ -135,20 +135,20 @@ export function AdminPanel({ lang }: Props) {
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
     } catch (e: any) {
-      alert(e?.message || 'Save error')
+      alert(e?.message || t('ui_save_error'))
       setSaveStatus(null)
     }
   }
 
   const handleAddAdmin = async () => {
     const num = parseInt(newAdminId, 10)
-    if (!num || num <= 0) return alert('Invalid User ID')
+    if (!num || num <= 0) return alert(t('ui_invalid_user_id'))
     try {
       await api.adminAddAdmin(num)
       setNewAdminId('')
       loadAdmins()
     } catch (e: any) {
-      alert(e?.message || 'Add admin error')
+      alert(e?.message || t('ui_add_admin_error'))
     }
   }
 
@@ -158,7 +158,7 @@ export function AdminPanel({ lang }: Props) {
       await api.adminRemoveAdmin(uid)
       loadAdmins()
     } catch (e: any) {
-      alert(e?.message || 'Remove admin error')
+      alert(e?.message || t('ui_remove_admin_error'))
     }
   }
 

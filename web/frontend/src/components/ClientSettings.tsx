@@ -198,7 +198,7 @@ export function ClientSettings({ lang }: Props) {
               type="password"
               value={apiHash}
               onChange={(e) => setApiHash(e.target.value)}
-              placeholder={settings?.api_hash_masked ? `Masked: ${settings.api_hash_masked}` : 'e.g. 0123456789abcdef0123456789abcdef'}
+              placeholder={settings?.api_hash_masked ? t('ui_masked_value', { value: settings.api_hash_masked }) : 'e.g. 0123456789abcdef0123456789abcdef'}
               style={{
                 width: '100%',
                 padding: 10,

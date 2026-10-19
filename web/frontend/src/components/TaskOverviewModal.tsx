@@ -406,7 +406,7 @@ export function TaskOverviewModal({
                 <div>
                   <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t('ui_sender_type')}</div>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>
-                    {draft.sender_type || 'Personal Telegram Account'}
+                    {draft.sender_type || t('ui_personal_telegram_account')}
                   </div>
                 </div>
                 <select
@@ -437,7 +437,7 @@ export function TaskOverviewModal({
                   <button
                     type="button"
                     onClick={() => {
-                      const newSrc = prompt('Enter Source Chat ID or Title:', draft.source_chat_id)
+                      const newSrc = prompt(t('ui_enter_source_chat_id_or_title'), draft.source_chat_id)
                       if (newSrc) setDraft({ ...draft, source_chat_id: newSrc, source_chat_name: newSrc })
                     }}
                     style={{
@@ -463,7 +463,7 @@ export function TaskOverviewModal({
                   <button
                     type="button"
                     onClick={() => {
-                      const newDst = prompt('Enter Target Chat ID or Title:', draft.target_chat_id)
+                      const newDst = prompt(t('ui_enter_target_chat_id_or_title'), draft.target_chat_id)
                       if (newDst) setDraft({ ...draft, target_chat_id: newDst, target_chat_name: newDst })
                     }}
                     style={{
@@ -1354,7 +1354,7 @@ export function TaskOverviewModal({
                     cursor: 'pointer',
                   }}
                 >
-                  {draft.cleaner_enabled ? '● Cleaner Active' : '○ Cleaner Inactive'}
+                  {draft.cleaner_enabled ? t('ui_cleaner_active') : t('ui_cleaner_inactive')}
                 </button>
               </div>
 

@@ -19,11 +19,15 @@
  *   - copy-named object properties (`{ label: 'Active' }`).
  *
  * What is not copy (documented exemptions, see `isTechnical`):
- *   brand names (`AutoTelegramForward`), URLs / routes / MIME types, CSS values,
+ *   brand names and proper nouns (`AutoTelegramForward`, `PRO GATEWAY`,
+ *   `Anthropic`), URLs / routes / MIME types, CSS values,
  *   field names and identifiers (`filter_rule_id`, `atf_lang`, `error`),
  *   log levels and env constants (`ERROR`, `ATF_API_URL`), service names
- *   (`core`, `api`, `logger`, `web`), shell commands (`systemctl --user …`),
- *   format examples (`{source_title}`, `yyyy-MM-dd`), numbers/emoji/punctuation.
+ *   (`core`, `api`, `logger`, `web`) and their health badges (`Core:6001`),
+ *   shell commands (`systemctl --user …`),
+ *   format examples (`{source_title}`, `yyyy-MM-dd`, `sk-...`, `{"key": "value"}`,
+ *   `JOIN, SCAM, PROMO`, `ms | v`), escaped glyph entities in JSX text (`&gt;`),
+ *   numbers/emoji/punctuation.
  *
  * Deliberate non-targets, because they are translations rather than copy:
  * the catalog itself (`src/locales/**`), generated label tables (`*.generated.ts`,
@@ -191,6 +195,21 @@ function hasWordRun(text) {
   return letters.length >= 2;
 }
 
+/**
+ * Proper nouns — product and company names the dashboard renders verbatim.
+ *
+ * A name reads the same in all ten locales, so "translating" one is the defect
+ * (`Anthropic` is not a Persian company, and a localized `PRO GATEWAY` would
+ * stop naming the edition in the header lockup). Keep this list to names only:
+ * a descriptive label that happens to mention a product — `Custom
+ * (OpenAI-compatible)` — is copy and must come from the catalog.
+ */
+const PROPER_NOUNS = new Set([
+  'AutoTelegramForward', // the product
+  'PRO GATEWAY', // the product edition, locked up next to it in the header
+  'Anthropic', // AI provider company (`OpenAI` the identifier rule already keeps)
+]);
+
 function isTechnical(text) {
   const raw = normalize(text);
   if (!raw) return true;
@@ -200,11 +219,33 @@ function isTechnical(text) {
   const value = raw.replace(/^[^\p{L}\p{N}]+/u, '');
   if (!value) return true;
   if (!hasWordRun(value)) return true; // numbers, emoji, punctuation, separators
-  if (value === 'AutoTelegramForward') return true; // brand
+  if (PROPER_NOUNS.has(value)) return true; // product / company name
   if (/^(?:https?:|mailto:|tel:|wss?:|data:|blob:)/i.test(value) || value.includes('://')) return true;
   if (/^(?:application|text|image|audio|video|multipart)\/[a-z0-9.+-]+$/i.test(value)) return true;
   if (/^(?:systemctl|sudo|docker|npm|npx|pip|python3?|pytest|git|curl|cd|ls|export|flutter|dart|go)\s/.test(value)) return true;
   if (/^[\d\s.,:%+\-/]+$/.test(value)) return true;
+  // Service health badge: the service name the API reports and the port it
+  // listens on (`Core:6001`, `Log:6002`, `Web:8088`) — a status readout.
+  if (/^[A-Z][A-Za-z]{1,7}:\d{2,5}$/.test(value)) return true;
+  // Format examples show the *shape* of the input rather than saying something:
+  // an elided secret after its prefix (`sk-...`, `123456789:AA…`), an
+  // enumerated list of all-caps keywords (`JOIN, SCAM, PROMO`), a hex sample
+  // (`e.g. 0123456789abcdef…`), a JSON object (`{"key": "value"}`). The elision
+  // must follow a separator, so a sentence ellipsis (`Loading…`) stays copy.
+  if (/^[A-Za-z0-9][A-Za-z0-9_-]*[-_:][A-Za-z0-9]*(?:\.{3}|…)$/.test(value)) return true;
+  if (/^[A-Z0-9_]+(?:,\s*[A-Z0-9_]+)+$/.test(value)) return true;
+  if (/^e\.g\.\s+[0-9a-f]+$/i.test(raw)) return true;
+  if (/^\{\s*"[^"]{1,32}"\s*:\s*"[^"]{0,32}"\s*\}$/.test(raw)) return true;
+  // A unit readout (`ms | v` — a duration and a version in a stat line): every
+  // piece is a unit symbol of at most two letters. Three or more (`on/off`) is
+  // a word, so it stays copy.
+  const readout = value.split(/[|·/]/);
+  if (readout.length > 1 && readout.every((piece) => /^[A-Za-z]{0,2}$/.test(piece.trim()))) return true;
+  // A field name echoed with its separator in an audit row (`rule=8f3a1c…`).
+  if (/^[a-z_][a-z0-9_]*=$/.test(value)) return true;
+  // An escaped entity in JSX text (`&gt;`) reaches the parser undecoded; it is a
+  // glyph, not a Latin word (`&amp;`, `&nbsp;`, `&#62;`).
+  if (/^&(?:[a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);$/.test(raw)) return true;
   if (/^(?:[\d.]+(?:px|rem|em|%|vh|vw|s|ms|fr)?|#[0-9a-f]{3,8}|rgba?\(|hsla?\(|calc\(|var\(|url\(|cubic-bezier\()/i.test(value)) return true;
   if (/^\/[a-z0-9_{}.\-/:]*$/i.test(value)) return true; // route / path
   if (/^[a-z0-9_{}.\-]+(?:\/[a-z0-9_{}.\-]+)+$/i.test(value)) return true; // relative path

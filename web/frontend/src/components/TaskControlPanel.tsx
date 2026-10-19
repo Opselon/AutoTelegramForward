@@ -154,7 +154,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
         setError(
           res.message
             ? `${res.error_code ? res.error_code + ': ' : ''}${res.message}`
-            : 'The server rejected these settings',
+            : t('ui_the_server_rejected_these_settings'),
         )
         return
       }
@@ -187,7 +187,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
         setError(
           res.message
             ? `${res.error_code ? res.error_code + ': ' : ''}${res.message}`
-            : 'The server refused to reset this setting',
+            : t('ui_the_server_refused_to_reset_this_setting'),
         )
         return
       }
@@ -621,7 +621,7 @@ function ChatListEditor({
             type="button"
             onClick={() => onRemove(entry)}
             disabled={!canRemove}
-            title={canRemove ? `Remove ${entry}` : removeDisabledHint}
+            title={canRemove ? t('ui_remove_name', { name: entry }) : removeDisabledHint}
             style={{
               background: 'none',
               border: 'none',
@@ -1000,7 +1000,7 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
               <button
                 type="button"
                 onClick={() => removeAt(idx)}
-                title={`Remove ${entry}`}
+                title={t('ui_remove_name', { name: entry })}
                 style={{
                   background: 'none',
                   border: 'none',

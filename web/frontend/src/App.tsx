@@ -809,7 +809,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
       setIsRuleModalOpen(false)
       showToast(t('ui_rule_saved_successfully'))
     } catch (e: any) {
-      let msg = e.message || 'Error'
+      let msg = e.message || t('ui_error')
       if (msg.includes('loop_detected') || msg.includes('Invalid rule endpoints')) {
         msg = t('ui_routing_loop_detected_source_and_target_endpoints_cannot_be_iden')
       }
@@ -1839,7 +1839,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                         <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
                           <div style={{ color: '#fbbf24', fontSize: '0.7rem' }}>{t('ui_brand_c')}</div>
                           <div style={{ fontWeight: 600, color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {rule.intermediate_channel_name || rule.intermediate_channel_id || 'Channel C'}
+                            {rule.intermediate_channel_name || rule.intermediate_channel_id || t('ui_channel_c')}
                           </div>
                           <div style={{ fontSize: '0.7rem', color: '#b45309' }}>
                             <span className="font-mono-ltr">{rule.intermediate_channel_id}</span>
@@ -2029,7 +2029,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 {(Array.isArray(rules) ? rules : []).map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.source_chat_name || r.source_chat_id} ➔ {r.target_chat_name || r.target_chat_id} (
-                    {r.use_intermediate ? 'VIP Hop via C' : r.forward_mode})
+                    {r.use_intermediate ? t('ui_vip_hop_via_c') : r.forward_mode})
                   </option>
                 ))}
               </select>
@@ -4374,7 +4374,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       : [
                           { id: 'openai', label: 'OpenAI', default_base_url: '', models: [] },
                           { id: 'anthropic', label: 'Anthropic', default_base_url: '', models: [] },
-                          { id: 'custom', label: 'Custom (OpenAI-compatible)', default_base_url: '', models: [] },
+                          { id: 'custom', label: t('ui_custom_openai_compatible'), default_base_url: '', models: [] },
                         ]
                     ).map((prov) => (
                       <option key={prov.id} value={prov.id}>
@@ -4764,7 +4764,7 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }: {
       await onSaved()
       openEditor(null)
     } catch (e: any) {
-      onToast(e.message || 'Error saving prompt')
+      onToast(e.message || t('ui_error_saving_prompt'))
     } finally {
       setSaving(false)
     }
@@ -4777,7 +4777,7 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }: {
       await onSaved()
       if (selected?.id === id) openEditor(null)
     } catch (e: any) {
-      onToast(e.message || 'Cannot delete system prompt')
+      onToast(e.message || t('ui_cannot_delete_system_prompt'))
     }
   }
 
@@ -4794,7 +4794,7 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }: {
       })
       setTestResult(r)
     } catch (e: any) {
-      onToast(e.message || 'Test failed')
+      onToast(e.message || t('ui_test_failed'))
     } finally {
       setTesting(false)
     }
