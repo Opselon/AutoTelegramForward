@@ -148,8 +148,13 @@ class _LogsScreenState extends State<LogsScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        '${format.toUpperCase()} export • '
-                        '${body.length} chars',
+                        t.get(
+                          'logs_export_summary',
+                          params: {
+                            'format': format.toUpperCase(),
+                            'count': '${body.length}',
+                          },
+                        ),
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -359,18 +364,21 @@ class _LogsScreenState extends State<LogsScreen> {
         context.read<AppState>().markExpired();
         return;
       }
+      final t = AppMessages.of(context);
       setState(
         () => _error = exc.error.message.isNotEmpty
             ? exc.error.message
-            : 'Logger request failed',
+            : t.get('logs_logger_request_failed'),
       );
     } catch (exc) {
       if (!mounted) return;
       // Never swallow: a dead endpoint must not masquerade as "no logs".
+      final t = AppMessages.of(context);
       setState(
-        () => _error =
-            'Cannot reach the log service: '
-            '${exc.toString().split('(').first.trim()}',
+        () => _error = t.get(
+          'logs_service_unreachable',
+          params: {'error': exc.toString().split('(').first.trim()},
+        ),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -398,17 +406,20 @@ class _LogsScreenState extends State<LogsScreen> {
       }
       // Audit events are a newer endpoint; an older server may not ship it.
       // Degrade to "unavailable", do not block the log view.
+      final t = AppMessages.of(context);
       setState(
         () => _auditError = exc.error.message.isNotEmpty
             ? exc.error.message
-            : 'Audit events unavailable on this server',
+            : t.get('logs_audit_unavailable'),
       );
     } catch (exc) {
       if (!mounted) return;
+      final t = AppMessages.of(context);
       setState(
-        () => _auditError =
-            'Audit events unavailable: '
-            '${exc.toString().split('(').first.trim()}',
+        () => _auditError = t.get(
+          'logs_audit_unavailable_detail',
+          params: {'error': exc.toString().split('(').first.trim()},
+        ),
       );
     } finally {
       if (mounted) setState(() => _loadingAudit = false);
@@ -910,11 +921,11 @@ class _LogsScreenState extends State<LogsScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: TextField(
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               isDense: true,
-              prefixIcon: Icon(Icons.link, size: 18),
-              hintText: 'Search by correlation ID…',
-              border: OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.link, size: 18),
+              hintText: t.get('logs_audit_search_hint'),
+              border: const OutlineInputBorder(),
             ),
             onChanged: (v) => setState(() => _correlationSearch = v),
             onSubmitted: (_) => _loadAudit(),
@@ -929,12 +940,8 @@ class _LogsScreenState extends State<LogsScreen> {
                     isEmpty: true,
                     isLoading: false,
                     error: _auditError,
-                    emptyTitle: 'No audit events yet',
-                    emptySubtitle:
-                        'Execution-assurance events appear here as messages '
-                        'flow through the pipeline.\n'
-                        'Failures show the reason code; pending work stays '
-                        'distinct from success.',
+                    emptyTitle: t.get('logs_audit_empty_title'),
+                    emptySubtitle: t.get('logs_audit_empty_sub'),
                     onRetry: _loadAudit,
                   )
                 : ListView.separated(

@@ -101,13 +101,13 @@ class _RulesScreenState extends State<RulesScreen> {
 
   Future<void> _duplicate(ForwardRule rule) async {
     final client = context.read<AppState>().buildApiClient();
+    final t = AppMessages.of(context);
     try {
       await client.duplicateRule(rule.id);
       await _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task duplicated successfully')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(t.get('rules_duplicated'))));
     } on ApiException catch (exc) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -243,12 +243,12 @@ class _RulesScreenState extends State<RulesScreen> {
                             ? r.sourceChatTitle
                             : (r.sourceChatId.isNotEmpty
                                   ? r.sourceChatId
-                                  : 'AF Route Lab Source');
+                                  : t.get('rules_source_fallback'));
                         final dstTitle = r.targetChatTitle.isNotEmpty
                             ? r.targetChatTitle
                             : (r.targetChatId.isNotEmpty
                                   ? r.targetChatId
-                                  : 'AF Route Lab Target');
+                                  : t.get('rules_target_fallback'));
                         // A task can hold several sources and several targets;
                         // the card shows the whole fan-out so a multi-entry
                         // route is visible without opening the task.
@@ -334,8 +334,12 @@ class _RulesScreenState extends State<RulesScreen> {
                                                 const SizedBox(width: 4),
                                                 Text(
                                                   r.isEnabled
-                                                      ? 'RUNNING'
-                                                      : 'PAUSED',
+                                                      ? t.get(
+                                                          'rules_status_active',
+                                                        )
+                                                      : t.get(
+                                                          'rules_status_paused',
+                                                        ),
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 10,
@@ -381,7 +385,9 @@ class _RulesScreenState extends State<RulesScreen> {
                                             Icons.copy_outlined,
                                             size: 20,
                                           ),
-                                          tooltip: 'Duplicate Task',
+                                          tooltip: t.get(
+                                            'rules_duplicate_task',
+                                          ),
                                           onPressed: () => _duplicate(r),
                                         ),
                                         IconButton(
@@ -419,9 +425,9 @@ class _RulesScreenState extends State<RulesScreen> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            const Text(
-                                              'Source',
-                                              style: TextStyle(
+                                            Text(
+                                              t.get('rules_col_source'),
+                                              style: const TextStyle(
                                                 fontSize: 11,
                                                 color: Colors.grey,
                                               ),
@@ -460,9 +466,9 @@ class _RulesScreenState extends State<RulesScreen> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.end,
                                           children: [
-                                            const Text(
-                                              'Target',
-                                              style: TextStyle(
+                                            Text(
+                                              t.get('rules_col_target'),
+                                              style: const TextStyle(
                                                 fontSize: 11,
                                                 color: Colors.grey,
                                               ),
@@ -536,14 +542,24 @@ class _RulesScreenState extends State<RulesScreen> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'Sender: ${r.senderType}',
+                                      t.get(
+                                        'rules_sender_line',
+                                        params: {'type': r.senderType},
+                                      ),
                                       style: TextStyle(
                                         fontSize: 11,
                                         color: Colors.grey.shade400,
                                       ),
                                     ),
                                     Text(
-                                      'Debug: ${r.debugMode ? 'on' : 'off'}',
+                                      t.get(
+                                        'rules_debug_line',
+                                        params: {
+                                          'st': r.debugMode
+                                              ? t.get('rules_state_on')
+                                              : t.get('rules_state_off'),
+                                        },
+                                      ),
                                       style: TextStyle(
                                         fontSize: 11,
                                         color: r.debugMode
@@ -576,9 +592,9 @@ class _RulesScreenState extends State<RulesScreen> {
                                             ),
                                           ),
                                         ),
-                                        child: const Text(
-                                          'Edit Source',
-                                          style: TextStyle(
+                                        child: Text(
+                                          t.get('rules_edit_source'),
+                                          style: const TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -603,9 +619,9 @@ class _RulesScreenState extends State<RulesScreen> {
                                             ),
                                           ),
                                         ),
-                                        child: const Text(
-                                          'Edit Target',
-                                          style: TextStyle(
+                                        child: Text(
+                                          t.get('rules_edit_target'),
+                                          style: const TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -624,7 +640,7 @@ class _RulesScreenState extends State<RulesScreen> {
                                         label: Text(
                                           r.topicId > 0
                                               ? '#${r.topicId}'
-                                              : 'Forwarding Topic',
+                                              : t.get('rules_forwarding_topic'),
                                           style: const TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.bold,
@@ -654,9 +670,9 @@ class _RulesScreenState extends State<RulesScreen> {
                                           Icons.tune_rounded,
                                           size: 14,
                                         ),
-                                        label: const Text(
-                                          'Advanced Settings',
-                                          style: TextStyle(
+                                        label: Text(
+                                          t.get('rules_advanced_settings'),
+                                          style: const TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
                                           ),

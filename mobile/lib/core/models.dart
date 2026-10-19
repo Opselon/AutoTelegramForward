@@ -1419,7 +1419,7 @@ class BotTokenInfo {
 
   factory BotTokenInfo.fromJson(Map<String, dynamic> json) => BotTokenInfo(
     id: '${json['id'] ?? ''}',
-    label: '${json['label'] ?? ''}'.isEmpty ? 'bot' : '${json['label']}',
+    label: '${json['label'] ?? ''}',
     isActive: json['is_active'] != false,
   );
 

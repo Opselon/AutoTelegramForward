@@ -130,9 +130,16 @@ class SettingsScreen extends StatelessWidget {
             title: Text(
               state.username.isNotEmpty
                   ? state.username
-                  : 'User #${state.userId}',
+                  : t.get(
+                      'settings_user_fallback',
+                      params: {'id': '${state.userId}'},
+                    ),
             ),
-            subtitle: Text(state.isAdmin ? 'Administrator' : 'Standard User'),
+            subtitle: Text(
+              state.isAdmin
+                  ? t.get('settings_role_admin')
+                  : t.get('settings_role_user'),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
