@@ -10193,7 +10193,8 @@ class ProBotUI:
                 chat_id=message.chat.id,
                 document=path,
                 caption=self._t("ui_backup_done", phone=target.phone_number, lang=lang)
-                + "\\n🔒 AES-GCM",
+                + "\n"
+                + self._t("ui_backup_cipher", lang=lang),
             )
             try:
                 self._log.info("bot", "session", "encrypted session backup exported")
