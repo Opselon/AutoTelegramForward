@@ -101,11 +101,14 @@ def editor(lang: str = "fa", saver=None) -> RegistryEditor:
 def lenient_editor(lang: str = "fa") -> RegistryEditor:
     """For the paths that *ask* about a key no catalog has, as production does.
 
-    `_has` is `t(key) != key`, so a strict translator would fail on the probe
+    The probe is `I18n.contains`, exactly as `ProBotUI._registry_editor` passes
+    it: asking whether a key exists must not go through `t`, which now names
+    every key it cannot find. A strict translator would also fail on the probe
     itself rather than on what the probe is about.
     """
     return RegistryEditor(
         translate=lambda key, **params: I18n().t(key, lang=lang, **params),
+        contains=I18n().contains,
         save=Saver(),
     )
 

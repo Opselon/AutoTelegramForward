@@ -40,6 +40,7 @@ from pyrogram.types import (
 
 from ...domain.rule_settings import SETTING_SPECS
 from . import diagnostics
+from .reason_text import reason_label
 from .registry_editor import RegistryEditor
 from .bot_transport import (
     BotApiError,
@@ -84,7 +85,7 @@ from ...application.use_cases import (
     SessionUseCases,
 )
 from ...domain import branding as branding_policy
-from ...domain.entities import AIConfig, FilterRule, ForwardRule
+from ...domain.entities import AIConfig, FilterRule, ForwardRule, clamp_delay_seconds
 from ...domain.value_objects import AIProviderType, ForwardMode, RoutingType, RoutingDecision
 from .client_pool import ClientPool
 from .errors import SEV_ERROR, SEV_FATAL, tg_detail, tg_error
@@ -6971,10 +6972,11 @@ class ProBotUI:
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            try:
-                rule.delay_seconds = float(sec_str)
-            except ValueError:
-                rule.delay_seconds = 0.0
+            # The callback payload is client-controlled: `rdly_s:<id>:nan` used to
+            # reach SQLite as NULL (NOT NULL violation), `inf` reached the job
+            # payload as invalid JSON, and a negative value left the screen showing
+            # a delay the queue ignored. Clamp to what the engine can honour.
+            rule.delay_seconds = clamp_delay_seconds(sec_str)
             await self._save_owned_rule(rule, uid)
             await cq.answer(self._t("ui_delay_status_alert", delay=f"{rule.delay_seconds:.0f}"))
             text, kbd = self._render_delay_menu(rule)
@@ -9486,7 +9488,9 @@ class ProBotUI:
             await self._persist(uid, st)
             return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
         try:
-            sec = max(0.0, float(text.strip()))
+            # Parse first so a typo is still reported as invalid, then clamp the
+            # number to a delay the workers can honour (0 .. 24h, finite).
+            sec = clamp_delay_seconds(float(text.strip()))
             rule.delay_seconds = sec
         except ValueError:
             return await message.reply_text(self._t("ui_step_delay_invalid_error"))
@@ -11388,9 +11392,9 @@ class ProBotUI:
         result_text = (
             self._t("ui_sim_dry_run_title") +
             "────────────────────\n"
-            f"📋 **Task:** `{rule.id[:8]}` ({rule.source_chat_name or rule.source_chat_id} ➔ {rule.target_chat_name or rule.target_chat_id})\n"
+            + self._t("ui_sim_task_line", task=rule.id[:8], source=rule.source_chat_name or rule.source_chat_id, target=rule.target_chat_name or rule.target_chat_id)
             + self._t("ui_sim_match_summary", match=match_status_text, cat=cat_labels.get(detected_cat, detected_cat), route=route_label)
-            + self._t("ui_sim_analysis", mode=self._logic_word(m_mode), kws=', '.join(kws) if kws else self._t("ui_clean_not_set"), rx=rx if rx else self._t("ui_clean_not_set"), reason=route_reason or reason)
+            + self._t("ui_sim_analysis", mode=self._logic_word(m_mode), kws=', '.join(kws) if kws else self._t("ui_clean_not_set"), rx=rx if rx else self._t("ui_clean_not_set"), reason=reason_label(route_reason or reason, self._t))
             + "\n".join(action_lines) + "\n\n"
             + self._t("ui_sim_footer_notes")
         )
