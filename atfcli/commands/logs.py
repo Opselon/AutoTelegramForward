@@ -16,6 +16,7 @@ import time
 from typing import Any, Sequence
 
 from .. import validators
+from ..domain.host import SERVICES
 from ..console import human_duration
 from ..domain.logs import LogQuery, canonical_level
 from ..domain.validators import LEVELS, argparse_type
@@ -32,14 +33,33 @@ def _filter_flags(parser, *, levels: bool = True) -> None:
     parser.add_argument("--level", default="", type=argparse_type("level", optional=True), help="single severity filter")
     if levels:
         parser.add_argument("--levels", default="", help="comma-separated severities (e.g. WARN,ERROR)")
-    parser.add_argument("--service", default="", help="filter by service (core/api/web/logger)")
+    # `service_argparse_type` normalises a container name (`atf-core` -> `core`)
+    # and refuses an unknown one with a suggestion, so every read verb behaves
+    # the same way for the same flag.
+    parser.add_argument(
+        "--service",
+        default="",
+        type=validators.service_argparse_type(optional=True),
+        help=f"filter by service ({validators.describe_choices(SERVICES)}; container names accepted)",
+    )
     parser.add_argument("-s", "--search", default="", help="text search in message/detail")
     parser.add_argument("-r", "--rule", default="", help="filter by task/rule id")
     parser.add_argument("--corr", default="", help="filter by correlation id")
     parser.add_argument("--category", default="", help="filter by log category")
-    parser.add_argument("--hours", type=int, default=0, help="only records from the last N hours")
-    parser.add_argument("--since", type=int, default=0, help="unix seconds: window start")
-    parser.add_argument("--until", type=int, default=0, help="unix seconds: window end")
+    # A window of zero hours is not "all time", it is a mistyped filter: the type=
+    # refuses it, while `optional=True` lets the omitted flag through as "".
+    parser.add_argument(
+        "--hours",
+        type=argparse_type("int", optional=True, minimum=1, maximum=8760),
+        default=0,
+        help="only records from the last N hours",
+    )
+    parser.add_argument(
+        "--since", type=int, default=0, help="unix seconds: window start"
+    )
+    parser.add_argument(
+        "--until", type=int, default=0, help="unix seconds: window end"
+    )
 
 
 def _query_from(args) -> LogQuery:

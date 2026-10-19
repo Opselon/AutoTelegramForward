@@ -413,7 +413,7 @@ def valid_service(value: str, *, services: Sequence[str] = (), containers: Seque
 
 def valid_service_name(value: str) -> str | None:
     """`valid_service` bound to this stack's real names, for argparse and logs."""
-    from .context import CONTAINERS, SERVICES
+    from .host import CONTAINERS, SERVICES
 
     return valid_service(value, services=SERVICES, containers=tuple(CONTAINERS.values()))
 
@@ -424,7 +424,7 @@ def service_argparse_type(*, optional: bool = False) -> Callable[[str], str]:
     `atf docker logs atf-core` and `atf docker logs core` both work because the
     container name is an alias, not a second vocabulary.
     """
-    from .context import CONTAINERS, SERVICES
+    from .host import CONTAINERS, SERVICES
 
     alias = {container: service for service, container in CONTAINERS.items()}
     return choice_argparse_type(SERVICES, label="service", alias=alias, optional=optional)

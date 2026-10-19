@@ -128,3 +128,24 @@ Each of these was a silent wrong answer, not a crash:
 
 `atf` is run as `python -m atfcli`, or as the packaged `atf.pyz`
 (`atf release portable`).
+
+## Where the rest of the surface lives
+
+The rings are not decoration: every module has a home, including the ones that
+predate the layout. The rules for placing a new module:
+
+| Module | Ring | Why |
+| --- | --- | --- |
+| `domain/validators.py` | domain | Pure string rules. The layer's only `argparse` (the `type=` adapter) and its only `socket` (a bindability probe) live here. |
+| `domain/host.py` | domain | Service names, container names, log-level vocabulary. |
+| `domain/resources.py` | domain | The API's resource shapes: field lists, request field names, plural envelope keys. |
+| `infrastructure/host/{repo,platforms,services,ports,upgrade}.py` | infrastructure | Everything that shells out, reads `/proc`, binds a socket or runs git. |
+| `infrastructure/http/*` | infrastructure | The only place JSON becomes domain objects. |
+| `application/use_cases/*` | application | One class per area. Returns dataclasses; never prints, prompts or exits. |
+| `commands/*.py` | presentation | Parsing, rendering, prompts. Reads its ports from `ctx` and never constructs an adapter. |
+
+`atfcli/{errors,api,context,platforms,ports,upgrade,services_probe}.py` are
+compatibility aliases kept so imports written before the move keep working; new
+code imports the ring module directly. `ports` and `upgrade` alias the module
+object itself, so a caller that reaches for a private helper (or patches one, as
+the upgrade tests do) still sees the module the commands use.

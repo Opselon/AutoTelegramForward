@@ -39,7 +39,6 @@ FORBIDDEN = {
         "atfcli.application",
         "requests",
         "urllib.request",
-        "socket",
         "subprocess",
     ),
     "application": (
@@ -93,20 +92,21 @@ def test_layer_never_imports_what_it_must_not(layer: str) -> None:
     assert not offenders, f"{layer} layer reached outside its ring: {offenders}"
 
 
-def test_argparse_is_confined_to_the_single_adapter_module() -> None:
-    """The domain states rules; exactly one module translates them for argparse.
+def test_process_and_argv_dependencies_are_confined_to_the_adapter_module() -> None:
+    """The domain states rules; exactly one module translates and probes.
 
-    `domain/validators.py` owns the one `argparse.ArgumentTypeError` in the layer
-    (see `argparse_type`). Any *other* domain module importing argparse means a
-    rule has been written for the command line first and the use case second,
-    which is how the two paths drift.
+    `domain/validators.py` owns the layer's only `argparse.ArgumentTypeError`
+    (see `argparse_type`) and its only bindability probe (`socket`, used to tell a
+    closed port from a busy one). Any *other* domain module importing either means
+    a rule has been written for the command line or the host first and the use
+    case second, which is how the two paths drift.
     """
     offenders = [
         path.name
         for path in _python_files("domain")
-        if path.name != "validators.py" and "argparse" in _imported_modules(path)
+        if path.name != "validators.py" and ({"argparse", "socket"} & _imported_modules(path))
     ]
-    assert not offenders, f"argparse leaked outside validators.py: {offenders}"
+    assert not offenders, f"argparse/socket leaked outside validators.py: {offenders}"
 
 
 def test_domain_modules_are_importable_without_side_effects() -> None:
@@ -161,7 +161,7 @@ def test_validators_are_shared_between_prompting_and_argparse() -> None:
     """
     from atfcli.domain import validators
 
-    kinds = ["chat", "telegram_id", "level", "service", "port", "severity"]
+    kinds = ["chat_ref", "telegram_user_id", "level", "service", "port", "severity"]
     for kind in kinds:
         broken = "!!not valid!!"
         problem = validators.check(kind, broken)
