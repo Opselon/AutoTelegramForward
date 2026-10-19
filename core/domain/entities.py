@@ -529,16 +529,23 @@ class ForwardRule:
         """Whether an edit must update the already-delivered copy in place.
 
         ``ignore_edits`` is the switch the task panel exposes ("Message Edit:
-        Sync / Ignore"); ``sync_edits`` is an older post-send gate that no
-        surface ever wrote. Because the sync engine only consulted
-        ``sync_edits``, a task showing "Sync" both skipped the in-place update
-        and fell through to the pipeline, which re-posted the edit as a brand
-        new message. An explicit ``sync_edits`` in metadata still wins;
-        otherwise the panel's switch decides.
+        Sync / Ignore"); ``sync_edits`` is an older post-send gate written by
+        API clients and by proto zero-values, which no panel shows.
+
+        The panel's Ignore is a **veto** and is checked first: a task whose
+        panel reads "Ignore" must stop updating its copies even when a stale
+        ``sync_edits=True`` sits in the metadata. It did not (measured on the
+        deployed image: ``ignore_edits=True`` with ``metadata["sync_edits"]=True``
+        still edited the target), so the visible switch was decoration for every
+        task the older API had touched. When the panel allows edits, an explicit
+        legacy ``sync_edits`` still decides, so a client that only knows the old
+        field keeps its meaning.
         """
+        if bool(self.ignore_edits):
+            return False
         if isinstance(self.metadata, dict) and "sync_edits" in self.metadata:
             return bool(self.metadata["sync_edits"])
-        return not bool(self.ignore_edits)
+        return True
 
     @property
     def album_mode(self) -> str:

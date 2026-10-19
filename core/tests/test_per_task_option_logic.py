@@ -93,7 +93,20 @@ def test_sync_edits_effective_follows_the_panel_switch():
     rule.ignore_edits = True  # panel shows "Message Edit: Ignore"
     assert rule.sync_edits_effective is False
 
-    # An explicit legacy override still wins (backup/restore, API clients).
+    # A stale legacy key cannot re-enable edits behind the panel's back: the
+    # panel's Ignore is a veto, and `SyncEngine.handle_edit` skips such a rule
+    # before it ever consults this property (measured on the deployed image:
+    # every "Ignore" row left the copy untouched, whatever the legacy key said).
+    # Reporting "Sync" here for a task whose panel reads "Ignore" was the
+    # disagreement between the two authorities that this property used to have.
+    rule.metadata["sync_edits"] = True
+    assert rule.sync_edits_effective is False
+
+    # It still decides when the panel allows edits, so clients that only know
+    # the old field keep their meaning.
+    rule.ignore_edits = False
+    rule.metadata["sync_edits"] = False
+    assert rule.sync_edits_effective is False
     rule.metadata["sync_edits"] = True
     assert rule.sync_edits_effective is True
 
