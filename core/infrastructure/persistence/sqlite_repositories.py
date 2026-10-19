@@ -818,6 +818,19 @@ class SqliteAIConfigRepository(IAIConfigRepository):
         )
         return [self._row_to_entity(r) for r in rows]
 
+    async def get_owned(self, config_id: str, owner_user_id: int) -> Optional[AIConfig]:
+        """Owner-scoped read: the caller's own config, or nothing.
+
+        Scoping in SQL (rather than reading then comparing) means a foreign row
+        is never even materialised, so no caller can accidentally hold a config
+        it does not own.
+        """
+        row = self._db.query_one(
+            "SELECT * FROM ai_configs WHERE id=? AND owner_user_id=?",
+            (config_id, int(owner_user_id or 0)),
+        )
+        return self._row_to_entity(row) if row else None
+
     async def delete(self, config_id: str) -> bool:
         cur = self._db.execute("DELETE FROM ai_configs WHERE id=?", (config_id,))
         return cur.rowcount > 0

@@ -884,8 +884,10 @@ class MessageForwardingUseCase:
         if rule.replacements:
             text = self._filter_engine.replace_text(text, rule.replacements)
 
+        # Owner-scoped for the same reason as the pipeline: a config id in a
+        # rule row is a selector, never proof that the rule's owner may spend it.
         ai_cfg = (
-            await self._ai_repo.get_by_id(rule.ai_config_id)
+            await self._ai_repo.get_owned(rule.ai_config_id, getattr(rule, "owner_user_id", 0) or 0)
             if rule.ai_config_id
             else None
         )

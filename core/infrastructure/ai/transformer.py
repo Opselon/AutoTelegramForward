@@ -105,24 +105,63 @@ class AITransformer:
     def metrics(self) -> dict:
         return dict(self._metrics)
 
+    async def _resolve_config(self, config_id: str, owner_user_id: int, role: str) -> Optional[AIConfig]:
+        """The config when the rule's owner owns it; ``None`` otherwise, loudly.
+
+        The id in a rule row is an identifier, not proof of ownership. A refusal
+        here must be distinguishable from "no such config" in the log, because
+        the two need different fixes: a foreign id is a boundary violation, an
+        ownerless legacy row needs re-saving by its user, and a missing one means
+        the config was deleted.
+        """
+        if not config_id:
+            return None
+        config = await self.ai_config_repo.get_owned(config_id, owner_user_id)
+        if config is not None:
+            return config
+        try:
+            existing = await self.ai_config_repo.get_by_id(config_id)
+        except Exception:
+            existing = None
+        if existing is None:
+            reason = "no such config"
+        elif int(existing.owner_user_id or 0) != int(owner_user_id or 0):
+            reason = (f"owned by {existing.owner_user_id}, not by rule owner {owner_user_id}"
+                      if int(existing.owner_user_id or 0) else
+                      "has no owner (re-save it to attach it to this task)")
+        else:
+            reason = "not returned by the owner-scoped read"
+        logger.warning(
+            "[AI:CONFIG_REFUSED] %s config %s refused for rule owner %s: %s",
+            role, config_id, owner_user_id, reason,
+        )
+        return None
+
     async def transform(
         self,
         request: AIRequest,
         primary_config_id: str,
         secondary_config_id: Optional[str] = None,
+        owner_user_id: int = 0,
     ) -> AIResponse:
-        """Executes AI transformation with timeout, circuit breaker, failover, and validation."""
+        """Executes AI transformation with timeout, circuit breaker, failover, and validation.
+
+        ``owner_user_id`` is the owner of the rule asking for the rewrite. Both
+        configs are resolved owner-scoped, so a rule that names another tenant's
+        config (a forged callback, an imported backup, a hand-edited row) cannot
+        spend that tenant's provider, base_url or API key.
+        """
         self._metrics["requests_total"] += 1
         start_time = time.time()
 
-        # 1. Fetch primary configuration
-        primary_config = await self.ai_config_repo.get_by_id(primary_config_id)
+        # 1. Fetch primary configuration — the caller's own, or nothing.
+        primary_config = await self._resolve_config(primary_config_id, owner_user_id, "primary")
         if not primary_config or not primary_config.is_enabled:
             self._metrics["failures_total"] += 1
             return AIResponse(
                 success=False,
                 error_code="INVALID_CONFIG",
-                error_message=f"Primary AI config '{primary_config_id}' not found or disabled",
+                error_message=f"Primary AI config '{primary_config_id}' not found, not owned by {owner_user_id} or disabled",
                 is_retryable=False,
                 execution_duration_ms=(time.time() - start_time) * 1000,
             )
@@ -149,7 +188,7 @@ class AITransformer:
         config_to_use = primary_config
         if is_failover and secondary_config_id:
             self._metrics["failovers_total"] += 1
-            secondary_config = await self.ai_config_repo.get_by_id(secondary_config_id)
+            secondary_config = await self._resolve_config(secondary_config_id, owner_user_id, "secondary")
             if secondary_config and secondary_config.is_enabled:
                 config_to_use = secondary_config
             else:

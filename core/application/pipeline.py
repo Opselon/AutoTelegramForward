@@ -1290,7 +1290,9 @@ class DurableMessagePipeline:
             # Fallback legacy provider if available
             if self._ai_repo and self._ai_factory:
                 try:
-                    ai_cfg = await self._ai_repo.get_by_id(rule.ai_config_id)
+                    # Owner-scoped: a rule that names another tenant's config
+                    # must not spend that tenant's provider or API key.
+                    ai_cfg = await self._ai_repo.get_owned(rule.ai_config_id, getattr(rule, "owner_user_id", 0) or 0)
                     if ai_cfg and ai_cfg.is_enabled:
                         provider = self._ai_factory.get(ai_cfg)
                         rewritten = await provider.rewrite(ai_cfg, text)
@@ -1351,6 +1353,9 @@ class DurableMessagePipeline:
             req,
             primary_config_id=rule.ai_config_id,
             secondary_config_id=getattr(rule, "ai_secondary_config_id", None),
+            # The rewriting engine resolves the config owner-scoped: the rule's
+            # owner must own the config it names, or the transform is refused.
+            owner_user_id=getattr(rule, "owner_user_id", 0) or 0,
         )
 
         if resp.success:
