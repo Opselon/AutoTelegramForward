@@ -1064,7 +1064,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_block_video')),
-                        secondary: const Icon(Icons.videocam_off_outlined, size: 20),
+                        secondary: const Icon(
+                          Icons.videocam_off_outlined,
+                          size: 20,
+                        ),
                         value: _blockVideo,
                         onChanged: (v) => setState(() => _blockVideo = v),
                       ),
@@ -1072,7 +1075,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(t.get('rules_block_audio')),
-                        secondary: const Icon(Icons.audiotrack_outlined, size: 20),
+                        secondary: const Icon(
+                          Icons.audiotrack_outlined,
+                          size: 20,
+                        ),
                         value: _blockAudio,
                         onChanged: (v) => setState(() => _blockAudio = v),
                       ),
