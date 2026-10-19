@@ -16,7 +16,7 @@
       "Ordered delivery lanes so a burst is delivered in the order it was posted",
       "Atomic channel cursor persistence — the poller can no longer race the connection",
       "Modern system surface shared by web and mobile, protected by a contract gate that fails on drift",
-      "Full-stack DevOps CLI with 24 command groups, plus atf validate as a CI pre-deploy gate",
+      "Full-stack DevOps CLI with 29 command groups, plus atf validate as a CI pre-deploy gate",
       "Automated upgrade engine: git pull → build → recreate → network alias repair → health gate",
       "10-language UI with enforced 1:1 catalog parity and strict English fallback"
     ]
