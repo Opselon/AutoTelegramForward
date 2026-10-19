@@ -269,3 +269,62 @@ No defect found: the durability model was designed correctly (ACID job+mapping i
 recovery as re-claim rather than re-enqueue). The five tests exist because the steer demands proof of that on the real objects,
 and because each property is one refactor away from being lost — the delay in particular survives only as long as it stays in
 `next_retry_at` and out of any in-process timer.
+
+## Part 2 STEER 12 — the features together, per tenant and per task
+
+Everything above proves one property at a time. This is the combined proof: the real ``DurableMessagePipeline``, the real
+``DurableQueueManager``, the real SQL repositories and the real worker path, against **two tenants and three tasks at once**,
+with only the Telegram client faked (it is the network).
+
+| What the combined run proves | Evidence (`core/tests/test_full_stack_cross_feature.py`) |
+|------------------------------|--------------------------------------------------------|
+| Two tenants and three tasks compose without crossing: a replacement and a header land only in the task that configures them, a blacklist drops a message for its own task only, and each task's text reaches its own target | `test_two_tenants_and_three_tasks_compose_without_crossing` |
+| A credential stays per tenant inside the integrated flow: a task naming another tenant's AI config delivers its text unchanged (fail-safe) and logs `[AI:CONFIG_REFUSED]` | `test_a_task_cannot_borrow_another_tenants_ai_config_here_either` |
+| The integrated run is durable: closing and reopening the database keeps every job with its id, and a replay by a brand-new pipeline delivers nothing twice | `test_the_integrated_run_survives_a_restart_and_a_replay` |
+| A failed delivery is recorded with the bot token redacted — the operator gets the reason, `delivery_jobs.error_detail` gets no secret — and the job is left with a retry time | `test_a_failed_delivery_is_recorded_without_the_bot_token` |
+| One message is consumed by exactly one task **per tenant** (deterministic single match), and `multi_route` fans out to the tenant's other tasks — the policy that would starve a second tenant is applied per owner, not globally | `test_one_message_is_consumed_by_one_task_per_tenant_until_multi_route` |
+
+### What the combined run found that no single-feature test would have
+
+Nothing broke in the combination, and that is itself the finding: the isolation seams are drawn where the earlier steers put
+them (owner on the rule, owner on the credential, per-task filters, per-owner routing). The one behaviour that surprises a
+reader is the single-match policy: a tenant with two tasks on one source sees only the higher-priority one until `multi_route`
+is on. It is intended, it is per owner, and it is now pinned inside the full stack — before this test it lived only in the
+routing unit tests.
+
+### Final status roll-up (28 features)
+
+| Feature | Final status | Evidence |
+|---------|--------------|----------|
+| F01 Edit sync ON/OFF | **PASS** | PR #178; `test_sync_switches_end_to_end.py` |
+| F02 Delete sync ON/OFF | **PASS** | PR #178; same |
+| F03 Reply ON/OFF | **PASS** | PR #178; same |
+| F04 Header / Footer | **PASS** | PR #181 |
+| F05 Duplicate filters | **PASS** | PR #185 |
+| F06 Replace | **PASS** | PR #188 |
+| F07 Blacklist | **PASS** | PR #191 |
+| F08 Whitelist | **PASS** | PR #191 |
+| F09 Cleaner | **PASS** | PR #192 |
+| F10 Filters | **PASS** | PR #194 |
+| F11 Set delay | **PASS** | PR #198; `test_forward_delay_end_to_end.py` (incl. a restarted worker) |
+| F12 Task status | **PASS** | PR #202 |
+| F13 Duplicate task | **PASS** | Part 2 batch B (the copy goes through `create`, so it is owned and validated); `test_task_screen_lifecycle.py` |
+| F14 Rename task | **PASS** | Part 2 batch B; owner-scoped `PATCH /rules/{id}` |
+| F15 Draft | **PASS** | Part 2 batch B + batch F; `test_ui_state_consistency.py` |
+| F16 Advanced settings | **PASS** | `test_task_overview_and_advanced_settings.py`, `test_phase2_advanced_settings_execution.py` |
+| F17 All settings | **PASS** | same store and schema as F16 |
+| F18 Delete task | **PASS** | PR #178 + Part 2 batch F (confirm payload and stack unwind) |
+| F19 Route: account / bot | **PASS** | Part 2 batch D; `test_bot_defaults_worker.py` (37) |
+| F20 Bot token | **PASS** | Part 2 batch D; `test_bot_route.py`; ownerless rows are unclaimable |
+| F21 Categories | **PASS** | caller-scoped list query; `test_cross_tenant_boundaries.py` |
+| F22 Back to Rules | **PASS** | Part 2 batch D (task id resolved through the owner) |
+| F23 Channel comments | **PARTIAL — premium addon** | entitlement enforced and never bypassed; `test_task_overview_and_advanced_settings.py` proves the flag round-trips and stays gated. The addon's delivery behaviour is not reachable for an unentitled tenant by design, so it is not exercised end to end |
+| F24 Forward every N messages | **NOT_IMPLEMENTED — premium addon** | only the flag exists (bot UI `radon:<rule>:every_n`, web `TaskOverviewModal` `locked: true`, catalog `ui_addon_every_n`); no engine path consumes it. Entitlement respected, not bypassed |
+| F25 Keyword confirmation | **PASS** | Part 2 batch C |
+| F26 Keyword reply threshold | **PASS** | Part 2 batch C/C1; `test_queue_concurrency_and_idempotency.py` |
+| F27 Auto delete message | **PASS** | the setting reaches the worker and deletion is scheduled off the delivered id (`durable_queue._schedule_auto_delete`); `test_phase2_advanced_settings_execution.py` |
+| F28 Outbound webhook | **NOT_IMPLEMENTED — premium addon** | only the flag exists (`radon:<rule>:webhook`, catalog `ui_rule_addon_webhook`); no outbound hook in the engine. Entitlement respected, not bypassed |
+
+F23, F24 and F28 are reported as what they are rather than as passing: the toggle renders and persists, which is exactly the
+evidence the steer forbids treating as proof that the feature works. Nothing was enabled to make them look complete — the
+locked-addon rule was inspected, not bypassed.
