@@ -516,7 +516,10 @@ class BotManager:
             except Exception:
                 pass
 
-        await message.reply_text(self.i18n.t("help_text", lang=lang))
+        # `help_text` was never a catalog key, so this fallback path — reached
+        # when the panel cannot render — replied with the literal string
+        # "help_text". The same body /help sends is one lookup away.
+        await message.reply_text(self.i18n.t("help", lang=lang))
 
     async def _login_reply(self, message: Message, result: str):
         lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"

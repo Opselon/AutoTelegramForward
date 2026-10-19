@@ -7932,7 +7932,9 @@ class ProBotUI:
             draft["is_active"] = not bool(draft.get("is_active", True))
             await self._persist(uid, st)
             stat = self._t("ui_rule_enabled_short") if draft["is_active"] else self._t("ui_rule_disabled_short")
-            await cq.answer(self._t("ui_draft_status_alert", status=stat))
+            # The catalog template declares `{stat}`; passing `status=` left the
+            # placeholder in the toast the user reads.
+            await cq.answer(self._t("ui_draft_status_alert", stat=stat))
             text, kbd = self._render_draft_editor(rule, draft)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
