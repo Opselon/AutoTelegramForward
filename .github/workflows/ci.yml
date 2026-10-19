@@ -79,6 +79,14 @@ jobs:
         # contracts/fixtures/ are the reference for all three.
         run: python scripts/audit_api_contract.py
 
+      - name: OpenAPI route parity
+        # docs/openapi.yaml is what every external client generates from, so it
+        # has to be the whole truth: every route api/main.go registers, nothing
+        # it does not, the same authorization class the router enforces, and an
+        # info.version equal to the module's APIVersion. It had drifted to
+        # 14 of 98 routes at version 2.3.0 while the module exported 1.0.0.
+        run: python -m pytest -q scripts/tests/test_openapi_route_parity.py
+
   go-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -114,11 +122,14 @@ jobs:
         env:
           ATF_TEST_REDIS_ADDR: 127.0.0.1:6379
         run: |
-          # The whole tree unchanged, plus the rate limiter under the race
-          # detector (it is the only Go code that will run on N replicas, so it
-          # is the only Go code whose data races matter today).
+          # The whole tree, then the whole tree again under the race detector.
+          # The detector used to run on the limiter alone, on the reasoning that
+          # it was "the only Go code with shared state" — but the handlers hold
+          # cross-request state too (the per-route limiter cache, the readiness
+          # snapshot) and every handler now runs through a shared body-reading
+          # path, so the narrow run could not observe a race in any of it.
           go test ./... -timeout 300s
-          go test ./internal/ratelimit/ -race -timeout 300s
+          go test -race ./... -timeout 600s
 
   docker-build:
     runs-on: ubuntu-latest

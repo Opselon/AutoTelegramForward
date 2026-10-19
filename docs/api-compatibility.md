@@ -42,6 +42,30 @@ within a major API version):
 an operator can reconcile a deployed server against the mobile build
 without querying it.
 
+## Log purge contract
+
+The log archive is a single shared store: it is written by every service and
+carries no tenant column on its purge path. The purge therefore cannot be
+scoped by filtering — a `DELETE`-style filter applied to a shared store is a
+cross-tenant destructive operation, and it used to be reachable by any
+authenticated caller (an omitted `rule_id` purged everything).
+
+- `POST /api/logs/purge` — body optional, `{rule_id?, older_than_hours?, ...}`.
+  - A **non-administrator MUST name a task they own** in `rule_id`; anything
+    else is `403` `rule_scope_required`. An id that is not the caller's is
+    `404`, deliberately indistinguishable from an unknown one.
+  - The installation-wide purge (no `rule_id`) is **administrator-only**.
+  - The command is audited with the verified actor and the resolved scope.
+- `DELETE /api/dlq` — purge, answering with the number of entries removed.
+
+This is a deliberate, security-driven narrowing of an endpoint that previously
+accepted an unscoped call. The route, the method and the request fields are
+unchanged, so no client breaks when it already passes `rule_id`; a client that
+relied on the installation-wide form now gets a named refusal instead of
+silently deleting other tenants' history. The dashboard
+(`handlePurgeLogs`) and the CLI both surface the scope requirement rather than
+asking the user to sign in again.
+
 ## Dead-letter queue contract
 
 A message that exhausts its retry budget lands in the dead-letter queue as one

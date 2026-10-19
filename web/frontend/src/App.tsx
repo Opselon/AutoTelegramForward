@@ -453,6 +453,16 @@ export function App({ me }: { me?: MeInfo } = {}) {
   const handlePurgeLogs = async () => {
     if (purging) return
     const keepH = Math.max(0, purgeWindowH)
+    // The log archive is one shared store and the purge path has no tenant
+    // dimension, so an installation-wide purge is administrator-only: the API
+    // refuses it with `rule_scope_required`. A tenant purges one of their own
+    // tasks, which is also the only scope the log explorer can show them.
+    // Asking for the refusal anyway would just look like a broken button.
+    const purgeRuleId = logFilterRule !== 'all' ? logFilterRule : undefined
+    if (!currentUser?.is_admin && !purgeRuleId) {
+      showToast(isRtl ? 'برای پاک‌سازی، یک تسک را انتخاب کنید' : 'Select a task before purging its logs')
+      return
+    }
     const label = keepH > 0 ? `قدیمی‌تر از ${keepH} ساعت` : 'تمام لاگ‌ها (بدون حفاظت زمانی)'
     const ruleLabel = logFilterRule !== 'all' ? `تسک ${logFilterRule.slice(0, 8)} ` : ''
     if (!window.confirm(`حذف ${ruleLabel}${logFilterLevel !== 'all' ? `سطح ${logFilterLevel} ` : ''}${logFilterService !== 'all' ? `سرویس ${logFilterService} ` : ''}${label}؟ این عمل قابل بازگشت نیست.`)) return
@@ -462,7 +472,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
       const res = await api.purgeLogs({
         level: logFilterLevel !== 'all' ? logFilterLevel : undefined,
         service: logFilterService !== 'all' ? logFilterService : undefined,
-        rule_id: logFilterRule !== 'all' ? logFilterRule : undefined,
+        rule_id: purgeRuleId,
         older_than_hours: keepH,
       })
       if (res?.success) {

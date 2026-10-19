@@ -280,41 +280,59 @@ GET /api/health/services         # per-service reachability, latency and detail 
 ```
 
 
-All API endpoints are documented with OpenAPI schemas:
+Every route is specified in [`docs/openapi.yaml`](docs/openapi.yaml) — the
+complete inventory, with the authorization class each one is served under. That
+file is what clients are generated from, and CI
+(`scripts/tests/test_openapi_route_parity.py`) fails if it and `api/main.go`
+ever disagree. The common surface:
 
 ```http
 # Health & Telemetry
 GET    /healthz
-GET    /api/v1/health/services
+GET    /api/version
+GET    /api/health/services
+GET    /api/system/setup
 
 # Forwarding Rules & Settings
-GET    /api/v1/rules
-POST   /api/v1/rules
-GET    /api/v1/rules/{id}
-PUT    /api/v1/rules/{id}
-DELETE /api/v1/rules/{id}
-POST   /api/v1/rules/{id}/pause
-POST   /api/v1/rules/{id}/resume
+GET    /api/rules
+POST   /api/rules
+GET    /api/rules/{id}
+PUT    /api/rules/{id}
+PATCH  /api/rules/{id}
+DELETE /api/rules/{id}
+POST   /api/rules/{id}/pause
+POST   /api/rules/{id}/resume
+GET    /api/rules/{id}/settings
+PATCH  /api/rules/{id}/settings
 
 # Session Management
-GET    /api/v1/sessions
-POST   /api/v1/sessions/backup
-POST   /api/v1/sessions/restore
-DELETE /api/v1/sessions/{id}
+GET    /api/sessions
+GET    /api/sessions/{sessionId}/chats
+POST   /api/sessions/{id}/backup
+DELETE /api/sessions/{id}
 
 # Filters & AI Configurations
-GET    /api/v1/filters
-POST   /api/v1/filters
-PUT    /api/v1/filters/{id}
-DELETE /api/v1/filters/{id}
-GET    /api/v1/ai
-POST   /api/v1/ai
-POST   /api/v1/ai/{id}/test
+GET    /api/filters
+POST   /api/filters
+PUT    /api/filters/{id}
+DELETE /api/filters/{id}
+GET    /api/ai-configs
+POST   /api/ai-configs
+POST   /api/ai-configs/check-key
+
+# Async tasks, queue and dead letters
+GET    /api/tasks
+POST   /api/tasks
+POST   /api/tasks/{id}/cancel
+GET    /api/dlq
+POST   /api/dlq/{id}/retry
+DELETE /api/dlq
 
 # Observability Logs
-GET    /api/v1/logs?service=&level=&search=&limit=&since=
-GET    /api/v1/logs/stats
-POST   /api/v1/logs/purge
+GET    /api/logs?service=&level=&search=&limit=&since=
+GET    /api/logs/stats
+GET    /api/logs/export
+POST   /api/logs/purge            # a tenant must name one of their own tasks; installation-wide purge is administrator-only
 ```
 
 ---

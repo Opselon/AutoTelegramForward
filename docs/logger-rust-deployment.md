@@ -140,7 +140,10 @@ Before that guard existed, a single run deposited 755 rows into the live store �
 most of them ERROR-level, reading `page row 99` — which is what an operator saw
 when they opened Logs to ask what was failing. Set
 `ATF_ACCEPTANCE_KEEP_ROWS=1` only when you need to inspect the probes afterwards;
-delete them yourself (`POST /api/logs/purge {"service":"acceptance"}`).
+delete them yourself **as an administrator**
+(`POST /api/logs/purge {"service":"acceptance"}` — a `service` filter names no
+task, so a tenant gets `403 rule_scope_required`; a tenant purges the logs of
+one of its own tasks instead).
 
 ### Behaviour differences from the retired Python engine (all in the safer direction)
 

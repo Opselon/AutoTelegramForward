@@ -2,12 +2,33 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
 	pb "autoforward/proto"
 )
+
+// bindStrict is bind with the administrator plane's own refusal wording kept
+// ("malformed JSON body"). The administrator routes read the same untrusted
+// bytes as every other route, so they get the same body cap — the cap is the
+// change here, not the message a client may already surface.
+func bindStrict(w http.ResponseWriter, r *http.Request, target any) bool {
+	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	}
+	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			bodyLimitError(w, maxJSONBodyBytes)
+			return false
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed JSON body"})
+		return false
+	}
+	return true
+}
 
 // AdminOverview handles GET /admin/overview
 func (h *Handlers) AdminOverview(w http.ResponseWriter, r *http.Request) {
@@ -92,8 +113,7 @@ func (h *Handlers) AdminSetUserStatus(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Status string `json:"status"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed JSON body"})
+	if !bindStrict(w, r, &body) {
 		return
 	}
 
@@ -122,8 +142,7 @@ func (h *Handlers) AdminBroadcast(w http.ResponseWriter, r *http.Request) {
 		Message string `json:"message"`
 		Target  string `json:"target"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed JSON body"})
+	if !bindStrict(w, r, &body) {
 		return
 	}
 	if strings.TrimSpace(body.Message) == "" {
@@ -179,8 +198,7 @@ func (h *Handlers) AdminSaveSettings(w http.ResponseWriter, r *http.Request) {
 		WebURL           string `json:"web_url"`
 		RegistrationOpen bool   `json:"registration_open"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed JSON body"})
+	if !bindStrict(w, r, &body) {
 		return
 	}
 
@@ -234,7 +252,10 @@ func (h *Handlers) AdminAddAdmin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		UserID int64 `json:"user_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.UserID <= 0 {
+	if !bindStrict(w, r, &body) {
+		return
+	}
+	if body.UserID <= 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "valid numeric user_id required"})
 		return
 	}
@@ -365,8 +386,7 @@ func (h *Handlers) ClientSaveCredentials(w http.ResponseWriter, r *http.Request)
 		ApiID   int64  `json:"api_id"`
 		ApiHash string `json:"api_hash"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed JSON body"})
+	if !bindStrict(w, r, &body) {
 		return
 	}
 

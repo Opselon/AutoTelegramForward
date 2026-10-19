@@ -383,7 +383,7 @@ const apiGroups = [
       ['GET', '/api/logs?service=&level=&search=&limit=&since=', 'Query attributable log history with bounded paging'],
       ['GET', '/api/logs/stats', 'Aggregate counts by service and level'],
       ['GET', '/api/logs/policy', 'Which levels and services the engine admits'],
-      ['POST', '/api/logs/purge', "Purge log history for the caller's scope"],
+      ['POST', '/api/logs/purge', "Purge log history for one of the caller's own tasks (the installation-wide purge is administrator-only)"],
       ['GET', '/api/stats', 'Delivery throughput and outcome counters'],
       ['GET', '/api/queue', 'Queue depth and in-flight jobs'],
       ['GET', '/api/dlq', 'Dead-lettered jobs'],

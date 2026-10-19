@@ -32,7 +32,15 @@ func (f *fakeAdminClient) ListUsers(_ context.Context, in *pb.AdminListUsersRequ
 
 type fakeDeliveryClient struct {
 	pb.DeliveryControlServiceClient
-	got []*pb.ListDeadLetterRequest
+	got       []*pb.ListDeadLetterRequest
+	lastPurge *pb.PurgeDeadLetterRequest
+}
+
+// PurgeDeadLetter completes the fake so the DLQ purge path can be driven too:
+// its body is optional, and an empty one used to corrupt the response.
+func (f *fakeDeliveryClient) PurgeDeadLetter(_ context.Context, in *pb.PurgeDeadLetterRequest, _ ...grpc.CallOption) (*pb.RuleActionResponse, error) {
+	f.lastPurge = in
+	return &pb.RuleActionResponse{Success: true, Message: "purged"}, nil
 }
 
 func (f *fakeDeliveryClient) ListDeadLetter(_ context.Context, in *pb.ListDeadLetterRequest, _ ...grpc.CallOption) (*pb.ListDeadLetterResponse, error) {
