@@ -438,3 +438,83 @@ def test_the_pipeline_stores_both_deliverables_for_a_keyword_match(db):
         assert rows["forward"]["target_chat_id"] == TARGET_A, rows["forward"]
 
     asyncio.run(run())
+
+
+# --------------------------------------------------------------------------- #
+# The worker: both deliverables ship, only the forward is recorded
+# --------------------------------------------------------------------------- #
+class _RecordingClient:
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+
+    async def send_message(self, chat_id, text, **kwargs):
+        class Sent:
+            id = 9000 + len(self.sent) + 1
+        self.sent.append({"chat_id": chat_id, "text": text, "kwargs": kwargs})
+        return Sent()
+
+    async def send_file(self, *args, **kwargs):  # pragma: no cover - not used here
+        raise AssertionError("a text-only reply must not upload the source media")
+
+    async def copy_message(self, *args, **kwargs):  # pragma: no cover
+        raise AssertionError("a text-only reply must not copy the source message")
+
+
+class _Pool:
+    def __init__(self, client) -> None:
+        self._client = client
+
+    def get(self, session_id):
+        return self._client
+
+    def __getitem__(self, session_id):
+        return self._client
+
+
+def test_the_worker_ships_both_deliverables_and_records_only_the_forward(db):
+    """End to end: enqueue a forward and a reply, dispatch both, check the map.
+
+    This is the defect D5 in full: after both deliveries the mapping row must
+    still name the *forward's* post, and both jobs must be SENT.
+    """
+    async def run():
+        from core.domain.value_objects import DeliveryStatus
+
+        await seed(db, make_rule("r-16"))
+        client = _RecordingClient()
+        queue = DurableQueueManager(
+            queue_repo=SqliteDeliveryQueueRepository(db),
+            message_map_repo=SqliteMessageMapRepository(db),
+            client_pool=_Pool(client),
+            rule_repo=SqliteForwardRuleRepository(db),
+            num_workers=1,
+        )
+        rule = await SqliteForwardRuleRepository(db).get_by_id("r-16")
+        assert await queue.enqueue_delivery(rule, payload(22, "buy BTC now"),
+                                           TARGET_A, "buy BTC now") is True
+        assert await queue.enqueue_delivery(rule, payload(22, "buy BTC now"),
+                                           TARGET_A, "keyword matched!",
+                                           job_kind="keyword_reply") is True
+
+        repo = SqliteDeliveryQueueRepository(db)
+        for _ in range(4):
+            for job in await repo.claim_batch(worker_id="w", batch_size=5, lease_duration=30):
+                confirmed = await queue._process_job("w", job)
+                if confirmed is not None:
+                    await repo.mark_sent(*confirmed)
+
+        assert len(client.sent) == 2, client.sent
+        assert {s["text"] for s in client.sent} == {"buy BTC now", "keyword matched!"}, client.sent
+        assert {str(s["chat_id"]) for s in client.sent} == {TARGET_A}, client.sent
+
+        mapping = (await SqliteMessageMapRepository(db).get_by_source(SOURCE, 22))[0]
+        forward_id = next(i for i, s in enumerate(client.sent, start=9001)
+                          if s["text"] == "buy BTC now")
+        assert int(mapping.target_message_id or 0) == forward_id, (mapping, client.sent)
+        assert str(getattr(mapping.delivery_status, "value", mapping.delivery_status)) == "SENT", mapping
+
+        statuses = {str(r["job_kind"]): r["status"] for r in jobs_rows(db)}
+        assert statuses == {"forward": "SENT", "keyword_reply": "SENT"}, statuses
+        assert DeliveryStatus.SENT.value == "SENT"  # the status the map is compared against
+
+    asyncio.run(run())
