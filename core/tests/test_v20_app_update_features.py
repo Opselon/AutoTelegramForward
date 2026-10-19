@@ -17,7 +17,12 @@ import asyncio
 
 import pytest
 
-from core.domain.entities import CleanerRule, ForwardRule, MessagePayload
+from core.domain.entities import (
+    MAX_FORWARD_DELAY_SECONDS,
+    CleanerRule,
+    ForwardRule,
+    MessagePayload,
+)
 from core.domain.services import AdvancedSettingsEngine
 from core.domain.value_objects import ForwardMode, MediaType
 
@@ -237,9 +242,14 @@ class TestSetDelayForward:
         assert AdvancedSettingsEngine.get_dispatch_delay(rule) == 12.0
 
     def test_delay_is_bounded(self):
+        # Bounded by the maximum the settings schema advertises, so the value a
+        # task can configure is the value the engine honours. This used to cap
+        # at 3600 s while the schema allowed 86400 s.
         rule = _rule()
         rule.forward_delay_seconds = 10_000.0
-        assert AdvancedSettingsEngine.get_dispatch_delay(rule) == 3600.0
+        assert AdvancedSettingsEngine.get_dispatch_delay(rule) == 10_000.0
+        rule.forward_delay_seconds = 100_000.0
+        assert AdvancedSettingsEngine.get_dispatch_delay(rule) == MAX_FORWARD_DELAY_SECONDS
 
     def test_negative_delay_is_zero(self):
         rule = _rule()
