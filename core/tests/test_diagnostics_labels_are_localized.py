@@ -94,6 +94,38 @@ def build_ui(locale: str = "fa", *, error_log=None, metrics=None, dispatcher=Non
     return ui
 
 
+@pytest.fixture(autouse=True)
+def _the_render_language_does_not_outlive_the_test():
+    """`_BOT_RENDER_LANGUAGE` is a process-wide ContextVar, not a fixture.
+
+    `build_ui()` below sets it so a screen renders in the language under test.
+    The production wrapper resets it in a `finally`; a test has no such wrapper,
+    so without this the chosen language — "fa" for the RTL cases — survives into
+    every later module and renders their text in Persian. That is the same leak
+    the render-language rule exists to prevent, just inside the test process.
+
+    The context is cleared on the way in as well, so a language leaked by an
+    earlier module cannot decide what an assertion in this file reads, and the
+    token restored on the way out leaves the process exactly as it was found.
+    """
+    token = _BOT_RENDER_LANGUAGE.set(None)
+    try:
+        yield
+    finally:
+        _BOT_RENDER_LANGUAGE.reset(token)
+
+
+def test_build_ui_renders_in_the_language_under_test():
+    """`build_ui` chooses a language by setting the render context.
+
+    Which is exactly why the fixture above exists: this value would otherwise
+    still be here for the next test and the next module to render in.
+    """
+    ui = build_ui("fa")
+    assert ui is not None
+    assert _BOT_RENDER_LANGUAGE.get(None) == "fa"
+
+
 # --------------------------------------------------------------------------- #
 # the catalog carries the vocabularies
 # --------------------------------------------------------------------------- #
