@@ -148,8 +148,13 @@ class _LogsScreenState extends State<LogsScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        '${format.toUpperCase()} export • '
-                        '${body.length} chars',
+                        t.get(
+                          'logs_export_summary',
+                          params: {
+                            'format': format.toUpperCase(),
+                            'count': '${body.length}',
+                          },
+                        ),
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -910,11 +915,11 @@ class _LogsScreenState extends State<LogsScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: TextField(
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               isDense: true,
-              prefixIcon: Icon(Icons.link, size: 18),
-              hintText: 'Search by correlation ID…',
-              border: OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.link, size: 18),
+              hintText: t.get('logs_audit_search_hint'),
+              border: const OutlineInputBorder(),
             ),
             onChanged: (v) => setState(() => _correlationSearch = v),
             onSubmitted: (_) => _loadAudit(),
@@ -929,12 +934,8 @@ class _LogsScreenState extends State<LogsScreen> {
                     isEmpty: true,
                     isLoading: false,
                     error: _auditError,
-                    emptyTitle: 'No audit events yet',
-                    emptySubtitle:
-                        'Execution-assurance events appear here as messages '
-                        'flow through the pipeline.\n'
-                        'Failures show the reason code; pending work stays '
-                        'distinct from success.',
+                    emptyTitle: t.get('logs_audit_empty_title'),
+                    emptySubtitle: t.get('logs_audit_empty_sub'),
                     onRetry: _loadAudit,
                   )
                 : ListView.separated(

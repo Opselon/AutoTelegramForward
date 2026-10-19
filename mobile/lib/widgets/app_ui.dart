@@ -14,6 +14,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
+import '../l10n/app_messages.dart';
 
 /// Card with a section title, optional trailing widget and body child.
 class SectionCard extends StatelessWidget {
@@ -190,13 +191,20 @@ class StatusPill extends StatelessWidget {
   });
 
   /// Convenience constructor for the ubiquitous online/offline case.
-  factory StatusPill.online(bool online, {String? label, bool dense = false}) =>
-      StatusPill(
-        label: label ?? (online ? 'ONLINE' : 'OFFLINE'),
-        color: AppTheme.statusColor(online),
-        icon: online ? Icons.check_circle : Icons.cancel,
-        dense: dense,
-      );
+  ///
+  /// [label] is required: this widget has no `BuildContext` of its own, and the
+  /// previous `'ONLINE'`/`'OFFLINE'` default rendered English in all nine other
+  /// locales. Callers pass the catalog's own words.
+  factory StatusPill.online(
+    bool online, {
+    required String label,
+    bool dense = false,
+  }) => StatusPill(
+    label: label,
+    color: AppTheme.statusColor(online),
+    icon: online ? Icons.check_circle : Icons.cancel,
+    dense: dense,
+  );
 
   final String label;
   final Color color;
@@ -703,7 +711,12 @@ class InlineBanner extends StatelessWidget {
             ),
           ),
           if (onRetry != null)
-            TextButton(onPressed: onRetry, child: Text(retryLabel ?? 'Retry')),
+            TextButton(
+              onPressed: onRetry,
+              child: Text(
+                retryLabel ?? AppMessages.of(context).get('action_retry'),
+              ),
+            ),
         ],
       ),
     );

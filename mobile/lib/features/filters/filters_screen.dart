@@ -93,7 +93,7 @@ class _FiltersScreenState extends State<FiltersScreen> {
                 autofocus: true,
                 decoration: InputDecoration(
                   labelText: t.get('filters_pattern'),
-                  hintText: 'badword, @channel, http...',
+                  hintText: t.get('filters_pattern_hint'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -264,7 +264,12 @@ class _FiltersScreenState extends State<FiltersScreen> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            subtitle: Text('Kind: ${f.kind}'),
+                            subtitle: Text(
+                              t.get(
+                                'filters_kind_summary',
+                                params: {'kind': _kindLabel(t, f.kind)},
+                              ),
+                            ),
                             onTap: () => _addOrEdit(f),
                             trailing: IconButton(
                               icon: const Icon(
@@ -283,4 +288,16 @@ class _FiltersScreenState extends State<FiltersScreen> {
       ),
     );
   }
+}
+
+/// The filter kind as the catalog names it.
+///
+/// `kind` arrives from the API as an identifier (`blacklist`, `whitelist`,
+/// `link`); the list used to print it verbatim next to a hardcoded English
+/// "Kind:" prefix. Known kinds resolve through the same keys the editor's
+/// dropdown uses, and an unknown one falls back to the raw identifier rather
+/// than an invented label.
+String _kindLabel(AppMessages t, String kind) {
+  const known = <String>{'blacklist', 'whitelist', 'link'};
+  return known.contains(kind) ? t.get('filters_kind_$kind') : kind;
 }

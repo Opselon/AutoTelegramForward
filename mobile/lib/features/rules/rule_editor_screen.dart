@@ -699,10 +699,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                     flex: 3,
                     child: TextFormField(
                       controller: _nameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Task Name',
+                      decoration: InputDecoration(
+                        labelText: t.get('rules_task_name'),
                         hintText: 'af_route_lab_b',
-                        prefixIcon: Icon(Icons.label_outline),
+                        prefixIcon: const Icon(Icons.label_outline),
                       ),
                     ),
                   ),
@@ -712,10 +712,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                     child: TextFormField(
                       controller: _topicCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Topic #',
-                        hintText: '0 (disabled)',
-                        prefixIcon: Icon(Icons.tag),
+                      decoration: InputDecoration(
+                        labelText: t.get('rules_topic_label'),
+                        hintText: t.get('rules_topic_hint'),
+                        prefixIcon: const Icon(Icons.tag),
                       ),
                     ),
                   ),
@@ -726,22 +726,22 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
               // Sender Type
               DropdownButtonFormField<String>(
                 initialValue: _senderType,
-                decoration: const InputDecoration(
-                  labelText: 'Sender Type',
-                  prefixIcon: Icon(Icons.person_outline),
+                decoration: InputDecoration(
+                  labelText: t.get('rules_sender_type'),
+                  prefixIcon: const Icon(Icons.person_outline),
                 ),
-                items: const [
+                items: [
                   DropdownMenuItem(
                     value: 'Personal Telegram Account',
-                    child: Text('Personal Telegram Account'),
+                    child: Text(t.get('rules_sender_account')),
                   ),
                   DropdownMenuItem(
                     value: 'Bot Account',
-                    child: Text('Bot Account'),
+                    child: Text(t.get('rules_sender_bot')),
                   ),
                   DropdownMenuItem(
                     value: 'MTProto Premium Userbot',
-                    child: Text('MTProto Premium Userbot'),
+                    child: Text(t.get('rules_sender_userbot')),
                   ),
                 ],
                 onChanged: (val) => setState(
@@ -983,7 +983,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                 controller: _filtersCtrl,
                 decoration: InputDecoration(
                   labelText: t.get('rules_filters'),
-                  hintText: 'word1, word2, badlink',
+                  hintText: t.get('rules_filters_hint'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1004,7 +1004,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                 maxLines: 2,
                 decoration: InputDecoration(
                   labelText: t.get('rules_header'),
-                  hintText: 'Header text or {source_title}',
+                  hintText: t.get('rules_header_hint'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1014,7 +1014,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                 maxLines: 2,
                 decoration: InputDecoration(
                   labelText: t.get('rules_footer'),
-                  hintText: 'Footer text',
+                  hintText: t.get('rules_footer_hint'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1225,18 +1225,14 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         children: [
                           SwitchListTile(
                             title: Text(t.get('rules_filters_dup')),
-                            subtitle: const Text(
-                              'Media & text deep fingerprint deduplication',
-                            ),
+                            subtitle: Text(t.get('rules_filters_dup_sub')),
                             value: _duplicateFilters,
                             onChanged: (v) =>
                                 setState(() => _duplicateFilters = v),
                           ),
                           SwitchListTile(
                             title: Text(t.get('rules_filters_crypto')),
-                            subtitle: const Text(
-                              'Signal detection, wallet cleaner, pair parsing',
-                            ),
+                            subtitle: Text(t.get('rules_filters_crypto_sub')),
                             value: _cryptoMode,
                             onChanged: (v) => setState(() => _cryptoMode = v),
                           ),
@@ -1251,7 +1247,17 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         ),
                         title: Text(t.get('rules_sec_schedules')),
                         subtitle: Text(
-                          'Auto Posting: ${_autoPosting ? "ON" : "OFF"} • Power: ${_powerControl ? "ON" : "OFF"}',
+                          t.get(
+                            'rules_sched_summary',
+                            params: {
+                              'auto': _autoPosting
+                                  ? t.get('rules_state_on')
+                                  : t.get('rules_state_off'),
+                              'power': _powerControl
+                                  ? t.get('rules_state_on')
+                                  : t.get('rules_state_off'),
+                            },
+                          ),
                         ),
                         children: [
                           SwitchListTile(
@@ -1274,7 +1280,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           color: Colors.purple,
                         ),
                         title: Text(t.get('rules_sec_time_forward')),
-                        subtitle: Text('Delay & Edit Time limits'),
+                        subtitle: Text(t.get('rules_time_forward_sub')),
                         children: [
                           Padding(
                             padding: const EdgeInsets.all(8),
@@ -1284,8 +1290,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                   child: TextFormField(
                                     controller: _delayCtrl,
                                     keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Set Delay (seconds)',
+                                    decoration: InputDecoration(
+                                      labelText: t.get('rules_time_delay'),
                                     ),
                                   ),
                                 ),
@@ -1294,8 +1300,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                   child: TextFormField(
                                     controller: _editTimeCtrl,
                                     keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Max Edit Time (seconds)',
+                                    decoration: InputDecoration(
+                                      labelText: t.get('rules_time_edit_limit'),
                                     ),
                                   ),
                                 ),
@@ -1366,7 +1372,17 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         ),
                         title: Text(t.get('rules_sec_processing')),
                         subtitle: Text(
-                          'Raw Text: ${_processRawText ? "ON" : "OFF"} • Btn2Txt: ${_buttonToText ? "ON" : "OFF"}',
+                          t.get(
+                            'rules_proc_summary',
+                            params: {
+                              'raw': _processRawText
+                                  ? t.get('rules_state_on')
+                                  : t.get('rules_state_off'),
+                              'btn2txt': _buttonToText
+                                  ? t.get('rules_state_on')
+                                  : t.get('rules_state_off'),
+                            },
+                          ),
                         ),
                         children: [
                           SwitchListTile(
@@ -1398,25 +1414,25 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                               children: [
                                 TextFormField(
                                   controller: _headerCtrl,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Header Text',
-                                    hintText: 'HEADER EMPTY',
+                                  decoration: InputDecoration(
+                                    labelText: t.get('rules_header'),
+                                    hintText: t.get('rules_header_empty_hint'),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 TextFormField(
                                   controller: _footerCtrl,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Footer Text',
-                                    hintText: 'FOOTER EMPTY',
+                                  decoration: InputDecoration(
+                                    labelText: t.get('rules_footer'),
+                                    hintText: t.get('rules_footer_empty_hint'),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 TextFormField(
                                   controller: _watermarkCtrl,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Watermark Text',
-                                    hintText: 'Empty',
+                                  decoration: InputDecoration(
+                                    labelText: t.get('rules_watermark_label'),
+                                    hintText: t.get('rules_watermark_hint'),
                                   ),
                                 ),
                               ],
@@ -1566,26 +1582,20 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         children: [
                           SwitchListTile(
                             title: Text(t.get('rules_ai_ocr')),
-                            subtitle: const Text(
-                              'Optical character recognition via vision AI',
-                            ),
+                            subtitle: Text(t.get('rules_ai_ocr_sub')),
                             value: _ocrImageAi,
                             onChanged: (v) => setState(() => _ocrImageAi = v),
                           ),
                           SwitchListTile(
                             title: Text(t.get('rules_ai_rewrite')),
-                            subtitle: const Text(
-                              'LLM intelligent content rephrasing',
-                            ),
+                            subtitle: Text(t.get('rules_ai_rewrite_sub')),
                             value: _smartAiRewrite,
                             onChanged: (v) =>
                                 setState(() => _smartAiRewrite = v),
                           ),
                           SwitchListTile(
                             title: Text(t.get('rules_ai_digest')),
-                            subtitle: const Text(
-                              'Automated news summary bullets',
-                            ),
+                            subtitle: Text(t.get('rules_ai_digest_sub')),
                             value: _newsDigest,
                             onChanged: (v) => setState(() => _newsDigest = v),
                           ),

@@ -797,7 +797,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
                 ),
               ),
               for (final bot in _bots)
-                DropdownMenuItem(value: bot.id, child: Text(bot.label)),
+                DropdownMenuItem(value: bot.id, child: Text(_botName(t, bot))),
             ],
             onChanged: _bots.isEmpty
                 ? null
@@ -913,7 +913,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            t.get('rules_bot_added', params: {'label': info.label}),
+            t.get('rules_bot_added', params: {'label': _botName(t, info)}),
           ),
         ),
       );
@@ -933,7 +933,10 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
       builder: (dialogContext) => AlertDialog(
         title: Text(t.get('rules_bot_remove')),
         content: Text(
-          t.get('rules_bot_remove_confirm', params: {'label': bot.label}),
+          t.get(
+            'rules_bot_remove_confirm',
+            params: {'label': _botName(t, bot)},
+          ),
         ),
         actions: [
           TextButton(
@@ -1394,3 +1397,11 @@ const Map<String, String> _groupLabelKeys = {
   // dashboard and the sheet both render, so it needs an authored label.
   'route': 'rules_settings_group_route',
 };
+
+/// A bot token's display name.
+///
+/// The label is optional on the server, so it arrives empty for an unnamed
+/// token; an empty string would leave a blank dropdown row and a dialog that
+/// reads "Remove ?". The catalog supplies the stand-in.
+String _botName(AppMessages t, BotTokenInfo bot) =>
+    bot.label.isEmpty ? t.get('rules_bot_untitled') : bot.label;

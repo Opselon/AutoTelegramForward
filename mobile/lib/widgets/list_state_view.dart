@@ -5,6 +5,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../l10n/app_messages.dart';
+
 ///   * [isLoading] — a request is in flight; show a spinner, not "no data".
 ///   * [error] is non-empty — the request FAILED (dead endpoint, auth, 5xx);
 ///     the user must see what went wrong, otherwise an unreachable server
@@ -32,6 +34,7 @@ class ListStateView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final t = AppMessages.of(context);
 
     if (isLoading) {
       return Center(
@@ -42,7 +45,7 @@ class ListStateView extends StatelessWidget {
             children: [
               const CircularProgressIndicator(),
               const SizedBox(height: 12),
-              Text('Loading…', style: theme.textTheme.bodySmall),
+              Text(t.get('state_loading'), style: theme.textTheme.bodySmall),
             ],
           ),
         ),
@@ -59,7 +62,7 @@ class ListStateView extends StatelessWidget {
               Icon(Icons.cloud_off, size: 40, color: theme.colorScheme.error),
               const SizedBox(height: 12),
               Text(
-                'Could not load data',
+                t.get('state_load_failed'),
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -77,7 +80,7 @@ class ListStateView extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Retry'),
+                label: Text(t.get('action_retry')),
               ),
             ],
           ),

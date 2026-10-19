@@ -6,6 +6,7 @@
 library;
 
 import 'package:autoforward_mobile/core/theme.dart';
+import 'package:autoforward_mobile/l10n/app_messages.dart';
 import 'package:autoforward_mobile/widgets/app_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -73,14 +74,21 @@ void main() {
 
   group('StatusPill', () {
     testWidgets('online and offline use different colours', (tester) async {
-      await tester.pumpWidget(_host(StatusPill.online(true)));
-      final up = tester.widget<Text>(find.text('ONLINE'));
+      // The pill's wording is the catalog's, so the test feeds it the same way
+      // the screens do: through the English catalog, not a bare literal.
+      const en = AppMessages(Locale('en'));
+      await tester.pumpWidget(
+        _host(StatusPill.online(true, label: en.get('status_online'))),
+      );
+      final up = tester.widget<Text>(find.text('Online'));
       // The healthy colour is the success hue; the brand hue means brand.
       expect(up.style?.color, AppTheme.statusColor(true));
       expect(AppTheme.statusColor(true), AppTheme.success);
 
-      await tester.pumpWidget(_host(StatusPill.online(false)));
-      final down = tester.widget<Text>(find.text('OFFLINE'));
+      await tester.pumpWidget(
+        _host(StatusPill.online(false, label: en.get('status_offline'))),
+      );
+      final down = tester.widget<Text>(find.text('Offline'));
       expect(down.style?.color, AppTheme.error);
     });
 
