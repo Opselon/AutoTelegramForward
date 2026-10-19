@@ -231,12 +231,23 @@ atf restart           # Safe sequential restart
 atf status            # Check live status, PIDs, and listening ports
 atf health            # Deep multi-layer diagnostics (DB, binaries, ports, gRPC)
 atf logs              # Real-time streaming service logs with filtering
+atf rules list        # Forwarding tasks: lifecycle, settings, sources, simulate
+atf ai list           # AI provider configs + check-key (probe a key before saving)
+atf prompts test      # Render a prompt template against a live AI config
+atf filters explain   # Plain-language reading of what a filter drops
+atf audit events      # Audit trail, tenant-scoped server-side
 atf version           # Display version and runtime execution mode
 atf service install   # Install OS background daemon (systemd / launchd / TaskScheduler)
 atf docker up/down    # Full Docker Compose orchestration
 atf k8s apply/status  # Production Kubernetes cluster deployments
 atf test              # Run multi-stack test suites
 ```
+
+`atfcli` is a layered package — `domain` (rules) → `application` (use cases and
+ports) → `infrastructure` (API and host adapters) → `commands` (argparse), with
+the dependency direction enforced by a test. See
+[docs/cli-architecture.md](docs/cli-architecture.md) for the layering, the
+command surface and the wire contracts it pins.
 
 ---
 

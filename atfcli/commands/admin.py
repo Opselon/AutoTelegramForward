@@ -1,10 +1,17 @@
-"""Administrator control plane: users, admins, extensions, global settings, broadcasts."""
+"""`atf admin` — the administrator control plane.
+
+Users, administrators, extensions, platform settings and broadcasts. The
+vocabulary each verb accepts comes from the application layer, so `--help`, the
+wizard and the request agree — and a status the core will refuse (`blocked`) is
+refused here, before the round trip, with the two values it does accept.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from ..context import is_secret_name
+from ..application.use_cases.admin import USER_STATUSES
+from ..domain.secrets import is_secret_name
 from ..errors import UsageError
 from . import _shared as sh
 
@@ -12,125 +19,133 @@ NAME = "admin"
 HELP = "Manage system users, administrators, extensions, and global settings"
 
 
-def _overview(ctx, args) -> None:
-    data = ctx.api.get("/api/admin/overview")
-    if args.json:
+def _render(value: Any) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item) for item in value) or "—"
+    if isinstance(value, dict):
+        return ", ".join(f"{k}={v}" for k, v in value.items()) or "—"
+    return str(value) if value not in (None, "") else "—"
+
+
+def _overview(ctx, args) -> int:
+    data = ctx.uc.admin.overview()
+    if ctx.want_json():
         ctx.out.json(data)
-        return
+        return 0
     ctx.out.title("System Administrator Overview")
-    if isinstance(data, dict):
-        ctx.out.kv([(k, v) for k, v in data.items() if not isinstance(v, (dict, list))])
+    for key, value in sorted(data.items()):
+        if isinstance(value, (dict, list)):
+            continue
+        ctx.out.kv([(key.replace("_", " "), _render(value))])
+    for key, value in sorted(data.items()):
+        if not isinstance(value, (dict, list)) or not value:
+            continue
+        ctx.out.line()
+        ctx.out.title(key.replace("_", " "))
+        if isinstance(value, dict):
+            ctx.out.kv([(str(k), _render(v)) for k, v in value.items()])
+        else:
+            ctx.out.line("  " + _render(value))
+    return 0
 
 
-def _users_list(ctx, args) -> None:
-    data = ctx.api.get("/api/admin/users")
-    items = sh.list_of(data, "users")
-    if args.json:
-        ctx.out.json({"count": len(items), "users": items})
-        return
-    rows = []
-    for u in items:
-        rows.append(
-            [
-                str(u.get("id") or u.get("user_id") or "—"),
-                u.get("username") or "—",
-                u.get("role") or ("admin" if u.get("is_admin") else "user"),
-                "active" if u.get("is_active", True) else "suspended",
-                str(u.get("rules_count", u.get("task_count", 0))),
-            ]
-        )
+def _users_list(ctx, args) -> int:
+    users = ctx.uc.admin.users(limit=int(args.limit or 50), offset=int(args.offset or 0))
+    if ctx.want_json():
+        ctx.out.json({"count": len(users), "users": [user.to_json() for user in users]})
+        return 0
+    rows = [
+        [user.id, user.username or "—", user.role or "user", "active" if user.active else "suspended", str(user.tasks)]
+        for user in users
+    ]
     ctx.out.table(("USER ID", "USERNAME", "ROLE", "STATUS", "TASKS"), rows, empty="no users found")
     ctx.out.line()
-    ctx.out.line(f"  {len(items)} registered user(s)")
+    ctx.out.line(f"  {len(users)} registered user(s)")
+    return 0
 
 
-def _user_status(ctx, args) -> None:
-    uid = args.user_id
-    status = args.status
-    res = ctx.api.post(f"/api/admin/users/{uid}/status", payload={"status": status})
-    ctx.out.emit(res, f"Updated user {uid} status to {status}")
+def _user_status(ctx, args) -> int:
+    outcome = ctx.uc.admin.set_user_status(args.user_id, args.status)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _broadcast(ctx, args) -> None:
-    message = args.message
-    if not message:
-        raise UsageError("Message is required for broadcast")
-    sh.confirm_or_fail(ctx, f"Broadcast message to all users?")
-    res = ctx.api.post("/api/admin/broadcast", payload={"message": message})
-    ctx.out.emit(res, "Broadcast sent")
+def _broadcast(ctx, args) -> int:
+    if not args.message:
+        raise UsageError("message is required", hint="pass the text to announce")
+    sh.confirm_or_fail(ctx, "broadcast this message to every user?")
+    outcome = ctx.uc.admin.broadcast(args.message, confirm=True)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _settings_get(ctx, args) -> None:
-    data = ctx.api.get("/api/admin/settings")
-    if args.json:
-        ctx.out.json(data)
-        return
+def _settings_get(ctx, args) -> int:
+    data = ctx.uc.admin.settings()
+    if ctx.want_json():
+        # The document a script parses keeps the keys, but a value whose name
+        # says "token" is masked: `--json` must not be the way a secret leaks.
+        ctx.out.json({key: ("[REDACTED]" if is_secret_name(key) else value) for key, value in data.items()})
+        return 0
     ctx.out.title("Global Administrator Settings")
-    if isinstance(data, dict):
-        # Values are masked by name: this surface can carry bot tokens and API
-        # keys, and the console's own filter only catches values it has already
-        # been told about.
-        pairs = [
-            (k, "[REDACTED]" if is_secret_name(k) else v) for k, v in data.items()
-        ]
-        ctx.out.kv(pairs)
+    ctx.out.kv([(key, "[REDACTED]" if is_secret_name(key) else _render(value)) for key, value in sorted(data.items())])
+    return 0
 
 
-def _settings_save(ctx, args) -> None:
+def _settings_save(ctx, args) -> int:
     settings = sh.settings_from_args(args)
     if not settings:
-        raise UsageError("Pass one or more KEY=VALUE pairs to save")
-    res = ctx.api.post("/api/admin/settings", payload=settings)
-    ctx.out.emit(res, f"Saved {len(settings)} global setting(s)")
+        raise UsageError("pass one or more KEY=VALUE pairs to save", hint="e.g. `atf admin settings set maintenance_mode=false`")
+    outcome = ctx.uc.admin.save_settings(settings)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _admins_list(ctx, args) -> None:
-    data = ctx.api.get("/api/admin/admins")
-    items = sh.list_of(data, "admins")
-    if args.json:
-        ctx.out.json({"count": len(items), "admins": items})
-        return
-    rows = []
-    for a in items:
-        rows.append([str(a.get("id") or a.get("user_id")), a.get("username") or "—"])
-    ctx.out.table(("USER ID", "USERNAME"), rows, empty="no administrators registered")
+def _admins_list(ctx, args) -> int:
+    admins = ctx.uc.admin.admins()
+    if ctx.want_json():
+        ctx.out.json({"count": len(admins), "admins": [admin.to_json() for admin in admins]})
+        return 0
+    rows = [[admin.id, admin.username or "—", admin.role or "admin"] for admin in admins]
+    ctx.out.table(("USER ID", "USERNAME", "ROLE"), rows, empty="no administrators registered")
+    return 0
 
 
-def _admin_add(ctx, args) -> None:
-    uid = args.user_id
-    res = ctx.api.post("/api/admin/admins", payload={"user_id": uid})
-    ctx.out.emit(res, f"Added admin: {uid}")
+def _admin_add(ctx, args) -> int:
+    outcome = ctx.uc.admin.add_admin(args.user_id, username=getattr(args, "username", "") or "")
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _admin_remove(ctx, args) -> None:
-    uid = args.user_id
-    sh.confirm_or_fail(ctx, f"Remove admin privileges for user {uid}?")
-    res = ctx.api.delete(f"/api/admin/admins/{uid}")
-    ctx.out.emit(res, f"Removed admin: {uid}")
+def _admin_remove(ctx, args) -> int:
+    sh.confirm_or_fail(ctx, f"remove admin privileges for user {args.user_id}?")
+    outcome = ctx.uc.admin.remove_admin(args.user_id, confirm=True)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _extensions_list(ctx, args) -> None:
-    data = ctx.api.get("/api/admin/extensions")
-    items = sh.list_of(data, "extensions")
-    if args.json:
-        ctx.out.json({"count": len(items), "extensions": items})
-        return
-    rows = []
-    for ext in items:
-        rows.append(
-            [
-                ext.get("id") or ext.get("name"),
-                "enabled" if ext.get("enabled", True) else "disabled",
-                sh.truncate(ext.get("description", "—"), 45),
-            ]
-        )
+def _extensions_list(ctx, args) -> int:
+    extensions = ctx.uc.admin.extensions()
+    if ctx.want_json():
+        ctx.out.json({"count": len(extensions), "extensions": extensions})
+        return 0
+    rows = [
+        [
+            str(ext.get("id") or ext.get("name") or "—"),
+            str(ext.get("status") or ("enabled" if ext.get("enabled", True) else "disabled")),
+            sh.truncate(str(ext.get("description") or "—"), 45),
+        ]
+        for ext in extensions
+    ]
     ctx.out.table(("EXTENSION", "STATUS", "DESCRIPTION"), rows, empty="no extensions registered")
+    return 0
 
 
-def _extension_toggle(ctx, args) -> None:
-    eid = args.id
-    res = ctx.api.post(f"/api/admin/extensions/{eid}/toggle")
-    ctx.out.emit(res, f"Toggled extension {eid}")
+def _extension_toggle(ctx, args) -> int:
+    outcome = ctx.uc.admin.toggle_extension(args.id)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
 def add_parser(subparsers, parents) -> None:
@@ -141,7 +156,7 @@ def add_parser(subparsers, parents) -> None:
     p = sub.add_parser("overview", help="show administrative metrics and summary", parents=parents)
     p.set_defaults(func=_overview)
 
-    p = sub.add_parser("broadcast", help="send broadcast announcement to all users", parents=parents)
+    p = sub.add_parser("broadcast", help="send a broadcast announcement to all users", parents=parents)
     p.add_argument("message", help="message content")
     p.set_defaults(func=_broadcast)
 
@@ -150,10 +165,16 @@ def add_parser(subparsers, parents) -> None:
     p.set_defaults(func=sh.help_handler(p))
     usub = sh.add_group(p)
     sp = usub.add_parser("list", aliases=["ls"], help="list users", parents=parents)
+    sp.add_argument("-n", "--limit", type=int, default=50, help="max users to return")
+    sp.add_argument("--offset", type=int, default=0, help="skip this many users")
     sp.set_defaults(func=_users_list)
-    sp = usub.add_parser("status", help="set user status (active/suspended)", parents=parents)
+    sp = usub.add_parser(
+        "status",
+        help=f"set user status ({'/'.join(USER_STATUSES)})",
+        parents=parents,
+    )
     sp.add_argument("user_id", help="target user ID")
-    sp.add_argument("status", choices=["active", "suspended", "blocked"])
+    sp.add_argument("status", help=f"one of: {', '.join(USER_STATUSES)}")
     sp.set_defaults(func=_user_status)
 
     # Settings
@@ -172,8 +193,9 @@ def add_parser(subparsers, parents) -> None:
     asub = sh.add_group(p)
     sp = asub.add_parser("list", aliases=["ls"], help="list admins", parents=parents)
     sp.set_defaults(func=_admins_list)
-    sp = asub.add_parser("add", help="promote user to admin", parents=parents)
+    sp = asub.add_parser("add", help="promote a user to admin", parents=parents)
     sp.add_argument("user_id", help="user ID to grant admin")
+    sp.add_argument("--username", default="", help="username to record alongside the id")
     sp.set_defaults(func=_admin_add)
     sp = asub.add_parser("remove", aliases=["rm"], help="revoke admin privileges", parents=parents)
     sp.add_argument("user_id", help="user ID to revoke admin")

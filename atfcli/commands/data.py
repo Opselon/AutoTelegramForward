@@ -1,137 +1,174 @@
-"""Data management, backup & restore, queue & DLQ monitoring."""
+"""`atf data` — backups, delivery queue, dead letters, and operational statistics.
+
+Two contract details this module gets right by going through the use cases:
+
+* ``backup-import`` sends ``{"bundle": <the file's text>}``. Posting the parsed
+  JSON object instead is refused by the API ("bundle is required"), which is what
+  the old code did — it read the file, parsed it, and sent the wrong shape.
+* a dead-letter retry counts as done only when the server says ``success: true``;
+  the core reports ``not_found`` / ``already_sent`` / ``replay_failed`` in the
+  same 200, so anything else is surfaced as a refusal.
+"""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
-from ..errors import UsageError
+from ..domain.errors import UsageError
 from . import _shared as sh
 
 NAME = "data"
 HELP = "Manage backups, delivery queues, dead-letter items, and system statistics"
 
 
-def _stats(ctx, args) -> None:
-    data = ctx.api.get("/api/stats")
-    if args.json:
+def _render(value: Any) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item) for item in value) or "—"
+    if isinstance(value, dict):
+        return ", ".join(f"{k}={v}" for k, v in value.items()) or "—"
+    return str(value) if value not in (None, "") else "—"
+
+
+def _stats(ctx, args) -> int:
+    data = ctx.uc.ops.stats()
+    if ctx.want_json():
         ctx.out.json(data)
-        return
+        return 0
     ctx.out.title("System & Delivery Statistics")
-    if isinstance(data, dict):
-        ctx.out.kv([(k, v) for k, v in data.items() if not isinstance(v, (dict, list))])
-        for group in ("queue", "forwarding", "system"):
-            if group in data and isinstance(data[group], dict):
-                ctx.out.line()
-                ctx.out.title(f"{group.capitalize()} Details")
-                ctx.out.kv([(k, v) for k, v in data[group].items()])
+    ctx.out.kv([(key.replace("_", " "), _render(value)) for key, value in sorted(data.items()) if not isinstance(value, (dict, list))])
+    for group in ("queue", "forwarding", "system"):
+        if isinstance(data.get(group), dict):
+            ctx.out.line()
+            ctx.out.title(f"{group.capitalize()} Details")
+            ctx.out.kv([(key, _render(value)) for key, value in data[group].items()])
+    return 0
 
 
-def _backup_export(ctx, args) -> None:
-    data = ctx.api.post("/api/backup/export")
+def _backup_export(ctx, args) -> int:
+    outcome = ctx.uc.backup.export(
+        passphrase=str(getattr(args, "passphrase", "") or ""),
+        output=str(getattr(args, "output", "") or ""),
+    )
+    for warning in outcome.warnings:
+        ctx.out.warn(warning.message)
+        ctx.out.hint(warning.hint)
+    if ctx.want_json():
+        document = outcome.to_json()
+        if args.output:
+            # A script asked for one JSON document: report where the bundle went
+            # rather than replaying every session and key it contains.
+            document = {**document, "bundle": "<written to file>"}
+        counts = ctx.uc.backup.summarise(outcome.payload)
+        if counts:
+            document = {**document, "counts": counts}
+        ctx.out.json(document)
+        return 0
     if args.output:
-        path = Path(args.output)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        ctx.out.ok(f"Exported system backup to {path}")
-    else:
-        if args.json:
-            ctx.out.json(data)
-        else:
-            sh.write_stdout(json.dumps(data, indent=2, ensure_ascii=False))
+        counts = ctx.uc.backup.summarise(outcome.payload)
+        ctx.out.ok(outcome.detail)
+        if counts:
+            ctx.out.kv([(key, _render(value)) for key, value in sorted(counts.items())])
+        return 0
+    sh.write_stdout(str(outcome.payload.get("bundle") or ""))
+    return 0
 
 
-def _backup_import(ctx, args) -> None:
-    path = Path(args.file)
-    if not path.exists():
-        raise UsageError(f"Backup file not found: {path}")
-    raw = path.read_text(encoding="utf-8")
-    payload = json.loads(raw)
-    sh.confirm_or_fail(ctx, f"Importing backup will overwrite/merge records. Continue?")
-    res = ctx.api.post("/api/backup/import", payload=payload)
-    ctx.out.emit(res, f"Backup import completed: {res.get('message', 'ok') if isinstance(res, dict) else res}")
+def _backup_inspect(ctx, args) -> int:
+    outcome = ctx.uc.backup.inspect(args.file)
+    if ctx.want_json():
+        ctx.out.json(outcome.to_json())
+        return 0
+    ctx.out.title("Backup Bundle")
+    ctx.out.kv([("file", outcome.detail)])
+    counts = outcome.payload.get("counts") or {}
+    if isinstance(counts, dict) and counts:
+        ctx.out.line()
+        ctx.out.kv([(key, _render(value)) for key, value in sorted(counts.items())])
+    return 0
 
 
-def _dlq_list(ctx, args) -> None:
-    data = ctx.api.get("/api/dlq")
-    # The handler answers `{"jobs": [...], "entries": [...], "total": N}`. Asking
-    # for a "dlq" key matched nothing, so the list helper fell through to
-    # returning the whole envelope as a single row — the table showed one bogus
-    # entry whose id, rule and error were all placeholders.
-    items = sh.list_of(data, "jobs")
-    if args.json:
-        ctx.out.json({"count": len(items), "dlq": items})
-        return
-    rows = []
-    for item in items:
-        # The API projects `last_error` and `attempts` (the same columns the
-        # queue repository's contract defines on both backends). The old column
-        # names — `error` and `retry_count` — matched neither, so the table
-        # silently rendered "—" and 0 for every row.
-        rows.append(
-            [
-                str(item.get("id") or "—")[:8],
-                str(item.get("rule_id") or "—")[:8],
-                sh.truncate(
-                    str(
-                        item.get("last_error")
-                        or item.get("error")
-                        or item.get("error_message")
-                        or "—"
-                    ),
-                    40,
-                ),
-                str(item.get("attempts", item.get("retry_count") or 0) or 0),
-            ]
-        )
+def _backup_import(ctx, args) -> int:
+    if not args.file:
+        raise UsageError("a bundle file is required", hint="pass -f <path>")
+    # Read the bundle first: the operator sees what is about to be written (and
+    # a wrong path is named) before being asked to confirm anything.
+    inspection = ctx.uc.backup.inspect(args.file)
+    counts = inspection.payload.get("counts") or {}
+    if not ctx.want_json() and isinstance(counts, dict) and counts:
+        ctx.out.kv([(key, _render(value)) for key, value in sorted(counts.items())])
+    sh.confirm_or_fail(ctx, "restoring replaces the tenant's current state — continue?")
+    passphrase = str(getattr(args, "passphrase", "") or "") or _passphrase_from_env()
+    outcome = ctx.uc.backup.restore(
+        args.file,
+        passphrase=passphrase,
+        overwrite=bool(getattr(args, "overwrite", False)),
+        confirm=True,
+    )
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
+
+
+def _passphrase_from_env() -> str:
+    import os
+
+    return os.environ.get("ATF_BACKUP_PASSPHRASE", "")
+
+
+def _queue(ctx, args) -> int:
+    snapshot = ctx.uc.delivery.queue()
+    if ctx.want_json():
+        ctx.out.json(snapshot.to_json())
+        return 0
+    ctx.out.title("Queue Status")
+    counters = {key: value for key, value in snapshot.raw.items() if not isinstance(value, (dict, list))}
+    ctx.out.kv([(key.replace("_", " "), _render(value)) for key, value in sorted(counters.items())])
+    nested = {key: value for key, value in snapshot.raw.items() if isinstance(value, dict)}
+    for key, value in sorted(nested.items()):
+        ctx.out.line()
+        ctx.out.title(key.replace("_", " "))
+        ctx.out.kv([(str(k), _render(v)) for k, v in value.items()])
+    return 0
+
+
+def _dlq_list(ctx, args) -> int:
+    items = ctx.uc.delivery.dead_letters()
+    if ctx.want_json():
+        ctx.out.json({"count": len(items), "dlq": [item.to_json() for item in items]})
+        return 0
+    rows = [
+        [item.id[:8], item.rule_id[:8] or "—", sh.truncate(item.error or "—", 40), str(item.retry_count)]
+        for item in items
+    ]
     ctx.out.table(("ID", "RULE", "ERROR", "RETRIES"), rows, empty="dead letter queue is empty")
     ctx.out.line()
     ctx.out.line(f"  {len(items)} failed message(s) in DLQ")
+    return 0
 
 
-def _dlq_retry(ctx, args) -> None:
-    mid = args.id
-    res = ctx.api.post(f"/api/dlq/{mid}/retry")
-    # The core answers with the documented result codes, not just success.
-    # `not_found`/`already_pending`/`already_sent`/`replay_failed` each mean the
-    # entry was *not* re-queued, and saying otherwise here would hide it.
-    # Only an explicit `true` is a replay. The API states `success` in both
-    # directions; a body that omits it is not evidence that anything happened.
-    if not isinstance(res, dict) or res.get("success") is not True:
-        code = (res or {}).get("error_code") or (res or {}).get("message") or "refused"
-        # `emit`, not `line`: `--json` promises exactly one JSON document, and
-        # `line` is suppressed in JSON mode, so a refusal reported that way
-        # printed nothing at all in scripts.
-        ctx.out.emit(
-            res,
-            f"  retry refused ({code}); message stays in the dead-letter queue",
-        )
-        return
-    ctx.out.emit(res, f"Replaying message {mid[:8]} from DLQ")
+def _dlq_retry(ctx, args) -> int:
+    if not args.id:
+        raise UsageError("a dead-letter id or unique prefix is required")
+    outcome = ctx.uc.delivery.retry(args.id)
+    if outcome.failed:
+        ctx.out.emit(outcome.to_json(), f"  retry refused ({outcome.failure_reason}); the message stays queued")
+        return 1
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _dlq_purge(ctx, args) -> None:
-    sh.confirm_or_fail(ctx, "Purge all messages in dead letter queue?")
-    res = ctx.api.delete("/api/dlq")
-    msg = res.get("message", "") if isinstance(res, dict) else ""
-    if not isinstance(res, dict) or res.get("success") is not True:
-        ctx.out.emit(
-            res,
-            f"  purge failed ({(res or {}).get('error_code') or msg or 'refused'})",
-        )
-        return
-    ctx.out.emit(res, f"Purged dead letter queue{f' ({msg})' if msg else ''}")
+def _dlq_retry_all(ctx, args) -> int:
+    outcome = ctx.uc.delivery.retry_all(confirm=bool(getattr(args, "yes", False)))
+    failures = 1 if outcome.failed else 0
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return failures
 
 
-def _queue(ctx, args) -> None:
-    data = ctx.api.get("/api/queue")
-    if args.json:
-        ctx.out.json(data)
-        return
-    ctx.out.title("Queue Status")
-    if isinstance(data, dict):
-        ctx.out.kv([(k, v) for k, v in data.items() if not isinstance(v, (dict, list))])
+def _dlq_purge(ctx, args) -> int:
+    outcome = ctx.uc.delivery.purge(confirm=bool(getattr(args, "yes", False)))
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
 def add_parser(subparsers, parents) -> None:
@@ -145,13 +182,20 @@ def add_parser(subparsers, parents) -> None:
     p = sub.add_parser("queue", help="inspect message queue states", parents=parents)
     p.set_defaults(func=_queue)
 
-    p = sub.add_parser("backup-export", help="export entire system configuration and state", parents=parents)
-    p.add_argument("-o", "--output", default="", help="destination file path")
+    p = sub.add_parser("backup-export", aliases=["export"], help="export the tenant's configuration and state", parents=parents)
+    p.add_argument("-o", "--output", default="", help="destination file path (defaults to stdout)")
+    p.add_argument("--passphrase", default="", help="encrypt the bundle with this passphrase")
     p.set_defaults(func=_backup_export)
 
-    p = sub.add_parser("backup-import", help="restore system state from JSON file", parents=parents)
-    p.add_argument("-f", "--file", required=True, help="source backup file")
+    p = sub.add_parser("backup-import", aliases=["import"], help="restore state from a bundle file", parents=parents)
+    p.add_argument("-f", "--file", default="", help="source bundle written by backup-export")
+    p.add_argument("--passphrase", default="", help="passphrase the bundle was encrypted with (or ATF_BACKUP_PASSPHRASE)")
+    p.add_argument("--overwrite", action="store_true", help="replace colliding tasks instead of failing")
     p.set_defaults(func=_backup_import)
+
+    p = sub.add_parser("backup-inspect", aliases=["inspect"], help="describe a bundle before restoring it", parents=parents)
+    p.add_argument("-f", "--file", default="", help="bundle written by backup-export")
+    p.set_defaults(func=_backup_inspect)
 
     p = sub.add_parser("dlq", help="dead-letter queue actions", parents=parents)
     p.set_defaults(func=sh.help_handler(p))
@@ -160,9 +204,12 @@ def add_parser(subparsers, parents) -> None:
     sp = dlq_sub.add_parser("list", aliases=["ls"], help="list dead letter items", parents=parents)
     sp.set_defaults(func=_dlq_list)
 
-    sp = dlq_sub.add_parser("retry", help="retry dead letter item", parents=parents)
-    sp.add_argument("id", help="DLQ message ID")
+    sp = dlq_sub.add_parser("retry", help="retry one dead letter item", parents=parents)
+    sp.add_argument("id", help="dead-letter id or a unique prefix")
     sp.set_defaults(func=_dlq_retry)
 
-    sp = dlq_sub.add_parser("purge", help="purge all items from DLQ", parents=parents)
+    sp = dlq_sub.add_parser("retry-all", help="requeue every dead letter item", parents=parents)
+    sp.set_defaults(func=_dlq_retry_all)
+
+    sp = dlq_sub.add_parser("purge", help="discard all items in the DLQ", parents=parents)
     sp.set_defaults(func=_dlq_purge)

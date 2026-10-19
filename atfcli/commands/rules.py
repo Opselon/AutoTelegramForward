@@ -1,397 +1,340 @@
-"""Forwarding tasks: lifecycle, per-task settings, sources, simulation.
+"""`atf rules` — forwarding tasks: lifecycle, settings, sources, history, simulation.
 
-This is the group an operator lives in, so the verbs mirror the dashboard
-exactly and accept the same identifiers a person has to hand — full id, id
-prefix, or task name.
+The group an operator lives in. Two things changed when this moved onto the
+application layer, and both were real bugs before:
+
+* **simulation** posts ``sample_text``/``sample_sender_id``. It used to post
+  ``text``/``sender``, which the API ignores — so every simulation ran against an
+  empty message and reported "no match" for a rule that would have matched.
+* **lifecycle** compares the state the server reports with the state the verb
+  promised, because the only mutation the API offers is ``toggle``: `enable` on an
+  already-enabled task must not flip it *off*.
+
+Identifiers accept a full id, a unique id prefix, or the task name, and that
+resolution happens once, in the use case, so every verb accepts the same forms.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 from typing import Any
 
-from ..errors import AtfError, UsageError
+from ..domain.errors import NotFoundError, UsageError
+from ..domain.host import SERVICES
+from ..domain.logs import LogQuery
+from ..domain.models import RoutePath, Task, TaskDraft
 from . import _shared as sh
 
 NAME = "rules"
 HELP = "Manage forwarding tasks: list, show, edit, pause, clone, settings, sources"
 
 
-# --------------------------------------------------------------------- verbs
-def _list(ctx, args) -> None:
-    payload = ctx.api.get("/api/rules")
-    rules = sh.list_of(payload, "rules")
-    if args.enabled_only:
-        rules = [r for r in rules if r.get("is_enabled")]
-    if args.state:
-        want = args.state.lower()
-        rules = [
-            r
-            for r in rules
-            if (want == "on" and r.get("is_enabled"))
-            or (want == "off" and not r.get("is_enabled"))
-            or (want == "paused" and r.get("is_paused"))
-        ]
-    if args.source:
-        needle = args.source.lower()
-        rules = [
-            r
-            for r in rules
-            if needle in str(r.get("source_chat_id", "")).lower()
-            or needle in str(r.get("source_chat_title", "")).lower()
-            or any(needle in str(s).lower() for s in (r.get("source_chat_ids") or []))
-        ]
-    if args.json:
-        ctx.out.json({"count": len(rules), "rules": rules})
+def _truncate(value: Any, width: int = 200) -> Any:
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    return sh.truncate(str(value), width)
+
+
+def _confirm(ctx, args, question: str) -> None:
+    if getattr(args, "dry_run", False):
         return
-    ctx.out.table(sh.RULE_HEADERS, [sh.rule_row(r) for r in rules], empty="no tasks")
+    sh.confirm_or_fail(ctx, question)
+
+
+def _dry(ctx, payload: dict[str, Any]) -> int:
+    ctx.out.json({"ok": True, "dry_run": True, **payload})
+    return 0
+
+
+# --------------------------------------------------------------------- queries
+def _list(ctx, args) -> int:
+    tasks = ctx.uc.tasks.list(
+        state=getattr(args, "state", "") or "",
+        source=getattr(args, "source", "") or "",
+        enabled_only=bool(getattr(args, "enabled_only", False)),
+    )
+    if ctx.want_json():
+        ctx.out.json({"count": len(tasks), "rules": [task.to_json() for task in tasks]})
+        return 0
+    ctx.out.table(sh.RULE_HEADERS, [sh.rule_row(task.to_json()) for task in tasks], empty="no tasks")
     ctx.out.line()
-    ctx.out.line(f"  {len(rules)} task(s)")
+    ctx.out.line(f"  {len(tasks)} task(s)")
+    return 0
 
 
-def _show(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    if args.json:
-        ctx.out.json(rule)
-        return
-    sh.print_rule(ctx, rule, deep=True)
+def _show(ctx, args) -> int:
+    task = ctx.uc.tasks.find(args.ref)
+    if ctx.want_json():
+        ctx.out.json(task.to_json())
+        return 0
+    sh.print_rule(ctx, task.to_json(), deep=True)
+    return 0
 
 
-def _create(ctx, args) -> None:
-    body: dict[str, Any] = {
-        "source_chat_id": args.source,
-        "target_chat_id": args.target,
-    }
-    if args.name:
-        body["name"] = args.name
-    if args.session:
-        body["session_id"] = args.session
-    if args.source_title:
-        body["source_chat_title"] = args.source_title
-    if args.target_title:
-        body["target_chat_title"] = args.target_title
-    if getattr(args, "no_enable", False):
-        body["is_enabled"] = False
-    if args.set:
-        body.update(sh.settings_from_args(args))
-    if args.dry_run:
-        ctx.out.json({"ok": True, "dry_run": True, "would_create": body})
-        return
-    created = ctx.api.post("/api/rules", payload=body)
-    if args.json:
-        ctx.out.json(created)
-        return
-    rule = created.get("rule", created) if isinstance(created, dict) else {}
-    ctx.out.ok(f"created task {rule.get('id', '(id in response)')}")
-    if isinstance(rule, dict) and rule.get("id"):
-        ctx.out.kv(
-            [
-                ("source", rule.get("source_chat_id", "")),
-                ("target", rule.get("target_chat_id", "")),
-            ]
-        )
+def _history(ctx, args) -> int:
+    """A task's own log history — the first place to look when it "does nothing"."""
+    query = LogQuery(
+        level=str(getattr(args, "level", "") or ""),
+        search=str(getattr(args, "search", "") or ""),
+        hours=int(getattr(args, "hours", 0) or 0),
+        limit=int(getattr(args, "limit", 50) or 50),
+        offset=int(getattr(args, "offset", 0) or 0),
+    )
+    page = ctx.uc.tasks.logs(args.ref, query)
+    if ctx.want_json():
+        ctx.out.json(page.to_json())
+        return 0
+    import time
+
+    rows = [
+        [
+            time.strftime("%m-%d %H:%M:%S", time.localtime(entry.timestamp)) if entry.timestamp else "—",
+            entry.level or "INFO",
+            entry.service or "—",
+            sh.truncate(entry.message or "—", 70),
+        ]
+        for entry in page.entries
+    ]
+    ctx.out.table(("TIME", "LEVEL", "SERVICE", "MESSAGE"), rows, empty="no history for this task")
+    ctx.out.line()
+    ctx.out.line(f"  {len(page.entries)} of {page.total} record(s)")
+    return 0
 
 
-def _update(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    patch = sh.settings_from_args(args)
-    if args.name:
-        patch["name"] = args.name
-    if getattr(args, "source", None):
-        patch["source_chat_id"] = args.source
-    if getattr(args, "target", None):
-        patch["target_chat_id"] = args.target
-    if not patch:
+# ------------------------------------------------------------------- mutations
+def _create(ctx, args) -> int:
+    draft = TaskDraft(
+        source=args.source,
+        target=args.target,
+        name=getattr(args, "name", "") or "",
+        session_id=getattr(args, "session", "") or "",
+        source_title=getattr(args, "source_title", "") or "",
+        target_title=getattr(args, "target_title", "") or "",
+        enabled=not bool(getattr(args, "no_enable", False)),
+        extra=sh.settings_from_args(args),
+    )
+    if getattr(args, "dry_run", False):
+        return _dry(ctx, {"would_create": draft.to_payload()})
+    outcome = ctx.uc.tasks.create(draft)
+    if ctx.want_json():
+        ctx.out.json(outcome.to_json())
+        return 0
+    ctx.out.ok(outcome.detail)
+    source = outcome.follow_up.get("source") or ""
+    target = outcome.follow_up.get("target") or ""
+    if source or target:
+        ctx.out.kv([("source", source or "—"), ("target", target or "—")])
+    return 0
+
+
+def _update(ctx, args) -> int:
+    changes: dict[str, Any] = dict(sh.settings_from_args(args))
+    if getattr(args, "name", ""):
+        changes["name"] = args.name
+    if getattr(args, "source", ""):
+        changes["source_chat_id"] = args.source
+    if getattr(args, "target", ""):
+        changes["target_chat_id"] = args.target
+    if not changes:
         raise UsageError("nothing to update", hint="pass --set key=value, --name, --source or --target")
-    if args.dry_run:
-        ctx.out.json({"ok": True, "dry_run": True, "task": rule.get("id"), "patch": patch})
-        return
-    result = ctx.api.put(f"/api/rules/{rule['id']}", payload=patch)
-    if args.json:
-        ctx.out.json(result)
-        return
-    ctx.out.ok(f"updated task {str(rule['id'])[:8]} ({', '.join(sorted(patch))})")
+    if getattr(args, "dry_run", False):
+        return _dry(ctx, {"task": args.ref, "patch": changes})
+    outcome = ctx.uc.tasks.update(args.ref, changes)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _delete(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    sh.confirm_or_fail(ctx, f"delete task {rule.get('name') or str(rule['id'])[:8]}?")
-    if args.dry_run:
-        ctx.out.json({"ok": True, "dry_run": True, "would_delete": rule.get("id")})
-        return
-    ctx.api.delete(f"/api/rules/{rule['id']}")
-    ctx.out.emit({"ok": True, "deleted": rule.get("id")}, f"deleted task {str(rule['id'])[:8]}")
+def _delete(ctx, args) -> int:
+    if getattr(args, "dry_run", False):
+        task = ctx.uc.tasks.find(args.ref)
+        return _dry(ctx, {"would_delete": task.id, "name": task.name})
+    task = ctx.uc.tasks.find(args.ref)
+    _confirm(ctx, args, f"delete task {task.label}?")
+    outcome = ctx.uc.tasks.delete(task.id)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
 def _lifecycle(verb: str):
-    """Build the enable/disable/pause/resume/stop/restart/toggle handlers."""
-
-    def handler(ctx, args) -> None:
-        rule = sh.resolve_rule(ctx.api, args.ref)
-        path = {
-            "enable": "toggle",
-            "disable": "toggle",
-            "toggle": "toggle",
-            "pause": "pause",
-            "resume": "resume",
-            "stop": "stop",
-            "restart": "restart",
-        }[verb]
-        if args.dry_run:
-            ctx.out.json({"ok": True, "dry_run": True, "task": rule.get("id"), "action": verb})
-            return
-        result = ctx.api.post(f"/api/rules/{rule['id']}/{path}")
-        # toggle flips state, so "enable" on an enabled task is a no-op the
-        # operator should be told about rather than a silent flip back off.
-        if verb in ("enable", "disable"):
-            was = bool(rule.get("is_enabled"))
-            state = result.get("is_enabled", result.get("rule", {}).get("is_enabled"))
-            if verb == "enable" and was and state is not None and not state:
-                result = ctx.api.post(f"/api/rules/{rule['id']}/toggle")
-            elif verb == "disable" and not was and state is not None and state:
-                result = ctx.api.post(f"/api/rules/{rule['id']}/toggle")
-        if args.json:
-            ctx.out.json(result)
-            return
-        current = result.get("is_enabled") if isinstance(result, dict) else None
-        ctx.out.ok(
-            f"{verb} task {str(rule['id'])[:8]}"
-            + (f" → {'enabled' if current else 'disabled'}" if current is not None else "")
-        )
+    def handler(ctx, args) -> int:
+        if getattr(args, "dry_run", False):
+            task = ctx.uc.tasks.find(args.ref)
+            return _dry(ctx, {"task": task.id, "action": verb})
+        outcome = ctx.uc.tasks.set_state(args.ref, verb)
+        ctx.out.emit(outcome.to_json(), outcome.detail)
+        return 0
 
     return handler
 
 
-def _duplicate(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    if args.dry_run:
-        ctx.out.json({"ok": True, "dry_run": True, "would_duplicate": rule.get("id")})
-        return
-    result = ctx.api.post(f"/api/rules/{rule['id']}/duplicate")
-    if args.json:
-        ctx.out.json(result)
-        return
-    clone = result.get("rule", result) if isinstance(result, dict) else {}
-    ctx.out.ok(f"duplicated {str(rule['id'])[:8]} → {str(clone.get('id', ''))[:8]}")
+def _duplicate(ctx, args) -> int:
+    if getattr(args, "dry_run", False):
+        task = ctx.uc.tasks.find(args.ref)
+        return _dry(ctx, {"would_duplicate": task.id})
+    outcome = ctx.uc.tasks.duplicate(args.ref)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _path(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    body = {"route_path": args.path}
-    if args.intermediate:
-        body["intermediate_chat_id"] = args.intermediate
-    result = ctx.api.post(f"/api/rules/{rule['id']}/route-path", payload=body)
-    ctx.out.emit(result, f"route path for {str(rule['id'])[:8]} set to {args.path}")
+def _path(ctx, args) -> int:
+    path = RoutePath(kind=args.path, intermediate=getattr(args, "intermediate", "") or "")
+    if getattr(args, "dry_run", False):
+        return _dry(ctx, {"task": args.ref, "route_path": path.to_payload()})
+    outcome = ctx.uc.tasks.set_route_path(args.ref, path)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _simulate(ctx, args) -> None:
-    """Dry-run a message through the live rule engine."""
-    rule = sh.resolve_rule(ctx.api, args.ref)
+def _simulate(ctx, args) -> int:
     text = args.text
-    if args.file:
+    if getattr(args, "file", ""):
         text = ctx.repo.path(args.file).read_text(encoding="utf-8")
     if not text:
-        raise UsageError("provide --text or --file")
-    payload = {"rule_id": rule["id"], "text": text}
-    if args.sender:
-        payload["sender"] = args.sender
-    result = ctx.api.post("/api/simulate", payload=payload)
-    if args.json:
-        ctx.out.json(result)
-        return
+        raise UsageError("provide --text or --file", hint="e.g. --text 'hello world'")
+    result = ctx.uc.tasks.simulate(args.ref, text, sender=getattr(args, "sender", "") or "")
+    if ctx.want_json():
+        ctx.out.json(result.to_json())
+        return 0
     ctx.out.title("simulation")
-    if isinstance(result, dict):
-        for key in ("matched", "action", "reason", "would_forward", "transformed_text", "notes"):
-            if key in result:
-                value = result[key]
-                ctx.out.kv([(key, sh.truncate(str(value), 200) if not isinstance(value, (int, float, bool)) else value)])
-        if args.show and "transformed_text" in result:
-            ctx.out.line()
-            ctx.out.line(str(result["transformed_text"]))
-    else:
-        ctx.out.line(str(result))
+    verdict = "would forward" if result.would_forward else "would not forward"
+    ctx.out.kv(
+        [
+            ("matched", "yes" if result.matched else "no"),
+            ("action", result.action or "—"),
+            ("verdict", verdict),
+        ]
+    )
+    if getattr(args, "show", False) and result.transformed_text:
+        ctx.out.line()
+        ctx.out.line(result.transformed_text)
+    for note in result.notes:
+        ctx.out.hint(note)
+    return 0
 
 
-# ------------------------------------------------------------------ settings
-def _settings_schema(ctx, args) -> None:
-    payload = ctx.api.get("/api/rules/settings/schema")
-    if args.json:
-        ctx.out.json(payload)
-        return
-    settings = payload.get("settings", []) if isinstance(payload, dict) else []
-    group = getattr(args, "settings_group", "")
+# -------------------------------------------------------------------- settings
+def _settings_schema(ctx, args) -> int:
+    payload = ctx.uc.tasks.settings_schema(group=getattr(args, "settings_group", "") or "")
+    if ctx.want_json():
+        ctx.out.json(payload["payload"])
+        return 0
+    specs = payload["settings"]
     rows = []
-    for spec in settings:
-        if group and spec.get("group") != group:
-            continue
+    for spec in specs:
         default = spec.get("default")
         if isinstance(default, (dict, list)):
             default = json.dumps(default, ensure_ascii=False)
         rows.append(
             [
-                spec.get("key", ""),
-                spec.get("kind", ""),
+                str(spec.get("key", "")),
+                str(spec.get("kind", "")),
                 sh.truncate(str(default), 22),
-                spec.get("group", ""),
-                sh.truncate(spec.get("label", ""), 30),
+                str(spec.get("group", "")),
+                sh.truncate(str(spec.get("label", "")), 30),
             ]
         )
     ctx.out.table(("KEY", "KIND", "DEFAULT", "GROUP", "LABEL"), rows)
     ctx.out.line()
-    ctx.out.line(f"  {len(rows)} setting(s) — {payload.get('count', len(settings))} registered")
-    groups = payload.get("groups") or []
+    registered = payload["payload"].get("count", len(payload["settings"]))
+    ctx.out.line(f"  {len(rows)} setting(s) — {registered} registered")
+    groups = payload["payload"].get("groups") or []
     if groups:
-        ctx.out.line("  groups: " + ", ".join(groups))
+        ctx.out.line("  groups: " + ", ".join(str(group) for group in groups))
+    return 0
 
 
-def _settings_get(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    payload = ctx.api.get(f"/api/rules/{rule['id']}/settings")
-    settings = payload.get("settings", {}) if isinstance(payload, dict) else {}
-    if args.key:
-        if args.key not in settings:
-            from ..errors import NotFoundError
-
-            raise NotFoundError(f"setting {args.key!r} is not set on this task")
-        value = settings[args.key]
+def _settings_get(ctx, args) -> int:
+    if getattr(args, "effective", False):
+        task, stored, effective = ctx.uc.tasks.effective_settings(args.ref)
+        if ctx.want_json():
+            ctx.out.json({"task": task.id, "settings": stored, "effective": effective})
+            return 0
+        ctx.out.title(f"effective settings · {task.label}")
+        rows = [[key, sh.truncate(json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value), 60)] for key, value in sorted(effective.items())]
+        ctx.out.table(("SETTING", "EFFECTIVE VALUE"), rows, empty="nothing to show")
+        ctx.out.line()
+        ctx.out.line(f"  {len(stored)} override(s) on this task; the rest are inherited")
+        return 0
+    if getattr(args, "key", ""):
+        task, value = ctx.uc.tasks.setting(args.ref, args.key)
         human = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-        ctx.out.emit({"key": args.key, "value": value}, f"{args.key} = {human}")
-        return
-    if args.json:
-        ctx.out.json(payload)
-        return
-    ctx.out.title(f"settings · {rule.get('name') or str(rule['id'])[:8]}")
+        ctx.out.emit({"task": task.id, "key": args.key, "value": value}, f"{args.key} = {human}")
+        return 0
+    task, settings = ctx.uc.tasks.settings(args.ref)
+    if ctx.want_json():
+        ctx.out.json({"task": task.id, "settings": settings})
+        return 0
+    ctx.out.title(f"settings · {task.label}")
     if not settings:
         ctx.out.line("  (no per-task overrides — defaults apply)")
-        return
-    rows = []
-    for key in sorted(settings):
-        value = settings[key]
-        if isinstance(value, (dict, list)):
-            value = json.dumps(value, ensure_ascii=False)
-        rows.append([key, sh.truncate(str(value), 60)])
+        return 0
+    rows = [
+        [key, sh.truncate(json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value), 60)]
+        for key, value in sorted(settings.items())
+    ]
     ctx.out.table(("SETTING", "VALUE"), rows)
+    return 0
 
 
-def _settings_set(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
+def _settings_set(ctx, args) -> int:
     values = sh.settings_from_args(args)
     if not values:
         raise UsageError("nothing to set", hint="pass key=value pairs, e.g. clean_buttons=true")
-    # Unknown keys are rejected server-side; catching them here would require
-    # duplicating the registry, so send and surface the server's message.
-    if args.dry_run:
-        ctx.out.json({"ok": True, "dry_run": True, "task": rule.get("id"), "settings": values})
-        return
-    result = ctx.api.patch(
-        f"/api/rules/{rule['id']}/settings",
-        payload={"settings": values, "replace_all": bool(args.replace)},
-    )
-    if args.json:
-        ctx.out.json(result)
-        return
-    if result.get("success") is False:
-        raise AtfError(
-            str(result.get("message", "the server rejected these settings")),
-            hint=str(result.get("error_code", "")),
-        )
-    ctx.out.ok(
-        f"applied {len(values)} setting(s) to {str(rule['id'])[:8]}: "
-        + ", ".join(sorted(values))
-    )
+    if getattr(args, "dry_run", False):
+        return _dry(ctx, {"task": args.ref, "settings": values, "replace_all": bool(args.replace)})
+    outcome = ctx.uc.tasks.set_settings(args.ref, values, replace_all=bool(getattr(args, "replace", False)))
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _settings_reset(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    # `reset` takes bare keys (there is no value to type), so the shared
-    # key=value collector does not apply here.
-    cleared = {key: None for key in (args.keys or [])}
-    if not cleared:
-        raise UsageError("nothing to clear", hint="name the settings to remove, e.g. clean_buttons")
-    result = ctx.api.patch(
-        f"/api/rules/{rule['id']}/settings",
-        payload={"settings": cleared, "replace_all": False},
-    )
-    ctx.out.emit(result, f"cleared {len(cleared)} override(s) on {str(rule['id'])[:8]}")
+def _settings_reset(ctx, args) -> int:
+    if getattr(args, "dry_run", False):
+        return _dry(ctx, {"task": args.ref, "reset": list(args.keys)})
+    outcome = ctx.uc.tasks.reset_settings(args.ref, list(args.keys))
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-# ------------------------------------------------------------------- sources
-def _sources_list(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    ids = [s for s in (rule.get("source_chat_ids") or []) if s]
-    if not ids:
-        ids = [rule.get("source_chat_id", "")]
-    names = rule.get("source_chat_names") or []
-    rows = [[str(i), ids[i], names[i] if i < len(names) else ""] for i in range(len(ids))]
-    if args.json:
-        ctx.out.json({"task": rule.get("id"), "sources": ids, "names": names})
-        return
+# --------------------------------------------------------------------- sources
+def _sources_list(ctx, args) -> int:
+    task, sources, names = ctx.uc.tasks.sources(args.ref)
+    if ctx.want_json():
+        ctx.out.json({"task": task.id, "sources": sources, "names": names})
+        return 0
+    rows = [[str(index), chat, names[index] if index < len(names) else ""] for index, chat in enumerate(sources)]
     ctx.out.table(("INDEX", "CHAT ID", "TITLE"), rows, empty="no sources")
+    return 0
 
 
-def _sources_add(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    ids = [s for s in (rule.get("source_chat_ids") or []) if s] or [rule.get("source_chat_id", "")]
-    if args.chat in ids:
-        ctx.out.warn(f"{args.chat} is already a source of this task")
-        return
-    ids.append(args.chat)
-    patch: dict[str, Any] = {"source_chat_ids": ids}
-    names = list(rule.get("source_chat_names") or [])
-    if args.title:
-        names = names + [args.title] if names else [args.title]
-        patch["source_chat_names"] = names
-    if args.dry_run:
-        ctx.out.json({"ok": True, "dry_run": True, "patch": patch})
-        return
-    ctx.api.put(f"/api/rules/{rule['id']}", payload=patch)
-    ctx.out.emit(
-        {"ok": True, "sources": ids},
-        f"added {args.chat} — task now reads {len(ids)} source(s)",
-    )
+def _sources_add(ctx, args) -> int:
+    if getattr(args, "dry_run", False):
+        task, sources, _ = ctx.uc.tasks.sources(args.ref)
+        return _dry(ctx, {"task": task.id, "sources": [*sources, args.chat]})
+    outcome = ctx.uc.tasks.add_source(args.ref, args.chat, title=getattr(args, "title", "") or "")
+    for warning in outcome.warnings:
+        ctx.out.warn(warning.message)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _sources_remove(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    ids = [s for s in (rule.get("source_chat_ids") or []) if s] or [rule.get("source_chat_id", "")]
-    if args.chat not in ids:
-        from ..errors import NotFoundError
-
-        raise NotFoundError(f"{args.chat} is not a source of this task")
-    if len(ids) == 1:
-        raise AtfError(
-            "a task must keep at least one source",
-            hint="add another source first, or delete the task",
-        )
-    ids = [s for s in ids if s != args.chat]
-    names = [n for n in (rule.get("source_chat_names") or []) if n != args.chat]
-    patch: dict[str, Any] = {"source_chat_ids": ids}
-    if names:
-        patch["source_chat_names"] = names
-    if args.dry_run:
-        ctx.out.json({"ok": True, "dry_run": True, "patch": patch})
-        return
-    ctx.api.put(f"/api/rules/{rule['id']}", payload=patch)
-    ctx.out.emit(
-        {"ok": True, "sources": ids},
-        f"removed {args.chat} — task now reads {len(ids)} source(s)",
-    )
+def _sources_remove(ctx, args) -> int:
+    if getattr(args, "dry_run", False):
+        task, sources, _ = ctx.uc.tasks.sources(args.ref)
+        return _dry(ctx, {"task": task.id, "sources": [chat for chat in sources if chat != args.chat]})
+    outcome = ctx.uc.tasks.remove_source(args.ref, args.chat)
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-def _sources_set(ctx, args) -> None:
-    rule = sh.resolve_rule(ctx.api, args.ref)
-    if not args.chats:
-        raise UsageError("pass one or more chat ids")
-    patch = {"source_chat_ids": list(args.chats), "source_chat_id": args.chats[0]}
-    if args.dry_run:
-        ctx.out.json({"ok": True, "dry_run": True, "patch": patch})
-        return
-    ctx.api.put(f"/api/rules/{rule['id']}", payload=patch)
-    ctx.out.emit({"ok": True, "sources": list(args.chats)}, f"set {len(args.chats)} source(s)")
+def _sources_set(ctx, args) -> int:
+    if getattr(args, "dry_run", False):
+        return _dry(ctx, {"task": args.ref, "sources": list(args.chats)})
+    outcome = ctx.uc.tasks.set_sources(args.ref, list(args.chats))
+    ctx.out.emit(outcome.to_json(), outcome.detail)
+    return 0
 
 
-# ------------------------------------------------------------------- wiring
+# ---------------------------------------------------------------------- wiring
 def add_parser(subparsers, parents) -> None:
     parser = subparsers.add_parser(
         NAME,
@@ -412,6 +355,15 @@ def add_parser(subparsers, parents) -> None:
     p.add_argument("ref", help="task id, id prefix or name")
     p.set_defaults(func=_show)
 
+    p = sub.add_parser("logs", aliases=["history"], help="this task's own log history", parents=parents)
+    p.add_argument("ref", help="task id, id prefix or name")
+    p.add_argument("-n", "--limit", type=int, default=50, help="max records")
+    p.add_argument("--offset", type=int, default=0, help="skip this many records")
+    p.add_argument("--level", default="", help="filter by severity")
+    p.add_argument("-s", "--search", default="", help="search the message text")
+    p.add_argument("--hours", type=int, default=0, help="only the last N hours")
+    p.set_defaults(func=_history)
+
     p = sub.add_parser("create", help="create a task", parents=parents)
     p.add_argument("--source", required=True, help="source chat id or @username")
     p.add_argument("--target", required=True, help="target chat id or @username")
@@ -420,7 +372,7 @@ def add_parser(subparsers, parents) -> None:
     p.add_argument("--target-title", default="", help="display title for the target")
     p.add_argument("--session", default="", help="telegram session id to forward with")
     p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="extra field (repeatable)")
-    p.add_argument("--no-enable", action="store_true", help="create it paused/disabled")
+    p.add_argument("--no-enable", action="store_true", help="create it disabled")
     p.set_defaults(func=_create)
 
     p = sub.add_parser("update", aliases=["edit"], help="update task fields", parents=parents)
@@ -436,8 +388,8 @@ def add_parser(subparsers, parents) -> None:
     p.set_defaults(func=_delete)
 
     for verb, help_text in (
-        ("enable", "enable a task"),
-        ("disable", "disable a task"),
+        ("enable", "enable a task (a state, not a flip)"),
+        ("disable", "disable a task (a state, not a flip)"),
         ("toggle", "flip a task's enabled state"),
         ("pause", "pause processing without disabling"),
         ("resume", "resume a paused task"),
@@ -476,17 +428,13 @@ def add_parser(subparsers, parents) -> None:
     # to the top-level subparsers action, and argparse copies a subparser's
     # namespace over the parent's, silently blanking `args.group` and sending
     # dispatch down the wrong branch.
-    sp.add_argument(
-        "--group",
-        dest="settings_group",
-        default="",
-        help="only this group (e.g. content_cleanup)",
-    )
+    sp.add_argument("--group", dest="settings_group", default="", help="only this group (e.g. content_cleanup)")
     sp.set_defaults(func=_settings_schema)
 
     sp = settings_sub.add_parser("get", help="show a task's settings", parents=parents)
     sp.add_argument("ref", help="task id, id prefix or name")
     sp.add_argument("key", nargs="?", default="", help="one setting key")
+    sp.add_argument("--effective", action="store_true", help="also show inherited values and their source")
     sp.set_defaults(func=_settings_get)
 
     sp = settings_sub.add_parser("set", help="apply settings", parents=parents)
