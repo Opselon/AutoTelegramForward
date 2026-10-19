@@ -17,8 +17,8 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 04 | Header NO/YES | FAIL → fixed | `FilterEngine.transform_text` → `apply_header_footer`; caption path `CaptionManagementEngine.format_caption` | Clear was inert (wrong metadata key); **17 owner-facing toggles were admin-gated while reading the rule unscoped** |
 | 05 | Duplicate Filters | FAIL → fixed | `DurableMessagePipeline` DEDUPLICATE stage → `IMessageMapRepository.claim_content_hash` | The fingerprint was written **before** delivery and never released — undelivered content blocked later legitimate posts; check was read-then-write, not atomic |
 | 06 | Replace | FAIL → fixed | `DurableMessagePipeline._apply_transforms` → `FilterEngine.replace_text`; editor `rtx:` / `rtxa:` / `rtxd:` | Applied **twice** per message (`# → ##` sent `####gold`); positional delete could remove a neighbour; entry buttons were admin-gated |
-| 07 | Blacklist | PENDING | — | — |
-| 08 | Whitelist | PENDING | — | — |
+| 07 | Blacklist | FAIL → fixed | bot menu `rfl_bl:` → `ForwardRule.blacklist` → `policy_chain` → `ContentPolicy.evaluate` | The menu stored words under the pre-policy key `metadata["blacklist"]`, which no forwarding code reads: the word was saved, rendered and counted, and the message was sent anyway |
+| 08 | Whitelist | FAIL → fixed | bot menu `rfl_wl:` → `ForwardRule.whitelist` → `policy_chain` → `ContentPolicy.evaluate` | Same inert storage, plus: the same key was the keyword-reply add-on's keyword list, so one list carried two unrelated meanings and neither was the allow-list the menu promises |
 | 09 | Cleaner | PENDING | — | — |
 | 10 | Filters | PENDING | — | — |
 | 11 | Set Delay | PENDING | — | — |
@@ -284,3 +284,68 @@ disabled, or edited in place (delete + re-add); the menu exposes delete buttons
 for the first six entries only (`Clear all` is the escape hatch); a single-token
 line in the add step is parsed as a deletion rule; matching is substring-based,
 so a one-character needle rewrites every occurrence.
+
+## 07 / 08 — Blacklist and Whitelist
+
+**Expected behaviour (from the code and the settings registry):** a task's blocked
+and required words live in its content policy
+(`metadata["content_policy"]["blacklist_words"] / ["whitelist_words"]`,
+`whitelist_mode` = `any` | `all` | `phrase`), are exposed by
+`core/domain/rule_settings.py` under the `content` group, and are evaluated on the
+forwarding path by `ForwardRule.policy_chain()` → `ContentPolicy.evaluate()`
+(`blacklist:<word>` / `whitelist_mismatch` …). The Telegram menus
+(`rfl_bl:` menu/add/clear/users, `rfl_wl:` menu/add/clear/users) are the operator
+surface for the same two lists.
+
+**Confirmed defect (both features) — the menu wrote to a key nobody reads.**
+`_cb_rule_blacklist_clear` / `_step_add_bl` (and the whitelist pair) stored the
+words in `metadata["blacklist"]` / `metadata["whitelist"]`, the storage the
+feature used before the content policy existed. No code on the forwarding path
+reads those keys: `content_policy()` folds in only `block_links` and
+`remove_links`. A word added in the menu was therefore saved, rendered by
+`_render_blacklist_menu`, counted in the rule screen — and never consulted.
+Measured through the real pipeline against the real store: blacklist `spam` +
+`buy spam now` → **delivered**; whitelist `gold` + `just chatting` →
+**delivered**. The engine's own keys worked, which is what made the menu's
+silence look like a working feature.
+
+**Second confirmed defect (whitelist) — one list, two meanings.** The same
+`metadata["whitelist"]` was read by `ForwardRuleService.classify_keyword_trigger`
+as the *keyword-reply* keyword list, so the menu's "whitelist" was simultaneously
+an unused allow-list and a live keyword list for an unrelated add-on.
+
+**Fix — one authoritative home.** `ForwardRule.blacklist` / `.whitelist` are now
+the compatibility view of the content policy: a write goes to
+`blacklist_words` / `whitelist_words` and removes the legacy key, a read prefers
+the policy and falls back to the legacy key, and `content_policy()` folds a
+legacy list in when the policy has none. Every writer (menu, settings API,
+backup restore) and the engine now read the same storage, and a task configured
+before the policy existed keeps filtering instead of silently forwarding
+everything it used to block. The live database was checked before the change: 3
+rules, none carrying either key (nor `keyword_confirmation`), so the migration is
+a compatibility path, not a data move.
+
+**Verified behaviour (22 tests, real pipeline + real SQLite store, RED 16 failed
+on the pre-fix code → GREEN):** a word added exactly as the menu writes it drops
+a matching message; a message without it still forwards; the word survives a
+restart; clearing in the menu stops the dropping; the menu renders what the
+engine enforces; whole-word default (`spam` does not match `spammer`); matching
+ignores letter case; Persian diacritic and letter variants still match; empty and
+whitespace-only entries never match everything; a regex-shaped entry (`.*`,
+`a{1,99999}`) is a literal, not a pattern (no ReDoS lever); one task's blacklist
+never suppresses another task's message and one task's whitelist never blocks
+another's; a whitelist gates both ways; `all` mode requires every word; a word in
+both lists is dropped (blacklist is evaluated first); the master switch
+(`content_policy_enabled = False`) turns the whole policy off; legacy rows in
+either key are still enforced; a malformed policy (`blacklist_words` as a dict,
+`whitelist_words` as an int, `whitelist_mode` nonsense) is coerced to empty and
+crashes nothing.
+
+**Recorded limitations:** the bot menu has no control for `whitelist_mode`, for
+`regex_block` / `regex_require`, for `strip_words`, or for length/media limits —
+those are reachable only through the settings surface; an *empty* whitelist
+constrains nothing by design (the master switch is the safety, and a whitelist
+that silently stops constraining is reported by the rule screen's count); the
+menu displays the first 20 words (`ui_bl_more` reports the remainder); and
+because the whitelist doubles as the keyword-reply keyword list, changing it
+changes both behaviours.
