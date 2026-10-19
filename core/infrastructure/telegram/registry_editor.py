@@ -150,8 +150,36 @@ class RegistryEditor:
         return read_settings(rule)
 
     def _label(self, key: str) -> str:
+        """The setting's name in the user's language, as a catalog value.
+
+        `spec.label` is written in English for the operator's own schema dump
+        and the slug fallback ("clean_usernames" -> "Clean Usernames") is the
+        same English, so this panel named all 72 settings in English in every
+        locale — including the buttons and the title of each setting's screen.
+
+        The name is UI copy, so it lives in the catalog under
+        `ui_reg_set_<key>`. A setting added server-side without its translations
+        logs and falls back to the slug: visibly English to the operator, never
+        a raw `ui_reg_set_...` key on a phone (see `_group_label` for the same
+        rule on the categories).
+        """
+        catalog_key = f"ui_reg_set_{key}"
+        if self._has(catalog_key):
+            return self._t(catalog_key)
+        logger.error("no catalog entry for the setting label %r", catalog_key)
         spec = SETTING_SPECS[key]
         return spec.label or key.replace("_", " ").title()
+
+    def _search_text(self, key: str) -> str:
+        """Everything a search should be able to match for one setting.
+
+        The user searches in their own language, so the localized label has to
+        be part of the haystack: with English-only matching a Persian user who
+        typed the very word printed on the button in front of them found
+        nothing. The raw key stays in as the stable technical alias.
+        """
+        spec = SETTING_SPECS[key]
+        return " ".join((key, self._label(key), spec.help or "")).lower()
 
     def _format(self, key: str, value: Any) -> str:
         spec = SETTING_SPECS[key]
@@ -439,10 +467,8 @@ class RegistryEditor:
         needle = raw.lower()
         keys = [
             key
-            for key, spec in SETTING_SPECS.items()
-            if needle in key.lower()
-            or needle in (spec.label or "").lower()
-            or needle in (spec.help or "").lower()
+            for key in SETTING_SPECS
+            if needle in self._search_text(key)
         ]
         self._set_keys(st, keys, "")
         if not keys:

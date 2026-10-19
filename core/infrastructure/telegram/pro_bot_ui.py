@@ -6599,7 +6599,7 @@ class ProBotUI:
             hint = self._t("ui_reg_list_hint") if spec.kind == "list" else ""
             await self._safe_edit(
                 cq,
-                self._t("ui_reg_prompt_value", label=spec.label or key, kind=spec.kind,
+                self._t("ui_reg_prompt_value", label=editor.label_for(key), kind=spec.kind,
                         help=(spec.help or hint)),
             )
             await cq.answer()
