@@ -65,6 +65,17 @@ jobs:
         # separately; this guard is change-scoped and fail-closed.
         run: python scripts/audit_telegram_i18n.py
 
+      - name: Mobile UI hardcoded-copy guard
+        # The two guards above cover the bot. The Flutter client had ~40 widget
+        # labels ('Retry', 'Task Name', 'HEADER EMPTY') that never reached
+        # mobile/lib/l10n/, so those screens rendered English in all 10 locales.
+        # Stdlib-only on purpose: this job has no Dart SDK — flutter analyze
+        # would not catch a hardcoded string anyway. Today's debt is pinned per
+        # content (not per line) in scripts/.mobile_ui_copy_baseline.txt; the
+        # gate is fail-closed on anything new, and prints a "backlog shrank"
+        # notice when the baseline may be regenerated.
+        run: python scripts/audit_mobile_ui_copy.py
+
       - name: Cross-language catalog audit
         # Every translation catalog (bot + mobile) must be 1:1 with the
         # English reference: no missing/extra keys, no empty values, no
@@ -235,6 +246,16 @@ jobs:
         run: |
           npx tsc -p tsconfig.app.json --noEmit
           npx tsc -p tsconfig.node.json --noEmit
+
+      - name: UI-copy gate (JSX-aware)
+        # Typechecking cannot see whether a label ever reaches a catalog: the
+        # dashboard shipped 458 inline `isRtl ? '…' : '…'` branches and hundreds
+        # of <span>Save changes</span> literals, so 9 of the 10 locales rendered
+        # English. This gate parses the JSX with the bundled typescript compiler
+        # and fails on any user-visible copy that is not a catalog lookup or a
+        # documented technical token. Existing debt is pinned per content (not
+        # per line) in scripts/.web_ui_copy_baseline.txt. Run from the repo root.
+        run: node scripts/audit_web_ui_copy.js
 
       - name: Provenance rules
         # Verify how a settings row decides what to show (edit/own/inherited)

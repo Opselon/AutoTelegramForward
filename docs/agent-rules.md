@@ -149,17 +149,63 @@ Before pushing changes or submitting PRs, agents must run and pass the following
    ```
    *Scans git diff against base branch (`origin/master` or `origin/main`) for any newly introduced hardcoded string literals in UI code.*
 
-3. **Core & Logger Pytest Suites:**
+3. **Web Dashboard UI-Copy Gate (JSX-aware):**
+   ```bash
+   node scripts/audit_web_ui_copy.js
+   ```
+   *Protects the dashboard's copy. Parses `web/frontend/src/**` with the bundled
+   `typescript` compiler (no regex guessing) and fails on user-visible copy that
+   never enters a translation catalog: JSX text nodes, `placeholder` / `title` /
+   `aria-label` / `aria-description` / `aria-valuetext` / `alt` / `label` /
+   `tooltip` string attributes, string branches of `cond ? 'A' : 'B'`,
+   `flag && 'A'` and template literals that land in a copy position, and
+   copy-named object properties (`{ label: 'Active' }`). It is not fooled by
+   `{t('key')}`, `<Trans>` children, or a catalog lookup in one branch of a
+   ternary — and it still flags the old `t(fa, en)` positional helper, which is
+   `isRtl ? fa : en` wearing a function name. Documented exemptions: the brand
+   `AutoTelegramForward`, URLs/routes/MIME types, CSS values, identifiers and
+   field names (`filter_rule_id`), log levels and env constants (`ERROR`),
+   service names (`core`, `api`, `logger`, `web`), shell commands, format
+   examples (`{source_title}`), and the catalog/generated tables themselves
+   (`src/locales/**`, `*.generated.ts`). Existing debt is pinned by
+   **content**, not line, in `scripts/.web_ui_copy_baseline.txt`
+   (`path|normalized text`, `#` comments allowed), so inserting a line above an
+   offender cannot redden CI. `--report` lists every offender;
+   `--update-baseline` rewrites the pin and prints the new count; a backlog that
+   shrank prints a *backlog shrank — regenerate the baseline* notice. Requires
+   `web/frontend/node_modules/typescript` (`npm ci`), and exits 2 rather than
+   reporting a pass when it cannot find it.*
+
+4. **Mobile UI-Copy Gate (Dart):**
+   ```bash
+   python scripts/audit_mobile_ui_copy.py
+   ```
+   *Protects the Flutter client's copy, with the same content-keyed baseline
+   (`scripts/.mobile_ui_copy_baseline.txt`). Scans `mobile/lib/**/*.dart`
+   excluding `mobile/lib/l10n/` for display literals: `Text('…')`,
+   `const Text('…')`, and string values of `labelText`, `hintText`, `tooltip`,
+   `label`, `title`, `semanticLabel`, `helperText`, `errorText`, `emptyTitle`,
+   `emptySubtitle`, `message`, `description`, … — including interpolated
+   strings, whose static part is what the user reads (`'Sender: ${r.senderType}'`).
+   Catalog lookups (`Text(t.get('key'))`) and technical tokens (URLs, paths,
+   timestamps, `AutoTelegramForward`, `{source_title}`, `filter_rule_id`,
+   `ERROR`, `application/json`) are tolerated by documented rules, and the
+   matcher reads Dart's quoting (`'`/`"`, triple quotes, `r'…'`,
+   `${t.get('k')}`) rather than guessing with a regex. Stdlib-only, so it runs
+   in the python CI job, which has no Dart SDK — `flutter analyze` cannot catch
+   a hardcoded label. Same `--report` / `--update-baseline` / shrink notice.*
+
+5. **Core & Logger Pytest Suites:**
    ```bash
    pytest -q core/tests scripts/tests
    ```
 
-4. **Go API Test Suite:**
+6. **Go API Test Suite:**
    ```bash
    cd api && go test ./...
    ```
 
-5. **Flutter Formatting & Analysis (if modifying `mobile/`):**
+7. **Flutter Formatting & Analysis (if modifying `mobile/`):**
    ```bash
    cd mobile && dart format --output=none --set-exit-if-changed lib test && flutter test
    ```
