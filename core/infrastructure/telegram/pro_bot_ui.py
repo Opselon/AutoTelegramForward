@@ -8132,7 +8132,7 @@ class ProBotUI:
             rule.metadata["detection_criteria"] = rule.detection_criteria
             await self._save_owned_rule(rule, uid)
             desc = self._t("ui_logic_all") if nxt == "ALL" else self._t("ui_logic_any")
-            await cq.answer(self._t("ui_match_logic_alert", nxt=nxt, desc=desc))
+            await cq.answer(self._t("ui_match_logic_alert", desc=desc))
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -10428,7 +10428,8 @@ class ProBotUI:
         if self._credentials is None:
             await self._persist(message.from_user.id, st)
             return await message.reply_text(
-                self._t("ui_cred_fail", lang=lang, error="vault unavailable"),
+                self._t("ui_cred_fail", lang=lang,
+                        error=self._t("ui_cred_vault_unavailable", lang=lang)),
                 reply_markup=self._creds_menu(),
             )
         try:
