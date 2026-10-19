@@ -1606,6 +1606,7 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             intermediate_chat_id=str(inter_chat) if inter_chat else None,
             intermediate_message_id=int(inter_msg) if inter_msg is not None else None,
             delivery_stage=str(deliv_stage or "DIRECT"),
+            job_kind=str(row["job_kind"]) if "job_kind" in keys and row["job_kind"] else "forward",
         )
 
     async def enqueue(self, job: DeliveryJob, conn=None) -> bool:
@@ -1627,8 +1628,9 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
                     id, rule_id, source_chat_id, source_message_id, target_chat_id,
                     payload_json, status, attempts, max_attempts, next_retry_at,
                     lease_until, worker_id, error_detail, created_at, updated_at,
-                    intermediate_chat_id, intermediate_message_id, delivery_stage
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    intermediate_chat_id, intermediate_message_id, delivery_stage,
+                    job_kind
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job.id,
@@ -1649,6 +1651,7 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
                     str(job.intermediate_chat_id or "") if job.intermediate_chat_id else None,
                     job.intermediate_message_id,
                     job.delivery_stage or "DIRECT",
+                    getattr(job, "job_kind", "forward") or "forward",
                 ),
             )
         except Exception:

@@ -2269,6 +2269,11 @@ class DeliveryJob:
     intermediate_chat_id: Optional[str] = None
     intermediate_message_id: Optional[int] = None
     delivery_stage: str = "DIRECT"
+    # What this job delivers. ``"forward"`` is the primary copy of the source
+    # message; anything else (``"keyword_reply"``) is an additional deliverable
+    # to the same target for the same event. It is part of the persisted
+    # deliverable key, so one source message can carry a forward *and* a reply.
+    job_kind: str = "forward"
     created_at: int = field(default_factory=_now)
     updated_at: int = field(default_factory=_now)
 

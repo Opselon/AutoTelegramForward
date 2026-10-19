@@ -174,3 +174,26 @@ Two further invariants the same file pins, so a later change cannot quietly brea
 Task→session ownership is enforced where the session is chosen: `ForwardRuleUseCases.create`/`update` raise
 `PermissionError` for a session owned by someone else, and the rejected task is not stored
 (`test_creating_a_task_on_another_tenants_account_is_refused`).
+
+## Part 2 STEER 06 — queue, concurrency and idempotency findings
+
+The durable queue is where "forwarded once" can quietly become "never". Part 1 proved the keyword-reply feature
+by asserting that the *enqueue call* carried `job_kind="keyword_reply"` with the queue stubbed out — a test that
+could not fail no matter what the store did. Driving the real `DurableQueueManager` against a real SQLite file
+(`core/tests/test_queue_concurrency_and_idempotency.py`, 15 tests) and the migration against a hand-built
+pre-v20 table (`core/tests/test_delivery_jobs_migration.py`, 5 tests) found two defects that made the reply
+impossible to deliver.
+
+| ID | Defect | Root cause | Fix | Evidence |
+|----|--------|-----------|-----|----------|
+| D4 | **Keyword reply / keyword confirmation never reached a target.** The reply job was refused by the queue on every message that was also forwarded — i.e. always — and nothing was logged, while the pipeline logged `keyword matched … reply enqueued` | `delivery_jobs` deduped with `INSERT OR IGNORE` on `UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id)`. A reply is a *second deliverable to the same target for the same source message*, so its row matched the forward's key, the insert was ignored and `enqueue_delivery` returned `False`. The distinct job *id* the code added could not help: the UNIQUE key never looked at the id. The pipeline ignored the return value, so the refusal produced no log at all | the deliverable kind is now part of the queue row's identity: `job_kind` is a column and part of the UNIQUE key (SQLite: `_rebuild_delivery_jobs_deliverable_key` — copy rows → compare counts → swap inside a SAVEPOINT, so a failure leaves the old table and its jobs untouched; Postgres: `scripts/postgres/schema.sql` widens `delivery_jobs_unique`). The pipeline now checks the result and logs `[PIPELINE:KEYWORD_REPLY] … refused by the queue` | `test_a_keyword_reply_is_not_deduplicated_away_by_the_forward`, `test_the_pipeline_stores_both_deliverables_for_a_keyword_match` (real pipeline → 2 rows: `forward` + `keyword_reply`), `test_the_old_collision_can_no_longer_happen`, `test_a_legacy_table_is_rebuilt_with_its_rows_intact`, `test_reopening_a_migrated_database_changes_nothing` |
+| D5 | A reply's outcome **overwrote the forward's delivery record**: edit/delete sync was pointed at the reply post instead of the forwarded copy, and a failed reply marked an already-delivered forward as `RETRY_WAIT`/`FAILED` | `message_map` is keyed by (rule, source, msg, target) too, and the worker wrote `target_message_id` + `delivery_status` there for **every** job, replies included. The reply is a different deliverable sharing that key | only the primary forward owns the mapping row: `DurableQueueManager._note_mapping` skips non-forward deliverables (all five post-dispatch writes route through it), and the enqueue path only upserts the mapping for a forward | `test_a_reply_outcome_never_rewrites_the_forwards_mapping`, `test_a_reply_does_not_create_a_mapping_row_of_its_own` |
+
+Invariants the same file pins so a later change cannot quietly break them:
+
+* one job, one delivery — a live lease cannot be claimed by a second worker, an expired lease is reclaimed as
+  **the same job** (never a forked row), and a destination is a single lane drained in source order;
+* nothing is lost — a `RETRY_WAIT` job waits its backoff and comes back, an exhausted job lands in the
+  dead-letter queue **with its payload**, and a job claimed by a crashed worker is recoverable;
+* the dead-letter queue is scoped to the caller's own rules, and an empty scope matches nothing;
+* a pending job survives a reopen with its text and every field the worker needs to finish it.

@@ -994,20 +994,29 @@ class DurableMessagePipeline:
                     if self._queue is None:
                         break
                     # job_kind="keyword_reply" gives the reply its own
-                    # delivery-job id so it is not deduplicated against the
-                    # primary forward for the same target.
-                    await self._queue.enqueue_delivery(
+                    # deliverable key (id + the table's UNIQUE key include the
+                    # kind) so it is not deduplicated against the primary
+                    # forward for the same target.
+                    queued = await self._queue.enqueue_delivery(
                         rule, payload, str(target), reply_text, eval_res,
                         job_kind="keyword_reply",
                         correlation_id=ctx.correlation_id,
                     )
+                    if queued is False:
+                        # A refused enqueue used to be invisible: the only log
+                        # line claimed the reply had shipped. Say what really
+                        # happened so an operator can see it in the console.
+                        logger.warning(
+                            "[PIPELINE:KEYWORD_REPLY] [%s] Rule %s msg %s — reply to %s was refused by the queue",
+                            ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
+                        )
                 ctx.record_stage(
                     PipelineStage.TRANSFORM, True,
                     reason="keyword_reply:matched",
                 )
                 logger.info(
                     "[PIPELINE:KEYWORD_REPLY] [%s] Rule %s keyword matched on msg %s — reply enqueued to %d target(s)",
-                    ctx.correlation_id[:8], rule.id[:8], payload.message_id, len(targets),
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id, len(delivery_targets),
                 )
         except Exception as exc:
             # The keyword reply is an add-on side effect: a failure here must
