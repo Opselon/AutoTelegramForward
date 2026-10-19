@@ -623,9 +623,48 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         )
         return [self._row_to_entity(r) for r in rows]
 
+    #: A task's own bookkeeping, all keyed by ``rule_id``. Deleting a task has to
+    #: take these with it:
+    #:
+    #: * a leftover ``message_map`` row claims the task already delivered a
+    #:   source message to a target, so re-creating the task (or restoring a
+    #:   backup that reuses the id) can silently skip that message;
+    #: * ``processed_messages`` keeps the same claim for the dedupe stage;
+    #: * jobs, dead letters, counters and error rows grow without bound and keep
+    #:   a deleted task visible in every operator view that reads them.
+    DEPENDENT_TABLES = (
+        "message_map",
+        "processed_messages",
+        "delivery_jobs",
+        "dead_letter_queue",
+        "rule_stats",
+        "error_log",
+        "content_dedup",
+    )
+
     async def delete(self, rule_id: str) -> bool:
-        cur = self._db.execute("DELETE FROM forward_rules WHERE id=?", (rule_id,))
-        return cur.rowcount > 0
+        """Delete the task and its own bookkeeping as one atomic unit.
+
+        All-or-nothing on purpose: each write goes through ``execute()``, which
+        commits per statement, so a crash between "the rule is gone" and "the
+        mappings are gone" would leave exactly the inconsistency this exists to
+        prevent — and no watchdog reconciles those tables. A store that predates
+        one of them simply has nothing to clean there.
+        """
+
+        def unit(conn: sqlite3.Connection) -> bool:
+            cur = conn.execute("DELETE FROM forward_rules WHERE id=?", (rule_id,))
+            if cur.rowcount == 0:
+                return False
+            for table in self.DEPENDENT_TABLES:
+                try:
+                    conn.execute(f"DELETE FROM {table} WHERE rule_id=?", (rule_id,))
+                except sqlite3.OperationalError:
+                    # Unknown table = an older store; there is nothing to clean.
+                    continue
+            return True
+
+        return bool(self._db.run_in_transaction(unit))
 
     async def set_task_status(
         self,
