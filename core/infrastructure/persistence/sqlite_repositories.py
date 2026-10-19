@@ -1907,6 +1907,27 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             )
         return cur.rowcount > 0
 
+    async def defer(self, job_id: str, reason: str, backoff_seconds: float) -> bool:
+        """Postpone without consuming an attempt (see the interface docstring).
+
+        ``attempts`` is deliberately untouched: the blockers this serves (paused
+        task, rate limit, time limit, no live client, unusable bot token) are
+        states of the *environment*, not failures of the job. A SENT or FAILED
+        job is never reopened by a late deferral.
+        """
+        now = time.time()
+        next_retry = now + max(0.0, float(backoff_seconds))
+        cur = self._db.execute(
+            """
+            UPDATE delivery_jobs
+            SET status = 'RETRY_WAIT', next_retry_at = ?, error_detail = ?,
+                lease_until = 0, updated_at = ?
+            WHERE id = ? AND status NOT IN ('SENT', 'FAILED')
+            """,
+            (next_retry, reason, int(now), job_id),
+        )
+        return cur.rowcount > 0
+
     async def mark_failed(self, job_id: str, error: str) -> bool:
         now = _now()
         cur = self._db.execute(

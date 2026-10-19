@@ -325,6 +325,33 @@ routing unit tests.
 | F27 Auto delete message | **PASS** | the setting reaches the worker and deletion is scheduled off the delivered id (`durable_queue._schedule_auto_delete`); `test_phase2_advanced_settings_execution.py` |
 | F28 Outbound webhook | **NOT_IMPLEMENTED — premium addon** | only the flag exists (`radon:<rule>:webhook`, catalog `ui_rule_addon_webhook`); no outbound hook in the engine. Entitlement respected, not bypassed |
 
+## Part 2 — post-audit repairs (STEER 13-28 read-only audit)
+
+The read-only audit of the task-level features (STEER 13-28) found two defects
+that #207's delete-cleanup does not cover, plus one cross-task write. All three
+are fixed here; each has a regression test that fails before the change.
+
+| Defect | Root cause | Fix | Evidence |
+|---|---|---|---|
+| **A queued message is delivered after its task is deleted** | the worker checked the rule only when it *existed* (`if rule_obj:`), so a deleted rule fell straight through to dispatch — the job was sent, left `PENDING`, and recorded no error | a missing rule now drops the job (`[PIPELINE:DROP] ... Rule no longer exists`); the job is gone, nothing is delivered | `test_transient_defers_and_deleted_tasks.py` |
+| **A transient blocker burned the delivery budget** | paused task, rate-limited target, time-limited account, no live client and an unusable bot token all called `mark_retry`, which spends an attempt and dead-letters the job as `DELIVERY_EXHAUSTED` at `max_attempts` (5) — a ten-second session outage destroyed a healthy message | `IDeliveryQueueRepository.defer()` postpones a job *without* spending an attempt (SQLite + Postgres, `attempts` untouched, `SENT`/`FAILED` never reopened); the worker defers all five transient states and falls back to `mark_retry` with a warning when an adapter cannot defer | same file: 12 pauses leave `attempts == 0`, no dead letter, and the message is delivered when the task resumes / the session returns |
+| **A staged draft could be written onto the wrong task** | `ed_save:<id>` never checked the staged draft's `rule_id` against the callback's task, and the version it compares comes from the same wrong buffer, so a leftover `ed_save:B` wrote task A's whole configuration onto B and reported success | the Save is refused when the staged draft belongs to another task, the stale buffer is dropped, and the user sees the draft-expired alert | `test_draft_save_targets_the_right_task.py` |
+
+Also confirmed by the audit, already correct: the duplicate handler goes through
+`create` with a fresh uuid and the caller's `owner_user_id` (D1 was fixed in an
+earlier batch — the audit's report describes the pre-fix path); bot-token reads
+are owner-scoped, encrypted, and never returned; delete authorisation is
+enforced on the bot, Go API and gRPC surfaces.
+
+The audit's remaining findings are recorded as such rather than silently
+"fixed": dead advanced-settings controls (crypto mode, OCR, translate, news
+digest, raw text, button-to-text, schedules), the `paid_addons` key mismatch
+between the UI toggles and the engine gates (`kw_reply` vs `keyword_reply`,
+`auto_del` vs `auto_delete_message`, `comments` vs `channel_comments`),
+auto-delete not surviving a restart, F24 (forward every N) and F28 (outbound
+webhook) having no engine path at all, and the `owner_user_id=0` gRPC bypass
+(mitigated by `ATF_CORE_RPC_TOKEN`). They are the next batches, not this one.
+
 F23, F24 and F28 are reported as what they are rather than as passing: the toggle renders and persists, which is exactly the
 evidence the steer forbids treating as proof that the feature works. Nothing was enabled to make them look complete — the
 locked-addon rule was inspected, not bypassed.

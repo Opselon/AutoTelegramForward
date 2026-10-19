@@ -1091,6 +1091,19 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
             await _execute_db(self._db, query, (attempts, next_retry, error, int(now), job_id))
         return True
 
+    async def defer(self, job_id: str, reason: str, backoff_seconds: float) -> bool:
+        """Postpone without consuming an attempt (see the interface docstring)."""
+        now = time.time()
+        next_retry = now + max(0.0, float(backoff_seconds))
+        query = """
+        UPDATE delivery_jobs
+        SET status = 'RETRY_WAIT', next_retry_at = %s, error_detail = %s,
+            lease_until = 0, updated_at = %s
+        WHERE id = %s AND status NOT IN ('SENT', 'FAILED')
+        """
+        res = await _execute_db(self._db, query, (next_retry, reason, int(now), job_id))
+        return bool(getattr(res, "rowcount", 1))
+
     async def mark_failed(self, job_id: str, error: str) -> bool:
         now = int(time.time())
         query = "UPDATE delivery_jobs SET status = 'FAILED', error_detail = %s, lease_until = 0, updated_at = %s WHERE id = %s"
