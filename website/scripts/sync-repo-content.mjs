@@ -426,10 +426,39 @@ for (const rawLine of apiSource.split('\n')) {
     continue;
   }
 
+  // A method-bearing Handle() is a route whose handler is wrapped in middleware
+  // before registration — `mux.Handle("PUT /logs/policy", h.RequireAdmin(...))`.
+  // The first version of this parser only read HandleFunc, so every admin-gated
+  // route registered this way was missing from the published reference while
+  // still answering on the wire. Ownership still comes from the mux it is
+  // registered on, so the mount resolution below is unchanged. Checked before
+  // the mount form, whose path never carries a verb.
+  const guarded = line.match(/^(\w+)\.Handle\("(GET|POST|PUT|PATCH|DELETE|HEAD) ([^"]+)",\s*(.+)\)$/);
+  if (guarded) {
+    endpointDecls.push({
+      owner: guarded[1],
+      method: guarded[2],
+      sub: `/${guarded[3]}`,
+      handler: guarded[4].trim(),
+      requiresAdmin: /RequireAdmin/.test(guarded[4]),
+    });
+    continue;
+  }
+
   const mount = line.match(/^(\w+)\.Handle\("([^"]+)",\s*(.+)\)$/);
   if (mount) {
     const child = mount[3].match(/\b(\w+Mux)\b/);
-    if (child) mounts.push({ owner: mount[1], prefix: mount[2], child: child[1] });
+    if (child)
+      mounts.push({
+        owner: mount[1],
+        prefix: mount[2],
+        child: child[1],
+        // A child mux mounted through RequireAdmin hands every route inside it
+        // the administrator gate, so the route's own handler text is not the
+        // only place that gate can appear:
+        //   dashMux.Handle("/admin/", http.StripPrefix("/admin", h.RequireAdmin(adminMux)))
+        adminGated: /RequireAdmin/.test(mount[3]),
+      });
     continue;
   }
 
@@ -463,6 +492,10 @@ for (let pass = 0; pass < 8; pass += 1) {
 const apiRoutes = [];
 const seenRoutes = new Set();
 
+// A mux mounted behind the administrator gate confers that gate on every route
+// it contains, however those routes were registered.
+const adminGatedMuxes = new Set(mounts.filter((mount) => mount.adminGated).map((mount) => mount.child));
+
 for (const decl of endpointDecls) {
   const base = muxPrefixes[decl.owner];
   if (base === undefined || base === null) continue;
@@ -475,7 +508,14 @@ for (const decl of endpointDecls) {
     method: decl.method,
     path: full,
     handler: decl.handler,
-    auth: decl.owner === 'dashMux' || decl.owner === 'adminMux' ? 'bearer' : 'none',
+    // `admin` is a stricter form of `bearer`: the route is only reachable with a
+    // verified identity that also carries the administrator flag. It comes from
+    // the route's own wrapper or from the gate on the mux it was mounted under.
+    auth: decl.requiresAdmin || adminGatedMuxes.has(decl.owner)
+      ? 'admin'
+      : decl.owner === 'dashMux' || decl.owner === 'adminMux'
+        ? 'bearer'
+        : 'none',
   });
 }
 

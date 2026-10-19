@@ -1,0 +1,410 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import Callout from '../../../components/Callout.astro';
+import GuardChain from '../../../components/GuardChain.astro';
+import RequestResponse from '../../../components/RequestResponse.astro';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'Response envelope';
+const pageDesc =
+  'What every API response looks like: the three body shapes, the refusal codes, correlation ids, pagination bounds and the guard that produces a 429.';
+
+const toc = [
+  { id: 'shapes', title: 'Three body shapes' },
+  { id: 'chain', title: 'The guard chain' },
+  { id: 'statuses', title: 'Status codes and bodies' },
+  { id: 'refusals', title: 'Refusals that matter' },
+  { id: 'correlation', title: 'Correlation and pacing' },
+  { id: 'bounds', title: 'Pagination and limits' },
+  { id: 'worked', title: 'Worked exchanges' },
+];
+
+const guards = [
+  {
+    title: 'CorrelationID',
+    detail:
+      'Reads X-Correlation-ID, X-Request-ID or traceparent from the request, or generates one, and echoes it on the response so support can join a client call to its server log.',
+    refusal: 'never refuses',
+  },
+  {
+    title: 'AccessLogger',
+    detail:
+      'Records every request — success and refusal — with the verified actor and the correlation id. An unauthenticated attempt is recorded as a security-relevant warning.',
+    refusal: 'never refuses',
+  },
+  {
+    title: 'Per-address shield',
+    detail:
+      'The outer limit, keyed on the peer address, evaluated before token validation so a flood of forged tokens never reaches the core.',
+    refusal: '429 rate_limited · 503 rate_limit_unavailable (fail-closed)',
+  },
+  {
+    title: 'API-key gate',
+    detail:
+      'Only installed when ATF_API_KEY is configured on the server. Accepts X-API-Key for service-to-service automation; it sits inside the access log so refused keys stay visible.',
+    refusal: '401 unauthorized (when configured)',
+  },
+  {
+    title: 'RequireAuth',
+    detail:
+      'Validates the Bearer JWT with the core, loads the verified identity, and refuses an account with no Telegram link before any handler can scope by owner 0.',
+    refusal: '401 authentication required · 401 invalid or expired token · 403 account_not_linked',
+  },
+  {
+    title: 'Rate class',
+    detail:
+      'Applies the class budget for the route (auth, read, write, admin), keyed on the verified user id, the address, or both.',
+    refusal: '429 rate_limited with Retry-After',
+  },
+  {
+    title: 'Handler and core',
+    detail:
+      'The handler binds JSON, calls the core over gRPC, and maps a domain refusal onto an HTTP status without inventing a new vocabulary.',
+    refusal: '400 · 404 · 409 · 422 · 502 · 500',
+  },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/api/responses/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'Responses', href: url('/api/responses/') },
+  ]}
+  toc={toc}
+  keywords={[
+    'AutoTelegramForward API response envelope',
+    'API error codes Telegram forwarding',
+    '401 403 429 refusals',
+    'correlation id X-Request-ID',
+  ]}
+>
+  <p>
+    Responses are ordinary JSON with <code>Content-Type: application/json</code>. There is no wrapper object to unwrap:
+    a successful call returns the resource, and a refusal returns an error object that names itself. That is a deliberate
+    choice — a client can render <code>error</code> to a human and switch on <code>error_code</code> without knowing the
+    endpoint.
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="shapes">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Three body shapes</h2>
+    <SpecTable
+      headers={['Shape', 'When', 'Example keys']}
+      rows={[
+        [
+          '<strong class="text-slate-100">Resource</strong>',
+          'A successful read or a created object.',
+          '<code>task</code>, <code>tasks</code>, <code>total</code>, <code>rules</code>, <code>services</code>',
+        ],
+        [
+          '<strong class="text-slate-100">Refusal</strong>',
+          'Anything the server refuses: malformed input, a missing token, a foreign row.',
+          '<code>error</code> plus <code>error_code</code> or <code>code</code>',
+        ],
+        [
+          '<strong class="text-slate-100">Mutation result</strong>',
+          'Handlers that report success as a value rather than a status alone.',
+          '<code>success</code>, <code>message</code>, <code>settings</code>, <code>effective</code>',
+        ],
+      ]}
+      caption="The three shapes a control-plane response can take"
+    />
+
+    <div class="grid gap-4 lg:grid-cols-2 mt-5">
+      <CodeBlock
+        label="A resource: GET /api/tasks/{id}"
+        language="json"
+        content={`{
+  "task": {
+    "id": "6f1c…",
+    "owner_user_id": 5094837833,
+    "kind": "dlq.replay",
+    "status": "RUNNING",
+    "attempt": 1,
+    "max_attempts": 3,
+    "created_at": 1790000000
+  }
+}`}
+      />
+      <CodeBlock
+        label="A refusal: 404 on somebody else's task"
+        language="json"
+        content={`{
+  "error": "not_found",
+  "error_code": "not_found"
+}`}
+      />
+      <CodeBlock
+        label="A mutation result: PATCH settings"
+        language="json"
+        content={`{
+  "success": true,
+  "message": "settings updated",
+  "settings": { "clean_links": true },
+  "effective": {
+    "clean_links": { "value": true, "source": "rule" }
+  }
+}`}
+      />
+      <CodeBlock
+        label="A rate-limit refusal: 429"
+        language="json"
+        content={`{
+  "error": "rate limit exceeded",
+  "code": "rate_limited",
+  "retry_after_seconds": 12,
+  "limit": 120,
+  "scope": "u"
+}`}
+      />
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="chain">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">The guard chain</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The order is the order the handlers are wrapped in <code>api/main.go</code>, outermost first. It explains almost
+      every refusal a client can meet: a 401 never carries rate-limit headers because the limiter for that class runs
+      after authentication, and a 429 from the shield never reaches the core at all.
+    </p>
+    <GuardChain steps={guards} />
+    <Callout type="info" class="mt-4" title="Why the order is load-bearing">
+      <p>
+        The access logger sits outside the API-key gate on purpose. Wrapped the other way round, every refused key would
+        be invisible twice over: no access-trail entry and no stdout line. An unauthenticated attempt is security
+        evidence, so it is recorded before anything refuses it.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="statuses">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Status codes and bodies</h2>
+    <SpecTable
+      headers={['Status', 'Body', 'Produced by', 'What to do']}
+      rows={[
+        [
+          '<code>200</code>',
+          'The resource, or <code>{"task": …}</code> with <code>already_existed: true</code>.',
+          'Any successful read or an idempotent replay.',
+          'Read the body; nothing else is implied.',
+        ],
+        [
+          '<code>201</code>',
+          'The created resource.',
+          '<code>POST /api/rules</code>, <code>POST /api/tasks</code>, <code>POST /api/auth/register</code>.',
+          'Store the id from the body.',
+        ],
+        [
+          '<code>400</code>',
+          '<code>{"error": "…", "code": "…"}</code> — the code names the refusal.',
+          'Malformed JSON, an unknown task kind, an invalid state transition, a payload over 64 KiB.',
+          'Fix the request; the error text is meant to be shown to a human.',
+        ],
+        [
+          '<code>401</code>',
+          '<code>{"error": "authentication required"}</code> or <code>{"error": "invalid or expired token"}</code>.',
+          'No <code>Authorization: Bearer</code> header, or a token the core rejected.',
+          'Log in again — tokens last 7 days.',
+        ],
+        [
+          '<code>403</code>',
+          '<code>{"error": "admin access required"}</code> or <code>{"error": "…", "code": "account_not_linked"}</code>.',
+          'The administrator gate, or an account with no Telegram link.',
+          'Link the account from the bot, or use an administrator token.',
+        ],
+        [
+          '<code>404</code>',
+          '<code>{"error": "…"}</code> — deliberately identical for foreign and missing rows.',
+          'A row that does not exist, or does not belong to the caller.',
+          'Treat it as missing; the API will not confirm that a foreign id exists.',
+        ],
+        [
+          '<code>409</code>',
+          'The current resource with its version.',
+          'A stale write raced a newer one.',
+          'Re-read, re-apply, retry.',
+        ],
+        [
+          '<code>422</code>',
+          '<code>{"error": "…", "code": "…"}</code> naming the refused field.',
+          'Schema or policy validation failed.',
+          'Read the field name in the message.',
+        ],
+        [
+          '<code>429</code>',
+          '<code>{"error": "rate limit exceeded", "code": "rate_limited", …}</code> plus <code>Retry-After</code>.',
+          'The per-address shield or a route class budget.',
+          'Wait <code>retry_after_seconds</code>; do not spin.',
+        ],
+        [
+          '<code>502</code>',
+          '<code>{"error": "core unavailable: …"}</code>.',
+          'The Go API could not reach the Python core or the logger.',
+          'Check <code>/api/health/services</code>, then <code>atf doctor</code>.',
+        ],
+        [
+          '<code>503</code>',
+          '<code>{"error": "rate limiting is unavailable…", "code": "rate_limit_unavailable"}</code>, or <code>session_not_connected</code>.',
+          'A fail-closed limiter lost its store; a session has no live client.',
+          'Retry shortly; reconnect the session from the bot.',
+        ],
+      ]}
+      caption="Statuses the control plane returns, and the body each one carries"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="refusals">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Refusals that matter</h2>
+    <div class="grid gap-3">
+      <div class="panel panel--flush">
+        <h3 class="text-sm font-bold text-white mb-1">A foreign row is a missing row</h3>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          Reads never distinguish “no such task” from “not your task”. The ownership predicate is part of the query, so
+          the server does not learn whether the id exists before it answers. That is what makes id probing useless
+          rather than merely noisy.
+        </p>
+      </div>
+      <div class="panel panel--flush">
+        <h3 class="text-sm font-bold text-white mb-1">An unlinked account is refused, not scoped to zero</h3>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          A verified account with no Telegram id resolves to <code>user_id = 0</code>. Rather than serving the
+          unattributed bucket, the authentication middleware answers <code>403 account_not_linked</code>. Onboarding is
+          unaffected: <code>/api/auth/*</code> is mounted outside that middleware, so <code>/auth/me</code> can still
+          explain what is missing.
+        </p>
+      </div>
+      <div class="panel panel--flush">
+        <h3 class="text-sm font-bold text-white mb-1">A missing limiter refuses instead of allowing</h3>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          The authentication and shield classes fail closed. If their store cannot answer, the request is refused with{' '}
+          <code>503 rate_limit_unavailable</code> — because a brute-force budget that disappears with Redis is not a
+          budget. Ordinary authenticated traffic falls back to the in-process limiter and keeps serving, with{' '}
+          <code>X-RateLimit-Degraded: 1</code> on the response.
+        </p>
+      </div>
+      <div class="panel panel--flush">
+        <h3 class="text-sm font-bold text-white mb-1">A refused action still says why</h3>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          Dead-letter replay, cancellation and retry all return their refusal body on the wire, with the same{' '}
+          <code>error</code> / <code>error_code</code> shape. A client never has to infer failure from an empty 200.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="correlation">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Correlation and pacing</h2>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div>
+        <SpecTable
+          headers={['Header', 'Direction', 'Meaning']}
+          rows={[
+            ['<code>X-Correlation-ID</code>', 'both', 'The request id, echoed on every response and stored with the log entry.'],
+            ['<code>X-Request-ID</code>', 'both', 'Alias of the same value, so either name works on the way in.'],
+            ['<code>traceparent</code>', 'in', 'Accepted as a correlation source when the caller already has a trace.'],
+            ['<code>X-RateLimit-Limit</code>', 'out', 'The budget for the class that evaluated the call.'],
+            ['<code>X-RateLimit-Remaining</code>', 'out', 'Units left in the current window.'],
+            ['<code>Retry-After</code>', 'out', 'Seconds to wait — on a 429 and on a fail-closed 503.'],
+            ['<code>X-RateLimit-Reset</code>', 'out', 'Same value as <code>Retry-After</code>, for clients that read it.'],
+            ['<code>X-RateLimit-Degraded</code>', 'out', '<code>1</code> when the in-process fallback enforced the limit.'],
+          ]}
+          caption="Headers worth reading on every call"
+        />
+      </div>
+      <Callout type="tip" title="Send your own correlation id">
+        <p>
+          Pass <code>X-Correlation-ID</code> on the way in and it is preserved end to end: the API echoes it, the access
+          trail stores it, and a delivery logged later can be joined back to the call that triggered it. Reading it out
+          of a support ticket is the difference between a five-minute lookup and an afternoon.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="bounds">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Pagination and limits</h2>
+    <SpecTable
+      headers={['Surface', 'Bound', 'Behaviour at the bound']}
+      rows={[
+        ['<code>GET /api/tasks</code>', '<code>limit</code> 1–200, default 50; <code>offset</code> ≥ 0', 'An out-of-range value is clamped before it is narrowed to an int — it cannot wrap.'],
+        ['<code>POST /api/tasks</code>', 'payload and result ≤ 64 KiB each; error text ≤ 8 KiB', 'Over the cap answers <code>400 payload_too_large</code>, never a truncated write.'],
+        ['<code>POST /api/tasks</code>', '<code>max_attempts</code> default 3, maximum 8', 'Clamped server-side; retries back off 5s → 20s → 80s, capped at 5 minutes.'],
+        ['<code>GET /api/logs</code>', '<code>limit</code> plus a time window', 'Bounded reads only; unbounded history is not a query this API offers.'],
+        ['<code>POST /api/auth/bot-login-link</code>', 'one live code per user, 60-second cooldown', '<code>429</code> with <code>Retry-After</code> instead of invalidating the link already handed out.'],
+        ['Any request', 'header 10s, read 60s, write 120s, idle 120s', 'A wedged handler cannot hold a connection, and a pool checkout, forever.'],
+      ]}
+      caption="Every bound a client can actually hit"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="worked">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Worked exchanges</h2>
+    <div class="grid gap-4">
+      <RequestResponse
+        exchange={{
+          label: 'Log in, then read your own tasks',
+          note: 'The token is the only tenant key. Nothing in the second request names a user.',
+          status: '200 OK',
+          request: `# 1 — exchange credentials
+curl -s -X POST https://your-host/api/auth/login \\
+  -H 'Content-Type: application/json' \\
+  -d '{"username":"operator","password":"…"}'
+
+# 2 — read the tasks that token owns
+curl -s https://your-host/api/tasks?limit=5 \\
+  -H "Authorization: Bearer $TOKEN"`,
+          response: `{
+  "tasks": [
+    { "id": "6f1c…", "kind": "session.backup", "status": "SUCCEEDED", "attempt": 1 }
+  ],
+  "total": 1,
+  "limit": 5,
+  "offset": 0
+}`,
+          requestLanguage: 'bash',
+        }}
+      />
+
+      <RequestResponse
+        exchange={{
+          label: 'A request the guard chain refuses',
+          note: 'No Bearer header: refused before any handler, any database read or any core call.',
+          status: '401 Unauthorized',
+          tone: 'err',
+          request: `curl -i https://your-host/api/rules`,
+          response: `HTTP/1.1 401 Unauthorized
+Content-Type: application/json
+X-Correlation-ID: 4b7f…
+
+{"error":"authentication required"}`,
+          requestLanguage: 'bash',
+          responseLanguage: 'text',
+        }}
+      />
+
+      <RequestResponse
+        exchange={{
+          label: 'A task created twice with the same idempotency key',
+          note: 'The second call is answered from the store, not re-executed: 200 with already_existed:true, exactly one job.',
+          status: '200 OK',
+          request: `curl -s -X POST https://your-host/api/tasks \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"kind":"dlq.replay","payload":{"ids":["a1"]},"idempotency_key":"replay-42"}'`,
+          response: `{
+  "task": { "id": "6f1c…", "status": "PENDING", "attempt": 0, "max_attempts": 3 },
+  "already_existed": true,
+  "id": "6f1c…",
+  "status": "PENDING"
+}`,
+          requestLanguage: 'bash',
+        }}
+      />
+    </div>
+  </section>
+</DocsLayout>

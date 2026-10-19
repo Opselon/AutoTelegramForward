@@ -10,6 +10,7 @@ const pageDesc =
   'How the platform keeps tenants apart: fail-closed identity scoping across bot, dashboard, mobile, REST and gRPC, AES-256-GCM at rest — and its stated limits.';
 
 const toc = [
+  { id: 'deep-dives', title: 'Security deep dives' },
   { id: 'model', title: 'Isolation model' },
   { id: 'enforcement', title: 'Where it is enforced' },
   { id: 'crypto', title: 'Cryptography' },
@@ -70,6 +71,31 @@ const layers = [
     that shapes everything else is that isolation is <strong>fail-closed</strong>: the default answer to "may this caller
     read this row?" is no, and a caller who has not linked a Telegram account can read nothing at all.
   </p>
+
+  <section class="not-prose scroll-mt-24" id="deep-dives">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Security deep dives</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      This page states the model. Three companions show the machinery underneath it — which query carries the owner,
+      where a secret can be read back, and what a hostile request meets before it reaches a handler.
+    </p>
+    <div class="grid gap-3.5 sm:grid-cols-3">
+      {
+        [
+          { title: 'Tenant isolation', href: url('/security/tenant-isolation/'), desc: 'Owner scoping per surface, the three refusals, the owner-zero trap and the tests that enforce it.', icon: 'users' },
+          { title: 'Secrets & keys', href: url('/security/secrets/'), desc: 'What is encrypted, what is write-only, what redaction does to a phone number, and how to rotate each credential.', icon: 'key' },
+          { title: 'Request hardening', href: url('/security/request-hardening/'), desc: 'Body caps, server timeouts, the endpoint guard that blocks SSRF, and the shutdown drain.', icon: 'shield' },
+        ].map((card) => (
+          <a class="card no-underline block" href={card.href}>
+            <span class="inline-flex w-9 h-9 items-center justify-center rounded-xl bg-sky-500/10 border border-sky-900/60 text-sky-300 mb-3">
+              <Icon name={card.icon} class="w-4 h-4" />
+            </span>
+            <h3 class="text-sm font-bold text-white mb-1.5">{card.title}</h3>
+            <p class="m-0 text-[13px] leading-relaxed text-slate-400">{card.desc}</p>
+          </a>
+        ))
+      }
+    </div>
+  </section>
 
   <section class="not-prose scroll-mt-24" id="model">
     <h2 class="display-3 text-white mb-3 scroll-mt-24">Isolation model</h2>

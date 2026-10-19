@@ -11,6 +11,7 @@ const pageTitle = 'REST API reference';
 const pageDesc = `All ${repoInfo.apiRoutes.length} routes the AutoTelegramForward control plane registers, grouped by subsystem, each with its verb, auth rule and a cURL example.`;
 
 const toc = [
+  { id: 'reference-map', title: 'Where to go deeper' },
   { id: 'auth', title: 'Authentication' },
   { id: 'conventions', title: 'Conventions' },
   { id: 'examples', title: 'Worked examples' },
@@ -59,6 +60,67 @@ const methodTone: Record<string, string> = {
     <span class="chip">{groups.length} route groups</span>
     <span class="chip">JSON in, JSON out</span>
   </p>
+
+  <section class="not-prose scroll-mt-24" id="reference-map">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Where to go deeper</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      This page is the map. The four pages below are the territory: the full endpoint table with accepted fields, the
+      response contract, the quota model and the durable-job lifecycle — each one grounded in the code that implements
+      it rather than in a description of intent.
+    </p>
+    <div class="grid gap-3 sm:grid-cols-2">
+      {
+        [
+          {
+            title: 'Endpoint reference',
+            href: url('/api/endpoints/'),
+            desc: `Every one of the ${repoInfo.apiRoutes.length} registered routes, searchable, with its accepted fields, its auth level and a real response body.`,
+            icon: 'chip',
+          },
+          {
+            title: 'Response envelope',
+            href: url('/api/responses/'),
+            desc: 'The three body shapes, the status codes that carry them, and the guard chain that decides whether a request ever reaches a handler.',
+            icon: 'code',
+          },
+          {
+            title: 'Rate limits & quotas',
+            href: url('/api/rate-limits/'),
+            desc: 'Six classes with their real budgets, how each key is derived, and which classes refuse when the shared store is gone.',
+            icon: 'gauge',
+          },
+          {
+            title: 'Durable task lifecycle',
+            href: url('/api/task-lifecycle/'),
+            desc: 'Six states with their full transition table, idempotent submission, retry backoff and every bound a caller can hit.',
+            icon: 'layers',
+          },
+        ].map((card) => (
+          <a class="panel panel--flush block no-underline group" href={card.href}>
+            <span class="inline-flex w-9 h-9 items-center justify-center rounded-xl bg-sky-500/10 border border-sky-900/60 text-sky-300 mb-2.5">
+              <Icon name={card.icon} class="w-4 h-4" />
+            </span>
+            <h3 class="text-sm font-bold text-white mb-1.5 group-hover:text-sky-300 transition-colors">{card.title}</h3>
+            <p class="m-0 text-[13px] leading-relaxed text-slate-400">{card.desc}</p>
+          </a>
+        ))
+      }
+    </div>
+    <div class="grid gap-3 sm:grid-cols-3 mt-3">
+      {
+        [
+          { title: 'Tenant isolation', href: url('/security/tenant-isolation/'), desc: 'Owner scoping and the three refusals.' },
+          { title: 'Secrets & keys', href: url('/security/secrets/'), desc: 'Encryption, write-only keys, rotation.' },
+          { title: 'Request hardening', href: url('/security/request-hardening/'), desc: 'Caps, timeouts, the SSRF guard.' },
+        ].map((card) => (
+          <a class="panel panel--flush block no-underline" href={card.href}>
+            <p class="m-0 mb-1 text-[13.5px] font-bold text-slate-100">{card.title}</p>
+            <p class="m-0 text-[12.5px] leading-relaxed text-slate-400">{card.desc}</p>
+          </a>
+        ))
+      }
+    </div>
+  </section>
 
   <section class="not-prose scroll-mt-24" id="auth">
     <h2 class="display-3 text-white mb-3 scroll-mt-24">Authentication</h2>

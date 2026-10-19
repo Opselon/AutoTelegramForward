@@ -1,0 +1,293 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Callout from '../../../components/Callout.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import RequestResponse from '../../../components/RequestResponse.astro';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'Rate limits and quotas';
+const pageDesc =
+  'The six rate classes with their real budgets, how each key is derived, what happens when the limiter loses its store, and how to pace a client.';
+
+const toc = [
+  { id: 'classes', title: 'The six classes' },
+  { id: 'keys', title: 'How the key is derived' },
+  { id: 'failures', title: 'When the limiter degrades' },
+  { id: 'headers', title: 'Pacing a client' },
+  { id: 'cooldowns', title: 'Per-user cooldowns' },
+  { id: 'worked', title: 'Worked exchange' },
+];
+
+const classes = [
+  {
+    name: 'auth',
+    budget: '30 / min · burst 10',
+    scope: 'peer address',
+    fail: 'closed',
+    where: 'Every route under /api/auth/ — login, register, code exchange, Mini App sign-in.',
+    why: 'A credential-stuffing loop is cheap to send and expensive to verify, so this class is the tightest one in the system.',
+  },
+  {
+    name: 'shield',
+    budget: '600 / min · burst 120',
+    scope: 'peer address',
+    fail: 'closed',
+    where: 'The outermost limit, applied before the token is looked at.',
+    why: 'Keyed on the address, not the identity: a flood of forged tokens never reaches the core because the caller is never a user in the first place.',
+  },
+  {
+    name: 'read',
+    budget: '600 / min · burst 120',
+    scope: 'verified user',
+    fail: 'local',
+    where: 'Dashboard reads — tasks, sessions, logs, stats, queue.',
+    why: 'Generous enough for a dashboard that polls, tight enough that one tenant cannot saturate the core for the others.',
+  },
+  {
+    name: 'write',
+    budget: '120 / min · burst 30',
+    scope: 'verified user',
+    fail: 'local',
+    where: 'Creating and changing tasks, filters, configs, settings.',
+    why: 'Writes cost a database round trip and a validation pass; the budget reflects that rather than the read budget.',
+  },
+  {
+    name: 'admin',
+    budget: '300 / min · burst 60',
+    scope: 'verified user',
+    fail: 'local',
+    where: 'Everything under /api/admin/.',
+    why: 'Installation-wide operations are not rarer than tenant writes — they are simply not unlimited.',
+  },
+  {
+    name: 'probe',
+    budget: '1200 / min · burst 300',
+    scope: 'peer address',
+    fail: 'local',
+    where: 'Health and readiness routes.',
+    why: 'A monitoring system polling every second must never be the reason a real caller is refused.',
+  },
+];
+
+const rateBody = `{
+  "error": "rate limit exceeded",
+  "code": "rate_limited",
+  "retry_after_seconds": 12,
+  "limit": 120,
+  "scope": "u"
+}`;
+
+const failClosedBody = `{
+  "error": "rate limiting is unavailable; this endpoint refuses requests until it can enforce its limit",
+  "code": "rate_limit_unavailable"
+}`;
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/api/rate-limits/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'Rate limits', href: url('/api/rate-limits/') },
+  ]}
+  toc={toc}
+  keywords={[
+    'AutoTelegramForward rate limit',
+    'API quota 429 Retry-After',
+    'token bucket Telegram API',
+    'fail-closed rate limiting',
+  ]}
+>
+  <p>
+    Every request is evaluated against one class, and the class is chosen by the route, not by the caller. The numbers
+    below are the defaults compiled into the limiter — a deployment may raise or lower them, and{' '}
+    <code>GET /api/admin/ratelimit</code> reports the policies actually in force, which is the honest way to find out
+    what your server enforces.
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="classes">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">The six classes</h2>
+    <div class="grid gap-3 lg:grid-cols-2">
+      {
+        classes.map((cls) => (
+          <div class="panel panel--flush">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <code class="text-[15px] font-bold text-sky-300">{cls.name}</code>
+              <span class="chip font-mono">{cls.budget}</span>
+            </div>
+            <dl class="endpoint-meta mb-2">
+              <dt>Key</dt>
+              <dd>{cls.scope}</dd>
+              <dt>On failure</dt>
+              <dd>{cls.fail === 'closed' ? 'fail-closed — refuse while it cannot enforce' : 'fall back to the in-process limiter and keep serving'}</dd>
+              <dt>Applies to</dt>
+              <dd>{cls.where}</dd>
+            </dl>
+            <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">{cls.why}</p>
+          </div>
+        ))
+      }
+    </div>
+
+    <SpecTable
+      class="mt-4"
+      headers={['Behaviour', 'How it works', 'What a client sees']}
+      rows={[
+        ['<strong class="text-slate-100">Token bucket per window</strong>', 'A Lua script evaluates the bucket, decrements it and reports the remaining units in one round trip; the window is refilled continuously rather than reset on the minute.', 'A steady trickle is never refused even at the average rate.'],
+        ['<strong class="text-slate-100">Burst is separate</strong>', 'Burst is the bucket depth, so a short spike above the average is allowed and then throttled.', 'An interactive dashboard can fire a dozen parallel reads without a refusal.'],
+        ['<strong class="text-slate-100">Circuit breaker</strong>', 'After repeated store failures the limiter stops waiting on the store and degrades deliberately instead of hanging every request behind a dead timeout.', 'Requests keep being served on the fallback with <code>X-RateLimit-Degraded: 1</code>.'],
+        ['<strong class="text-slate-100">Shared state</strong>', 'The budget lives in Redis, so several API replicas share one limit rather than each granting its own.', 'Scaling the API out does not multiply the quota.'],
+      ]}
+      caption="What the limiter does with a request"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="keys">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">How the key is derived</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The key is what stops one caller spending another caller's budget, so it is built from proven facts only.
+    </p>
+    <SpecTable
+      headers={['Scope', 'Key source', 'Why not the alternative']}
+      rows={[
+        ['<code>ip</code>', 'The peer address as seen by the API. Behind a reverse proxy the forwarded address is used.', 'That is precisely why the proxy must be the only thing able to set the forwarded header: a client that could forge it would pick whose budget it spends.'],
+        ['<code>u</code>', 'The numeric user id the token validated to — after <code>ValidateToken</code> answered, never from a header or a body field.', 'A caller-supplied id would let anyone spend somebody else\'s quota, or probe which ids exist by watching the refusals.'],
+        ['<code>uip</code>', 'Both, joined: the identity and the address together.', 'Used where limiting per user alone would let one account fan out across addresses.'],
+      ]}
+      caption="Where each key comes from"
+    />
+    <Callout type="tip" class="mt-4" title="Static routes are exempt by design">
+      <p>
+        The shields sit around the routes they protect rather than around the whole server, so dashboard assets and the
+        OpenAPI document are served without touching the limiter. An operator locked out by a rate limit can still read
+        the schema that says why.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="failures">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">When the limiter degrades</h2>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div>
+        <p class="m-0 mb-3 text-[15px] leading-relaxed text-slate-300">
+          A limiter that silently stops limiting is worse than no limiter, because it is trusted. So each class declares
+          what happens when the shared store cannot be reached:
+        </p>
+        <SpecTable
+          headers={['Class', 'Store unreachable', 'Reasoning']}
+          rows={[
+            ['<code>auth</code>', '<code>503</code> <code>rate_limit_unavailable</code>', 'A brute-force budget that disappears with Redis is not a budget.'],
+            ['<code>shield</code>', '<code>503</code> <code>rate_limit_unavailable</code>', 'The outer limit is the one that protects the process itself.'],
+            ['<code>read</code> · <code>write</code> · <code>admin</code> · <code>probe</code>', 'Serve on the in-process limiter, flag <code>X-RateLimit-Degraded: 1</code>', 'Availability matters more than a shared count here, and the per-process limit still exists.'],
+          ]}
+        />
+      </div>
+      <div class="grid gap-3">
+        <CodeBlock label="Fail-closed refusal: 503" language="json" content={failClosedBody} />
+        <CodeBlock label="Over budget: 429" language="json" content={rateBody} />
+      </div>
+    </div>
+    <Callout type="info" class="mt-4" title="Degraded is visible, not silent">
+      <p>
+        The response says <code>X-RateLimit-Degraded: 1</code> and the status endpoint reports the store as unreachable,
+        so an operator reading a support ticket can tell a cluster-wide limit from a single process guessing. A refusal
+        under a degraded limit is still a refusal — it just does not claim to be the whole cluster&apos;s.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="headers">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Pacing a client</h2>
+    <SpecTable
+      headers={['Header', 'Type', 'Reading it']}
+      rows={[
+        ['<code>X-RateLimit-Limit</code>', 'integer', 'The budget for the class that evaluated this call.'],
+        ['<code>X-RateLimit-Remaining</code>', 'integer', 'Units left. Clamp at zero and treat zero as "stop now", not "try once more".'],
+        ['<code>Retry-After</code>', 'seconds', 'Present on a 429 and on a fail-closed 503. Honour it literally.'],
+        ['<code>X-RateLimit-Reset</code>', 'seconds', 'The same value, for clients that read a reset header.'],
+        ['<code>X-RateLimit-Degraded</code>', '<code>1</code>', 'The in-process fallback enforced this call — the limit is per replica, not cluster-wide.'],
+      ]}
+      caption="The five headers a well-behaved client uses"
+    />
+    <ul class="grid gap-2 list-none p-0 m-0 mt-4">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <span class="text-sky-400 font-bold shrink-0">1.</span>
+        <span>Read <code>X-RateLimit-Remaining</code> on every response and slow down before it reaches zero rather than after the first refusal.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <span class="text-sky-400 font-bold shrink-0">2.</span>
+        <span>On a 429, wait <code>retry_after_seconds</code> and retry once. Retrying sooner spends the same budget and adds load to the refusal path.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <span class="text-sky-400 font-bold shrink-0">3.</span>
+        <span>Serialize writes instead of firing them in parallel — the write budget is the one a bulk import actually meets.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <span class="text-sky-400 font-bold shrink-0">4.</span>
+        <span>Poll <code>/api/version</code> and health routes, not a dashboard route, when what you want is a liveness signal.</span>
+      </li>
+    </ul>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="cooldowns">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Per-user cooldowns</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Two limits are not about throughput at all — they exist to keep a single-use credential single-use, and they are
+      enforced per user rather than per class:
+    </p>
+    <SpecTable
+      headers={['Surface', 'Limit', 'Answer while the limit is in force']}
+      rows={[
+        ['<code>POST /api/auth/bot-login-link</code> — dashboard login link', 'One live code per user; 60-second cooldown between mints', '<code>429</code> with <code>Retry-After</code>, and the code already issued keeps working.'],
+        ['Login codes', '10 minutes to live, exactly one use', 'The exchange answers <code>401</code> for a spent, expired or unknown code — the three cases are deliberately identical.'],
+      ]}
+      caption="Cooldowns that protect a credential instead of a rate"
+    />
+    <Callout type="success" class="mt-4" title="Why a cooldown beats minting a second link">
+      <p>
+        A double click on &quot;open dashboard&quot; would otherwise invalidate the link that was just handed out, and the
+        user would be told the link is broken. Refusing to mint a second code keeps the first one valid; the client
+        simply opens the link it already has.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="worked">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Worked exchange</h2>
+    <RequestResponse
+      exchange={{
+        label: 'Meeting the write budget head-on',
+        note: 'A bulk import fires writes in parallel. The API refuses with a definite wait rather than an ambiguous error, and the client resumes with the same idempotency keys — which is why none of the retries creates a duplicate task.',
+        status: '429 Too Many Requests',
+        tone: 'err',
+        request: `for i in 1 2 3 4 5 6; do
+  curl -s -o /dev/null -w '%{http_code}\\n' \\
+    -X POST https://your-host/api/rules \\
+    -H "Authorization: Bearer $TOKEN" \\
+    -H 'Content-Type: application/json' \\
+    -d "{\\"name\\":\\"bulk-$i\\"}" &
+done; wait`,
+        response: `200
+200
+429   Retry-After: 12
+429   Retry-After: 12
+200
+200
+
+# 429 body
+{
+  "error": "rate limit exceeded",
+  "code": "rate_limited",
+  "retry_after_seconds": 12,
+  "limit": 120,
+  "scope": "u"
+}`,
+        requestLanguage: 'bash',
+        responseLanguage: 'text',
+      }}
+    />
+  </section>
+</DocsLayout>

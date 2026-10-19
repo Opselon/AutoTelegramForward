@@ -1,0 +1,273 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Callout from '../../../components/Callout.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import RequestResponse from '../../../components/RequestResponse.astro';
+import GuardChain from '../../../components/GuardChain.astro';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'Durable task lifecycle';
+const pageDesc =
+  'How long-running work survives a restart: the six states, the allowed transitions, idempotent submission, retry backoff, refusal codes and the 64 KiB bounds.';
+
+const toc = [
+  { id: 'why', title: 'Why a task queue' },
+  { id: 'states', title: 'States and transitions' },
+  { id: 'kinds', title: 'Task kinds' },
+  { id: 'idempotency', title: 'Idempotent submission' },
+  { id: 'retries', title: 'Attempts and backoff' },
+  { id: 'bounds', title: 'Bounds and refusals' },
+  { id: 'walkthrough', title: 'Walkthrough' },
+];
+
+const states = [
+  { title: 'PENDING', detail: 'Accepted and stored. Any worker may claim it; nothing has run yet.', refusal: 'cancellable' },
+  { title: 'RUNNING', detail: 'A worker holds the claim and is executing. The attempt counter has already been incremented.', refusal: 'running_not_cancellable' },
+  { title: 'RETRY_WAIT', detail: 'The attempt failed in a way that is worth retrying. The backoff delay is counted down, and the job stays cancellable while it waits.', refusal: 'cancellable' },
+  { title: 'SUCCEEDED', detail: 'The work finished and its result is stored with the row. Terminal.', refusal: 'not_cancellable' },
+  { title: 'FAILED', detail: 'The attempt budget is spent, or the failure was not worth retrying. Terminal — unless the owner explicitly retries it.', refusal: 'retryable' },
+  { title: 'CANCELLED', detail: 'The owner stopped it before it ran, or while it waited for a retry. Terminal.', refusal: 'not_cancellable' },
+];
+
+const transitions = [
+  ['PENDING', 'RUNNING, CANCELLED', 'A worker claims it, or the owner stops it before the claim.'],
+  ['RUNNING', 'SUCCEEDED, FAILED, CANCELLED, RETRY_WAIT', 'The one state with four exits: done, permanent failure, a cancelled-and-cooperative run, or another attempt later.'],
+  ['RETRY_WAIT', 'PENDING, RUNNING, CANCELLED', 'The delay expires and the job is queued again, or the owner stops it while it waits.'],
+  ['FAILED', 'PENDING', 'Only an explicit retry re-queues it, and only from FAILED.'],
+  ['SUCCEEDED', '—', 'Terminal. Nothing transitions out.'],
+  ['CANCELLED', '—', 'Terminal. Nothing transitions out.'],
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/api/task-lifecycle/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'Task lifecycle', href: url('/api/task-lifecycle/') },
+  ]}
+  toc={toc}
+  keywords={[
+    'AutoTelegramForward durable tasks',
+    'async task states Telegram',
+    'idempotency key task API',
+    'retry backoff dead letter',
+  ]}
+>
+  <p>
+    A session backup, a dead-letter replay, a whole-installation export: each of these outlives the HTTP request that
+    starts it. Rather than holding a connection open, the API writes a row and returns it. The row is the contract —
+    poll it, cancel it, retry it — and it is owned by the same tenant rule as everything else, which is why a foreign
+    task id answers exactly like one that does not exist.
+  </p>
+
+  <Callout type="info" title="The 201/200 answer is the whole handshake">
+    <p>
+      <code>POST /api/tasks</code> returns the stored row, so a client does not have to follow up just to learn the id.
+      The id, the state and the attempt budget all come back in the same response that accepted the work.
+    </p>
+  </Callout>
+
+  <section class="not-prose scroll-mt-24" id="why">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Why a task queue instead of a long request</h2>
+    <ul class="grid gap-2 list-none p-0 m-0">
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <span class="text-sky-400 font-bold shrink-0">·</span>
+        <span><strong class="text-slate-100">Restarts do not lose work.</strong> The row is in the database, so a container replaced mid-backup comes back to a claimable PENDING job rather than an orphaned promise.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <span class="text-sky-400 font-bold shrink-0">·</span>
+        <span><strong class="text-slate-100">Progress is observable.</strong> <code>GET /api/tasks</code> shows the state, the attempt count and the last error, so &quot;is it still running?&quot; is a query, not a guess.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <span class="text-sky-400 font-bold shrink-0">·</span>
+        <span><strong class="text-slate-100">Failures are recoverable.</strong> A transient Telegram or network failure reaches RETRY_WAIT with backoff; a spent budget reaches FAILED, where an operator can retry it deliberately.</span>
+      </li>
+      <li class="flex gap-2 text-[14.5px] text-slate-300">
+        <span class="text-sky-400 font-bold shrink-0">·</span>
+        <span><strong class="text-slate-100">Retries are safe.</strong> The idempotency rule means a client that retries a submission gets the original job back, not a second copy of the work.</span>
+      </li>
+    </ul>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="states">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">States and transitions</h2>
+    <GuardChain steps={states} />
+    <SpecTable
+      class="mt-4"
+      headers={['From', 'To', 'Trigger']}
+      rows={transitions}
+      caption="The complete transition table — anything not listed here is refused"
+    />
+    <Callout type="warning" class="mt-4" title="RUNNING is honest, not optimistic">
+      <p>
+        A cancel request against a RUNNING job answers <code>running_not_cancellable</code> rather than pretending to stop
+        it. The worker only moves to CANCELLED if it observes the request cooperatively; otherwise the job finishes and
+        lands on SUCCEEDED or FAILED. Reporting CANCELLED for a job that is still running would be a lie that a later poll
+        would contradict.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="kinds">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Task kinds</h2>
+    <SpecTable
+      headers={['Kind', 'Started by', 'What it produces']}
+      rows={[
+        ['<code>session.backup</code>', '<code>POST /api/sessions/{id}/backup</code>', 'An encrypted archive of the session file, written only after the export succeeds.'],
+        ['<code>dlq.replay</code>', 'Dead-letter replay from the dashboard or <code>POST /api/tasks</code>', 'The refused deliveries re-attempted against their original targets.'],
+        ['<code>dlq.purge</code>', '<code>DELETE /api/dlq</code>', 'The caller\'s dead-letter entries removed, ownership applied before the delete.'],
+        ['<code>backup.export</code>', '<code>POST /api/backup/export</code>', 'A configuration bundle that can be imported on another host.'],
+      ]}
+      caption="The kinds a caller may submit"
+    />
+    <Callout type="danger" class="mt-4" title="An unknown kind is refused, not guessed">
+      <p>
+        The kind must be one of the four above. Anything else answers <code>400 unknown_task_kind</code> — the queue
+        dispatches on a closed set, so a typo cannot silently queue work that nothing will ever run.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="idempotency">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Idempotent submission</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The identity of a job is the trio of <strong class="text-slate-100">owner</strong>,{' '}
+      <strong class="text-slate-100">kind</strong> and <strong class="text-slate-100">idempotency_key</strong>. The owner
+      comes from the verified token — never from the body — so two tenants may use the same key without colliding, and a
+      client that retried a submission after a timeout gets its original job back instead of duplicating the work.
+    </p>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <CodeBlock
+        label="First submission — 201 Created"
+        language="json"
+        content={`{
+  "task": {
+    "id": "6f1c…",
+    "kind": "dlq.replay",
+    "status": "PENDING",
+    "idempotency_key": "replay-2026-10-19",
+    "attempt": 0,
+    "max_attempts": 3
+  },
+  "already_existed": false,
+  "id": "6f1c…",
+  "status": "PENDING"
+}`}
+      />
+      <CodeBlock
+        label="The same submission again — 200 OK, same job"
+        language="json"
+        content={`{
+  "task": { "id": "6f1c…", "status": "RUNNING", "attempt": 1 },
+  "already_existed": true,
+  "id": "6f1c…",
+  "status": "RUNNING"
+}`}
+      />
+    </div>
+    <Callout type="tip" class="mt-4" title="Choose a key that describes the work, not the attempt">
+      <p>
+        A key derived from the intent — the day, the batch, the rule — makes a retry safe. A random key makes every retry
+        a new job, which is exactly the behaviour idempotency keys exist to prevent.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="retries">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Attempts and backoff</h2>
+    <SpecTable
+      headers={['Rule', 'Value', 'Why']}
+      rows={[
+        ['Default attempt budget', '<code>3</code> attempts', 'Enough to ride out a transient failure, short enough that a permanent one is reported the same day.'],
+        ['Maximum attempt budget', '<code>8</code>', 'A requested budget is clamped server-side rather than rejected, so an exaggerated value cannot create an unbounded retry loop.'],
+        ['Backoff', '<code>5s → 20s → 80s → …</code>, factor 4, capped at <code>5 min</code>', 'Growth fast enough to stop hammering a service that is down, capped so a long queue still drains.'],
+        ['Attempt accounting', 'Incremented when the attempt starts', 'A worker that dies mid-attempt does not get a free retry; the attempt it was running is visible in the row.'],
+        ['Explicit retry', 'FAILED → PENDING with a fresh budget', 'An operator who fixed the cause re-queues the job; anything not in FAILED answers <code>not_retryable</code>.'],
+        ['Terminal retention', '30 days by default, configurable', 'Finished rows are purged by a scheduled job; nothing that is still PENDING, RUNNING or RETRY_WAIT is ever eligible.'],
+      ]}
+      caption="Retry behaviour, in the order you will meet it"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="bounds">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Bounds and refusals</h2>
+    <SpecTable
+      headers={['Condition', 'Answer', 'Detail']}
+      rows={[
+        ['Payload or result over the cap', '<code>400</code> <code>payload_too_large</code>', 'Each is capped at <strong>64 KiB</strong> and must be valid JSON. The message names which side exceeded the cap.'],
+        ['Unknown kind', '<code>400</code> <code>unknown_task_kind</code>', 'The dispatcher works on a closed set of four kinds.'],
+        ['Cancelling a finished job', '<code>400</code> <code>not_cancellable</code>', 'A SUCCEEDED, FAILED or CANCELLED job can only be retried (if FAILED) or ignored.'],
+        ['Cancelling a running job', '<code>400</code> <code>running_not_cancellable</code>', 'The row is left in RUNNING, because that is the truth.'],
+        ['Retrying anything not FAILED', '<code>400</code> <code>not_retryable</code>', 'Only a failed job has an attempt budget left to spend.'],
+        ['Reading or cancelling a foreign job', '<code>404</code> <code>not_found</code>', 'Owner and id are both in the query, so the answer is the same as for a job that never existed.'],
+        ['Listing without bounds', '<code>GET /api/tasks</code>', 'Pages with <code>limit</code> (1–200, default 50) and <code>offset</code>; an out-of-range value is clamped before it is narrowed to an int.'],
+      ]}
+      caption="Every way a task call can be refused"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="walkthrough">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Walkthrough</h2>
+    <div class="grid gap-4">
+      <RequestResponse
+        exchange={{
+          label: 'Submit, poll, then recover a failed job',
+          note: 'The same key is used for both submissions, so the second call is answered from the store. Only after the job reaches FAILED does the explicit retry become legal.',
+          status: '201 → 200 → 200 OK',
+          request: `# 1 — submit (retry-safe)
+POST /api/tasks
+{
+  "kind": "dlq.replay",
+  "payload": { "ids": ["a1","a2"] },
+  "idempotency_key": "replay-2026-10-19",
+  "max_attempts": 3
+}
+
+# 2 — poll one job
+GET /api/tasks/6f1c…
+
+# 3 — it exhausted its attempts
+GET /api/tasks/6f1c…
+{ "task": { "status": "FAILED", "attempt": 3, "max_attempts": 3 } }
+
+# 4 — retry it, now that the cause is fixed
+POST /api/tasks/6f1c…/retry`,
+          response: `{
+  "task": {
+    "id": "6f1c…",
+    "owner_user_id": 5094837833,
+    "kind": "dlq.replay",
+    "status": "PENDING",
+    "attempt": 0,
+    "max_attempts": 3,
+    "created_at": 1790000000
+  },
+  "already_existed": false,
+  "id": "6f1c…",
+  "status": "PENDING"
+}`,
+          requestLanguage: 'text',
+        }}
+      />
+
+      <RequestResponse
+        exchange={{
+          label: 'A cancel that is refused, honestly',
+          note: 'A reminder that the API reports state rather than intent: the row is not silently marked CANCELLED, so a poll series never shows a value the worker contradicts.',
+          status: '400 Bad Request',
+          tone: 'err',
+          request: `POST /api/tasks/6f1c…/cancel`,
+          response: `{
+  "error": "running_not_cancellable",
+  "error_code": "running_not_cancellable"
+}`,
+          requestLanguage: 'text',
+        }}
+      />
+    </div>
+  </section>
+</DocsLayout>

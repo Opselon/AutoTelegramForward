@@ -1,0 +1,40 @@
+---
+import Icon from './Icon.astro';
+
+/**
+ * The ordered list of guards and stages a request actually passes through,
+ * outermost first. Read from api/main.go's middleware wrapping order — the list
+ * is a fact about the binary, not a diagram of intent, which is why every step
+ * names the refusal it can produce.
+ */
+export interface ChainStep {
+  title: string;
+  detail: string;
+  /** The status/symptom this step produces when it refuses. */
+  refusal?: string;
+}
+
+interface Props {
+  steps: ChainStep[];
+  class?: string;
+}
+
+const { steps, class: cls = '' } = Astro.props;
+---
+
+<ol class={`chain ${cls}`}>
+  {
+    steps.map((step, index) => (
+      <li class="chain-step">
+        <span class="chain-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+        <p class="chain-title">{step.title}</p>
+        <p class="chain-detail">{step.detail}</p>
+        {step.refusal && (
+          <p class="chain-refusal">
+            <Icon name="alert" class="w-3 h-3 inline-block align-[-2px]" strokeWidth={2.2} /> {step.refusal}
+          </p>
+        )}
+      </li>
+    ))
+  }
+</ol>

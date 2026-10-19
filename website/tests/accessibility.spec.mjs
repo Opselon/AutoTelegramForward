@@ -28,6 +28,16 @@ const PAGES = [
   '/operations/ai-providers/',
   '/getting-started/account-linking/',
   '/api/authentication/',
+  // The API and security reference pages added the endpoint cards, the
+  // request/response panes, the guard chain and the method chips — all new
+  // painted surfaces in both themes.
+  '/api/endpoints/',
+  '/api/responses/',
+  '/api/rate-limits/',
+  '/api/task-lifecycle/',
+  '/security/tenant-isolation/',
+  '/security/secrets/',
+  '/security/request-hardening/',
 ];
 
 const setTheme = async (page, theme) => {

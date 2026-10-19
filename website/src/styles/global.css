@@ -945,7 +945,7 @@
 .spec-cards {
   display: none;
 }
-@media (max-width: 767px) {
+@media (width <= 767px) {
   .spec-table {
     display: none;
   }
@@ -2980,4 +2980,502 @@ html[data-theme='light'] .pill-live-dot {
 }
 html[data-theme='light'] .link-arrow {
   color: #0369a1;
+}
+
+/* ==========================================================================
+   API reference surfaces (v3.1)
+   --------------------------------------------------------------------------
+   The endpoint explorer, the request/response panes and the guard chain are the
+   three shapes a control-plane reference reader needs: which verb and path, what
+   goes in, what comes back, and which guard ran first. Every one of them is a
+   layout primitive plus one explicit `html[data-theme='light']` counterpart, so
+   the light palette stays exhaustive (tests/theme-coverage.test.mjs). Nothing
+   here widens the page: the rails scroll inside themselves and every mono string
+   is allowed to break, which is what keeps a 320px screen from scrolling
+   sideways.
+   ========================================================================== */
+
+/* The boolean attribute is authoritative: a filtered-out row has to lose to any
+   `display` its own component class sets for it. */
+[hidden] {
+  display: none !important;
+}
+
+/* --------------------------------------------------------------- anchor rail */
+.anchor-rail {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.anchor-rail > * {
+  flex: 0 0 auto;
+}
+.anchor-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  padding: 0.375rem 0.6875rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.85);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.anchor-pill:hover {
+  color: #fff;
+  border-color: var(--v3-edge-lit);
+}
+.anchor-pill.is-active {
+  color: #7dd3fc;
+  border-color: rgba(3, 105, 161, 0.7);
+  background: rgba(8, 47, 73, 0.6);
+}
+html[data-theme='light'] .anchor-pill {
+  background: #ffffff;
+  color: #334155;
+}
+html[data-theme='light'] .anchor-pill:hover {
+  color: #0b1220;
+  border-color: rgba(2, 132, 199, 0.5);
+}
+html[data-theme='light'] .anchor-pill.is-active {
+  color: #075985;
+  border-color: rgba(2, 132, 199, 0.6);
+  background: rgba(224, 242, 254, 0.9);
+}
+
+/* ------------------------------------------------------------- method chips */
+.method {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.4rem;
+  padding: 0.125rem 0.45rem;
+  border-radius: 0.45rem;
+  border: 1px solid;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.method-get {
+  color: #6ee7b7;
+  border-color: rgba(4, 120, 87, 0.6);
+  background: rgba(6, 78, 59, 0.35);
+}
+.method-post {
+  color: #7dd3fc;
+  border-color: rgba(3, 105, 161, 0.6);
+  background: rgba(8, 47, 73, 0.5);
+}
+.method-put {
+  color: #fcd34d;
+  border-color: rgba(180, 83, 9, 0.6);
+  background: rgba(120, 53, 15, 0.3);
+}
+.method-patch {
+  color: #c4b5fd;
+  border-color: rgba(109, 40, 217, 0.6);
+  background: rgba(46, 16, 101, 0.35);
+}
+.method-delete {
+  color: #fda4af;
+  border-color: rgba(190, 18, 60, 0.6);
+  background: rgba(76, 5, 25, 0.35);
+}
+html[data-theme='light'] .method-get {
+  color: #14532d;
+  border-color: #16a34a;
+  background: rgba(220, 252, 231, 0.9);
+}
+html[data-theme='light'] .method-post {
+  color: #075985;
+  border-color: #0284c7;
+  background: rgba(224, 242, 254, 0.9);
+}
+html[data-theme='light'] .method-put {
+  color: #7c2d12;
+  border-color: #d97706;
+  background: rgba(254, 243, 199, 0.9);
+}
+html[data-theme='light'] .method-patch {
+  color: #4c1d95;
+  border-color: #7c3aed;
+  background: rgba(237, 233, 254, 0.9);
+}
+html[data-theme='light'] .method-delete {
+  color: #881337;
+  border-color: #be123c;
+  background: rgba(255, 228, 230, 0.9);
+}
+
+/* ----------------------------------------------------------------- explorer */
+.explorer {
+  display: grid;
+  gap: 1rem;
+}
+.explorer-bar {
+  position: sticky;
+  top: 3.5rem;
+  z-index: 20;
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid var(--v3-edge);
+  border-radius: var(--radius-lg);
+  background: var(--v3-panel-strong);
+  backdrop-filter: blur(12px);
+}
+@media (min-width: 768px) {
+  .explorer-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+@media (min-width: 1024px) {
+  .explorer-bar {
+    top: 4rem;
+  }
+}
+.explorer-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: rgba(2, 6, 23, 0.55);
+}
+.explorer-field:focus-within {
+  border-color: var(--v3-edge-lit);
+}
+.explorer-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-block: 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+}
+.explorer-input::placeholder {
+  color: var(--text-muted);
+}
+.explorer-input:focus {
+  outline: none;
+}
+.explorer-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.8);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.filter-chip[aria-pressed='true'] {
+  color: #7dd3fc;
+  border-color: rgba(3, 105, 161, 0.75);
+  background: rgba(8, 47, 73, 0.7);
+}
+.explorer-count {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+html[data-theme='light'] .explorer-field {
+  background: #ffffff;
+}
+html[data-theme='light'] .filter-chip {
+  background: #ffffff;
+  color: #475569;
+}
+html[data-theme='light'] .filter-chip[aria-pressed='true'] {
+  color: #075985;
+  border-color: rgba(2, 132, 199, 0.6);
+  background: rgba(224, 242, 254, 0.9);
+}
+
+/* --------------------------------------------------------------- endpoint card */
+.endpoint-group {
+  display: grid;
+  gap: 0.75rem;
+  scroll-margin-top: 8rem;
+}
+.endpoint {
+  border: 1px solid var(--v3-edge);
+  border-radius: var(--radius-lg);
+  background: var(--v3-panel);
+  overflow: hidden;
+}
+.endpoint-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--v3-edge);
+  background: rgba(15, 23, 42, 0.45);
+}
+.endpoint-path {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.endpoint-body {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+@media (min-width: 1024px) {
+  .endpoint-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+.endpoint-meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.375rem 0.75rem;
+  margin: 0;
+  align-content: start;
+}
+.endpoint-meta dt {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.endpoint-meta dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.endpoint-empty {
+  padding: 1.5rem;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  color: var(--text-secondary);
+}
+html[data-theme='light'] .endpoint-head {
+  background: rgba(241, 245, 249, 0.85);
+}
+
+/* ------------------------------------------------------- request/response panes */
+.reqres {
+  display: grid;
+  gap: 0.75rem;
+}
+@media (min-width: 1024px) {
+  .reqres {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.reqres-pane {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+  align-content: start;
+}
+.reqres-cap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.reqres-status {
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.4rem;
+  border: 1px solid;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.reqres-status--ok {
+  color: #6ee7b7;
+  border-color: rgba(4, 120, 87, 0.6);
+  background: rgba(6, 78, 59, 0.3);
+}
+.reqres-status--err {
+  color: #fda4af;
+  border-color: rgba(190, 18, 60, 0.6);
+  background: rgba(76, 5, 25, 0.3);
+}
+html[data-theme='light'] .reqres-status--ok {
+  color: #14532d;
+  border-color: #16a34a;
+  background: rgba(220, 252, 231, 0.9);
+}
+html[data-theme='light'] .reqres-status--err {
+  color: #881337;
+  border-color: #be123c;
+  background: rgba(255, 228, 230, 0.9);
+}
+
+/* ------------------------------------------------------------- guard chain */
+.chain {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: chain;
+}
+.chain-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.35rem 0.625rem;
+  align-items: start;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--v3-edge);
+  border-inline-start: 2px solid var(--v3-rail-lit);
+  border-radius: var(--radius);
+  background: var(--v3-panel);
+}
+.chain-step::after {
+  content: '';
+  position: absolute;
+  left: 1.35rem;
+  bottom: -0.5rem;
+  width: 1px;
+  height: 0.5rem;
+  background: linear-gradient(180deg, var(--v3-rail), transparent);
+}
+.chain-step:last-child::after {
+  display: none;
+}
+.chain-index {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--v3-edge);
+  background: var(--v3-panel-strong);
+  color: var(--v3-rail-lit);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+/* Every line of a step lives in the second column, which may shrink; without an
+   explicit column the fourth child wrapped back under the index and the title
+   was squeezed to nothing on a narrow screen. */
+.chain-title,
+.chain-detail,
+.chain-refusal {
+  grid-column: 2;
+  min-width: 0;
+}
+.chain-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.chain-detail {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.chain-refusal {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------- responsive hardening */
+/* A long mono string (path, id, hash) must break inside its own box rather than
+   widen the document on a narrow screen. */
+.font-mono,
+.endpoint-path,
+.chain-refusal,
+.spec-table code,
+.prose-custom code {
+  overflow-wrap: anywhere;
+}
+
+/* A grid or flex child starts at `min-width: auto`, which makes the widest thing
+   inside it the floor for the whole column: a code sample, a table or one
+   unbreakable string then pushes the document wider instead of scrolling inside
+   its own box. These are the boxes that hold exactly that kind of content. */
+.card,
+.step,
+.step-body,
+.chain-step,
+.codeblock,
+.reqres,
+.reqres-pane,
+.spec-table-wrap {
+  min-width: 0;
+}
+
+/* The markdown rule above turns every table inside an article into a block-level
+   scroll box (`display: block`). It also wins the cascade on our own spec tables
+   — same specificity band, later in the file — where it defeated the mobile card
+   fallback and let a wide table push the whole document sideways. Restate both
+   halves of the contract where they win: the table stays a table, its wrapper
+   scrolls, and below 768px the card list takes over completely. */
+.spec-table-wrap {
+  overflow-x: auto;
+}
+.prose-custom .spec-table {
+  display: table;
+}
+@media (width <= 767px) {
+  .spec-table-wrap {
+    overflow: visible;
+  }
+  .prose-custom .spec-table {
+    display: none;
+  }
+}
+@media (width <= 359px) {
+  .container-x,
+  .container-narrow {
+    padding-inline: 0.75rem;
+  }
+}
+/* Large displays get a wider reading measure instead of bigger margins. */
+@media (min-width: 1920px) {
+  .container-x {
+    max-width: 88rem;
+  }
 }

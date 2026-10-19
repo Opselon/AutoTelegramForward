@@ -1,0 +1,256 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Callout from '../../../components/Callout.astro';
+import GuardChain from '../../../components/GuardChain.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'Tenant isolation';
+const pageDesc =
+  'The mechanics behind the isolation claim: where the owner id comes from on each surface, the three refusals, the owner-zero trap and the tests.';
+
+const toc = [
+  { id: 'rule', title: 'The one rule' },
+  { id: 'refusals', title: 'The three refusals' },
+  { id: 'owner-zero', title: 'The owner-zero trap' },
+  { id: 'surfaces', title: 'Surface by surface' },
+  { id: 'admin', title: 'Administration is separate' },
+  { id: 'tests', title: 'What enforces it' },
+  { id: 'verify', title: 'Verify it yourself' },
+];
+
+const chain = [
+  {
+    title: 'A token arrives',
+    detail: 'Authorization: Bearer <jwt>. Nothing else in the request is trusted to name a tenant — not a query parameter, not a body field, not a header.',
+    refusal: '401 authentication required',
+  },
+  {
+    title: 'The core validates it',
+    detail: 'The signature, the expiry and the account are checked over gRPC. The answer carries the numeric user id, the username and the administrator flag.',
+    refusal: '401 invalid or expired token',
+  },
+  {
+    title: 'The identity is refused if it owns nothing',
+    detail: 'An account that has not linked a Telegram id resolves to a synthetic negative id. Rather than serving the unattributed bucket, the middleware refuses it.',
+    refusal: '403 account_not_linked',
+  },
+  {
+    title: 'The handler asks only for that owner',
+    detail: 'Every core call is made with the verified id as the owner argument. The ownership predicate is part of the query, not a check applied to the result.',
+    refusal: '404 not_found — for foreign and missing rows alike',
+  },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/security/tenant-isolation/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Security', href: url('/security/') },
+    { name: 'Tenant isolation', href: url('/security/tenant-isolation/') },
+  ]}
+  toc={toc}
+  keywords={[
+    'Telegram bot multi-tenant isolation',
+    'IDOR prevention Telegram forwarding',
+    'owner scoping fail closed',
+    'account_not_linked',
+  ]}
+>
+  <p>
+    Isolation is not a filter applied to a result set. It is the shape of every query: the owner is an argument of the
+    read, so a row belonging to somebody else is not fetched and then hidden — it is never fetched. That distinction is
+    what makes the guarantee hold under refactoring, because a handler that forgot the owner would fail to compile
+    against the core method it needs.
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="rule">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">The one rule</h2>
+    <Callout type="success" title="Every data access carries the owner it was verified for">
+      <p>
+        Identity enters the system exactly once per request, from the token the core validated. From that point it is
+        passed explicitly into every call. There is no ambient &quot;current user&quot; that a handler could forget to
+        set, and no request field that can override it.
+      </p>
+    </Callout>
+
+    <GuardChain steps={chain} />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="refusals">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">The three refusals</h2>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div>
+        <SpecTable
+          headers={['Situation', 'Answer', 'Why this answer']}
+          rows={[
+            ['No credential at all', '<code>401</code> <code>{"error":"authentication required"}</code>', 'The request never named a tenant, so there is nothing to scope by.'],
+            ['A bad or expired token', '<code>401</code> <code>{"error":"invalid or expired token"}</code>', 'Identical for a forged signature and an expired one: a client learns only that it must sign in again.'],
+            ['A valid token for an unlinked account', '<code>403</code> <code>{"error":"…","code":"account_not_linked"}</code>', 'Fail closed. Serving this caller would mean serving the unattributed bucket, which is the whole installation.'],
+            ['A row owned by somebody else', '<code>404</code> <code>{"error":"not_found"}</code>', 'Byte-identical to a row that does not exist, so ids cannot be probed for existence.'],
+          ]}
+          caption="Refusals, and the reason each one is shaped the way it is"
+        />
+      </div>
+      <div class="grid gap-3">
+        <CodeBlock
+          label="Unlinked account"
+          language="json"
+          content={`HTTP/1.1 403 Forbidden
+
+{
+  "error": "this account must be linked to a Telegram id first",
+  "code": "account_not_linked"
+}`}
+        />
+        <CodeBlock
+          label="Foreign row — indistinguishable from missing"
+          language="json"
+          content={`HTTP/1.1 404 Not Found
+
+{
+  "error": "not_found",
+  "error_code": "not_found"
+}`}
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="owner-zero">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">The owner-zero trap</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The most dangerous value in a multi-tenant system is the one that means &quot;no owner&quot;, because every code
+      path that forgets to check it silently addresses everything. This platform has three separate guards against it,
+      and the reason is worth stating plainly:
+    </p>
+    <SpecTable
+      headers={['Path', 'What owner 0 would have meant', 'The guard']}
+      rows={[
+        ['Any authenticated read', 'The shared, unattributed bucket that no tenant should see.', 'The authentication middleware refuses a non-positive id before any handler runs.'],
+        ['A backup export', 'The <strong>entire installation</strong>, because an export with no owner is an export of everything.', 'The same middleware refusal, plus the handler\'s own non-positive check.'],
+        ['Administration', 'An unreachable route set, not merely a hidden one.', 'Mounted behind the admin requirement, and the core re-checks the role.'],
+      ]}
+      caption="Three places where zero would have widened the scope instead of narrowing it"
+    />
+    <Callout type="info" class="mt-4" title="Why this was a real bug class, not a hypothetical">
+      <p>
+        The core issues a synthetic negative id for an account with no Telegram link, precisely so such an account cannot
+        collide with a real one. Before the middleware refusal, that id reached handlers that scoped by owner — and for
+        some reads, owner zero is the unattributed bucket. The regression test for it is named{' '}
+        <code>accountless_identity_test.go</code>, and it asserts the refusal rather than the empty result.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="surfaces">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Surface by surface</h2>
+    <SpecTable
+      headers={['Surface', 'How identity is established', 'What it can reach']}
+      rows={[
+        ['Telegram bot', 'The Telegram client itself resolves the caller to a numeric id on every update.', 'Only that account\'s tasks, sessions and history.'],
+        ['Web dashboard', 'Bearer token from the authentication routes.', 'The tenant routes, scoped by the verified id.'],
+        ['Mobile app', 'The same authentication routes — there is no second, weaker sign-in path.', 'The same tenant API.'],
+        ['REST integrations', 'Bearer token; <code>X-API-Key</code> only when the operator has configured one for service-to-service automation.', 'The tenant routes.'],
+        ['gRPC core', 'Called by the Go API with the owner it verified; the core never trusts a caller-supplied owner for a tenant read.', 'Whatever the API asked for, on behalf of the id it passed.'],
+        ['Session chat lists', 'Scoped from the token identity; a session that is not yours is a 404, and a session with no live client is a 503.', 'The chat list of a session you own.'],
+      ]}
+      caption="Where identity comes from, per surface"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="admin">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Administration is separate</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Administration is not &quot;the tenant API with more rows&quot;. The route set is mounted behind a gate that reads
+      the verified administrator flag, and the core re-checks the role on the other side of gRPC. A stale or forged claim
+      therefore fails twice: once where the route is mounted, and once where the work is done.
+    </p>
+    <div class="grid gap-3 lg:grid-cols-3">
+      <div class="panel panel--flush">
+        <p class="micro m-0 mb-1">Gate one — routing</p>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          Requests to <code>/api/admin/*</code> reach a handler only if the identity carries the administrator flag.
+          A non-administrator gets <code>403 admin access required</code>, not an empty list.
+        </p>
+      </div>
+      <div class="panel panel--flush">
+        <p class="micro m-0 mb-1">Gate two — the core</p>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          The core re-verifies the role before performing an installation-wide operation, so the API is not the only
+          thing standing between a forged token and every tenant&apos;s data.
+        </p>
+      </div>
+      <div class="panel panel--flush">
+        <p class="micro m-0 mb-1">Gate three — the log</p>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          Administrative actions are recorded with the verified actor, so &quot;who disabled that account&quot; has an
+          answer that does not depend on the application&apos;s own memory.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="tests">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">What enforces it</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The claim is only worth what fails when it is broken. These files exist in the repository and run in CI:
+    </p>
+    <SpecTable
+      headers={['Test file', 'What it pins down']}
+      rows={[
+        ['<code>api/internal/handlers/accountless_identity_test.go</code>', 'An unlinked account is refused with 403 rather than served the unattributed bucket.'],
+        ['<code>api/internal/handlers/session_chats_test.go</code>', 'A foreign session is a 404; a session with no live client is a 503 — two different facts, two different answers.'],
+        ['<code>api/internal/handlers/admin_test.go</code>', 'The administrator gate refuses a non-admin identity on every administrative route.'],
+        ['<code>api/internal/handlers/action_refusal_test.go</code>', 'Refused actions return their reason on the wire instead of an empty success.'],
+        ['<code>api/internal/handlers/query_bounds_test.go</code>', 'Pagination bounds are clamped before narrowing, so an out-of-range limit cannot wrap.'],
+        ['<code>core/tests/test_tenant_isolation.py</code>', 'Owner scoping in the core: a read for one tenant cannot return another tenant\'s row.'],
+        ['<code>core/tests/test_cross_language_isolation.py</code>', 'The Go API and the Python core agree on the owner they carry, so a boundary crossing cannot drop it.'],
+        ['<code>core/tests/test_session_backup_security.py</code>', 'A backup is encrypted and tenant-scoped before it is written.'],
+      ]}
+      caption="Tests that make the isolation claim checkable"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="verify">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Verify it yourself</h2>
+    <p class="m-0 mb-3 text-[15px] leading-relaxed text-slate-300">
+      Two tenants and one terminal are enough to see the behaviour. Create a task as tenant A, then ask for it as tenant
+      B — the answer should be indistinguishable from asking for a task that never existed.
+    </p>
+    <CodeBlock
+      label="A five-minute isolation check"
+      language="bash"
+      content={`# as tenant A
+A=$(curl -s -X POST https://your-host/api/auth/login \\
+  -H 'Content-Type: application/json' \\
+  -d '{"username":"alice","password":"…"}' | jq -r .token)
+
+TASK=$(curl -s -X POST https://your-host/api/tasks \\
+  -H "Authorization: Bearer $A" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"kind":"dlq.purge","payload":{}}' | jq -r .id)
+
+# as tenant B — expect 404, exactly as for a random id
+B=$(curl -s -X POST https://your-host/api/auth/login \\
+  -H 'Content-Type: application/json' \\
+  -d '{"username":"bob","password":"…"}' | jq -r .token)
+
+curl -s -o /dev/null -w 'foreign:  %{http_code}\\n' \\
+  -H "Authorization: Bearer $B" https://your-host/api/tasks/$TASK
+curl -s -o /dev/null -w 'random:   %{http_code}\\n' \\
+  -H "Authorization: Bearer $B" https://your-host/api/tasks/does-not-exist
+
+# and without a token at all
+curl -s -o /dev/null -w 'anonymous: %{http_code}\\n' https://your-host/api/tasks/$TASK
+
+# 200 for the owner is the fourth line of the proof
+curl -s -o /dev/null -w 'owner:    %{http_code}\\n' \\
+  -H "Authorization: Bearer $A" https://your-host/api/tasks/$TASK`}
+    />
+  </section>
+</DocsLayout>

@@ -1,0 +1,198 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import EndpointExplorer from '../../../components/EndpointExplorer.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Callout from '../../../components/Callout.astro';
+import Icon from '../../../components/Icon.astro';
+import repoInfo from '../../../data/repo-info.json';
+import { groupBlurbs } from '../../../data/api-surface';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'Endpoint reference';
+const pageDesc = `Every one of the ${repoInfo.apiRoutes.length} routes the control plane registers: verb, path, auth level, the fields each one accepts and a real response body.`;
+
+const groups = repoInfo.apiRouteGroupOrder as string[];
+const responsesHref = url('/api/responses/');
+const adminCount = repoInfo.apiRoutes.filter((r: { auth: string }) => r.auth === 'admin').length;
+const bearerCount = repoInfo.apiRoutes.filter((r: { auth: string }) => r.auth === 'bearer').length;
+const publicCount = repoInfo.apiRoutes.filter((r: { auth: string }) => r.auth === 'none').length;
+const methodCounts = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((method) => [
+  method,
+  String(repoInfo.apiRoutes.filter((r: { method: string }) => r.method === method).length),
+]);
+
+const toc = [
+  { id: 'how-to-read', title: 'How to read a route' },
+  { id: 'grouping', title: 'What each group is scoped to' },
+  { id: 'route-explorer', title: `All ${repoInfo.apiRoutes.length} routes` },
+  { id: 'versioning', title: 'Versioning and aliases' },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/api/endpoints/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Reference', href: url('/api/') },
+    { name: 'Endpoints', href: url('/api/endpoints/') },
+  ]}
+  toc={toc}
+  keywords={[
+    'AutoTelegramForward endpoint reference',
+    'Telegram forwarding REST endpoints',
+    'control plane route table',
+    'API request response examples',
+  ]}
+>
+  <p>
+    The table on this page is not typed by hand. <code>api/main.go</code> is parsed at build time, including the routes
+    registered through middleware, so the list is exactly what the binary under test registers — {repoInfo.apiRoutes
+      .length} routes across {groups.length} groups. Each one carries what it accepts and what it answers.
+  </p>
+
+  <p class="not-prose flex flex-wrap gap-2">
+    <span class="chip chip-success">{bearerCount} need a token</span>
+    <span class="chip chip-warn">{adminCount} need an administrator</span>
+    <span class="chip">{publicCount} are public probes</span>
+    {methodCounts.map(([method, count]) => <span class="chip font-mono">{method} {count}</span>)}
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="how-to-read">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">How to read a route</h2>
+    <SpecTable
+      headers={['Row', 'What it tells you', 'Why it matters']}
+      rows={[
+        [
+          '<span class="method method-get">GET</span> verb chip',
+          'The HTTP verb, colour-coded consistently across this site.',
+          'A <code>PATCH</code> is a partial update; a <code>PUT</code> replaces the whole resource.',
+        ],
+        [
+          '<code class="endpoint-path">/api/rules/{id}</code>',
+          'The exact path, resolved through every mount prefix.',
+          'These paths are registered on a standard-library mux, so <code>{id}</code> matches one path segment.',
+        ],
+        [
+          '<span class="chip chip-success">Bearer</span> / <span class="chip chip-warn">Admin</span> / <span class="chip">Public</span>',
+          'The credential the route requires.',
+          'Public routes are probes and login exchanges. Admin routes are gated on the route and re-checked in the core.',
+        ],
+        [
+          '<strong class="text-slate-100">Scope</strong>',
+          'What the query is filtered by server-side.',
+          'A tenant route can only ever read rows whose owner is the identity the token proves.',
+        ],
+        [
+          '<strong class="text-slate-100">Statuses</strong>',
+          'The statuses this route can actually answer with.',
+          `Read the <a class="text-sky-400" href="${responsesHref}">response reference</a> for the body shape behind each code.`,
+        ],
+      ]}
+      caption="The four facts every route card states"
+    />
+
+    <div class="grid gap-4 lg:grid-cols-3 mt-5">
+      <div class="panel panel--flush">
+        <p class="micro m-0 mb-1">Filter by verb</p>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          The verb chips under the search box are toggles: press <code>POST</code> and <code>PUT</code> to see only the
+          routes that change something.
+        </p>
+      </div>
+      <div class="panel panel--flush">
+        <p class="micro m-0 mb-1">Filter by anything else</p>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          The search box matches the path, the handler name, the summary and every accepted field — search
+          <code>idempotency</code> and only the routes that take one remain.
+        </p>
+      </div>
+      <div class="panel panel--flush">
+        <p class="micro m-0 mb-1">No JavaScript?</p>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          Every card is rendered on the server. Filtering is an enhancement, so the full table is present and linkable
+          with scripting disabled.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="grouping">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">What each group is scoped to</h2>
+    <div class="grid gap-3 lg:grid-cols-2">
+      {
+        groups.map((group) => (
+          <div class="panel panel--flush">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <h3 class="text-base font-bold text-white m-0">{group}</h3>
+              <span class="chip">
+                {repoInfo.apiRoutes.filter((r: { group: string }) => r.group === group).length} routes
+              </span>
+            </div>
+            <p class="m-0 mb-2 text-[13.5px] leading-relaxed text-slate-300">{groupBlurbs[group]?.blurb}</p>
+            <p class="micro m-0">Scope · {groupBlurbs[group]?.scope}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="route-explorer">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">All {repoInfo.apiRoutes.length} routes</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      Grouped by the mux that owns them, in registration order, with the mount prefixes already applied. Statuses are
+      the ones each handler can return; the shared envelope is described in the{' '}
+      <a class="text-sky-400" href={url('/api/responses/')}>response reference</a>.
+    </p>
+    <EndpointExplorer />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="versioning">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Versioning and aliases</h2>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div>
+        <ul class="grid gap-2 list-none p-0 m-0">
+          <li class="flex gap-2 text-[14.5px] text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+            <span>
+              <strong class="text-slate-100">Two contract versions are exposed on purpose.</strong> The product version
+              (<code>{repoInfo.version}</code>) moves with releases; the API contract version stays at{' '}
+              <code>1.0.0</code> until a breaking change lands.
+            </span>
+          </li>
+          <li class="flex gap-2 text-[14.5px] text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+            <span>
+              <strong class="text-slate-100">Probes answer on both shapes.</strong> Health and system routes exist under
+              <code>/api/…</code> and <code>/api/v1/…</code>; the versioned form is what the mobile client pins.
+            </span>
+          </li>
+          <li class="flex gap-2 text-[14.5px] text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+            <span>
+              <strong class="text-slate-100">Clients negotiate before they call.</strong> Read{' '}
+              <code>/api/version</code> and check <code>min_supported_client</code> plus the <code>features</code> keys
+              instead of probing endpoints for their presence.
+            </span>
+          </li>
+          <li class="flex gap-2 text-[14.5px] text-slate-300">
+            <Icon name="check" class="w-4 h-4 mt-[3px] text-emerald-400 shrink-0" strokeWidth={2.4} />
+            <span>
+              <strong class="text-slate-100">The shipped schema is authoritative.</strong> The API serves its own OpenAPI
+              document at <code>/api/openapi.yaml</code>, baked into the image next to the code that serves it.
+            </span>
+          </li>
+        </ul>
+      </div>
+      <Callout type="tip" title="Generate a client, then check it against the gate">
+        <p>
+          Fetch <code>/api/openapi.yaml</code> from a running deployment and point a generator at it. The route table on
+          this page is parsed from the same source as that document, so both move together; the{' '}
+          <a class="text-sky-400" href={url('/api/responses/')}>response reference</a> explains the envelope every
+          generated client still has to unwrap.
+        </p>
+      </Callout>
+    </div>
+  </section>
+</DocsLayout>
