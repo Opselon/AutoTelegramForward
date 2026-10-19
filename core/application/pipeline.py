@@ -1049,9 +1049,9 @@ class DurableMessagePipeline:
         if getattr(rule, "remove_emojis", False):
             text = self._filter_engine.remove_emojis(text)
 
-        # Replacements
-        if getattr(rule, "replacements", None):
-            text = self._filter_engine.replace_text(text, rule.replacements)
+        # Replacements are applied once, in the final pass below (after the AI
+        # stage), so an expanding rule (`# -> ##`) is not applied twice and a
+        # rewrite cannot reintroduce text the task asked to replace.
 
         # Per-task content rules: remove-links / strip words / replacements.
         # Runs after the legacy cleaner + link engine so the policy sees the
@@ -1099,7 +1099,10 @@ class DurableMessagePipeline:
                 return None
             text = ai_transformed
 
-        # Final Replacements & Link clean pass
+        # Final Replacements: the single authority for `rule.replacements`.
+        # Applied after the AI stage (so a rewrite cannot resurrect replaced
+        # text) and before the header/footer (so a task rule never rewrites the
+        # task's own header).
         if getattr(rule, "replacements", None):
             text = self._filter_engine.replace_text(text, rule.replacements)
 

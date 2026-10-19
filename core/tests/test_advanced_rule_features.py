@@ -299,7 +299,11 @@ async def test_bot_ui_rule_card_rendering():
     rep_cbs = [btn.callback_data for row in rep_kbd.inline_keyboard for btn in row]
     assert "rtxa:test-rule-id-12345" in rep_cbs  # add replacement
     assert "rtxc:test-rule-id-12345" in rep_cbs  # clear replacements
-    assert "rtxd:test-rule-id-12345:0" in rep_cbs  # delete specific replacement
+    assert "rtxd:test-rule-id-12345:0:1" in rep_cbs  # delete specific replacement
+    # The entry key carries the list generation (`rule.version`), so a click
+    # from a menu rendered before another edit is refused instead of deleting
+    # whichever entry has meanwhile moved into that position.
+    assert all(cb.count(":") >= 3 for cb in rep_cbs if cb.startswith("rtxd:")), rep_cbs
 
     # 3. Test Header/Footer Menu View
     hf_text, hf_kbd = ui._render_header_footer_menu(rule)
