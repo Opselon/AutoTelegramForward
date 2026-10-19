@@ -350,7 +350,10 @@ class BotManager:
             if not uid:
                 return
             if not message.document:
-                return await message.reply_text(self.i18n.t("restore_failed", lang=lang, error="attach .atf file"))
+                return await message.reply_text(
+                    self.i18n.t("restore_failed", lang=lang,
+                                error=self.i18n.t("restore_attach_hint", lang=lang))
+                )
             path = await message.download()
             try:
                 # Reading a bundle can be megabytes off disk: keep the loop free
