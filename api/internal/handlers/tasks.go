@@ -45,11 +45,23 @@ type createTaskReq struct {
 // safe to retry over an unstable network.
 func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	var req createTaskReq
-	if req.Kind == "" && (r.URL.Query().Get("kind") != "" || r.ContentLength == 0) {
-		// allow a bare POST /tasks?kind=... with no body
+	// `POST /api/tasks?kind=<kind>` with no body is a documented convenience.
+	// It used to be implemented by *skipping* the body read whenever the query
+	// carried a kind — which also skipped it for a request that had BOTH, so a
+	// body payload and its idempotency key were silently discarded and the
+	// caller got a 201 for a task that could not do what it asked.
+	//
+	// The body is now always read when one is present (a chunked body reports
+	// ContentLength -1, so "not zero" is the right test rather than "> 0"); the
+	// query value is only a fallback for the no-body form, so the explicit body
+	// wins and the two can never disagree silently.
+	if r.ContentLength != 0 {
+		if !bind(w, r, &req) {
+			return
+		}
+	}
+	if req.Kind == "" {
 		req.Kind = r.URL.Query().Get("kind")
-	} else if !bind(w, r, &req) {
-		return
 	}
 	if req.Kind == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{

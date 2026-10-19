@@ -442,6 +442,15 @@ class ApiClient:
 
     @staticmethod
     def _hint_for(status: int, path: str) -> str:
+        if status == 403 and path.rstrip("/").endswith("/logs/purge"):
+            # The log archive is one shared store with no tenant dimension on
+            # its purge path, so the installation-wide purge is
+            # administrator-only. "Log in again" would be actively misleading
+            # here: the token is fine, the scope is not.
+            return (
+                "purge needs a task scope: pass --rule <task id> to purge one of "
+                "your tasks (the installation-wide purge is administrator-only)"
+            )
         if status in (401, 403):
             return "run `atf auth login` or `atf auth token --save`"
         if status == 404:

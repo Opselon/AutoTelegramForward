@@ -396,3 +396,25 @@ def test_use_case_bundles_implement_the_gateway_protocols() -> None:
 def test_ai_config_spec_marks_the_key_as_editable_so_it_can_be_rotated() -> None:
     assert AI_CONFIGS.flag_map()["api_key"] == "apiKey"
     assert "apiKey" in AI_CONFIGS.editable
+
+
+# ------------------------------------------------------- logs: purge refusals
+def test_purge_refusal_explains_the_scope_instead_of_demanding_a_new_login() -> None:
+    """A 403 here is an entitlement decision, not a bad token.
+
+    The API makes the installation-wide log purge administrator-only: the
+    archive is one shared store with no tenant dimension on that path, so a
+    tenant must name a task they own. The CLI used to answer every 403 with
+    "run `atf auth login`", which sent the user to re-authenticate against a
+    credential that was never the problem. The hint has to name the fix.
+    """
+    from atfcli.infrastructure.http.transport import ApiClient
+
+    hint = ApiClient._hint_for(403, "/api/logs/purge")
+    assert "--rule" in hint
+    assert "log in" not in hint.lower()
+    # Trailing slash and a prefixed base URL must both classify the same way.
+    assert hint == ApiClient._hint_for(403, "/api/logs/purge/")
+
+    # The generic 403 path is untouched for every other endpoint.
+    assert "auth login" in ApiClient._hint_for(403, "/api/rules/abc")

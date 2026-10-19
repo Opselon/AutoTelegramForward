@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1053,11 +1054,30 @@ func normalizeFieldName(name string) string {
 	return strings.ToLower(strings.ReplaceAll(name, "_", ""))
 }
 
+// readBody reads a whole request body under a hard cap. Handlers that need the
+// raw bytes (protojson decoding, the PATCH update-mask form) use this instead
+// of io.ReadAll so they are bounded exactly like every decoded body.
+func readBody(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, bool) {
+	if r.Body == nil {
+		return nil, true
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			bodyLimitError(w, limit)
+			return nil, false
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
+		return nil, false
+	}
+	return body, true
+}
+
 func (h *Handlers) CreateRule(w http.ResponseWriter, r *http.Request) {
 	id := identity(r)
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
+	body, ok := readBody(w, r, maxJSONBodyBytes)
+	if !ok {
 		return
 	}
 	var rule pb.ForwardRule
@@ -1162,9 +1182,8 @@ func (h *Handlers) UpdateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
+	body, ok := readBody(w, r, maxJSONBodyBytes)
+	if !ok {
 		return
 	}
 	updateMask := extractUpdateMask(r, body)
@@ -1429,9 +1448,8 @@ func (h *Handlers) UpdateRuleSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
 		return
 	}
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
+	body, ok := readBody(w, r, maxJSONBodyBytes)
+	if !ok {
 		return
 	}
 	settings, replaceAll, edited, resets, err := parseSettingsBody(body)
@@ -1809,7 +1827,9 @@ func (h *Handlers) PauseRule(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Until int64 `json:"until"`
 	}
-	_ = bind(w, r, &body)
+	if !bindOptional(w, r, &body) {
+		return
+	}
 	resp, err := h.c.Rules.PauseRule(ctx, &pb.PauseRuleRequest{
 		RuleId:      r.PathValue("id"),
 		Until:       body.Until,
@@ -2035,7 +2055,9 @@ func (h *Handlers) PurgeDeadLetter(w http.ResponseWriter, r *http.Request) {
 		RuleId    string `json:"rule_id"`
 		OlderThan int64  `json:"older_than"`
 	}
-	_ = bind(w, r, &body)
+	if !bindOptional(w, r, &body) {
+		return
+	}
 	if body.RuleId == "" {
 		body.RuleId = r.URL.Query().Get("rule_id")
 	}
@@ -2859,7 +2881,9 @@ func (h *Handlers) PurgeLogs(w http.ResponseWriter, r *http.Request) {
 		RuleID         string `json:"rule_id"`
 		OlderThanHours int64  `json:"older_than_hours"`
 	}
-	_ = bind(w, r, &body)
+	if !bindOptional(w, r, &body) {
+		return
+	}
 	q := r.URL.Query()
 	if body.Level == "" {
 		body.Level = q.Get("level")
@@ -2884,8 +2908,24 @@ func (h *Handlers) PurgeLogs(w http.ResponseWriter, r *http.Request) {
 	if body.OlderThanHours == 0 {
 		body.OlderThanHours = 24
 	}
+	// Fail closed on the unscoped form. The log archive is ONE shared store and
+	// the purge path has no tenant dimension at all (PurgeLogsRequest carries
+	// no owner), so a purge with no rule_id deletes rows belonging to every
+	// tenant — this API's own evidence trail included. Any authenticated user
+	// could issue it, and the ownership check below bounded nothing because
+	// omitting rule_id was allowed. A tenant may purge a task they own; the
+	// installation-wide form belongs to the administrator plane, next to
+	// PUT /api/logs/policy, which is already admin-only for the same reason.
+	id := identity(r)
+	if body.RuleID == "" && !id.IsAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error":      "select one of your own tasks to purge its logs; the installation-wide purge is administrator-only",
+			"error_code": "rule_scope_required",
+		})
+		return
+	}
 	// A purge scoped to one task must not touch a task the caller does not own.
-	if body.RuleID != "" && !h.ownsRule(ctx, body.RuleID, identity(r).UserID) {
+	if body.RuleID != "" && !h.ownsRule(ctx, body.RuleID, id.UserID) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
 		return
 	}
@@ -2941,7 +2981,9 @@ func (h *Handlers) BackupExport(w http.ResponseWriter, r *http.Request) {
 		OwnerUserID int64  `json:"owner_user_id"`
 		Passphrase  string `json:"passphrase"`
 	}
-	_ = bind(w, r, &body)
+	if !bindOptional(w, r, &body) {
+		return
+	}
 	id := identity(r)
 	// This route is mounted under the auth middleware, but it must not depend on
 	// that: the branch below maps an owner of 0 to an UNSCOPED snapshot (every
@@ -2999,7 +3041,9 @@ func (h *Handlers) BackupImport(w http.ResponseWriter, r *http.Request) {
 		TargetOwnerUserID int64  `json:"target_owner_user_id"`
 		OverwriteExisting bool   `json:"overwrite_existing"`
 	}
-	if !bind(w, r, &body) {
+	// A bundle is the one body that is legitimately large, so this endpoint
+	// gets its own ceiling instead of the shared JSON one.
+	if !bindLimited(w, r, &body, maxBackupBundleBytes) {
 		return
 	}
 	if strings.TrimSpace(body.Bundle) == "" {
@@ -3057,6 +3101,23 @@ func withAITimeout(r *http.Request) (context.Context, func()) {
 	return context.WithTimeout(r.Context(), 90*time.Second)
 }
 
+// statusClientClosedRequest is nginx's non-standard 499 for "the client went
+// away first". It is the canonical mapping for gRPC CANCELLED and it is worth
+// distinguishing from a 500 in a log store an operator reads.
+const statusClientClosedRequest = 499
+
+// grpcError maps a gRPC status onto the HTTP answer. It is the single
+// translation table every client reads its behaviour from, so a code that is
+// missing here is not a cosmetic problem: it used to fold DEADLINE_EXCEEDED
+// into 500, which tells a client "the server is broken, retry now" instead of
+// "the work timed out", and it reported the core's own authorization refusals
+// (UNAUTHENTICATED / PERMISSION_DENIED) and quota refusals
+// (RESOURCE_EXHAUSTED) as crashes, so no client could react to them at all.
+//
+// The mapping follows the canonical gRPC -> HTTP table (the one the Google API
+// transcoder publishes), with one deliberate local convention kept: UNAVAILABLE
+// answers 502, because "the core is not answering" is what this repo documents
+// and what its deploy gate checks.
 func grpcError(w http.ResponseWriter, err error) {
 	st, _ := status.FromError(err)
 	switch st.Code() {
@@ -3064,6 +3125,39 @@ func grpcError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": st.Message()})
 	case codes.Unavailable:
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "core unavailable: " + st.Message()})
+	case codes.DeadlineExceeded:
+		// The request budget is bounded (withTimeout); saying 500 here made a
+		// slow core look like a crashed API to every client and to the metrics.
+		writeJSON(w, http.StatusGatewayTimeout, map[string]string{
+			"error": st.Message(), "code": "deadline_exceeded"})
+	case codes.Canceled:
+		writeJSON(w, statusClientClosedRequest, map[string]string{
+			"error": st.Message(), "code": "canceled"})
+	case codes.Unauthenticated:
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": st.Message(), "code": "unauthenticated"})
+	case codes.PermissionDenied:
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": st.Message(), "code": "permission_denied"})
+	case codes.ResourceExhausted:
+		// A quota refusal is retryable after a pause, not a server fault.
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{
+			"error": st.Message(), "code": "resource_exhausted"})
+	case codes.AlreadyExists, codes.Aborted:
+		writeJSON(w, http.StatusConflict, map[string]string{
+			"error": st.Message(), "code": "conflict"})
+	case codes.FailedPrecondition:
+		// "This state cannot do what you asked" — a 400, but with its own code:
+		// a client that keys on `invalid_argument` to highlight a form field
+		// must not be told a precondition failure was that field's fault.
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": st.Message(), "code": "failed_precondition"})
+	case codes.OutOfRange:
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": st.Message(), "code": "out_of_range"})
+	case codes.Unimplemented:
+		writeJSON(w, http.StatusNotImplemented, map[string]string{
+			"error": st.Message(), "code": "unimplemented"})
 	case codes.InvalidArgument:
 		code := "invalid_argument"
 		// The message *is* the code for refusals the core names itself: keep it
@@ -3107,23 +3201,99 @@ func chatListError(w http.ResponseWriter, err error) {
 	}
 }
 
+// maxJSONBodyBytes is the size cap every JSON request body is decoded under.
+//
+// It is deliberately generous — an order of magnitude above the largest real
+// payload on the dashboard/mobile/CLI paths — because its job is to stop a
+// caller choosing this process's allocation, not to police payload shape. The
+// few endpoints that legitimately carry more (a whole-installation backup
+// bundle) opt into their own larger cap instead of raising this one.
+const maxJSONBodyBytes = 1 << 20 // 1 MiB
+
+// maxBackupBundleBytes is the cap for POST /backup/import. A bundle is base64
+// of every rule, session and credential the tenant owns, so it is the one body
+// that is routinely megabytes; it still needs a ceiling, because "we will read
+// whatever you send" is the defect this whole family of limits exists to close.
+const maxBackupBundleBytes = 64 << 20 // 64 MiB
+
 func bind(w http.ResponseWriter, r *http.Request, target any) bool {
+	return bindLimited(w, r, target, maxJSONBodyBytes)
+}
+
+// bindOptional decodes a body the endpoint treats as OPTIONAL.
+//
+// It exists because the previous form was `_ = bind(w, r, &body)`: bind had
+// already written its own 400 before the handler ignored the result and went on
+// to write a success body into the same response, so the client received a 400
+// whose body held two concatenated JSON documents. Worse, the documented
+// "send no body and take the defaults" form — DELETE /api/dlq, POST
+// /rules/{id}/pause, POST /backup/export — never worked at all: an empty body
+// decodes to io.EOF, which is not a client error when the body is optional.
+//
+// A body that IS present is decoded under the same cap and malformed JSON is
+// still refused.
+func bindOptional(w http.ResponseWriter, r *http.Request, target any) bool {
+	if r.Body == nil || r.ContentLength == 0 {
+		return true
+	}
+	return bind(w, r, target)
+}
+
+// bodyLimitError writes the refusal for a body that exceeded its cap.
+//
+// It is a 413, not a 400: "your body is too large" is a different client bug
+// from "your JSON is malformed", and a client that retries on 400 would
+// otherwise loop on a request that can never succeed.
+func bodyLimitError(w http.ResponseWriter, limit int64) {
+	writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{
+		"error":      "request body exceeds the " + strconv.FormatInt(limit, 10) + "-byte limit for this endpoint",
+		"error_code": "body_too_large",
+	})
+}
+
+// bindError distinguishes an over-limit body from malformed JSON.
+func bindError(w http.ResponseWriter, err error, limit int64) {
+	var maxErr *http.MaxBytesError
+	if errors.As(err, &maxErr) {
+		bodyLimitError(w, limit)
+		return
+	}
+	writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+}
+
+// bindLimited decodes a JSON body with a hard size cap.
+//
+// Without the cap the caller chose the size of this process's allocation: every
+// JSON endpoint read whatever it was handed, so one POST could force an
+// arbitrarily large read before any handler-level bound (maxMetadataBytes, the
+// core's task-payload limit) could apply. The cap is applied at the reader, so
+// the allocation stops at the limit rather than after it.
+func bindLimited(w http.ResponseWriter, r *http.Request, target any, limit int64) bool {
+	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
+	}
 	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		bindError(w, err, limit)
 		return false
 	}
 	return true
 }
 
+// bindPB is bind for protobuf-aware handlers. It reads the whole body with
+// io.ReadAll, so the cap is what stands between a client and an unbounded
+// allocation — protojson has no incremental form here.
 func bindPB(w http.ResponseWriter, r *http.Request, target any) bool {
-	// protojson accepts both enum names ("COPY_MESSAGE") and numbers, while
-	// encoding/json rejects names entirely — the frontend sends names.
 	if msg, ok := target.(proto.Message); ok {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot read body: " + err.Error()})
+			bindError(w, err, maxJSONBodyBytes)
 			return false
 		}
+		// protojson accepts both enum names ("COPY_MESSAGE") and numbers, while
+		// encoding/json rejects names entirely — the frontend sends names.
 		opts := protojson.UnmarshalOptions{DiscardUnknown: true}
 		if err := opts.Unmarshal(body, msg); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
@@ -3131,11 +3301,7 @@ func bindPB(w http.ResponseWriter, r *http.Request, target any) bool {
 		}
 		return true
 	}
-	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
-		return false
-	}
-	return true
+	return bindLimited(w, r, target, maxJSONBodyBytes)
 }
 
 func writeJSON(w http.ResponseWriter, code int, body any) {
