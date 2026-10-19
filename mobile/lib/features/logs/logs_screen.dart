@@ -375,9 +375,10 @@ class _LogsScreenState extends State<LogsScreen> {
       // Never swallow: a dead endpoint must not masquerade as "no logs".
       final t = AppMessages.of(context);
       setState(
-        () => _error = t.get('logs_service_unreachable', params: {
-          'error': '${exc.toString().split('(').first.trim()}',
-        }),
+        () => _error = t.get(
+          'logs_service_unreachable',
+          params: {'error': exc.toString().split('(').first.trim()},
+        ),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -415,9 +416,10 @@ class _LogsScreenState extends State<LogsScreen> {
       if (!mounted) return;
       final t = AppMessages.of(context);
       setState(
-        () => _auditError = t.get('logs_audit_unavailable_detail', params: {
-          'error': '${exc.toString().split('(').first.trim()}',
-        }),
+        () => _auditError = t.get(
+          'logs_audit_unavailable_detail',
+          params: {'error': exc.toString().split('(').first.trim()},
+        ),
       );
     } finally {
       if (mounted) setState(() => _loadingAudit = false);
