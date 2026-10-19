@@ -44,8 +44,9 @@ def _verify(ctx, args) -> int:
 
 
 PORTABLE_DEFAULT = "dist/atf.pyz"
-#: The whole CLI is stdlib-only, so one zipapp file runs anywhere python 3.11+ is
-#: installed — no pip, no venv, no checkout. That is the point of this artifact.
+#: The whole CLI is stdlib-only, so one zipapp file runs anywhere a supported
+#: python (3.11-3.13, see atfcli.platforms) is installed — no pip, no venv, no
+#: checkout. That is the point of this artifact.
 PORTABLE_ENTRY = """import sys
 
 from atfcli.cli import main
@@ -90,7 +91,7 @@ def _portable(ctx, args) -> int:
         [
             ("run it", f"python3 {target.name} --help"),
             ("wizard", f"python3 {target.name} setup"),
-            ("hosts", "copy this file to any machine with python 3.11+ (Linux, macOS, Windows)"),
+            ("hosts", "copy this file to any machine with python 3.11-3.13 (Linux, macOS, Windows)"),
             ("needs", "docker only for the default docker mode — source and portable modes need none"),
         ]
     )

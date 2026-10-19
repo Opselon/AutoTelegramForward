@@ -39,6 +39,7 @@ from typing import Any
 from .. import platforms as plat
 from .. import services_probe as probe
 from .. import ui
+from .. import validators
 from ..errors import AtfError
 from . import _shared as sh
 from . import deploy, validate
@@ -280,7 +281,6 @@ def wait_health(ctx, args, runbook: Runbook, *, seconds: float = 60.0) -> dict |
 # ------------------------------------------------------------------- services
 def verify_services(ctx, runbook: Runbook, *, repair: bool = True, render: bool = True) -> list[dict[str, Any]]:
     """Prove each microservice is up; optionally nudge dead containers once."""
-    """Prove each microservice is up; optionally nudge dead containers once."""
     ctx.out.step("Verifying microservices (core, logger, api, web)...")
     if ctx.repo.dry_run:
         # Nothing was started, so there is nothing to inspect: an inspection run
@@ -352,12 +352,12 @@ class Question:
     def validator(self):
         checks = {
             "bot_token": ui.valid_telegram_token,
-            "api_id": lambda v: ui.valid_int(v, minimum=1, maximum=10**12, label="api_id"),
-            "api_hash": lambda v: None if is_api_hash(v) else "api_hash must be 32 hex characters (from my.telegram.org)",
-            "admin_id": lambda v: ui.valid_int(v, minimum=1, label="admin user id"),
-            "web_url": valid_url,
+            "api_id": validators.valid_api_id,
+            "api_hash": validators.valid_api_hash,
+            "admin_id": validators.valid_telegram_user_id,
+            "web_url": validators.valid_url,
             "tls_domain": ui.valid_domain,
-            "tls_email": valid_email,
+            "tls_email": validators.valid_email,
         }
         if self.choices:
             return ui.valid_choice(self.choices)
@@ -365,21 +365,16 @@ class Question:
 
 
 def is_api_hash(value: str) -> bool:
-    text = value.strip().lower()
-    return len(text) == 32 and all(c in "0123456789abcdef" for c in text)
+    return validators.valid_api_hash(value) is None
 
 
 def valid_url(value: str) -> str | None:
-    if value and not value.strip().lower().startswith(("http://", "https://")):
-        return "web url must start with http:// or https://"
-    return None
+    """Kept for callers of this module; the rule itself lives in `validators`."""
+    return validators.valid_url(value)
 
 
 def valid_email(value: str) -> str | None:
-    text = value.strip()
-    if text and ("@" not in text or "." not in text.split("@")[-1] or " " in text):
-        return "that is not a valid email address"
-    return None
+    return validators.valid_email(value)
 
 
 def questions_for(env: dict[str, str], docker: plat.Docker) -> list[Question]:
@@ -536,9 +531,17 @@ def collect_answers(ctx, args, env: dict[str, str], docker: plat.Docker, host: p
     wants_prompts = ctx.out.is_tty or bool(os.environ.get("ATF_ASSUME_TTY"))
     interactive = not (getattr(args, "yes", False) or args.json or getattr(args, "answers", "") or not wants_prompts)
     preset = bool(getattr(args, "answers", ""))
+    # `--quick` is the "I want it running, ask me only what you cannot know"
+    # path: the token is always asked for, everything else keeps its default.
+    quick = bool(getattr(args, "quick", False))
+    skipped: list[str] = []
     for question in questions_for(env, docker):
         given = answers.get(question.key)
         if given not in (None, ""):
+            continue
+        if quick and question.key != "bot_token" and (not question.required or question.default):
+            answers[question.key] = question.default
+            skipped.append(question.key)
             continue
         if not interactive:
             answers[question.key] = question.default
@@ -557,10 +560,12 @@ def collect_answers(ctx, args, env: dict[str, str], docker: plat.Docker, host: p
         if key == "boot_service" and not host.systemd:
             answers["boot_service"] = False
             continue
-        if interactive and key not in flags:
+        if interactive and not quick and key not in flags:
             answers[key] = ui.confirm(ctx.out, "  " + question, default=as_bool(answers.get(key), True))
         else:
             answers[key] = as_bool(answers.get(key), True)
+    if quick and skipped and not ctx.out.json_mode:
+        ctx.out.hint(f"--quick kept the defaults for: {', '.join(skipped)}")
     if not answers.get("tls_domain"):
         answers["tls_email"] = ""
     runbook.add(
@@ -831,12 +836,22 @@ def add_parser(subparsers, parents) -> None:
         action="store_true",
         help="run the legacy bare-metal wizard (config.yaml + supervised local processes) instead",
     )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="ask only for the bot token; keep defaults for everything else",
+    )
     parser.add_argument("--force", action="store_true", help="continue past failures and regenerate secrets")
     parser.add_argument("--no-build", action="store_true", help="skip the docker image build")
     parser.add_argument("--no-start", action="store_true", help="prepare only; do not touch the stack")
     parser.add_argument("--no-boot-service", action="store_true", help="do not install the systemd boot unit")
     parser.add_argument("--no-auth", action="store_true", help="skip token minting and storage")
     parser.add_argument("--no-save", action="store_true", help="do not persist the token into ~/.atf/cli.json")
-    parser.add_argument("--admin-id", default="", help="Telegram user id to register as admin")
-    parser.add_argument("--wait", type=int, default=60, help="seconds to wait for /healthz (default 60)")
+    # default=None, not "": argparse runs `type=` over a *string* default too,
+    # so an empty string would be rejected by the validator before the wizard
+    # ever starts.
+    parser.add_argument("--admin-id", type=validators.argparse_type("telegram_user_id"), default=None,
+                        help="Telegram user id to register as admin")
+    parser.add_argument("--wait", type=validators.argparse_type("int", minimum=0, maximum=3600), default=60,
+                        help="seconds to wait for /healthz (default 60)")
     parser.set_defaults(func=_setup)

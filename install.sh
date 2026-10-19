@@ -6,7 +6,7 @@
 #     curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.sh | bash
 #
 #  What this does:
-#    1. Makes sure git and Python >= 3.10 (with pip + venv) are available,
+#    1. Makes sure git and Python 3.11-3.13 (with pip + venv) are available,
 #       installing them with your system package manager if they are missing.
 #    2. Clones AutoTelegramForward (unless you are already inside a copy).
 #    3. Hands off to:   python atf.py setup
@@ -18,6 +18,7 @@
 #     --dir PATH      Directory to clone into          ATF_INSTALL_DIR
 #     --branch NAME   Branch/tag to clone              ATF_BRANCH
 #     --with-go       Also install the Go toolchain (optional REST API)
+#     --quick         Ask only for the bot token; keep every other default
 #     --force         Replace an existing clone
 #     --help          Show usage
 #
@@ -66,12 +67,17 @@ die()   { printf '%s %s%s%s\n' "${C_RED}✗${C_RESET}" "${C_RED}" "$1" "${C_RESE
 have()  { command -v "$1" >/dev/null 2>&1; }
 
 on_exit() {
-  [[ -n "$WORK" && -d "$WORK" ]] && rm -rf "$WORK"
+  # `if`, not `[[ ... ]] && rm`: a bare `&&` that fails (empty WORK) leaves the
+  # trap with status 1, which becomes the script's exit status — `install.sh
+  # --help` exited 1 and broke `install.sh --help && …` chains.
+  if [[ -n "$WORK" && -d "$WORK" ]]; then
+    rm -rf "$WORK"
+  fi
 }
 trap on_exit EXIT
 
 usage() {
-  sed -n '3,26p' "$0" 2>/dev/null | sed 's/^#\s\?//' || true
+  sed -n '3,27p' "$0" 2>/dev/null | sed 's/^#\s\?//' || true
   exit 0
 }
 
@@ -83,6 +89,7 @@ while [[ $# -gt 0 ]]; do
     --branch)   BRANCH="${2:-}"; shift 2 ;;
     --branch=*) BRANCH="${1#*=}"; shift ;;
     --with-go)  WITH_GO=1; shift ;;
+    --quick)    QUICK=1; shift ;;
     --force)    FORCE=1; shift ;;
     -h|--help)  usage ;;
     *)          die "Unknown option: $1 (try --help)" ;;
@@ -141,24 +148,30 @@ pkg_manager() {
 }
 
 # --------------------------------------------------------------- python -----
-py_ok() {  # py_ok <interpreter> -> 0 if it is Python >= 3.10
+py_ok() {  # py_ok <interpreter> -> 0 if it is Python 3.11-3.13 (the supported range)
   local v
   v="$("$1" -c 'import sys;print("%d.%d"%sys.version_info[:2])' 2>/dev/null || true)"
   [[ -n "$v" ]] || return 1
   local major="${v%%.*}" minor="${v##*.}"
-  [[ "$major" -ge 4 || ( "$major" -eq 3 && "$minor" -ge 10 ) ]]
+  # The ceiling is real: pyrogram's sync layer calls asyncio.get_event_loop()
+  # while it is imported, and Python 3.14 stopped creating a loop implicitly, so
+  # a 3.14 venv builds fine and then cannot import the core (atfcli/platforms.py
+  # holds the same range and a test pins them equal).
+  [[ "$major" -eq 3 && "$minor" -ge 11 && "$minor" -le 13 ]]
 }
 
 resolve_python() {
   local c
-  for c in python3 python python3.12 python3.11 python3.10; do
+  # Supported versions first: `python3` may be 3.14 on a 2026 distro while a
+  # perfectly good python3.12 sits next to it.
+  for c in python3.13 python3.12 python3.11 python3 python; do
     if have "$c" && py_ok "$c"; then echo "$c"; return 0; fi
   done
   # Homebrew keg-only formulae are not on PATH by default.
   local prefix
   if have brew; then
     prefix="$(brew --prefix 2>/dev/null || true)"
-    for v in 3.12 3.11 3.10; do
+    for v in 3.13 3.12 3.11; do
       if [[ -x "${prefix}/opt/python@${v}/bin/python${v}" ]] \
          && py_ok "${prefix}/opt/python@${v}/bin/python${v}"; then
         echo "${prefix}/opt/python@${v}/bin/python${v}"
@@ -167,7 +180,7 @@ resolve_python() {
     done
   fi
   # macOS python.org installer
-  for v in 3.12 3.11 3.10; do
+  for v in 3.13 3.12 3.11; do
     for p in "/Library/Frameworks/Python.framework/Versions/${v}/bin/python${v}" \
              "/usr/local/bin/python${v}"; do
       if [[ -x "$p" ]] && py_ok "$p"; then echo "$p"; return 0; fi
@@ -208,9 +221,11 @@ install_python() {
     linux|bsd)
       mgr="$(pkg_manager || true)"
       [[ -n "$mgr" ]] || die "No package manager found and Python is missing.
-  Install Python >= 3.10 manually (https://www.python.org/downloads/) and re-run this script."
+  Install Python 3.11-3.13 manually (https://www.python.org/downloads/) and re-run this script."
       case "$mgr" in
-        apt-get) pkgs="python3 python3-pip python3-venv ca-certificates" ;;
+        # Prefer an explicitly supported minor: the distro's bare `python3` may
+        # already be 3.14, which builds a venv our core cannot import.
+        apt-get) pkgs="python3.12 python3.12-venv python3-pip ca-certificates" ;;
         dnf|yum) pkgs="python3 python3-pip" ;;
         apk)     pkgs="python3 py3-pip ca-certificates" ;;
         pacman)  pkgs="python python-pip" ;;
@@ -219,8 +234,11 @@ install_python() {
       esac
       [[ "$mgr" == "apt-get" ]] && pkgs="$pkgs git curl"
       step "Installing Python via ${mgr}: ${pkgs}"
-      install_pkgs "$mgr" $pkgs \
-        || die "Failed to install Python packages with ${mgr}. Install Python >= 3.10 manually and re-run."
+      # Not every distro carries python3.12; fall back to the default python3
+      # and let resolve_python refuse it if it is outside the range.
+      install_pkgs "$mgr" $pkgs >/dev/null 2>&1 \
+        || install_pkgs "$mgr" python3 python3-pip python3-venv ca-certificates \
+        || die "Failed to install Python packages with ${mgr}. Install Python 3.11-3.13 manually and re-run."
       # Soft optional: makes the documented `python atf.py ...` work verbatim.
       if [[ "$mgr" == "apt-get" ]]; then
         install_pkgs apt-get python-is-python3 >/dev/null 2>&1 || true
@@ -231,40 +249,41 @@ install_python() {
         step "Installing Python via Homebrew (python@3.12)"
         brew install python@3.12 >/dev/null 2>&1 \
           || brew install python >/dev/null 2>&1 \
-          || die "brew install python failed. Install Python >= 3.10 manually and re-run."
+          || die "brew install python failed. Install Python 3.11-3.13 manually and re-run."
       else
         local v url pkg
-        for v in 3.12.10 3.11.9 3.10.16; do
+        for v in 3.13.7 3.12.10 3.11.9; do
           url="https://www.python.org/ftp/python/${v}/python-${v}-macos11.pkg"
           if curl -fsIL --max-time 10 "$url" >/dev/null 2>&1; then break; fi
           url=""
         done
         [[ -n "$url" ]] || die "Could not find a Python installer for macOS.
-  Install Homebrew (https://brew.sh) or Python >= 3.10 (https://www.python.org/downloads/) and re-run."
+  Install Homebrew (https://brew.sh) or Python 3.11-3.13 (https://www.python.org/downloads/) and re-run."
         pkg="$WORK/python.pkg"
         step "Downloading official Python ${v} for macOS"
         curl -fsSL "$url" -o "$pkg" || die "Download failed: $url"
         step "Installing Python ${v} (you may be asked for your macOS password)"
         $SUDO installer -pkg "$pkg" -target / >/dev/null 2>&1 \
-          || die "installer failed. Install Python >= 3.10 manually and re-run."
+          || die "installer failed. Install Python 3.11-3.13 manually and re-run."
       fi
       ;;
     msys)
       die "Python was not found. On Windows, use the PowerShell installer instead:
   irm https://raw.githubusercontent.com/${REPO}/master/install.ps1 | iex
-or install Python >= 3.10 from https://www.python.org/downloads/ and re-run."
+or install Python 3.11-3.13 from https://www.python.org/downloads/ and re-run."
       ;;
   esac
   hash -r 2>/dev/null || true
-  resolve_python >/dev/null 2>&1 || die "Python was installed but is still not usable.
-  Open a new terminal and re-run this script."
+  resolve_python >/dev/null 2>&1 || die "Python was installed but is still unusable.
+  This stack needs Python 3.11-3.13; if your distro installed a newer one, install python3.12
+  (or run the stack in docker mode: docker compose up -d) and re-run this script."
 }
 
 ensure_python() {
   if PY="$(resolve_python 2>/dev/null)"; then
     step "Found Python: $(command -v "$PY" 2>/dev/null || echo "$PY")  ($( "$PY" -c 'import sys;print("%d.%d.%d"%sys.version_info[:3])' 2>/dev/null || echo ok))"
   else
-    warn "Python >= 3.10 not found — installing it"
+    warn "Python 3.11-3.13 not found — installing it"
     install_python
     PY="$(resolve_python)" || die "Unable to locate a usable Python interpreter."
     step "Python ready: $( "$PY" -c 'import sys;print("%d.%d.%d"%sys.version_info[:3])' 2>/dev/null || echo "$PY")"
@@ -413,7 +432,7 @@ cd "$TARGET" || die "cannot cd into $TARGET"
 printf '\n%s\n' "${C_BOLD}${C_GREEN}Environment ready.${C_RESET}"
 info "Location : $TARGET"
 info "Python   : $(command -v "$PY" 2>/dev/null || echo "$PY")"
-info "Next     : ${C_BOLD}atf start${C_RESET}  (after setup)"
+info "Next     : ${C_BOLD}atf status${C_RESET}  ·  ${C_BOLD}atf upgrade check${C_RESET}  ·  ${C_BOLD}atf doctor${C_RESET}"
 printf '%s\n' "${C_DIM}---------------------------------------------------------------------------${C_RESET}"
 printf '%s\n' "${C_BOLD}Setup now — have your Telegram bot token ready (get one from @BotFather).${C_RESET}"
 printf '%s\n\n' "${C_DIM}The wizard detects this machine, creates the virtualenv, asks only what it must, then builds and verifies every service.${C_RESET}"
@@ -423,5 +442,13 @@ printf '%s\n\n' "${C_DIM}The wizard detects this machine, creates the virtualenv
 # source mode when it is not. exec keeps stdin/stdout attached so prompts work
 # even under `curl ... | bash`, and ATF_BOOTSTRAP_ARGS lets the wizard run in
 # --check mode.
+SETUP_ARGS="${ATF_BOOTSTRAP_ARGS:-}"
+if [[ "$QUICK" -eq 1 ]]; then
+  # `--quick` is the wizard's own flag: it asks for the bot token — the one
+  # answer it cannot invent — and keeps the defaults for everything else.
+  SETUP_ARGS="${SETUP_ARGS} --quick"
+  info "Quick mode: the wizard will ask only for the bot token."
+fi
+
 # shellcheck disable=SC2086
-exec "$PY" scripts/bootstrap.py ${ATF_BOOTSTRAP_ARGS:-}
+exec "$PY" scripts/bootstrap.py ${SETUP_ARGS}

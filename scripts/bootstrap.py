@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Cross-platform bootstrap: from a bare checkout to a running stack.
 
-Run it with any Python 3.11+ on Linux, macOS or Windows:
+Run it with any supported Python (3.11-3.13 — see atfcli/platforms.py for why
+the ceiling is real) on Linux, macOS or Windows:
 
     python3 scripts/bootstrap.py            # venv + deps + `atf setup`
     python3 scripts/bootstrap.py --check     # report only, change nothing
@@ -29,6 +30,30 @@ MIN_PYTHON = (3, 11)
 ROOT = Path(__file__).resolve().parent.parent
 VENV_DIR = ROOT / ".venv"
 REQUIREMENT_FILES = ("requirements.txt", "core/requirements.txt")
+
+
+def _platforms():
+    """`atfcli.platforms`, or None when the checkout is incomplete.
+
+    The interpreter range lives there so the wizard, the installers and this
+    script cannot disagree; this file stays stdlib-only, so the import is
+    optional and the literal below is the fallback — a test pins the two equal.
+    """
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    try:
+        from atfcli import platforms  # noqa: PLC0415 - optional dependency
+
+        return platforms
+    except Exception:  # pragma: no cover - partial checkout
+        return None
+
+
+#: Mirror of `atfcli.platforms.PYTHON_MAX`, used only when that module cannot be
+#: imported (a checkout without `atfcli/`). Keep the two in step: there is a
+#: regression test that reads both.
+MAX_PYTHON = (3, 13)
+SUPPORTED_PYTHON = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}\u2013{MAX_PYTHON[0]}.{MAX_PYTHON[1]}"
 
 RESET, BOLD, DIM = "\033[0m", "\033[1m", "\033[2m"
 CYAN, GREEN, YELLOW, RED, GREY = "\033[36m", "\033[32m", "\033[33m", "\033[31m", "\033[90m"
@@ -100,8 +125,39 @@ def install_hints() -> list[tuple[str, str]]:
         return [("install script", "curl -fsSL https://get.docker.com | sh"), ("docs", "https://docs.docker.com/engine/install/")]
 
 
+def python_problem() -> str:
+    """Why this interpreter cannot run the stack, or "" when it can.
+
+    The range comes from `atfcli.platforms` when it is importable, so the
+    installer, the wizard and the doctor all refuse the same hosts for the same
+    reason.
+    """
+    platforms = _platforms()
+    if platforms is not None:
+        return platforms.python_problem(sys.version_info)
+    current = tuple(sys.version_info[:2])
+    if current < MIN_PYTHON:
+        return f"python {platform.python_version()} is too old — this stack needs {SUPPORTED_PYTHON}"
+    if current > MAX_PYTHON:
+        return (
+            f"python {platform.python_version()} is newer than this stack supports ({SUPPORTED_PYTHON}) — "
+            "pyrogram's sync layer needs an event loop to exist while it is imported, and Python 3.14 "
+            "stopped creating one implicitly. Install a supported interpreter, or use docker mode, "
+            "whose images pin 3.11"
+        )
+    return ""
+
+
 def python_ok() -> bool:
-    return sys.version_info >= MIN_PYTHON
+    return not python_problem()
+
+
+def python_rows() -> list[tuple[str, str]]:
+    """How to get a supported interpreter on this machine."""
+    platforms = _platforms()
+    if platforms is not None:
+        return platforms.python_install_guidance(platforms.detect_host())
+    return [("python.org", "https://www.python.org/downloads/")]
 
 
 def venv_python() -> Path:
@@ -110,10 +166,13 @@ def venv_python() -> Path:
 
 def check_only() -> int:
     problems = 0
-    if python_ok():
-        ok(f"python {platform.python_version()} at {sys.executable}")
+    problem = python_problem()
+    if not problem:
+        ok(f"python {platform.python_version()} at {sys.executable} (supported: {SUPPORTED_PYTHON})")
     else:
-        fail(f"python {platform.python_version()} is too old — {MIN_PYTHON[0]}.{MIN_PYTHON[1]}+ required")
+        fail(problem)
+        for what, command in python_rows():
+            print(f"    {GREY if _color() else ''}{what}: {command}{RESET}")
         problems += 1
     if venv_python().exists():
         ok(f"virtualenv present: {VENV_DIR}")
@@ -210,6 +269,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-deps", action="store_true", help="skip pip install")
     parser.add_argument("--no-run", action="store_true", help="install the CLI, do not start the wizard")
     parser.add_argument("--no-link", action="store_true", help="do not symlink `atf` into /usr/local/bin")
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="ask only for the bot token, keep every other default (forwarded to `atf setup`)",
+    )
     parser.add_argument("setup_args", nargs="*", help="extra arguments passed to `atf setup`")
     args = parser.parse_args(argv)
 
@@ -222,11 +286,28 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  root  {ROOT}")
     print()
 
-    if not python_ok():
-        fail(f"python {platform.python_version()} is too old — install {MIN_PYTHON[0]}.{MIN_PYTHON[1]}+ and re-run")
-        return 2
     if args.check:
         return check_only()
+
+    problem = python_problem()
+    if problem:
+        # Docker mode runs our code in containers that pin 3.11, so a too-new
+        # local interpreter only blocks the paths that execute on *this* host
+        # (source mode). Refuse those paths, not the whole install.
+        present, daemon, _description = docker_state()
+        if present and daemon:
+            warn(problem)
+            print("  docker mode is unaffected — the images pin python 3.11")
+            print("  do not use `atf setup --source-wizard` on this interpreter")
+            print()
+        else:
+            fail(problem)
+            print("  install a supported interpreter for this machine:")
+            for what, command in python_rows():
+                print(f"    • {what}")
+                print(f"      {GREY if _color() else ''}{command}{RESET}")
+            print("  (or run in docker mode: it pins python 3.11 inside the images)")
+            return 2
 
     present, daemon, description = docker_state()
     if present and daemon:
@@ -249,7 +330,12 @@ def main(argv: list[str] | None = None) -> int:
         print()
         say(f"CLI ready — start it with: {py} {ROOT / 'atf'} setup")
         return 0
-    return run_wizard(py, args.setup_args)
+    extra = list(args.setup_args)
+    if args.quick and "--quick" not in extra:
+        # Named here as well as in `atf setup` so `install.sh --quick` can pass it
+        # through without the `--` separator bootstrap uses for pass-through args.
+        extra.append("--quick")
+    return run_wizard(py, extra)
 
 
 def install_guidance_rows() -> list[tuple[str, str]]:

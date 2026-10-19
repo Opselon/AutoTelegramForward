@@ -3,8 +3,8 @@
 Each check answers a question an operator actually asks when something is
 broken, in the order that narrows the fault fastest:
 
-    docker → repo → containers → networks → aliases → ports → api → services
-    → telegram session → database → disk → certificate → config
+    docker → python → repo → containers → networks → aliases → ports → api →
+    services → telegram session → database → disk → certificate → config
 
 Checks are independent: a failure records a finding and the run continues, so
 one command tells you everything that is wrong instead of one thing per attempt.
@@ -28,6 +28,9 @@ from ..context import (
     SERVICES,
 )
 from ..errors import AtfError
+from .. import platforms as plat
+from .. import ports as portmap
+from .. import validators
 
 NAME = "doctor"
 HELP = "Diagnose the whole stack (and --fix the repairs that are safe)"
@@ -71,14 +74,37 @@ class Report:
 
 
 def _port_open(host: str, port: int, timeout: float = 1.5) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
+    """Kept as a module-level name: `validate` and the wizard import it."""
+    return portmap.port_open(host, port, timeout)
 
 
 # --------------------------------------------------------------------- checks
+def check_python(ctx, report: Report, *, fix: bool) -> None:
+    """Can this host's interpreter run our code at all?
+
+    It matters most in source mode, where the core runs on this very
+    interpreter; in docker mode the images pin 3.11 and only the CLI runs here.
+    Either way the operator should hear it from `doctor` rather than from a
+    stack trace after a build.
+    """
+    problem = plat.python_problem()
+    if not problem:
+        report.add("python", "ok", f"{plat.detect_host().python_version} (supported: {plat.SUPPORTED_PYTHON})")
+        return
+    docker = ctx.repo.docker_info(refresh=True)
+    status = "warn" if docker.available else "fail"
+    rows = plat.python_install_guidance()
+    detail = problem
+    if docker.available:
+        detail += " — docker mode is unaffected; do not use source mode here"
+    report.add(
+        "python",
+        status,
+        detail,
+        fix=rows[0][1] if rows else "install a supported interpreter",
+    )
+
+
 def check_docker(ctx, report: Report, *, fix: bool) -> None:
     info = ctx.repo.docker_info(refresh=True)
     if not info.available:
@@ -191,19 +217,83 @@ def check_aliases(ctx, report: Report, *, fix: bool) -> None:
 
 
 def check_ports(ctx, report: Report, *, fix: bool) -> None:
-    expected = {"api": 8080, "web": 8088, "core": 50051, "logger": 50052}
-    closed = [f"{svc}:{port}" for svc, port in expected.items() if not _port_open("127.0.0.1", port)]
-    if closed:
-        # api/web are host-published; the gRPC ports are normally container-only,
-        # so a closed gRPC port is informational rather than a failure.
-        host_facing = [c for c in closed if c.split(":")[0] in ("api", "web")]
-        if host_facing:
-            report.add("ports", "fail", f"host ports closed: {', '.join(host_facing)}",
-                       fix="atf docker restart api web")
-        else:
-            report.add("ports", "ok", f"host ports open; internal-only closed: {', '.join(closed)}")
+    """Every host port: who holds it, why it is closed, and where to go instead.
+
+    A closed port has three very different causes — a stranger owns it, the
+    container lost its mapping, or nothing is bound at all — and they need three
+    different actions. `ports.diagnose` separates them, names the holder with
+    its pid, and offers the next free port, so the finding is actionable instead
+    of a symptom.
+    """
+    diagnoses = portmap.diagnose(ctx, services=SERVICES)
+    rebind = bool(getattr(getattr(ctx, "args", None), "rebind_ports", False))
+    healed: list[str] = []
+    if fix:
+        # Safe repairs always; moving a port changes the public URL, so that
+        # half waits for --rebind-ports.
+        healed = portmap.heal(ctx, diagnoses, rebind=rebind)
+
+    host_facing = [d for d in diagnoses if d.host_facing]
+    problems = [d for d in host_facing if d.verdict not in ("ok", "unknown")]
+    internal = [d for d in diagnoses if not d.host_facing]
+
+    if not problems:
+        detail = ", ".join(f"{d.port} ({d.service})" for d in host_facing) + " answering"
+        if internal:
+            internal_bad = [d for d in internal if d.verdict not in ("ok", "unknown")]
+            detail += "; internal " + (
+                ", ".join(f"{d.port} ({d.service})" for d in internal if d.verdict in ("ok", "unknown")) or "none"
+            )
+            if internal_bad:
+                report.add(
+                    "ports",
+                    "warn",
+                    detail
+                    + " — but "
+                    + ", ".join(f"{d.service}:{d.port} silent inside its container" for d in internal_bad),
+                    fix="; ".join(d.fix for d in internal_bad if d.fix),
+                )
+                return
+        report.add("ports", "ok", detail)
         return
-    report.add("ports", "ok", "8080, 8088, 50051, 50052 all answering")
+
+    summary = "; ".join(f"{d.service}:{d.port} {d.verdict} ({d.detail})" for d in problems)
+    report.add(
+        "ports",
+        "fail",
+        summary,
+        fix="; ".join(dict.fromkeys(d.fix for d in problems if d.fix)),
+        fixed=bool(healed),
+    )
+    for diagnosis in problems:
+        if diagnosis.fixed:
+            continue
+        line = f"{diagnosis.service}:{diagnosis.port} — {diagnosis.detail}"
+        if diagnosis.alternative:
+            line += f" (free alternative: {diagnosis.alternative} as {diagnosis.env_key})"
+        report.add(f"port {diagnosis.service}", "warn", line, fix=diagnosis.fix)
+    if healed:
+        report.add("ports healed", "ok", "; ".join(healed), fixed=True)
+
+
+def check_firewall(ctx, report: Report, *, fix: bool) -> None:
+    """A bound port is not the same as a reachable port.
+
+    On these hosts the usual reason a published port is unreachable from outside
+    is `ufw` or an `iptables` DROP. The CLI reports it and hands over the exact
+    command; it never edits firewall rules on the operator's behalf.
+    """
+    if not ctx.repo.docker_info().available:
+        return
+    wanted = [d.port for d in portmap.diagnose(ctx, services=portmap.HOST_FACING) if d.listening]
+    if not wanted:
+        return
+    findings = portmap.firewall_findings(ctx, wanted)
+    if not findings:
+        report.add("firewall", "ok", f"no host firewall rule drops {wanted}")
+        return
+    for detail, hint in findings:
+        report.add("firewall", "warn", detail, fix=hint)
 
 
 def check_api(ctx, report: Report, *, fix: bool) -> None:
@@ -395,10 +485,12 @@ def check_ai(ctx, report: Report, *, fix: bool) -> None:
 
 CHECKS: tuple[Callable, ...] = (
     check_docker,
+    check_python,
     check_repo,
     check_containers,
     check_aliases,
     check_ports,
+    check_firewall,
     check_api,
     check_services,
     check_database,
@@ -409,6 +501,10 @@ CHECKS: tuple[Callable, ...] = (
     check_ai,
 )
 
+#: Names accepted by `--only`, derived from CHECKS so the help text, the
+#: validator and the dispatch can never drift apart.
+CHECK_NAMES: tuple[str, ...] = tuple(c.__name__.removeprefix("check_") for c in CHECKS)
+
 
 # -------------------------------------------------------------------- render
 _MARK = {"ok": ("✓", "green"), "warn": ("!", "yellow"), "fail": ("✗", "red")}
@@ -416,15 +512,29 @@ _MARK = {"ok": ("✓", "green"), "warn": ("!", "yellow"), "fail": ("✗", "red")
 
 def _doctor(ctx, args) -> int:
     report = Report()
-    selected = [c for c in CHECKS if not args.only or c.__name__.replace("check_", "") in args.only]
+    only = list(args.only or ())
+    unknown = [name for name in only if name not in CHECK_NAMES]
+    if unknown:
+        for name in unknown:
+            # `suggest` returns the whole tail (" — did you mean 'docker'?"), so
+            # it is appended, not re-wrapped: wrapping it printed
+            # "did you mean " — did you mean 'docker'?"?".
+            tail = validators.suggest(name, CHECK_NAMES)
+            raise AtfError(
+                f"unknown check {name!r}{tail}",
+                hint=f"available checks: {validators.describe_choices(CHECK_NAMES)}",
+            )
+    selected = [c for c in CHECKS if not only or c.__name__.removeprefix("check_") in only]
+    if not selected:
+        raise AtfError("no checks selected", hint=f"available checks: {validators.describe_choices(CHECK_NAMES)}")
     started = time.time()
     for check in selected:
         try:
             check(ctx, report, fix=args.fix)
         except AtfError as exc:
-            report.add(check.__name__.replace("check_", ""), "warn", exc.message)
+            report.add(check.__name__.removeprefix("check_"), "warn", exc.message)
         except Exception as exc:  # noqa: BLE001 - a broken check must not hide the rest
-            report.add(check.__name__.replace("check_", ""), "warn", f"{type(exc).__name__}: {exc}")
+            report.add(check.__name__.removeprefix("check_"), "warn", f"{type(exc).__name__}: {exc}")
     elapsed = time.time() - started
 
     payload = {
@@ -443,6 +553,14 @@ def _doctor(ctx, args) -> int:
             for f in report.findings
         ],
     }
+    if "ports" in {c.__name__.removeprefix("check_") for c in selected}:
+        try:
+            payload["ports"] = portmap.to_json(
+                portmap.diagnose(ctx, services=SERVICES),
+                firewall=portmap.firewall_findings(ctx, [d.port for d in portmap.diagnose(ctx) if d.listening]),
+            )
+        except Exception as exc:  # noqa: BLE001 - enrichment must never break doctor
+            payload["ports"] = {"error": f"{type(exc).__name__}: {exc}"}
     if args.json:
         ctx.out.json(payload)
         return 0 if not report.failures else 1
@@ -461,6 +579,8 @@ def _doctor(ctx, args) -> int:
         repaired = [f.check for f in report.findings if f.fixed]
         if repaired:
             ctx.out.line(f"  repaired: {', '.join(repaired)}")
+    if report.failures and not args.fix:
+        ctx.out.line(ctx.out.paint("  re-run with --fix to repair what is safe automatically", "grey"))
     return 0 if not report.failures else 1
 
 
@@ -472,9 +592,23 @@ def add_parser(subparsers, parents) -> None:
         parents=parents,
         epilog=(
             "Exit code is 0 when nothing failed, 1 when any check failed — so a\n"
-            "cron job can alert on `atf doctor` without parsing output."
+            "cron job can alert on `atf doctor` without parsing output.\n\n"
+            "`--fix` repairs what is safe (aliases, restarts, re-creating a lost\n"
+            "port mapping). `--rebind-ports` additionally moves a service onto a\n"
+            "free port when a process outside the stack owns its port — that\n"
+            "changes the public URL, so it is opt-in."
         ),
     )
     parser.add_argument("--fix", action="store_true", help="apply safe repairs (network aliases, etc.)")
-    parser.add_argument("--only", nargs="+", metavar="CHECK", help="run only these checks")
+    parser.add_argument(
+        "--rebind-ports",
+        action="store_true",
+        help="with --fix: also move services onto free ports when a foreign process owns theirs",
+    )
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        metavar="CHECK",
+        help=f"run only these checks ({', '.join(CHECK_NAMES)})",
+    )
     parser.set_defaults(func=_doctor)

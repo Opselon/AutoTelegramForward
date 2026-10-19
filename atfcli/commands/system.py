@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from ..context import AI_NETWORK, COMPOSE_NETWORK, CONTAINERS, NETWORK_ALIASES, SERVICES
+from .. import upgrade
 from . import _shared as sh
 from . import deploy, validate
 from .doctor import Report, check_aliases, check_api, check_containers, check_database
@@ -25,64 +26,27 @@ def _info(ctx, args) -> None:
 
 
 def _upgrade(ctx, args) -> int:
-    """Full-system automated upgrade procedure."""
+    """Full-system upgrade — the same engine as `atf upgrade`, kept for muscle memory.
+
+    This used to be a straight five-step script. It now delegates to
+    `atfcli.upgrade` so there is exactly one implementation of the sequence:
+    a second copy here is how the two would drift, and the one an operator
+    typed the wrong one of would be the bug.
+    """
     ctx.out.title("Executing Full ATF System Upgrade")
-    sh.confirm_or_fail(ctx, "Proceed with full stack rebuild, container recreation, and upgrade?")
-
-    # 1. Git pull if requested or in git repo
-    if not args.no_pull:
-        ctx.out.step("Step 1/5: Pulling latest code from upstream...")
-        pull_res = ctx.repo.run(["git", "pull", "--ff-only"], check=False)
-        if pull_res.ok:
-            ctx.out.ok(f"Git updated: {pull_res.stdout.strip()}")
-        else:
-            ctx.out.warn(f"Git pull skipped or returned non-zero: {pull_res.stderr.strip() or pull_res.stdout.strip()}")
-    else:
-        ctx.out.info("Skipping git pull (--no-pull)")
-
-    # 2. Build Docker images
-    ctx.out.step("Step 2/5: Building all service container images...")
-    ctx.repo.run_streaming(["docker", "compose", "build", *SERVICES])
-    ctx.out.ok("Container images built")
-
-    # 3. Stop and Recreate
-    ctx.out.step("Step 3/5: Recreating containers with zero lingering state...")
-    for s in SERVICES:
-        ctx.repo.run(["docker", "rm", "-f", CONTAINERS[s]], check=False, quiet=True)
-    ctx.repo.run(["docker", "compose", "up", "-d", "--no-deps", *SERVICES], check=True)
-    ctx.out.ok("Containers successfully recreated")
-
-    # 4. Repair network aliases & bridges
-    ctx.out.step("Step 4/5: Enforcing compose network aliases and bridge links...")
-    for s in SERVICES:
-        alias = NETWORK_ALIASES.get(s, s)
-        ctx.repo.run(
-            ["docker", "network", "connect", "--alias", alias, COMPOSE_NETWORK, CONTAINERS[s]],
-            check=False,
-            quiet=True,
-        )
-    if ctx.repo.container_running("core"):
-        ctx.repo.run(["docker", "network", "connect", AI_NETWORK, CONTAINERS["core"]], check=False, quiet=True)
-    ctx.out.ok("Network DNS routing and external bridges connected")
-
-    # 5. Doctor & Health validation
-    ctx.out.step("Step 5/5: Running comprehensive post-upgrade doctor checks...")
-    time.sleep(3.0)
-    report = Report()
-    check_containers(ctx, report, fix=False)
-    check_aliases(ctx, report, fix=True)
-    check_api(ctx, report, fix=False)
-    check_database(ctx, report, fix=False)
-
-    if report.failures:
-        ctx.out.fail(f"Upgrade completed but found {len(report.failures)} degraded component(s):")
-        for f in report.failures:
-            ctx.out.line(f"  • {f.check}: {f.detail}")
-        return 1
-
-    ctx.out.title("System Upgrade Succeeded")
-    ctx.out.ok(f"AutoTelegramForward is running cleanly at v{ctx.repo.version}")
-    return 0
+    run = upgrade.apply(
+        ctx,
+        rebuild=True,
+        backup=True,
+        verify=True,
+        assume_yes=bool(getattr(args, "yes", False)),
+        fetch_remote=not getattr(args, "no_pull", False),
+    )
+    if getattr(args, "json", False):
+        ctx.out.json(run.to_json())
+        return 0 if run.ok else 1
+    upgrade.render_run(ctx, run)
+    return 0 if run.ok else 1
 
 
 UNIT_NAME = "atf-stack.service"

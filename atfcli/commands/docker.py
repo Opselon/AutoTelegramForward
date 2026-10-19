@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from .. import validators
 from ..context import CONTAINERS, SERVICES
 from ..errors import UsageError
 from . import _shared as sh
@@ -104,7 +105,7 @@ def add_parser(subparsers, parents) -> None:
     p.set_defaults(func=_restart)
 
     p = sub.add_parser("logs", help="view Docker container logs", parents=parents)
-    p.add_argument("service", choices=list(SERVICES) + list(CONTAINERS.values()), help="target service or container")
+    p.add_argument("service", type=validators.service_argparse_type(), help="target service or container")
     p.add_argument("-f", "--follow", action="store_true", help="follow log output")
     p.add_argument("-n", "--tail", type=int, default=100, help="number of lines from end")
     p.set_defaults(func=_logs)

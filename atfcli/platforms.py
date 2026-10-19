@@ -9,15 +9,77 @@ from __future__ import annotations
 
 import os
 import platform as _platform
+import re
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 #: Docker's official convenience script; the one command that works on any
 #: Debian/Ubuntu-family host.
 GET_DOCKER = "curl -fsSL https://get.docker.com | sh"
+
+#: Interpreters this stack runs on, inclusive. The floor is what the pinned
+#: dependencies need. The ceiling is real, not cosmetic: pyrogram 2.0's sync
+#: layer calls `asyncio.get_event_loop()` while it is being imported, and Python
+#: 3.14 no longer creates a loop implicitly, so `import pyrogram` dies with
+#: "There is no current event loop in thread 'MainThread'" before any of our code
+#: runs. Docker mode is unaffected — the images pin 3.11.
+#:
+#: Every installer reads this range (scripts/bootstrap.py imports it, install.sh
+#: and install.ps1 mirror it, and a test pins them equal), so a host is refused
+#: once, with one sentence, instead of failing later in a stack trace.
+PYTHON_MIN = (3, 11)
+PYTHON_MAX = (3, 13)
+SUPPORTED_PYTHON = f"{PYTHON_MIN[0]}.{PYTHON_MIN[1]}–{PYTHON_MAX[0]}.{PYTHON_MAX[1]}"
+PYTHON_WHY = (
+    "pyrogram's sync layer needs an event loop to exist while it is imported, "
+    "and Python 3.14 stopped creating one implicitly"
+)
+
+
+def python_supported(version_info: Sequence[int] | None = None) -> bool:
+    """True when this interpreter can run the core (source mode)."""
+    current = tuple((version_info or sys.version_info)[:2])
+    return PYTHON_MIN <= current <= PYTHON_MAX
+
+
+def python_problem(version_info: Sequence[int] | None = None) -> str:
+    """An actionable sentence when the interpreter is unusable, else ""."""
+    current = tuple((version_info or sys.version_info)[:2])
+    shown = ".".join(str(part) for part in current)
+    if current < PYTHON_MIN:
+        return f"python {shown} is too old — this stack needs {SUPPORTED_PYTHON}"
+    if current > PYTHON_MAX:
+        return (
+            f"python {shown} is newer than this stack supports ({SUPPORTED_PYTHON}) — {PYTHON_WHY}. "
+            "Install a supported interpreter, or use docker mode, whose images pin 3.11"
+        )
+    return ""
+
+
+def python_install_guidance(host: "Host | None" = None) -> list[tuple[str, str]]:
+    """(what, exact command) pairs that install a supported interpreter here."""
+    machine = host or detect_host()
+    if machine.os == "macos":
+        return [("Homebrew", "brew install python@3.12")]
+    if machine.os == "windows":
+        return [("winget", "winget install -e --id Python.Python.3.12")]
+    if machine.os == "linux":
+        if machine.distro in {"fedora", "rhel", "centos", "rocky", "almalinux"}:
+            first = ("dnf", "sudo dnf install -y python3.12")
+        elif machine.distro in {"arch", "manjaro"}:
+            first = ("pacman", "sudo pacman -S --noconfirm python312")
+        else:
+            first = ("Debian/Ubuntu", "sudo apt-get install -y python3.12 python3.12-venv")
+        return [
+            first,
+            ("no package for it", "https://www.python.org/downloads/"),
+            ("or skip the local interpreter", "docker compose up -d   # docker mode pins 3.11"),
+        ]
+    return [("python.org", "https://www.python.org/downloads/")]
 
 _DISTRO_HINTS: dict[str, str] = {
     "ubuntu": "sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2",
@@ -47,7 +109,21 @@ class Host:
     is_wsl: bool = False
     in_container: bool = False
     python: str = ""
+    python_version: str = ""
     shell: str = ""
+
+    @property
+    def python_supported(self) -> bool:
+        """Whether this host's Python can run the core (source mode)."""
+        return python_supported(self.python_version_info)
+
+    @property
+    def python_version_info(self) -> tuple[int, ...]:
+        """The interpreter's (major, minor) as integers, or (0, 0) if unknown."""
+        parts = [part for part in re.split(r"[.\-+]", self.python_version or "") if part.isdigit()]
+        if len(parts) >= 2:
+            return (int(parts[0]), int(parts[1]))
+        return (0, 0)
 
     @property
     def label(self) -> str:
@@ -95,6 +171,7 @@ def detect_host() -> Host:
         is_wsl=is_wsl,
         in_container=in_container,
         python=sys.executable,
+        python_version=_platform.python_version(),
         shell=os.environ.get("SHELL") or os.environ.get("COMSPEC", ""),
     )
 
@@ -204,7 +281,7 @@ RUN_MODES: tuple[tuple[str, str, str], ...] = (
     ),
     (
         "source",
-        "bare metal (python 3.11+)",
+        f"bare metal (python {SUPPORTED_PYTHON})",
         "no docker: installs into a venv and supervises local processes (atf setup --source-wizard)",
     ),
     (

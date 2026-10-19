@@ -82,6 +82,12 @@ SECRET_SHAPES: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 #: Paths where a token-shaped literal is expected (fixtures, docs, templates).
 SCAN_SKIP = re.compile(r"(^|/)(tests?|fixtures?)/|\.example$|\.md$|\.lock$|package-lock\.json")
+#: The directory `scripts/gen_proto.py` reads its sources from. A `.proto`
+#: outside it (the Rust logger crate, the mobile app) is compiled by its own
+#: toolchain, so comparing it against `core/proto/*_pb2.py` reports staleness
+#: that cannot exist — the check would fail because a file from another
+#: language tree was checked out later.
+PROTO_SOURCE_DIR = "proto"
 
 
 # --------------------------------------------------------------------- helpers
@@ -404,21 +410,23 @@ def _repo_glob(ctx, pattern: str) -> list[Path]:
 
 
 def check_proto_freshness(ctx, report: Report, **_) -> None:
-    protos = _repo_glob(ctx, "*.proto")
+    source_dir = ctx.repo.path(PROTO_SOURCE_DIR)
+    protos = sorted(source_dir.glob("*.proto")) if source_dir.is_dir() else []
     if not protos:
-        report.add("proto", "warn", "no .proto sources found")
+        report.add("proto", "warn", f"no .proto sources in {PROTO_SOURCE_DIR}/")
         return
-    newest_proto = max(p.stat().st_mtime for p in protos)
     generated = _repo_glob(ctx, "*_pb2.py")
     if not generated:
         report.add("proto", "warn", "no generated *_pb2.py — run `atf proto gen`")
         return
-    newest_gen = max(p.stat().st_mtime for p in generated)
-    if newest_proto > newest_gen:
+    newest_proto = max(protos, key=lambda p: p.stat().st_mtime)
+    newest_gen = max(generated, key=lambda p: p.stat().st_mtime)
+    if newest_proto.stat().st_mtime > newest_gen.stat().st_mtime:
         report.add(
             "proto",
             "warn",
-            "a .proto is newer than the generated stubs",
+            f"{newest_proto.relative_to(ctx.repo.root)} is newer than "
+            f"{newest_gen.relative_to(ctx.repo.root)} — run `atf proto gen`",
             fix="atf proto",
         )
     else:
