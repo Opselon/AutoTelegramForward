@@ -297,7 +297,10 @@ void main() {
     // Tapping a rejected/accepted chip selects that entry in its field.
     await tester.ensureVisible(_chip('-1001111111111'));
     await tester.tap(_chip('-1001111111111'));
-    await tester.pump();
+    // Focusing the field scrolls it into view; the assertion below reads the
+    // controller, and the delete tap that follows must land on the chip's real
+    // position — so wait for the scroll animation instead of a single frame.
+    await tester.pumpAndSettle();
     final ctrl = tester
         .widget<TextFormField>(_field('rule_sources_field'))
         .controller!;
@@ -305,13 +308,14 @@ void main() {
 
     // Removing a chip drops exactly that entry, keeping the rest in order.
     await tester.ensureVisible(_chip('-1002222222222'));
+    await tester.pumpAndSettle();
     await tester.tap(
       find.descendant(
         of: _chip('-1002222222222'),
         matching: find.byIcon(Icons.close),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(_chip('-1002222222222'), findsNothing);
     expect(_chip('-1001111111111'), findsOneWidget);
