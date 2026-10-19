@@ -196,11 +196,18 @@ def port_open(host: str, port: int, timeout: float = 1.5) -> bool:
         return False
 
 
-def free_port(start: int, *, host: str = "0.0.0.0", avoid: Iterable[int] = (), span: int = AUTO_PORT_SPAN) -> int | None:
+def free_port(start: int, *, host: str = "127.0.0.1", avoid: Iterable[int] = (), span: int = AUTO_PORT_SPAN) -> int | None:
     """The first bindable port at or after `start`.
 
     `avoid` carries the other services' ports: picking one of those would trade
     a conflict with a stranger for a conflict with ourselves.
+
+    The probe binds the loopback address, never the wildcard: a process already
+    holding `0.0.0.0:<port>` (docker-proxy, for one) makes a loopback bind fail
+    with EADDRINUSE just the same, so the answer is the same for every conflict
+    that actually happens locally — and this way the CLI never opens a
+    listening socket on every interface, not even for the instant it takes to
+    close it.
     """
     taken = {int(p) for p in avoid}
     for candidate in range(max(LOWEST_AUTO_PORT, int(start)), min(65535, int(start) + span) + 1):

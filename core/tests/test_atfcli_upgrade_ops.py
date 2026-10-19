@@ -136,7 +136,9 @@ def test_git_ref_validator_refuses_options_ranges_spaces_and_junk():
 def test_refusals_name_the_likely_intent():
     assert "did you mean 'web'?" in str(validators.valid_service_name("webhook"))
     assert "@userinfobot" in str(validators.valid_telegram_user_id("xyz"))
-    assert "api.example.com" in str(validators.valid_domain("not_a_domain"))
+    # Exact, not a substring: a partial match on a host name is not a check
+    # (and CodeQL flags it as one, correctly, even inside a test).
+    assert str(validators.valid_domain("not_a_domain")) == "that is not a valid domain name (e.g. api.example.com)"
     assert "number must be >= 1" in str(validators.valid_int("0", minimum=1, label="number"))
 
 
@@ -575,7 +577,13 @@ def test_a_dry_run_still_reads_the_repository():
     """
     ctx, _sink = _ctx(dry_run=True)
     assert upg.is_checkout(ctx) is True
-    assert upg.branch(ctx) != ""
+
+    # Compare against a live read rather than a literal branch name: CI checks
+    # out a detached merge commit, and `branch()` is "" there *by design* (the
+    # plan then says "HEAD is detached", instead of inventing a branch name).
+    live, _ = _ctx(dry_run=False)
+    assert upg.branch(ctx) == upg.branch(live)
+    assert upg.remote_url(ctx) == upg.remote_url(live)
 
     current = upg.current_revision(ctx)
     assert current.version == ctx.repo.version, "read from HEAD, not from the working tree"
@@ -583,6 +591,11 @@ def test_a_dry_run_still_reads_the_repository():
 
     chk = upg.check(ctx, do_fetch=False)
     assert "not a git checkout" not in " ".join(chk.notes)
+    if not upg.branch(ctx):
+        # A detached HEAD is a legitimate state (CI, a tag, a pinned deploy):
+        # what matters is that the plan *says* so rather than coming back empty.
+        assert any("detached" in blocker for blocker in chk.blockers), chk.blockers
+        return
     assert chk.target.version == ctx.repo.version
     assert not upg.plan(ctx, chk) == []
 

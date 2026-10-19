@@ -194,7 +194,13 @@ def valid_port(value: str) -> str | None:
     return None
 
 
-def _port_bindable(port: int, host: str = "0.0.0.0") -> bool:
+def _port_bindable(port: int, host: str = "127.0.0.1") -> bool:
+    """Can this process bind the port? Loopback, not the wildcard.
+
+    A listener on `0.0.0.0:<port>` refuses a loopback bind with EADDRINUSE, so
+    this detects the conflicts that occur in practice while never opening a
+    socket on every interface (see `ports.free_port`).
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
@@ -204,7 +210,7 @@ def _port_bindable(port: int, host: str = "0.0.0.0") -> bool:
     return True
 
 
-def valid_free_port(value: str, *, host: str = "0.0.0.0") -> str | None:
+def valid_free_port(value: str, *, host: str = "127.0.0.1") -> str | None:
     """A port number that is also free *right now*.
 
     The bind test is what turns "port 8088 is already in use" from a build-time
