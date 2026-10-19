@@ -191,9 +191,12 @@ async def test_durable_queue_worker_postpones_paused_rule():
 
     res = await durable._process_job("worker-1", job)
     assert res is None
-    # Worker must postpone via mark_retry instead of mark_failed
-    queue_repo.mark_retry.assert_called_once()
-    assert "Rule paused" in queue_repo.mark_retry.call_args[0][1]
+    # Worker must postpone instead of failing — and, since the pause is the
+    # environment's state rather than a failed attempt, it postpones without
+    # spending the delivery budget (`defer`, not `mark_retry`).
+    queue_repo.defer.assert_called_once()
+    assert "Rule paused" in queue_repo.defer.call_args[0][1]
+    queue_repo.mark_retry.assert_not_called()
     queue_repo.mark_failed.assert_not_called()
 
 

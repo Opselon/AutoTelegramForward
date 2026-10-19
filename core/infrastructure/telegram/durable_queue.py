@@ -549,6 +549,27 @@ class DurableQueueManager:
                 logger.exception("[%s] Unexpected error in worker loop", worker_id)
                 await asyncio.sleep(0.5)
 
+    async def _defer_job(self, job: DeliveryJob, reason: str, backoff: float) -> None:
+        """Postpone a job whose blocker is transient, without spending an attempt.
+
+        Falling back to ``mark_retry`` keeps older queue adapters working, but it
+        is logged because that fallback loses the guarantee: five transient
+        deferrals would dead-letter a perfectly good message.
+        """
+        try:
+            deferred = await self._queue.defer(job.id, reason, backoff)
+        except Exception as exc:  # adapter predates defer()
+            logger.debug("queue adapter has no working defer(): %s", exc)
+            deferred = False
+        if deferred:
+            return
+        logger.warning(
+            "[PIPELINE:DEFER:UNSUPPORTED] queue adapter cannot postpone %s without "
+            "spending an attempt; falling back to mark_retry (%s)",
+            job.id, reason,
+        )
+        await self._queue.mark_retry(job.id, reason, backoff_seconds=backoff)
+
     async def _process_job(self, worker_id: str, job: DeliveryJob) -> Optional[tuple]:
         """Process a single delivery job with rate limiting, error classification, and mapping confirmation.
 
@@ -568,7 +589,7 @@ class DurableQueueManager:
         if rate_wait > 0:
             # Target is throttled: schedule next attempt for this job and yield worker immediately
             _bump_target("retried")
-            await self._queue.mark_retry(job.id, "Target rate-limited", backoff_seconds=rate_wait)
+            await self._defer_job(job, "Target rate-limited", rate_wait)
             return None
 
         session_id = job.payload_data.get("session_id")
@@ -588,7 +609,7 @@ class DurableQueueManager:
                                 "[PIPELINE:TIME_LIMITED] [%s] Account %s is time-limited (%.1fs remaining). Pausing job %s",
                                 worker_id, session_id[:8], rem, job.id,
                             )
-                            await self._queue.mark_retry(job.id, f"Account time-limited ({rem:.1f}s)", backoff_seconds=max(2.0, rem))
+                            await self._defer_job(job, f"Account time-limited ({rem:.1f}s)", max(2.0, rem))
                             return None
                 except Exception as exc:
                     logger.debug("Failed checking time limit for %s: %s", session_id, exc)
@@ -597,24 +618,34 @@ class DurableQueueManager:
         rule_obj = None
         if self._rules is not None:
             rule_obj = await self._rules.get_by_id(job.rule_id)
-            if rule_obj:
-                if not rule_obj.is_active:
-                    logger.info("[PIPELINE:DROP] [%s] Rule %s is disabled. Dropping job %s", worker_id, job.rule_id[:8], job.id)
-                    await self._queue.mark_failed(job.id, "Rule disabled")
-                    return None
-                if getattr(rule_obj, "is_paused", False) and getattr(rule_obj, "is_currently_paused", lambda: True)():
-                    backoff = 5.0
-                    if getattr(rule_obj, "paused_until", 0) > 0:
-                        rem = float(rule_obj.paused_until) - time.time()
-                        if rem > 0:
-                            backoff = max(2.0, rem)
-                    _bump_target("retried")
-                    logger.info(
-                        "[PIPELINE:PAUSED] [%s] Rule %s is paused. Postponing job %s for %.1fs",
-                        worker_id, job.rule_id[:8], job.id, backoff,
-                    )
-                    await self._queue.mark_retry(job.id, f"Rule paused ({backoff:.1f}s)", backoff_seconds=backoff)
-                    return None
+            if rule_obj is None:
+                # The task was deleted while this job was queued. Delivering it
+                # would forward a message the owner has already removed, and
+                # `update`'s being a no-op for a missing row is exactly how a
+                # deleted task used to keep forwarding.
+                logger.info(
+                    "[PIPELINE:DROP] [%s] Rule %s no longer exists. Dropping job %s",
+                    worker_id, job.rule_id[:8], job.id,
+                )
+                await self._queue.mark_failed(job.id, "Rule no longer exists")
+                return None
+            if not rule_obj.is_active:
+                logger.info("[PIPELINE:DROP] [%s] Rule %s is disabled. Dropping job %s", worker_id, job.rule_id[:8], job.id)
+                await self._queue.mark_failed(job.id, "Rule disabled")
+                return None
+            if getattr(rule_obj, "is_paused", False) and getattr(rule_obj, "is_currently_paused", lambda: True)():
+                backoff = 5.0
+                if getattr(rule_obj, "paused_until", 0) > 0:
+                    rem = float(rule_obj.paused_until) - time.time()
+                    if rem > 0:
+                        backoff = max(2.0, rem)
+                _bump_target("retried")
+                logger.info(
+                    "[PIPELINE:PAUSED] [%s] Rule %s is paused. Postponing job %s for %.1fs",
+                    worker_id, job.rule_id[:8], job.id, backoff,
+                )
+                await self._defer_job(job, f"Rule paused ({backoff:.1f}s)", backoff)
+                return None
 
         transport_wanted = str(job.payload_data.get("delivery_transport") or "USER").strip().upper()
         route = None
@@ -633,7 +664,7 @@ class DurableQueueManager:
                     job.id,
                     str(job.payload_data.get("bot_token_id") or "")[:8] or "(none)",
                 )
-                await self._queue.mark_retry(job.id, "bot route: attached token unusable", backoff_seconds=15.0)
+                await self._defer_job(job, "bot route: attached token unusable", 15.0)
                 return None
 
         client = route or (self._pool.get(session_id) if self._pool is not None else None)
@@ -652,7 +683,10 @@ class DurableQueueManager:
                     )
                 except Exception:
                     pass
-            await self._queue.mark_retry(job.id, f"No live client for session {session_id}", backoff_seconds=1.0)
+            # A session that is offline is not a failed delivery. Deferring keeps
+            # the message for when the account comes back, instead of
+            # dead-lettering it after five one-second polls.
+            await self._defer_job(job, f"No live client for session {session_id}", 15.0)
             return None
 
         # Attempt delivery to Telegram

@@ -670,6 +670,23 @@ class IDeliveryQueueRepository(ABC):
     async def mark_retry(self, job_id: str, error: str, backoff_seconds: float) -> bool:
         ...
 
+    async def defer(self, job_id: str, reason: str, backoff_seconds: float) -> bool:
+        """Postpone a job WITHOUT spending one of its delivery attempts.
+
+        The queue calls this for conditions that are neither the job's fault nor
+        terminal: the task is paused, the target is rate-limited, the account is
+        time-limited, no live client is attached yet, the attached bot token is
+        temporarily unusable. All of them resolve on their own, so counting them
+        as attempts is what turns a ten-second session outage into a dead-lettered
+        message reported as ``DELIVERY_EXHAUSTED`` — a healthy forward recorded as
+        permanently failed, after five polls.
+
+        Returns ``False`` when the adapter cannot postpone without consuming an
+        attempt; the caller then falls back to ``mark_retry`` and says so in the
+        log, rather than silently losing the distinction.
+        """
+        return False
+
     @abstractmethod
     async def mark_failed(self, job_id: str, error: str) -> bool:
         ...

@@ -7454,6 +7454,22 @@ class ProBotUI:
             draft = st.buffer.get("draft") if isinstance(st.buffer, dict) else None
             if not isinstance(draft, dict):
                 return await cq.answer(self._t("ui_draft_expired_alert"), show_alert=True)
+            staged_rule_id = str(st.buffer.get("rule_id") or "")
+            if staged_rule_id and staged_rule_id != rule_id:
+                # The staged draft belongs to a different task: another screen in
+                # the same chat, a stale Save button, a reused buffer. Applying it
+                # here would overwrite THIS task with another task's entire
+                # configuration — name, endpoints, switches — and report success.
+                # The optimistic-concurrency check cannot catch it, because the
+                # version it compares comes from the same wrong buffer.
+                logger.warning(
+                    "[UI:DRAFT] refusing ed_save for %s: the staged draft belongs to %s",
+                    rule_id[:8], staged_rule_id[:8],
+                )
+                st.buffer = {}
+                st.step = ""
+                await self._persist(uid, st)
+                return await cq.answer(self._t("ui_draft_expired_alert"), show_alert=True)
 
             src = str(draft.get("source_chat_id", "")).strip()
             dst = str(draft.get("target_chat_id", "")).strip()
