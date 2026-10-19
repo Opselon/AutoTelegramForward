@@ -625,3 +625,20 @@ presses the real `rdup:<task>` button through the registered handler: with the p
 with `PermissionError: not_owner` and no row; with the fix the copy exists, is owned by the duplicator, keeps the
 original's routing, and deleting it leaves the original byte-identical. `…_duplicating_another_tenants_task_creates_nothing`
 presses the same button as the other tenant and asserts neither a new row nor a changed victim row.
+
+## 14 — Cross-feature interactions (Part 2 STEER 05)
+
+Run with all switches on at once, the pipeline had three interaction defects that no single-switch test could
+see. Detail, root cause and evidence are in `docs/feature-coverage-matrix.md` § "Part 2 STEER 05":
+
+1. **Content policy applied twice** — the task's own header/footer/replacement text was re-checked against the
+   task's own blacklist at the per-target gate, so a task could reject 100% of its own messages. Status:
+   `FAIL → fixed`. Only `target:`-scoped overrides decide at the gate now.
+2. **Cross-tenant starvation** — the single-match routing policy was global, so on a shared source channel one
+   tenant's task silently consumed every message and the other tenant's task never fired. Status:
+   `FAIL → fixed` (per-owner single match).
+3. **Paused task logged as a routing miss** — a stopped task produced `no_matching_rules`/`RULE_NOT_MATCHED`
+   and no pause-specific log line, which sends an operator hunting for a routing bug that does not exist.
+   Status: `FAIL → fixed` (`rule_paused` / `RULE_PAUSED`).
+
+Regression tests: `core/tests/test_combined_pipeline_stages.py` (13 tests, real pipeline + real SQLite).

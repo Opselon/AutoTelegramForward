@@ -143,3 +143,34 @@ by scheduled deletion; `content_dedup` the duplicate-filter claim; `delivery_job
 * `flutter`/mobile and the Rust logger are built and tested by CI; they are not exercised on this host.
 * A→B end-to-end Telegram delivery cannot be observed from this environment (no bot membership in the two test
   channels), so delivery is proven at the worker/client boundary with a recording client.
+
+## Part 2 STEER 05 — combined-pipeline findings
+
+Three defects only appear when several features are configured **together**. All three were reproduced with the
+real `DurableMessagePipeline` against a real SQLite store
+(`core/tests/test_combined_pipeline_stages.py`, 13 tests) and fixed in the same batch.
+
+The stage order the file pins, read off `_apply_transforms` and the `process()` stage records:
+
+    INGEST → NORMALIZE → DEDUPLICATE → FILTER (media gates + content policy)
+           → TRANSFORM (cleaner → link engine → emoji → task policy → AI → replacements → header/footer → watermark)
+           → ENQUEUE (per-target override, then durable job per target)
+
+| ID | Defect | Root cause | Fix | Evidence |
+|----|--------|-----------|-----|----------|
+| D1 | A task whose header/footer (or a replacement's target text) contained one of the task's **own** blacklist words rejected **every** message it ever forwarded — silently | the content policy was decided twice: once in FILTER on the source text, and again at ENQUEUE on `ctx.transformed_text` (which already includes the task's own header/footer) | the ENQUEUE gate now decides only `target:`-scoped overrides; the task's policy and any `source:` override stay single-authority in FILTER | `test_a_word_the_tasks_own_header_introduces_is_not_filtered`, `test_a_target_override_still_rejects_only_its_own_target`, `test_a_target_blacklist_is_not_replaced_by_the_task_decorations` |
+| D2 | Two tenants watching the same source channel: only **one** of them ever forwarded; the other's task was starved permanently | `SmartRoutingEngine.matching_rules` applied the single-match policy across *all* rules, and its sort key (`priority`, `execution_order`, `created_at`) is tenant-controlled — so one tenant could starve another's tasks at will | single-match is now applied **per owner**: one message is consumed by exactly one task of a tenant (unchanged), and every other tenant's task still gets it | `test_two_tenants_tasks_deliver_to_their_own_targets_from_one_message` |
+| D3 | A paused task's drop was logged and audited as "none of N active rules matched" (`RULE_NOT_MATCHED`) | `evaluate_rule` returns `rule_paused` for a paused rule, so the rule never reaches `matching`; the pause-aware branch below it was unreachable | when every candidate for the source is paused, the drop is recorded as `rule_paused` / `RULE_PAUSED` with its own log line | `test_a_paused_task_is_reported_as_paused_not_as_no_rules` |
+
+Two further invariants the same file pins, so a later change cannot quietly break them:
+
+* a blacklisted word is blocked **before** any transform: text the cleaner would have removed still counts
+  (`test_a_blacklisted_word_is_blocked_even_when_the_cleaner_would_remove_it`);
+* a message that cleans/rewrites down to nothing is dropped with `empty_after_clean` — not delivered as an
+  empty message, not dropped silently (`test_a_message_that_cleans_to_nothing_is_dropped_with_a_reason`);
+* one replay of the same event is deduped (`duplicate_event`/`duplicate_content`), and a reply whose parent was
+  never forwarded is still delivered without inventing a mapping.
+
+Task→session ownership is enforced where the session is chosen: `ForwardRuleUseCases.create`/`update` raise
+`PermissionError` for a session owned by someone else, and the rejected task is not stored
+(`test_creating_a_task_on_another_tenants_account_is_refused`).
