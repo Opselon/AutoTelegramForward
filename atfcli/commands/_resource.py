@@ -93,7 +93,6 @@ def _collection_verbs(spec: ResourceSpec):
 
     def do_delete(ctx, args) -> int:
         resources = use_case(ctx, spec)
-        _warn_unknown(ctx, spec, values)
         if getattr(args, "dry_run", False):
             row = resources.find(args.ref)
             ctx.out.json({"ok": True, "dry_run": True, "would_delete": row.id})
