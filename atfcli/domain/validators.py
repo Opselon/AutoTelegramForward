@@ -28,6 +28,7 @@ wants an exception.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import re
 import socket
@@ -284,6 +285,18 @@ def valid_ipv4(value: str) -> str | None:
     return None
 
 
+def valid_ipv6(value: str) -> str | None:
+    """An IPv6 literal, with or without the brackets a URL requires."""
+    text = (value or "").strip().strip("[]")
+    if not text:
+        return "an IPv6 address is required"
+    try:
+        ipaddress.IPv6Address(text)
+    except ValueError:
+        return "expected an IPv6 address, e.g. [::1]"
+    return None
+
+
 def valid_cidr(value: str) -> str | None:
     text = (value or "").strip()
     host, _, prefix = text.partition("/")
@@ -305,24 +318,64 @@ def valid_email(value: str) -> str | None:
 
 
 def valid_url(value: str, *, schemes: Sequence[str] = ("http", "https"), allow_blank: bool = True) -> str | None:
-    """An absolute URL with a host — `ftp://x` is not a dashboard URL."""
+    """An absolute URL with a host — `ftp://x` is not a dashboard URL.
+
+    Deliberately strict, because this value decides where a bearer token is
+    sent: the scheme must be one the transport understands, the authority must
+    carry a real host (and a numeric port), and it may not smuggle credentials
+    (`http://user:pass@host`) or a query/fragment into a base URL.
+    """
     text = (value or "").strip()
     if not text:
         return None if allow_blank else "a URL is required"
+    if CONTROL_RE.search(text) or " " in text:
+        return "a URL may not contain spaces or control characters"
     match = re.match(r"^([A-Za-z][A-Za-z0-9+.-]*)://([^/\s?#]+)(.*)$", text)
     if not match:
         return "expected an absolute URL, e.g. http://127.0.0.1:8088"
-    scheme, authority, _rest = match.groups()
+    scheme, authority, rest = match.groups()
     if scheme.lower() not in {s.lower() for s in schemes}:
         return f"{scheme}:// is not supported here — use " + " or ".join(f"{s}://" for s in schemes)
+    if "@" in authority:
+        # urllib would send the embedded userinfo and every log line would keep
+        # a copy of a credential in a URL; the CLI authenticates with a token.
+        return "credentials in a URL are never used — pass --token or run `atf auth login`"
     host, port = _split_authority(authority)
     if port and not port.isdigit():
         return f"{port!r} is not a port number in that URL"
     if port and not 1 <= int(port) <= 65535:
         return f"port {port} is out of range in that URL"
-    if valid_hostname(host):
+    host_problem = valid_ipv6(host) if ":" in host else valid_hostname(host)
+    if host_problem:
         return f"{authority!r} is not a usable host in that URL"
+    if "?" in rest or "#" in rest:
+        return "a base URL cannot carry a query or fragment — keep it to scheme://host[:port][/path]"
     return None
+
+
+def normalise_base_url(value: str, *, source: str = "--url", allow_blank: bool = False) -> str:
+    """The canonical base URL for the API, or raise [ValueError] naming the source.
+
+    Canonical means: scheme and host lower-cased, no trailing slash, no empty
+    path. It is computed once and used everywhere (`resolve_url`, the token
+    store key, the deployment links), so `http://Host:8088/` and
+    `http://host:8088` can never address two different token entries.
+    """
+    problem = valid_url(value, allow_blank=allow_blank)
+    if problem:
+        raise ValueError(f"{source}: {problem}")
+    text = (value or "").strip()
+    if not text:
+        return ""
+    match = re.match(r"^([A-Za-z][A-Za-z0-9+.-]*)://([^/\s?#]+)(.*)$", text)
+    assert match is not None  # valid_url already refused anything else
+    scheme, authority, rest = match.groups()
+    host, port = _split_authority(authority)
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"  # IPv6 literals keep their brackets in a URL
+    authority = f"{host}:{port}" if port else host
+    path = rest.rstrip("/")
+    return f"{scheme.lower()}://{authority.lower()}{path}"
 
 
 def _split_authority(authority: str) -> tuple[str, str]:
@@ -560,6 +613,7 @@ VALIDATORS: dict[str, Callable[..., str | None]] = {
     "domain": valid_domain,
     "hostname": valid_hostname,
     "ipv4": valid_ipv4,
+    "ipv6": valid_ipv6,
     "cidr": valid_cidr,
     "email": valid_email,
     "url": valid_url,

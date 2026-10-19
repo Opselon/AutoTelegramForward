@@ -23,9 +23,11 @@ from typing import Any
 
 from . import __version__
 from .api import ApiClient
+from .commands._shared import HelpHandler
 from .console import Console
 from .context import RepoContext
-from .errors import AtfError, EXIT_FAILURE, EXIT_OK
+from .domain import validators
+from .errors import AtfError, EXIT_FAILURE, EXIT_OK, EXIT_USAGE
 
 # Order matters only for the help listing: most-used groups first.
 COMMAND_MODULES: tuple[str, ...] = (
@@ -72,7 +74,42 @@ ALIASES: dict[str, list[str]] = {
 
 #: Global flags that consume the following token, so the alias scanner must not
 #: mistake that value for the command position.
-_VALUE_FLAGS = frozenset({"--url", "--token", "--timeout", "--root"})
+_VALUE_FLAGS = frozenset({"--url", "--token", "--timeout", "--root", "--retries"})
+
+
+def _retries_type(raw: str) -> int:
+    """`--retries N`: how many *extra* attempts a safe request may make.
+
+    Kept small on purpose: this is a CLI, not a queue worker. `0` is the escape
+    hatch for a script that would rather fail now and decide itself.
+    """
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError("expected a whole number of retries, e.g. 2") from None
+    if not 0 <= value <= 10:
+        raise argparse.ArgumentTypeError("retries must be between 0 and 10")
+    return value
+
+
+def _retries_default() -> int:
+    """`ATF_CLI_RETRIES`, clamped; a malformed value falls back instead of crashing."""
+    try:
+        value = int(os.environ.get("ATF_CLI_RETRIES", "") or 2)
+    except ValueError:
+        return 2
+    return max(0, min(value, 10))
+
+
+def _timeout_type(raw: str) -> float:
+    """`--timeout S`: seconds, finite and positive."""
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError("expected a number of seconds, e.g. 20") from None
+    if not 0 < value <= 3600:
+        raise argparse.ArgumentTypeError("timeout must be greater than 0 and at most 3600 seconds")
+    return value
 
 
 def _expand_aliases(argv: list[str]) -> list[str]:
@@ -124,6 +161,7 @@ class CliContext:
                 url=getattr(self.args, "url", "") or "",
                 token=getattr(self.args, "token", "") or "",
                 timeout=float(getattr(self.args, "timeout", 20.0) or 20.0),
+                retries=int(getattr(self.args, "retries", 2) or 0),
                 verify_tls=not getattr(self.args, "insecure", False),
                 context=self.repo,
             )
@@ -192,6 +230,7 @@ _GLOBAL_DEFAULTS: dict[str, Any] = {
     "url": "",
     "token": "",
     "timeout": 20.0,
+    "retries": 2,
     "insecure": False,
     "no_mint": False,
     "no_color": False,
@@ -216,9 +255,20 @@ def _global_flags(*, defaults: bool) -> argparse.ArgumentParser:
     default = (lambda value: value) if defaults else (lambda value: argparse.SUPPRESS)
 
     parser.add_argument("--json", action="store_true", default=default(False), help="emit one JSON document on stdout")
-    parser.add_argument("--url", default=default(os.environ.get("ATF_CLI_URL", "")), help="dashboard API base URL")
+    parser.add_argument(
+        "--url",
+        type=validators.argparse_type("url", optional=True),
+        default=default(os.environ.get("ATF_CLI_URL", "")),
+        help="dashboard API base URL (default: $ATF_CLI_URL, the saved server, or a local probe)",
+    )
     parser.add_argument("--token", default=default(os.environ.get("ATF_TOKEN", "")), help="bearer token (prefer ATF_TOKEN)")
-    parser.add_argument("--timeout", type=float, default=default(20.0), help="HTTP timeout in seconds")
+    parser.add_argument("--timeout", type=_timeout_type, default=default(20.0), help="HTTP timeout in seconds (default: 20)")
+    parser.add_argument(
+        "--retries",
+        type=_retries_type,
+        default=default(_retries_default()),
+        help="extra attempts for safe requests after a timeout/5xx (default: 2, 0 disables)",
+    )
     parser.add_argument("--insecure", action="store_true", default=default(False), help="skip TLS verification")
     parser.add_argument("--no-mint", action="store_true", default=default(False), help="never derive a local admin token")
     parser.add_argument("--no-color", action="store_true", default=default(False), help="disable ANSI colour")
@@ -293,6 +343,45 @@ def _fill_global_defaults(args: argparse.Namespace) -> None:
             setattr(args, key, value)
 
 
+def _is_help_handler(handler: Any) -> bool:
+    """True for the synthetic `func` a command *group* gets (see `help_handler`)."""
+    return isinstance(handler, HelpHandler)
+
+
+def _group_commands(handler: Any) -> list[str]:
+    """The verbs a bare group could have run, for the machine-readable refusal."""
+    parser = getattr(handler, "parser", None)
+    commands: list[str] = []
+    if parser is None:
+        return commands
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            commands = sorted(action.choices)
+    return commands
+
+
+def _json_usage_error(console: Console, args: argparse.Namespace, handler: Any) -> int:
+    """A bare group in `--json` mode: one document, a real usage exit code.
+
+    Printing help text to stdout and exiting 0 made `atf admin --json | jq`
+    receive prose with a success status — the worst of both contracts. The verbs
+    are listed so the caller can pick one without a second invocation.
+    """
+    group_parser = getattr(handler, "parser", None)
+    prog = getattr(group_parser, "prog", "") or f"atf {getattr(args, 'group', '')}"
+    commands = _group_commands(handler)
+    console.json(
+        {
+            "ok": False,
+            "error": f"a command is required after `{prog}`",
+            "group": getattr(args, "group", ""),
+            "commands": commands,
+            "hint": f"run `{prog} <command> --help`",
+        }
+    )
+    return EXIT_USAGE
+
+
 def dispatch(argv: list[str] | None = None) -> int:
     argv = _expand_aliases(list(sys.argv[1:] if argv is None else argv))
     parser, registry = build_parser()
@@ -305,9 +394,17 @@ def dispatch(argv: list[str] | None = None) -> int:
         return EXIT_OK
 
     handler = getattr(args, "func", None)
+    if console.json_mode and (handler is None or _is_help_handler(handler)):
+        return _json_usage_error(console, args, handler)
+
     if handler is None:
         # `atf rules` with no verb: show that group's help.
         parser.parse_args([args.group, "--help"])
+        return EXIT_OK
+
+    if _is_help_handler(handler):
+        # Nested group (`atf rules settings`): its own help, human mode only.
+        handler.parser.print_help()  # type: ignore[attr-defined]
         return EXIT_OK
 
     repo = RepoContext(
@@ -327,7 +424,15 @@ def dispatch(argv: list[str] | None = None) -> int:
         return 130
     except AtfError as exc:
         if console.json_mode:
-            console.json({"ok": False, "error": exc.message, "hint": exc.hint})
+            console.json(
+                {
+                    "ok": False,
+                    "error": exc.message,
+                    "hint": exc.hint,
+                    "error_type": type(exc).__name__,
+                    "exit_code": exc.exit_code,
+                }
+            )
         else:
             console.fail(exc.message)
             console.hint(exc.hint)
@@ -339,7 +444,14 @@ def dispatch(argv: list[str] | None = None) -> int:
         if os.environ.get("ATF_DEBUG"):
             traceback.print_exc()
         if console.json_mode:
-            console.json({"ok": False, "error": str(exc), "type": type(exc).__name__})
+            console.json(
+                {
+                    "ok": False,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "exit_code": EXIT_FAILURE,
+                }
+            )
         else:
             console.fail(f"{type(exc).__name__}: {exc}")
             console.hint("re-run with ATF_DEBUG=1 for a traceback")

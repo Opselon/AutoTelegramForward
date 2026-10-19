@@ -11,6 +11,21 @@ machine that runs the stack, an operator already has the access needed to read
 the signing material, so the CLI can derive the same HMAC key core derives and
 issue itself a short-lived admin token. It is local-machine trust, not a
 backdoor: without filesystem/container access to this host, it cannot be done.
+
+Three rules protect the token once it exists:
+
+* **It only travels over a URL the CLI validated** — `http(s)` with a real host.
+  A `file://` or `ftp://` base URL is a configuration mistake that turns a
+  network client into a file reader, so it is refused, not coerced.
+* **It never follows a redirect to another origin.** urllib copies every header
+  (Authorization included) onto a redirect it follows, which would hand the
+  token to whatever host the URL replies with. Same-host hops are followed —
+  including the `http` -> `https` upgrade — and anything else is refused with
+  the address to use instead.
+* **It is retried only when retrying is safe.** A GET/HEAD/PUT/DELETE that hit a
+  connection reset or a 5xx is attempted again with bounded exponential
+  backoff (honouring `Retry-After`); a POST is not, because a retried write is a
+  second write.
 """
 
 from __future__ import annotations
@@ -20,21 +35,52 @@ import hashlib
 import hmac
 import json
 import os
+import random
+import socket
 import ssl
+import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+import uuid
+from dataclasses import dataclass
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from ...console import Console
 from ..host.repo import RepoContext
 from ...domain.errors import AuthError, AtfError, TimeoutError_, UnreachableError, http_status_error
+from ...domain.validators import normalise_base_url
 
 TOKEN_TTL_SECONDS = 7 * 24 * 3600
 DEFAULT_URLS = ("http://127.0.0.1:8088", "http://127.0.0.1:8080")
+
+#: Extra attempts after the first one. Two means "a blip is not a failure" while
+#: keeping the worst case (all attempts time out) to three timeouts, not ten.
+DEFAULT_RETRIES = 2
+#: Exponential backoff: 0.25s, 0.5s, 1s … capped, with jitter so a fleet of cron
+#: jobs hitting a restarting API does not synchronise into a thundering herd.
+BACKOFF_BASE = 0.25
+BACKOFF_CAP = 2.0
+#: A server may ask for a longer pause than our backoff; honour it, but never
+#: let a hostile or misconfigured `Retry-After: 86400` stall a terminal.
+RETRY_AFTER_CAP = 5.0
+#: Statuses worth another attempt. 408/425/429 are explicitly "try again";
+#: 500/502/503/504 are what a booting or restarting gateway answers.
+RETRY_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
+#: Methods that may be replayed without changing the outcome.
+IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
+#: Redirect budget for one request.
+MAX_REDIRECTS = 5
+
+
+class CrossOriginRedirect(AtfError):
+    """The API answered with a redirect that would carry the token elsewhere."""
+
+    exit_code = 5  # unreachable: the URL the operator wants is not the one they gave
 
 
 def _b64url(data: bytes) -> str:
@@ -43,6 +89,73 @@ def _b64url(data: bytes) -> str:
 
 def _b64url_decode(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def _origin(url: str) -> tuple[str, int | None]:
+    parts = urllib.parse.urlsplit(url)
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    return (parts.hostname or "").lower(), port
+
+
+def default_user_agent() -> str:
+    """Identify the CLI (and its version) to the gateway, for its access log."""
+    import platform
+
+    from ... import __version__
+
+    return (
+        f"atf-cli/{__version__} ({platform.system()} {platform.machine() or 'unknown'}; "
+        f"Python {platform.python_version()})"
+    )
+
+
+def _parse_retry_after(value: str) -> float | None:
+    """`Retry-After` in either form the RFC allows: delay-seconds or HTTP-date."""
+    text = (value or "").strip()
+    if not text:
+        return None
+    if text.isdigit():
+        return float(text)
+    try:
+        moment = parsedate_to_datetime(text)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if moment is None:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return max(0.0, moment.timestamp() - time.time())
+
+
+class _GuardedRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect only while the credential cannot leave its origin.
+
+    urllib's default handler copies the request headers — `Authorization`
+    included — onto every hop it follows, so a 302 to an attacker's host hands
+    over the bearer token. Here a hop is allowed when the host:port is unchanged
+    (same host, any path) or when the same host upgrades `http` -> `https`
+    (a strictly better channel). Everything else raises, and `raw()` turns that
+    into the address the operator should have configured.
+    """
+
+    max_redirections = MAX_REDIRECTS
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old = req.full_url
+        old_host, old_port = _origin(old)
+        new_host, new_port = _origin(newurl)
+        same_host = old_host == new_host
+        upgrade = urllib.parse.urlsplit(old).scheme == "http" and urllib.parse.urlsplit(newurl).scheme == "https"
+        if same_host and (old_port == new_port or upgrade):
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+        raise CrossOriginRedirect(
+            f"refused a redirect from {old} to {newurl}",
+            hint=(
+                "a bearer token must never be sent to another origin — point "
+                "--url (or ATF_CLI_URL) at the address the API redirects to"
+            ),
+        )
+
 
 
 @dataclass
@@ -75,29 +188,83 @@ class Credential:
 
 
 class TokenStore:
-    """`~/.atf/cli.json`, mode 0600, one entry per server URL."""
+    """`~/.atf/cli.json`, mode 0600, one entry per server URL.
+
+    The file also carries the operator's default server (`default_url`), so a
+    host that talks to a remote dashboard does not need `ATF_CLI_URL` exported in
+    every shell — see `atf auth use`.
+
+    File permissions are part of the contract, not an implementation detail: a
+    token file that another local user can read is already compromised, so a
+    loose mode is reported and tightened to 0600 before the token is used. On
+    Windows `chmod` only toggles the read-only bit, so the check is POSIX-only
+    and the warning says what it can.
+    """
 
     def __init__(self, path: Path | None = None) -> None:
-        self.path = path or Path(os.environ.get("ATF_CLI_HOME", Path.home() / ".atf")) / "cli.json"
+        home = os.environ.get("ATF_CLI_HOME") or str(Path.home() / ".atf")
+        self.path = path or Path(home) / "cli.json"
+        self._warned = False
 
     def _load(self) -> dict:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             return data if isinstance(data, dict) else {}
-        except (OSError, json.JSONDecodeError):
+        except FileNotFoundError:
             return {}
+        except (OSError, json.JSONDecodeError):
+            # A corrupt store must not take the CLI down, but it must not be
+            # silently ignored either: the next `set` overwrites it, so the
+            # operator needs to know the old tokens are gone.
+            print(
+                f"warning: ignoring unreadable token store {self.path} "
+                "(re-run `atf auth login` to rewrite it)",
+                file=sys.stderr,
+            )
+            return {}
+
+    def _check_permissions(self) -> None:
+        if os.name != "posix" or self._warned:
+            return
+        try:
+            mode = self.path.stat().st_mode & 0o777
+        except OSError:
+            return
+        if mode & 0o077:
+            try:
+                os.chmod(self.path, 0o600)
+            except OSError:
+                print(
+                    f"warning: {self.path} is readable by other users (mode {mode:o})",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"warning: {self.path} was readable by other users (mode {mode:o}); "
+                    "tightened it to 600",
+                    file=sys.stderr,
+                )
+        self._warned = True
 
     def _save(self, data: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        if os.name == "posix":
+            try:
+                os.chmod(self.path.parent, 0o700)
+            except OSError:
+                pass
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
         os.chmod(tmp, 0o600)
+        # Atomic replace: a reader (or a concurrent writer) sees either the old
+        # document or the new one, never a half-written file.
         tmp.replace(self.path)
 
     def get(self, url: str) -> Credential | None:
         entry = self._load().get("servers", {}).get(url)
         if not isinstance(entry, dict) or not entry.get("token"):
             return None
+        self._check_permissions()
         return Credential(
             token=entry["token"],
             url=url,
@@ -129,10 +296,41 @@ class TokenStore:
         servers = data.get("servers", {})
         servers.pop(url, None)
         data["servers"] = servers
+        if data.get("default_url") == url:
+            data.pop("default_url", None)
         self._save(data)
 
     def servers(self) -> list[str]:
         return sorted(self._load().get("servers", {}).keys())
+
+    # ------------------------------------------------------------ default host
+    def default_url(self) -> str:
+        value = self._load().get("default_url", "")
+        return value if isinstance(value, str) else ""
+
+    def set_default_url(self, url: str) -> str:
+        """Persist (and return) the canonical default server URL; "" clears it."""
+        data = self._load()
+        canonical = normalise_base_url(url, source="default server") if url else ""
+        if canonical:
+            data["default_url"] = canonical
+        else:
+            data.pop("default_url", None)
+        self._save(data)
+        return canonical
+
+    def entries(self) -> list[dict[str, Any]]:
+        """Every saved server with its non-secret metadata, for `atf auth servers`."""
+        saved = self._load().get("servers", {})
+        rows: list[dict[str, Any]] = []
+        for url, entry in sorted(saved.items()):
+            if not isinstance(entry, dict) or not entry.get("token"):
+                continue
+            cred = self.get(url)
+            if cred is None:
+                continue
+            rows.append({**cred.safe(), "default": url == self.default_url()})
+        return rows
 
 
 def jwt_payload(token: str) -> dict:
@@ -157,26 +355,57 @@ class ApiClient:
         timeout: float = 20.0,
         verify_tls: bool = True,
         context: RepoContext | None = None,
+        retries: int = DEFAULT_RETRIES,
+        backoff_base: float = BACKOFF_BASE,
+        sleep: Callable[[float], None] = time.sleep,
+        agent: str = "",
     ) -> None:
         self.out = console
         self.repo = context
-        self.url = (url or "").rstrip("/")
+        self.url = self._base_url(url, source="--url") if url else ""
         self.token = token
         self.timeout = timeout
         self.verify_tls = verify_tls
+        self.retries = max(0, int(retries))
+        self.backoff_base = max(0.0, float(backoff_base))
+        self.sleep = sleep
+        self.user_agent = agent or default_user_agent()
         self.store = TokenStore()
         self._minted: Credential | None = None
+        self._opener_cache: urllib.request.OpenerDirector | None = None
         # The credential resolved for this client, so `load_credential` is
         # idempotent and the reported source stays truthful.
         self._credential: Credential | None = None
 
+    @staticmethod
+    def _base_url(value: str, *, source: str) -> str:
+        """Validate and canonicalise a base URL, as a usage error when it is wrong."""
+        from ...domain.errors import UsageError
+
+        try:
+            return normalise_base_url(value, source=source)
+        except ValueError as exc:
+            raise UsageError(str(exc), hint="e.g. --url https://atf.example.com") from exc
+
     # -------------------------------------------------------------- discovery
     def resolve_url(self, *, probe: bool = True) -> str:
+        """The API base URL: flag, then environment, then the saved default, then probe.
+
+        The saved default (`atf auth use`) sits below the environment on purpose:
+        an exported `ATF_CLI_URL` is a statement about *this* shell, while the
+        stored value is the machine's habit. Both are validated before a token
+        is ever attached to them.
+        """
         if self.url:
             return self.url
-        env_url = os.environ.get("ATF_CLI_URL") or os.environ.get("ATF_API_URL")
-        if env_url:
-            self.url = env_url.rstrip("/")
+        for source in ("ATF_CLI_URL", "ATF_API_URL"):
+            raw = os.environ.get(source, "")
+            if raw:
+                self.url = self._base_url(raw, source=source)
+                return self.url
+        stored = self.store.default_url()
+        if stored:
+            self.url = stored
             return self.url
         for candidate in DEFAULT_URLS:
             if not probe or self._alive(candidate):
@@ -189,7 +418,9 @@ class ApiClient:
 
     def _alive(self, base: str) -> bool:
         try:
-            status, _ = self.raw("GET", f"{base}/healthz", with_auth=False, timeout=3.0)
+            status, _ = self.raw(
+                "GET", f"{base}/healthz", with_auth=False, timeout=3.0, retries=0
+            )
             return status < 500
         except AtfError:
             return False
@@ -231,7 +462,9 @@ class ApiClient:
             return stored
 
         if stored and stored.expired:
-            self.out.debug(f"stored token for {url} expired; re-minting")
+            self.out.warn(
+                f"the saved token for {url} expired — minting a local admin token"
+            )
 
         if allow_mint:
             cred = self.mint_local_admin(url)
@@ -272,6 +505,17 @@ class ApiClient:
 
         if user_id == 0:
             user_id = self._default_admin_id()
+        if not user_id:
+            # A token is only as good as the identity it claims. Minting one for
+            # "user 0" would authenticate as an admin nobody can audit, so this
+            # refuses instead of quietly writing traffic to a phantom account.
+            raise AuthError(
+                "no admin user id to mint a token for",
+                hint=(
+                    "set ADMIN_USER_ID in .env, pass --token/ATF_TOKEN, or run "
+                    "`atf auth login --username <user>`"
+                ),
+            )
         if not username or username == "cli-admin":
             username = os.environ.get("ATF_CLI_USERNAME", "") or f"cli-{user_id}"
 
@@ -345,6 +589,21 @@ class ApiClient:
             return ctx
         return None
 
+    def _opener(self) -> urllib.request.OpenerDirector:
+        """One opener per client: guarded redirects, optional unverified TLS.
+
+        Built once so the redirect guard cannot be forgotten on a code path that
+        constructs its own opener, and so connection setup is reused across the
+        retries of one request.
+        """
+        if self._opener_cache is None:
+            handlers: list[Any] = [_GuardedRedirects()]
+            context = self._ssl_context()
+            if context is not None:
+                handlers.append(urllib.request.HTTPSHandler(context=context))
+            self._opener_cache = urllib.request.build_opener(*handlers)
+        return self._opener_cache
+
     def raw(
         self,
         method: str,
@@ -355,9 +614,84 @@ class ApiClient:
         with_auth: bool = True,
         timeout: float | None = None,
         accept: str = "application/json",
+        retries: int | None = None,
+        idempotent: bool | None = None,
+        request_id: str = "",
     ) -> tuple[int, bytes]:
+        """Send one request, retrying only what is safe to retry.
+
+        `retries` counts *extra* attempts (0 = one shot). Writes are not replayed
+        unless the caller passes `idempotent=True`: a retried POST is a second
+        POST, and a duplicated retry of a DLQ item is a duplicated message.
+        """
+        verb = method.upper()
+        attempts = self.retries if retries is None else max(0, int(retries))
+        replayable = verb in IDEMPOTENT_METHODS if idempotent is None else bool(idempotent)
+        correlation = request_id or uuid.uuid4().hex
+        for attempt in range(attempts + 1):
+            try:
+                status, data, retry_after = self._send(
+                    verb,
+                    url,
+                    body=body,
+                    headers=headers,
+                    with_auth=with_auth,
+                    timeout=timeout,
+                    accept=accept,
+                    request_id=correlation,
+                )
+            except (UnreachableError, TimeoutError_) as exc:
+                if not replayable or attempt >= attempts:
+                    raise
+                self.out.debug(
+                    f"{verb} {url} failed ({exc.message}); attempt "
+                    f"{attempt + 1}/{attempts + 1}"
+                )
+                self.sleep(self._retry_delay(attempt, None))
+                continue
+            if status in RETRY_STATUS and replayable and attempt < attempts:
+                self.out.debug(
+                    f"{verb} {url} -> HTTP {status}; attempt {attempt + 1}/{attempts + 1}"
+                )
+                self.sleep(self._retry_delay(attempt, retry_after))
+                continue
+            return status, data
+        # The loop either returns or raises; this keeps type checkers honest.
+        raise UnreachableError(f"{verb} {url} failed after {attempts + 1} attempts")
+
+    def _retry_delay(self, attempt: int, retry_after: str | None) -> float:
+        """Seconds to wait before attempt `attempt + 1`.
+
+        `Retry-After` wins when the server sent one (capped: a bad header must
+        not hang the terminal), otherwise bounded exponential backoff with
+        jitter, so parallel cron jobs do not retry in lockstep.
+        """
+        if retry_after:
+            seconds = _parse_retry_after(retry_after)
+            if seconds is not None:
+                return max(0.0, min(seconds, RETRY_AFTER_CAP))
+        delay = min(BACKOFF_CAP, self.backoff_base * (2**attempt))
+        return delay * random.uniform(0.8, 1.2) if delay else 0.0
+
+    def _send(
+        self,
+        method: str,
+        url: str,
+        *,
+        body: bytes | None,
+        headers: Mapping[str, str] | None,
+        with_auth: bool,
+        timeout: float | None,
+        accept: str,
+        request_id: str,
+    ) -> tuple[int, bytes, str | None]:
+        """One HTTP exchange: (status, body, Retry-After)."""
         request = urllib.request.Request(url, data=body, method=method)
         request.add_header("Accept", accept)
+        request.add_header("User-Agent", self.user_agent)
+        # Correlates every retry of one logical request in the server's log, and
+        # lets an operator grep for it from the error message.
+        request.add_header("X-Request-Id", request_id)
         if body is not None and not (headers or {}).get("Content-Type"):
             request.add_header("Content-Type", "application/json")
         for key, value in (headers or {}).items():
@@ -365,26 +699,32 @@ class ApiClient:
         if with_auth and self.token:
             request.add_header("Authorization", f"Bearer {self.token}")
         try:
-            with urllib.request.urlopen(
-                request,
-                timeout=timeout or self.timeout,
-                context=self._ssl_context(),
-            ) as resp:
-                return resp.status, resp.read()
+            with self._opener().open(request, timeout=timeout or self.timeout) as resp:
+                return resp.status, resp.read(), resp.headers.get("Retry-After")
         except urllib.error.HTTPError as exc:
-            return exc.code, exc.read()
+            # A 4xx/5xx is an answer, not a transport failure: the caller decides
+            # what it means (and `raw` decides whether it is worth retrying).
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            return exc.code, exc.read(), retry_after
+        except CrossOriginRedirect:
+            raise
         except urllib.error.URLError as exc:
             reason = getattr(exc, "reason", exc)
-            if "timed out" in str(reason).lower():
+            if isinstance(reason, (TimeoutError, socket.timeout)) or "timed out" in str(reason).lower():
                 raise TimeoutError_(
-                    f"{method} {url} timed out after {timeout or self.timeout}s"
+                    f"{method} {url} timed out after {timeout or self.timeout}s "
+                    f"(request {request_id})",
+                    hint="raise --timeout, or check the gateway's upstream latency",
                 ) from exc
             raise UnreachableError(
-                f"cannot reach {url}: {reason}",
+                f"cannot reach {url}: {reason} (request {request_id})",
                 hint="check the gateway is up (`atf doctor`) or pass --url",
             ) from exc
-        except TimeoutError as exc:
-            raise TimeoutError_(f"{method} {url} timed out") from exc
+        except (TimeoutError, socket.timeout) as exc:
+            raise TimeoutError_(
+                f"{method} {url} timed out after {timeout or self.timeout}s",
+                hint="raise --timeout, or check the gateway's upstream latency",
+            ) from exc
         except ssl.SSLError as exc:
             raise UnreachableError(
                 f"TLS failure talking to {url}: {exc}",
@@ -403,6 +743,8 @@ class ApiClient:
         accept: str = "application/json",
         with_auth: bool = True,
         expect: tuple[int, ...] = (200, 201, 202, 204),
+        retries: int | None = None,
+        idempotent: bool | None = None,
     ) -> Any:
         url = f"{self.resolve_url()}{path}"
         if params:
@@ -416,7 +758,16 @@ class ApiClient:
         body = raw_body
         if payload is not None and raw_body is None:
             body = json.dumps(payload).encode("utf-8")
-        status, data = self.raw(method, url, body=body, timeout=timeout, accept=accept)
+        status, data = self.raw(
+            method,
+            url,
+            body=body,
+            timeout=timeout,
+            accept=accept,
+            with_auth=with_auth,
+            retries=retries,
+            idempotent=idempotent,
+        )
         if expect and status not in expect:
             message = self._error_message(data, status)
             raise http_status_error(status, message, hint=self._hint_for(status, path))

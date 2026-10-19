@@ -53,14 +53,26 @@ def add_group(parser: argparse.ArgumentParser, name: str = "cmd") -> argparse._S
     return parser.add_subparsers(dest=name, metavar="<command>")
 
 
-def help_handler(parser: argparse.ArgumentParser):
-    """`func` for a group parser so `atf rules settings` prints its own help."""
+class HelpHandler:
+    """A group's "no verb given" action: print help, exit 0.
 
-    def handler(ctx, args) -> int:
-        parser.print_help()
+    For a human at a terminal that is the right answer. For `--json` it is not:
+    stdout must carry exactly one JSON document, so the dispatcher recognises
+    this handler and answers with a machine-readable usage error instead of a
+    page of help text and a success exit code.
+    """
+
+    def __init__(self, parser: argparse.ArgumentParser) -> None:
+        self.parser = parser
+
+    def __call__(self, ctx, args) -> int:
+        self.parser.print_help()
         return 0
 
-    return handler
+
+def help_handler(parser: argparse.ArgumentParser) -> HelpHandler:
+    """`func` for a group parser so `atf rules settings` prints its own help."""
+    return HelpHandler(parser)
 
 
 def wants_json(ctx, args=None) -> bool:
