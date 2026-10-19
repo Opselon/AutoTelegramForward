@@ -25,7 +25,7 @@ import time
 import uuid
 from functools import wraps
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 from pyrogram import Client, filters
@@ -2680,50 +2680,56 @@ class ProBotUI:
         ]
         return text, self._kbd(rows)
 
+    #: The add-on catalogue's single vocabulary: add-on key -> catalog key.
+    #:
+    #: The screen hardcoded all eighteen labels in English ("🔒 Forward Every N
+    #: Messages", "🧹 Cleaner Protocol"), which is invisible to the key-parity
+    #: audits — the keys were fine, the labels never came from one. Each row
+    #: reuses the SAME key its add-on grid renders elsewhere, so a feature never
+    #: reads two names and the state suffix is composed per locale.
+    _ADDON_ROWS: ClassVar[Tuple[Tuple[str, str], ...]] = (
+        ("comments", "ui_addon_comments"),
+        ("every_n", "ui_addon_every_n"),
+        ("kw_confirm", "ui_addon_kw_confirm"),
+        ("kw_reply", "ui_addon_kw_reply"),
+        ("auto_del", "ui_addon_auto_del"),
+        ("webhook", "ui_rule_addon_webhook"),
+        ("crypto", "ui_addon_crypto"),
+        ("affiliate", "ui_addon_affiliate"),
+        ("link_buttons", "ui_addon_link_buttons"),
+        ("watermark", "ui_rule_addon_watermark"),
+        ("duplicate", "ui_addon_duplicate"),
+        ("cleaner", "ui_addon_cleaner"),
+        ("scheduler", "ui_addon_scheduler"),
+        ("power_schedule", "ui_addon_power_schedule"),
+        ("raw_text", "ui_addon_raw_text"),
+        ("button_to_text", "ui_addon_button_to_text"),
+        ("ocr_ai", "ui_addon_ocr_ai"),
+        ("ai_rewrite", "ui_addon_ai_rewrite"),
+    )
+
     def _render_all_addons(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """Render the add-ons catalogue with toggle controls, localized."""
         lang = self._lang_for(rule)
-        """Render all 18 Add-ons catalogue with toggle controls."""
         task_name = rule.name or f"task_{rule.id[:8]}"
         addons = rule.paid_addons
-        
-        all_18 = [
-            ("comments", "★ Channel Comments"),
-            ("every_n", "🔒 Forward Every N Messages"),
-            ("kw_confirm", "🔒 Keyword Confirmation"),
-            ("kw_reply", "🔒 Keyword Reply Thread"),
-            ("auto_del", "🔒 Auto Delete Messages"),
-            ("webhook", "🔒 Outbound Webhooks"),
-            ("crypto", "🪙 Crypto Mode"),
-            ("affiliate", "💲 Affiliate Kit"),
-            ("link_buttons", "🔗 Link Buttons"),
-            ("watermark", "🖼 Watermark Protection"),
-            ("duplicate", "🔀 Duplicate Filters"),
-            ("cleaner", "🧹 Cleaner Protocol"),
-            ("scheduler", "⏰ Auto Post Scheduler"),
-            ("power_schedule", "⏻ Power On/Off Schedule"),
-            ("raw_text", "📄 Process Raw Text"),
-            ("button_to_text", "🔘 Button To Text"),
-            ("ocr_ai", "👁 OCR Image AI"),
-            ("ai_rewrite", "✨ Smart AI Rewrite"),
-        ]
 
         text = (
-            f"👑 **PAID ADDON Catalogue — 18 Modular Extensions**\n"
-            f"📋 **Task:** `{task_name}`\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"{self._t('ui_addon_catalogue_desc')}\n"
+            self._t("ui_addons_catalogue_title", lang=lang, n=len(self._ADDON_ROWS)) + "\n"
+            + self._t("ui_route_task_line", lang=lang, task=task_name, rid=rule.id[:8]) + "\n"
+            + "━━━━━━━━━━━━━━━━━━━━\n"
+            + self._t("ui_addon_catalogue_desc", lang=lang)
         )
 
         rows: List[List[Tuple[str, str]]] = []
-        for i in range(0, len(all_18), 2):
-            pair = []
-            k1, lbl1 = all_18[i]
-            on1 = "🟢" if addons.get(k1) else "⚪"
-            pair.append((f"{lbl1} {on1}", f"radon_tg:{rule.id}:{k1}"))
-            if i + 1 < len(all_18):
-                k2, lbl2 = all_18[i + 1]
-                on2 = "🟢" if addons.get(k2) else "⚪"
-                pair.append((f"{lbl2} {on2}", f"radon_tg:{rule.id}:{k2}"))
+        for i in range(0, len(self._ADDON_ROWS), 2):
+            pair: List[Tuple[str, str]] = []
+            for addon_key, catalog_key in self._ADDON_ROWS[i:i + 2]:
+                # The dot, not ui_toggle_addon's word form: this grid packs two
+                # labels per line and "<label>: <state word>" wraps there.
+                dot = "🟢" if addons.get(addon_key) else "⚪"
+                label = f"{self._addon_label(catalog_key, lang)} {dot}"
+                pair.append((label, f"radon_tg:{rule.id}:{addon_key}"))
             rows.append(pair)
 
         rows.append([(self._btn('ui_rule_back_task'), f"rd:{rule.id}")])

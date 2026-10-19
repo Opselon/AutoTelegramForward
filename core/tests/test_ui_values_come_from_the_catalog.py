@@ -54,6 +54,34 @@ BATCH_KEYS = (
     "ui_user_fallback_name",
 )
 
+#: one catalog key per catalogue row — no source literal left in the grid
+ADDON_ROW_KEYS = (
+    "ui_addon_affiliate",
+    "ui_addon_ai_rewrite",
+    "ui_addon_auto_del",
+    "ui_addon_button_to_text",
+    "ui_addon_cleaner",
+    "ui_addon_comments",
+    "ui_addon_crypto",
+    "ui_addon_duplicate",
+    "ui_addon_every_n",
+    "ui_addon_kw_confirm",
+    "ui_addon_kw_reply",
+    "ui_addon_link_buttons",
+    "ui_addon_ocr_ai",
+    "ui_addon_power_schedule",
+    "ui_addon_raw_text",
+    "ui_addon_scheduler",
+    "ui_rule_addon_watermark",
+    "ui_rule_addon_webhook",
+)
+
+#: the rows plus the catalogue's own title
+ADDON_KEYS = ADDON_ROW_KEYS + ("ui_addons_catalogue_title",)
+
+#: every key this file holds to 1:1 parity, placeholders and script isolation
+AUDIT_KEYS = BATCH_KEYS + ADDON_KEYS
+
 #: literals that used to sit in the source and reach a user's screen
 RETIRED_LITERALS = (
     "VIP Pro",
@@ -64,6 +92,23 @@ RETIRED_LITERALS = (
     "New Rule (Copy)",
     "**Set up Forwarding Topic**",
     "mode=",
+    "PAID ADDON Catalogue",
+    "Forward Every N Messages",
+    "Keyword Confirmation",
+    "Keyword Reply Thread",
+    "Auto Delete Messages",
+    "Watermark Protection",
+    "Cleaner Protocol",
+    "Crypto Mode",
+    "Affiliate Kit",
+    "Link Buttons",
+    "Duplicate Filters",
+    "Auto Post Scheduler",
+    "Power On/Off Schedule",
+    "Process Raw Text",
+    "Button To Text",
+    "OCR Image AI",
+    "Smart AI Rewrite",
 )
 
 
@@ -169,21 +214,21 @@ def _rule(**kw: Any) -> ForwardRule:
 # the keys exist, 1:1, with the English placeholders
 # --------------------------------------------------------------------------- #
 
-@pytest.mark.parametrize("key", BATCH_KEYS)
+@pytest.mark.parametrize("key", AUDIT_KEYS)
 def test_every_key_of_the_batch_exists_in_every_locale(key: str) -> None:
     assert set(CATALOG) == set(SUPPORTED_LANGUAGES)
     for lang in SUPPORTED_LANGUAGES:
         assert CATALOG[lang].get(key, "").strip(), f"{key} missing from {lang}"
 
 
-@pytest.mark.parametrize("key", BATCH_KEYS)
+@pytest.mark.parametrize("key", AUDIT_KEYS)
 def test_every_batch_key_keeps_the_english_placeholders(key: str) -> None:
     english = set(re.findall(r"\{(\w+)\}", CATALOG["en"][key]))
     for lang in SUPPORTED_LANGUAGES:
         assert set(re.findall(r"\{(\w+)\}", CATALOG[lang][key])) == english, (lang, key)
 
 
-@pytest.mark.parametrize("key", BATCH_KEYS)
+@pytest.mark.parametrize("key", AUDIT_KEYS)
 def test_no_batch_value_carries_another_locale_script(key: str) -> None:
     """A Persian value under the English key renders Persian to every English user."""
     for lang in ("en", "es", "fr", "it", "pt"):
@@ -313,6 +358,56 @@ def test_the_advanced_panel_localizes_chat_labels_and_second_values() -> None:
     assert CATALOG["fa"]["ui_rule_source_fallback"] in text
     assert CATALOG["fa"]["ui_secs_value"].format(sec="0") in text
     assert "0 s" not in text and " s" not in text
+
+
+# --------------------------------------------------------------------------- #
+# the add-on catalogue
+# --------------------------------------------------------------------------- #
+
+def test_the_addon_catalogue_labels_come_from_the_catalog() -> None:
+    """Every row used to be an English literal in the source, so the screen was
+    English in all ten locales — and the audits stayed green, because the
+    catalogue's keys were never the problem."""
+    ui = _fa_ui()
+    ui._render_all_addons = ProBotUI._render_all_addons.__get__(ui, ProBotUI)
+    text, kbd = ui._render_all_addons(_rule())
+
+    labels = [btn.text for row in kbd.inline_keyboard for btn in row]
+    assert len(labels) == len(ADDON_ROW_KEYS) + 1  # + the back button
+    for key in ADDON_ROW_KEYS:
+        assert any(label.startswith(CATALOG["fa"][key]) for label in labels), key
+    assert CATALOG["fa"]["ui_addons_catalogue_title"].format(n=18) in text
+    assert CATALOG["fa"]["ui_route_task_line"].split("{")[0].strip() in text
+
+
+def test_the_addon_catalogue_carries_no_english_row_in_persian() -> None:
+    ui = _fa_ui()
+    ui._render_all_addons = ProBotUI._render_all_addons.__get__(ui, ProBotUI)
+    text, kbd = ui._render_all_addons(_rule())
+    rendered = text + " ".join(btn.text for row in kbd.inline_keyboard for btn in row)
+    for english in (
+        "Forward Every N Messages",
+        "Keyword Confirmation",
+        "Outbound Webhooks",
+        "Watermark Protection",
+        "PAID ADDON Catalogue",
+        "Cleaner Protocol",
+        "Smart AI Rewrite",
+    ):
+        assert english not in rendered, f"{english!r} reached the Persian catalogue"
+
+
+def test_the_addon_catalogue_state_dot_tracks_the_rule() -> None:
+    ui = _fa_ui()
+    ui._render_all_addons = ProBotUI._render_all_addons.__get__(ui, ProBotUI)
+    rule = _rule()
+    rule.paid_addons = {"crypto": True, "cleaner": False}
+    _text, kbd = ui._render_all_addons(rule)
+    rows = [btn.text for row in kbd.inline_keyboard for btn in row]
+    crypto = next(label for label in rows if label.startswith(CATALOG["fa"]["ui_addon_crypto"]))
+    assert crypto.endswith("🟢")
+    cleaner = next(label for label in rows if label.startswith(CATALOG["fa"]["ui_addon_cleaner"]))
+    assert cleaner.endswith("⚪")
 
 
 # --------------------------------------------------------------------------- #
