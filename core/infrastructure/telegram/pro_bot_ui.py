@@ -1373,7 +1373,7 @@ class ProBotUI:
         bl_count = len(rule.blacklist)
         wl_count = len(rule.whitelist)
         cl_count = rule.cleaner_active_option_count
-        fl_count = (1 if rule.duplicate_filters else 0) + (1 if rule.block_links else 0) + (1 if rule.block_voice else 0) + (1 if rule.block_stickers else 0)
+        fl_count = rule.filter_active_option_count
         rep_count = len(rule.replacements)
         delay_val = f"{rule.delay_seconds:.0f}s" if rule.delay_seconds > 0 else "0s"
         # Who the copies are sent as. The bot route only shows as "Bot" when a
@@ -2521,7 +2521,7 @@ class ProBotUI:
         bl_count, wl_count = len(rule.blacklist), len(rule.whitelist)
         bu_count, wu_count = len(rule.blacklist_users), len(rule.whitelist_users)
         cl_count = rule.cleaner_active_option_count
-        fl_count = int(bool(rule.filter_rule_id))
+        fl_count = rule.filter_active_option_count
         sched_status = status_on(bool(rule.auto_post_scheduler.get("enabled", False)))
         pwr_status = status_on(bool(rule.power_schedule.get("enabled", False)))
         delay_val = self._t("ui_secs_value", lang=lang, sec=f"{rule.delay_seconds:.0f}" if rule.delay_seconds > 0 else "0")
@@ -3039,6 +3039,11 @@ class ProBotUI:
             + self._t("ui_fl_sticker", lang=lang, status=stk_b)
             + self._t("ui_fl_text", lang=lang, status=txt_b)
             + self._t("ui_fl_voice", lang=lang, status=voc_b)
+            + self._t(
+                "ui_fl_advanced",
+                lang=lang,
+                status=self._t("ui_yes", lang=lang) if rule.filter_rule_id else self._t("ui_no", lang=lang),
+            )
             + self._t("ui_fl_hint", lang=lang)
         )
 

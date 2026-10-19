@@ -15,6 +15,7 @@ from urllib.parse import urlparse, urlunparse
 from ..domain.entities import EvaluationResult, FilterRule, ForwardRule, MessagePayload
 from ..domain.value_objects import DeliveryStatus, FilterAction, LinkPolicy, MediaType, RoutingDecision
 from . import branding
+from .content_policy import compile_user_regex
 
 logger = logging.getLogger(__name__)
 
@@ -87,10 +88,14 @@ class FilterEngine:
         if filter_rule.regex_patterns:
             any_valid = False
             for pattern in filter_rule.regex_patterns:
-                try:
-                    compiled = re.compile(pattern, re.IGNORECASE | re.MULTILINE)
-                except re.error:
-                    continue  # invalid pattern: ignore it, never crash or drop
+                # The same guarded compiler the content policy uses: a pattern
+                # that is malformed, oversized or carries a nested quantifier is
+                # refused instead of executed (one crafted message could
+                # otherwise occupy a worker for minutes), and a refused pattern
+                # never turns into a drop.
+                compiled = compile_user_regex(pattern)
+                if compiled is None:
+                    continue
                 any_valid = True
                 if compiled.search(text):
                     break
