@@ -1372,7 +1372,7 @@ class ProBotUI:
 
         bl_count = len(rule.blacklist)
         wl_count = len(rule.whitelist)
-        cl_count = (1 if rule.cleaner_enabled else 0) + len(rule.clean_custom_words) + (1 if rule.remove_links else 0) + (1 if rule.remove_emojis else 0)
+        cl_count = rule.cleaner_active_option_count
         fl_count = (1 if rule.duplicate_filters else 0) + (1 if rule.block_links else 0) + (1 if rule.block_voice else 0) + (1 if rule.block_stickers else 0)
         rep_count = len(rule.replacements)
         delay_val = f"{rule.delay_seconds:.0f}s" if rule.delay_seconds > 0 else "0s"
@@ -2520,7 +2520,7 @@ class ProBotUI:
         crypto_status = status_on(bool(rule.crypto_mode))
         bl_count, wl_count = len(rule.blacklist), len(rule.whitelist)
         bu_count, wu_count = len(rule.blacklist_users), len(rule.whitelist_users)
-        cl_count = len(rule.clean_custom_words) + int(bool(rule.remove_links)) + int(bool(rule.remove_emojis))
+        cl_count = rule.cleaner_active_option_count
         fl_count = int(bool(rule.filter_rule_id))
         sched_status = status_on(bool(rule.auto_post_scheduler.get("enabled", False)))
         pwr_status = status_on(bool(rule.power_schedule.get("enabled", False)))

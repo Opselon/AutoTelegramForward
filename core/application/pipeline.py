@@ -35,6 +35,7 @@ from ..domain.services import (
     LinkManagementEngine,
     RoutingPolicy,
     TransformationService,
+    utf16_len,
 )
 from .effective_settings import materialize
 from .log_policy import LogPolicy
@@ -1026,6 +1027,14 @@ class DurableMessagePipeline:
                         ctx.correlation_id[:8], rule.id[:8], payload.message_id, len(text), len(cleaned),
                     )
                     text = cleaned
+                # The inline keyboard is markup, not text: the cleaner cannot
+                # reach it from `clean()`, so the option is applied here.
+                if getattr(cleaner, "strip_buttons", False) and getattr(payload, "reply_markup", None) is not None:
+                    payload.reply_markup = None
+                    logger.info(
+                        "[PIPELINE:CLEANER] [%s] Rule %s removed the inline keyboard of msg %s",
+                        ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                    )
             except Exception as exc:
                 # A cleaner failure must never drop the message — deliver
                 # uncleaned text and record why.
@@ -1037,8 +1046,20 @@ class DurableMessagePipeline:
         # Link Management Engine (Entity-aware, domain allowlist/blocklist, SSRF protected)
         link_policy = getattr(rule, "link_policy", "PRESERVE_ALL")
         if (link_policy and link_policy != "PRESERVE_ALL") or getattr(rule, "remove_links", False):
-            clean_text, updated_ents, links_mod = LinkManagementEngine.apply_to_payload(payload, rule)
-            text = clean_text
+            clean_text, updated_ents, links_mod = LinkManagementEngine.apply_to_payload(
+                payload, rule, text=text
+            )
+            if clean_text is not None:
+                # Defensive: the engine must never answer a payload with None.
+                text = clean_text
+            if updated_ents is not None:
+                # The engine shifts UTF-16 offsets for the entities it kept;
+                # carrying them on the payload keeps rich formatting aligned
+                # with the text that will actually be sent.
+                if payload.has_media:
+                    payload.caption_entities = updated_ents
+                else:
+                    payload.entities = updated_ents
             if links_mod:
                 evaluation.links_removed = True
         elif getattr(rule, "link_replacement", None):
@@ -1048,6 +1069,31 @@ class DurableMessagePipeline:
         # Emoji removal
         if getattr(rule, "remove_emojis", False):
             text = self._filter_engine.remove_emojis(text)
+
+        # The cleaner is a text-only stage, so an entity whose range was inside
+        # removed text can end up pointing past the end of the body. Telegram
+        # rejects such an entity, so it is dropped (or clipped) here.
+        self._clamp_entities(payload, text)
+
+        if (payload.effective_text or "").strip() and not text.strip():
+            # The stages above removed the whole body (for example the only
+            # content was a link the task asked to strip). Forwarding an empty
+            # message is not an option and neither is dropping it silently: the
+            # message is dropped with a reason code and an audit record.
+            ctx.record_stage(PipelineStage.TRANSFORM, False, reason="empty_after_clean")
+            self.metrics.filtered_total += 1
+            logger.info(
+                "[PIPELINE:CLEANER] [%s] Rule %s dropped msg %s: nothing left after cleaning "
+                "(reason=empty_after_clean, link_policy=%s)",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                getattr(rule, "link_policy", "PRESERVE_ALL"),
+            )
+            await self._audit(
+                ctx, "forward.filtered", "REJECTED", reason_code="EMPTY_AFTER_CLEAN",
+                rule_id=rule.id, message_id=str(payload.message_id),
+                result_summary="cleaner:empty_after_clean",
+            )
+            return None
 
         # Replacements are applied once, in the final pass below (after the AI
         # stage), so an expanding rule (`# -> ##`) is not applied twice and a
@@ -1135,7 +1181,47 @@ class DurableMessagePipeline:
                 ctx.correlation_id[:8], rule.id[:8], exc,
             )
 
+        # Every text transform above (AI rewrite, replacements, header/footer,
+        # watermark) can move the body under the entity ranges again; clamp once
+        # more so what leaves the pipeline is always sendable.
+        self._clamp_entities(payload, text)
+
         return text
+
+    @staticmethod
+    def _clamp_entities(payload: MessagePayload, text: str) -> None:
+        """Keep the payload's entities inside the body they annotate.
+
+        The cleaner and the other text stages are text-only, so they can delete
+        a span an entity pointed at. An entity that runs past the end of the
+        body makes Telegram reject the whole send, so an out-of-range entity is
+        dropped and an entity that straddles the end is clipped.
+        """
+        attr = "caption_entities" if payload.has_media else "entities"
+        entities = getattr(payload, attr, None)
+        if not entities:
+            return
+        limit = utf16_len(text or "")
+        kept = []
+        for ent in entities:
+            try:
+                offset = int(getattr(ent, "offset", 0) or 0)
+                length = int(getattr(ent, "length", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if offset < 0 or offset >= limit or length <= 0:
+                continue
+            if offset + length > limit:
+                try:
+                    ent.length = limit - offset
+                except Exception:
+                    continue
+            kept.append(ent)
+        try:
+            setattr(payload, attr, kept or None)
+        except Exception:
+            # A read-only payload shim must not break delivery.
+            return
 
     async def _run_ai_transform(
         self,
