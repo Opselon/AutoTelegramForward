@@ -45,10 +45,13 @@ python scripts/audit_cross_language.py
 # 2. Telegram UI hardcoded literal guard (checks git diff against base branch)
 python scripts/audit_telegram_i18n.py
 
-# 3. Python unit test suites
+# 3. Web dashboard UI-copy gate (JSX-aware; needs web/frontend/node_modules/typescript)
+node scripts/audit_web_ui_copy.js --root . && python scripts/audit_mobile_ui_copy.py
+
+# 4. Python unit test suites
 pytest -q core/tests scripts/tests
 
-# 4. Go API test suite
+# 5. Go API test suite
 cd api && go test ./...
 ```
 

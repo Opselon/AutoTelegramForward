@@ -82,6 +82,10 @@ DISPLAY_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 BRAND = "AutoTelegramForward"
+# Proper nouns that are never translated: a platform name is a name, not copy.
+# (`Telegram` badges the chat type on a rule card — in every locale it reads
+# "Telegram", the same way the brand does.)
+PROPER_NOUNS = frozenset({"Telegram"})
 INTERPOLATION = re.compile(r"\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*")
 LATIN_WORD = re.compile(r"[A-Za-z]{2,}")
 OTHER_SCRIPT = re.compile(r"[\u0400-\u04ff\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\u4e00-\u9fff]")
@@ -140,6 +144,8 @@ def is_technical(text: str) -> bool:
     if not raw:
         return True
     if raw == BRAND:
+        return True
+    if raw in PROPER_NOUNS:
         return True
     # Decoration in front of a token (`'❌ ERROR'`) is not prose.
     value = re.sub(r"^[^\w{]+", "", raw, flags=re.UNICODE)
