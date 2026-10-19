@@ -1,0 +1,309 @@
+---
+import repoInfo from '../data/repo-info.json';
+import { endpointDetail, groupBlurbs, scopeNoteFor } from '../data/api-surface';
+import { url } from '../utils/paths';
+import SpecTable from './SpecTable.astro';
+import CodeBlock from './CodeBlock.astro';
+import Icon from './Icon.astro';
+
+/**
+ * The searchable route reference.
+ *
+ * The route list itself is not written here: it is parsed out of api/main.go at
+ * build time (scripts/sync-repo-content.mjs → repo-info.json), so this component
+ * cannot show a route the binary does not register, and it cannot hide one it
+ * does. Everything prose — what a route is for, what it accepts, what it returns
+ * — comes from src/data/api-surface.ts, which tests/api-surface.test.mjs checks
+ * against the same parsed list: a new route with no description fails the gate
+ * rather than shipping undocumented.
+ *
+ * Filtering is pure progressive enhancement: every card is server-rendered and
+ * visible without JavaScript; the script only narrows what is already there.
+ */
+interface Props {
+  class?: string;
+}
+
+const { class: cls = '' } = Astro.props;
+
+const groups = repoInfo.apiRouteGroupOrder as string[];
+const routesByGroup = Object.fromEntries(
+  groups.map((group) => [
+    group,
+    repoInfo.apiRoutes.filter((route: { group: string }) => route.group === group),
+  ]),
+);
+const methodTone: Record<string, string> = {
+  GET: 'get',
+  POST: 'post',
+  PUT: 'put',
+  PATCH: 'patch',
+  DELETE: 'delete',
+};
+const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+const countOf = (method: string) =>
+  repoInfo.apiRoutes.filter((route: { method: string }) => route.method === method).length;
+
+const authChip = (auth: string) =>
+  auth === 'admin'
+    ? { label: 'Admin', cls: 'chip chip-warn' }
+    : auth === 'bearer'
+      ? { label: 'Bearer', cls: 'chip chip-success' }
+      : { label: 'Public', cls: 'chip' };
+
+const anchorFor = (group: string) => `routes-${group.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
+const detailFor = (method: string, path: string) =>
+  endpointDetail[`${method} ${path}`] ?? { summary: 'Registered by the control plane mux.', statuses: [] };
+
+const searchable = (group: string, route: { method: string; path: string; handler: string }) => {
+  const detail = endpointDetail[`${route.method} ${route.path}`];
+  return [
+    group,
+    route.method,
+    route.path,
+    route.handler,
+    detail?.summary ?? '',
+    (detail?.fields ?? []).map((field) => `${field.name} ${field.type}`).join(' '),
+  ]
+    .join(' ')
+    .toLowerCase()
+    .replace(/"/g, '&quot;');
+};
+---
+
+<section class={`explorer ${cls}`} data-explorer>
+  <div class="explorer-bar">
+    <label class="explorer-field" for="endpoint-filter">
+      <Icon name="search" class="w-4 h-4 text-slate-400 shrink-0" strokeWidth={2.1} />
+      <input
+        id="endpoint-filter"
+        class="explorer-input"
+        type="search"
+        autocomplete="off"
+        placeholder={`Filter ${repoInfo.apiRoutes.length} routes by path, verb, handler or field…`}
+        aria-label="Filter routes"
+      />
+      <button type="button" class="anchor-pill" data-explorer-clear hidden aria-label="Clear the route filter">
+        <Icon name="close" class="w-3 h-3" strokeWidth={2.4} /> Clear
+      </button>
+    </label>
+
+    <div class="explorer-filters" role="group" aria-label="Filter routes by HTTP method">
+      {
+        methods.map((method) => (
+          <button type="button" class="filter-chip" data-explorer-method={method} aria-pressed="false">
+            {method}
+            <span class="opacity-60">{countOf(method)}</span>
+          </button>
+        ))
+      }
+    </div>
+
+    <p class="explorer-count m-0" data-explorer-count data-total={repoInfo.apiRoutes.length} aria-live="polite">
+      Showing all {repoInfo.apiRoutes.length} registered routes across {groups.length} groups.
+    </p>
+  </div>
+
+  <nav class="anchor-rail" aria-label="Route groups">
+    {
+      groups.map((group) => (
+        <a class="anchor-pill" href={`#${anchorFor(group)}`} data-anchor-for={anchorFor(group)}>
+          {group}
+          <span class="opacity-60">{routesByGroup[group].length}</span>
+        </a>
+      ))
+    }
+    <a class="anchor-pill" href={url('/api/responses/')}>
+      Response envelope
+      <Icon name="arrow-right" class="w-3 h-3" strokeWidth={2.4} />
+    </a>
+  </nav>
+
+  <div data-explorer-list>
+    {
+      groups.map((group) => (
+        <div class="endpoint-group" id={anchorFor(group)} data-explorer-group>
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 class="display-3 text-white m-0">{group}</h3>
+            <span class="micro">
+              {routesByGroup[group].length} routes · {groupBlurbs[group]?.scope ?? 'tenant-scoped'}
+            </span>
+          </div>
+          {groupBlurbs[group] && (
+            <p class="m-0 text-[14.5px] leading-relaxed text-slate-300">{groupBlurbs[group].blurb}</p>
+          )}
+
+          <div class="grid gap-3">
+            {routesByGroup[group].map((route: { method: string; path: string; handler: string; auth: string; publicPath?: string }) => {
+              const detail = detailFor(route.method, route.path);
+              const chip = authChip(route.auth);
+              return (
+                <article
+                  class="endpoint"
+                  data-endpoint
+                  data-method={route.method}
+                  data-search={searchable(group, route)}
+                >
+                  <div class="endpoint-head">
+                    <span class={`method method-${methodTone[route.method] ?? 'get'}`}>{route.method}</span>
+                    <h4 class="endpoint-path m-0">{route.path}</h4>
+                    <span class={chip.cls}>{chip.label}</span>
+                    <code class="text-[11.5px] text-slate-400">{route.handler}</code>
+                  </div>
+                  <div class="endpoint-body">
+                    <div class="grid gap-3 content-start min-w-0">
+                      <p class="m-0 text-[14.5px] leading-relaxed text-slate-300">{detail.summary}</p>
+                      <dl class="endpoint-meta">
+                        <dt>Auth</dt>
+                        <dd>
+                          {route.auth === 'admin'
+                            ? 'Bearer identity that also carries the administrator flag — gated twice, on the route and in the core'
+                            : route.auth === 'bearer'
+                              ? 'Verified identity — Bearer JWT (or TMA exchange), scoped server-side'
+                              : 'No credential — public probe or login exchange'}
+                        </dd>
+                        <dt>Scope</dt>
+                        <dd>{scopeNoteFor(route.path, route.auth)}</dd>
+                        <dt>Statuses</dt>
+                        <dd>{(detail.statuses ?? []).join(' · ') || '200 · 401 · 404 · 500 as applicable'}</dd>
+                        {detail.note && (
+                          <>
+                            <dt>Note</dt>
+                            <dd>{detail.note}</dd>
+                          </>
+                        )}
+                      </dl>
+                      {detail.fields && detail.fields.length > 0 && (
+                        <SpecTable
+                          headers={['Field', 'Type', 'Required', 'Meaning']}
+                          rows={detail.fields.map((field) => [
+                            `<code>${field.name}</code>`,
+                            `<code class="text-slate-400">${field.type}</code>`,
+                            field.required === false ? 'Optional' : field.required === 'conditional' ? 'Conditional' : 'Yes',
+                            field.notes,
+                          ])}
+                        />
+                      )}
+                    </div>
+                    <div class="grid gap-3 content-start min-w-0">
+                      {detail.response && (
+                        <CodeBlock label={`${route.method} ${route.path} — response`} language="json" content={detail.response} />
+                      )}
+                      {detail.request && (
+                        <CodeBlock label="Request body" language="json" content={detail.request} />
+                      )}
+                      {!detail.response && !detail.request && (
+                        <p class="micro m-0">
+                          Request and response bodies follow the shared envelope — see the response reference below.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      ))
+    }
+  </div>
+
+  <p class="endpoint-empty" data-explorer-empty hidden>
+    No route matches that filter. Clear the search box or release a verb chip to see the full
+    {' '}{repoInfo.apiRoutes.length}-route table.
+  </p>
+</section>
+
+<script>
+  /**
+   * Progressive enhancement only: without this script the page still shows every
+   * route, just unfiltered. With it, the text box and the verb chips narrow the
+   * server-rendered cards, and the counter announces the result.
+   */
+  document.querySelectorAll('[data-explorer]').forEach((root) => {
+    const input = root.querySelector('#endpoint-filter') as HTMLInputElement | null;
+    const clear = root.querySelector('[data-explorer-clear]') as HTMLElement | null;
+    const count = root.querySelector('[data-explorer-count]') as HTMLElement | null;
+    const empty = root.querySelector('[data-explorer-empty]') as HTMLElement | null;
+    const cards = Array.from(root.querySelectorAll('[data-endpoint]')) as HTMLElement[];
+    const sections = Array.from(root.querySelectorAll('[data-explorer-group]')) as HTMLElement[];
+    const chips = Array.from(root.querySelectorAll('[data-explorer-method]')) as HTMLElement[];
+    const pills = Array.from(root.querySelectorAll('[data-anchor-for]')) as HTMLElement[];
+    const total = Number(count?.dataset.total || cards.length);
+    const pressed = new Set<string>();
+
+    const apply = () => {
+      const query = (input?.value || '').trim().toLowerCase();
+      let visible = 0;
+
+      for (const card of cards) {
+        const matchesText = !query || (card.dataset.search || '').includes(query);
+        const matchesMethod = pressed.size === 0 || pressed.has(card.dataset.method || '');
+        const show = matchesText && matchesMethod;
+        card.hidden = !show;
+        if (show) visible++;
+      }
+
+      for (const section of sections) {
+        const any = Array.from(section.querySelectorAll('[data-endpoint]')).some((c) => !(c as HTMLElement).hidden);
+        section.hidden = !any;
+      }
+
+      if (count) {
+        const filtering = visible !== total;
+        count.textContent = filtering
+          ? `Showing ${visible} of ${total} routes${pressed.size ? ` · ${[...pressed].join(' ')}` : ''}`
+          : `Showing all ${total} registered routes.`;
+      }
+      if (empty) empty.hidden = visible !== 0;
+      if (clear) clear.hidden = !query && pressed.size === 0;
+    };
+
+    input?.addEventListener('input', apply);
+    input?.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        if (input.value) {
+          input.value = '';
+          apply();
+        }
+      }
+    });
+
+    for (const chip of chips) {
+      chip.addEventListener('click', () => {
+        const method = chip.dataset.explorerMethod || '';
+        const on = chip.getAttribute('aria-pressed') !== 'true';
+        chip.setAttribute('aria-pressed', String(on));
+        if (on) pressed.add(method);
+        else pressed.delete(method);
+        apply();
+      });
+    }
+
+    clear?.addEventListener('click', () => {
+      if (input) input.value = '';
+      pressed.clear();
+      chips.forEach((chip) => chip.setAttribute('aria-pressed', 'false'));
+      apply();
+      input?.focus();
+    });
+
+    // The group pills double as a position indicator: whichever group owns the
+    // viewport gets the lit pill, so a long page still says where you are.
+    if (pills.length && 'IntersectionObserver' in window) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            const pill = pills.find((p) => p.dataset.anchorFor === entry.target.id);
+            if (pill) pill.classList.toggle('is-active', entry.isIntersecting);
+          }
+        },
+        { rootMargin: '-96px 0px -70% 0px' },
+      );
+      sections.forEach((section) => observer.observe(section));
+    }
+
+    apply();
+  });
+</script>

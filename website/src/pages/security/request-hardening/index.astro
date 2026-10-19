@@ -1,0 +1,229 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import SpecTable from '../../../components/SpecTable.astro';
+import Callout from '../../../components/Callout.astro';
+import GuardChain from '../../../components/GuardChain.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import { url } from '../../../utils/paths';
+
+const pageTitle = 'Request hardening';
+const pageDesc =
+  'The limits a hostile request meets before it reaches a handler: body caps, server timeouts, the AI endpoint guard that blocks SSRF, and the shutdown drain.';
+
+const toc = [
+  { id: 'edge', title: 'At the edge' },
+  { id: 'timeouts', title: 'Timeouts' },
+  { id: 'ssrf', title: 'The AI endpoint guard' },
+  { id: 'payloads', title: 'Payload caps' },
+  { id: 'admin', title: 'Privileged writes' },
+  { id: 'shutdown', title: 'Shutdown' },
+];
+
+const guardSteps = [
+  {
+    title: 'Method and path',
+    detail: 'Routes are registered on a pattern mux with an explicit verb. A request to a known path with the wrong verb never reaches a handler.',
+    refusal: '405 method not allowed',
+  },
+  {
+    title: 'Body size',
+    detail: 'JSON bodies pass through a limiting reader with a per-route cap before decoding, so an oversized body is refused while it is being read rather than after it has been buffered.',
+    refusal: '413 / 400 payload_too_large',
+  },
+  {
+    title: 'Decode and bind',
+    detail: 'The decoder is strict about types and rejects trailing garbage. A field the handler does not accept is not silently ignored where the contract says it matters.',
+    refusal: '400 invalid JSON or field',
+  },
+  {
+    title: 'Identity and rate class',
+    detail: 'The Bearer token is validated with the core, then the class budget is charged against the verified identity or the address.',
+    refusal: '401 · 403 · 429',
+  },
+  {
+    title: 'Outbound target check',
+    detail: 'Any request the core makes to a tenant-supplied URL — the AI provider probe — is validated first, including a DNS resolution check.',
+    refusal: '400 endpoint_blocked · endpoint_invalid · missing_endpoint',
+  },
+  {
+    title: 'Bounded upstream call',
+    detail: 'Every core call runs under its own timeout, and a write path that touches an external provider gets a longer, still finite, budget.',
+    refusal: '502 core unavailable · 504 timeout',
+  },
+];
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  path="/security/request-hardening/"
+  breadcrumbs={[
+    { name: 'Home', href: url('/') },
+    { name: 'Security', href: url('/security/') },
+    { name: 'Request hardening', href: url('/security/request-hardening/') },
+  ]}
+  toc={toc}
+  keywords={[
+    'API request hardening',
+    'SSRF endpoint guard AI provider',
+    'body size limit MaxBytesReader',
+    'graceful shutdown drain',
+  ]}
+>
+  <p>
+    Every one of these limits exists because of a specific failure it prevents: an unbounded body that exhausts memory, a
+    request that holds a connection until the process is replaced, a tenant-supplied URL that turns the core into a port
+    scanner. The numbers below are the values in the source, not targets.
+  </p>
+
+  <section class="not-prose scroll-mt-24" id="edge">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">At the edge</h2>
+    <GuardChain steps={guardSteps} />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="timeouts">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Timeouts</h2>
+    <SpecTable
+      headers={['Timeout', 'Value', 'What it stops']}
+      rows={[
+        ['Header read', '<strong>10s</strong>', 'A client that opens a connection and dribbles headers cannot hold a slot indefinitely.'],
+        ['Request read', '<strong>60s</strong>', 'A slow body upload is bounded; the handler never starts on a half-delivered request.'],
+        ['Response write', '<strong>120s</strong>', 'A handler that wedges cannot keep the connection open beyond a known ceiling.'],
+        ['Idle', '<strong>120s</strong>', 'Keep-alive connections are reclaimed instead of accumulating.'],
+        ['Graceful drain on shutdown', '<strong>10s</strong>', 'In-flight requests finish; new ones are refused; then the process exits.'],
+        ['AI rewrite calls', 'Longer than an ordinary read, still finite', 'A model call is slow by nature, so it gets its own budget rather than raising the global one.'],
+      ]}
+      caption="Server and upstream timeouts"
+    />
+    <Callout type="info" class="mt-4" title="A timeout is a refusal, not a hang">
+      <p>
+        When the core does not answer in time the API returns <code>502</code> with the failure named, because a client
+        that waits forever has no way to distinguish a slow system from a broken one. The correlation id on that response
+        is what turns it into a support case with an answer.
+      </p>
+    </Callout>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="ssrf">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">The AI endpoint guard</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      The tenant names their own model endpoint, and the core calls it. That is a server-side request aimed at a
+      host the tenant chose — which is exactly the shape of an SSRF primitive. So the endpoint is validated before the
+      probe is allowed to leave the process:
+    </p>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div class="min-w-0">
+        <SpecTable
+          headers={['Check', 'Refusal code', 'Detail']}
+          rows={[
+            ['No endpoint given', '<code>missing_endpoint</code>', 'Nothing to guard and nothing to probe.'],
+            ['Not http or https', '<code>endpoint_invalid</code>', 'Schemes such as <code>file:</code>, <code>gopher:</code> or <code>ftp:</code> are never a model provider.'],
+            ['A hostname that only means "this machine"', '<code>endpoint_blocked</code>', '<code>localhost</code>, <code>metadata</code>, <code>metadata.google.internal</code>, <code>instance-data</code>, <code>metadata.azure.com</code>, <code>metadata.aws.internal</code>.'],
+            ['A literal loopback, link-local, unspecified, multicast, private or reserved address', '<code>endpoint_blocked</code>', 'Cloud metadata lives at <code>169.254.169.254</code> — link-local, and blocked on that basis.'],
+            ['A name that resolves into the host’s own networks', '<code>endpoint_blocked</code>', 'Every address the name resolves to is checked, so <code>localhost.evil.example</code> cannot become a port scan.'],
+            ['A name that does not resolve', '<code>endpoint_unreachable</code>', 'Reported as unreachable rather than retried.'],
+          ]}
+          caption="What the endpoint guard refuses"
+        />
+      </div>
+      <div class="grid gap-3 min-w-0">
+        <CodeBlock
+          label="A refused probe — the network was never touched"
+          language="json"
+          content={`{
+  "ran": false,
+  "healthy": false,
+  "latency_ms": 0,
+  "detail": "endpoint resolves to a private address",
+  "error_code": "endpoint_blocked"
+}`}
+        />
+        <Callout type="warning" title="Private endpoints are opt-in, per deployment">
+          <p>
+            A self-hosted operator running a model server on their own LAN sets{' '}
+            <code>ATF_ALLOW_PRIVATE_AI_ENDPOINTS=1</code>. It is off by default because on a shared deployment one
+            tenant&apos;s unchecked URL would let them probe the stack&apos;s own services — a port scan with a status
+            code in the reply.
+          </p>
+        </Callout>
+      </div>
+    </div>
+    <div class="grid gap-3 lg:grid-cols-3 mt-4">
+      <div class="panel panel--flush">
+        <p class="micro m-0 mb-1">Probe budget</p>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          A probe is a person waiting on a form, so it runs under a <strong>12-second</strong> timeout — far tighter than
+          an actual rewrite.
+        </p>
+      </div>
+      <div class="panel panel--flush">
+        <p class="micro m-0 mb-1">What comes back</p>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          A status class, a latency and at most <strong>300 characters</strong> of the provider&apos;s own message — with
+          the credential replaced by <code>[REDACTED]</code> if the provider echoed it.
+        </p>
+      </div>
+      <div class="panel panel--flush">
+        <p class="micro m-0 mb-1">Refused ≠ broken</p>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          <code>ran: false</code> means the guard refused to ask. It is never reported as an unhealthy provider, so the
+          probe cannot be used to map the private network.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="payloads">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Payload caps</h2>
+    <SpecTable
+      headers={['Surface', 'Cap', 'Answer']}
+      rows={[
+        ['Durable task payload and result', '<strong>64 KiB</strong> each, JSON only', '<code>400 payload_too_large</code>, naming which side exceeded it.'],
+        ['Task error text', '<strong>8 KiB</strong>', 'Truncated at the store, so a hostile or verbose upstream cannot bloat a row.'],
+        ['Bot token and defaults writes', 'Per-route limiting reader', 'Refused while reading, before the body is buffered.'],
+        ['Logging-policy writes', 'A small fixed cap', 'The policy document is a short JSON object; anything larger is not a policy.'],
+        ['Rule metadata', 'Bounded shape and size, not just a byte count', 'Nested blobs are capped by depth and key count, so a valid-JSON bomb is still refused.'],
+        ['Query bounds', 'Clamped before narrowing to an integer', '<code>limit</code> 1–200 on task lists; an out-of-range value cannot wrap into a huge page.'],
+      ]}
+      caption="Where the size limit is, and what it answers"
+    />
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="admin">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Privileged writes</h2>
+    <div class="grid gap-3 lg:grid-cols-2">
+      <div class="panel panel--flush">
+        <h3 class="text-sm font-bold text-white mb-1">The logging policy is changed where it is enforced</h3>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          <code>PUT /api/logs/policy</code> is administrator-only and routed through the process that applies the policy.
+          Writing it straight into a config file would let two components disagree about what is being collected, and a
+          disagreement about retention is a disagreement about evidence.
+        </p>
+      </div>
+      <div class="panel panel--flush">
+        <h3 class="text-sm font-bold text-white mb-1">Administrator grants are not additive by accident</h3>
+        <p class="m-0 text-[13.5px] leading-relaxed text-slate-300">
+          <code>POST /api/admin/admins</code> grants the flag to an existing account; <code>DELETE</code> revokes it, and
+          the last administrator cannot be removed. Losing the last admin would leave an installation no one could
+          administer — a lockout, not a security improvement.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="not-prose scroll-mt-24" id="shutdown">
+    <h2 class="display-3 text-white mb-3 scroll-mt-24">Shutdown</h2>
+    <p class="m-0 mb-4 text-[15px] leading-relaxed text-slate-300">
+      A deploy should not turn into a burst of 502s. On a termination signal the server stops accepting new connections,
+      gives in-flight requests up to ten seconds to finish, and only then exits. Work that outlives a request is already
+      a durable task row, so nothing is lost when a write is interrupted after the response was sent.
+    </p>
+    <Callout type="success" title="Restart-safe by construction">
+      <p>
+        This is also why the upgrade gate can be strict: the process either answers <code>/readyz</code> or it does not.
+        A rolling replacement drains, closes and comes back ready, and the health gate sees a binary that can serve rather
+        than a port that happens to be open.
+      </p>
+    </Callout>
+  </section>
+</DocsLayout>

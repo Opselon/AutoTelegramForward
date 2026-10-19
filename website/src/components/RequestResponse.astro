@@ -1,0 +1,64 @@
+---
+import Icon from './Icon.astro';
+import CodeBlock from './CodeBlock.astro';
+
+/**
+ * A worked request/response pair.
+ *
+ * This is the shape the API reference is actually read in: what the client
+ * sends, and what comes back — including the refusal, which is the response a
+ * caller meets first when something is wrong. Panes are side by side from
+ * 1024px and stacked below it, and each pane's code block scrolls inside
+ * itself rather than widening the page.
+ */
+export interface Exchange {
+  label: string;
+  /** Optional one-line framing shown above the pair. */
+  note?: string;
+  request: string;
+  response: string;
+  /** Status line printed in the response caption, e.g. "200 OK". */
+  status?: string;
+  tone?: 'ok' | 'err';
+  requestLanguage?: 'bash' | 'json' | 'text';
+  responseLanguage?: 'json' | 'text' | 'bash';
+}
+
+interface Props {
+  exchange: Exchange;
+  class?: string;
+}
+
+const { exchange, class: cls = '' } = Astro.props;
+const tone = exchange.tone ?? 'ok';
+---
+
+<div class={`panel panel--flush ${cls}`}>
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <p class="micro m-0">{exchange.label}</p>
+    {
+      exchange.status && (
+        <span class={`reqres-status reqres-status--${tone === 'ok' ? 'ok' : 'err'}`}>{exchange.status}</span>
+      )
+    }
+  </div>
+
+  {exchange.note && <p class="m-0 mb-3 text-[13.5px] leading-relaxed text-slate-300">{exchange.note}</p>}
+
+  <div class="reqres">
+    <div class="reqres-pane">
+      <p class="reqres-cap m-0">
+        <Icon name="arrow-right" class="w-3.5 h-3.5" strokeWidth={2.2} />
+        Request
+      </p>
+      <CodeBlock label={exchange.label} language={exchange.requestLanguage ?? 'json'} content={exchange.request} />
+    </div>
+    <div class="reqres-pane">
+      <p class="reqres-cap m-0">
+        <Icon name="chevron-right" class="w-3.5 h-3.5 rotate-180" strokeWidth={2.2} />
+        Response
+      </p>
+      <CodeBlock label="Response body" language={exchange.responseLanguage ?? 'json'} content={exchange.response} />
+    </div>
+  </div>
+</div>
