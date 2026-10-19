@@ -116,18 +116,59 @@ logger = logging.getLogger("atf.botui")
 # Request-scoped locale; safe for concurrent Telegram updates.
 _BOT_RENDER_LANGUAGE: ContextVar[Optional[str]] = ContextVar("atf_bot_render_language", default=None)
 
-LANG_FLAG = {
+#: One row per language: the name its own speakers write, then its flag.
+#:
+#: The picker names are endonyms on purpose — a user who cannot read the current
+#: interface language still has to recognise their own — so this is the one table
+#: of *UI copy* that is deliberately not translated. Which is why it has to be
+#: the only copy of the list: the settings language menu, the per-task
+#: translation picker and the `/lang` list are all rendered from it, because
+#: hand-written copies are how one screen keeps offering nine languages after an
+#: eleventh ships.
+LANG_ENDONYM = {
     "en": "English 🇬🇧",
     "fa": "فارسی 🇮🇷",
+    "ru": "Русский 🇷🇺",
+    "zh": "中文 🇨🇳",
     "pt": "Português 🇵🇹",
     "uz": "O'zbek 🇺🇿",
-    "ru": "Русский 🇷🇺",
     "id": "Bahasa Indonesia 🇮🇩",
     "es": "Español 🇪🇸",
     "fr": "Français 🇫🇷",
     "it": "Italiano 🇮🇹",
-    "zh": "中文 🇨🇳",
 }
+
+#: "<endonym> <flag>": the form the settings language menu and `/lang` show.
+LANG_FLAG = dict(LANG_ENDONYM)
+
+#: The flags alone, for the picker's leading-flag form.
+LANG_FLAG_EMOJI = {code: row.rpartition(" ")[2] for code, row in LANG_ENDONYM.items()}
+
+
+def language_row(code: str) -> Tuple[str, str]:
+    """(endonym, flag) for one language — `(code.upper(), "")` when unknown."""
+    row = LANG_ENDONYM.get(str(code or "").strip().lower())
+    if not row:
+        return str(code or "").strip().upper(), ""
+    name, _, flag = row.rpartition(" ")
+    return (name, flag) if name else (row, "")
+
+
+def language_label(code: str, *, with_code: bool = False) -> str:
+    """One language the way its own speakers write it: `🇮🇷 فارسی` / `🇮🇷 فارسی (FA)`.
+
+    A code this build does not know (a task pinned to a language that was
+    dropped) is shown as its own upper-cased text rather than dropped from the
+    screen, and an empty code renders nothing at all.
+    """
+    key = str(code or "").strip().lower()
+    name, flag = language_row(code)
+    if not name:
+        return ""
+    if key not in LANG_ENDONYM:
+        return name
+    text = f"{flag} {name}".strip()
+    return f"{text} ({key.upper()})" if with_code else text
 
 # Callback data must stay <= 64 bytes for Telegram. Keep keys short.
 CB = {
@@ -2561,7 +2602,7 @@ class ProBotUI:
         ftr_badge = configured if rule.footer else empty
         ed_badge = status_on(not rule.ignore_edits)
         dl_badge = status_on(bool(rule.sync_deletes))
-        tr_status = rule.translate_lang.upper() if rule.translate_lang else self._t("ui_status_off", lang=lang)
+        tr_status = language_label(rule.translate_lang) if rule.translate_lang else self._t("ui_status_off", lang=lang)
         wm_status = configured if rule.watermark else empty
         btn_count = len(rule.link_buttons)
         ak_status = self._t(
@@ -3221,7 +3262,8 @@ class ProBotUI:
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         current = (rule.translate_lang or "").lower()
-        curr_label = current.upper() if current else self._t("ui_tr_off", lang=lang)
+        curr_label = (language_label(current, with_code=True) if current
+                      else self._t("ui_tr_off", lang=lang))
 
         text = (
             self._t("ui_tr_title", lang=lang)
@@ -3235,27 +3277,15 @@ class ProBotUI:
             [
                 (self._t("ui_tr_btn_off", lang=lang), f"rtr_set:{rule.id}:none"),
             ],
-            [
-                ("🇬🇧 English (EN)", f"rtr_set:{rule.id}:en"),
-                ("🇮🇷 فارسی (FA)", f"rtr_set:{rule.id}:fa"),
-            ],
-            [
-                ("🇷🇺 Русский (RU)", f"rtr_set:{rule.id}:ru"),
-                ("🇪🇸 Español (ES)", f"rtr_set:{rule.id}:es"),
-            ],
-            [
-                ("🇵🇹 Português (PT)", f"rtr_set:{rule.id}:pt"),
-                ("🇺🇿 O'zbek (UZ)", f"rtr_set:{rule.id}:uz"),
-            ],
-            [
-                ("🇮🇩 Bahasa Indonesia (ID)", f"rtr_set:{rule.id}:id"),
-                ("🇫🇷 Français (FR)", f"rtr_set:{rule.id}:fr"),
-            ],
-            [
-                ("🇮🇹 Italiano (IT)", f"rtr_set:{rule.id}:it"),
-            ],
-            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
+        # Every supported language, in the canonical order, two per row — built
+        # from the one table rather than spelled out here.
+        choices = [
+            (language_label(code, with_code=True), f"rtr_set:{rule.id}:{code}")
+            for code in SUPPORTED_LANGUAGES
+        ]
+        rows += [choices[i:i + 2] for i in range(0, len(choices), 2)]
+        rows.append([(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")])
         return text, self._kbd(rows)
 
     async def _render_profile_menu(self, uid: int, user: Any = None) -> Tuple[str, InlineKeyboardMarkup]:
@@ -3902,7 +3932,9 @@ class ProBotUI:
         ])
 
     def _lang_menu(self) -> InlineKeyboardMarkup:
-        items = [(name, f'{CB["lang_set"]}:{code}') for code, name in LANG_FLAG.items()]
+        # The same label the picker shows, from the same row: flag, then the
+        # language's own name.
+        items = [(language_label(code), f'{CB["lang_set"]}:{code}') for code in LANG_FLAG]
         rows = [items[i:i + 2] for i in range(0, len(items), 2)]
         rows.append([(self._t("ui_back"), CB["main"])])
         return self._kbd(rows)
@@ -7130,7 +7162,11 @@ class ProBotUI:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.translate_lang = "" if lang_code == "none" else lang_code
             await self._save_owned_rule(rule, uid)
-            status_msg = f"{self._t('ui_adv_btn_translate')}: {lang_code.upper()}" if rule.translate_lang else self._t("ui_filter_link_off")
+            # The label already names the language (`🌐 Translation: 🇮🇷 فارسی`),
+            # so the toast *is* the label. Building it from the template without
+            # the placeholder printed `{language}` at the user.
+            status_msg = (self._t("ui_adv_btn_translate", language=language_label(rule.translate_lang))
+                          if rule.translate_lang else self._t("ui_filter_link_off"))
             await cq.answer(status_msg)
             text, kbd = self._render_translate_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
