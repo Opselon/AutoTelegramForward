@@ -126,7 +126,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
       setSettingSources(res?.sources ?? {})
       setEdits({})
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load task settings')
+      setError(err instanceof Error ? err.message : t('ui_could_not_load_task_settings'))
     } finally {
       setLoading(false)
     }
@@ -161,10 +161,10 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
       if (res?.settings) setSettings(res.settings)
       setSettingSources(res?.sources ?? settingSources)
       setEdits({})
-      setNotice(res?.message || 'Settings saved')
+      setNotice(res?.message || t('ui_settings_saved'))
       onSaved?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save settings')
+      setError(err instanceof Error ? err.message : t('ui_could_not_save_settings'))
     } finally {
       setSaving(false)
     }
@@ -199,10 +199,10 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
         delete next[key]
         return next
       })
-      setNotice(res?.message || 'Handed back to the default')
+      setNotice(res?.message || t('ui_handed_back_to_the_default'))
       onSaved?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not reset this setting')
+      setError(err instanceof Error ? err.message : t('ui_could_not_reset_setting'))
     } finally {
       setResetting(null)
     }

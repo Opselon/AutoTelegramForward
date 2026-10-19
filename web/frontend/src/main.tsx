@@ -13,6 +13,11 @@ import {
   type SessionState,
 } from './session'
 import { appKey, isSessionStorageEvent } from './sessionIdentity'
+import { makeT, preferredLang } from './locales'
+
+// The shell has no component tree to inherit a language from, so it resolves
+// the same preference the panels do (stored choice → browser → English).
+const t = makeT(preferredLang())
 
 // Global error boundary to prevent any blank screen crash
 class ErrorBoundary extends React.Component<
@@ -51,10 +56,10 @@ class ErrorBoundary extends React.Component<
         >
           <div style={{ fontSize: 44, marginBottom: 12 }}>⚠️</div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: 8, color: '#f87171' }}>
-            خطا در اجرای داشبورد
+            {t('ui_dashboard_failed_to_start')}
           </h2>
           <p style={{ fontSize: '0.875rem', color: '#94a3b8', maxWidth: 400, marginBottom: 20 }}>
-            {this.state.error?.message || 'مشکلی در بارگذاری رخ داد.'}
+            {this.state.error?.message || t('ui_something_went_wrong_loading')}
           </p>
           <button
             onClick={() => {
@@ -71,7 +76,7 @@ class ErrorBoundary extends React.Component<
               cursor: 'pointer',
             }}
           >
-            تلاش مجدد و ورود مجدد
+            {t('ui_retry_and_sign_in_again')}
           </button>
         </div>
       )
@@ -158,14 +163,15 @@ function Root() {
           onLogin()
         } else {
           // The core refuses used, expired and unknown codes alike.
-          setLinkError('این لینک ورود منقضی شده یا قبلاً استفاده شده است. از ربات دوباره لینک بگیرید.')
+          setLinkError(t('ui_login_link_expired'))
         }
       })
       .catch((err: unknown) => {
         if (cancelled) return
         setLinkError(
-          'این لینک ورود منقضی شده یا قبلاً استفاده شده است. از ربات دوباره لینک بگیرید. ' +
-            `(${err instanceof Error ? err.message : String(err)})`,
+          `${t('ui_login_link_expired')} (${
+            err instanceof Error ? err.message : String(err)
+          })`,
         )
       })
       .finally(() => {
@@ -244,7 +250,7 @@ function Root() {
           fontSize: '0.95rem',
         }}
       >
-        در حال ورود…
+        {t('ui_signing_in')}
       </div>
     )
   }

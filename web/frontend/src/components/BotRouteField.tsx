@@ -68,7 +68,7 @@ export function BotRouteField({
       setOpen(false)
       await reloadBots()
       if (info?.id) onChange(info.id)
-      setNotice(`Attached ${info?.label || 'the bot'} — Telegram accepted it.`)
+      setNotice(t('ui_bot_attached_telegram_accepted', { name: info?.label || t('ui_the_bot') }))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('ui_telegram_refused_this_token'))
     } finally {

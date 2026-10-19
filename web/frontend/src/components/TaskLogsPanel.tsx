@@ -65,7 +65,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
       })
       setPage(res)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load this task’s logs')
+      setError(err instanceof Error ? err.message : t('ui_could_not_load_task_logs'))
       setPage(null)
     } finally {
       setLoading(false)
@@ -120,7 +120,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
         format,
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Export failed')
+      setError(err instanceof Error ? err.message : t('ui_export_failed'))
     } finally {
       setExporting(false)
     }

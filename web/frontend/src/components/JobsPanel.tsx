@@ -66,7 +66,7 @@ export function JobsPanel({
       setTotal(page.total ?? sorted.length)
       setError(null)
     } catch (e: any) {
-      setError(e?.message || 'Failed to load')
+      setError(e?.message || t('ui_failed_to_load'))
     } finally {
       setLoading(false)
     }
@@ -96,7 +96,7 @@ export function JobsPanel({
       await (op === 'cancel' ? api.cancelTask(task.id) : api.retryTask(task.id))
       await refresh()
     } catch (e: any) {
-      setError(e?.message || 'Failed')
+      setError(e?.message || t('ui_failed'))
     } finally {
       setBusy(null)
     }

@@ -72,7 +72,7 @@ export function AuditEventsPanel({ lang }: Props) {
       setEvents(res.events || [])
       setTotal(res.total || 0)
     } catch (e: any) {
-      setError(e?.message || 'failed to load audit events')
+      setError(e?.message || t('ui_could_not_load_audit_events'))
       setEvents([])
       setTotal(0)
     } finally {

@@ -392,7 +392,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
         setSimSelectedRuleId(r[0].id)
       }
     } catch (e: any) {
-      showToast(e.message || 'Error loading dashboard data')
+      showToast(e.message || t('ui_error_loading_dashboard_data'))
     } finally {
       setLoading(false)
     }
@@ -750,7 +750,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
       setPvConfig(saved)
       showToast(t('ui_pv_assistant_config_saved_successfully'))
     } catch (e: any) {
-      showToast(e.message || 'Error saving PV Assistant config')
+      showToast(e.message || t('ui_error_saving_pv_config'))
     } finally {
       setPvSaving(false)
     }
@@ -1012,7 +1012,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
       })
       setSimResult(res)
     } catch (e: any) {
-      showToast(e.message || 'Simulation error')
+      showToast(e.message || t('ui_simulation_error'))
     } finally {
       setSimulating(false)
     }
@@ -3101,11 +3101,11 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     }}
                   >
                     <option value="all">{t('ui_all_services')}</option>
-                    <option value="core">core (پایتون هسته)</option>
-                    <option value="bot">bot (ربات تلگرام)</option>
-                    <option value="api">api (کنترل پلین Go)</option>
-                    <option value="pipeline">pipeline (پایپ‌لاین فوروارد)</option>
-                    <option value="boot">boot (راه‌اندازی سشن‌ها)</option>
+                    <option value="core">{t('ui_service_core')}</option>
+                    <option value="bot">{t('ui_service_bot')}</option>
+                    <option value="api">{t('ui_service_api')}</option>
+                    <option value="pipeline">{t('ui_service_pipeline')}</option>
+                    <option value="boot">{t('ui_service_boot')}</option>
                   </select>
                 </div>
 
@@ -4037,7 +4037,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                               value={brandingListValue('keywords')}
                               onChange={(e) => onBrandingListInput('keywords', e.target.value)}
                               className="input-field"
-                              placeholder="BUY, SIGNAL, طلا"
+                              placeholder={t('ui_example_keywords')}
                             />
                           </div>
 
