@@ -330,6 +330,16 @@ async def test_transformer_timeout_isolation():
     )
     mock_repo.get_by_id.return_value = cfg
 
+    # `get_owned` is part of the interface (the engine reads a config
+    # owner-scoped). Left to auto-create, it hands the transformer a MagicMock
+    # "config" whose attributes are mocks — the prompt builder then takes a
+    # coroutine it never awaits, which is both a RuntimeWarning and a test that
+    # no longer drives the real timeout path.
+    async def get_owned(cid, owner_user_id=0):
+        return cfg
+
+    mock_repo.get_owned.side_effect = get_owned
+
     async def slow_call(*args, **kwargs):
         await asyncio.sleep(0.5)
         return "Slow result"
