@@ -1506,9 +1506,11 @@ class AdvancedSettingsEngine:
 
     @classmethod
     def get_dispatch_delay(cls, rule: "ForwardRule") -> float:
-        """Seconds to wait before dispatching, honoring the advanced setting.
+        """Seconds to wait before dispatching — the one authority for the delay.
 
-        Falls back to the rule's first-class ``delay_seconds`` when the advanced
-        setting is absent, and is hard-bounded to one hour.
+        The advanced setting wins, falling back to the rule's first-class
+        ``delay_seconds`` when it is absent, and the result is bounded by
+        ``MAX_FORWARD_DELAY_SECONDS`` so no layer can advertise a delay that
+        another layer silently truncates.
         """
         return float(rule.forward_delay_seconds or 0.0)

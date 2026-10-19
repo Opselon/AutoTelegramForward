@@ -294,7 +294,12 @@ class DurableQueueManager:
         # permanent source-of-truth inconsistency between rule state and the
         # delivery table. The job insert stays INSERT OR IGNORE, so a replay
         # after a mid-unit crash is a harmless no-op rather than a duplicate.
-        delay = float(getattr(rule, "delay_seconds", 0.0) or 0.0)
+        # The delay is a *durable scheduling* decision, so it is written into the
+        # job's claim gate (`next_retry_at`) once, from the single authority the
+        # worker also reads. Applying it here *and* sleeping in the worker made a
+        # configured 300s wait 600s, and the sleep died with the process while the
+        # gate survives a restart.
+        delay = AdvancedSettingsEngine.get_dispatch_delay(rule)
         next_retry_at = time.time() + delay if delay > 0 else 0.0
         # The reply is a distinct deliverable, so it gets a distinct id —
         # otherwise the primary forward's INSERT OR IGNORE swallows it.
@@ -1078,17 +1083,18 @@ class DurableQueueManager:
             has_media = False
 
         # --- Phase 2: advanced task-overview settings execute here -------------
-        # `advanced_delay_seconds` is the authoritative Phase 2 field; the
-        # legacy `delay_seconds` is kept as a fallback so existing rules that
-        # predate the advanced UI keep behaving exactly as before.
+        # The delay is enforced by this job's claim gate (`next_retry_at`, written
+        # from `AdvancedSettingsEngine.get_dispatch_delay` at enqueue time): the job
+        # was not even claimable until the delay elapsed. Sleeping again here would
+        # double the configured wait and burn a worker slot for up to an hour, and
+        # the sleep would be lost on restart while the gate is not. Logged only.
         adv_delay = data.get("advanced_delay_seconds")
         delay = float(adv_delay) if adv_delay is not None else float(data.get("delay_seconds", 0.0) or 0.0)
         if delay > 0:
             logger.debug(
-                "[DURABLE_QUEUE] applying advanced dispatch delay %.1fs for job %s -> %s",
+                "[DURABLE_QUEUE] dispatch delay %.1fs already elapsed for job %s -> %s",
                 delay, job.id, target,
             )
-            await asyncio.sleep(min(delay, 3600.0))
 
         caption = text if text else None
 

@@ -1,3 +1,4 @@
+import math
 import re
 import time
 import uuid
@@ -86,6 +87,33 @@ def _strip_phone_numbers(text: str) -> str:
 
 def _now() -> int:
     return int(time.time())
+
+
+#: Longest delay a task may configure, in seconds (24h). One constant for every
+#: layer that bounds a delay: the advanced-settings schema advertises 86400, the
+#: legacy first-class field is clamped here, and both dispatch paths cap at it —
+#: so a value the UI accepts is a value the worker actually honours.
+MAX_FORWARD_DELAY_SECONDS = 86400.0
+
+
+def clamp_delay_seconds(value: Any, *, maximum: float = MAX_FORWARD_DELAY_SECONDS) -> float:
+    """Return a delay the forwarding engine can honour, whatever the client sent.
+
+    Client-supplied numbers arrive as text or as callback payloads, so they are
+    not trustworthy: `nan` reached SQLite as NULL (NOT NULL violation on save),
+    `inf` reached the job payload as invalid JSON (`Infinity`), and a negative
+    delay left the screens showing a value the queue ignored. Anything that is not
+    a finite number in ``[0, maximum]`` is normalized instead of persisted.
+    """
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if math.isnan(seconds) or math.isinf(seconds):
+        return 0.0
+    if seconds <= 0.0:
+        return 0.0
+    return min(seconds, float(maximum))
 
 
 @dataclass
@@ -219,6 +247,11 @@ class ForwardRule:
 
     def __post_init__(self):
         # Sync metadata with first-class fields if provided via metadata
+        # A delay is a scheduling hint the workers must be able to honour: it is
+        # normalized here, at construction, because every write path (bot screens,
+        # Go API -> RPC, web dashboard, backup restore, task duplication) builds a
+        # ForwardRule and only some of them validate their input.
+        self.delay_seconds = clamp_delay_seconds(self.delay_seconds)
         if isinstance(self.metadata, dict):
             if not self.name and self.metadata.get("name"):
                 self.name = str(self.metadata["name"])
@@ -1452,24 +1485,15 @@ class ForwardRule:
     def forward_delay_seconds(self) -> float:
         """Delay (seconds) applied before dispatch — anti-detection/scheduling."""
         if not isinstance(self.metadata, dict):
-            return float(self.delay_seconds or 0.0)
+            return clamp_delay_seconds(self.delay_seconds)
         raw = self.metadata.get("forward_delay_seconds", self.delay_seconds)
-        try:
-            val = float(raw)
-        except (TypeError, ValueError):
-            return float(self.delay_seconds or 0.0)
-        # Bounded: a delay is a scheduling hint, not an unbounded sleep. The
-        # hard cap keeps a misconfigured rule from stalling a worker forever.
-        return max(0.0, min(val, 3600.0))
+        return clamp_delay_seconds(raw if raw not in (None, "") else self.delay_seconds)
 
     @forward_delay_seconds.setter
     def forward_delay_seconds(self, val: Optional[float]) -> None:
         if not isinstance(self.metadata, dict):
             self.metadata = {}
-        try:
-            self.metadata["forward_delay_seconds"] = max(0.0, min(float(val or 0.0), 3600.0))
-        except (TypeError, ValueError):
-            self.metadata["forward_delay_seconds"] = 0.0
+        self.metadata["forward_delay_seconds"] = clamp_delay_seconds(val)
 
     @property
     def edit_time_limit_seconds(self) -> int:
