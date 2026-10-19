@@ -1,0 +1,1254 @@
+# Content-keyed baseline for the UI-copy gate: one 'path|normalized text'
+# entry per currently tolerated offender. Regenerate with --update-baseline.
+# Never hand-edit an entry to silence a new string: localize it instead.
+web/frontend/src/App.tsx|${…} تنظیمات از فایل بکاپ${…}؟${…} این عمل قابل بازگشت نیست.
+web/frontend/src/App.tsx|${…} لاگ حذف شد · ${…} باقی ماند
+web/frontend/src/App.tsx|AI Config deleted
+web/frontend/src/App.tsx|AI Config saved successfully
+web/frontend/src/App.tsx|AI Config:
+web/frontend/src/App.tsx|AI Engine Configuration
+web/frontend/src/App.tsx|AI Intelligence
+web/frontend/src/App.tsx|AI Intelligence & Rewriting Engines
+web/frontend/src/App.tsx|AI Message Rewrite
+web/frontend/src/App.tsx|AI PV Assistant
+web/frontend/src/App.tsx|AI behavior prompt for private chats...
+web/frontend/src/App.tsx|API Key:
+web/frontend/src/App.tsx|API Key:
+web/frontend/src/App.tsx|Active Rules
+web/frontend/src/App.tsx|Advanced Content & Media Filtering
+web/frontend/src/App.tsx|Advanced Filters
+web/frontend/src/App.tsx|Album Mode:
+web/frontend/src/App.tsx|All Levels
+web/frontend/src/App.tsx|All Services
+web/frontend/src/App.tsx|All tasks
+web/frontend/src/App.tsx|Allowed Media:
+web/frontend/src/App.tsx|Anthropic
+web/frontend/src/App.tsx|Anti-Spam Filter
+web/frontend/src/App.tsx|Are you sure you want to delete this rule?
+web/frontend/src/App.tsx|Audit Events
+web/frontend/src/App.tsx|Auth Status:
+web/frontend/src/App.tsx|Authorized ✓
+web/frontend/src/App.tsx|Auto
+web/frontend/src/App.tsx|BUY, SIGNAL, طلا
+web/frontend/src/App.tsx|Backup
+web/frontend/src/App.tsx|Backup & Restore (Server Migration)
+web/frontend/src/App.tsx|Backup failed
+web/frontend/src/App.tsx|Backup file
+web/frontend/src/App.tsx|Blacklist Keywords (comma-separated):
+web/frontend/src/App.tsx|Blacklist:
+web/frontend/src/App.tsx|Brand C
+web/frontend/src/App.tsx|Branding hop triggers (optional)
+web/frontend/src/App.tsx|Bypass Activated: Protected content will be re-uploaded directly.
+web/frontend/src/App.tsx|Cancel
+web/frontend/src/App.tsx|Cancel
+web/frontend/src/App.tsx|Cancel
+web/frontend/src/App.tsx|Cancel
+web/frontend/src/App.tsx|Cannot delete system prompt
+web/frontend/src/App.tsx|Central Logger
+web/frontend/src/App.tsx|Channel C
+web/frontend/src/App.tsx|Chat History Limit:
+web/frontend/src/App.tsx|Check key & endpoint
+web/frontend/src/App.tsx|Checking…
+web/frontend/src/App.tsx|Client Settings
+web/frontend/src/App.tsx|Comma separated. Matches the channel name in the forward header, not the message body.
+web/frontend/src/App.tsx|Configuration Name:
+web/frontend/src/App.tsx|Configure LLM models for auto-rewriting, signal parsing, and translations
+web/frontend/src/App.tsx|Configure triple-routes, branding hops, bypass policies, and channel mappings
+web/frontend/src/App.tsx|Connected Sessions
+web/frontend/src/App.tsx|Content Filter Rule
+web/frontend/src/App.tsx|Cooldown (s):
+web/frontend/src/App.tsx|Copied
+web/frontend/src/App.tsx|Copy log line
+web/frontend/src/App.tsx|Core:6001
+web/frontend/src/App.tsx|Create an AI config first
+web/frontend/src/App.tsx|Custom (OpenAI-compatible)
+web/frontend/src/App.tsx|Custom Footer:
+web/frontend/src/App.tsx|Custom Header:
+web/frontend/src/App.tsx|DLQ purged
+web/frontend/src/App.tsx|DLQ purged (${…})
+web/frontend/src/App.tsx|Dead Letter Queue
+web/frontend/src/App.tsx|Dead Letter Queue (DLQ)
+web/frontend/src/App.tsx|Dead Letter Queue is empty ✓
+web/frontend/src/App.tsx|Decision
+web/frontend/src/App.tsx|Decision Reason:
+web/frontend/src/App.tsx|Default (no system prompt)
+web/frontend/src/App.tsx|Delete
+web/frontend/src/App.tsx|Delete
+web/frontend/src/App.tsx|Delete this AI Config?
+web/frontend/src/App.tsx|Delete this filter rule?
+web/frontend/src/App.tsx|Delivery Jobs & Dead Letter Queue (DLQ)
+web/frontend/src/App.tsx|Description:
+web/frontend/src/App.tsx|DevOps & Logs
+web/frontend/src/App.tsx|Direct
+web/frontend/src/App.tsx|Direct
+web/frontend/src/App.tsx|Direct (No Proxy)
+web/frontend/src/App.tsx|Dismiss
+web/frontend/src/App.tsx|Down services:
+web/frontend/src/App.tsx|Duplicate Task
+web/frontend/src/App.tsx|ERROR:
+web/frontend/src/App.tsx|Edit
+web/frontend/src/App.tsx|Edit Forward Rule
+web/frontend/src/App.tsx|Endpoint:
+web/frontend/src/App.tsx|Engine Decision & Workflow Trace
+web/frontend/src/App.tsx|English
+web/frontend/src/App.tsx|English
+web/frontend/src/App.tsx|Error
+web/frontend/src/App.tsx|Error loading dashboard data
+web/frontend/src/App.tsx|Error saving PV Assistant config
+web/frontend/src/App.tsx|Error saving prompt
+web/frontend/src/App.tsx|Every setting, rule, filter, AI config and Telegram session is packed into one JSON bundle. Restore it on the new server to migrate.
+web/frontend/src/App.tsx|Export failed
+web/frontend/src/App.tsx|Failed
+web/frontend/src/App.tsx|Failed to duplicate task
+web/frontend/src/App.tsx|Failed to save task
+web/frontend/src/App.tsx|Fallback:
+web/frontend/src/App.tsx|File passphrase (optional, recommended)
+web/frontend/src/App.tsx|Filter
+web/frontend/src/App.tsx|Filter Name:
+web/frontend/src/App.tsx|Filter name is required
+web/frontend/src/App.tsx|Filter rule deleted
+web/frontend/src/App.tsx|Filter rule saved successfully
+web/frontend/src/App.tsx|Filter to this task
+web/frontend/src/App.tsx|Filtered
+web/frontend/src/App.tsx|First media only
+web/frontend/src/App.tsx|For a custom provider, enter the full address of your own endpoint
+web/frontend/src/App.tsx|Forex Signals
+web/frontend/src/App.tsx|Forex VIP Channel
+web/frontend/src/App.tsx|Forward Origin Chat ID:
+web/frontend/src/App.tsx|Forward Origin Title:
+web/frontend/src/App.tsx|Forward Origin Username:
+web/frontend/src/App.tsx|Forward-origin channel IDs:
+web/frontend/src/App.tsx|Forward-origin channel names:
+web/frontend/src/App.tsx|Forwarded
+web/frontend/src/App.tsx|Forwarded 24h
+web/frontend/src/App.tsx|Full album
+web/frontend/src/App.tsx|Full replace (overwrite existing rows)
+web/frontend/src/App.tsx|Has Media
+web/frontend/src/App.tsx|Header:
+web/frontend/src/App.tsx|High-throughput independent Logger microservice on gRPC :6002 with live auto-refresh and multi-tier filtering
+web/frontend/src/App.tsx|History:
+web/frontend/src/App.tsx|Hop
+web/frontend/src/App.tsx|Hop C
+web/frontend/src/App.tsx|Hop C
+web/frontend/src/App.tsx|Human-like conversational auto-responder for Telegram private messages
+web/frontend/src/App.tsx|INFO:
+web/frontend/src/App.tsx|Ignore Bot Messages
+web/frontend/src/App.tsx|In Queue
+web/frontend/src/App.tsx|Intermediate Channel ID (C):
+web/frontend/src/App.tsx|Intermediate Title:
+web/frontend/src/App.tsx|JOIN, SCAM, PROMO
+web/frontend/src/App.tsx|Job requeued for retry
+web/frontend/src/App.tsx|Keep last
+web/frontend/src/App.tsx|Lang:
+web/frontend/src/App.tsx|Leave blank to keep the stored key
+web/frontend/src/App.tsx|Leave blank to use this provider's default: ${…}
+web/frontend/src/App.tsx|Level:
+web/frontend/src/App.tsx|Linked AI Model Configuration:
+web/frontend/src/App.tsx|Live Smart Simulator
+web/frontend/src/App.tsx|Live Stream Active (3s)
+web/frontend/src/App.tsx|Live Stream Paused
+web/frontend/src/App.tsx|Log export downloaded
+web/frontend/src/App.tsx|Log:6002
+web/frontend/src/App.tsx|Logout
+web/frontend/src/App.tsx|Loop
+web/frontend/src/App.tsx|Manage text blacklists/whitelists, Regex patterns, and media type policies
+web/frontend/src/App.tsx|Master Admin
+web/frontend/src/App.tsx|Max Typing Delay (s):
+web/frontend/src/App.tsx|Media & Sync Settings (bot parity)
+web/frontend/src/App.tsx|Message text keywords:
+web/frontend/src/App.tsx|Min Typing Delay (s):
+web/frontend/src/App.tsx|Model Name:
+web/frontend/src/App.tsx|Monitor connected userbot sessions, auth status, and proxies
+web/frontend/src/App.tsx|Msg #
+web/frontend/src/App.tsx|My Brand Channel
+web/frontend/src/App.tsx|My Jobs
+web/frontend/src/App.tsx|Name, provider, and model are required
+web/frontend/src/App.tsx|Name:
+web/frontend/src/App.tsx|Native
+web/frontend/src/App.tsx|Native forward from C (the only way B shows C in the header)
+web/frontend/src/App.tsx|New AI Engine
+web/frontend/src/App.tsx|New Filter Rule
+web/frontend/src/App.tsx|New Forward Rule
+web/frontend/src/App.tsx|New Prompt
+web/frontend/src/App.tsx|New Rule +
+web/frontend/src/App.tsx|Newer
+web/frontend/src/App.tsx|Newest first
+web/frontend/src/App.tsx|No log events matching current filters.
+web/frontend/src/App.tsx|No pending jobs in queue
+web/frontend/src/App.tsx|No pipeline errors recorded. All healthy.
+web/frontend/src/App.tsx|No simulation run yet. Click Run to evaluate.
+web/frontend/src/App.tsx|None / Environment
+web/frontend/src/App.tsx|Older
+web/frontend/src/App.tsx|Oldest first
+web/frontend/src/App.tsx|On AI Failure:
+web/frontend/src/App.tsx|Only hop messages matching the triggers below (otherwise every matched message hops)
+web/frontend/src/App.tsx|OpenAI GPT-4o Fast
+web/frontend/src/App.tsx|Or paste the bundle
+web/frontend/src/App.tsx|Order:
+web/frontend/src/App.tsx|Output Language:
+web/frontend/src/App.tsx|Output Message Preview:
+web/frontend/src/App.tsx|PRO GATEWAY
+web/frontend/src/App.tsx|PV Assistant
+web/frontend/src/App.tsx|PV Assistant config saved successfully
+web/frontend/src/App.tsx|Page size
+web/frontend/src/App.tsx|Passphrase (if the file is encrypted)
+web/frontend/src/App.tsx|Pause
+web/frontend/src/App.tsx|Pause
+web/frontend/src/App.tsx|Persona & Tone Presets:
+web/frontend/src/App.tsx|Persona Prompt Instructions:
+web/frontend/src/App.tsx|Phone:
+web/frontend/src/App.tsx|Pipeline Execution Steps:
+web/frontend/src/App.tsx|Premium Deals, Forex VIP
+web/frontend/src/App.tsx|Pro Active Logger & Diagnostics
+web/frontend/src/App.tsx|Processed
+web/frontend/src/App.tsx|Prompt Test (no message sent)
+web/frontend/src/App.tsx|Prompt deleted
+web/frontend/src/App.tsx|Prompt saved
+web/frontend/src/App.tsx|Protected Content Channel
+web/frontend/src/App.tsx|Provider Endpoint (Base URL):
+web/frontend/src/App.tsx|Provider:
+web/frontend/src/App.tsx|Proxy:
+web/frontend/src/App.tsx|Purge All DLQ
+web/frontend/src/App.tsx|Purge all DLQ entries?
+web/frontend/src/App.tsx|Purge archive:
+web/frontend/src/App.tsx|Purge old logs
+web/frontend/src/App.tsx|Python Core & MTProto
+web/frontend/src/App.tsx|Queue & DLQ
+web/frontend/src/App.tsx|REST Control Plane
+web/frontend/src/App.tsx|REST proxy + JWT
+web/frontend/src/App.tsx|Recent Delivery Jobs
+web/frontend/src/App.tsx|Recent Pipeline Errors (Triage Queue)
+web/frontend/src/App.tsx|Refresh
+web/frontend/src/App.tsx|Refresh
+web/frontend/src/App.tsx|Refresh Now
+web/frontend/src/App.tsx|Refuse messages that are not forwards
+web/frontend/src/App.tsx|Resume
+web/frontend/src/App.tsx|Resume
+web/frontend/src/App.tsx|Retry
+web/frontend/src/App.tsx|Reusable rewrite prompts for forward rules. ⭐ = system prompts (read-only).
+web/frontend/src/App.tsx|Rewrite Prompt Editor
+web/frontend/src/App.tsx|Rewrite Prompt:
+web/frontend/src/App.tsx|Rewrite the text preserving numbers, links, and names. Never invent facts. Return only the rewritten text.
+web/frontend/src/App.tsx|Route 1: Direct
+web/frontend/src/App.tsx|Route 1: Direct Copy
+web/frontend/src/App.tsx|Route 2: VIP
+web/frontend/src/App.tsx|Route 2: VIP Hop
+web/frontend/src/App.tsx|Route 3: Native
+web/frontend/src/App.tsx|Route 3: Native
+web/frontend/src/App.tsx|Routing Loop Detected: Intermediate channel cannot match source or target!
+web/frontend/src/App.tsx|Routing Loop Detected: Source and target IDs cannot be identical!
+web/frontend/src/App.tsx|Rule deleted successfully
+web/frontend/src/App.tsx|Rule paused
+web/frontend/src/App.tsx|Rule resumed
+web/frontend/src/App.tsx|Rule route switched successfully
+web/frontend/src/App.tsx|Rule saved successfully
+web/frontend/src/App.tsx|Rule status updated
+web/frontend/src/App.tsx|Rules & Routes
+web/frontend/src/App.tsx|Run AI Test
+web/frontend/src/App.tsx|Run Decision Engine
+web/frontend/src/App.tsx|Save
+web/frontend/src/App.tsx|Save Filter
+web/frontend/src/App.tsx|Save PV Config
+web/frontend/src/App.tsx|Save Prompt
+web/frontend/src/App.tsx|Save Rule
+web/frontend/src/App.tsx|Saving...
+web/frontend/src/App.tsx|Saving…
+web/frontend/src/App.tsx|Search logs live...
+web/frontend/src/App.tsx|Select Target Rule:
+web/frontend/src/App.tsx|Select a task before purging its logs
+web/frontend/src/App.tsx|Service:
+web/frontend/src/App.tsx|Services Topology & Live Health
+web/frontend/src/App.tsx|Session backup downloaded
+web/frontend/src/App.tsx|Session terminated
+web/frontend/src/App.tsx|Simulated Message Text:
+web/frontend/src/App.tsx|Simulating...
+web/frontend/src/App.tsx|Simulation error
+web/frontend/src/App.tsx|Smart Forwarding & Routing Rules
+web/frontend/src/App.tsx|Smart Simulator
+web/frontend/src/App.tsx|Source A
+web/frontend/src/App.tsx|Source A
+web/frontend/src/App.tsx|Source Chat ID (A):
+web/frontend/src/App.tsx|Source Title:
+web/frontend/src/App.tsx|Source and target IDs are required
+web/frontend/src/App.tsx|Split messages
+web/frontend/src/App.tsx|Stage:
+web/frontend/src/App.tsx|Stored on the server only; it is never sent back to this page
+web/frontend/src/App.tsx|System
+web/frontend/src/App.tsx|System Prompt (دستور اصلی به AI):
+web/frontend/src/App.tsx|System Prompt:
+web/frontend/src/App.tsx|System Prompt:
+web/frontend/src/App.tsx|System Prompt:
+web/frontend/src/App.tsx|TOTAL ARCHIVE:
+web/frontend/src/App.tsx|Target B
+web/frontend/src/App.tsx|Target B
+web/frontend/src/App.tsx|Target Chat ID (B):
+web/frontend/src/App.tsx|Target Title:
+web/frontend/src/App.tsx|Task Overview & Advanced Settings
+web/frontend/src/App.tsx|Task duplicated successfully
+web/frontend/src/App.tsx|Task updated successfully
+web/frontend/src/App.tsx|Task:
+web/frontend/src/App.tsx|Telegram MTProto Client Sessions
+web/frontend/src/App.tsx|Telegram Mini App auto-authenticated
+web/frontend/src/App.tsx|Telegram Sessions
+web/frontend/src/App.tsx|Temperature:
+web/frontend/src/App.tsx|Terminate
+web/frontend/src/App.tsx|Terminate failed
+web/frontend/src/App.tsx|Terminate session ${…}?
+web/frontend/src/App.tsx|Test failed
+web/frontend/src/App.tsx|Test routing engine decisions, VIP origin criteria, and protected content bypass
+web/frontend/src/App.tsx|This file is unencrypted and holds live credentials.
+web/frontend/src/App.tsx|Timeout (s):
+web/frontend/src/App.tsx|Timeout (ثانیه):
+web/frontend/src/App.tsx|Trace this request end to end
+web/frontend/src/App.tsx|Track in-flight delivery jobs and recover failed telegram messages
+web/frontend/src/App.tsx|Trigger match mode:
+web/frontend/src/App.tsx|USDJPY VIP
+web/frontend/src/App.tsx|Unauthorized ✗
+web/frontend/src/App.tsx|Unified Smart Telegram Forwarding Gateway & Microservice Platform
+web/frontend/src/App.tsx|Use Intermediate Branding Channel (Hop via C)
+web/frontend/src/App.tsx|User ID:
+web/frontend/src/App.tsx|User Prompt Template:
+web/frontend/src/App.tsx|VIP Hop via C
+web/frontend/src/App.tsx|WARN:
+web/frontend/src/App.tsx|Web Gateway
+web/frontend/src/App.tsx|Web:8088
+web/frontend/src/App.tsx|You are an expert forex signal translator...
+web/frontend/src/App.tsx|all — every matching group must match
+web/frontend/src/App.tsx|all — همه شرط‌ها باید مطابق باشند
+web/frontend/src/App.tsx|any — one matching group is enough
+web/frontend/src/App.tsx|any — یکی از شرط‌ها کافی است
+web/frontend/src/App.tsx|api (کنترل پلین Go)
+web/frontend/src/App.tsx|boot (راه‌اندازی سشن‌ها)
+web/frontend/src/App.tsx|bot (ربات تلگرام)
+web/frontend/src/App.tsx|bundle contents...
+web/frontend/src/App.tsx|core (پایتون هسته)
+web/frontend/src/App.tsx|corr:
+web/frontend/src/App.tsx|e.g. Formal Rewrite
+web/frontend/src/App.tsx|gRPC control
+web/frontend/src/App.tsx|gRPC logs
+web/frontend/src/App.tsx|gRPC لاگ
+web/frontend/src/App.tsx|gRPC کنترل
+web/frontend/src/App.tsx|history from
+web/frontend/src/App.tsx|ms | v
+web/frontend/src/App.tsx|no events
+web/frontend/src/App.tsx|oldest record on disk
+web/frontend/src/App.tsx|pipeline (پایپ‌لاین فوروارد)
+web/frontend/src/App.tsx|provider default
+web/frontend/src/App.tsx|scoped:
+web/frontend/src/App.tsx|sk-...
+web/frontend/src/App.tsx|strong passphrase
+web/frontend/src/App.tsx|system, read-only
+web/frontend/src/App.tsx|task:
+web/frontend/src/App.tsx|{text} is replaced with the message body.
+web/frontend/src/App.tsx|آخرین خطاهای پایپ‌لاین (صف رفع اشکال)
+web/frontend/src/App.tsx|آخرین فوروارد
+web/frontend/src/App.tsx|آدرس سرویس‌دهنده (Endpoint):
+web/frontend/src/App.tsx|آدرس سرویس‌دهنده:
+web/frontend/src/App.tsx|آنلاین
+web/frontend/src/App.tsx|آیا از حذف این فیلتر مطمئن هستید؟
+web/frontend/src/App.tsx|آیا از حذف این قانون اطمینان دارید؟
+web/frontend/src/App.tsx|آیا از حذف این پیکربندی هوش مصنوعی مطمئن هستید؟
+web/frontend/src/App.tsx|آیا از قطع سشن ${…} مطمئن هستید؟
+web/frontend/src/App.tsx|آیا از پاک‌سازی کامل صف خطاهای ناموفق اطمینان دارید؟
+web/frontend/src/App.tsx|اجرای ارزیابی هوشمند
+web/frontend/src/App.tsx|ادامه
+web/frontend/src/App.tsx|ارائه‌دهنده (Provider):
+web/frontend/src/App.tsx|ارزیابی رفتار موتور روتینگ، تطبیق VIP، بای‌پس محتوای قفل‌شده و پیش‌نمایش خروجی پیام قبل از ارسال واقعی
+web/frontend/src/App.tsx|ارسال نیتیو از C (تنها حالتی که B هدر C را نشان می‌دهد)
+web/frontend/src/App.tsx|از سر گیری
+web/frontend/src/App.tsx|استریم زنده فعال (۳ ثانیه)
+web/frontend/src/App.tsx|استریم متوقف
+web/frontend/src/App.tsx|استفاده از هاپ برند واسط (کانال C) جهت تغییر هدر فوروارد
+web/frontend/src/App.tsx|افزودن فیلتر جدید
+web/frontend/src/App.tsx|افزودن قانون جدید +
+web/frontend/src/App.tsx|افزودن مدل هوش مصنوعی
+web/frontend/src/App.tsx|انتخاب قانون برای شبیه‌سازی:
+web/frontend/src/App.tsx|اندازه صفحه
+web/frontend/src/App.tsx|انصراف
+web/frontend/src/App.tsx|انصراف
+web/frontend/src/App.tsx|انصراف
+web/frontend/src/App.tsx|انصراف
+web/frontend/src/App.tsx|اول یک پیکربندی AI بسازید
+web/frontend/src/App.tsx|این فایل رمزگذاری شده است؛ رمز عبور را وارد کنید
+web/frontend/src/App.tsx|این فایل رمزگذاری نشده و حاوی اطلاعات حساس است.
+web/frontend/src/App.tsx|با کاما جدا کنید. تطبیق با نام کانال در هدر فوروارد انجام می‌شود، نه با متن پیام.
+web/frontend/src/App.tsx|بازنویسی هوشمند پیام (AI Rewrite)
+web/frontend/src/App.tsx|بازیابی کامل · ${…} رکورد وارد شد${…}
+web/frontend/src/App.tsx|باقی
+web/frontend/src/App.tsx|بدون رمز عبور، فایل بکاپ حاوی اطلاعات حساس به‌صورت متن ساده خواهد بود. ادامه می‌دهید؟
+web/frontend/src/App.tsx|بدون رویداد
+web/frontend/src/App.tsx|برای ارائه‌دهنده سفارشی، آدرس کامل سرویس‌دهنده خود را وارد کنید
+web/frontend/src/App.tsx|برای نگه داشتن کلید ذخیره‌شده این فیلد را خالی بگذارید
+web/frontend/src/App.tsx|برای پاک‌سازی، یک تسک را انتخاب کنید
+web/frontend/src/App.tsx|بررسی جاب‌های در حال انجام، خطاهای پایپ‌لاین و تلاش مجدد برای پیام‌های شکست‌خورده
+web/frontend/src/App.tsx|بررسی کلید و آدرس
+web/frontend/src/App.tsx|بروزرسانی
+web/frontend/src/App.tsx|بروزرسانی دستی
+web/frontend/src/App.tsx|بستن
+web/frontend/src/App.tsx|به‌روزرسانی داده‌ها
+web/frontend/src/App.tsx|بکاپ ساخته شد · ${…} رکورد${…}
+web/frontend/src/App.tsx|بکاپ سشن
+web/frontend/src/App.tsx|بکاپ سشن دانلود شد
+web/frontend/src/App.tsx|بکاپ ناموفق بود
+web/frontend/src/App.tsx|بکاپ‌گیری و بازیابی (انتقال بین سرورها)
+web/frontend/src/App.tsx|تاریخچه از
+web/frontend/src/App.tsx|تخلیه صف خطاهای DLQ
+web/frontend/src/App.tsx|ترتیب:
+web/frontend/src/App.tsx|تست با AI
+web/frontend/src/App.tsx|تست پرامپت (بدون ارسال پیام)
+web/frontend/src/App.tsx|تسک ${…}
+web/frontend/src/App.tsx|تسک با موفقیت به‌روزرسانی شد
+web/frontend/src/App.tsx|تسک:
+web/frontend/src/App.tsx|تصمیم پای نهایی
+web/frontend/src/App.tsx|تعریف مسیرهای سه‌گانه، سیاست‌های بازنویسی، کنترل حفاظت تلگرام و سوئیچ سریع مسیر
+web/frontend/src/App.tsx|تلاش مجدد
+web/frontend/src/App.tsx|تمام تنظیمات، قوانین، فیلترها، پیکربندی‌های هوش مصنوعی و سشن‌های تلگرام در یک فایل JSON ذخیره می‌شود. برای انتقال به سرور جدید، این فایل را در سرور مقصد بازیابی کنید.
+web/frontend/src/App.tsx|تمام لاگ‌ها (بدون حفاظت زمانی)
+web/frontend/src/App.tsx|تنظیم لیست‌های سفید/سیاه، الگوهای عبارات باقاعده (Regex) و مسدودسازی رسانه‌ها
+web/frontend/src/App.tsx|تنظیمات دستیار پی‌وی ذخیره شد
+web/frontend/src/App.tsx|تنظیمات رسانه و سینک (مشابه ربات)
+web/frontend/src/App.tsx|تنظیمات موتور هوش مصنوعی
+web/frontend/src/App.tsx|تنظیمات هوش مصنوعی حذف شد
+web/frontend/src/App.tsx|تنظیمات کاربر
+web/frontend/src/App.tsx|توضیحات:
+web/frontend/src/App.tsx|توقف
+web/frontend/src/App.tsx|توقف
+web/frontend/src/App.tsx|توپولوژی سرویس‌ها و سلامت زنده
+web/frontend/src/App.tsx|جاب‌های فعال در حال تحویل
+web/frontend/src/App.tsx|جایگزینی کامل (بازنویسی سطرهای موجود)
+web/frontend/src/App.tsx|جدیدتر
+web/frontend/src/App.tsx|جدیدترین اول
+web/frontend/src/App.tsx|جستجوی زنده در پیام و متن لاگ...
+web/frontend/src/App.tsx|حافظه تاریخچه چت:
+web/frontend/src/App.tsx|حالت آلبوم:
+web/frontend/src/App.tsx|حالت تطبیق شرط‌ها:
+web/frontend/src/App.tsx|حداقل تایپینگ (ثانیه):
+web/frontend/src/App.tsx|حداکثر تایپینگ (ثانیه):
+web/frontend/src/App.tsx|حذف
+web/frontend/src/App.tsx|حذف
+web/frontend/src/App.tsx|حذف ${…}${…}${…}${…}؟ این عمل قابل بازگشت نیست.
+web/frontend/src/App.tsx|حذف شد
+web/frontend/src/App.tsx|حذف لاگ‌های قدیمی
+web/frontend/src/App.tsx|حسابرسی رویدادها
+web/frontend/src/App.tsx|حفظ آخرین
+web/frontend/src/App.tsx|خالی بگذارید تا از پیش‌فرض این ارائه‌دهنده استفاده شود: ${…}
+web/frontend/src/App.tsx|خاموش
+web/frontend/src/App.tsx|خروج از حساب
+web/frontend/src/App.tsx|خروجی لاگ دانلود شد
+web/frontend/src/App.tsx|خطا
+web/frontend/src/App.tsx|خطا در بازیابی بکاپ
+web/frontend/src/App.tsx|خطا در بازیابی بکاپ
+web/frontend/src/App.tsx|خطا در تکثیر قانون
+web/frontend/src/App.tsx|خطا در خروجی گرفتن
+web/frontend/src/App.tsx|خطا در ذخیره تسک
+web/frontend/src/App.tsx|خطا در ساخت بکاپ
+web/frontend/src/App.tsx|خطا در ساخت بکاپ
+web/frontend/src/App.tsx|خطا در پاکسازی لاگ‌ها
+web/frontend/src/App.tsx|خطا در پاکسازی لاگ‌ها
+web/frontend/src/App.tsx|خطای حلقه
+web/frontend/src/App.tsx|خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است!
+web/frontend/src/App.tsx|خطای حلقه: کانال واسط نمی‌تواند با مبدأ یا مقصد یکسان باشد!
+web/frontend/src/App.tsx|در حال بررسی…
+web/frontend/src/App.tsx|در حال ذخیره...
+web/frontend/src/App.tsx|در حال ذخیره…
+web/frontend/src/App.tsx|در حال شبیه‌سازی...
+web/frontend/src/App.tsx|در صف
+web/frontend/src/App.tsx|درگاه DevOps
+web/frontend/src/App.tsx|درگاه وب (Rust)
+web/frontend/src/App.tsx|دستورالعمل رفتار هوش مصنوعی در چت پی‌وی...
+web/frontend/src/App.tsx|دستورالعمل و پرامپت پرسونا (Persona Prompt):
+web/frontend/src/App.tsx|دستیار هوشمند پی‌وی (PV Assistant)
+web/frontend/src/App.tsx|دستیار پی‌وی
+web/frontend/src/App.tsx|دلیل تصمیم موتور:
+web/frontend/src/App.tsx|ذخیره
+web/frontend/src/App.tsx|ذخیره تنظیمات پی‌وی
+web/frontend/src/App.tsx|ذخیره فیلتر
+web/frontend/src/App.tsx|ذخیره قانون
+web/frontend/src/App.tsx|ذخیره پرامپت
+web/frontend/src/App.tsx|رسانه‌های مجاز:
+web/frontend/src/App.tsx|رفتار در خطای AI:
+web/frontend/src/App.tsx|رمز عبور (در صورت رمزگذاری بودن فایل)
+web/frontend/src/App.tsx|رمز عبور فایل
+web/frontend/src/App.tsx|رمز عبور فایل (اختیاری، ولی توصیه می‌شود)
+web/frontend/src/App.tsx|رمز عبور قوی
+web/frontend/src/App.tsx|زبان خروجی:
+web/frontend/src/App.tsx|ساعت
+web/frontend/src/App.tsx|سامانه یکپارچه فوروارد هوشمند، میکروسرویس Rust + React و درگاه DevOps
+web/frontend/src/App.tsx|سرویس لاگر مستقل بر بستر gRPC پورت 6002 با پایگاه داده SQLite WAL، فیلترینگ چندسطحی و استریم زنده
+web/frontend/src/App.tsx|سرویس:
+web/frontend/src/App.tsx|سرویس‌های خاموش:
+web/frontend/src/App.tsx|سشن قطع شد
+web/frontend/src/App.tsx|سشن‌های تلگرام
+web/frontend/src/App.tsx|سشن‌های متصل
+web/frontend/src/App.tsx|سشن‌های متصل تلگرام (Userbots / Clients)
+web/frontend/src/App.tsx|سطح لاگ:
+web/frontend/src/App.tsx|سیستمی، فقط‌خواندنی
+web/frontend/src/App.tsx|شبیه‌ساز تصمیم‌گیری و آزمون زنده
+web/frontend/src/App.tsx|شبیه‌ساز زنده مسیر
+web/frontend/src/App.tsx|شرط‌های طی کردن مسیر برند (اختیاری)
+web/frontend/src/App.tsx|شما صاحب این اکانت تلگرام هستید. پاسخ‌ها بسیار کوتاه (حداکثر ۱ یا ۲ جمله)، کاملاً عامیانه، صمیمی و شبیه چت سریع جوانان در تلگرام باشد. هیچ مقدمه، موخوره یا توضیحات اضافه نده. هرگز نگو ربات هستی!
+web/frontend/src/App.tsx|شما صاحب این اکانت شخصی تلگرام هستید و دارید مستقیماً به پیام‌های شخصی (پی‌وی) مخاطبان و دوستان خود پاسخ می‌دهید. قوانین حیاتی و شیوه صحبت کردن: ۱. لحن شما باید کاملاً خودمانی، بسیار جذاب، صمیمی، محترمانه و زنده به زبان فارسی باشد؛ دقیقاً مانند یک جوان هوشمند، خوش‌برخورد و امروزی ایرانی در چت تلگرام. ۲. هرگز و تحت هیچ شرایطی نگو که ربات، هوش مصنوعی، مدل زبانی یا دستیار مجازی هستی! وانمود کن که خود کاربر هستی. ۳. پاسخ‌ها کوتاه، صمیمانه، خوش‌طبع و موجز باشند (از پاسخ‌های طولانی، رسمی یا مقاله‌ای پرهیز کن). ۴. از اموجی‌های متناسب و طبیعی چت (مانند 🙏، 😉، 🤝، 😂، ✌️) به‌جا و به اندازه استفاده کن. ۵. اگر سوال فنی یا کاری پرسیدند، هوشمندانه و کوتاه راهنمایی کن. اگر گفت‌وگوی احوال‌پرسی است، گرم و صمیمی باش.
+web/frontend/src/App.tsx|شما صاحب این اکانت شخصی تلگرام هستید. پاسخ‌های شما در پی‌وی به مراجعین و همکاران باید بسیار مؤدبانه، حرفه‌ای، محترمانه و سازنده باشد. قوانین: ۱. از زبان فارسی شیک و کلمات محترمانه استفاده کنید. ۲. تحت هیچ عنوان هویت ربات یا هوش مصنوعی را بروز ندهید؛ خود شخص پشت این اکانت هستید. ۳. پاسخ‌ها دقیق، روشن و با رعایت نزاکت کاری باشند.
+web/frontend/src/App.tsx|شناسه منشأ فوروارد (Chat ID):
+web/frontend/src/App.tsx|شناسه کانال مبدأ (A):
+web/frontend/src/App.tsx|شناسه کانال مقصد (B):
+web/frontend/src/App.tsx|شناسه کانال واسط C:
+web/frontend/src/App.tsx|شناسه یا یوزرنیم کانال مبدأ فوروارد:
+web/frontend/src/App.tsx|صف DLQ تخلیه شد
+web/frontend/src/App.tsx|صف DLQ تخلیه شد (${…})
+web/frontend/src/App.tsx|صف تحویل و DLQ
+web/frontend/src/App.tsx|صف خطاها (DLQ)
+web/frontend/src/App.tsx|صف خطاهای DLQ خالی است ✓
+web/frontend/src/App.tsx|صف پیام‌های ناموفق (DLQ)
+web/frontend/src/App.tsx|غیرفعال
+web/frontend/src/App.tsx|غیرفعال
+web/frontend/src/App.tsx|غیرفعال (خاموش)
+web/frontend/src/App.tsx|فارسی
+web/frontend/src/App.tsx|فارسی
+web/frontend/src/App.tsx|فایل بکاپ
+web/frontend/src/App.tsx|فعال
+web/frontend/src/App.tsx|فعال (روشن)
+web/frontend/src/App.tsx|فقط پیام‌های مطابق شرط‌های زیر از کانال C عبور کنند (در غیر این صورت همه پیام‌ها)
+web/frontend/src/App.tsx|فقط:
+web/frontend/src/App.tsx|فوتر سفارشی پیام:
+web/frontend/src/App.tsx|فوروارد
+web/frontend/src/App.tsx|فوروارد ۲۴ ساعت
+web/frontend/src/App.tsx|فوروارد‌شده
+web/frontend/src/App.tsx|فیلتر
+web/frontend/src/App.tsx|فیلتر روی این تسک
+web/frontend/src/App.tsx|فیلترشده
+web/frontend/src/App.tsx|فیلترهای پیشرفته
+web/frontend/src/App.tsx|فیلترهای پیشرفته متن و رسانه
+web/frontend/src/App.tsx|قاعده فیلتر حذف شد
+web/frontend/src/App.tsx|قاعده فیلتر ذخیره شد
+web/frontend/src/App.tsx|قاعده فیلتر محتوا
+web/frontend/src/App.tsx|قالب پیام کاربر (User Template):
+web/frontend/src/App.tsx|قانون از سر گرفته شد
+web/frontend/src/App.tsx|قانون با موفقیت تکثیر شد
+web/frontend/src/App.tsx|قانون با موفقیت حذف شد
+web/frontend/src/App.tsx|قانون با موفقیت ذخیره شد
+web/frontend/src/App.tsx|قانون فوروارد جدید
+web/frontend/src/App.tsx|قانون متوقف شد
+web/frontend/src/App.tsx|قدیمی‌تر
+web/frontend/src/App.tsx|قدیمی‌تر از ${…} ساعت
+web/frontend/src/App.tsx|قدیمی‌ترین اول
+web/frontend/src/App.tsx|قدیمی‌ترین رکورد موجود
+web/frontend/src/App.tsx|قطع سشن
+web/frontend/src/App.tsx|قطع ناموفق بود
+web/frontend/src/App.tsx|قوانین فوروارد و مسیریابی هوشمند
+web/frontend/src/App.tsx|قوانین و مسیرها
+web/frontend/src/App.tsx|لاگر مرکزی
+web/frontend/src/App.tsx|لحن و پرسونا آماده:
+web/frontend/src/App.tsx|لطفا شناسه‌های مبدا و مقصد را وارد کنید
+web/frontend/src/App.tsx|متصل
+web/frontend/src/App.tsx|متغیر {text} جای متن پیام قرار می‌گیرد.
+web/frontend/src/App.tsx|متن را با حفظ اعداد، لینک‌ها و نام‌ها بازنویسی کن. اطلاعات جدید اختراع نکن. فقط متن بازنویسی‌شده را برگردان.
+web/frontend/src/App.tsx|متن فایل بکاپ را وارد کنید یا فایل را انتخاب کنید
+web/frontend/src/App.tsx|متن پیام آزمایشی:
+web/frontend/src/App.tsx|مثلاً: بازنویسی رسمی
+web/frontend/src/App.tsx|محتوای فایل بکاپ...
+web/frontend/src/App.tsx|مدل هوش مصنوعی متصل:
+web/frontend/src/App.tsx|مرکز لاگر پیشرفته و مانیتورینگ زنده (Pro Active Logger)
+web/frontend/src/App.tsx|مستقیم
+web/frontend/src/App.tsx|مسیر قانون با موفقیت تغییر یافت
+web/frontend/src/App.tsx|مسیر ۱: مستقیم
+web/frontend/src/App.tsx|مسیر ۱: کپی مستقیم
+web/frontend/src/App.tsx|مسیر ۲: VIP
+web/frontend/src/App.tsx|مسیر ۲: برندینگ VIP
+web/frontend/src/App.tsx|مسیر ۳: نیتیو
+web/frontend/src/App.tsx|مسیر ۳: نیتیو
+web/frontend/src/App.tsx|مقصد نهایی (B)
+web/frontend/src/App.tsx|مقصد نهایی (B)
+web/frontend/src/App.tsx|نام فیلتر الزامی است
+web/frontend/src/App.tsx|نام فیلتر:
+web/frontend/src/App.tsx|نام مدل:
+web/frontend/src/App.tsx|نام نمایشی مبدأ:
+web/frontend/src/App.tsx|نام نمایشی مقصد:
+web/frontend/src/App.tsx|نام نمایشی کانال منشأ:
+web/frontend/src/App.tsx|نام پیکربندی:
+web/frontend/src/App.tsx|نام کانال مبدأ فوروارد (هدر «فوروارد از»):
+web/frontend/src/App.tsx|نام کانال واسط C:
+web/frontend/src/App.tsx|نام:
+web/frontend/src/App.tsx|نام، ارائه‌دهنده و مدل الزامی هستند
+web/frontend/src/App.tsx|ناموفق
+web/frontend/src/App.tsx|نتیجه تحلیل و جریان انتقال
+web/frontend/src/App.tsx|نمای تسک و تنظیمات پیشرفته (Task Overview)
+web/frontend/src/App.tsx|هدر سفارشی پیام:
+web/frontend/src/App.tsx|هدر پیام:
+web/frontend/src/App.tsx|هسته پایتون + MTProto
+web/frontend/src/App.tsx|همه تسک‌ها
+web/frontend/src/App.tsx|همه سرویس‌ها
+web/frontend/src/App.tsx|همه سطوح
+web/frontend/src/App.tsx|هنوز شبیه‌سازی انجام نشده است. روی دکمه اجرای ارزیابی کلیک کنید.
+web/frontend/src/App.tsx|هوش مصنوعی
+web/frontend/src/App.tsx|هیچ جابی در صف معلق نیست (همه تحویل شدند)
+web/frontend/src/App.tsx|هیچ خطایی در پایپ‌لاین ثبت نشده است.
+web/frontend/src/App.tsx|هیچ لاگی با فیلترهای جاری یافت نشد.
+web/frontend/src/App.tsx|واسط برند (C)
+web/frontend/src/App.tsx|واسط برند C
+web/frontend/src/App.tsx|ورود خودکار مینی‌اپ تلگرام انجام شد
+web/frontend/src/App.tsx|وضعیت سیستم
+web/frontend/src/App.tsx|وضعیت قانون با موفقیت تغییر کرد
+web/frontend/src/App.tsx|وظایف من
+web/frontend/src/App.tsx|ویرایش
+web/frontend/src/App.tsx|ویرایش قانون فوروارد
+web/frontend/src/App.tsx|پاسخگویی خودکار، کاملاً انسانی، صمیمی و محاوره‌ای به پیام‌های خصوصی تلگرام
+web/frontend/src/App.tsx|پاکسازی آرشیو:
+web/frontend/src/App.tsx|پایش حساب‌های تلگرام، وضعیت احراز هویت، پراکسی و کنترل نشست‌های فعال
+web/frontend/src/App.tsx|پایپ‌لاین ارسال و صف خطاهای DLQ
+web/frontend/src/App.tsx|پرامپت بازنویسی:
+web/frontend/src/App.tsx|پرامپت جدید
+web/frontend/src/App.tsx|پرامپت حذف شد
+web/frontend/src/App.tsx|پرامپت ذخیره شد
+web/frontend/src/App.tsx|پرامپت‌های بازنویسی (AI Rewrite Prompts)
+web/frontend/src/App.tsx|پرامپت‌های قابل استفاده در قوانین فوروارد. پرامپت‌های ⭐ سیستمی هستند و فقط قابل مشاهده.
+web/frontend/src/App.tsx|پردازش‌شده
+web/frontend/src/App.tsx|پروکسی REST + JWT
+web/frontend/src/App.tsx|پیام برای تلاش مجدد به صف بازگردانده شد
+web/frontend/src/App.tsx|پیام دارای تصویر/مدیا است
+web/frontend/src/App.tsx|پیام‌های غیرفوروارد عبور نکنند
+web/frontend/src/App.tsx|پیدا کردن کل مسیر این درخواست
+web/frontend/src/App.tsx|پیش‌فرض (بدون پرامپت سیستمی)
+web/frontend/src/App.tsx|پیش‌فرض ارائه‌دهنده
+web/frontend/src/App.tsx|پیش‌نمایش خروجی پیام ارسالی به مقصد:
+web/frontend/src/App.tsx|پیمایش تاریخچه:
+web/frontend/src/App.tsx|پیکربندی AI:
+web/frontend/src/App.tsx|پیکربندی هوش مصنوعی ذخیره شد
+web/frontend/src/App.tsx|پیکربندی هوش مصنوعی و بازنویسی خودکار
+web/frontend/src/App.tsx|کانال مبدأ (A)
+web/frontend/src/App.tsx|کانال مبدا (A)
+web/frontend/src/App.tsx|کانال منبع محافظت‌شده است (Protected/No-Forward)
+web/frontend/src/App.tsx|کانال واسط (C)
+web/frontend/src/App.tsx|کل قوانین فعال
+web/frontend/src/App.tsx|کلمات مسدود (Blacklist):
+web/frontend/src/App.tsx|کلمات مسدود (با ویرگول جدا کنید):
+web/frontend/src/App.tsx|کلمات کلیدی متن پیام:
+web/frontend/src/App.tsx|کلید فقط روی سرور ذخیره می‌شود و هرگز به مرورگر بازنمی‌گردد
+web/frontend/src/App.tsx|کنترل‌پلین REST (Go)
+web/frontend/src/App.tsx|کول‌داون پیام (ثانیه):
+web/frontend/src/App.tsx|کپی خط لاگ
+web/frontend/src/App.tsx|کپی شد
+web/frontend/src/App.tsx|کپی و تکثیر تسک
+web/frontend/src/App.tsx|گام‌های عملیاتی پایپ‌لاین:
+web/frontend/src/App.tsx|یا چسباندن محتوای فایل
+web/frontend/src/App.tsx|یوزرنیم کانال منشأ (Username):
+web/frontend/src/App.tsx|یکپارچه‌سازی با OpenAI، Anthropic و مدل‌های سفارشی جهت ترجمه، سیگنال‌یابی و بازنویسی
+web/frontend/src/App.tsx|۱. گرفتن بکاپ از این سرور
+web/frontend/src/App.tsx|۱️⃣ فقط اولین مدیا
+web/frontend/src/App.tsx|۲. بازیابی در این سرور
+web/frontend/src/App.tsx|… در حال بررسی
+web/frontend/src/App.tsx|ℹ️ INFO
+web/frontend/src/App.tsx|⋯ older events exist
+web/frontend/src/App.tsx|⋯ رویدادهای قدیمی‌تری وجود دارد
+web/frontend/src/App.tsx|⚠️ Degraded
+web/frontend/src/App.tsx|⚠️ Routing Loop Detected: Intermediate hop channel cannot match source or target!
+web/frontend/src/App.tsx|⚠️ Routing Loop Detected: Source and target chat IDs cannot be identical! Forwarding back to source is blocked.
+web/frontend/src/App.tsx|⚠️ خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است! فوروارد پیام به مبدأ خود مجاز نیست.
+web/frontend/src/App.tsx|⚠️ خطای حلقه: کانال واسط (Hop) نمی‌تواند با کانال مبدأ یا مقصد یکسان باشد!
+web/frontend/src/App.tsx|⚠️ سرویس ناسالم
+web/frontend/src/App.tsx|✅ All services healthy
+web/frontend/src/App.tsx|✅ همه سرویس‌ها سالم
+web/frontend/src/App.tsx|✓ reached the end of history
+web/frontend/src/App.tsx|✓ به انتهای تاریخچه رسیدید
+web/frontend/src/App.tsx|❌ Disabled (no rewrite)
+web/frontend/src/App.tsx|❌ غیرفعال (بدون بازنویسی)
+web/frontend/src/App.tsx|💎 VIP FOREX
+web/frontend/src/App.tsx|💡 Fail Open sends the original text if AI fails, and logs the fallback event.
+web/frontend/src/App.tsx|💡 در حالت Fail Open، اگر AI در دسترس نباشد پیام اصلی بدون تغییر ارسال می‌شود و رویداد در لاگ ثبت می‌گردد.
+web/frontend/src/App.tsx|📤 Restore backup
+web/frontend/src/App.tsx|📤 بازیابی بکاپ
+web/frontend/src/App.tsx|📥 Download backup
+web/frontend/src/App.tsx|📥 دانلود فایل بکاپ
+web/frontend/src/App.tsx|🔀 تفکیک پیام‌ها
+web/frontend/src/App.tsx|🔁 Retry
+web/frontend/src/App.tsx|🔁 تلاش مجدد (Retry)
+web/frontend/src/App.tsx|🔒 Quarantine
+web/frontend/src/App.tsx|🔒 قرنطینه
+web/frontend/src/App.tsx|🔴 Drop (Fail Closed)
+web/frontend/src/App.tsx|🔴 عدم ارسال (Fail Closed)
+web/frontend/src/App.tsx|🖼 آلبوم کامل
+web/frontend/src/App.tsx|🛡 بای‌پس حفاظت تلگرام: دانلود محتوای قفل‌شده و ارسال مجدد بدون نقض قوانین کپی‌رایت
+web/frontend/src/App.tsx|🛡 پنل مدیریت کلان
+web/frontend/src/App.tsx|🟢 Send original (Fail Open)
+web/frontend/src/App.tsx|🟢 ارسال متن اصلی (Fail Open)
+web/frontend/src/App.tsx|🤖 System Default
+web/frontend/src/App.tsx|🤖 مدل پیش‌فرض سیستم (Default)
+web/frontend/src/App.tsx|🤖 نادیده‌گرفتن پیام‌های ربات‌ها
+web/frontend/src/components/AdminPanel.tsx|@MyChannel or -100123456789
+web/frontend/src/components/AdminPanel.tsx|Actions
+web/frontend/src/components/AdminPanel.tsx|Activate
+web/frontend/src/components/AdminPanel.tsx|Active Rules
+web/frontend/src/components/AdminPanel.tsx|Add Admin
+web/frontend/src/components/AdminPanel.tsx|Add admin error
+web/frontend/src/components/AdminPanel.tsx|Administrators
+web/frontend/src/components/AdminPanel.tsx|Asynchronous Broadcast Dispatcher
+web/frontend/src/components/AdminPanel.tsx|Authorized Administrators (RBAC)
+web/frontend/src/components/AdminPanel.tsx|Broadcast ID:
+web/frontend/src/components/AdminPanel.tsx|Broadcast Message Body (Markdown supported):
+web/frontend/src/components/AdminPanel.tsx|Broadcast Queue
+web/frontend/src/components/AdminPanel.tsx|Broadcast error
+web/frontend/src/components/AdminPanel.tsx|Broadcast queued successfully.
+web/frontend/src/components/AdminPanel.tsx|Channel Force-Subscription Gate
+web/frontend/src/components/AdminPanel.tsx|Core Daemon Status
+web/frontend/src/components/AdminPanel.tsx|Dashboard Public URL:
+web/frontend/src/components/AdminPanel.tsx|Dispatch Broadcast
+web/frontend/src/components/AdminPanel.tsx|Dispatching...
+web/frontend/src/components/AdminPanel.tsx|Enable Mandatory Channel Subscription
+web/frontend/src/components/AdminPanel.tsx|Enforce mandatory channel membership prior to granting access to bot capabilities.
+web/frontend/src/components/AdminPanel.tsx|Error updating user status
+web/frontend/src/components/AdminPanel.tsx|Force-Subscription
+web/frontend/src/components/AdminPanel.tsx|Invalid User ID
+web/frontend/src/components/AdminPanel.tsx|Master Administrative Control Plane
+web/frontend/src/components/AdminPanel.tsx|Messages are asynchronously queued and dispatched at 25 msgs/sec with automatic FloodWait retry protection.
+web/frontend/src/components/AdminPanel.tsx|Numeric Telegram User ID...
+web/frontend/src/components/AdminPanel.tsx|ONLINE (gRPC 50051)
+web/frontend/src/components/AdminPanel.tsx|Pending in Queue
+web/frontend/src/components/AdminPanel.tsx|Plan
+web/frontend/src/components/AdminPanel.tsx|Platform Extensions & Core Engines
+web/frontend/src/components/AdminPanel.tsx|Public Web Domain Configuration
+web/frontend/src/components/AdminPanel.tsx|Real-time multi-tenant governance, background broadcasting, force-subscription & admin RBAC
+web/frontend/src/components/AdminPanel.tsx|Refresh
+web/frontend/src/components/AdminPanel.tsx|Registered Tenants & Lifecycle Control
+web/frontend/src/components/AdminPanel.tsx|Remove
+web/frontend/src/components/AdminPanel.tsx|Remove admin access for ${…}?
+web/frontend/src/components/AdminPanel.tsx|Remove admin error
+web/frontend/src/components/AdminPanel.tsx|Required Channel Username or Numeric ID:
+web/frontend/src/components/AdminPanel.tsx|Save Domain
+web/frontend/src/components/AdminPanel.tsx|Save Gate Settings
+web/frontend/src/components/AdminPanel.tsx|Save error
+web/frontend/src/components/AdminPanel.tsx|Saved
+web/frontend/src/components/AdminPanel.tsx|Saving...
+web/frontend/src/components/AdminPanel.tsx|Settings & Extensions
+web/frontend/src/components/AdminPanel.tsx|Status
+web/frontend/src/components/AdminPanel.tsx|Suspend
+web/frontend/src/components/AdminPanel.tsx|System Overview
+web/frontend/src/components/AdminPanel.tsx|Total Registered Users
+web/frontend/src/components/AdminPanel.tsx|Type broadcast announcement here...
+web/frontend/src/components/AdminPanel.tsx|User Governance
+web/frontend/src/components/AdminPanel.tsx|User ID
+web/frontend/src/components/AdminPanel.tsx|Username
+web/frontend/src/components/AdminPanel.tsx|| Recipients:
+web/frontend/src/components/AdminPanel.tsx|آدرس HTTPS داشبورد (جهت دکمه وب‌اپ در ربات):
+web/frontend/src/components/AdminPanel.tsx|ارسال همگانی
+web/frontend/src/components/AdminPanel.tsx|ارسال همگانی
+web/frontend/src/components/AdminPanel.tsx|ارسال پیام همگانی به کاربران ربات تلگرام
+web/frontend/src/components/AdminPanel.tsx|افزودن مدیر
+web/frontend/src/components/AdminPanel.tsx|بروزرسانی
+web/frontend/src/components/AdminPanel.tsx|تعلیق کاربر
+web/frontend/src/components/AdminPanel.tsx|تنظیمات قفل عضویت اجباری کانال (Force-Subscription Gate)
+web/frontend/src/components/AdminPanel.tsx|حذف
+web/frontend/src/components/AdminPanel.tsx|حذف دسترسی مدیریت کاربر ${…}؟
+web/frontend/src/components/AdminPanel.tsx|دامنه وب و آدرس عمومی داشبورد
+web/frontend/src/components/AdminPanel.tsx|در حال آغاز...
+web/frontend/src/components/AdminPanel.tsx|در حال ذخیره...
+web/frontend/src/components/AdminPanel.tsx|در صورت فعال‌سازی، کاربران ربات قبل از دسترسی به هرگونه امکاناتی باید در کانال مشخص‌شده عضو شوند.
+web/frontend/src/components/AdminPanel.tsx|ذخیره تنظیمات
+web/frontend/src/components/AdminPanel.tsx|ذخیره دامنه
+web/frontend/src/components/AdminPanel.tsx|ذخیره شد
+web/frontend/src/components/AdminPanel.tsx|شناسه تلگرام
+web/frontend/src/components/AdminPanel.tsx|شناسه عددی تلگرام کاربر...
+web/frontend/src/components/AdminPanel.tsx|شناسه یا یوزرنیم کانال الزامی:
+web/frontend/src/components/AdminPanel.tsx|عضویت اجباری
+web/frontend/src/components/AdminPanel.tsx|عملیات
+web/frontend/src/components/AdminPanel.tsx|فعال
+web/frontend/src/components/AdminPanel.tsx|فعال‌سازی
+web/frontend/src/components/AdminPanel.tsx|فعال‌سازی قفل عضویت اجباری
+web/frontend/src/components/AdminPanel.tsx|فهرست مدیران دارای دسترسی به کنترل پنل
+web/frontend/src/components/AdminPanel.tsx|فهرست کاربران و کنترل دسترسی چندمستاجره
+web/frontend/src/components/AdminPanel.tsx|قوانین فوروارد فعال
+web/frontend/src/components/AdminPanel.tsx|ماژول‌ها و افزونه‌های اختیاری سامانه
+web/frontend/src/components/AdminPanel.tsx|متن اطلاعیه مهم را اینجا بنویسید...
+web/frontend/src/components/AdminPanel.tsx|متن پیام همگانی (Markdown / Emojis پشتیبانی می‌شود):
+web/frontend/src/components/AdminPanel.tsx|مدیران سامانه
+web/frontend/src/components/AdminPanel.tsx|مدیریت کاربران
+web/frontend/src/components/AdminPanel.tsx|مرکز فرماندهی و مدیریت کلان سامانه
+web/frontend/src/components/AdminPanel.tsx|معلق‌شده
+web/frontend/src/components/AdminPanel.tsx|نام کاربری
+web/frontend/src/components/AdminPanel.tsx|نظارت بلادرنگ بر کاربران، ارسال همگانی، عضویت اجباری و کنترل دسترسی مدیران
+web/frontend/src/components/AdminPanel.tsx|وضعیت
+web/frontend/src/components/AdminPanel.tsx|وضعیت سامانه
+web/frontend/src/components/AdminPanel.tsx|وضعیت سلامت هسته
+web/frontend/src/components/AdminPanel.tsx|پلن
+web/frontend/src/components/AdminPanel.tsx|پیام‌ها در صف ذخیره شده و با محدودیت نرخ استاندارد (۲۵ پیام در ثانیه) بدون مسدود شدن هسته ربات ارسال می‌گردند.
+web/frontend/src/components/AdminPanel.tsx|پیام‌های در صف
+web/frontend/src/components/AdminPanel.tsx|پیکربندی و افزونه‌ها
+web/frontend/src/components/AdminPanel.tsx|کل کاربران سامانه
+web/frontend/src/components/AuditEventsPanel.tsx|${…} رویداد
+web/frontend/src/components/AuditEventsPanel.tsx|All outcomes
+web/frontend/src/components/AuditEventsPanel.tsx|All services
+web/frontend/src/components/AuditEventsPanel.tsx|Audit Events & Execution Assurance
+web/frontend/src/components/AuditEventsPanel.tsx|Audit events appear here as messages flow through the pipeline
+web/frontend/src/components/AuditEventsPanel.tsx|Durable PostgreSQL audit events with correlation-ID search — actual outcomes, not optimistic logging
+web/frontend/src/components/AuditEventsPanel.tsx|No audit events found
+web/frontend/src/components/AuditEventsPanel.tsx|Refresh
+web/frontend/src/components/AuditEventsPanel.tsx|Search by correlation ID…
+web/frontend/src/components/AuditEventsPanel.tsx|failed to load audit events
+web/frontend/src/components/AuditEventsPanel.tsx|rule=
+web/frontend/src/components/AuditEventsPanel.tsx|با عبور پیام از خط لوله، رویدادهای حسابرسی اینجا نمایش داده می‌شوند
+web/frontend/src/components/AuditEventsPanel.tsx|بروزرسانی
+web/frontend/src/components/AuditEventsPanel.tsx|جستجو بر اساس Correlation ID…
+web/frontend/src/components/AuditEventsPanel.tsx|حسابرسی رویدادها و تضمین اجرا
+web/frontend/src/components/AuditEventsPanel.tsx|رویدادهای حسابرسی پایدار (PostgreSQL) با جستجوی correlation ID — موفقیت واقعی، نه لاگ‌های خوش‌بینانه
+web/frontend/src/components/AuditEventsPanel.tsx|همه سرویس‌ها
+web/frontend/src/components/AuditEventsPanel.tsx|همه نتایج
+web/frontend/src/components/AuditEventsPanel.tsx|هیچ رویدادی یافت نشد
+web/frontend/src/components/AuditEventsPanel.tsx|— loading…
+web/frontend/src/components/AuditEventsPanel.tsx|— در حال بارگذاری…
+web/frontend/src/components/BotRouteField.tsx|Add
+web/frontend/src/components/BotRouteField.tsx|Attach bot
+web/frontend/src/components/BotRouteField.tsx|Attached ${…} — Telegram accepted it.
+web/frontend/src/components/BotRouteField.tsx|Attached:
+web/frontend/src/components/BotRouteField.tsx|Bot removed. Its token is gone from this account.
+web/frontend/src/components/BotRouteField.tsx|Cancel
+web/frontend/src/components/BotRouteField.tsx|Could not remove this bot
+web/frontend/src/components/BotRouteField.tsx|Paste the token @BotFather gave you. It is sent once, checked with Telegram, and stored encrypted — it is never shown again, not even here.
+web/frontend/src/components/BotRouteField.tsx|Remove this bot from the account
+web/frontend/src/components/BotRouteField.tsx|Telegram refused this token
+web/frontend/src/components/BotRouteField.tsx|This task delivers as a bot, so it needs one attached before the token can be cleared.
+web/frontend/src/components/BotRouteField.tsx|This task is set to deliver as a bot but none is attached — attach one, or switch the route back to the account.
+web/frontend/src/components/BotRouteField.tsx|label (optional)
+web/frontend/src/components/BotRouteField.tsx|no bot attached yet
+web/frontend/src/components/BotRouteField.tsx|— none —
+web/frontend/src/components/ClientSettings.tsx|API Hash must be 32 hexadecimal characters.
+web/frontend/src/components/ClientSettings.tsx|API Hash باید دقیقاً ۳۲ کاراکتر هگزادسیمال باشد.
+web/frontend/src/components/ClientSettings.tsx|Account & Quota Overview
+web/frontend/src/components/ClientSettings.tsx|Active & Encrypted
+web/frontend/src/components/ClientSettings.tsx|Client Settings & Credentials
+web/frontend/src/components/ClientSettings.tsx|Credentials saved.
+web/frontend/src/components/ClientSettings.tsx|Custom Credentials:
+web/frontend/src/components/ClientSettings.tsx|Custom Telegram API Credentials
+web/frontend/src/components/ClientSettings.tsx|Enter your own API ID and API Hash from my.telegram.org to run your MTProto sessions under your own developer keys.
+web/frontend/src/components/ClientSettings.tsx|Error saving credentials
+web/frontend/src/components/ClientSettings.tsx|Forwarded Messages:
+web/frontend/src/components/ClientSettings.tsx|Isolated workspace credentials, personal Telegram API keys, and account preferences
+web/frontend/src/components/ClientSettings.tsx|Masked: ${…}
+web/frontend/src/components/ClientSettings.tsx|Numeric User ID:
+web/frontend/src/components/ClientSettings.tsx|Please provide a valid numeric API ID.
+web/frontend/src/components/ClientSettings.tsx|Save Custom Keys
+web/frontend/src/components/ClientSettings.tsx|Saving...
+web/frontend/src/components/ClientSettings.tsx|Subscription Plan:
+web/frontend/src/components/ClientSettings.tsx|Telegram API Hash (32 characters):
+web/frontend/src/components/ClientSettings.tsx|Telegram API Hash (۳۲ کاراکتر):
+web/frontend/src/components/ClientSettings.tsx|Telegram API ID (Numeric):
+web/frontend/src/components/ClientSettings.tsx|Telegram API ID (عدد):
+web/frontend/src/components/ClientSettings.tsx|Using System Default
+web/frontend/src/components/ClientSettings.tsx|e.g. 0123456789abcdef0123456789abcdef
+web/frontend/src/components/ClientSettings.tsx|استفاده از پیش‌فرض سامانه
+web/frontend/src/components/ClientSettings.tsx|اطلاعات حساب و دسترسی
+web/frontend/src/components/ClientSettings.tsx|تنظیمات و کلیدهای شخصی تلگرام
+web/frontend/src/components/ClientSettings.tsx|خطا در ذخیره کلیدها
+web/frontend/src/components/ClientSettings.tsx|در حال ذخیره‌سازی...
+web/frontend/src/components/ClientSettings.tsx|در صورتی که می‌خواهید فورواردها با شناسه برنامه اختصاصی شما در my.telegram.org انجام شوند، اطلاعات زیر را وارد نمایید.
+web/frontend/src/components/ClientSettings.tsx|ذخیره کلیدهای اختصاصی
+web/frontend/src/components/ClientSettings.tsx|سطح اشتراک (Plan):
+web/frontend/src/components/ClientSettings.tsx|شناسه کاربری عددی:
+web/frontend/src/components/ClientSettings.tsx|لطفاً یک API ID معتبر وارد نمایید.
+web/frontend/src/components/ClientSettings.tsx|وضعیت کلید اختصاصی:
+web/frontend/src/components/ClientSettings.tsx|پیام‌های فورواردشده:
+web/frontend/src/components/ClientSettings.tsx|پیکربندی اختصاصی کلیدهای API ID و API Hash مستقل برای هر کاربر و مدیریت سهمیه
+web/frontend/src/components/ClientSettings.tsx|کلیدهای اختصاصی API تلگرام
+web/frontend/src/components/ClientSettings.tsx|کلیدهای اختصاصی ذخیره شد.
+web/frontend/src/components/ClientSettings.tsx|✅ فعال و رمزنگاری‌شده
+web/frontend/src/components/DiagnosticsPanel.tsx|${…} errors · ${…} warnings · ${…} info
+web/frontend/src/components/DiagnosticsPanel.tsx|${…} تسک و ${…} پیکربندی AI بررسی شد
+web/frontend/src/components/DiagnosticsPanel.tsx|${…} خطا · ${…} هشدار · ${…} اطلاع
+web/frontend/src/components/DiagnosticsPanel.tsx|No problems found — every task is healthy.
+web/frontend/src/components/DiagnosticsPanel.tsx|Re-run check
+web/frontend/src/components/DiagnosticsPanel.tsx|Scanning…
+web/frontend/src/components/DiagnosticsPanel.tsx|System Preflight
+web/frontend/src/components/DiagnosticsPanel.tsx|checked ${…} tasks, ${…} AI configs
+web/frontend/src/components/DiagnosticsPanel.tsx|بررسی مجدد
+web/frontend/src/components/DiagnosticsPanel.tsx|بررسی پیش‌پرواز سیستم
+web/frontend/src/components/DiagnosticsPanel.tsx|در حال بررسی…
+web/frontend/src/components/DiagnosticsPanel.tsx|هیچ مشکلی پیدا نشد — همه تسک‌ها سالم هستند.
+web/frontend/src/components/JobsPanel.tsx|Auto-renew
+web/frontend/src/components/JobsPanel.tsx|Cancel
+web/frontend/src/components/JobsPanel.tsx|Failed
+web/frontend/src/components/JobsPanel.tsx|Failed to load
+web/frontend/src/components/JobsPanel.tsx|Loading jobs…
+web/frontend/src/components/JobsPanel.tsx|My Jobs
+web/frontend/src/components/JobsPanel.tsx|New background job
+web/frontend/src/components/JobsPanel.tsx|New job
+web/frontend/src/components/JobsPanel.tsx|No jobs yet. Long-running operations (session backups, DLQ replays/purges, exports) appear here with their progress and result.
+web/frontend/src/components/JobsPanel.tsx|Retry
+web/frontend/src/components/JobsPanel.tsx|Submit
+web/frontend/src/components/JobsPanel.tsx|اجرای مجدد
+web/frontend/src/components/JobsPanel.tsx|ارسال
+web/frontend/src/components/JobsPanel.tsx|به‌روزرسانی خودکار
+web/frontend/src/components/JobsPanel.tsx|در حال بارگذاری…
+web/frontend/src/components/JobsPanel.tsx|لغو
+web/frontend/src/components/JobsPanel.tsx|هیچ وظیفه‌ای نیست. عملیات طولانی (پشتیبان‌گیری سشن، اجرای مجدد/پاکسازی DLQ، خروجی پشتیبان) با پیشرفت و نتیجه در این‌جا نمایش داده می‌شوند.
+web/frontend/src/components/JobsPanel.tsx|وظایف من
+web/frontend/src/components/JobsPanel.tsx|وظیفه جدید
+web/frontend/src/components/JobsPanel.tsx|وظیفه پس‌زمینه جدید
+web/frontend/src/components/LogPolicyPanel.tsx|${…} emitted · ${…} dropped by level · ${…} dropped by rate
+web/frontend/src/components/LogPolicyPanel.tsx|${…} ارسال‌شده · ${…} حذف‌شده با سطح · ${…} حذف‌شده با نرخ
+web/frontend/src/components/LogPolicyPanel.tsx|${…} ثانیه باقی‌مانده
+web/frontend/src/components/LogPolicyPanel.tsx|${…} رویداد در ثانیه
+web/frontend/src/components/LogPolicyPanel.tsx|${…}s left
+web/frontend/src/components/LogPolicyPanel.tsx|Applied and saved (survives a restart)
+web/frontend/src/components/LogPolicyPanel.tsx|Applied, but not saved: it will be reset by a restart
+web/frontend/src/components/LogPolicyPanel.tsx|Apply levels and rate
+web/frontend/src/components/LogPolicyPanel.tsx|At least one level must be selected
+web/frontend/src/components/LogPolicyPanel.tsx|Change core policy (atf-core)
+web/frontend/src/components/LogPolicyPanel.tsx|Click to toggle
+web/frontend/src/components/LogPolicyPanel.tsx|Collecting now
+web/frontend/src/components/LogPolicyPanel.tsx|Configured levels
+web/frontend/src/components/LogPolicyPanel.tsx|Diagnostic window (seconds)
+web/frontend/src/components/LogPolicyPanel.tsx|Diagnostic window active
+web/frontend/src/components/LogPolicyPanel.tsx|Log Collection Policy (per service)
+web/frontend/src/components/LogPolicyPanel.tsx|Rate ceiling
+web/frontend/src/components/LogPolicyPanel.tsx|Rate ceiling (0 = unlimited)
+web/frontend/src/components/LogPolicyPanel.tsx|Refresh
+web/frontend/src/components/LogPolicyPanel.tsx|Stop diagnostics
+web/frontend/src/components/LogPolicyPanel.tsx|The diagnostic window must be between 1 and 3600 seconds
+web/frontend/src/components/LogPolicyPanel.tsx|The policy is enforced per process, so each card is that process’s own answer. Changes are admin-only and are applied by the core that enforces them.
+web/frontend/src/components/LogPolicyPanel.tsx|The rate ceiling must be a non-negative number (0 = unlimited)
+web/frontend/src/components/LogPolicyPanel.tsx|Unavailable:
+web/frontend/src/components/LogPolicyPanel.tsx|no reason given
+web/frontend/src/components/LogPolicyPanel.tsx|اعمال سطح‌ها و نرخ
+web/frontend/src/components/LogPolicyPanel.tsx|بدون محدودیت
+web/frontend/src/components/LogPolicyPanel.tsx|برای تغییر کلیک کنید
+web/frontend/src/components/LogPolicyPanel.tsx|بروزرسانی
+web/frontend/src/components/LogPolicyPanel.tsx|تغییر اعمال شد اما ذخیره نشد؛ پس از راه‌اندازی مجدد بازنشانی می‌شود
+web/frontend/src/components/LogPolicyPanel.tsx|تغییر اعمال و ذخیره شد (پس از راه‌اندازی مجدد باقی می‌ماند)
+web/frontend/src/components/LogPolicyPanel.tsx|تغییر سیاست هسته (atf-core)
+web/frontend/src/components/LogPolicyPanel.tsx|حالت تشخیصی فعال است
+web/frontend/src/components/LogPolicyPanel.tsx|حداقل یک سطح باید انتخاب شود
+web/frontend/src/components/LogPolicyPanel.tsx|در حال جمع‌آوری
+web/frontend/src/components/LogPolicyPanel.tsx|در دسترس نیست:
+web/frontend/src/components/LogPolicyPanel.tsx|دلیل نامشخص
+web/frontend/src/components/LogPolicyPanel.tsx|سطح‌های تنظیم‌شده
+web/frontend/src/components/LogPolicyPanel.tsx|سقف نرخ
+web/frontend/src/components/LogPolicyPanel.tsx|سقف نرخ (۰ = بدون محدودیت)
+web/frontend/src/components/LogPolicyPanel.tsx|سقف نرخ باید عددی نامنفی باشد (۰ = بدون محدودیت)
+web/frontend/src/components/LogPolicyPanel.tsx|سیاست برای هر فرایند جداگانه اعمال می‌شود؛ اعداد و سطوح زیر همان چیزی است که خود سرویس گزارش می‌دهد. تغییر فقط توسط ادمین و از طریق هسته اعمال می‌شود.
+web/frontend/src/components/LogPolicyPanel.tsx|سیاست جمع‌آوری لاگ (هر سرویس)
+web/frontend/src/components/LogPolicyPanel.tsx|پایان حالت تشخیصی
+web/frontend/src/components/LogPolicyPanel.tsx|پنجره تشخیصی (ثانیه)
+web/frontend/src/components/LogPolicyPanel.tsx|پنجره تشخیصی باید بین ۱ تا ۳۶۰۰ ثانیه باشد
+web/frontend/src/components/SystemPanel.tsx|${…} required setting(s) missing
+web/frontend/src/components/SystemPanel.tsx|${…} تنظیم الزامی تنظیم نشده است
+web/frontend/src/components/SystemPanel.tsx|Capabilities
+web/frontend/src/components/SystemPanel.tsx|Configuration contract
+web/frontend/src/components/SystemPanel.tsx|Next steps
+web/frontend/src/components/SystemPanel.tsx|Not ready
+web/frontend/src/components/SystemPanel.tsx|Offline
+web/frontend/src/components/SystemPanel.tsx|Online
+web/frontend/src/components/SystemPanel.tsx|Re-probe
+web/frontend/src/components/SystemPanel.tsx|Ready
+web/frontend/src/components/SystemPanel.tsx|Server readiness, service topology and the configuration contract — the same report the atf wizard and the mobile app read.
+web/frontend/src/components/SystemPanel.tsx|This server does not expose the system status endpoint. Update the server to see readiness here.
+web/frontend/src/components/SystemPanel.tsx|keys set
+web/frontend/src/components/SystemPanel.tsx|services online
+web/frontend/src/components/SystemPanel.tsx|آفلاین
+web/frontend/src/components/SystemPanel.tsx|آماده
+web/frontend/src/components/SystemPanel.tsx|آماده نیست
+web/frontend/src/components/SystemPanel.tsx|آمادگی سرور، چیدمان سرویس‌ها و قرارداد تنظیمات — همان گزارشی که ویزارد atf و اپ موبایل می‌خوانند.
+web/frontend/src/components/SystemPanel.tsx|آنلاین
+web/frontend/src/components/SystemPanel.tsx|اختیاری
+web/frontend/src/components/SystemPanel.tsx|الزامی
+web/frontend/src/components/SystemPanel.tsx|این سرور مسیر وضعیت سیستم را ارائه نمی‌دهد. برای دیدن آمادگی، سرور را به‌روز کنید.
+web/frontend/src/components/SystemPanel.tsx|بررسی مجدد
+web/frontend/src/components/SystemPanel.tsx|تنظیم شده
+web/frontend/src/components/SystemPanel.tsx|تنظیم نشده
+web/frontend/src/components/SystemPanel.tsx|سرویس‌های فعال
+web/frontend/src/components/SystemPanel.tsx|قابلیت‌ها
+web/frontend/src/components/SystemPanel.tsx|قابلیت‌ها
+web/frontend/src/components/SystemPanel.tsx|قرارداد تنظیمات
+web/frontend/src/components/SystemPanel.tsx|پیشنهادی
+web/frontend/src/components/SystemPanel.tsx|کلیدهای تنظیم‌شده
+web/frontend/src/components/SystemPanel.tsx|گام‌های بعدی
+web/frontend/src/components/TaskControlPanel.tsx|@channel, t.me/xxx or -1001234567890
+web/frontend/src/components/TaskControlPanel.tsx|@channel, t.me/xxx or -1001234567890
+web/frontend/src/components/TaskControlPanel.tsx|Add
+web/frontend/src/components/TaskControlPanel.tsx|Add
+web/frontend/src/components/TaskControlPanel.tsx|All task settings
+web/frontend/src/components/TaskControlPanel.tsx|Could not load task settings
+web/frontend/src/components/TaskControlPanel.tsx|Could not reset this setting
+web/frontend/src/components/TaskControlPanel.tsx|Could not save settings
+web/frontend/src/components/TaskControlPanel.tsx|Discard
+web/frontend/src/components/TaskControlPanel.tsx|Every setting this task supports (${…}), validated by the server.
+web/frontend/src/components/TaskControlPanel.tsx|Handed back to the default
+web/frontend/src/components/TaskControlPanel.tsx|JSON object.
+web/frontend/src/components/TaskControlPanel.tsx|Loading the settings schema…
+web/frontend/src/components/TaskControlPanel.tsx|No entries yet.
+web/frontend/src/components/TaskControlPanel.tsx|Not valid JSON yet — fix it before saving.
+web/frontend/src/components/TaskControlPanel.tsx|Remove ${…}
+web/frontend/src/components/TaskControlPanel.tsx|Remove ${…}
+web/frontend/src/components/TaskControlPanel.tsx|Save settings${…}
+web/frontend/src/components/TaskControlPanel.tsx|Save the task to apply source changes.
+web/frontend/src/components/TaskControlPanel.tsx|Save the task to apply target changes.
+web/frontend/src/components/TaskControlPanel.tsx|Saving…
+web/frontend/src/components/TaskControlPanel.tsx|Settings saved
+web/frontend/src/components/TaskControlPanel.tsx|Sources
+web/frontend/src/components/TaskControlPanel.tsx|Targets
+web/frontend/src/components/TaskControlPanel.tsx|The server refused to reset this setting
+web/frontend/src/components/TaskControlPanel.tsx|The server rejected these settings
+web/frontend/src/components/TaskControlPanel.tsx|Use the default for this setting
+web/frontend/src/components/TaskControlPanel.tsx|add one entry…
+web/frontend/src/components/TaskControlPanel.tsx|add one word…
+web/frontend/src/components/TaskControlPanel.tsx|use default
+web/frontend/src/components/TaskControlPanel.tsx|{"key": "value"}
+web/frontend/src/components/TaskControlPanel.tsx|پیش‌فرض
+web/frontend/src/components/TaskLogsPanel.tsx|All time
+web/frontend/src/components/TaskLogsPanel.tsx|Copy row
+web/frontend/src/components/TaskLogsPanel.tsx|Could not load this task’s logs
+web/frontend/src/components/TaskLogsPanel.tsx|Export failed
+web/frontend/src/components/TaskLogsPanel.tsx|Last 24h
+web/frontend/src/components/TaskLogsPanel.tsx|Last 30d
+web/frontend/src/components/TaskLogsPanel.tsx|Last 7d
+web/frontend/src/components/TaskLogsPanel.tsx|Last hour
+web/frontend/src/components/TaskLogsPanel.tsx|Newer
+web/frontend/src/components/TaskLogsPanel.tsx|Newest first
+web/frontend/src/components/TaskLogsPanel.tsx|No log events recorded for this task yet.
+web/frontend/src/components/TaskLogsPanel.tsx|Older
+web/frontend/src/components/TaskLogsPanel.tsx|Oldest first
+web/frontend/src/components/TaskLogsPanel.tsx|Order
+web/frontend/src/components/TaskLogsPanel.tsx|Refresh
+web/frontend/src/components/TaskLogsPanel.tsx|Search
+web/frontend/src/components/TaskLogsPanel.tsx|Search message + detail…
+web/frontend/src/components/TaskLogsPanel.tsx|Show detail
+web/frontend/src/components/TaskLogsPanel.tsx|This panel pages through the task’s entire history — search matches both the message and the structured detail.
+web/frontend/src/components/TaskLogsPanel.tsx|Time window
+web/frontend/src/components/TaskLogsPanel.tsx|corr:
+web/frontend/src/components/TaskLogsPanel.tsx|loading…
+web/frontend/src/components/TaskLogsPanel.tsx|no log events
+web/frontend/src/components/TaskLogsPanel.tsx|preparing export…
+web/frontend/src/components/TaskLogsPanel.tsx|این پنل کل تاریخچهٔ این تسک را با صفحه‌بندی نشان می‌دهد؛ جستجو روی پیام و جزئیات ساختاریافته اعمال می‌شود.
+web/frontend/src/components/TaskLogsPanel.tsx|بارگذاری…
+web/frontend/src/components/TaskLogsPanel.tsx|بازه زمانی
+web/frontend/src/components/TaskLogsPanel.tsx|بدون لاگ
+web/frontend/src/components/TaskLogsPanel.tsx|بروزرسانی
+web/frontend/src/components/TaskLogsPanel.tsx|ترتیب
+web/frontend/src/components/TaskLogsPanel.tsx|جدیدتر
+web/frontend/src/components/TaskLogsPanel.tsx|جدیدترین اول
+web/frontend/src/components/TaskLogsPanel.tsx|جستجو
+web/frontend/src/components/TaskLogsPanel.tsx|جستجو در پیام و جزئیات…
+web/frontend/src/components/TaskLogsPanel.tsx|در حال آماده‌سازی…
+web/frontend/src/components/TaskLogsPanel.tsx|رویدادی برای این تسک ثبت نشده است.
+web/frontend/src/components/TaskLogsPanel.tsx|صفحه
+web/frontend/src/components/TaskLogsPanel.tsx|قدیمی‌تر
+web/frontend/src/components/TaskLogsPanel.tsx|قدیمی‌ترین اول
+web/frontend/src/components/TaskLogsPanel.tsx|نمایش جزئیات
+web/frontend/src/components/TaskLogsPanel.tsx|همه زمان‌ها
+web/frontend/src/components/TaskLogsPanel.tsx|کپی
+web/frontend/src/components/TaskLogsPanel.tsx|۱ ساعت اخیر
+web/frontend/src/components/TaskLogsPanel.tsx|۲۴ ساعت اخیر
+web/frontend/src/components/TaskLogsPanel.tsx|۳۰ روز اخیر
+web/frontend/src/components/TaskLogsPanel.tsx|۷ روز اخیر
+web/frontend/src/components/TaskOverviewModal.tsx|#️⃣ Strip Hashtags (#)
+web/frontend/src/components/TaskOverviewModal.tsx|&gt;
+web/frontend/src/components/TaskOverviewModal.tsx|*Reply, Edit, Replace, Translate will not work when show header
+web/frontend/src/components/TaskOverviewModal.tsx|- Max Tokens
+web/frontend/src/components/TaskOverviewModal.tsx|AI Features
+web/frontend/src/components/TaskOverviewModal.tsx|Activated:
+web/frontend/src/components/TaskOverviewModal.tsx|Active Replacements
+web/frontend/src/components/TaskOverviewModal.tsx|Active Rules:
+web/frontend/src/components/TaskOverviewModal.tsx|Add
+web/frontend/src/components/TaskOverviewModal.tsx|Add
+web/frontend/src/components/TaskOverviewModal.tsx|Add
+web/frontend/src/components/TaskOverviewModal.tsx|Add
+web/frontend/src/components/TaskOverviewModal.tsx|Add Blacklisted Keyword or Domain
+web/frontend/src/components/TaskOverviewModal.tsx|Add Required Keyword or Domain
+web/frontend/src/components/TaskOverviewModal.tsx|Add Text Replacement
+web/frontend/src/components/TaskOverviewModal.tsx|Adds an asynchronous pause before forwarding each message to prevent Telegram rate limits and simulate natural human posting.
+web/frontend/src/components/TaskOverviewModal.tsx|Advanced Settings
+web/frontend/src/components/TaskOverviewModal.tsx|Affiliate Kit
+web/frontend/src/components/TaskOverviewModal.tsx|All
+web/frontend/src/components/TaskOverviewModal.tsx|Auto Delete Messages
+web/frontend/src/components/TaskOverviewModal.tsx|Auto Delete Messages
+web/frontend/src/components/TaskOverviewModal.tsx|Auto Post Scheduler
+web/frontend/src/components/TaskOverviewModal.tsx|Auto Posting
+web/frontend/src/components/TaskOverviewModal.tsx|Automatic Stripping Rules
+web/frontend/src/components/TaskOverviewModal.tsx|Blacklist
+web/frontend/src/components/TaskOverviewModal.tsx|Blacklist & Whitelist
+web/frontend/src/components/TaskOverviewModal.tsx|Blacklisted:
+web/frontend/src/components/TaskOverviewModal.tsx|Blocked Words
+web/frontend/src/components/TaskOverviewModal.tsx|Bot Account
+web/frontend/src/components/TaskOverviewModal.tsx|Button To Text
+web/frontend/src/components/TaskOverviewModal.tsx|Button To Text
+web/frontend/src/components/TaskOverviewModal.tsx|Cancel
+web/frontend/src/components/TaskOverviewModal.tsx|Channel Comments
+web/frontend/src/components/TaskOverviewModal.tsx|Channel Comments
+web/frontend/src/components/TaskOverviewModal.tsx|Choose & customize tools
+web/frontend/src/components/TaskOverviewModal.tsx|Cleaned content is stripped before forwarding so sensitive elements never leak to targets.
+web/frontend/src/components/TaskOverviewModal.tsx|Cleaner
+web/frontend/src/components/TaskOverviewModal.tsx|Cleaner Protocol
+web/frontend/src/components/TaskOverviewModal.tsx|Configure Forward Delay
+web/frontend/src/components/TaskOverviewModal.tsx|Content
+web/frontend/src/components/TaskOverviewModal.tsx|Creativity
+web/frontend/src/components/TaskOverviewModal.tsx|Crypto Mode
+web/frontend/src/components/TaskOverviewModal.tsx|Crypto Signal Mode
+web/frontend/src/components/TaskOverviewModal.tsx|Current Delay:
+web/frontend/src/components/TaskOverviewModal.tsx|Custom Patterns to Strip
+web/frontend/src/components/TaskOverviewModal.tsx|Debug mode
+web/frontend/src/components/TaskOverviewModal.tsx|Delay (seconds)
+web/frontend/src/components/TaskOverviewModal.tsx|Delay in Seconds:
+web/frontend/src/components/TaskOverviewModal.tsx|Delete
+web/frontend/src/components/TaskOverviewModal.tsx|Delete Task
+web/frontend/src/components/TaskOverviewModal.tsx|Done
+web/frontend/src/components/TaskOverviewModal.tsx|Duplicate Filters
+web/frontend/src/components/TaskOverviewModal.tsx|Duplicate Filters
+web/frontend/src/components/TaskOverviewModal.tsx|Duplicate Filters
+web/frontend/src/components/TaskOverviewModal.tsx|Edit
+web/frontend/src/components/TaskOverviewModal.tsx|Edit Source
+web/frontend/src/components/TaskOverviewModal.tsx|Edit Target
+web/frontend/src/components/TaskOverviewModal.tsx|Edit Task
+web/frontend/src/components/TaskOverviewModal.tsx|Edit Time Limit (s)
+web/frontend/src/components/TaskOverviewModal.tsx|Empty
+web/frontend/src/components/TaskOverviewModal.tsx|Enter Source Chat ID or Title:
+web/frontend/src/components/TaskOverviewModal.tsx|Enter Target Chat ID or Title:
+web/frontend/src/components/TaskOverviewModal.tsx|Enter banned word or phrase...
+web/frontend/src/components/TaskOverviewModal.tsx|Enter required word or phrase...
+web/frontend/src/components/TaskOverviewModal.tsx|Enter word, phrase, or ad text...
+web/frontend/src/components/TaskOverviewModal.tsx|Explain &gt;
+web/frontend/src/components/TaskOverviewModal.tsx|FOOTER EMPTY
+web/frontend/src/components/TaskOverviewModal.tsx|Feature groups
+web/frontend/src/components/TaskOverviewModal.tsx|Features
+web/frontend/src/components/TaskOverviewModal.tsx|Filter Message Types
+web/frontend/src/components/TaskOverviewModal.tsx|Filters
+web/frontend/src/components/TaskOverviewModal.tsx|Filters (?)
+web/frontend/src/components/TaskOverviewModal.tsx|Find text...
+web/frontend/src/components/TaskOverviewModal.tsx|Footer
+web/frontend/src/components/TaskOverviewModal.tsx|Forward Every N Messages
+web/frontend/src/components/TaskOverviewModal.tsx|Forward Every N Messages
+web/frontend/src/components/TaskOverviewModal.tsx|Forwarding Status
+web/frontend/src/components/TaskOverviewModal.tsx|Full Control & Sources
+web/frontend/src/components/TaskOverviewModal.tsx|HEADER EMPTY
+web/frontend/src/components/TaskOverviewModal.tsx|Header
+web/frontend/src/components/TaskOverviewModal.tsx|Keyword Confirmation
+web/frontend/src/components/TaskOverviewModal.tsx|Keyword Confirmation
+web/frontend/src/components/TaskOverviewModal.tsx|Keyword Reply Thread
+web/frontend/src/components/TaskOverviewModal.tsx|Keyword Reply Thread
+web/frontend/src/components/TaskOverviewModal.tsx|Link Buttons
+web/frontend/src/components/TaskOverviewModal.tsx|MMO / Affiliate
+web/frontend/src/components/TaskOverviewModal.tsx|MTProto Premium Userbot
+web/frontend/src/components/TaskOverviewModal.tsx|Media & Type Filters
+web/frontend/src/components/TaskOverviewModal.tsx|Modify Content (?)
+web/frontend/src/components/TaskOverviewModal.tsx|Modular Extensions Catalogue — Toggle features for this task:
+web/frontend/src/components/TaskOverviewModal.tsx|No
+web/frontend/src/components/TaskOverviewModal.tsx|No custom strip patterns added yet.
+web/frontend/src/components/TaskOverviewModal.tsx|No text replacements configured.
+web/frontend/src/components/TaskOverviewModal.tsx|No whitelist restrictions (all permitted).
+web/frontend/src/components/TaskOverviewModal.tsx|No words in blacklist.
+web/frontend/src/components/TaskOverviewModal.tsx|OCR Image AI
+web/frontend/src/components/TaskOverviewModal.tsx|OCR Image AI
+web/frontend/src/components/TaskOverviewModal.tsx|Outbound Webhooks
+web/frontend/src/components/TaskOverviewModal.tsx|Outbound Webhooks
+web/frontend/src/components/TaskOverviewModal.tsx|PAID ADDON
+web/frontend/src/components/TaskOverviewModal.tsx|Personal Telegram Account
+web/frontend/src/components/TaskOverviewModal.tsx|Personal Telegram Account
+web/frontend/src/components/TaskOverviewModal.tsx|Power Control
+web/frontend/src/components/TaskOverviewModal.tsx|Power On/Off Schedule
+web/frontend/src/components/TaskOverviewModal.tsx|Process Raw Text
+web/frontend/src/components/TaskOverviewModal.tsx|Process Raw Text
+web/frontend/src/components/TaskOverviewModal.tsx|Processing Messages (?)
+web/frontend/src/components/TaskOverviewModal.tsx|Quick Presets:
+web/frontend/src/components/TaskOverviewModal.tsx|Replace
+web/frontend/src/components/TaskOverviewModal.tsx|Replace with...
+web/frontend/src/components/TaskOverviewModal.tsx|Reply
+web/frontend/src/components/TaskOverviewModal.tsx|Required Whitelist Words
+web/frontend/src/components/TaskOverviewModal.tsx|Save Changes
+web/frontend/src/components/TaskOverviewModal.tsx|Saving...
+web/frontend/src/components/TaskOverviewModal.tsx|Schedules (?)
+web/frontend/src/components/TaskOverviewModal.tsx|Sender Type
+web/frontend/src/components/TaskOverviewModal.tsx|Set Delay
+web/frontend/src/components/TaskOverviewModal.tsx|Set up Forwarding Topic
+web/frontend/src/components/TaskOverviewModal.tsx|Show Forward Header
+web/frontend/src/components/TaskOverviewModal.tsx|Show Forward Header
+web/frontend/src/components/TaskOverviewModal.tsx|Smart AI Rewrite
+web/frontend/src/components/TaskOverviewModal.tsx|Smart AI Rewrite
+web/frontend/src/components/TaskOverviewModal.tsx|Source
+web/frontend/src/components/TaskOverviewModal.tsx|Target
+web/frontend/src/components/TaskOverviewModal.tsx|Task Logs
+web/frontend/src/components/TaskOverviewModal.tsx|Task Overview
+web/frontend/src/components/TaskOverviewModal.tsx|Telegram
+web/frontend/src/components/TaskOverviewModal.tsx|Telegram
+web/frontend/src/components/TaskOverviewModal.tsx|Time Forward (?)
+web/frontend/src/components/TaskOverviewModal.tsx|Topic Thread ID (0 to remove)
+web/frontend/src/components/TaskOverviewModal.tsx|Unlock premium features with credits
+web/frontend/src/components/TaskOverviewModal.tsx|View all (18)
+web/frontend/src/components/TaskOverviewModal.tsx|Watermark
+web/frontend/src/components/TaskOverviewModal.tsx|Watermark Protection
+web/frontend/src/components/TaskOverviewModal.tsx|Whitelist
+web/frontend/src/components/TaskOverviewModal.tsx|Whitelisted:
+web/frontend/src/components/TaskOverviewModal.tsx|Yes
+web/frontend/src/components/TaskOverviewModal.tsx|₿ Crypto
+web/frontend/src/components/TaskOverviewModal.tsx|← Back
+web/frontend/src/components/TaskOverviewModal.tsx|← Back to Task Overview
+web/frontend/src/components/TaskOverviewModal.tsx|← Back to Task Overview
+web/frontend/src/components/TaskOverviewModal.tsx|← Back to Task Overview
+web/frontend/src/components/TaskOverviewModal.tsx|← Back to Task Overview
+web/frontend/src/components/TaskOverviewModal.tsx|← Back to Task Overview
+web/frontend/src/components/TaskOverviewModal.tsx|← Back to Task Overview
+web/frontend/src/components/TaskOverviewModal.tsx|○ Cleaner Inactive
+web/frontend/src/components/TaskOverviewModal.tsx|● Cleaner Active
+web/frontend/src/components/TaskOverviewModal.tsx|⚙️ Regex Engine
+web/frontend/src/components/TaskOverviewModal.tsx|🎙 Block Voice Messages
+web/frontend/src/components/TaskOverviewModal.tsx|🎬 Block Video Messages
+web/frontend/src/components/TaskOverviewModal.tsx|🎭 Block Stickers
+web/frontend/src/components/TaskOverviewModal.tsx|🎵 Block Audio Files
+web/frontend/src/components/TaskOverviewModal.tsx|👤 Strip Mentions (@)
+web/frontend/src/components/TaskOverviewModal.tsx|📝 Block Text Messages
+web/frontend/src/components/TaskOverviewModal.tsx|📝 Clean Captions
+web/frontend/src/components/TaskOverviewModal.tsx|🔀 Duplicate Filters (SHA-256 Fingerprint)
+web/frontend/src/components/TaskOverviewModal.tsx|🔗 Block Links
+web/frontend/src/components/TaskOverviewModal.tsx|🔗 Strip URLs
+web/frontend/src/components/TaskOverviewModal.tsx|🔤 Case Sensitive
+web/frontend/src/components/TaskOverviewModal.tsx|😀 Strip Emojis
+web/frontend/src/main.tsx|تلاش مجدد و ورود مجدد
+web/frontend/src/main.tsx|خطا در اجرای داشبورد
+web/frontend/src/main.tsx|در حال ورود…
+web/frontend/src/main.tsx|مشکلی در بارگذاری رخ داد.
+web/frontend/src/pages/Auth.tsx|Account created. Please sign in.
+web/frontend/src/pages/Auth.tsx|Already have an account?
+web/frontend/src/pages/Auth.tsx|Create Account
+web/frontend/src/pages/Auth.tsx|Create your control panel account
+web/frontend/src/pages/Auth.tsx|Display Name (optional)
+web/frontend/src/pages/Auth.tsx|Don't have an account?
+web/frontend/src/pages/Auth.tsx|Operation failed
+web/frontend/src/pages/Auth.tsx|Password
+web/frontend/src/pages/Auth.tsx|Please wait...
+web/frontend/src/pages/Auth.tsx|Register
+web/frontend/src/pages/Auth.tsx|Secure password (min 6 chars)
+web/frontend/src/pages/Auth.tsx|Sign In
+web/frontend/src/pages/Auth.tsx|Sign In
+web/frontend/src/pages/Auth.tsx|Sign in to your control panel
+web/frontend/src/pages/Auth.tsx|Tip:
+web/frontend/src/pages/Auth.tsx|Username
+web/frontend/src/pages/Auth.tsx|Username (min 4 chars)
+web/frontend/src/pages/Auth.tsx|Web Dashboard
+web/frontend/src/pages/Auth.tsx|You can get your dedicated username and password directly from the Telegram bot via the
+web/frontend/src/pages/Auth.tsx|button.
+web/frontend/src/pages/Auth.tsx|e.g. John Doe
+web/frontend/src/pages/Auth.tsx|«💻 داشبورد وب»
+web/frontend/src/pages/Auth.tsx|از قبل حساب دارید؟
+web/frontend/src/pages/Auth.tsx|ثبت‌نام حساب جدید
+web/frontend/src/pages/Auth.tsx|ثبت‌نام در پنل
+web/frontend/src/pages/Auth.tsx|ثبت‌نام و ایجاد حساب کاربری داشبورد
+web/frontend/src/pages/Auth.tsx|حساب کاربری ایجاد شد. لطفاً وارد شوید.
+web/frontend/src/pages/Auth.tsx|حساب کاربری ندارید؟
+web/frontend/src/pages/Auth.tsx|در حال برقراری ارتباط...
+web/frontend/src/pages/Auth.tsx|دریافت کنید.
+web/frontend/src/pages/Auth.tsx|راهنمایی:
+web/frontend/src/pages/Auth.tsx|رمز عبور
+web/frontend/src/pages/Auth.tsx|رمز عبور امن (حداقل ۶ حرف)
+web/frontend/src/pages/Auth.tsx|عملیات با خطا مواجه شد
+web/frontend/src/pages/Auth.tsx|مثلاً: مدیر فروش
+web/frontend/src/pages/Auth.tsx|نام نمایشی (اختیاری)
+web/frontend/src/pages/Auth.tsx|نام کاربری
+web/frontend/src/pages/Auth.tsx|نام کاربری (حداقل ۴ حرف)
+web/frontend/src/pages/Auth.tsx|نام کاربری و رمز اختصاصی خود را می‌توانید مستقیماً از ربات تلگرام با لمس دکمه
+web/frontend/src/pages/Auth.tsx|ورود
+web/frontend/src/pages/Auth.tsx|ورود به داشبورد
+web/frontend/src/pages/Auth.tsx|ورود به پنل مدیریت هوشمند و فوروارد
+web/frontend/src/pages/Auth.tsx|🌐 English
+web/frontend/src/pages/Auth.tsx|🌐 فارسی
+web/frontend/src/providerKey.ts|Key accepted (${…} ms)
+web/frontend/src/providerKey.ts|The check failed
+web/frontend/src/providerKey.ts|بررسی ناموفق بود
+web/frontend/src/providerKey.ts|کلید پذیرفته شد (${…} میلی‌ثانیه)
+web/frontend/src/settingProvenance.ts|Inherited from the bot's default for this setting
+web/frontend/src/settingProvenance.ts|Nothing overrides the registry's default
+web/frontend/src/settingProvenance.ts|This task chose this value; a bot default will not change it
