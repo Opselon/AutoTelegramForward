@@ -656,6 +656,18 @@ class ProBotUI:
         """
         return decorate_button_label(key, self._t(key, lang=lang, **kw), style=style)
 
+    def _fallback_display_name(self, uid: Optional[int], lang: str) -> str:
+        """A greeting name for a user whose Telegram profile carries none.
+
+        Both greeting screens inlined the English literals ``User {uid}`` /
+        ``Valued User`` straight into a catalog template, so a user with no
+        first name was greeted in English in every one of the other nine
+        locales — a value leak the key-parity audit cannot see.
+        """
+        if uid:
+            return self._t("ui_user_fallback_id", lang=lang, uid=uid)
+        return self._t("ui_user_fallback_name", lang=lang)
+
     def _addon_label(self, key: str, lang: Optional[str] = None, enabled: Optional[bool] = None) -> str:
         """Catalog label for an add-on row, optionally carrying its state.
 
@@ -802,6 +814,7 @@ class ProBotUI:
 
     def _render_welcome_onboarding(self, uid: int, user: Optional[Any] = None) -> Tuple[str, InlineKeyboardMarkup]:
         """First-run onboarding welcome screen for users without a connected Telegram session."""
+        lang = self._resolve_lang(uid, user)
         display_name = ""
         if user:
             parts = [getattr(user, "first_name", "") or "", getattr(user, "last_name", "") or ""]
@@ -809,9 +822,7 @@ class ProBotUI:
             if not display_name and getattr(user, "username", None):
                 display_name = f"@{user.username}"
         if not display_name:
-            display_name = f"User {uid}" if uid else "Valued User"
-
-        lang = self._resolve_lang(uid, user)
+            display_name = self._fallback_display_name(uid, lang)
 
         text = self._t("ui_onboard_greeting", lang=lang, display_name=display_name) + self._t("ui_onboard_body", lang=lang)
         connect_btn = self._t("ui_onboard_connect_btn", lang=lang)
@@ -850,7 +861,10 @@ class ProBotUI:
         server status, web token, service plan, forwarding metrics, and support links.
         Strictly scoped to the requesting tenant (uid).
         """
-        # User details
+        # User details. Resolve per-user WITH the user object so the user's own
+        # Telegram client language wins (never the process-wide i18n.current):
+        # the greeting name below is a catalog value that needs the locale.
+        lang = await self._get_user_lang(uid, user)
         display_name = ""
         if user:
             parts = [getattr(user, "first_name", "") or "", getattr(user, "last_name", "") or ""]
@@ -858,7 +872,7 @@ class ProBotUI:
             if not display_name and getattr(user, "username", None):
                 display_name = f"@{user.username}"
         if not display_name:
-            display_name = f"User {uid}" if uid else "Valued User"
+            display_name = self._fallback_display_name(uid, lang)
 
         uid_str = str(uid) if uid else "N/A"
 
@@ -908,7 +922,7 @@ class ProBotUI:
 
         active_ai = sum(1 for a in ai_configs if getattr(a, "is_enabled", False))
         total_ai = len(ai_configs)
-        active_ai_model = "None"
+        active_ai_model = self._t("ui_none_label", lang=lang)
         for a in ai_configs:
             if getattr(a, "is_enabled", False):
                 active_ai_model = f"{getattr(a, 'provider', '')}/{getattr(a, 'model', '')}".strip("/")
@@ -930,7 +944,7 @@ class ProBotUI:
         live_sessions = sum(1 for s in sessions if getattr(s, "is_active", False))
         total_sessions = len(sessions)
 
-        connected_phone = "None"
+        connected_phone = self._t("ui_none_label", lang=lang)
         if sessions:
             p = getattr(sessions[0], "phone_number", None) or getattr(sessions[0], "phone", None)
             if p:
@@ -955,13 +969,12 @@ class ProBotUI:
             except Exception:
                 pass
 
-        # Service Plan
-        plan = "VIP Pro" if (active_rules > 0 or live_sessions > 0) else "Free"
-        remaining = "Active" if plan == "VIP Pro" else "0 days"
-
-        # Resolve per-user WITH the user object so the user's own Telegram
-        # client language wins (never the process-wide i18n.current).
-        lang = await self._get_user_lang(uid, user)
+        # Service plan. Both words are interpolated into the catalog templates
+        # below, so they have to come from the catalog themselves: a hardcoded
+        # English word renders English inside every other locale's plan line.
+        is_pro = bool(active_rules > 0 or live_sessions > 0)
+        plan = self._t("ui_plan_pro" if is_pro else "ui_plan_free", lang=lang)
+        remaining = self._t("ui_plan_status_active" if is_pro else "ui_plan_status_none", lang=lang)
 
         session_status = (
             self._t("ui_main_sess_active", lang=lang) if live_sessions > 0
@@ -1321,7 +1334,9 @@ class ProBotUI:
             )
             mode = getattr(r.forward_mode, "value", r.forward_mode)
             delay = float(getattr(r, "delay_seconds", 0) or 0)
-            lines.append(f"     ⚙️ mode={mode} | ⏳ delay={delay:.0f}s")
+            lines.append(
+                "     " + self._t("ui_rules_row_meta", lang=lang, mode=mode, delay=f"{delay:.0f}")
+            )
 
         if total_pages > 1:
             lines.append("")
@@ -1333,8 +1348,10 @@ class ProBotUI:
         lang = self._lang_for(rule)
         """Render the complete Task Management & Routing Overview (Screens 1, 4, 5)."""
         task_name = rule.name or f"task_{rule.id[:8]}"
-        src_label = rule.source_chat_name or rule.source_chat_id or "AF Route Lab Source"
-        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id or "AF Route Lab Target")
+        src_label = rule.source_chat_name or rule.source_chat_id or self._t("ui_rule_source_fallback", lang=lang)
+        dst_label = getattr(rule, "target_label", None) or (
+            rule.target_chat_name or rule.target_chat_id or self._t("ui_rule_target_fallback", lang=lang)
+        )
 
         status_text = self._t("ui_rule_status_running", lang=lang) if rule.is_active else self._t("ui_rule_status_paused", lang=lang)
         debug_text = self._t("ui_rule_on", lang=lang) if rule.debug_mode else self._t("ui_rule_off", lang=lang)
@@ -2492,9 +2509,9 @@ class ProBotUI:
         """Render advanced rule controls using the rule owner's selected locale."""
         lang = self._lang_for(rule)
         task_name = rule.name or f"task_{rule.id[:8]}"
-        src_label = rule.source_chat_name or rule.source_chat_id or "AF Route Lab Source"
+        src_label = rule.source_chat_name or rule.source_chat_id or self._t("ui_rule_source_fallback", lang=lang)
         dst_label = getattr(rule, "target_label", None) or (
-            rule.target_chat_name or rule.target_chat_id or "AF Route Lab Target"
+            rule.target_chat_name or rule.target_chat_id or self._t("ui_rule_target_fallback", lang=lang)
         )
         status_on = lambda enabled: self._t(
             "ui_status_on" if enabled else "ui_status_off", lang=lang
@@ -2507,8 +2524,8 @@ class ProBotUI:
         fl_count = int(bool(rule.filter_rule_id))
         sched_status = status_on(bool(rule.auto_post_scheduler.get("enabled", False)))
         pwr_status = status_on(bool(rule.power_schedule.get("enabled", False)))
-        delay_val = f"{rule.delay_seconds:.0f} s" if rule.delay_seconds > 0 else "0 s"
-        mte_val = f"{rule.max_time_edit} s" if rule.max_time_edit > 0 else "0 s"
+        delay_val = self._t("ui_secs_value", lang=lang, sec=f"{rule.delay_seconds:.0f}" if rule.delay_seconds > 0 else "0")
+        mte_val = self._t("ui_secs_value", lang=lang, sec=f"{rule.max_time_edit}" if rule.max_time_edit > 0 else "0")
         raw_status = status_on(bool(rule.process_raw_text))
         btn2txt_status = status_on(bool(rule.button_to_text))
 
@@ -5505,7 +5522,9 @@ class ProBotUI:
                     f"{status} `{r.id[:8]}` **{r.source_chat_name or r.source_chat_id}** ➔ **{target}**")
                 mode = getattr(r.forward_mode, "value", r.forward_mode)
                 delay = float(getattr(r, "delay_seconds", 0) or 0)
-                lines.append(f"     ⚙️ mode={mode} | ⏳ delay={delay:.0f}s")
+                lines.append(
+                    "     " + self._t("ui_rules_row_meta", lang=self._lang_for(r), mode=mode, delay=f"{delay:.0f}")
+                )
             await self._safe_edit(cq, "\n".join(lines), reply_markup=self._rules_menu(rules))
             await cq.answer(self._t("ui_done"))
 
@@ -6269,7 +6288,10 @@ class ProBotUI:
             draft = rule.to_draft()
             new_rule = ForwardRule(
                 session_id=rule.session_id,
-                name=f"{rule.name} (Copy)" if rule.name else "New Rule (Copy)",
+                name=(
+                    self._t("ui_rule_copy_of", lang=self._lang_for(rule), name=rule.name)
+                    if rule.name else self._t("ui_rule_new_copy", lang=self._lang_for(rule))
+                ),
                 source_chat_id=rule.source_chat_id,
                 source_chat_name=rule.source_chat_name,
                 target_chat_id=rule.target_chat_id,
@@ -7173,8 +7195,12 @@ class ProBotUI:
             st.step = f"set_topic_{rule.id}"
             await self._persist(uid, st)
             text = (
-                f"#️⃣ **Set up Forwarding Topic**\n\n"
-                + self._t("ui_prompt_set_topic", topic=rule.topic_id or "None")
+                self._t("ui_topic_panel_title", lang=self._lang_for(rule)) + "\n\n"
+                + self._t(
+                    "ui_prompt_set_topic",
+                    lang=self._lang_for(rule),
+                    topic=rule.topic_id or self._t("ui_none_label", lang=self._lang_for(rule)),
+                )
             )
             kbd = self._kbd([[(self._t("ui_cancel_back"), f"rd:{rule.id}")]])
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -7651,7 +7677,10 @@ class ProBotUI:
                     + (f" | 📝 v{result.get('prompt_version_used')}" if result.get("prompt_version_used") else "")
                 )
             else:
-                body = f"❌ **Error:**\n`{result.get('error_message') or 'unknown'}`"
+                body = self._t(
+                    "ui_ai_test_error_body",
+                    error=result.get("error_message") or self._t("ui_ai_test_unknown_error"),
+                )
             await self._safe_edit(cq, body, reply_markup=self._kbd([
                 [(self._btn("ui_retry"), f"r_ai_test:{rule_id}")],
                 [(self._t("ui_back"), f"r_ai:{rule_id}")],
@@ -9371,7 +9400,14 @@ class ProBotUI:
         st.step = ""
         await self._persist(uid, st)
         card_text, kbd = self._render_rule_detail(rule)
-        await message.reply_text(self._t("ui_step_topic_saved", topic=rule.topic_id or "None"), reply_markup=kbd)
+        await message.reply_text(
+            self._t(
+                "ui_step_topic_saved",
+                lang=self._lang_for(rule),
+                topic=rule.topic_id or self._t("ui_none_label", lang=self._lang_for(rule)),
+            ),
+            reply_markup=kbd,
+        )
 
     async def _step_set_delay(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
         uid = message.from_user.id if message.from_user else 0
