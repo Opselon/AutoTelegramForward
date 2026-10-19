@@ -322,6 +322,29 @@ class MessageDispatcher:
         await self._sync_engine.handle_edit(payload, payload.effective_text)
         return True
 
+    async def _route_reply(self, payload: MessagePayload) -> bool:
+        """Claim a reply to an already-delivered message; True when it is delivered.
+
+        The task panel's "Reply" switch mirrors a conversation across the hop: a
+        reply written in the source chat is posted in the target as a reply to
+        the mapped copy, so the thread survives the crossing. Nothing called
+        ``SyncEngine.handle_reply``, so the switch was decoration — the reply
+        was forwarded like any other message and the target copy never saw the
+        thread. A non-zero claim means the reply has been delivered: posting it
+        again as a plain forward would be the duplicate this feature exists to
+        avoid.
+
+        Fails open: no parent mapping, the switch off for every rule that
+        matched, or no text to carry, all return False and the reply is
+        forwarded exactly as before.
+        """
+        if self._sync_engine is None or not getattr(payload, "reply_to_message_id", None):
+            return False
+        deliver = getattr(self._sync_engine, "handle_reply", None)
+        if deliver is None:
+            return False
+        return bool(await deliver(payload))
+
     def _make_handler(self, trigger: str, session_id: Optional[str] = None):
         async def _handler(client, message):
             try:
@@ -366,6 +389,18 @@ class MessageDispatcher:
                 # Never delivered by any rule: fall through so this edit is
                 # its first delivery, exactly once (the dedupe stage below
                 # stops repeats on reconnect).
+
+            # Reply mirroring: a reply to a message this bot already delivered is
+            # posted in the target as a reply to the mapped copy, so the thread
+            # survives the crossing. The reply has then been delivered and must
+            # not also be forwarded as a plain message. Anything the switch does
+            # not claim falls through and is forwarded as before.
+            if trigger == "NEW_MESSAGE" and getattr(payload, "reply_to_message_id", None):
+                try:
+                    if await self._route_reply(payload):
+                        return
+                except Exception:
+                    logger.exception("sync_engine handle_reply failed")
 
             # Album: bounded LRU aggregator with TTL
             if payload.media_group_id and trigger == "NEW_MESSAGE":

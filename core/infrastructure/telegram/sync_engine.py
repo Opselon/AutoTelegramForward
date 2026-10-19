@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any, List, Optional
 
@@ -30,12 +31,47 @@ class SyncEngine:
         rule_repo: IForwardRuleRepository,
         client_pool: Any,
         filter_repo: Optional[IFilterRuleRepository] = None,
+        flood_wait_max: float = 10.0,
+        flood_wait_attempts: int = 2,
     ) -> None:
         self._map = message_map_repo
         self._rules = rule_repo
         self._pool = client_pool
         self._filters = filter_repo
         self._filter_engine = FilterEngine()
+        # Telegram throttles edits, deletes and sends per chat. One bounded
+        # retry keeps a burst from dropping the copy silently; a wait longer
+        # than the cap is reported instead of blocking the handler.
+        self._flood_wait_max = float(flood_wait_max)
+        self._flood_attempts = max(1, int(flood_wait_attempts))
+        self._sleep = asyncio.sleep
+
+    @staticmethod
+    def flood_wait_seconds(exc: BaseException) -> Optional[float]:
+        """Seconds Telegram asked us to wait, or None when it is not a flood wait."""
+        for attr in ("value", "retry_after", "x"):
+            raw = getattr(exc, attr, None)
+            if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+                return float(raw)
+        match = re.search(r"FLOOD_WAIT_?(\d+)", str(exc))
+        return float(match.group(1)) if match else None
+
+    async def _throttled(self, factory, *, what: str, rule_id: str, target_msg_id: Any):
+        """Run one Telegram call, retrying once inside the flood-wait cap."""
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                return await factory()
+            except Exception as exc:
+                wait = self.flood_wait_seconds(exc)
+                if wait is None or wait > self._flood_wait_max or attempt >= self._flood_attempts:
+                    raise
+                logger.info(
+                    "[PIPELINE:SYNC_FLOOD_RETRY] %s rule=%s tgt=%s waiting %.0fs (attempt %d)",
+                    what, str(rule_id)[:8], target_msg_id, wait, attempt,
+                )
+                await self._sleep(wait)
 
     async def has_mapping(self, source_chat_id: Any, source_message_id: int) -> bool:
         """Whether this message was already delivered by any rule.
@@ -44,12 +80,22 @@ class SyncEngine:
         message is updated in place and must never be posted again; an unmapped
         one was never delivered, so forwarding it is a first delivery rather
         than a duplicate.
+
+        Fails **closed**: when the mapping lookup itself errors, the edit is
+        claimed rather than released. Releasing it let the pipeline re-post an
+        edit as a brand new message, which is the one outcome the feature
+        promises never to produce; a claimed edit that also fails to update
+        leaves the copy stale and is visible in the log instead.
         """
         try:
             mappings = await self._map.get_by_source(str(source_chat_id), int(source_message_id))
         except Exception:
-            logger.debug("message_map lookup failed for %s:%s", source_chat_id, source_message_id)
-            return False
+            logger.warning(
+                "[PIPELINE:SYNC_PROBE_FAILED] message_map lookup failed for %s:%s; "
+                "treating it as already delivered so the edit cannot be re-posted",
+                source_chat_id, source_message_id,
+            )
+            return True
         return bool(mappings)
 
     async def handle_edit(self, payload: MessagePayload, formatted_text: str) -> int:
@@ -137,16 +183,22 @@ class SyncEngine:
 
             try:
                 if payload.has_media:
-                    await client.edit_message_caption(
-                        chat_id=target,
-                        message_id=target_msg_id,
-                        caption=final_text or None,
+                    await self._throttled(
+                        lambda: client.edit_message_caption(
+                            chat_id=target,
+                            message_id=target_msg_id,
+                            caption=final_text or None,
+                        ),
+                        what="edit", rule_id=rule.id, target_msg_id=target_msg_id,
                     )
                 else:
-                    await client.edit_message_text(
-                        chat_id=target,
-                        message_id=target_msg_id,
-                        text=final_text or "...",
+                    await self._throttled(
+                        lambda: client.edit_message_text(
+                            chat_id=target,
+                            message_id=target_msg_id,
+                            text=final_text or "...",
+                        ),
+                        what="edit", rule_id=rule.id, target_msg_id=target_msg_id,
                     )
                 synced_count += 1
                 logger.info(
@@ -249,9 +301,12 @@ class SyncEngine:
             target_msg_id = int(m.target_message_id)
 
             try:
-                await client.delete_messages(
-                    chat_id=target,
-                    message_ids=[target_msg_id],
+                await self._throttled(
+                    lambda: client.delete_messages(
+                        chat_id=target,
+                        message_ids=[target_msg_id],
+                    ),
+                    what="delete", rule_id=rule.id, target_msg_id=target_msg_id,
                 )
                 deleted_count += 1
                 logger.info(
@@ -286,7 +341,14 @@ class SyncEngine:
         chat as a reply *to the mapped target message*, so the conversation
         context survives the crossing.
 
-        Returns the number of target messages replied to.
+        Returns the number of target copies this reply is responsible for
+        (posted now, or delivered by an earlier delivery of the same reply).
+        The dispatcher uses a non-zero result as a claim on the event: the
+        reply has been delivered, so it must not also be forwarded as a plain
+        message, and a redelivery must not post it twice. The delivery is
+        recorded in the message map, which is what makes the second delivery
+        and the retry safe, and makes the reply itself editable/deletable like
+        any other delivered copy.
         """
         replied_id = getattr(payload, "reply_to_message_id", None)
         if not replied_id:
@@ -300,6 +362,15 @@ class SyncEngine:
         if not text:
             return 0
 
+        # Idempotency: a mapping keyed on this reply's own message id means an
+        # earlier delivery (or a Telegram redelivery) already posted it.
+        already: set = set()
+        try:
+            own = await self._map.get_by_source(str(payload.chat_id), int(payload.message_id))
+            already = {(str(m.rule_id), str(m.target_chat_id)) for m in own}
+        except Exception:
+            logger.debug("No reply delivery record readable for %s:%s", payload.chat_id, payload.message_id)
+
         replied_count = 0
         for m in mappings:
             if m.delivery_status != DeliveryStatus.SENT or not m.target_message_id:
@@ -311,6 +382,14 @@ class SyncEngine:
             if not getattr(rule, "sync_replies", False):
                 continue
 
+            if (str(rule.id), str(m.target_chat_id)) in already:
+                replied_count += 1
+                logger.info(
+                    "[PIPELINE:SYNC_REPLY_DUPLICATE] rule=%s reply %s:%s already delivered to %s",
+                    rule.id[:8], payload.chat_id, payload.message_id, m.target_chat_id,
+                )
+                continue
+
             client = self._pool.get(rule.session_id)
             if client is None:
                 continue
@@ -318,17 +397,22 @@ class SyncEngine:
             target = int(m.target_chat_id) if m.target_chat_id.lstrip("-").isdigit() else m.target_chat_id
 
             try:
-                sent = await client.send_message(
-                    chat_id=target,
-                    text=text,
-                    reply_to_message_id=int(m.target_message_id),
+                sent = await self._throttled(
+                    lambda: client.send_message(
+                        chat_id=target,
+                        text=text,
+                        reply_to_message_id=int(m.target_message_id),
+                    ),
+                    what="reply", rule_id=rule.id, target_msg_id=m.target_message_id,
                 )
+                sent_id = getattr(sent, "id", None) or getattr(sent, "message_id", None)
                 if sent:
                     replied_count += 1
+                    await self._record_reply(rule, payload, m, sent_id)
                     logger.info(
                         "[PIPELINE:SYNC_REPLY] rule=%s src=%s:%s -> tgt=%s replied to %s",
                         rule.id[:8], payload.chat_id, payload.message_id, target,
-                        getattr(sent, "id", None) or getattr(sent, "message_id", None),
+                        sent_id or m.target_message_id,
                     )
             except Exception as exc:
                 logger.warning(
@@ -337,3 +421,27 @@ class SyncEngine:
                 )
 
         return replied_count
+
+    async def _record_reply(self, rule: ForwardRule, payload: MessagePayload, parent: MessageMapping,
+                            sent_message_id: Any) -> None:
+        """Remember that this reply reached that target, so a retry cannot repeat it."""
+        target_message_id: Optional[int] = None
+        if sent_message_id is not None:
+            try:
+                target_message_id = int(sent_message_id)
+            except (TypeError, ValueError):
+                target_message_id = None
+        try:
+            await self._map.add_or_update(MessageMapping(
+                rule_id=rule.id,
+                source_chat_id=str(payload.chat_id),
+                source_message_id=int(payload.message_id),
+                target_chat_id=str(parent.target_chat_id),
+                target_message_id=target_message_id,
+                delivery_status=DeliveryStatus.SENT,
+            ))
+        except Exception:
+            logger.warning(
+                "[PIPELINE:SYNC_REPLY_MAP_FAIL] rule=%s could not record reply %s:%s (a redelivery may repeat it)",
+                rule.id[:8], payload.chat_id, payload.message_id,
+            )
