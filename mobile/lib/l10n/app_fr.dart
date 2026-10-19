@@ -298,7 +298,7 @@ class AppMessagesFr {
     'rules_album_split': 'Split Messages',
     'rules_block_stickers': 'Block Stickers',
     'rules_block_video': 'Bloquer les vidéos',
-    'rules_block_audio': "Bloquer l'audio",
+    'rules_block_audio': 'Bloquer l\'audio',
     'rules_block_text': 'Bloquer le texte',
     'rules_block_voice': 'Block Voice',
     'rules_bot_added': '{label} ajouté.',
