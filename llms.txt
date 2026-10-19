@@ -9,8 +9,8 @@ Key facts, all derived from the repository at build time:
 - License: MIT
 - Services: 4 (core, logger, api/web gateway, bot UI)
 - UI languages: 10 (en, es, fa, fr, id, it, pt, ru, uz, zh) with enforced 1:1 catalog parity and strict English fallback
-- Localized strings: 1349
-- CLI command groups: 25
+- Localized strings: 1552
+- CLI command groups: 29
 - gRPC RPCs: 78
 - Registered REST routes parsed from api/main.go: 102
 - Media classes handled: 12
@@ -55,7 +55,7 @@ Key facts, all derived from the repository at build time:
 - [Dedup, replies & edits](https://opselon.github.io/AutoTelegramForward/features/deduplication-and-replies/): SHA-256 content and album fingerprinting kills duplicate forwards, reply chains stay linked, and edits and deletions propagate within a bounded window.
 - [Clients & interfaces](https://opselon.github.io/AutoTelegramForward/features/clients-and-interfaces/): Telegram bot UI, React dashboard behind a Rust Axum gateway, Flutter client and a REST/gRPC control plane — all enforced against the same contract fixtures.
 - [Multilingual UI](https://opselon.github.io/AutoTelegramForward/features/multilingual-ui/): English, Persian, Russian, Chinese, Portuguese, Uzbek, Indonesian, Spanish, French and Italian share one catalog with enforced 1:1 parity.
-- [DevOps CLI & upgrades](https://opselon.github.io/AutoTelegramForward/features/devops-cli/): 25 command groups cover setup, tasks, logs, backups, docker, k8s and TLS, with a read-only validator for CI and an upgrade engine behind a health gate.
+- [DevOps CLI & upgrades](https://opselon.github.io/AutoTelegramForward/features/devops-cli/): 29 command groups cover setup, tasks, logs, backups, docker, k8s and TLS, with a read-only validator for CI and an upgrade engine behind a health gate.
 
 ## Documentation index
 
