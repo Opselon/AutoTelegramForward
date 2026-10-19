@@ -129,13 +129,14 @@ def test_main_menu_buttons_structure(mock_pro_bot_ui):
     # but had no way in from Telegram at all.
     assert len(rows) == 8
 
-    # Row 1: Forward | Spam
-    assert rows[0][0].text == "Forward" and rows[0][0].callback_data == CB["rules"]
-    assert rows[0][1].text == "Spam" and rows[0][1].callback_data == CB["filters"]
+    # Row 1: Forward | Spam — both now carry the canonical dashboard glyph
+    # (they rendered as bare "Forward"/"Spam" before the style funnel).
+    assert rows[0][0].text == "📤 Forward" and rows[0][0].callback_data == CB["rules"]
+    assert rows[0][1].text == "🛡️ Spam" and rows[0][1].callback_data == CB["filters"]
 
     # Row 2: Publish | Clone
-    assert rows[1][0].text == "Publish" and rows[1][0].callback_data == CB["rule_add"]
-    assert rows[1][1].text == "Clone" and rows[1][1].callback_data == CB["ai"]
+    assert rows[1][0].text == "➕ Publish" and rows[1][0].callback_data == CB["rule_add"]
+    assert rows[1][1].text == "📋 Clone" and rows[1][1].callback_data == CB["ai"]
 
     # Row 3: Settings | Browse Addons
     assert rows[2][0].text == "⚙️ Settings" and rows[2][0].callback_data == CB["settings"]
