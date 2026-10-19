@@ -6474,11 +6474,7 @@ class ProBotUI:
                     show_alert=True,
                 )
             rule.clear_auto_pause()
-            try:
-                await self._rules.update(rule)
-            except Exception as exc:
-                logger.error("Could not resume rule %s after a successful check: %s", rule.id[:8], exc)
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner_alert"), show_alert=True)
+            await self._save_owned_rule(rule, uid)
             logger.info(
                 "[PIPELINE:AUTO_PAUSE] rule %s resumed by owner %s after %s resolved",
                 rule.id[:8], uid, chat_id,
@@ -6529,10 +6525,7 @@ class ProBotUI:
             # the task would stay "auto-paused" forever.
             if fresh.is_active and not fresh.is_currently_paused() and fresh.auto_pause:
                 fresh.clear_auto_pause()
-                try:
-                    await self._rules.update(fresh)
-                except Exception as exc:
-                    logger.warning("Could not clear auto-pause on %s: %s", fresh.id[:8], exc)
+                await self._save_owned_rule(fresh, uid)
             status = self._status_label(fresh, lang=self._lang_for(fresh))
             await cq.answer(self._t("ui_rule_status_alert", status=status))
             text, kbd = self._render_rule_detail(fresh)
