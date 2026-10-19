@@ -1,72 +1,1357 @@
 [
   {
+    "version": "v2.2.4",
+    "tag": "v2.2.4",
+    "date": "2026-10-18",
+    "title": "v2.2.4",
+    "summary": "One Single Executable, All 4 Microservices.",
+    "highlights": [
+      "Python Core Engine (:6001) — Telegram MTProto client pool, rule engine, smart routing, link sanitization, and multi-provider AI text transformations.",
+      "Rust Logger Engine (:6002) — High-throughput gRPC log ingestion with secret redaction, queryable structured logs, and a dedicated SQLite archive.",
+      "Go REST API (:8080) — Production control-plane, OpenAPI REST endpoints for rules, sessions, and telemetry.",
+      "Rust Axum Web Gateway & React Dashboard (:8088) — Zero-dependency web server embedding the React Single Page App, providing security headers, high-throughput reverse proxying to…",
+      "Interactive Onboarding & Setup Wizard:",
+      "Start All Services with One Command:",
+      "Verify Live Status & Health:",
+      "Open Web Dashboard:",
+      "Dead-letter queue: one owner-scoped contract, honest replay, bot + CLI + web recovery by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/148",
+      "Let a refused action say so on the wire (proto3 omitempty) and hold every client to it by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/149",
+      "Keep --json a promise: a refused dead-letter action still emits its body by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/150",
+      "Dashboard login: a single-use code, never a Telegram user id by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/151"
+    ],
+    "url": "https://github.com/Opselon/AutoTelegramForward/releases/tag/v2.2.4",
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "atf-api-linux-arm64",
+        "size": 13172896,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-api-linux-arm64"
+      },
+      {
+        "name": "atf-api-linux-x64",
+        "size": 14143648,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-api-linux-x64"
+      },
+      {
+        "name": "atf-api-macos-arm64",
+        "size": 13663874,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-api-macos-arm64"
+      },
+      {
+        "name": "atf-api-macos-x64",
+        "size": 14565904,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-api-macos-x64"
+      },
+      {
+        "name": "atf-api-windows-x64.exe",
+        "size": 14590464,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-api-windows-x64.exe"
+      },
+      {
+        "name": "atf-linux-arm64",
+        "size": 61540072,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-linux-arm64"
+      },
+      {
+        "name": "atf-linux-arm64-portable.tar.gz",
+        "size": 51358808,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-linux-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-linux-x64",
+        "size": 63266104,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-linux-x64"
+      },
+      {
+        "name": "atf-linux-x64-portable.tar.gz",
+        "size": 52604774,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-linux-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-arm64",
+        "size": 45550288,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-macos-arm64"
+      },
+      {
+        "name": "atf-macos-arm64-portable.tar.gz",
+        "size": 35266831,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-macos-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-x64",
+        "size": 45550624,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-macos-x64"
+      },
+      {
+        "name": "atf-macos-x64-portable.tar.gz",
+        "size": 35265925,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-macos-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-windows-x64-portable.zip",
+        "size": 35930584,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-windows-x64-portable.zip"
+      },
+      {
+        "name": "atf-windows-x64.exe",
+        "size": 44207544,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/atf-windows-x64.exe"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.4-android-arm64.apk",
+        "size": 20000793,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/AutoTelegramForward-2.2.4-android-arm64.apk"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.4-android-armv7.apk",
+        "size": 17573349,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/AutoTelegramForward-2.2.4-android-armv7.apk"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.4-android-bundle.aab",
+        "size": 55513938,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/AutoTelegramForward-2.2.4-android-bundle.aab"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.4-android-x86_64.apk",
+        "size": 21484565,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/AutoTelegramForward-2.2.4-android-x86_64.apk"
+      },
+      {
+        "name": "autotelegramforward-2.2.4-portable.tar.gz",
+        "size": 2337139,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/autotelegramforward-2.2.4-portable.tar.gz"
+      },
+      {
+        "name": "autotelegramforward-2.2.4-portable.tar.gz.sha256",
+        "size": 118,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/autotelegramforward-2.2.4-portable.tar.gz.sha256"
+      },
+      {
+        "name": "manifest.json",
+        "size": 7882,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/manifest.json"
+      },
+      {
+        "name": "SHA256SUMS-ios-sim.txt",
+        "size": 110,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/SHA256SUMS-ios-sim.txt"
+      },
+      {
+        "name": "SHA256SUMS-mobile.txt",
+        "size": 331,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/SHA256SUMS-mobile.txt"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 2245,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.4/SHA256SUMS.txt"
+      }
+    ],
+    "source": "github-api"
+  },
+  {
+    "version": "v2.2.2",
+    "tag": "v2.2.2",
+    "date": "2026-10-17",
+    "title": "v2.2.2",
+    "summary": "One Single Executable, All 4 Microservices.",
+    "highlights": [
+      "Python Core Engine (:6001) — Telegram MTProto client pool, rule engine, smart routing, link sanitization, and multi-provider AI text transformations.",
+      "Rust Logger Engine (:6002) — High-throughput gRPC log ingestion with secret redaction, queryable structured logs, and a dedicated SQLite archive.",
+      "Go REST API (:8080) — Production control-plane, OpenAPI REST endpoints for rules, sessions, and telemetry.",
+      "Rust Axum Web Gateway & React Dashboard (:8088) — Zero-dependency web server embedding the React Single Page App, providing security headers, high-throughput reverse proxying to…",
+      "Interactive Onboarding & Setup Wizard:",
+      "Start All Services with One Command:",
+      "Verify Live Status & Health:",
+      "Open Web Dashboard:",
+      "Drive warnings and errors to zero: real crashes, log corruption, lint gate by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/118",
+      "Per-task option logic: AI off means off, edit sync stops duplicating, album modes reach the worker by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/119",
+      "Styled buttons (keyboardButtonStyle) + one way out of the task panel by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/120",
+      "Pass the button-style diagnostics into the core container by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/121"
+    ],
+    "url": "https://github.com/Opselon/AutoTelegramForward/releases/tag/v2.2.2",
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "atf-api-linux-arm64",
+        "size": 13172896,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-api-linux-arm64"
+      },
+      {
+        "name": "atf-api-linux-x64",
+        "size": 14114976,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-api-linux-x64"
+      },
+      {
+        "name": "atf-api-macos-arm64",
+        "size": 13646178,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-api-macos-arm64"
+      },
+      {
+        "name": "atf-api-macos-x64",
+        "size": 14536080,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-api-macos-x64"
+      },
+      {
+        "name": "atf-api-windows-x64.exe",
+        "size": 14560256,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-api-windows-x64.exe"
+      },
+      {
+        "name": "atf-linux-arm64",
+        "size": 61492808,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-linux-arm64"
+      },
+      {
+        "name": "atf-linux-arm64-portable.tar.gz",
+        "size": 51317621,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-linux-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-linux-x64",
+        "size": 63217752,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-linux-x64"
+      },
+      {
+        "name": "atf-linux-x64-portable.tar.gz",
+        "size": 52568344,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-linux-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-arm64",
+        "size": 45502912,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-macos-arm64"
+      },
+      {
+        "name": "atf-macos-arm64-portable.tar.gz",
+        "size": 35228083,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-macos-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-x64",
+        "size": 45501088,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-macos-x64"
+      },
+      {
+        "name": "atf-macos-x64-portable.tar.gz",
+        "size": 35227543,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-macos-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-windows-x64-portable.zip",
+        "size": 35891680,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-windows-x64-portable.zip"
+      },
+      {
+        "name": "atf-windows-x64.exe",
+        "size": 44159590,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/atf-windows-x64.exe"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.2-android-arm64.apk",
+        "size": 20000789,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/AutoTelegramForward-2.2.2-android-arm64.apk"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.2-android-armv7.apk",
+        "size": 17524193,
+        "downloads": 2,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/AutoTelegramForward-2.2.2-android-armv7.apk"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.2-android-bundle.aab",
+        "size": 55392041,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/AutoTelegramForward-2.2.2-android-bundle.aab"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.2-android-x86_64.apk",
+        "size": 21419029,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/AutoTelegramForward-2.2.2-android-x86_64.apk"
+      },
+      {
+        "name": "autotelegramforward-2.2.2-portable.tar.gz",
+        "size": 2242119,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/autotelegramforward-2.2.2-portable.tar.gz"
+      },
+      {
+        "name": "autotelegramforward-2.2.2-portable.tar.gz.sha256",
+        "size": 118,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/autotelegramforward-2.2.2-portable.tar.gz.sha256"
+      },
+      {
+        "name": "manifest.json",
+        "size": 7882,
+        "downloads": 2,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/manifest.json"
+      },
+      {
+        "name": "SHA256SUMS-ios-sim.txt",
+        "size": 110,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/SHA256SUMS-ios-sim.txt"
+      },
+      {
+        "name": "SHA256SUMS-mobile.txt",
+        "size": 331,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/SHA256SUMS-mobile.txt"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 2245,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.2/SHA256SUMS.txt"
+      }
+    ],
+    "source": "github-api"
+  },
+  {
+    "version": "v2.2.1",
+    "tag": "v2.2.1",
+    "date": "2026-10-17",
+    "title": "v2.2.1",
+    "summary": "One Single Executable, All 4 Microservices.",
+    "highlights": [
+      "Python Core Engine (:6001) — Telegram MTProto client pool, rule engine, smart routing, link sanitization, and multi-provider AI text transformations.",
+      "Rust Logger Engine (:6002) — High-throughput gRPC log ingestion with secret redaction, queryable structured logs, and a dedicated SQLite archive.",
+      "Go REST API (:8080) — Production control-plane, OpenAPI REST endpoints for rules, sessions, and telemetry.",
+      "Rust Axum Web Gateway & React Dashboard (:8088) — Zero-dependency web server embedding the React Single Page App, providing security headers, high-throughput reverse proxying to…",
+      "Interactive Onboarding & Setup Wizard:",
+      "Start All Services with One Command:",
+      "Verify Live Status & Health:",
+      "Open Web Dashboard:",
+      "fix(mobile): stop stringified numbers blanking Rules/Chats, and stop the 9-destination bar running off-screen by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/117"
+    ],
+    "url": "https://github.com/Opselon/AutoTelegramForward/releases/tag/v2.2.1",
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "atf-api-linux-arm64",
+        "size": 13107360,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-api-linux-arm64"
+      },
+      {
+        "name": "atf-api-linux-x64",
+        "size": 14065824,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-api-linux-x64"
+      },
+      {
+        "name": "atf-api-macos-arm64",
+        "size": 13578674,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-api-macos-arm64"
+      },
+      {
+        "name": "atf-api-macos-x64",
+        "size": 14481376,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-api-macos-x64"
+      },
+      {
+        "name": "atf-api-windows-x64.exe",
+        "size": 14508032,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-api-windows-x64.exe"
+      },
+      {
+        "name": "atf-linux-arm64",
+        "size": 61380832,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-linux-arm64"
+      },
+      {
+        "name": "atf-linux-arm64-portable.tar.gz",
+        "size": 51222262,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-linux-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-linux-x64",
+        "size": 63106488,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-linux-x64"
+      },
+      {
+        "name": "atf-linux-x64-portable.tar.gz",
+        "size": 52462562,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-linux-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-arm64",
+        "size": 45393552,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-macos-arm64"
+      },
+      {
+        "name": "atf-macos-arm64-portable.tar.gz",
+        "size": 35131979,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-macos-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-x64",
+        "size": 45392800,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-macos-x64"
+      },
+      {
+        "name": "atf-macos-x64-portable.tar.gz",
+        "size": 35130700,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-macos-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-windows-x64-portable.zip",
+        "size": 35792422,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-windows-x64-portable.zip"
+      },
+      {
+        "name": "atf-windows-x64.exe",
+        "size": 44046886,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/atf-windows-x64.exe"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.1-android-arm64.apk",
+        "size": 19935101,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/AutoTelegramForward-2.2.1-android-arm64.apk"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.1-android-armv7.apk",
+        "size": 17491273,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/AutoTelegramForward-2.2.1-android-armv7.apk"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.1-android-bundle.aab",
+        "size": 55298263,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/AutoTelegramForward-2.2.1-android-bundle.aab"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.1-android-x86_64.apk",
+        "size": 21418877,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/AutoTelegramForward-2.2.1-android-x86_64.apk"
+      },
+      {
+        "name": "autotelegramforward-2.2.1-portable.tar.gz",
+        "size": 2075424,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/autotelegramforward-2.2.1-portable.tar.gz"
+      },
+      {
+        "name": "autotelegramforward-2.2.1-portable.tar.gz.sha256",
+        "size": 118,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/autotelegramforward-2.2.1-portable.tar.gz.sha256"
+      },
+      {
+        "name": "manifest.json",
+        "size": 7882,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/manifest.json"
+      },
+      {
+        "name": "SHA256SUMS-ios-sim.txt",
+        "size": 110,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/SHA256SUMS-ios-sim.txt"
+      },
+      {
+        "name": "SHA256SUMS-mobile.txt",
+        "size": 331,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/SHA256SUMS-mobile.txt"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 2245,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.1/SHA256SUMS.txt"
+      }
+    ],
+    "source": "github-api"
+  },
+  {
+    "version": "v2.2.0",
+    "tag": "v2.2.0",
+    "date": "2026-10-17",
+    "title": "v2.2.0",
+    "summary": "One Single Executable, All 4 Microservices.",
+    "highlights": [
+      "Python Core Engine (:6001) — Telegram MTProto client pool, rule engine, smart routing, link sanitization, and multi-provider AI text transformations.",
+      "Rust Logger Engine (:6002) — High-throughput gRPC log ingestion with secret redaction, queryable structured logs, and a dedicated SQLite archive.",
+      "Go REST API (:8080) — Production control-plane, OpenAPI REST endpoints for rules, sessions, and telemetry.",
+      "Rust Axum Web Gateway & React Dashboard (:8088) — Zero-dependency web server embedding the React Single Page App, providing security headers, high-throughput reverse proxying to…",
+      "Interactive Onboarding & Setup Wizard:",
+      "Start All Services with One Command:",
+      "Verify Live Status & Health:",
+      "Open Web Dashboard:",
+      "fix(security): the port-probe regression test must not bind the wildcard itself by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/110",
+      "feat(routing): make the A -> C -> B branding hop actually deliver by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/111",
+      "feat(web): configure the A -> C -> B branding hop from the dashboard by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/112",
+      "feat(mobile): surface the A → C → B branding hop in the task editor by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/113"
+    ],
+    "url": "https://github.com/Opselon/AutoTelegramForward/releases/tag/v2.2.0",
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "atf-api-linux-arm64",
+        "size": 13107360,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-api-linux-arm64"
+      },
+      {
+        "name": "atf-api-linux-x64",
+        "size": 14065824,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-api-linux-x64"
+      },
+      {
+        "name": "atf-api-macos-arm64",
+        "size": 13578674,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-api-macos-arm64"
+      },
+      {
+        "name": "atf-api-macos-x64",
+        "size": 14481376,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-api-macos-x64"
+      },
+      {
+        "name": "atf-api-windows-x64.exe",
+        "size": 14508032,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-api-windows-x64.exe"
+      },
+      {
+        "name": "atf-linux-arm64",
+        "size": 61380144,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-linux-arm64"
+      },
+      {
+        "name": "atf-linux-arm64-portable.tar.gz",
+        "size": 51222507,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-linux-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-linux-x64",
+        "size": 63107032,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-linux-x64"
+      },
+      {
+        "name": "atf-linux-x64-portable.tar.gz",
+        "size": 52471441,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-linux-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-arm64",
+        "size": 45392352,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-macos-arm64"
+      },
+      {
+        "name": "atf-macos-arm64-portable.tar.gz",
+        "size": 35131336,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-macos-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-x64",
+        "size": 45392816,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-macos-x64"
+      },
+      {
+        "name": "atf-macos-x64-portable.tar.gz",
+        "size": 35131426,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-macos-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-windows-x64-portable.zip",
+        "size": 35793550,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-windows-x64-portable.zip"
+      },
+      {
+        "name": "atf-windows-x64.exe",
+        "size": 44046151,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/atf-windows-x64.exe"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.0-android-arm64.apk",
+        "size": 19935101,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/AutoTelegramForward-2.2.0-android-arm64.apk"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.0-android-armv7.apk",
+        "size": 17507661,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/AutoTelegramForward-2.2.0-android-armv7.apk"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.0-android-bundle.aab",
+        "size": 55343655,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/AutoTelegramForward-2.2.0-android-bundle.aab"
+      },
+      {
+        "name": "AutoTelegramForward-2.2.0-android-x86_64.apk",
+        "size": 21418877,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/AutoTelegramForward-2.2.0-android-x86_64.apk"
+      },
+      {
+        "name": "autotelegramforward-2.2.0-portable.tar.gz",
+        "size": 2075402,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/autotelegramforward-2.2.0-portable.tar.gz"
+      },
+      {
+        "name": "autotelegramforward-2.2.0-portable.tar.gz.sha256",
+        "size": 118,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/autotelegramforward-2.2.0-portable.tar.gz.sha256"
+      },
+      {
+        "name": "manifest.json",
+        "size": 7882,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/manifest.json"
+      },
+      {
+        "name": "SHA256SUMS-ios-sim.txt",
+        "size": 110,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/SHA256SUMS-ios-sim.txt"
+      },
+      {
+        "name": "SHA256SUMS-mobile.txt",
+        "size": 331,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/SHA256SUMS-mobile.txt"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 2245,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.2.0/SHA256SUMS.txt"
+      }
+    ],
+    "source": "github-api"
+  },
+  {
     "version": "v2.0.0",
     "tag": "v2.0.0",
-    "date": "2026-10-16",
-    "title": "v2.0 — Multi-Source Routing, Per-Task Policies, AI Control & Full Observability",
-    "summary": "v2.0 turns the forwarder into a routing platform: one task fans out from any number of sources to any number of targets, each with its own content policy. AI rewriting is switchable per task, the whole stack is observable, scriptable and upgradeable from the command line, and both clients share one contract-gated system surface.",
+    "date": "2026-10-14",
+    "title": "v2.0.0",
+    "summary": "One Single Executable, All 4 Microservices.",
     "highlights": [
-      "M sources → N targets per task, with the primary mirror kept in step by a single sanctioned write path",
-      "Per-task content rules (metadata[\"content_policy\"]) plus per-source and per-target overrides that are additive only",
-      "Unicode-folded, word-boundary keyword matching — one blacklist catches Persian, Arabic and English spellings alike",
-      "ReDoS-refused regex gates, single-pass deterministic replacements and cheapest-first evaluation",
-      "AI rewrite enable/disable per task, custom prompt templates with versioning, and delivery that never blocks when the model is unreachable",
-      "Central logger with attributable, queryable history plus a log explorer with live stream, stats and purge",
-      "Dead-letter queue inspect / replay / purge, tenant-scoped, with OUTCOME_UNCONFIRMED as a first-class outcome",
-      "Ordered delivery lanes so a burst is delivered in the order it was posted",
-      "Atomic channel cursor persistence — the poller can no longer race the connection",
-      "Modern system surface shared by web and mobile, protected by a contract gate that fails on drift",
-      "Full-stack DevOps CLI with 24 command groups, plus atf validate as a CI pre-deploy gate",
-      "Automated upgrade engine: git pull → build → recreate → network alias repair → health gate",
-      "10-language UI with enforced 1:1 catalog parity and strict English fallback"
-    ]
+      "Python Core Engine (:6001) — Telegram MTProto client pool, rule engine, smart routing, link sanitization, and multi-provider AI text transformations.",
+      "Python Logger Service (:6002) — Telemetry, queryable structured logs with dedicated SQLite storage.",
+      "Go REST API (:8080) — Production control-plane, OpenAPI REST endpoints for rules, sessions, and telemetry.",
+      "Rust Axum Web Gateway & React Dashboard (:8088) — Zero-dependency web server embedding the React Single Page App, providing security headers, high-throughput reverse proxying to…",
+      "Interactive Onboarding & Setup Wizard:",
+      "Start All Services with One Command:",
+      "Verify Live Status & Health:",
+      "Open Web Dashboard:",
+      "fix(dispatcher): prevent Pyrogram Str UTF-16 surrogate crash by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/40",
+      "feat(security): secure admin and client control planes with immutable ID authorization by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/41",
+      "feat(rules): 1:1 task overview and advanced settings parity across bot, web, and mobile by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/42",
+      "feat(core, api, web, mobile): TMA auth, full task lifecycle parity, and web dashboard bugfix by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/43"
+    ],
+    "url": "https://github.com/Opselon/AutoTelegramForward/releases/tag/v2.0.0",
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "atf-api-linux-arm64",
+        "size": 12910752,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-api-linux-arm64"
+      },
+      {
+        "name": "atf-api-linux-x64",
+        "size": 13820064,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-api-linux-x64"
+      },
+      {
+        "name": "atf-api-macos-arm64",
+        "size": 13358850,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-api-macos-arm64"
+      },
+      {
+        "name": "atf-api-macos-x64",
+        "size": 14226384,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-api-macos-x64"
+      },
+      {
+        "name": "atf-api-windows-x64.exe",
+        "size": 14255616,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-api-windows-x64.exe"
+      },
+      {
+        "name": "atf-linux-arm64",
+        "size": 57933528,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-linux-arm64"
+      },
+      {
+        "name": "atf-linux-arm64-portable.tar.gz",
+        "size": 47868183,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-linux-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-linux-x64",
+        "size": 59581696,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-linux-x64"
+      },
+      {
+        "name": "atf-linux-x64-portable.tar.gz",
+        "size": 49047799,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-linux-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-arm64",
+        "size": 42262656,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-macos-arm64"
+      },
+      {
+        "name": "atf-macos-arm64-portable.tar.gz",
+        "size": 32100992,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-macos-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-x64",
+        "size": 42263104,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-macos-x64"
+      },
+      {
+        "name": "atf-macos-x64-portable.tar.gz",
+        "size": 32101146,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-macos-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-windows-x64-portable.zip",
+        "size": 32994008,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-windows-x64-portable.zip"
+      },
+      {
+        "name": "atf-windows-x64.exe",
+        "size": 41057119,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/atf-windows-x64.exe"
+      },
+      {
+        "name": "AutoTelegramForward-2.0.0-android-arm64.apk",
+        "size": 8666147,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/AutoTelegramForward-2.0.0-android-arm64.apk"
+      },
+      {
+        "name": "AutoTelegramForward-2.0.0-android-armv7.apk",
+        "size": 8205257,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/AutoTelegramForward-2.0.0-android-armv7.apk"
+      },
+      {
+        "name": "AutoTelegramForward-2.0.0-android-bundle.aab",
+        "size": 24117992,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/AutoTelegramForward-2.0.0-android-bundle.aab"
+      },
+      {
+        "name": "AutoTelegramForward-2.0.0-android-x86_64.apk",
+        "size": 8804117,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/AutoTelegramForward-2.0.0-android-x86_64.apk"
+      },
+      {
+        "name": "autotelegramforward-2.0.0-portable.tar.gz",
+        "size": 1311439,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/autotelegramforward-2.0.0-portable.tar.gz"
+      },
+      {
+        "name": "autotelegramforward-2.0.0-portable.tar.gz.sha256",
+        "size": 118,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/autotelegramforward-2.0.0-portable.tar.gz.sha256"
+      },
+      {
+        "name": "manifest.json",
+        "size": 7839,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/manifest.json"
+      },
+      {
+        "name": "SHA256SUMS-ios-sim.txt",
+        "size": 110,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/SHA256SUMS-ios-sim.txt"
+      },
+      {
+        "name": "SHA256SUMS-mobile.txt",
+        "size": 331,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/SHA256SUMS-mobile.txt"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 2245,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v2.0.0/SHA256SUMS.txt"
+      }
+    ],
+    "source": "github-api"
   },
   {
     "version": "v1.5.2",
     "tag": "v1.5.2",
     "date": "2026-10-13",
-    "title": "Mobile release hardening",
-    "summary": "Android permission and packaging fixes on top of the Flutter client preview.",
+    "title": "v1.5.2",
+    "summary": "One Single Executable, All 4 Microservices.",
     "highlights": [
-      "INTERNET permission restored in the Android manifest",
-      "Release APK and Play Store bundle pipeline stabilised",
-      "Mobile reachability probing before any credential prompt"
-    ]
+      "Python Core Engine (:6001) — Telegram MTProto client pool, rule engine, smart routing, link sanitization, and multi-provider AI text transformations.",
+      "Python Logger Service (:6002) — Telemetry, queryable structured logs with dedicated SQLite storage.",
+      "Go REST API (:8080) — Production control-plane, OpenAPI REST endpoints for rules, sessions, and telemetry.",
+      "Rust Axum Web Gateway & React Dashboard (:8088) — Zero-dependency web server embedding the React Single Page App, providing security headers, high-throughput reverse proxying to…",
+      "Interactive Onboarding & Setup Wizard:",
+      "Start All Services with One Command:",
+      "Verify Live Status & Health:",
+      "Open Web Dashboard:",
+      "fix(android): declare INTERNET permission (app could not reach any server) by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/39"
+    ],
+    "url": "https://github.com/Opselon/AutoTelegramForward/releases/tag/v1.5.2",
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "atf-api-linux-arm64",
+        "size": 12845216,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-api-linux-arm64"
+      },
+      {
+        "name": "atf-api-linux-x64",
+        "size": 13688992,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-api-linux-x64"
+      },
+      {
+        "name": "atf-api-macos-arm64",
+        "size": 13223298,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-api-macos-arm64"
+      },
+      {
+        "name": "atf-api-macos-x64",
+        "size": 14095984,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-api-macos-x64"
+      },
+      {
+        "name": "atf-api-windows-x64.exe",
+        "size": 14123008,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-api-windows-x64.exe"
+      },
+      {
+        "name": "atf-linux-arm64",
+        "size": 57793776,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-linux-arm64"
+      },
+      {
+        "name": "atf-linux-arm64-portable.tar.gz",
+        "size": 47775400,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-linux-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-linux-x64",
+        "size": 59439712,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-linux-x64"
+      },
+      {
+        "name": "atf-linux-x64-portable.tar.gz",
+        "size": 48954672,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-linux-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-arm64",
+        "size": 42121536,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-macos-arm64"
+      },
+      {
+        "name": "atf-macos-arm64-portable.tar.gz",
+        "size": 32005748,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-macos-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-x64",
+        "size": 42121184,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-macos-x64"
+      },
+      {
+        "name": "atf-macos-x64-portable.tar.gz",
+        "size": 32005817,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-macos-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-windows-x64-portable.zip",
+        "size": 32900893,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-windows-x64-portable.zip"
+      },
+      {
+        "name": "atf-windows-x64.exe",
+        "size": 40914271,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/atf-windows-x64.exe"
+      },
+      {
+        "name": "AutoTelegramForward-1.5.2-android-arm64.apk",
+        "size": 8616736,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/AutoTelegramForward-1.5.2-android-arm64.apk"
+      },
+      {
+        "name": "AutoTelegramForward-1.5.2-android-armv7.apk",
+        "size": 8150887,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/AutoTelegramForward-1.5.2-android-armv7.apk"
+      },
+      {
+        "name": "AutoTelegramForward-1.5.2-android-bundle.aab",
+        "size": 23971090,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/AutoTelegramForward-1.5.2-android-bundle.aab"
+      },
+      {
+        "name": "AutoTelegramForward-1.5.2-android-x86_64.apk",
+        "size": 8757961,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/AutoTelegramForward-1.5.2-android-x86_64.apk"
+      },
+      {
+        "name": "autotelegramforward-1.5.2-portable.tar.gz",
+        "size": 1188882,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/autotelegramforward-1.5.2-portable.tar.gz"
+      },
+      {
+        "name": "autotelegramforward-1.5.2-portable.tar.gz.sha256",
+        "size": 118,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/autotelegramforward-1.5.2-portable.tar.gz.sha256"
+      },
+      {
+        "name": "manifest.json",
+        "size": 7839,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/manifest.json"
+      },
+      {
+        "name": "SHA256SUMS-ios-sim.txt",
+        "size": 110,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/SHA256SUMS-ios-sim.txt"
+      },
+      {
+        "name": "SHA256SUMS-mobile.txt",
+        "size": 331,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/SHA256SUMS-mobile.txt"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 2245,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.2/SHA256SUMS.txt"
+      }
+    ],
+    "source": "github-api"
   },
   {
     "version": "v1.5.1",
     "tag": "v1.5.1",
     "date": "2026-10-13",
-    "title": "Flutter client parity pass",
-    "summary": "Mobile client aligned with the dashboard surface and the localization rules.",
+    "title": "v1.5.1",
+    "summary": "One Single Executable, All 4 Microservices.",
     "highlights": [
-      "RTL/LTR layout handling verified on Android",
-      "Secure credential storage for sessions and passwords",
-      "Protocol version compatibility check against the API"
-    ]
-  },
-  {
-    "version": "v1.5.0",
-    "tag": "v1.5.0",
-    "date": "2026-10-13",
-    "title": "Flutter mobile client",
-    "summary": "First packaged mobile release mirroring the dashboard capabilities.",
-    "highlights": [
-      "Native Android build embedding the full control surface",
-      "Encrypted local storage of the dashboard token",
-      "Live health and topology screen on mobile"
-    ]
+      "Python Core Engine (:6001) — Telegram MTProto client pool, rule engine, smart routing, link sanitization, and multi-provider AI text transformations.",
+      "Python Logger Service (:6002) — Telemetry, queryable structured logs with dedicated SQLite storage.",
+      "Go REST API (:8080) — Production control-plane, OpenAPI REST endpoints for rules, sessions, and telemetry.",
+      "Rust Axum Web Gateway & React Dashboard (:8088) — Zero-dependency web server embedding the React Single Page App, providing security headers, high-throughput reverse proxying to…",
+      "Interactive Onboarding & Setup Wizard:",
+      "Start All Services with One Command:",
+      "Verify Live Status & Health:",
+      "Open Web Dashboard:",
+      "feat(release): unified server+mobile release engineering (version endpoint, probe, manifest, CI gates, docs) by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/37",
+      "chore: bump to 1.5.1 (unified server+mobile release) by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/38"
+    ],
+    "url": "https://github.com/Opselon/AutoTelegramForward/releases/tag/v1.5.1",
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "atf-api-linux-arm64",
+        "size": 12845216,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-api-linux-arm64"
+      },
+      {
+        "name": "atf-api-linux-x64",
+        "size": 13688992,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-api-linux-x64"
+      },
+      {
+        "name": "atf-api-macos-arm64",
+        "size": 13223298,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-api-macos-arm64"
+      },
+      {
+        "name": "atf-api-macos-x64",
+        "size": 14095984,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-api-macos-x64"
+      },
+      {
+        "name": "atf-api-windows-x64.exe",
+        "size": 14123008,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-api-windows-x64.exe"
+      },
+      {
+        "name": "atf-linux-arm64",
+        "size": 57793456,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-linux-arm64"
+      },
+      {
+        "name": "atf-linux-arm64-portable.tar.gz",
+        "size": 47773105,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-linux-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-linux-x64",
+        "size": 59440288,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-linux-x64"
+      },
+      {
+        "name": "atf-linux-x64-portable.tar.gz",
+        "size": 48955501,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-linux-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-arm64",
+        "size": 42121680,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-macos-arm64"
+      },
+      {
+        "name": "atf-macos-arm64-portable.tar.gz",
+        "size": 32006235,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-macos-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-x64",
+        "size": 42121616,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-macos-x64"
+      },
+      {
+        "name": "atf-macos-x64-portable.tar.gz",
+        "size": 32005141,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-macos-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-windows-x64-portable.zip",
+        "size": 32897905,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-windows-x64-portable.zip"
+      },
+      {
+        "name": "atf-windows-x64.exe",
+        "size": 40913637,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/atf-windows-x64.exe"
+      },
+      {
+        "name": "AutoTelegramForward-1.5.1-android-arm64.apk",
+        "size": 8616664,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/AutoTelegramForward-1.5.1-android-arm64.apk"
+      },
+      {
+        "name": "AutoTelegramForward-1.5.1-android-armv7.apk",
+        "size": 8150816,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/AutoTelegramForward-1.5.1-android-armv7.apk"
+      },
+      {
+        "name": "AutoTelegramForward-1.5.1-android-bundle.aab",
+        "size": 23971036,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/AutoTelegramForward-1.5.1-android-bundle.aab"
+      },
+      {
+        "name": "AutoTelegramForward-1.5.1-android-x86_64.apk",
+        "size": 8757894,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/AutoTelegramForward-1.5.1-android-x86_64.apk"
+      },
+      {
+        "name": "autotelegramforward-1.5.1-portable.tar.gz",
+        "size": 1188893,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/autotelegramforward-1.5.1-portable.tar.gz"
+      },
+      {
+        "name": "autotelegramforward-1.5.1-portable.tar.gz.sha256",
+        "size": 118,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/autotelegramforward-1.5.1-portable.tar.gz.sha256"
+      },
+      {
+        "name": "manifest.json",
+        "size": 7839,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/manifest.json"
+      },
+      {
+        "name": "SHA256SUMS-ios-sim.txt",
+        "size": 110,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/SHA256SUMS-ios-sim.txt"
+      },
+      {
+        "name": "SHA256SUMS-mobile.txt",
+        "size": 331,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/SHA256SUMS-mobile.txt"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 2245,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.5.1/SHA256SUMS.txt"
+      }
+    ],
+    "source": "github-api"
   },
   {
     "version": "v1.4.1",
     "tag": "v1.4.1",
     "date": "2026-10-11",
-    "title": "Bot-layer tenant isolation",
-    "summary": "Fail-closed ownership enforcement extended into the Telegram bot layer.",
+    "title": "v1.4.1",
+    "summary": "One Single Executable, All 4 Microservices.",
     "highlights": [
-      "Numeric-id authorization for every bot action",
-      "Clean onboarding for unlinked users (no premature dashboard links)",
-      "Structured [PIPELINE:*] logging across the bot commands"
-    ]
+      "Python Core Engine (:6001) — Telegram MTProto client pool, rule engine, smart routing, link sanitization, and multi-provider AI text transformations.",
+      "Python Logger Service (:6002) — Telemetry, queryable structured logs with dedicated SQLite storage.",
+      "Go REST API (:8080) — Production control-plane, OpenAPI REST endpoints for rules, sessions, and telemetry.",
+      "Rust Axum Web Gateway & React Dashboard (:8088) — Zero-dependency web server embedding the React Single Page App, providing security headers, high-throughput reverse proxying to…",
+      "Interactive Onboarding & Setup Wizard:",
+      "Start All Services with One Command:",
+      "Verify Live Status & Health:",
+      "Open Web Dashboard:",
+      "fix(security): owner-scope bot reads, writes and AI execution (v12.1) by @Opselon in https://github.com/Opselon/AutoTelegramForward/pull/17"
+    ],
+    "url": "https://github.com/Opselon/AutoTelegramForward/releases/tag/v1.4.1",
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "atf-api-linux-arm64",
+        "size": 12845216,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-api-linux-arm64"
+      },
+      {
+        "name": "atf-api-linux-x64",
+        "size": 13684896,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-api-linux-x64"
+      },
+      {
+        "name": "atf-api-macos-arm64",
+        "size": 13206610,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-api-macos-arm64"
+      },
+      {
+        "name": "atf-api-macos-x64",
+        "size": 14091712,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-api-macos-x64"
+      },
+      {
+        "name": "atf-api-windows-x64.exe",
+        "size": 14119424,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-api-windows-x64.exe"
+      },
+      {
+        "name": "atf-linux-arm64",
+        "size": 54514656,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-linux-arm64"
+      },
+      {
+        "name": "atf-linux-arm64-portable.tar.gz",
+        "size": 44466891,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-linux-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-linux-x64",
+        "size": 56107432,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-linux-x64"
+      },
+      {
+        "name": "atf-linux-x64-portable.tar.gz",
+        "size": 45592453,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-linux-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-arm64",
+        "size": 41332192,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-macos-arm64"
+      },
+      {
+        "name": "atf-macos-arm64-portable.tar.gz",
+        "size": 31219749,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-macos-arm64-portable.tar.gz"
+      },
+      {
+        "name": "atf-macos-x64",
+        "size": 41331984,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-macos-x64"
+      },
+      {
+        "name": "atf-macos-x64-portable.tar.gz",
+        "size": 31218268,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-macos-x64-portable.tar.gz"
+      },
+      {
+        "name": "atf-windows-x64-portable.zip",
+        "size": 32202107,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-windows-x64-portable.zip"
+      },
+      {
+        "name": "atf-windows-x64.exe",
+        "size": 40204803,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/atf-windows-x64.exe"
+      },
+      {
+        "name": "autotelegramforward-1.4.1-portable.tar.gz",
+        "size": 487489,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/autotelegramforward-1.4.1-portable.tar.gz"
+      },
+      {
+        "name": "autotelegramforward-1.4.1-portable.tar.gz.sha256",
+        "size": 118,
+        "downloads": 0,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/autotelegramforward-1.4.1-portable.tar.gz.sha256"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 1546,
+        "downloads": 1,
+        "url": "https://github.com/Opselon/AutoTelegramForward/releases/download/v1.4.1/SHA256SUMS.txt"
+      }
+    ],
+    "source": "github-api"
   }
 ]

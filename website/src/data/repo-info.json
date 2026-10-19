@@ -7,9 +7,9 @@
   "version": "2.2.4",
   "releaseTag": "v2.2.4",
   "releaseDate": "2026-10-16",
-  "gitCommit": "5374c79",
-  "gitDate": "2026-10-19T04:30:17+03:30",
-  "syncTimestamp": "2026-10-19T01:10:39.034Z",
+  "gitCommit": "c4e8da9",
+  "gitDate": "2026-10-19T07:32:44+03:30",
+  "syncTimestamp": "2026-10-19T04:10:08.106Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -28,16 +28,16 @@
     "uz",
     "zh"
   ],
-  "i18nKeyCount": 1337,
+  "i18nKeyCount": 1551,
   "stats": {
-    "pythonTests": 108,
+    "pythonTests": 132,
     "goTests": 39,
     "grpcRpcCount": 78,
-    "cliGroups": 24,
+    "cliGroups": 29,
     "featureCatalogEntries": 18,
     "services": 4,
     "locales": 10,
-    "i18nKeys": 1337,
+    "i18nKeys": 1551,
     "implementedFeatures": 14,
     "partialFeatures": 2,
     "plannedFeatures": 2,
@@ -412,7 +412,7 @@
     {
       "category": "DevOps & Operations",
       "items": [
-        "24 CLI command groups covering setup, rules, logs, docker, k8s, certs and data",
+        "29 CLI command groups covering setup, rules, logs, docker, k8s, certs and data",
         "atf validate — read-only checks usable as a CI pre-deploy gate (--strict, --runtime, --deep)",
         "atf doctor and atf system upgrade: git pull → build → recreate → alias repair → health gate",
         "Boot persistence via systemd / launchd / Task Scheduler (atf system service install)",

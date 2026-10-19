@@ -250,22 +250,50 @@ const verifiedFeatures = [
 ];
 
 // ---------------------------------------------------------------------------
-// 4. Shortcodes (core/domain/services.py)
+// 4. Shortcodes — derived from the interpolator, not from this file
 // ---------------------------------------------------------------------------
-const supportedShortcodes = [
-  { code: '[[ORIGIN_TEXT]]', desc: 'Message body after cleaner and policy passes', example: 'Breaking market report...' },
-  { code: '[[ORIGIN_NAME]]', desc: 'Title of the source channel or supergroup', example: 'Crypto News Daily' },
-  { code: '[[ORIGIN_USERNAME]]', desc: 'Public @handle of the source channel', example: 'cryptonewsdaily' },
-  { code: '[[ORIGIN_USERID]]', desc: 'Numerical Telegram id of the author / sender', example: '10842918' },
-  { code: '[[ORIGIN_POST_ID]]', desc: 'Original post id inside the source channel', example: '4921' },
-  { code: '[[ORIGIN_CHAT_ID]]', desc: 'Numerical id of the source channel', example: '-1001695513745' },
-  { code: '[[ORIGIN_POST_DATE]]', desc: 'Original publication timestamp (UTC)', example: '2026-10-16 14:00 UTC' },
-  { code: '[[ORIGIN_NAME_URL]]', desc: 'Markdown hyperlink back to the original post', example: '[Crypto News](https://t.me/cryptonewsdaily/4921)' },
-  { code: '[[SOURCE_NAME]]', desc: 'Alias for the source channel name', example: 'Crypto News Daily' },
-  { code: '[[SENDER_CHAT]]', desc: 'Chat id or title the post was sent in', example: '-1001695513745' },
-  { code: '[[FORWARD_FROM_CHAT]]', desc: 'Original channel when the incoming post was itself a forward', example: 'Reuters Telegram' },
-  { code: '[[FROM_USER]]', desc: 'Display name of the original author', example: 'John Doe' },
-];
+// `HeaderFormatter.format_text` (core/domain/services.py) owns the mapping: it
+// builds one dict of placeholder -> value and replaces both `[[KEY]]` and
+// `{KEY}` for every entry. The names below are read out of that dict, so a
+// placeholder that is added there appears on the site and one that is removed
+// disappears from it; only the human description is written here, keyed by the
+// name the engine uses.
+const templateSource = (() => {
+  try {
+    return read('core/domain/services.py');
+  } catch {
+    console.warn('services.py unreadable — shortcode list falls back to the last generated copy');
+    return '';
+  }
+})();
+
+const SHORTCODE_DESCRIPTIONS = {
+  ORIGIN_TEXT: { desc: 'Message body after the cleaner and policy passes', example: 'Breaking market report...' },
+  ORIGIN_NAME: { desc: 'Title of the source channel or supergroup', example: 'Crypto News Daily' },
+  ORIGIN_USERNAME: { desc: 'Public @handle of the source channel', example: 'cryptonewsdaily' },
+  ORIGIN_USERID: { desc: 'Numeric Telegram id of the sender', example: '10842918' },
+  ORIGIN_POST_ID: { desc: 'Original post id inside the source channel', example: '4921' },
+  ORIGIN_CHAT_ID: { desc: 'Numeric id of the source channel', example: '-1001695513745' },
+  ORIGIN_POST_DATE: { desc: 'Original publication timestamp (UTC)', example: '2026-10-16 14:00 UTC' },
+  ORIGIN_NAME_URL: { desc: 'Markdown hyperlink back to the original post', example: '[Crypto News](https://t.me/cryptonewsdaily/4921)' },
+  SOURCE_NAME: { desc: 'Alias for the source channel title', example: 'Crypto News Daily' },
+  SENDER_CHAT: { desc: 'Chat id the post was sent in', example: '-1001695513745' },
+  FORWARD_FROM_CHAT: { desc: 'Original chat when the incoming post was itself a forward', example: 'Reuters Telegram' },
+  FROM_USER: { desc: 'Display name of the original author', example: 'John Doe' },
+};
+
+const supportedShortcodes = (() => {
+  const names = [...templateSource.matchAll(/^\s*"([A-Z][A-Z0-9_]{3,})":/gm)].map((m) => m[1]);
+  const unique = [...new Set(names)];
+  if (!unique.length) return [];
+  return unique.map((code) => ({
+    code: `[[${code}]]`,
+    desc: SHORTCODE_DESCRIPTIONS[code]?.desc || 'Rendered by the header/footer interpolator',
+    example: SHORTCODE_DESCRIPTIONS[code]?.example || '',
+  }));
+})();
+
+console.log(`   shortcodes: ${supportedShortcodes.length} derived from HeaderFormatter`);
 
 // ---------------------------------------------------------------------------
 // 5. Capability matrix across the four clients
@@ -286,34 +314,157 @@ const capabilityMatrix = [
 ];
 
 // ---------------------------------------------------------------------------
-// 6. CLI surface (atfcli/commands — the groups the binary actually exposes)
+// 6. CLI surface — parsed out of the CLI's own registry
 // ---------------------------------------------------------------------------
-const cliGroups = [
-  { group: 'setup', what: 'Guided wizard: detect the platform, validate every answer, build, then prove each service is serving', examples: ['atf setup', 'atf setup --check', 'atf setup --yes', 'atf setup --answers answers.json'] },
-  { group: 'status', what: 'Live service board with ports, reachability, task counts and the dashboard URL', examples: ['atf status', 'atf status --watch'] },
-  { group: 'system', what: 'Stack lifecycle plus boot persistence and the full upgrade path', examples: ['atf system services', 'atf system upgrade', 'atf system service install'] },
-  { group: 'validate', what: 'Read-only checks: layout, env, compose, catalog parity, secrets scan, database, proto, ports', examples: ['atf validate', 'atf validate --runtime', 'atf validate --strict --json', 'atf validate --deep'] },
-  { group: 'doctor', what: 'Deep diagnosis across DB, binaries, ports and gRPC, with --fix to repair', examples: ['atf doctor', 'atf doctor --fix'] },
-  { group: 'rules', what: 'Task control: list, show, create, update, clone, enable/disable, pause/resume, sources, path, simulate, settings', examples: ['atf rules list --json', 'atf rules sources <id> add <chat>', 'atf rules simulate <id> --text "hello"', 'atf rules settings set <id> clean_buttons=true'] },
-  { group: 'logs', what: 'Log archive access from the terminal: tail, query, search, stats, export, purge', examples: ['atf logs tail --follow -n 50', 'atf logs query --level ERROR', 'atf logs stats'] },
-  { group: 'data', what: 'Queue and DLQ inspection, aggregate stats, encrypted backup export / import', examples: ['atf data queue', 'atf data dlq --replay', 'atf data backup-export --out atf.atf'] },
-  { group: 'sessions', what: 'Telegram session inventory, encrypted backup and terminate', examples: ['atf sessions list', 'atf sessions backup --out session.bak'] },
-  { group: 'auth', what: 'Dashboard / API authentication for the CLI itself', examples: ['atf auth token --save', 'atf auth whoami'] },
-  { group: 'admin', what: 'Administration: users, admins, settings, extensions, broadcast, overview', examples: ['atf admin overview', 'atf admin users list', 'atf admin broadcast --text "maintenance"'] },
-  { group: 'config', what: 'Read and write configuration values with validation', examples: ['atf config list', 'atf config set ATF_BOT_TOKEN'] },
-  { group: 'db', what: 'Database inspection, integrity status, snapshot and backup', examples: ['atf db status', 'atf db snapshot'] },
-  { group: 'docker', what: 'Compose lifecycle for the four containers', examples: ['atf docker up', 'atf docker ps', 'atf docker logs core'] },
-  { group: 'deploy', what: 'Build, recreate and verify in one gated command', examples: ['atf deploy --build'] },
-  { group: 'certs', what: 'TLS certificate inspection, expiry checks and renewal', examples: ['atf certs check', 'atf certs renew'] },
-  { group: 'net', what: 'Network inspection and the AI bridge reconnect path', examples: ['atf net inspect', 'atf net reconnect'] },
-  { group: 'platform', what: 'Host detection plus the exact docker install commands for this distribution', examples: ['atf platform', 'atf platform --json'] },
-  { group: 'release', what: 'Version, manifest, verification and the portable single-file build', examples: ['atf release version', 'atf release verify', 'atf release portable'] },
-  { group: 'ci', what: 'Pipeline status, logs and live watch for GitHub Actions runs', examples: ['atf ci status', 'atf ci watch'] },
-  { group: 'i18n', what: 'Cross-language catalog audits: parity, placeholders and RTL leakage', examples: ['atf i18n'] },
-  { group: 'proto', what: 'Regenerate and verify gRPC stubs against the .proto sources', examples: ['atf proto'] },
-  { group: 'test', what: 'Run the test suites: python, go, flutter or all', examples: ['atf test py', 'atf test all'] },
-  { group: 'watch', what: 'Continuous supervision of the running stack', examples: ['atf watch'] },
-];
+// The site used to carry a hand-written list of groups. It said 24 while the
+// CLI registered 29 (`ai`, `audit`, `filters`, `prompts` and `upgrade` were
+// missing), and nothing could notice: the count came from the directory listing
+// and the list came from prose. Both now come from the same two facts —
+// `COMMAND_MODULES` in atfcli/cli.py and each module's own `NAME` / `HELP` /
+// `add_parser(...)` calls.
+const cliSource = (() => {
+  try {
+    return read('atfcli/cli.py');
+  } catch {
+    console.warn('atfcli/cli.py unreadable — CLI surface will be empty');
+    return '';
+  }
+})();
+
+const cliModuleOrder = (() => {
+  const block = cliSource.match(/COMMAND_MODULES[^=]*=\s*\(([\s\S]*?)\)/);
+  if (!block) return [];
+  return [...block[1].matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]);
+})();
+
+const cliAliases = (() => {
+  const block = cliSource.match(/ALIASES[^=]*=\s*\{([\s\S]*?)\n\}/);
+  if (!block) return [];
+  return [...block[1].matchAll(/"([a-z0-9_]+)":\s*\[([^\]]*)\]/g)].map((m) => ({
+    shortcut: m[1],
+    expandsTo: [...m[2].matchAll(/"([a-z0-9_]+)"/g)].map((x) => x[1]).join(' '),
+  }));
+})();
+
+/** Shared CRUD verbs every collection group gets from `_resource.register`. */
+const sharedCollectionVerbs = (() => {
+  try {
+    const source = read('atfcli/commands/_resource.py');
+    const declared = [...source.matchAll(/add_parser\(\s*\n?\s*"([a-z-]+)"(?:,\s*aliases=[^)]*?\[([^\]]*)\])?/g)];
+    return declared.map((m) => ({
+      verb: m[1],
+      aliases: m[2] ? [...m[2].matchAll(/"([a-z-]+)"/g)].map((x) => x[1]) : [],
+    }));
+  } catch {
+    return [];
+  }
+})();
+
+function moduleSummary(name, source) {
+  // The module docstring's first sentence explains what the group is for.
+  const doc = source.match(/^"""([\s\S]*?)"""/);
+  if (!doc) return '';
+  const first = doc[1]
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith('`atf') && !line.startsWith('---'));
+  if (!first) return '';
+  const sentence = first.split(/(?<=\.)\s/)[0] || first;
+  return sentence.replace(/`/g, '').slice(0, 220);
+}
+
+const cliGroups = cliModuleOrder
+  .map((module) => {
+    let source = '';
+    try {
+      source = read(`atfcli/commands/${module}.py`);
+    } catch {
+      console.warn(`ATF CLI module atfcli/commands/${module}.py is registered but missing`);
+      return null;
+    }
+    const name = (source.match(/^NAME\s*=\s*"([^"]+)"/m) || [])[1] || module;
+    const help = (source.match(/^HELP\s*=\s*"([^"]+)"/m) || [])[1] || '';
+    const own = [...source.matchAll(/add_parser\(\s*\n?\s*"([a-z][a-z0-9-]*)"(?:,\s*aliases=[^)]*?\[([^\]]*)\])?/g)].map(
+      (m) => ({
+        verb: m[1],
+        aliases: m[2] ? [...m[2].matchAll(/"([a-z0-9-]+)"/g)].map((x) => x[1]) : [],
+      }),
+    );
+    const isCollection = /from\s+\.\s+import\s+_resource|import _resource/.test(source);
+    const verbs = isCollection ? [...sharedCollectionVerbs, ...own] : own;
+    const seen = new Set();
+    const subcommands = verbs.filter((entry) => {
+      if (seen.has(entry.verb)) return false;
+      seen.add(entry.verb);
+      return true;
+    });
+    return {
+      name,
+      help,
+      summary: moduleSummary(name, source),
+      module: `atfcli/commands/${module}.py`,
+      collection: isCollection,
+      subcommands,
+    };
+  })
+  .filter(Boolean);
+
+// The released single-file binary is `atf.py`: it dispatches the modern groups
+// above *and* a set of compact lifecycle verbs it owns itself. Both surfaces are
+// real, so both are documented — the verbs and their one-line help are read out
+// of the dispatch table and the module docstring.
+const bundledCliVerbs = (() => {
+  let source = '';
+  try {
+    source = read('atf.py');
+  } catch {
+    console.warn('atf.py unreadable — bundled binary verbs will be empty');
+    return [];
+  }
+  const table = source.match(/COMMANDS[^=]*=\s*\{([\s\S]*?)\n\}/);
+  const verbs = table ? [...table[1].matchAll(/"([a-z0-9_]+)":\s*(cmd_\w+)/g)].map((m) => m[1]) : [];
+  const described = Object.fromEntries(
+    [...source.matchAll(/^\s{4}atf\s+([a-z0-9_]+)\s{2,}(.+)$/gm)].map((m) => [m[1], m[2].trim()]),
+  );
+  return verbs.map((verb) => ({ verb, help: described[verb] || '' }));
+})();
+
+console.log(
+  `   cli: ${cliGroups.length} groups from COMMAND_MODULES, ` +
+    `${cliGroups.reduce((n, g) => n + g.subcommands.length, 0)} subcommands, ` +
+    `${bundledCliVerbs.length} bundled-binary verbs`,
+);
+
+// ---------------------------------------------------------------------------
+// 6b. Cleaner options — the engine's own field list
+// ---------------------------------------------------------------------------
+// The playground lets a visitor toggle the message cleaner. Its toggles have to
+// be the engine's options, in the engine's order, or the demo teaches the wrong
+// product: `CleanerRule.clean()` in core/domain/entities.py is the code that
+// runs before delivery, so its dataclass fields are the list.
+const cleanerOptions = (() => {
+  let source = '';
+  try {
+    source = read('core/domain/entities.py');
+  } catch {
+    console.warn('core/domain/entities.py unreadable — cleaner options will be empty');
+    return [];
+  }
+  const body = source.slice(source.indexOf('class CleanerRule:'));
+  const end = body.indexOf('\n    def clean(');
+  const fields = (end > 0 ? body.slice(0, end) : body)
+    .split('\n')
+    .map((line) => line.match(/^\s{4}([a-z_]+):\s*bool\s*=\s*(True|False)/))
+    .filter(Boolean)
+    .map((m) => m[1]);
+  const extras = {
+    strip_buttons: 'Acts on the message markup rather than its text: the inline keyboard is dropped.',
+  };
+  return fields.map((field) => ({ field, option: field, note: extras[field] || '' }));
+})();
+
+console.log(`   cleaner: ${cleanerOptions.length} engine options (${cleanerOptions.map((o) => o.field).join(', ')})`);
+
 
 // ---------------------------------------------------------------------------
 // 7. Public REST surface (Go control plane, :8080)

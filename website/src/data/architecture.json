@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-18T21:52:53.279Z",
-  "commit": "6bb4172",
-  "gitDate": "2026-10-19T00:31:47+03:30",
+  "generatedAt": "2026-10-19T04:10:08.419Z",
+  "commit": "c4e8da9",
+  "gitDate": "2026-10-19T07:32:44+03:30",
   "granularity": {
     "python": "module (file)",
     "go": "package (directory)",
@@ -21,25 +21,25 @@
       "role": "Forwarding engine",
       "tech": "Python 3 · Pyrogram · gRPC",
       "blurb": "Domain model, rule engine and the durable delivery pipeline. Owns the Telegram sessions and the database.",
-      "files": 179,
-      "sourceFiles": 178,
-      "loc": 62541,
+      "files": 217,
+      "sourceFiles": 216,
+      "loc": 72540,
       "langs": [
         "python"
       ],
       "areas": [
         {
-          "id": "infrastructure",
-          "files": 50,
-          "loc": 27145,
+          "id": "tests",
+          "files": 133,
+          "loc": 30136,
           "langs": [
             "python"
           ]
         },
         {
-          "id": "tests",
-          "files": 97,
-          "loc": 21656,
+          "id": "infrastructure",
+          "files": 52,
+          "loc": 28235,
           "langs": [
             "python"
           ]
@@ -47,7 +47,7 @@
         {
           "id": "application",
           "files": 13,
-          "loc": 4623,
+          "loc": 4819,
           "langs": [
             "python"
           ]
@@ -55,7 +55,7 @@
         {
           "id": "domain",
           "files": 9,
-          "loc": 4235,
+          "loc": 4468,
           "langs": [
             "python"
           ]
@@ -94,17 +94,17 @@
       "role": "Control plane",
       "tech": "Go · net/http · gRPC client",
       "blurb": "Stateless REST control plane. Authenticates clients, applies tenant scoping, and speaks gRPC to the core and the logger.",
-      "files": 65,
-      "sourceFiles": 63,
-      "loc": 27979,
+      "files": 71,
+      "sourceFiles": 69,
+      "loc": 28489,
       "langs": [
         "go"
       ],
       "areas": [
         {
           "id": "internal",
-          "files": 60,
-          "loc": 14479,
+          "files": 66,
+          "loc": 14987,
           "langs": [
             "go"
           ]
@@ -120,7 +120,7 @@
         {
           "id": "(root)",
           "files": 1,
-          "loc": 202,
+          "loc": 204,
           "langs": [
             "go"
           ]
@@ -258,25 +258,49 @@
       "role": "Operator tooling",
       "tech": "Python · atf entrypoint",
       "blurb": "Install, validate, diagnose and upgrade the stack from one command surface.",
-      "files": 36,
-      "sourceFiles": 36,
-      "loc": 5835,
+      "files": 78,
+      "sourceFiles": 78,
+      "loc": 11999,
       "langs": [
         "python"
       ],
       "areas": [
         {
           "id": "commands",
-          "files": 26,
-          "loc": 4039,
+          "files": 32,
+          "loc": 5243,
+          "langs": [
+            "python"
+          ]
+        },
+        {
+          "id": "infrastructure",
+          "files": 10,
+          "loc": 2850,
+          "langs": [
+            "python"
+          ]
+        },
+        {
+          "id": "domain",
+          "files": 8,
+          "loc": 1548,
+          "langs": [
+            "python"
+          ]
+        },
+        {
+          "id": "application",
+          "files": 15,
+          "loc": 1517,
           "langs": [
             "python"
           ]
         },
         {
           "id": "(root)",
-          "files": 10,
-          "loc": 1796,
+          "files": 13,
+          "loc": 841,
           "langs": [
             "python"
           ]
@@ -316,9 +340,9 @@
       "role": "Documentation",
       "tech": "Astro · TypeScript",
       "blurb": "The site you are reading, generated from the same checkout it documents.",
-      "files": 82,
-      "sourceFiles": 73,
-      "loc": 13508,
+      "files": 93,
+      "sourceFiles": 84,
+      "loc": 16473,
       "langs": [
         "astro",
         "typescript"
@@ -326,8 +350,8 @@
       "areas": [
         {
           "id": "pages",
-          "files": 42,
-          "loc": 7999,
+          "files": 49,
+          "loc": 9868,
           "langs": [
             "astro",
             "typescript"
@@ -335,16 +359,16 @@
         },
         {
           "id": "components",
-          "files": 24,
-          "loc": 3623,
+          "files": 27,
+          "loc": 4000,
           "langs": [
             "astro"
           ]
         },
         {
           "id": "data",
-          "files": 4,
-          "loc": 1446,
+          "files": 5,
+          "loc": 2165,
           "langs": [
             "typescript"
           ]
@@ -369,27 +393,27 @@
     }
   ],
   "totals": {
-    "files": 437,
-    "sourceFiles": 417,
-    "loc": 146189,
-    "nodes": 361,
-    "edges": 1227,
+    "files": 534,
+    "sourceFiles": 514,
+    "loc": 165827,
+    "nodes": 453,
+    "edges": 1601,
     "generatedFiles": 2,
-    "testFiles": 132,
+    "testFiles": 172,
     "subsystems": 8
   },
   "languages": [
     {
       "lang": "python",
-      "files": 215,
-      "loc": 69433,
-      "bytes": 3754451
+      "files": 295,
+      "loc": 85596,
+      "bytes": 4646714
     },
     {
       "lang": "go",
-      "files": 63,
-      "loc": 27979,
-      "bytes": 1199990
+      "files": 69,
+      "loc": 28489,
+      "bytes": 1231311
     },
     {
       "lang": "dart",
@@ -399,15 +423,15 @@
     },
     {
       "lang": "typescript",
-      "files": 28,
-      "loc": 14673,
-      "bytes": 655005
+      "files": 29,
+      "loc": 15399,
+      "bytes": 688773
     },
     {
       "lang": "astro",
-      "files": 65,
-      "loc": 11838,
-      "bytes": 612660
+      "files": 75,
+      "loc": 14077,
+      "bytes": 728626
     },
     {
       "lang": "proto",
@@ -479,7 +503,7 @@
         "application"
       ],
       "isTest": false,
-      "fanIn": 6,
+      "fanIn": 7,
       "fanOut": 3,
       "isEntry": false
     },
@@ -573,13 +597,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 995,
+      "loc": 1102,
       "generated": false,
       "areas": [
         "application"
       ],
       "isTest": false,
-      "fanIn": 13,
+      "fanIn": 18,
       "fanOut": 10,
       "isEntry": false
     },
@@ -613,13 +637,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 585,
+      "loc": 644,
       "generated": false,
       "areas": [
         "application"
       ],
       "isTest": false,
-      "fanIn": 25,
+      "fanIn": 26,
       "fanOut": 1,
       "isEntry": false
     },
@@ -633,13 +657,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 668,
+      "loc": 698,
       "generated": false,
       "areas": [
         "application"
       ],
       "isTest": false,
-      "fanIn": 20,
+      "fanIn": 21,
       "fanOut": 6,
       "isEntry": false
     },
@@ -813,13 +837,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 487,
+      "loc": 490,
       "generated": false,
       "areas": [
         "domain"
       ],
       "isTest": false,
-      "fanIn": 4,
+      "fanIn": 5,
       "fanOut": 1,
       "isEntry": false
     },
@@ -833,13 +857,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1611,
+      "loc": 1753,
       "generated": false,
       "areas": [
         "domain"
       ],
       "isTest": false,
-      "fanIn": 75,
+      "fanIn": 90,
       "fanOut": 4,
       "isEntry": false
     },
@@ -859,7 +883,7 @@
         "domain"
       ],
       "isTest": false,
-      "fanIn": 15,
+      "fanIn": 19,
       "fanOut": 0,
       "isEntry": false
     },
@@ -873,14 +897,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1084,
+      "loc": 1172,
       "generated": false,
       "areas": [
         "domain"
       ],
       "isTest": false,
-      "fanIn": 21,
-      "fanOut": 4,
+      "fanIn": 24,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -899,7 +923,7 @@
         "domain"
       ],
       "isTest": false,
-      "fanIn": 44,
+      "fanIn": 48,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1073,13 +1097,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 384,
+      "loc": 389,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 1,
+      "fanIn": 2,
       "fanOut": 3,
       "isEntry": false
     },
@@ -1113,13 +1137,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 2140,
+      "loc": 2154,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 11,
+      "fanIn": 12,
       "fanOut": 14,
       "isEntry": false
     },
@@ -1233,13 +1257,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 827,
+      "loc": 857,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 48,
+      "fanIn": 58,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1293,13 +1317,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1693,
+      "loc": 1759,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 9,
+      "fanIn": 10,
       "fanOut": 4,
       "isEntry": false
     },
@@ -1313,13 +1337,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 2134,
+      "loc": 2204,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 38,
+      "fanIn": 46,
       "fanOut": 7,
       "isEntry": false
     },
@@ -1399,7 +1423,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 19,
+      "fanIn": 27,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1419,7 +1443,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 13,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1473,13 +1497,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 445,
+      "loc": 448,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 4,
+      "fanIn": 5,
       "fanOut": 8,
       "isEntry": false
     },
@@ -1519,7 +1543,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 3,
+      "fanIn": 5,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1593,14 +1617,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 322,
+      "loc": 387,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 3,
-      "fanOut": 0,
+      "fanIn": 4,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -1613,13 +1637,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 707,
+      "loc": 729,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 9,
+      "fanIn": 10,
       "fanOut": 11,
       "isEntry": false
     },
@@ -1633,13 +1657,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1145,
+      "loc": 1151,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 15,
+      "fanIn": 17,
       "fanOut": 7,
       "isEntry": false
     },
@@ -1659,7 +1683,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 6,
+      "fanIn": 8,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1673,13 +1697,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 38,
+      "loc": 57,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 22,
+      "fanIn": 45,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1719,7 +1743,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 6,
+      "fanIn": 7,
       "fanOut": 3,
       "isEntry": false
     },
@@ -1733,14 +1757,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 10152,
+      "loc": 10323,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 22,
-      "fanOut": 25,
+      "fanIn": 38,
+      "fanOut": 27,
       "isEntry": false
     },
     {
@@ -1784,6 +1808,26 @@
       "isEntry": false
     },
     {
+      "id": "core/infrastructure/telegram/reason_text.py",
+      "label": "reason_text",
+      "path": "core/infrastructure/telegram/reason_text.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 125,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "core/infrastructure/telegram/registry_editor.py",
       "label": "registry_editor",
       "path": "core/infrastructure/telegram/registry_editor.py",
@@ -1793,13 +1837,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 470,
+      "loc": 592,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 2,
+      "fanIn": 6,
       "fanOut": 1,
       "isEntry": false
     },
@@ -1853,13 +1897,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 267,
+      "loc": 361,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 6,
       "fanOut": 3,
       "isEntry": false
     },
@@ -1879,7 +1923,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 2,
+      "fanIn": 3,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1893,14 +1937,34 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 272,
+      "loc": 350,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 2,
+      "fanIn": 3,
       "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/telegram/ui_styles.py",
+      "label": "ui_styles",
+      "path": "core/infrastructure/telegram/ui_styles.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 200,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -2093,7 +2157,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 256,
+      "loc": 257,
       "generated": false,
       "areas": [
         "tests"
@@ -2181,6 +2245,66 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 13,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_atfcli_architecture.py",
+      "label": "test_atfcli_architecture",
+      "path": "core/tests/test_atfcli_architecture.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 141,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_atfcli_contracts.py",
+      "label": "test_atfcli_contracts",
+      "path": "core/tests/test_atfcli_contracts.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 267,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 9,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_atfcli_upgrade_ops.py",
+      "label": "test_atfcli_upgrade_ops",
+      "path": "core/tests/test_atfcli_upgrade_ops.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 453,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 11,
       "isEntry": false
     },
     {
@@ -2304,6 +2428,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_backup_scope_is_observable.py",
+      "label": "test_backup_scope_is_observable",
+      "path": "core/tests/test_backup_scope_is_observable.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 99,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_backup_service.py",
       "label": "test_backup_service",
       "path": "core/tests/test_backup_service.py",
@@ -2321,6 +2465,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_blacklist_whitelist_end_to_end.py",
+      "label": "test_blacklist_whitelist_end_to_end",
+      "path": "core/tests/test_blacklist_whitelist_end_to_end.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 392,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -2593,7 +2757,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 657,
+      "loc": 661,
       "generated": false,
       "areas": [
         "tests"
@@ -2624,6 +2788,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_catalog_batch_writer.py",
+      "label": "test_catalog_batch_writer",
+      "path": "core/tests/test_catalog_batch_writer.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 56,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_channel_cursor_persistence.py",
       "label": "test_channel_cursor_persistence",
       "path": "core/tests/test_channel_cursor_persistence.py",
@@ -2641,6 +2825,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_cleaner_options_end_to_end.py",
+      "label": "test_cleaner_options_end_to_end",
+      "path": "core/tests/test_cleaner_options_end_to_end.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 570,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
       "isEntry": false
     },
     {
@@ -2724,6 +2928,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_dashboard_button_styles.py",
+      "label": "test_dashboard_button_styles",
+      "path": "core/tests/test_dashboard_button_styles.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 181,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_dead_letter_replay.py",
       "label": "test_dead_letter_replay",
       "path": "core/tests/test_dead_letter_replay.py",
@@ -2784,6 +3008,66 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_diagnostics_labels_are_localized.py",
+      "label": "test_diagnostics_labels_are_localized",
+      "path": "core/tests/test_diagnostics_labels_are_localized.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 227,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_dialog_picker_survives_buffer_bounds.py",
+      "label": "test_dialog_picker_survives_buffer_bounds",
+      "path": "core/tests/test_dialog_picker_survives_buffer_bounds.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 113,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_duplicate_filters_dedupe.py",
+      "label": "test_duplicate_filters_dedupe",
+      "path": "core/tests/test_duplicate_filters_dedupe.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 362,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_durable_queue_semantics.py",
       "label": "test_durable_queue_semantics",
       "path": "core/tests/test_durable_queue_semantics.py",
@@ -2824,6 +3108,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_every_placeholder_reaches_its_template.py",
+      "label": "test_every_placeholder_reaches_its_template",
+      "path": "core/tests/test_every_placeholder_reaches_its_template.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 159,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_filter_engine.py",
       "label": "test_filter_engine",
       "path": "core/tests/test_filter_engine.py",
@@ -2841,6 +3145,46 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_filters_end_to_end.py",
+      "label": "test_filters_end_to_end",
+      "path": "core/tests/test_filters_end_to_end.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 351,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_forward_delay_end_to_end.py",
+      "label": "test_forward_delay_end_to_end",
+      "path": "core/tests/test_forward_delay_end_to_end.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 357,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
       "isEntry": false
     },
     {
@@ -2884,6 +3228,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_header_switch_end_to_end.py",
+      "label": "test_header_switch_end_to_end",
+      "path": "core/tests/test_header_switch_end_to_end.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 227,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_i18n.py",
       "label": "test_i18n",
       "path": "core/tests/test_i18n.py",
@@ -2924,6 +3288,46 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_input_aliases_are_catalog_driven.py",
+      "label": "test_input_aliases_are_catalog_driven",
+      "path": "core/tests/test_input_aliases_are_catalog_driven.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 110,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_internal_port_probe.py",
+      "label": "test_internal_port_probe",
+      "path": "core/tests/test_internal_port_probe.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 187,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_jwt_secret_hardening.py",
       "label": "test_jwt_secret_hardening",
       "path": "core/tests/test_jwt_secret_hardening.py",
@@ -2941,6 +3345,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_language_list_is_one_table.py",
+      "label": "test_language_list_is_one_table",
+      "path": "core/tests/test_language_list_is_one_table.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 198,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -3064,6 +3488,46 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_login_failure_text.py",
+      "label": "test_login_failure_text",
+      "path": "core/tests/test_login_failure_text.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 199,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_match_logic_is_named_not_coded.py",
+      "label": "test_match_logic_is_named_not_coded",
+      "path": "core/tests/test_match_logic_is_named_not_coded.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 173,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_multilingual_chat_picker_and_dialog_fetch.py",
       "label": "test_multilingual_chat_picker_and_dialog_fetch",
       "path": "core/tests/test_multilingual_chat_picker_and_dialog_fetch.py",
@@ -3073,7 +3537,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 193,
+      "loc": 196,
       "generated": false,
       "areas": [
         "tests"
@@ -3081,6 +3545,66 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_no_literal_text_reaches_the_screen.py",
+      "label": "test_no_literal_text_reaches_the_screen",
+      "path": "core/tests/test_no_literal_text_reaches_the_screen.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 120,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_no_raw_catalog_key_reaches_the_user.py",
+      "label": "test_no_raw_catalog_key_reaches_the_user",
+      "path": "core/tests/test_no_raw_catalog_key_reaches_the_user.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 195,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_no_value_is_still_english.py",
+      "label": "test_no_value_is_still_english",
+      "path": "core/tests/test_no_value_is_still_english.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 147,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -3193,7 +3717,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 199,
+      "loc": 204,
       "generated": false,
       "areas": [
         "tests"
@@ -3213,7 +3737,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 374,
+      "loc": 380,
       "generated": false,
       "areas": [
         "tests"
@@ -3344,6 +3868,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_python_support_range.py",
+      "label": "test_python_support_range",
+      "path": "core/tests/test_python_support_range.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 157,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_raw_tracer_safety.py",
       "label": "test_raw_tracer_safety",
       "path": "core/tests/test_raw_tracer_safety.py",
@@ -3381,6 +3925,86 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_registry_help_is_translated.py",
+      "label": "test_registry_help_is_translated",
+      "path": "core/tests/test_registry_help_is_translated.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 156,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_registry_labels_are_translated.py",
+      "label": "test_registry_labels_are_translated",
+      "path": "core/tests/test_registry_labels_are_translated.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 178,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_replace_rules_end_to_end.py",
+      "label": "test_replace_rules_end_to_end",
+      "path": "core/tests/test_replace_rules_end_to_end.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 291,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_result_rows_are_mappings.py",
+      "label": "test_result_rows_are_mappings",
+      "path": "core/tests/test_result_rows_are_mappings.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 95,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -3584,6 +4208,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_setting_choices_and_errors_are_words.py",
+      "label": "test_setting_choices_and_errors_are_words",
+      "path": "core/tests/test_setting_choices_and_errors_are_words.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 299,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_smart_forwarding_rules.py",
       "label": "test_smart_forwarding_rules",
       "path": "core/tests/test_smart_forwarding_rules.py",
@@ -3621,6 +4265,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_sync_switches_end_to_end.py",
+      "label": "test_sync_switches_end_to_end",
+      "path": "core/tests/test_sync_switches_end_to_end.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 391,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -3684,6 +4348,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_task_status_end_to_end.py",
+      "label": "test_task_status_end_to_end",
+      "path": "core/tests/test_task_status_end_to_end.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 433,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 10,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_telegram_error_forensics.py",
       "label": "test_telegram_error_forensics",
       "path": "core/tests/test_telegram_error_forensics.py",
@@ -3704,6 +4388,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_template_values_are_localized.py",
+      "label": "test_template_values_are_localized",
+      "path": "core/tests/test_template_values_are_localized.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 140,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_tenant_isolation.py",
       "label": "test_tenant_isolation",
       "path": "core/tests/test_tenant_isolation.py",
@@ -3713,7 +4417,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 684,
+      "loc": 688,
       "generated": false,
       "areas": [
         "tests"
@@ -3721,6 +4425,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 16,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_the_engine_s_reasons_speak_the_users_language.py",
+      "label": "test_the_engine_s_reasons_speak_the_users_language",
+      "path": "core/tests/test_the_engine_s_reasons_speak_the_users_language.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 237,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -3741,6 +4465,66 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_ui_styles.py",
+      "label": "test_ui_styles",
+      "path": "core/tests/test_ui_styles.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 228,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_ui_values_come_from_the_catalog.py",
+      "label": "test_ui_values_come_from_the_catalog",
+      "path": "core/tests/test_ui_values_come_from_the_catalog.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 331,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_user_language_text_surfaces.py",
+      "label": "test_user_language_text_surfaces",
+      "path": "core/tests/test_user_language_text_surfaces.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 230,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -3893,7 +4677,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 320,
+      "loc": 327,
       "generated": false,
       "areas": [
         "tests"
@@ -4011,9 +4795,9 @@
       "granularity": "package",
       "granularityLabel": "package (directory)",
       "lang": "go",
-      "files": 34,
-      "testFiles": 22,
-      "loc": 9810,
+      "files": 37,
+      "testFiles": 24,
+      "loc": 10154,
       "generated": false,
       "areas": [
         "internal"
@@ -4051,16 +4835,36 @@
       "granularity": "package",
       "granularityLabel": "package (directory)",
       "lang": "go",
-      "files": 9,
-      "testFiles": 6,
-      "loc": 1102,
+      "files": 10,
+      "testFiles": 7,
+      "loc": 1197,
       "generated": false,
       "areas": [
         "internal"
       ],
       "isTest": false,
       "fanIn": 3,
-      "fanOut": 2,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "api/internal/probes",
+      "label": "probes",
+      "path": "api/internal/probes",
+      "subsystem": "api",
+      "granularity": "package",
+      "granularityLabel": "package (directory)",
+      "lang": "go",
+      "files": 2,
+      "testFiles": 1,
+      "loc": 74,
+      "generated": false,
+      "areas": [
+        "internal"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -4073,14 +4877,14 @@
       "lang": "go",
       "files": 13,
       "testFiles": 5,
-      "loc": 2790,
+      "loc": 2785,
       "generated": false,
       "areas": [
         "internal"
       ],
       "isTest": false,
       "fanIn": 2,
-      "fanOut": 0,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -4093,7 +4897,7 @@
       "lang": "go",
       "files": 1,
       "testFiles": 0,
-      "loc": 202,
+      "loc": 204,
       "generated": false,
       "areas": [
         "(root)"
@@ -5439,7 +6243,7 @@
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 6,
+      "fanIn": 16,
       "fanOut": 1,
       "isEntry": false
     },
@@ -5473,14 +6277,314 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 452,
+      "loc": 22,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
       "fanIn": 2,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/__init__.py",
+      "label": "__init__",
+      "path": "atfcli/application/__init__.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 12,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/container.py",
+      "label": "container",
+      "path": "atfcli/application/container.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 50,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 11,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/gateways.py",
+      "label": "gateways",
+      "path": "atfcli/application/gateways.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 178,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 6,
       "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/results.py",
+      "label": "results",
+      "path": "atfcli/application/results.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 35,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/__init__.py",
+      "label": "__init__",
+      "path": "atfcli/application/use_cases/__init__.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 16,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 7,
+      "fanOut": 9,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/_payload.py",
+      "label": "_payload",
+      "path": "atfcli/application/use_cases/_payload.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 8,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 5,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/admin.py",
+      "label": "admin",
+      "path": "atfcli/application/use_cases/admin.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 115,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/audit.py",
+      "label": "audit",
+      "path": "atfcli/application/use_cases/audit.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 58,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/backup.py",
+      "label": "backup",
+      "path": "atfcli/application/use_cases/backup.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 141,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/delivery.py",
+      "label": "delivery",
+      "path": "atfcli/application/use_cases/delivery.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 84,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/logs.py",
+      "label": "logs",
+      "path": "atfcli/application/use_cases/logs.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 115,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/ops.py",
+      "label": "ops",
+      "path": "atfcli/application/use_cases/ops.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 139,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/resources.py",
+      "label": "resources",
+      "path": "atfcli/application/use_cases/resources.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 175,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/sessions.py",
+      "label": "sessions",
+      "path": "atfcli/application/use_cases/sessions.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 54,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/application/use_cases/tasks.py",
+      "label": "tasks",
+      "path": "atfcli/application/use_cases/tasks.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 337,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -5493,14 +6597,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 231,
+      "loc": 271,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 5,
-      "fanOut": 5,
+      "fanIn": 8,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -5519,8 +6623,28 @@
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 23,
+      "fanIn": 31,
       "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/commands/_resource.py",
+      "label": "_resource",
+      "path": "atfcli/commands/_resource.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 177,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -5533,13 +6657,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 175,
+      "loc": 198,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 22,
+      "fanIn": 28,
       "fanOut": 3,
       "isEntry": false
     },
@@ -5553,7 +6677,47 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 148,
+      "loc": 167,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/commands/ai.py",
+      "label": "ai",
+      "path": "atfcli/commands/ai.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 134,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/commands/audit.py",
+      "label": "audit",
+      "path": "atfcli/commands/audit.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 79,
       "generated": false,
       "areas": [
         "atfcli"
@@ -5653,7 +6817,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 123,
+      "loc": 191,
       "generated": false,
       "areas": [
         "atfcli"
@@ -5713,14 +6877,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 90,
+      "loc": 91,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
       "fanIn": 0,
-      "fanOut": 4,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -5733,14 +6897,34 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 409,
+      "loc": 520,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 3,
-      "fanOut": 3,
+      "fanIn": 4,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/commands/filters.py",
+      "label": "filters",
+      "path": "atfcli/commands/filters.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 91,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -5773,14 +6957,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 178,
+      "loc": 318,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
       "fanIn": 0,
-      "fanOut": 4,
+      "fanOut": 9,
       "isEntry": false
     },
     {
@@ -5793,14 +6977,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 42,
+      "loc": 136,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 0,
-      "fanOut": 3,
+      "fanIn": 1,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -5813,7 +6997,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 90,
+      "loc": 102,
       "generated": false,
       "areas": [
         "atfcli"
@@ -5821,6 +7005,26 @@
       "isTest": false,
       "fanIn": 1,
       "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/commands/prompts.py",
+      "label": "prompts",
+      "path": "atfcli/commands/prompts.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 91,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -5873,14 +7077,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 442,
+      "loc": 387,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
       "fanIn": 0,
-      "fanOut": 3,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -5893,7 +7097,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 56,
+      "loc": 67,
       "generated": false,
       "areas": [
         "atfcli"
@@ -5913,14 +7117,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 699,
+      "loc": 709,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 10,
+      "fanOut": 11,
       "isEntry": false
     },
     {
@@ -5933,7 +7137,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 139,
+      "loc": 172,
       "generated": false,
       "areas": [
         "atfcli"
@@ -5953,14 +7157,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 254,
+      "loc": 228,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 8,
+      "fanOut": 9,
       "isEntry": false
     },
     {
@@ -5984,6 +7188,26 @@
       "isEntry": false
     },
     {
+      "id": "atfcli/commands/upgrade.py",
+      "label": "upgrade",
+      "path": "atfcli/commands/upgrade.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 188,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
       "id": "atfcli/commands/validate.py",
       "label": "validate",
       "path": "atfcli/commands/validate.py",
@@ -5993,7 +7217,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 572,
+      "loc": 575,
       "generated": false,
       "areas": [
         "atfcli"
@@ -6039,7 +7263,7 @@
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 7,
+      "fanIn": 9,
       "fanOut": 0,
       "isEntry": false
     },
@@ -6053,20 +7277,40 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 326,
+      "loc": 40,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 14,
-      "fanOut": 2,
+      "fanIn": 12,
+      "fanOut": 3,
       "isEntry": false
     },
     {
-      "id": "atfcli/errors.py",
+      "id": "atfcli/domain/__init__.py",
+      "label": "__init__",
+      "path": "atfcli/domain/__init__.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 38,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/domain/errors.py",
       "label": "errors",
-      "path": "atfcli/errors.py",
+      "path": "atfcli/domain/errors.py",
       "subsystem": "cli",
       "granularity": "file",
       "granularityLabel": "module (file)",
@@ -6079,8 +7323,348 @@
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 20,
+      "fanIn": 21,
       "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/domain/host.py",
+      "label": "host",
+      "path": "atfcli/domain/host.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 203,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 9,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/domain/logs.py",
+      "label": "logs",
+      "path": "atfcli/domain/logs.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 192,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 6,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/domain/models.py",
+      "label": "models",
+      "path": "atfcli/domain/models.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 415,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 12,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/domain/resources.py",
+      "label": "resources",
+      "path": "atfcli/domain/resources.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 121,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 9,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/domain/secrets.py",
+      "label": "secrets",
+      "path": "atfcli/domain/secrets.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 20,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 5,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/domain/validators.py",
+      "label": "validators",
+      "path": "atfcli/domain/validators.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 511,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 11,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/errors.py",
+      "label": "errors",
+      "path": "atfcli/errors.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 47,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 18,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/infrastructure/__init__.py",
+      "label": "__init__",
+      "path": "atfcli/infrastructure/__init__.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 7,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/infrastructure/host/__init__.py",
+      "label": "__init__",
+      "path": "atfcli/infrastructure/host/__init__.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 3,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/infrastructure/host/platforms.py",
+      "label": "platforms",
+      "path": "atfcli/infrastructure/host/platforms.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 244,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/infrastructure/host/ports.py",
+      "label": "ports",
+      "path": "atfcli/infrastructure/host/ports.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 713,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/infrastructure/host/repo.py",
+      "label": "repo",
+      "path": "atfcli/infrastructure/host/repo.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 313,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/infrastructure/host/services.py",
+      "label": "services",
+      "path": "atfcli/infrastructure/host/services.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 136,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/infrastructure/host/upgrade.py",
+      "label": "upgrade",
+      "path": "atfcli/infrastructure/host/upgrade.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 699,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/infrastructure/http/__init__.py",
+      "label": "__init__",
+      "path": "atfcli/infrastructure/http/__init__.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 4,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/infrastructure/http/gateways.py",
+      "label": "gateways",
+      "path": "atfcli/infrastructure/http/gateways.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 279,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/infrastructure/http/transport.py",
+      "label": "transport",
+      "path": "atfcli/infrastructure/http/transport.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 452,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -6093,14 +7677,34 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 191,
+      "loc": 7,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 2,
-      "fanOut": 0,
+      "fanIn": 4,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/ports.py",
+      "label": "ports",
+      "path": "atfcli/ports.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 9,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -6113,7 +7717,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 136,
+      "loc": 5,
       "generated": false,
       "areas": [
         "atfcli"
@@ -6133,14 +7737,54 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 210,
+      "loc": 211,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 5,
-      "fanOut": 0,
+      "fanIn": 4,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/upgrade.py",
+      "label": "upgrade",
+      "path": "atfcli/upgrade.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 9,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "atfcli/validators.py",
+      "label": "validators",
+      "path": "atfcli/validators.py",
+      "subsystem": "cli",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 18,
+      "generated": false,
+      "areas": [
+        "atfcli"
+      ],
+      "isTest": false,
+      "fanIn": 8,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -6259,7 +7903,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 20,
+      "fanIn": 27,
       "fanOut": 1,
       "isEntry": false
     },
@@ -6299,7 +7943,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 13,
+      "fanIn": 21,
       "fanOut": 0,
       "isEntry": false
     },
@@ -6321,6 +7965,26 @@
       "isTest": false,
       "fanIn": 1,
       "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/components/EndpointExplorer.astro",
+      "label": "EndpointExplorer",
+      "path": "website/src/components/EndpointExplorer.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 283,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -6364,6 +8028,26 @@
       "isEntry": false
     },
     {
+      "id": "website/src/components/GuardChain.astro",
+      "label": "GuardChain",
+      "path": "website/src/components/GuardChain.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 36,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
       "id": "website/src/components/Header.astro",
       "label": "Header",
       "path": "website/src/components/Header.astro",
@@ -6399,7 +8083,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 36,
+      "fanIn": 40,
       "fanOut": 0,
       "isEntry": false
     },
@@ -6504,6 +8188,26 @@
       "isEntry": false
     },
     {
+      "id": "website/src/components/RequestResponse.astro",
+      "label": "RequestResponse",
+      "path": "website/src/components/RequestResponse.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 58,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
       "id": "website/src/components/SEO.astro",
       "label": "SEO",
       "path": "website/src/components/SEO.astro",
@@ -6539,7 +8243,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 15,
+      "fanIn": 23,
       "fanOut": 1,
       "isEntry": false
     },
@@ -6644,6 +8348,26 @@
       "isEntry": false
     },
     {
+      "id": "website/src/data/api-surface.ts",
+      "label": "api-surface",
+      "path": "website/src/data/api-surface.ts",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 698,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "website/src/data/docs-nav.ts",
       "label": "docs-nav",
       "path": "website/src/data/docs-nav.ts",
@@ -6653,7 +8377,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 94,
+      "loc": 101,
       "generated": false,
       "areas": [
         "src"
@@ -6693,7 +8417,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 173,
+      "loc": 187,
       "generated": false,
       "areas": [
         "src"
@@ -6759,7 +8483,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 37,
+      "fanIn": 44,
       "fanOut": 5,
       "isEntry": false
     },
@@ -6804,6 +8528,26 @@
       "isEntry": false
     },
     {
+      "id": "website/src/pages/api/endpoints/index.astro",
+      "label": "index",
+      "path": "website/src/pages/api/endpoints/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 188,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
       "id": "website/src/pages/api/index.astro",
       "label": "index",
       "path": "website/src/pages/api/index.astro",
@@ -6813,7 +8557,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 276,
+      "loc": 337,
       "generated": false,
       "areas": [
         "src"
@@ -6821,6 +8565,66 @@
       "isTest": false,
       "fanIn": 0,
       "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/api/rate-limits/index.astro",
+      "label": "index",
+      "path": "website/src/pages/api/rate-limits/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 279,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/api/responses/index.astro",
+      "label": "index",
+      "path": "website/src/pages/api/responses/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 394,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 7,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/api/task-lifecycle/index.astro",
+      "label": "index",
+      "path": "website/src/pages/api/task-lifecycle/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 256,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -7333,7 +9137,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 84,
+      "loc": 91,
       "generated": false,
       "areas": [
         "src"
@@ -7473,7 +9277,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 211,
+      "loc": 236,
       "generated": false,
       "areas": [
         "src"
@@ -7481,6 +9285,66 @@
       "isTest": false,
       "fanIn": 0,
       "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/security/request-hardening/index.astro",
+      "label": "index",
+      "path": "website/src/pages/security/request-hardening/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 219,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/security/secrets/index.astro",
+      "label": "index",
+      "path": "website/src/pages/security/secrets/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 203,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/security/tenant-isolation/index.astro",
+      "label": "index",
+      "path": "website/src/pages/security/tenant-isolation/index.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 237,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -7619,7 +9483,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 49,
+      "fanIn": 57,
       "fanOut": 0,
       "isEntry": false
     },
@@ -7863,6 +9727,11 @@
     {
       "source": "core/domain/services.py",
       "target": "core/domain/branding.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/domain/services.py",
+      "target": "core/domain/content_policy.py",
       "kind": "import"
     },
     {
@@ -8171,6 +10040,11 @@
       "kind": "import"
     },
     {
+      "source": "core/infrastructure/telegram/diagnostics.py",
+      "target": "core/infrastructure/telegram/errors.py",
+      "kind": "import"
+    },
+    {
       "source": "core/infrastructure/telegram/dispatcher.py",
       "target": "core/application/__init__.py",
       "kind": "import"
@@ -8292,6 +10166,11 @@
     },
     {
       "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/infrastructure/telegram/reason_text.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
       "target": "core/infrastructure/telegram/registry_editor.py",
       "kind": "import"
     },
@@ -8303,6 +10182,11 @@
     {
       "source": "core/infrastructure/telegram/pro_bot_ui.py",
       "target": "core/infrastructure/telegram/button_style.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/infrastructure/telegram/ui_styles.py",
       "kind": "import"
     },
     {
@@ -8941,6 +10825,141 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_atfcli_architecture.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_architecture.py",
+      "target": "atfcli/application/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_architecture.py",
+      "target": "atfcli/application/container.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_architecture.py",
+      "target": "atfcli/domain/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_architecture.py",
+      "target": "atfcli/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_architecture.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_architecture.py",
+      "target": "atfcli/cli.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_contracts.py",
+      "target": "atfcli/application/container.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_contracts.py",
+      "target": "atfcli/application/gateways.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_contracts.py",
+      "target": "atfcli/application/use_cases/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_contracts.py",
+      "target": "atfcli/application/use_cases/ops.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_contracts.py",
+      "target": "atfcli/application/use_cases/tasks.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_contracts.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_contracts.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_contracts.py",
+      "target": "atfcli/domain/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_contracts.py",
+      "target": "atfcli/infrastructure/http/gateways.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/ports.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/upgrade.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/cli.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/commands/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/commands/doctor.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/console.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/context.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_atfcli_upgrade_ops.py",
+      "target": "atfcli/commands/net.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_audit_events_schema.py",
       "target": "core/infrastructure/persistence/audit_events.py",
       "kind": "import"
@@ -9061,6 +11080,16 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_backup_scope_is_observable.py",
+      "target": "core/infrastructure/grpc_server/servicers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_backup_scope_is_observable.py",
+      "target": "core/application/backup_service.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_backup_service.py",
       "target": "core/application/backup_service.py",
       "kind": "import"
@@ -9078,6 +11107,41 @@
     {
       "source": "core/tests/test_backup_service.py",
       "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_blacklist_whitelist_end_to_end.py",
+      "target": "core/application/pipeline.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_blacklist_whitelist_end_to_end.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_blacklist_whitelist_end_to_end.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_blacklist_whitelist_end_to_end.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_blacklist_whitelist_end_to_end.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_blacklist_whitelist_end_to_end.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_blacklist_whitelist_end_to_end.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
       "kind": "import"
     },
     {
@@ -9531,6 +11595,46 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_cleaner_options_end_to_end.py",
+      "target": "core/application/pipeline.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_options_end_to_end.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_options_end_to_end.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_options_end_to_end.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_options_end_to_end.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_options_end_to_end.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_options_end_to_end.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_options_end_to_end.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_content_policy.py",
       "target": "core/domain/content_policy.py",
       "kind": "import"
@@ -9563,6 +11667,26 @@
     {
       "source": "core/tests/test_crypto.py",
       "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dashboard_button_styles.py",
+      "target": "core/infrastructure/telegram/button_style.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dashboard_button_styles.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dashboard_button_styles.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dashboard_button_styles.py",
+      "target": "core/infrastructure/telegram/ui_styles.py",
       "kind": "import"
     },
     {
@@ -9626,6 +11750,76 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_diagnostics_labels_are_localized.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_diagnostics_labels_are_localized.py",
+      "target": "core/infrastructure/telegram/diagnostics.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_diagnostics_labels_are_localized.py",
+      "target": "core/infrastructure/telegram/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_diagnostics_labels_are_localized.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_diagnostics_labels_are_localized.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dialog_picker_survives_buffer_bounds.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dialog_picker_survives_buffer_bounds.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dialog_picker_survives_buffer_bounds.py",
+      "target": "core/infrastructure/telegram/ui_state.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_dialog_picker_survives_buffer_bounds.py",
+      "target": "core/infrastructure/telegram/ui_state_manager.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_duplicate_filters_dedupe.py",
+      "target": "core/application/pipeline.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_duplicate_filters_dedupe.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_duplicate_filters_dedupe.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_duplicate_filters_dedupe.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_duplicate_filters_dedupe.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_durable_queue_semantics.py",
       "target": "core/domain/entities.py",
       "kind": "import"
@@ -9666,6 +11860,11 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_every_placeholder_reaches_its_template.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_filter_engine.py",
       "target": "core/domain/entities.py",
       "kind": "import"
@@ -9678,6 +11877,86 @@
     {
       "source": "core/tests/test_filter_engine.py",
       "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_filters_end_to_end.py",
+      "target": "core/application/pipeline.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_filters_end_to_end.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_filters_end_to_end.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_filters_end_to_end.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_filters_end_to_end.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_filters_end_to_end.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_filters_end_to_end.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_filters_end_to_end.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_delay_end_to_end.py",
+      "target": "core/infrastructure/telegram/durable_queue.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_delay_end_to_end.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_delay_end_to_end.py",
+      "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_delay_end_to_end.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_delay_end_to_end.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_delay_end_to_end.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_delay_end_to_end.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_delay_end_to_end.py",
+      "target": "core/domain/rule_settings.py",
       "kind": "import"
     },
     {
@@ -9741,6 +12020,36 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_header_switch_end_to_end.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_header_switch_end_to_end.py",
+      "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_header_switch_end_to_end.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_header_switch_end_to_end.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_header_switch_end_to_end.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_header_switch_end_to_end.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_i18n.py",
       "target": "core/infrastructure/telegram/i18n.py",
       "kind": "import"
@@ -9781,6 +12090,36 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_input_aliases_are_catalog_driven.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_input_aliases_are_catalog_driven.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_internal_port_probe.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_internal_port_probe.py",
+      "target": "atfcli/ports.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_internal_port_probe.py",
+      "target": "atfcli/console.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_internal_port_probe.py",
+      "target": "atfcli/context.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_jwt_secret_hardening.py",
       "target": "core/infrastructure/grpc_server/account_servicer.py",
       "kind": "import"
@@ -9788,6 +12127,26 @@
     {
       "source": "core/tests/test_jwt_secret_hardening.py",
       "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_language_list_is_one_table.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_language_list_is_one_table.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_language_list_is_one_table.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_language_list_is_one_table.py",
+      "target": "core/infrastructure/telegram/i18n.py",
       "kind": "import"
     },
     {
@@ -9876,6 +12235,46 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_login_failure_text.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_login_failure_text.py",
+      "target": "core/infrastructure/telegram/login_flow.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_login_failure_text.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_login_failure_text.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_match_logic_is_named_not_coded.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_match_logic_is_named_not_coded.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_match_logic_is_named_not_coded.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_match_logic_is_named_not_coded.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_multilingual_chat_picker_and_dialog_fetch.py",
       "target": "core/infrastructure/telegram/pro_bot_ui.py",
       "kind": "import"
@@ -9883,6 +12282,31 @@
     {
       "source": "core/tests/test_multilingual_chat_picker_and_dialog_fetch.py",
       "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_no_raw_catalog_key_reaches_the_user.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_no_raw_catalog_key_reaches_the_user.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_no_raw_catalog_key_reaches_the_user.py",
+      "target": "core/infrastructure/telegram/registry_editor.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_no_raw_catalog_key_reaches_the_user.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_no_raw_catalog_key_reaches_the_user.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
       "kind": "import"
     },
     {
@@ -10221,6 +12645,26 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_python_support_range.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_python_support_range.py",
+      "target": "atfcli/platforms.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_python_support_range.py",
+      "target": "atfcli/commands/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_python_support_range.py",
+      "target": "atfcli/cli.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_raw_tracer_safety.py",
       "target": "core/infrastructure/telegram/__init__.py",
       "kind": "import"
@@ -10253,6 +12697,91 @@
     {
       "source": "core/tests/test_redis_lease_coordination.py",
       "target": "core/infrastructure/redis/lease.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_registry_help_is_translated.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_registry_help_is_translated.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_registry_help_is_translated.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_registry_help_is_translated.py",
+      "target": "core/infrastructure/telegram/registry_editor.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_registry_labels_are_translated.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_registry_labels_are_translated.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_registry_labels_are_translated.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_registry_labels_are_translated.py",
+      "target": "core/infrastructure/telegram/registry_editor.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_replace_rules_end_to_end.py",
+      "target": "core/application/pipeline.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_replace_rules_end_to_end.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_replace_rules_end_to_end.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_replace_rules_end_to_end.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_replace_rules_end_to_end.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_replace_rules_end_to_end.py",
+      "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_replace_rules_end_to_end.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_replace_rules_end_to_end.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_result_rows_are_mappings.py",
+      "target": "core/infrastructure/persistence/database.py",
       "kind": "import"
     },
     {
@@ -10561,6 +13090,31 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_setting_choices_and_errors_are_words.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_setting_choices_and_errors_are_words.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_setting_choices_and_errors_are_words.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_setting_choices_and_errors_are_words.py",
+      "target": "core/infrastructure/telegram/registry_editor.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_setting_choices_and_errors_are_words.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_smart_forwarding_rules.py",
       "target": "core/domain/entities.py",
       "kind": "import"
@@ -10613,6 +13167,26 @@
     {
       "source": "core/tests/test_sqlite_repositories.py",
       "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sync_switches_end_to_end.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sync_switches_end_to_end.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sync_switches_end_to_end.py",
+      "target": "core/infrastructure/telegram/dispatcher.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_sync_switches_end_to_end.py",
+      "target": "core/infrastructure/telegram/sync_engine.py",
       "kind": "import"
     },
     {
@@ -10686,6 +13260,56 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_task_status_end_to_end.py",
+      "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_task_status_end_to_end.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_task_status_end_to_end.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_task_status_end_to_end.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_task_status_end_to_end.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_task_status_end_to_end.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_task_status_end_to_end.py",
+      "target": "core/infrastructure/telegram/durable_queue.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_task_status_end_to_end.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_task_status_end_to_end.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_task_status_end_to_end.py",
+      "target": "core/infrastructure/persistence/postgres_repositories.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_telegram_error_forensics.py",
       "target": "core/infrastructure/telegram/__init__.py",
       "kind": "import"
@@ -10693,6 +13317,11 @@
     {
       "source": "core/tests/test_telegram_error_forensics.py",
       "target": "core/infrastructure/telegram/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_template_values_are_localized.py",
+      "target": "core/infrastructure/telegram/i18n.py",
       "kind": "import"
     },
     {
@@ -10776,6 +13405,21 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_the_engine_s_reasons_speak_the_users_language.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_the_engine_s_reasons_speak_the_users_language.py",
+      "target": "core/infrastructure/telegram/reason_text.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_the_engine_s_reasons_speak_the_users_language.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_ui_state_manager.py",
       "target": "core/infrastructure/telegram/ui_state_manager.py",
       "kind": "import"
@@ -10783,6 +13427,66 @@
     {
       "source": "core/tests/test_ui_state_manager.py",
       "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ui_styles.py",
+      "target": "core/infrastructure/telegram/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ui_styles.py",
+      "target": "core/infrastructure/telegram/ui_styles.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ui_styles.py",
+      "target": "core/infrastructure/telegram/button_style.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ui_styles.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ui_values_come_from_the_catalog.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ui_values_come_from_the_catalog.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_ui_values_come_from_the_catalog.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_language_text_surfaces.py",
+      "target": "core/infrastructure/grpc_server/admin_servicer.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_language_text_surfaces.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_language_text_surfaces.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_language_text_surfaces.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_user_language_text_surfaces.py",
+      "target": "core/infrastructure/telegram/bot_manager.py",
       "kind": "import"
     },
     {
@@ -11067,12 +13771,12 @@
     },
     {
       "source": "api/internal/handlers",
-      "target": "api/proto",
+      "target": "api/internal/grpcclient",
       "kind": "import"
     },
     {
       "source": "api/internal/handlers",
-      "target": "api/internal/grpcclient",
+      "target": "api/proto",
       "kind": "import"
     },
     {
@@ -11098,6 +13802,16 @@
     {
       "source": "api/internal/middleware",
       "target": "api/internal/logpolicy",
+      "kind": "import"
+    },
+    {
+      "source": "api/internal/middleware",
+      "target": "api/internal/probes",
+      "kind": "import"
+    },
+    {
+      "source": "api/internal/ratelimit",
+      "target": "api/internal/probes",
       "kind": "import"
     },
     {
@@ -12107,17 +14821,337 @@
     },
     {
       "source": "atfcli/api.py",
-      "target": "atfcli/console.py",
+      "target": "atfcli/infrastructure/http/transport.py",
       "kind": "import"
     },
     {
-      "source": "atfcli/api.py",
-      "target": "atfcli/context.py",
+      "source": "atfcli/application/__init__.py",
+      "target": "atfcli/application/results.py",
       "kind": "import"
     },
     {
-      "source": "atfcli/api.py",
-      "target": "atfcli/errors.py",
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/gateways.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/use_cases/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/use_cases/admin.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/use_cases/audit.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/use_cases/backup.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/use_cases/delivery.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/use_cases/logs.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/use_cases/ops.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/use_cases/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/use_cases/sessions.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/container.py",
+      "target": "atfcli/application/use_cases/tasks.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/gateways.py",
+      "target": "atfcli/domain/logs.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/gateways.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/gateways.py",
+      "target": "atfcli/domain/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/__init__.py",
+      "target": "atfcli/application/use_cases/admin.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/__init__.py",
+      "target": "atfcli/application/use_cases/audit.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/__init__.py",
+      "target": "atfcli/application/use_cases/backup.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/__init__.py",
+      "target": "atfcli/application/use_cases/delivery.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/__init__.py",
+      "target": "atfcli/application/use_cases/logs.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/__init__.py",
+      "target": "atfcli/application/use_cases/ops.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/__init__.py",
+      "target": "atfcli/application/use_cases/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/__init__.py",
+      "target": "atfcli/application/use_cases/sessions.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/__init__.py",
+      "target": "atfcli/application/use_cases/tasks.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/_payload.py",
+      "target": "atfcli/application/results.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/admin.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/admin.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/admin.py",
+      "target": "atfcli/domain/secrets.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/admin.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/admin.py",
+      "target": "atfcli/application/use_cases/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/admin.py",
+      "target": "atfcli/application/use_cases/_payload.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/audit.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/audit.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/audit.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/backup.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/backup.py",
+      "target": "atfcli/application/gateways.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/backup.py",
+      "target": "atfcli/application/use_cases/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/backup.py",
+      "target": "atfcli/application/use_cases/_payload.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/delivery.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/delivery.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/delivery.py",
+      "target": "atfcli/application/use_cases/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/delivery.py",
+      "target": "atfcli/application/use_cases/_payload.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/logs.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/logs.py",
+      "target": "atfcli/domain/logs.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/logs.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/logs.py",
+      "target": "atfcli/application/use_cases/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/logs.py",
+      "target": "atfcli/application/use_cases/_payload.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/ops.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/ops.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/ops.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/resources.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/resources.py",
+      "target": "atfcli/domain/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/resources.py",
+      "target": "atfcli/domain/secrets.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/resources.py",
+      "target": "atfcli/application/gateways.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/resources.py",
+      "target": "atfcli/application/results.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/sessions.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/sessions.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/sessions.py",
+      "target": "atfcli/application/use_cases/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/sessions.py",
+      "target": "atfcli/application/use_cases/_payload.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/tasks.py",
+      "target": "atfcli/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/tasks.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/tasks.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/tasks.py",
+      "target": "atfcli/domain/logs.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/tasks.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/tasks.py",
+      "target": "atfcli/application/gateways.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/application/use_cases/tasks.py",
+      "target": "atfcli/application/results.py",
       "kind": "import"
     },
     {
@@ -12146,6 +15180,31 @@
       "kind": "import"
     },
     {
+      "source": "atfcli/cli.py",
+      "target": "atfcli/infrastructure/http/gateways.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/cli.py",
+      "target": "atfcli/application/container.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/_resource.py",
+      "target": "atfcli/domain/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/_resource.py",
+      "target": "atfcli/commands/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/_resource.py",
+      "target": "atfcli/commands/_shared.py",
+      "kind": "import"
+    },
+    {
       "source": "atfcli/commands/_shared.py",
       "target": "atfcli/console.py",
       "kind": "import"
@@ -12162,7 +15221,12 @@
     },
     {
       "source": "atfcli/commands/admin.py",
-      "target": "atfcli/context.py",
+      "target": "atfcli/application/use_cases/admin.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/admin.py",
+      "target": "atfcli/domain/secrets.py",
       "kind": "import"
     },
     {
@@ -12177,6 +15241,46 @@
     },
     {
       "source": "atfcli/commands/admin.py",
+      "target": "atfcli/commands/_shared.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/ai.py",
+      "target": "atfcli/domain/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/ai.py",
+      "target": "atfcli/commands/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/ai.py",
+      "target": "atfcli/commands/_resource.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/ai.py",
+      "target": "atfcli/commands/_shared.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/audit.py",
+      "target": "atfcli/application/use_cases/audit.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/audit.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/audit.py",
+      "target": "atfcli/commands/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/audit.py",
       "target": "atfcli/commands/_shared.py",
       "kind": "import"
     },
@@ -12242,7 +15346,7 @@
     },
     {
       "source": "atfcli/commands/data.py",
-      "target": "atfcli/errors.py",
+      "target": "atfcli/domain/errors.py",
       "kind": "import"
     },
     {
@@ -12302,6 +15406,16 @@
     },
     {
       "source": "atfcli/commands/docker.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/docker.py",
+      "target": "atfcli/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/docker.py",
       "target": "atfcli/context.py",
       "kind": "import"
     },
@@ -12332,7 +15446,47 @@
     },
     {
       "source": "atfcli/commands/doctor.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/doctor.py",
+      "target": "atfcli/platforms.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/doctor.py",
+      "target": "atfcli/ports.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/doctor.py",
+      "target": "atfcli/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/doctor.py",
       "target": "atfcli/console.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/filters.py",
+      "target": "atfcli/domain/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/filters.py",
+      "target": "atfcli/commands/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/filters.py",
+      "target": "atfcli/commands/_resource.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/filters.py",
+      "target": "atfcli/commands/_shared.py",
       "kind": "import"
     },
     {
@@ -12347,12 +15501,37 @@
     },
     {
       "source": "atfcli/commands/logs.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/logs.py",
+      "target": "atfcli/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/logs.py",
+      "target": "atfcli/domain/host.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/logs.py",
       "target": "atfcli/console.py",
       "kind": "import"
     },
     {
       "source": "atfcli/commands/logs.py",
-      "target": "atfcli/errors.py",
+      "target": "atfcli/domain/logs.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/logs.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/logs.py",
+      "target": "atfcli/domain/errors.py",
       "kind": "import"
     },
     {
@@ -12368,6 +15547,26 @@
     {
       "source": "atfcli/commands/net.py",
       "target": "atfcli/context.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/net.py",
+      "target": "atfcli/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/net.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/net.py",
+      "target": "atfcli/ports.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/net.py",
+      "target": "atfcli/validators.py",
       "kind": "import"
     },
     {
@@ -12393,6 +15592,26 @@
     {
       "source": "atfcli/commands/platform.py",
       "target": "atfcli/ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/prompts.py",
+      "target": "atfcli/domain/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/prompts.py",
+      "target": "atfcli/commands/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/prompts.py",
+      "target": "atfcli/commands/_resource.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/prompts.py",
+      "target": "atfcli/commands/_shared.py",
       "kind": "import"
     },
     {
@@ -12422,7 +15641,22 @@
     },
     {
       "source": "atfcli/commands/rules.py",
-      "target": "atfcli/errors.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/rules.py",
+      "target": "atfcli/domain/host.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/rules.py",
+      "target": "atfcli/domain/logs.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/rules.py",
+      "target": "atfcli/domain/models.py",
       "kind": "import"
     },
     {
@@ -12468,6 +15702,11 @@
     {
       "source": "atfcli/commands/setup.py",
       "target": "atfcli/ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/setup.py",
+      "target": "atfcli/validators.py",
       "kind": "import"
     },
     {
@@ -12502,7 +15741,7 @@
     },
     {
       "source": "atfcli/commands/status.py",
-      "target": "atfcli/context.py",
+      "target": "atfcli/domain/host.py",
       "kind": "import"
     },
     {
@@ -12523,6 +15762,16 @@
     {
       "source": "atfcli/commands/system.py",
       "target": "atfcli/context.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/system.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/system.py",
+      "target": "atfcli/upgrade.py",
       "kind": "import"
     },
     {
@@ -12552,11 +15801,6 @@
     },
     {
       "source": "atfcli/commands/system.py",
-      "target": "atfcli/__init__.py",
-      "kind": "import"
-    },
-    {
-      "source": "atfcli/commands/system.py",
       "target": "atfcli/services_probe.py",
       "kind": "import"
     },
@@ -12567,6 +15811,36 @@
     },
     {
       "source": "atfcli/commands/test.py",
+      "target": "atfcli/commands/_shared.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/upgrade.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/upgrade.py",
+      "target": "atfcli/upgrade.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/upgrade.py",
+      "target": "atfcli/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/upgrade.py",
+      "target": "atfcli/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/upgrade.py",
+      "target": "atfcli/commands/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/upgrade.py",
       "target": "atfcli/commands/_shared.py",
       "kind": "import"
     },
@@ -12607,22 +15881,222 @@
     },
     {
       "source": "atfcli/context.py",
-      "target": "atfcli/console.py",
+      "target": "atfcli/domain/host.py",
       "kind": "import"
     },
     {
       "source": "atfcli/context.py",
-      "target": "atfcli/errors.py",
+      "target": "atfcli/domain/secrets.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/context.py",
+      "target": "atfcli/infrastructure/host/repo.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/domain/__init__.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/domain/logs.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/domain/logs.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/domain/logs.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/domain/models.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/domain/models.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/domain/resources.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/domain/validators.py",
+      "target": "atfcli/domain/host.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/errors.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/__init__.py",
+      "target": "atfcli/infrastructure/host/repo.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/ports.py",
+      "target": "atfcli/domain/host.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/ports.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/repo.py",
+      "target": "atfcli/console.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/repo.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/repo.py",
+      "target": "atfcli/domain/host.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/repo.py",
+      "target": "atfcli/domain/secrets.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/services.py",
+      "target": "atfcli/domain/host.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/upgrade.py",
+      "target": "atfcli/domain/host.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/upgrade.py",
+      "target": "atfcli/infrastructure/host/repo.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/host/upgrade.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/__init__.py",
+      "target": "atfcli/infrastructure/http/gateways.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/__init__.py",
+      "target": "atfcli/infrastructure/http/transport.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/gateways.py",
+      "target": "atfcli/application/gateways.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/gateways.py",
+      "target": "atfcli/domain/logs.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/gateways.py",
+      "target": "atfcli/domain/models.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/gateways.py",
+      "target": "atfcli/domain/resources.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/gateways.py",
+      "target": "atfcli/infrastructure/http/transport.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/transport.py",
+      "target": "atfcli/console.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/transport.py",
+      "target": "atfcli/infrastructure/host/repo.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/transport.py",
+      "target": "atfcli/domain/errors.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/platforms.py",
+      "target": "atfcli/infrastructure/host/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/platforms.py",
+      "target": "atfcli/infrastructure/host/platforms.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/ports.py",
+      "target": "atfcli/infrastructure/host/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/ports.py",
+      "target": "atfcli/infrastructure/host/ports.py",
       "kind": "import"
     },
     {
       "source": "atfcli/services_probe.py",
-      "target": "atfcli/context.py",
+      "target": "atfcli/infrastructure/host/services.py",
       "kind": "import"
     },
     {
       "source": "atfcli/services_probe.py",
-      "target": "atfcli/ui.py",
+      "target": "atfcli/infrastructure/host/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/ui.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/ui.py",
+      "target": "atfcli/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/upgrade.py",
+      "target": "atfcli/infrastructure/host/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/upgrade.py",
+      "target": "atfcli/infrastructure/host/upgrade.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/validators.py",
+      "target": "atfcli/domain/validators.py",
       "kind": "import"
     },
     {
@@ -12647,6 +16121,31 @@
     },
     {
       "source": "website/src/components/CapabilityMatrix.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/EndpointExplorer.astro",
+      "target": "website/src/data/api-surface.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/EndpointExplorer.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/EndpointExplorer.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/EndpointExplorer.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/EndpointExplorer.astro",
       "target": "website/src/components/Icon.astro",
       "kind": "import"
     },
@@ -12676,6 +16175,11 @@
       "kind": "import"
     },
     {
+      "source": "website/src/components/GuardChain.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
       "source": "website/src/components/Header.astro",
       "target": "website/src/data/site.ts",
       "kind": "import"
@@ -12713,6 +16217,16 @@
     {
       "source": "website/src/components/QuickstartCard.astro",
       "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/RequestResponse.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/components/RequestResponse.astro",
+      "target": "website/src/components/CodeBlock.astro",
       "kind": "import"
     },
     {
@@ -12876,6 +16390,41 @@
       "kind": "import"
     },
     {
+      "source": "website/src/pages/api/endpoints/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/endpoints/index.astro",
+      "target": "website/src/components/EndpointExplorer.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/endpoints/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/endpoints/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/endpoints/index.astro",
+      "target": "website/src/components/Icon.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/endpoints/index.astro",
+      "target": "website/src/data/api-surface.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/endpoints/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
       "source": "website/src/pages/api/index.astro",
       "target": "website/src/layouts/DocsLayout.astro",
       "kind": "import"
@@ -12902,6 +16451,106 @@
     },
     {
       "source": "website/src/pages/api/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/rate-limits/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/rate-limits/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/rate-limits/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/rate-limits/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/rate-limits/index.astro",
+      "target": "website/src/components/RequestResponse.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/rate-limits/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/responses/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/responses/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/responses/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/responses/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/responses/index.astro",
+      "target": "website/src/components/GuardChain.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/responses/index.astro",
+      "target": "website/src/components/RequestResponse.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/responses/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/task-lifecycle/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/task-lifecycle/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/task-lifecycle/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/task-lifecycle/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/task-lifecycle/index.astro",
+      "target": "website/src/components/RequestResponse.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/task-lifecycle/index.astro",
+      "target": "website/src/components/GuardChain.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/api/task-lifecycle/index.astro",
       "target": "website/src/utils/paths.ts",
       "kind": "import"
     },
@@ -13631,6 +17280,91 @@
       "kind": "import"
     },
     {
+      "source": "website/src/pages/security/request-hardening/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/request-hardening/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/request-hardening/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/request-hardening/index.astro",
+      "target": "website/src/components/GuardChain.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/request-hardening/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/request-hardening/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/secrets/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/secrets/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/secrets/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/secrets/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/secrets/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/tenant-isolation/index.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/tenant-isolation/index.astro",
+      "target": "website/src/components/SpecTable.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/tenant-isolation/index.astro",
+      "target": "website/src/components/Callout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/tenant-isolation/index.astro",
+      "target": "website/src/components/GuardChain.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/tenant-isolation/index.astro",
+      "target": "website/src/components/CodeBlock.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/security/tenant-isolation/index.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
       "source": "website/src/pages/status/index.astro",
       "target": "website/src/layouts/DocsLayout.astro",
       "kind": "import"
@@ -13787,10 +17521,20 @@
       "label": "entities",
       "subsystem": "core",
       "lang": "python",
-      "loc": 1611,
-      "fanIn": 75,
+      "loc": 1753,
+      "fanIn": 90,
       "fanOut": 4,
-      "score": 154
+      "score": 184
+    },
+    {
+      "id": "core/infrastructure/persistence/database.py",
+      "label": "database",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 857,
+      "fanIn": 58,
+      "fanOut": 0,
+      "score": 116
     },
     {
       "id": "website/src/utils/paths.ts",
@@ -13798,19 +17542,29 @@
       "subsystem": "website",
       "lang": "typescript",
       "loc": 28,
-      "fanIn": 49,
+      "fanIn": 57,
       "fanOut": 0,
-      "score": 98
+      "score": 114
     },
     {
-      "id": "core/infrastructure/persistence/database.py",
-      "label": "database",
+      "id": "core/infrastructure/telegram/pro_bot_ui.py",
+      "label": "pro_bot_ui",
       "subsystem": "core",
       "lang": "python",
-      "loc": 827,
-      "fanIn": 48,
-      "fanOut": 0,
-      "score": 96
+      "loc": 10323,
+      "fanIn": 38,
+      "fanOut": 27,
+      "score": 103
+    },
+    {
+      "id": "core/infrastructure/persistence/sqlite_repositories.py",
+      "label": "sqlite_repositories",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 2204,
+      "fanIn": 46,
+      "fanOut": 7,
+      "score": 99
     },
     {
       "id": "core/domain/value_objects.py",
@@ -13818,19 +17572,9 @@
       "subsystem": "core",
       "lang": "python",
       "loc": 102,
-      "fanIn": 44,
+      "fanIn": 48,
       "fanOut": 0,
-      "score": 88
-    },
-    {
-      "id": "core/infrastructure/persistence/sqlite_repositories.py",
-      "label": "sqlite_repositories",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 2134,
-      "fanIn": 38,
-      "fanOut": 7,
-      "score": 83
+      "score": 96
     },
     {
       "id": "website/src/layouts/DocsLayout.astro",
@@ -13838,9 +17582,19 @@
       "subsystem": "website",
       "lang": "astro",
       "loc": 260,
-      "fanIn": 37,
+      "fanIn": 44,
       "fanOut": 5,
-      "score": 79
+      "score": 93
+    },
+    {
+      "id": "core/infrastructure/telegram/i18n.py",
+      "label": "i18n",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 57,
+      "fanIn": 45,
+      "fanOut": 0,
+      "score": 90
     },
     {
       "id": "website/src/components/Icon.astro",
@@ -13848,19 +17602,69 @@
       "subsystem": "website",
       "lang": "astro",
       "loc": 89,
-      "fanIn": 36,
+      "fanIn": 40,
       "fanOut": 0,
-      "score": 72
+      "score": 80
     },
     {
-      "id": "core/infrastructure/telegram/pro_bot_ui.py",
-      "label": "pro_bot_ui",
+      "id": "atfcli/commands/__init__.py",
+      "label": "__init__",
+      "subsystem": "cli",
+      "lang": "python",
+      "loc": 5,
+      "fanIn": 31,
+      "fanOut": 0,
+      "score": 62
+    },
+    {
+      "id": "atfcli/commands/_shared.py",
+      "label": "_shared",
+      "subsystem": "cli",
+      "lang": "python",
+      "loc": 198,
+      "fanIn": 28,
+      "fanOut": 3,
+      "score": 59
+    },
+    {
+      "id": "website/src/components/Callout.astro",
+      "label": "Callout",
+      "subsystem": "website",
+      "lang": "astro",
+      "loc": 25,
+      "fanIn": 27,
+      "fanOut": 1,
+      "score": 55
+    },
+    {
+      "id": "core/infrastructure/security/crypto.py",
+      "label": "crypto",
       "subsystem": "core",
       "lang": "python",
-      "loc": 10152,
-      "fanIn": 22,
-      "fanOut": 25,
-      "score": 69
+      "loc": 18,
+      "fanIn": 27,
+      "fanOut": 0,
+      "score": 54
+    },
+    {
+      "id": "core/domain/services.py",
+      "label": "services",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 1172,
+      "fanIn": 24,
+      "fanOut": 5,
+      "score": 53
+    },
+    {
+      "id": "core/application/repositories.py",
+      "label": "repositories",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 644,
+      "fanIn": 26,
+      "fanOut": 1,
+      "score": 53
     },
     {
       "id": "mobile/lib/l10n/app_messages.dart",
@@ -13873,14 +17677,14 @@
       "score": 52
     },
     {
-      "id": "core/application/repositories.py",
-      "label": "repositories",
+      "id": "core/application/use_cases.py",
+      "label": "use_cases",
       "subsystem": "core",
       "lang": "python",
-      "loc": 585,
-      "fanIn": 25,
-      "fanOut": 1,
-      "score": 51
+      "loc": 698,
+      "fanIn": 21,
+      "fanOut": 6,
+      "score": 48
     },
     {
       "id": "core/main.py",
@@ -13893,54 +17697,24 @@
       "score": 48
     },
     {
-      "id": "atfcli/commands/_shared.py",
-      "label": "_shared",
-      "subsystem": "cli",
-      "lang": "python",
-      "loc": 175,
-      "fanIn": 22,
-      "fanOut": 3,
+      "id": "website/src/components/SpecTable.astro",
+      "label": "SpecTable",
+      "subsystem": "website",
+      "lang": "astro",
+      "loc": 57,
+      "fanIn": 23,
+      "fanOut": 1,
       "score": 47
     },
     {
-      "id": "core/domain/services.py",
-      "label": "services",
+      "id": "core/application/pipeline.py",
+      "label": "pipeline",
       "subsystem": "core",
       "lang": "python",
-      "loc": 1084,
-      "fanIn": 21,
-      "fanOut": 4,
+      "loc": 1102,
+      "fanIn": 18,
+      "fanOut": 10,
       "score": 46
-    },
-    {
-      "id": "core/application/use_cases.py",
-      "label": "use_cases",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 668,
-      "fanIn": 20,
-      "fanOut": 6,
-      "score": 46
-    },
-    {
-      "id": "atfcli/commands/__init__.py",
-      "label": "__init__",
-      "subsystem": "cli",
-      "lang": "python",
-      "loc": 5,
-      "fanIn": 23,
-      "fanOut": 0,
-      "score": 46
-    },
-    {
-      "id": "core/infrastructure/telegram/i18n.py",
-      "label": "i18n",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 38,
-      "fanIn": 22,
-      "fanOut": 0,
-      "score": 44
     },
     {
       "id": "mobile/lib/core/api_client.dart",
@@ -13963,64 +17737,24 @@
       "score": 42
     },
     {
-      "id": "core/proto/__init__.py",
-      "label": "__init__",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 8,
-      "fanIn": 20,
-      "fanOut": 2,
-      "score": 42
-    },
-    {
-      "id": "website/src/components/Callout.astro",
-      "label": "Callout",
-      "subsystem": "website",
-      "lang": "astro",
-      "loc": 25,
-      "fanIn": 20,
-      "fanOut": 1,
-      "score": 41
-    },
-    {
-      "id": "atfcli/errors.py",
+      "id": "atfcli/domain/errors.py",
       "label": "errors",
       "subsystem": "cli",
       "lang": "python",
       "loc": 48,
-      "fanIn": 20,
+      "fanIn": 21,
       "fanOut": 0,
-      "score": 40
+      "score": 42
     },
     {
-      "id": "mobile/lib/core/models.dart",
-      "label": "models",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "loc": 1737,
-      "fanIn": 18,
-      "fanOut": 2,
-      "score": 38
-    },
-    {
-      "id": "core/infrastructure/security/crypto.py",
-      "label": "crypto",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 18,
-      "fanIn": 19,
+      "id": "website/src/components/CodeBlock.astro",
+      "label": "CodeBlock",
+      "subsystem": "website",
+      "lang": "astro",
+      "loc": 48,
+      "fanIn": 21,
       "fanOut": 0,
-      "score": 38
-    },
-    {
-      "id": "core/infrastructure/telegram/durable_queue.py",
-      "label": "durable_queue",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 1145,
-      "fanIn": 15,
-      "fanOut": 7,
-      "score": 37
+      "score": 42
     }
   ],
   "largest": [
@@ -14030,17 +17764,17 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 10152,
-      "fanIn": 22,
-      "fanOut": 25
+      "loc": 10323,
+      "fanIn": 38,
+      "fanOut": 27
     },
     {
       "id": "api/internal/handlers",
       "label": "handlers",
       "subsystem": "api",
       "lang": "go",
-      "files": 34,
-      "loc": 9810,
+      "files": 37,
+      "loc": 10154,
       "fanIn": 1,
       "fanOut": 5
     },
@@ -14070,9 +17804,19 @@
       "subsystem": "api",
       "lang": "go",
       "files": 13,
-      "loc": 2790,
+      "loc": 2785,
       "fanIn": 2,
-      "fanOut": 0
+      "fanOut": 1
+    },
+    {
+      "id": "core/infrastructure/persistence/sqlite_repositories.py",
+      "label": "sqlite_repositories",
+      "subsystem": "core",
+      "lang": "python",
+      "files": 1,
+      "loc": 2204,
+      "fanIn": 46,
+      "fanOut": 7
     },
     {
       "id": "web/frontend/src/components/TaskOverviewModal.tsx",
@@ -14090,19 +17834,29 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 2140,
-      "fanIn": 11,
+      "loc": 2154,
+      "fanIn": 12,
       "fanOut": 14
     },
     {
-      "id": "core/infrastructure/persistence/sqlite_repositories.py",
-      "label": "sqlite_repositories",
+      "id": "core/infrastructure/persistence/postgres_repositories.py",
+      "label": "postgres_repositories",
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 2134,
-      "fanIn": 38,
-      "fanOut": 7
+      "loc": 1759,
+      "fanIn": 10,
+      "fanOut": 4
+    },
+    {
+      "id": "core/domain/entities.py",
+      "label": "entities",
+      "subsystem": "core",
+      "lang": "python",
+      "files": 1,
+      "loc": 1753,
+      "fanIn": 90,
+      "fanOut": 4
     },
     {
       "id": "mobile/lib/core/models.dart",
@@ -14113,26 +17867,6 @@
       "loc": 1737,
       "fanIn": 18,
       "fanOut": 2
-    },
-    {
-      "id": "core/infrastructure/persistence/postgres_repositories.py",
-      "label": "postgres_repositories",
-      "subsystem": "core",
-      "lang": "python",
-      "files": 1,
-      "loc": 1693,
-      "fanIn": 9,
-      "fanOut": 4
-    },
-    {
-      "id": "core/domain/entities.py",
-      "label": "entities",
-      "subsystem": "core",
-      "lang": "python",
-      "files": 1,
-      "loc": 1611,
-      "fanIn": 75,
-      "fanOut": 4
     },
     {
       "id": "mobile/lib/features/rules/rule_editor_screen.dart",
@@ -14165,24 +17899,14 @@
       "fanOut": 4
     },
     {
-      "id": "core/infrastructure/telegram/durable_queue.py",
-      "label": "durable_queue",
-      "subsystem": "core",
-      "lang": "python",
-      "files": 1,
-      "loc": 1145,
-      "fanIn": 15,
-      "fanOut": 7
-    },
-    {
       "id": "api/internal/middleware",
       "label": "middleware",
       "subsystem": "api",
       "lang": "go",
-      "files": 9,
-      "loc": 1102,
+      "files": 10,
+      "loc": 1197,
       "fanIn": 3,
-      "fanOut": 2
+      "fanOut": 3
     },
     {
       "id": "core/domain/services.py",
@@ -14190,19 +17914,29 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 1084,
-      "fanIn": 21,
-      "fanOut": 4
+      "loc": 1172,
+      "fanIn": 24,
+      "fanOut": 5
     },
     {
-      "id": "atf.py",
-      "label": "atf",
-      "subsystem": "root",
+      "id": "core/infrastructure/telegram/durable_queue.py",
+      "label": "durable_queue",
+      "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 1057,
-      "fanIn": 1,
-      "fanOut": 2
+      "loc": 1151,
+      "fanIn": 17,
+      "fanOut": 7
+    },
+    {
+      "id": "core/application/pipeline.py",
+      "label": "pipeline",
+      "subsystem": "core",
+      "lang": "python",
+      "files": 1,
+      "loc": 1102,
+      "fanIn": 18,
+      "fanOut": 10
     }
   ],
   "orphans": [],
@@ -14212,6 +17946,14 @@
       "core/domain/content_policy.py",
       "core/domain/entities.py",
       "core/domain/services.py"
+    ],
+    [
+      "atfcli/application/use_cases/__init__.py",
+      "atfcli/application/use_cases/admin.py",
+      "atfcli/application/use_cases/backup.py",
+      "atfcli/application/use_cases/delivery.py",
+      "atfcli/application/use_cases/logs.py",
+      "atfcli/application/use_cases/sessions.py"
     ],
     [
       "atfcli/__init__.py",
@@ -14226,7 +17968,7 @@
     {
       "from": "core",
       "to": "atfcli",
-      "count": 15
+      "count": 50
     },
     {
       "from": "core",
@@ -14341,9 +18083,9 @@
       "protocol": "HTTP health + config probes",
       "detail": "Diagnostics read the same endpoints an operator would curl.",
       "evidence": [
-        "atfcli/api.py",
-        "atfcli/cli.py",
-        "atfcli/commands/db.py"
+        "atfcli/application/gateways.py",
+        "atfcli/application/use_cases/logs.py",
+        "atfcli/application/use_cases/ops.py"
       ]
     },
     {
@@ -14458,8 +18200,8 @@
       "tech": "Pyrogram client pool",
       "role": "Authorised user/bot sessions, update stream, album aggregation",
       "color": "#38bdf8",
-      "files": 25,
-      "loc": 17403,
+      "files": 27,
+      "loc": 18308,
       "langs": [
         "python"
       ],
@@ -14480,7 +18222,7 @@
       "role": "Policy resolution, cleaning, shortcodes, replacements, AI pass",
       "color": "#22d3ee",
       "files": 22,
-      "loc": 8858,
+      "loc": 9287,
       "langs": [
         "python"
       ],
@@ -14501,14 +18243,14 @@
       "role": "Ordered delivery, retries with backoff, dead-letter control",
       "color": "#818cf8",
       "files": 22,
-      "loc": 9998,
+      "loc": 10360,
       "langs": [
         "python"
       ],
       "evidence": [
         "core/application/backup_service.py",
+        "core/application/pipeline.py",
         "core/application/repositories.py",
-        "core/application/user_task_worker.py",
         "core/infrastructure/persistence/sqlite_repositories.py"
       ],
       "external": false
@@ -14522,7 +18264,7 @@
       "role": "Tasks, queue, sessions, audit outbox",
       "color": "#a3e635",
       "files": 9,
-      "loc": 5375,
+      "loc": 5541,
       "langs": [
         "python"
       ],
@@ -14543,7 +18285,7 @@
       "role": "Eleven servicers exposing the engine to the control plane",
       "color": "#34d399",
       "files": 9,
-      "loc": 6813,
+      "loc": 6832,
       "langs": [
         "python"
       ],
@@ -14620,8 +18362,8 @@
       "tech": "Go net/http :8080",
       "role": "Auth, tenant scoping, rules, delivery, logs, diagnostics",
       "color": "#34d399",
-      "files": 35,
-      "loc": 10012,
+      "files": 38,
+      "loc": 10358,
       "langs": [
         "go"
       ],
@@ -14641,8 +18383,8 @@
       "tech": "Go middleware",
       "role": "Correlation ids, audit trail, log-policy gate, access log",
       "color": "#6ee7b7",
-      "files": 13,
-      "loc": 1671,
+      "files": 14,
+      "loc": 1766,
       "langs": [
         "python",
         "go"
@@ -14723,15 +18465,15 @@
       "tech": "Python + atf entrypoint",
       "role": "Install, validate, diagnose, upgrade",
       "color": "#22d3ee",
-      "files": 37,
-      "loc": 6892,
+      "files": 79,
+      "loc": 13056,
       "langs": [
         "python"
       ],
       "evidence": [
         "atfcli/cli.py",
         "atfcli/commands/__init__.py",
-        "atfcli/commands/_shared.py",
+        "atfcli/commands/_resource.py",
         "atf.py"
       ],
       "external": false
@@ -15491,12 +19233,20 @@
         "count": 5
       },
       {
+        "tag": "CLEANER",
+        "count": 4
+      },
+      {
         "tag": "DROP",
         "count": 4
       },
       {
         "tag": "POLICY",
         "count": 4
+      },
+      {
+        "tag": "DUP_FILTER",
+        "count": 3
       },
       {
         "tag": "RESTRICTED_BYPASS",
@@ -15512,10 +19262,6 @@
       },
       {
         "tag": "CLEAN",
-        "count": 2
-      },
-      {
-        "tag": "CLEANER",
         "count": 2
       },
       {
@@ -15587,15 +19333,15 @@
         "count": 1
       },
       {
-        "tag": "DUP_FILTER",
-        "count": 1
-      },
-      {
         "tag": "EDIT_WINDOW",
         "count": 1
       },
       {
         "tag": "ENQUEUE_DROP",
+        "count": 1
+      },
+      {
+        "tag": "FILTER_OWNERSHIP",
         "count": 1
       },
       {
@@ -15667,14 +19413,30 @@
         "count": 1
       },
       {
+        "tag": "SYNC_FLOOD_RETRY",
+        "count": 1
+      },
+      {
+        "tag": "SYNC_PROBE_FAILED",
+        "count": 1
+      },
+      {
         "tag": "SYNC_REPLY",
+        "count": 1
+      },
+      {
+        "tag": "SYNC_REPLY_DUPLICATE",
         "count": 1
       },
       {
         "tag": "SYNC_REPLY_FAIL",
         "count": 1
+      },
+      {
+        "tag": "SYNC_REPLY_MAP_FAIL",
+        "count": 1
       }
     ],
-    "total": 160
+    "total": 169
   }
 }
