@@ -49,9 +49,21 @@ class Delivery:
         )
 
     def retry(self, ref: str) -> _payload.Outcome:
-        item = self.find_dead_letter(ref)
-        document = _payload.mapping(self.gateway.retry_dead_letter(item.id))
-        detail = f"requeued {item.id[:8]}"
+        """Requeue one dead letter by id or unique prefix.
+
+        The prefix is resolved against the pile when that list is readable, but a
+        miss is not a refusal: the replay endpoint is authoritative and answers
+        `not_found` itself. Refusing here made a retry impossible whenever the
+        listing was empty or unreadable.
+        """
+        if not ref:
+            raise UsageError("a dead-letter id or unique prefix is required")
+        try:
+            item_id = self.find_dead_letter(ref).id
+        except NotFoundError:
+            item_id = ref
+        document = _payload.mapping(self.gateway.retry_dead_letter(item_id))
+        detail = f"requeued {item_id[:8]}"
         attempts = document.get("attempts") or document.get("attempt_count")
         if attempts:
             detail += f" (attempt {attempts})"

@@ -63,6 +63,19 @@ def help_handler(parser: argparse.ArgumentParser):
     return handler
 
 
+def wants_json(ctx, args=None) -> bool:
+    """`--json` from the arguments, or from the console the context carries.
+
+    Commands are driven directly by tests with a stub context that has an `out`
+    (sometimes a real Console in JSON mode) but no `want_json`; reading the flag
+    from both places keeps them drivable without a special case per command.
+    """
+    if args is not None and getattr(args, "json", False):
+        return True
+    checker = getattr(ctx, "want_json", None)
+    return bool(checker()) if callable(checker) else False
+
+
 def want_json(ctx) -> bool:
     return bool(getattr(ctx.args, "json", False))
 

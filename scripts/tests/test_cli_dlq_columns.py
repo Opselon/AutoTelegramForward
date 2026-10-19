@@ -70,10 +70,30 @@ class _Api:
 
 
 class _Ctx:
+    """A stub context: the transport, the console, and the use cases over both.
+
+    `uc` is the real composition root built on the stub transport, so these tests
+    drive the same code path the CLI runs — only the transport and the printer are
+    fakes. The assertions below are about what gets printed, unchanged.
+    """
+
     def __init__(self, api: _Api) -> None:
         self.api = api
         self.out = _Out()
         self.repo = _Repo()
+        self._uc = None
+
+    @property
+    def uc(self):
+        if self._uc is None:
+            from atfcli.application.container import build_use_cases
+            from atfcli.infrastructure.http.gateways import HttpGateways
+
+            self._uc = build_use_cases(HttpGateways(self.api))
+        return self._uc
+
+    def want_json(self) -> bool:
+        return False
 
 
 class _Args:

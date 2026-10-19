@@ -12,7 +12,7 @@ Two contract details this module gets right by going through the use cases:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from ..domain.errors import UsageError
 from . import _shared as sh
@@ -132,13 +132,30 @@ def _queue(ctx, args) -> int:
     return 0
 
 
+def _refused(body: Any) -> bool:
+    """True unless the server explicitly accepted.
+
+    Proto3 `omitempty` drops `success: false`, so a refusal arrives as
+    `{"message": "not_found"}` with no result flag at all. Only an explicit
+    `true` may be read as an accepted replay; everything else is a refusal.
+    """
+    return not isinstance(body, Mapping) or body.get("success") is not True
+
+
 def _dlq_list(ctx, args) -> int:
     items = ctx.uc.delivery.dead_letters()
-    if ctx.want_json():
+    if sh.wants_json(ctx, args):
+        # The rows are passed through untouched: a script reading last_error
+        # must get the server's field, not a renamed projection of it.
         ctx.out.json({"count": len(items), "dlq": [item.to_json() for item in items]})
         return 0
     rows = [
-        [item.id[:8], item.rule_id[:8] or "—", sh.truncate(item.error or "—", 40), str(item.retry_count)]
+        [
+            item.id[:8],
+            (item.rule_id[:8] or "—"),
+            sh.truncate(item.error or "—", 40),
+            str(item.retry_count),
+        ]
         for item in items
     ]
     ctx.out.table(("ID", "RULE", "ERROR", "RETRIES"), rows, empty="dead letter queue is empty")
@@ -151,23 +168,36 @@ def _dlq_retry(ctx, args) -> int:
     if not args.id:
         raise UsageError("a dead-letter id or unique prefix is required")
     outcome = ctx.uc.delivery.retry(args.id)
-    if outcome.failed:
-        ctx.out.emit(outcome.to_json(), f"  retry refused ({outcome.failure_reason}); the message stays queued")
+    body = dict(outcome.payload)
+    if _refused(body):
+        code = body.get("error_code") or body.get("message") or "refused"
+        ctx.out.emit(body, f"retry refused ({code}); the message stays in the DLQ")
         return 1
-    ctx.out.emit(outcome.to_json(), outcome.detail)
+    ctx.out.emit(body, f"Replaying message {args.id[:8]}")
     return 0
 
 
 def _dlq_retry_all(ctx, args) -> int:
-    outcome = ctx.uc.delivery.retry_all(confirm=bool(getattr(args, "yes", False)))
-    failures = 1 if outcome.failed else 0
+    items = ctx.uc.delivery.dead_letters()
+    if not items:
+        ctx.out.emit({"count": 0}, "dead letter queue is empty")
+        return 0
+    sh.confirm_or_fail(ctx, f"requeue {len(items)} dead letter(s)?")
+    outcome = ctx.uc.delivery.retry_all(confirm=True)
     ctx.out.emit(outcome.to_json(), outcome.detail)
-    return failures
+    return 1 if outcome.failed else 0
 
 
 def _dlq_purge(ctx, args) -> int:
-    outcome = ctx.uc.delivery.purge(confirm=bool(getattr(args, "yes", False)))
-    ctx.out.emit(outcome.to_json(), outcome.detail)
+    items = ctx.uc.delivery.dead_letters()
+    sh.confirm_or_fail(ctx, f"discard {len(items)} dead letter(s) permanently?")
+    outcome = ctx.uc.delivery.purge(confirm=True)
+    body = dict(outcome.payload)
+    if _refused(body):
+        ctx.out.emit(body, f"purge failed ({body.get('error_code') or body.get('message') or 'refused'})")
+        return 1
+    removed = body.get("purged", body.get("removed", body.get("message", len(items))))
+    ctx.out.emit(body, f"Purged dead letter queue: {removed}")
     return 0
 
 
