@@ -40,6 +40,7 @@ from pyrogram.types import (
 
 from ...domain.rule_settings import SETTING_SPECS
 from . import diagnostics
+from .reason_text import reason_label
 from .registry_editor import RegistryEditor
 from .bot_transport import (
     BotApiError,
@@ -11360,9 +11361,9 @@ class ProBotUI:
         result_text = (
             self._t("ui_sim_dry_run_title") +
             "────────────────────\n"
-            f"📋 **Task:** `{rule.id[:8]}` ({rule.source_chat_name or rule.source_chat_id} ➔ {rule.target_chat_name or rule.target_chat_id})\n"
+            + self._t("ui_sim_task_line", task=rule.id[:8], source=rule.source_chat_name or rule.source_chat_id, target=rule.target_chat_name or rule.target_chat_id)
             + self._t("ui_sim_match_summary", match=match_status_text, cat=cat_labels.get(detected_cat, detected_cat), route=route_label)
-            + self._t("ui_sim_analysis", mode=m_mode, kws=', '.join(kws) if kws else self._t("ui_clean_not_set"), rx=rx if rx else self._t("ui_clean_not_set"), reason=route_reason or reason)
+            + self._t("ui_sim_analysis", mode=m_mode, kws=', '.join(kws) if kws else self._t("ui_clean_not_set"), rx=rx if rx else self._t("ui_clean_not_set"), reason=reason_label(route_reason or reason, self._t))
             + "\n".join(action_lines) + "\n\n"
             + self._t("ui_sim_footer_notes")
         )
