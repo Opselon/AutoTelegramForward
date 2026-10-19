@@ -3,7 +3,7 @@
 Statuses are **evidence-based**: a switch is `PASS` only when the forwarding
 engine's real behaviour matches the label — never because the screen renders, a
 database value exists, or unit tests are green. Evidence quoted below was
-measured against a running stack (`sha-649c969`, 5/5 `atf-*` containers healthy)
+measured against a running stack (`sha-9aeb96d`, 5/5 `atf-*` containers healthy)
 and/or by driving the real engine through its real entry point.
 
 Legend: `PASS` behaviour verified · `FAIL` confirmed defect · `PARTIAL` some
@@ -16,7 +16,7 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 03 | Reply ON/OFF | FAIL → fixed | `SyncEngine.handle_reply` via `MessageDispatcher._route_reply` (**new**) | The switch had **no production caller**; a reply was never mirrored |
 | 04 | Header NO/YES | FAIL → fixed | `FilterEngine.transform_text` → `apply_header_footer`; caption path `CaptionManagementEngine.format_caption` | Clear was inert (wrong metadata key); **17 owner-facing toggles were admin-gated while reading the rule unscoped** |
 | 05 | Duplicate Filters | FAIL → fixed | `DurableMessagePipeline` DEDUPLICATE stage → `IMessageMapRepository.claim_content_hash` | The fingerprint was written **before** delivery and never released — undelivered content blocked later legitimate posts; check was read-then-write, not atomic |
-| 06 | Replace | PENDING | — | — |
+| 06 | Replace | FAIL → fixed | `DurableMessagePipeline._apply_transforms` → `FilterEngine.replace_text`; editor `rtx:` / `rtxa:` / `rtxd:` | Applied **twice** per message (`# → ##` sent `####gold`); positional delete could remove a neighbour; entry buttons were admin-gated |
 | 07 | Blacklist | PENDING | — | — |
 | 08 | Whitelist | PENDING | — | — |
 | 09 | Cleaner | PENDING | — | — |
@@ -225,3 +225,62 @@ A terminal delivery failure after the enqueue leaves the fingerprint in place
 (the claim is earned at "accepted for delivery", mirroring the identity marker);
 retention bounds that, and the alternative would need a delivery-result callback
 into the pipeline.
+
+## 06 — Replace
+
+**Expected behaviour (from the code):** a task's replacement rules are literal
+needle → value pairs stored in `metadata["replacements"]`, applied in insertion
+order: an exact, case-sensitive `str.replace` when the needle occurs, otherwise a
+case-insensitive fallback "for handles or words"; user input is never compiled as
+a pattern. The editor is `rtx:` (menu) → `rtxa:` (add, free-text step) →
+`rtxd:` (delete one) / `rtxc:` (clear all).
+
+**Confirmed defect 1 — applied twice.** `_apply_transforms` applied
+`rule.replacements` at "Replacements" (before the content policy and the AI
+stage) **and** again at "Final Replacements" (after the AI stage).
+`str.replace` is not idempotent for an expanding rule, so a `#gold` post under
+`# → ##` was sent as `####gold`; `Gold → silver` on `Gold and GOLD` sent
+`silver and silver` because the second pass re-ran the case-insensitive
+fallback over text the first pass had deliberately left alone. The edit path
+(`FilterEngine.transform_text`, used by `SyncEngine` for edits) applied the
+rules once, so a message and its later edit could disagree. Measured:
+`####gold` from the real pipeline.
+
+**Fix:** the final pass is the single authority — it runs after the AI stage (so
+a rewrite cannot resurrect text the task asked to replace) and before the
+header/footer (so a task rule never rewrites the task's own header). With the AI
+stage off, the outgoing text is unchanged.
+
+**Confirmed defect 2 — a positional delete could hit its neighbour.** The menu
+addressed an entry by index (`rtxd:<rule>:<idx>`), so a click from a menu
+rendered before another edit deleted whichever replacement had meanwhile moved
+into that slot — silently, and for every subsequently forwarded message.
+
+**Fix:** the click carries the list generation (`rule.version`, bumped by every
+write) and `_resolve_replace_click` refuses a stale generation, answering with a
+localized alert and re-rendering the current list instead of deleting. Out-of-range
+and negative indices resolve to nothing.
+
+**Confirmed defect 3 — the editor was admin-only and read the rule unscoped.**
+`rtx:`/`rtxa:` (and 25 sibling owner-facing handlers, including the draft
+editor's cancel) were behind an installation-admin gate and fetched the rule by
+the id in the callback data. A task owner could not open their own replacement
+rules, and the rule they addressed was read without an ownership scope. All of
+them now go through `_owned_rule`/`_save_owned_rule`; the prompt openers
+authorize the rule *before* stashing its id in the conversation state.
+
+**Verified behaviour (20 tests, real pipeline + real SQLite store +
+`_resolve_replace_click` driven directly):** an expanding rule is applied once
+(text and caption); a plain rule once; the case-insensitive fallback does not
+re-scan replaced text; three chained rules apply in insertion order in one pass;
+exact match stays case-sensitive; handles match case-insensitively; an empty
+needle is ignored; a regex-shaped needle is a literal (no ReDoS); Unicode/RTL
+survive; one task's rules never touch another task's text; the dict survives a
+persistence round trip in order; a current click resolves to its key, a stale or
+out-of-range click to nothing; the new alert exists in all ten languages.
+
+**Recorded limitations:** replacements cannot be reordered, individually
+disabled, or edited in place (delete + re-add); the menu exposes delete buttons
+for the first six entries only (`Clear all` is the escape hatch); a single-token
+line in the add step is parsed as a deletion rule; matching is substring-based,
+so a one-character needle rewrites every occurrence.
