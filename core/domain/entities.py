@@ -2,7 +2,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple
 
 from .value_objects import (
     AIFallbackPolicy,
@@ -57,6 +57,31 @@ _CLEANER_EMOJI_RE = re.compile(
     r"[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\ufe00-\ufe0f]",
     flags=re.UNICODE,
 )
+# Phone numbers: a bounded candidate with no nested quantifiers (no ReDoS), then a
+# callback that accepts only things that really look like a contact number — a
+# leading "+" or at least 10 digits carrying a separator. A bare 10-digit product
+# id is deliberately left alone.
+_CLEANER_PHONE_CANDIDATE_RE = re.compile(r"(?<![\d])\+?\d[\d\s\-().]{5,18}\d(?![\d])")
+_CLEANER_PHONE_SEPARATOR_RE = re.compile(r"[\s\-().]")
+_CLEANER_DIGITS_RE = re.compile(r"\D")
+_CLEANER_BLANK_LINES_RE = re.compile(r"\n[ \t]*\n(?:[ \t]*\n)*")
+
+
+def _strip_phone_numbers(text: str) -> str:
+    """Remove contact numbers from ``text`` without touching ordinary numbers."""
+
+    def _replace(match: "re.Match[str]") -> str:
+        candidate = match.group(0)
+        digits = _CLEANER_DIGITS_RE.sub("", candidate)
+        if not 8 <= len(digits) <= 15:
+            return candidate
+        if candidate.strip().startswith("+"):
+            return ""
+        if len(digits) >= 10 and _CLEANER_PHONE_SEPARATOR_RE.search(candidate):
+            return ""
+        return candidate
+
+    return _CLEANER_PHONE_CANDIDATE_RE.sub(_replace, text)
 
 
 def _now() -> int:
@@ -689,7 +714,9 @@ class ForwardRule:
         if isinstance(self.metadata, dict) and "cleaner_enabled" in self.metadata:
             return bool(self.metadata["cleaner_enabled"])
         # If legacy cleaner fields are active, consider cleaner enabled
-        if bool(self.remove_links or self.clean_usernames or self.clean_hashtags or self.remove_emojis or self.clean_custom_words):
+        if bool(self.remove_links or self.clean_usernames or self.clean_hashtags or self.remove_emojis
+                or self.clean_custom_words or self.clean_phones or self.clean_buttons
+                or self.clean_empty_lines):
             return True
         return False
 
@@ -698,6 +725,32 @@ class ForwardRule:
         if not isinstance(self.metadata, dict):
             self.metadata = {}
         self.metadata["cleaner_enabled"] = bool(val)
+
+    #: The cleaner options, named by the flag that carries each one.
+    CLEANER_OPTION_FLAGS: "ClassVar[Tuple[str, ...]]" = (
+        "clean_usernames",
+        "clean_hashtags",
+        "clean_phones",
+        "clean_empty_lines",
+        "clean_buttons",
+        "remove_links",
+        "remove_emojis",
+    )
+
+    @property
+    def cleaner_active_option_count(self) -> int:
+        """How many cleaner options the engine will actually apply.
+
+        The panel badge is derived from this rather than from a hand-written
+        subset, so the screen cannot drift from the engine: with the master
+        switch off ``build_cleaner()`` returns None and nothing is cleaned (so
+        the count is 0), and every option the engine does run is counted exactly
+        once — a non-empty custom-word list included.
+        """
+        if not self.cleaner_enabled:
+            return 0
+        count = sum(1 for flag in self.CLEANER_OPTION_FLAGS if getattr(self, flag, False))
+        return count + (1 if self.clean_custom_words else 0)
 
     @property
     def cleaner_config(self) -> dict:
@@ -719,7 +772,9 @@ class ForwardRule:
         raw_cfg = self.cleaner_config
         if not isinstance(raw_cfg, dict) or not raw_cfg:
             # Check if any legacy cleaner settings are present
-            if not (self.clean_custom_words or self.remove_links or self.clean_usernames or self.clean_hashtags or self.remove_emojis):
+            if not (self.clean_custom_words or self.remove_links or self.clean_usernames
+                    or self.clean_hashtags or self.remove_emojis or self.clean_phones
+                    or self.clean_buttons or self.clean_empty_lines):
                 return None
             raw_cfg = {}
         cfg = dict(raw_cfg)
@@ -736,9 +791,15 @@ class ForwardRule:
         remove_mentions = bool(cfg.get("remove_mentions", self.clean_usernames))
         remove_hashtags = bool(cfg.get("remove_hashtags", self.clean_hashtags))
         remove_emojis = bool(cfg.get("remove_emojis", self.remove_emojis))
+        remove_phones = bool(cfg.get("remove_phone_numbers", self.clean_phones))
+        remove_empty_lines = bool(cfg.get("remove_empty_lines", self.clean_empty_lines))
+        strip_buttons = bool(cfg.get("strip_buttons", self.clean_buttons))
 
         clean_pats = [str(p) for p in patterns if isinstance(p, str) and p.strip()]
-        if not clean_pats and not (remove_urls or remove_mentions or remove_hashtags or remove_emojis):
+        if not clean_pats and not (
+            remove_urls or remove_mentions or remove_hashtags or remove_emojis
+            or remove_phones or remove_empty_lines or strip_buttons
+        ):
             return None
 
         try:
@@ -751,6 +812,9 @@ class ForwardRule:
                 remove_mentions=remove_mentions,
                 remove_hashtags=remove_hashtags,
                 remove_emojis=remove_emojis,
+                remove_phone_numbers=remove_phones,
+                remove_empty_lines=remove_empty_lines,
+                strip_buttons=strip_buttons,
                 apply_to_caption=bool(cfg.get("apply_to_caption", True)),
                 case_sensitive=bool(cfg.get("case_sensitive", False)),
                 is_active=True,
@@ -1905,6 +1969,11 @@ class CleanerRule:
     - ``remove_urls`` strips http(s)/t.me links. ``remove_mentions`` strips
       @username. ``remove_hashtags`` strips #tags. ``remove_emojis`` strips
       pictographs (delegated to the existing EMOJI_REGEX).
+      ``remove_phone_numbers`` strips contact numbers (a leading "+" or a
+      separator-bearing number with 10+ digits; a bare id is left alone),
+      ``remove_empty_lines`` removes blank lines, and ``strip_buttons`` tells the
+      pipeline to drop the message's inline keyboard (the only option that acts on
+      the message markup rather than its text).
     - ``apply_to_caption`` also cleans media captions, not just bodies.
     - Everything is a removal-only transform: it never drops a message.
     """
@@ -1916,6 +1985,9 @@ class CleanerRule:
     remove_mentions: bool = False
     remove_hashtags: bool = False
     remove_emojis: bool = False
+    remove_phone_numbers: bool = False
+    remove_empty_lines: bool = False
+    strip_buttons: bool = False
     apply_to_caption: bool = True
     case_sensitive: bool = False
     is_active: bool = True
@@ -1948,9 +2020,13 @@ class CleanerRule:
             out = _CLEANER_HASHTAG_RE.sub("", out)
         if self.remove_emojis:
             out = _CLEANER_EMOJI_RE.sub("", out)
+        if self.remove_phone_numbers:
+            out = _strip_phone_numbers(out)
         # Collapse the whitespace holes the removals punched out so the
         # rendered message does not show "word  word" artifacts.
         out = re.sub(r"[ \t]{2,}", " ", out)
+        if self.remove_empty_lines:
+            out = _CLEANER_BLANK_LINES_RE.sub("\n", out)
         out = re.sub(r"\n{3,}", "\n\n", out)
         return out.strip()
 

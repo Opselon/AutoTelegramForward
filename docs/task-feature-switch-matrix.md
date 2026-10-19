@@ -19,7 +19,7 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 06 | Replace | FAIL → fixed | `DurableMessagePipeline._apply_transforms` → `FilterEngine.replace_text`; editor `rtx:` / `rtxa:` / `rtxd:` | Applied **twice** per message (`# → ##` sent `####gold`); positional delete could remove a neighbour; entry buttons were admin-gated |
 | 07 | Blacklist | FAIL → fixed | bot menu `rfl_bl:` → `ForwardRule.blacklist` → `policy_chain` → `ContentPolicy.evaluate` | The menu stored words under the pre-policy key `metadata["blacklist"]`, which no forwarding code reads: the word was saved, rendered and counted, and the message was sent anyway |
 | 08 | Whitelist | FAIL → fixed | bot menu `rfl_wl:` → `ForwardRule.whitelist` → `policy_chain` → `ContentPolicy.evaluate` | Same inert storage, plus: the same key was the keyword-reply add-on's keyword list, so one list carried two unrelated meanings and neither was the allow-list the menu promises |
-| 09 | Cleaner | PENDING | — | — |
+| 09 | Cleaner | FAIL → fixed | `ForwardRule.build_cleaner()` → `CleanerRule.clean()` in `DurableMessagePipeline._apply_transforms`; links/buttons/entities handled by the pipeline and `LinkManagementEngine` | Phones, inline buttons and empty lines were stored, rendered and counted but changed nothing; **Links/Remove (and every non-default link policy) dropped 100% of messages** (`apply_to_payload` did not exist, the `AttributeError` was swallowed by a bare `except`); the badge counted a hand-written subset |
 | 10 | Filters | PENDING | — | — |
 | 11 | Set Delay | PENDING | — | — |
 | 12 | Task Status | PENDING | — | — |
@@ -349,3 +349,82 @@ that silently stops constraining is reported by the rule screen's count); the
 menu displays the first 20 words (`ui_bl_more` reports the remainder); and
 because the whitelist doubles as the keyword-reply keyword list, changing it
 changes both behaviours.
+
+## 09 — Cleaner
+
+**Expected behaviour (from the code):** the cleaner menu (`rcl:` …) is a master
+switch plus eight options — `remove_links`, `clean_usernames`, `clean_hashtags`,
+`clean_phones`, `clean_buttons`, `clean_empty_lines`, `remove_emojis` and a
+custom-word list. They live in the rule metadata and the engine materialises
+them through `ForwardRule.build_cleaner()` into a `CleanerRule`, which
+`DurableMessagePipeline._apply_transforms` runs on the body or the caption;
+`CleanerRule`'s contract is removal-only — "it never drops a message".
+
+**Confirmed defect 1 — three options were inert.** `clean_phones`,
+`clean_buttons` and `clean_empty_lines` were written by the menu, rendered by the
+panel and counted by the badge, but `build_cleaner()` never copied them and
+`CleanerRule` had neither a field nor a branch for them. Measured on the real
+pipeline before the fix: with each option alone, the outgoing text was byte-for-
+byte the input.
+
+**Confirmed defect 2 — the Links option dropped every message.**
+`_apply_transforms` called `LinkManagementEngine.apply_to_payload(...)`, a method
+that does not exist on the engine. The call sat inside `try: … except Exception`,
+so the `AttributeError` became "cleaner failed — delivering uncleaned text" and
+the message was dropped. Measured: `Deal here https://t.me/ad now` was delivered
+0 times with `remove_links=True`, and 0 times for every non-default
+`link_policy` (`REMOVE_ALL_URLS`, `STRIP_LINKS`, …) — the single most damaging
+cleaner setting in the product silently blackholed a task's traffic.
+
+**Confirmed defect 3 — out-of-range entities.** The cleaner is a text-only
+stage, so it can delete a span an entity pointed at; the entity was still sent,
+and Telegram rejects the whole message for an invalid entity range.
+
+**Confirmed defect 4 — the badge counted its own list.** Both
+`ui_rule_btn_cleaner` render sites computed the count from a hand-written subset
+(neither included phones, buttons, usernames, hashtags or empty lines, and one
+omitted the master switch), so a task stripping five things could show
+"cleaner: 1".
+
+**Confirmed defect 5 — a one-character entity drift.** `process_text_and_entities`
+collapses whitespace and strips the ends as its last step and returned the
+entity list unchanged, so an entity after the removed leading space was one
+character late (measured: a bold run covering `gold` came out covering `old`).
+
+**Fix:** `CleanerRule` gained `remove_phone_numbers`, `remove_empty_lines` and
+`strip_buttons` (`build_cleaner()` passes all three through both the
+`cleaner_config` and the legacy paths); `clean()` strips a contact number (a
+leading "+" or a separator-bearing 10+ digit number — a bare id is left alone)
+and collapses blank lines; `strip_buttons` is applied in the pipeline because it
+acts on `reply_markup`, not on the text; `LinkManagementEngine.apply_to_payload()`
+exists for real and works on the **live** text (so a later stage cannot resurrect
+what an earlier stage removed), keeps `@` mentions, remaps entity offsets through
+its own normalization, and `resolve_policy()` fails closed to `PRESERVE_ALL` for
+an unknown policy instead of stripping everything; `_clamp_entities()` drops or
+clips entities the text stages moved out of range; a message whose whole body is
+removed is dropped with reason `empty_after_clean` and an audit record rather
+than silently; and `ForwardRule.cleaner_active_option_count` is the single source
+for both badge sites.
+
+**Verified behaviour (31 tests, real `DurableMessagePipeline` + real SQLite
+store):** each of the eight options observed to change the outgoing text/markup
+and nothing else (`remove_links` and every non-default `link_policy` strip the
+link and still deliver; buttons survive when the option is off and the message
+still goes out when it is on; extra blank lines are removed only when asked); an
+explicitly disabled master switch stays off and an option on without the master
+switch still cleans; an unknown link policy fails closed to preserve; the drop
+of an all-removed body is recorded with a reason code; entity offsets follow the
+stripped text and an entity left past the end is dropped; one task's cleaner
+never touches another task's message; the options survive a restart; a malformed
+regex and a bombed `clean()` both leave delivery intact; captions are cleaned
+like bodies; messages without text are untouched; the badge count equals the
+engine's count and its master switch wins; the menu's labels exist, and are not
+English placeholders, in all ten languages.
+
+**Recorded limitations:** only "+"-prefixed or separator-bearing numbers are
+stripped (a bare id is deliberately kept to avoid eating message ids and prices);
+`clean_buttons` removes the whole inline keyboard rather than rewriting the
+button text; the link pass runs on the cleaned text, so a policy cannot
+re-introduce content the cleaner removed; and importing `pro_bot_ui` after an
+event loop has been closed raises inside pyrogram (a test-hygiene constraint, not
+a runtime path).

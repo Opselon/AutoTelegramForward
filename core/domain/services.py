@@ -5,15 +5,18 @@ isolation and reused by any adapter (bot, gRPC, queue consumer).
 """
 
 import ipaddress
+import logging
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse, urlunparse
 
 from ..domain.entities import EvaluationResult, FilterRule, ForwardRule, MessagePayload
 from ..domain.value_objects import DeliveryStatus, FilterAction, LinkPolicy, MediaType, RoutingDecision
 from . import branding
+
+logger = logging.getLogger(__name__)
 
 URL_REGEX = re.compile(
     r"(https?://[^\s]+|www\.[^\s]+|(?:https?://)?(?:t(?:elegram)?\.(?:me|dog))/[^\s]+|@[A-Za-z0-9_]{3,32})",
@@ -701,6 +704,9 @@ class LinkManagementEngine:
 
     TG_DOMAINS = {"t.me", "telegram.me", "telegram.dog"}
 
+    #: Policy values already reported as unsupported (one log line per value).
+    _warned_policies: ClassVar[set] = set()
+
     @classmethod
     def is_safe_url(cls, url: str) -> bool:
         """SSRF & redirect abuse defense. Rejects private IP ranges, loopback,
@@ -846,6 +852,11 @@ class LinkManagementEngine:
         # Process matches in reverse order so string slicing indices remain stable
         for m in reversed(matches):
             raw_url = m.group(0)
+            if raw_url.startswith("@"):
+                # A mention is not a link: the cleaner has its own option for
+                # those, and stripping them here would remove usernames the user
+                # asked to keep.
+                continue
             if _should_remove(raw_url):
                 start, end = m.span()
                 removed_len = utf16_len(raw_url)
@@ -890,10 +901,107 @@ class LinkManagementEngine:
                             if hasattr(ent, "offset"):
                                 ent.offset = e_off + diff
 
-        # Clean trailing double spaces
+        # Clean trailing double spaces. Every removal in this normalization also
+        # shrinks the text underneath the entities, so each offset is remapped
+        # through the same arithmetic — an entity addressed one character late
+        # formats the wrong word — and anything that no longer fits is dropped
+        # rather than sent to Telegram as an invalid range.
+        pre_normalized = res_text
         res_text = re.sub(r"[ \t]+", " ", res_text)
-        res_text = re.sub(r"\n\s*\n\s*\n+", "\n\n", res_text).strip()
-        return res_text, filtered_entities, altered
+        res_text = re.sub(r"\n\s*\n\s*\n+", "\n\n", res_text)
+        lead = len(res_text) - len(res_text.lstrip())
+        res_text = res_text.strip()
+
+        def _shifted(old_index: int) -> int:
+            head = re.sub(r"[ \t]+", " ", pre_normalized[:old_index])
+            head = re.sub(r"\n\s*\n\s*\n+", "\n\n", head)
+            return max(0, len(head) - lead)
+
+        limit = utf16_len(res_text)
+        remapped: List[Any] = []
+        for ent in filtered_entities:
+            old_offset = int(getattr(ent, "offset", 0) or 0)
+            old_length = int(getattr(ent, "length", 0) or 0)
+            if old_length <= 0:
+                continue
+            new_offset = _shifted(old_offset)
+            new_end = _shifted(old_offset + old_length)
+            if new_offset >= limit:
+                continue
+            new_length = max(0, min(new_end - new_offset, limit - new_offset))
+            if new_length <= 0:
+                continue
+            try:
+                ent.offset = new_offset
+                ent.length = new_length
+            except Exception:
+                continue
+            remapped.append(ent)
+        return res_text, remapped, altered
+
+    @classmethod
+    def resolve_policy(cls, raw: Any, *, remove_links: bool = False) -> LinkPolicy:
+        """Coerce a stored policy value into ``LinkPolicy``, failing closed.
+
+        Task rows store the policy as a plain string (the default is
+        ``"PRESERVE_ALL"``). An unsupported value must never be read as "remove
+        everything": it is treated as PRESERVE_ALL and reported once, because a
+        typo in a settings payload is not a reason to strip a message.
+        """
+        if isinstance(raw, LinkPolicy):
+            policy = raw
+        elif isinstance(raw, str) and raw.strip():
+            try:
+                policy = LinkPolicy(raw.strip().upper())
+            except ValueError:
+                policy = LinkPolicy.PRESERVE_ALL
+                if raw not in cls._warned_policies:
+                    cls._warned_policies.add(raw)
+                    logger.warning(
+                        "[LINK_ENGINE] Unsupported link policy %r -> PRESERVE_ALL (fail closed)", raw
+                    )
+        else:
+            policy = LinkPolicy.PRESERVE_ALL
+        if policy is LinkPolicy.PRESERVE_ALL and remove_links:
+            # The cleaner's "Links: remove" toggle predates the policy enum and
+            # means exactly this.
+            return LinkPolicy.REMOVE_ALL_URLS
+        return policy
+
+    @classmethod
+    def apply_to_payload(
+        cls, payload: MessagePayload, rule: ForwardRule, text: Optional[str] = None
+    ) -> Tuple[str, Optional[List[Any]], bool]:
+        """Apply a task's link policy to one payload.
+
+        This is the pipeline's entry point into the link engine. ``text`` is the
+        body as it stands *after* the earlier stages (the cleaner runs first and
+        may already have changed it); the payload is consulted for the entity
+        list. Passing the live text is what keeps this pass from resurrecting
+        content an earlier stage removed.
+
+        Returns the new text, the entity list whose UTF-16 offsets match that
+        text, and whether anything changed. The entity list is returned even when
+        nothing changed so the caller always has a consistent view.
+        """
+        body = payload.effective_text if text is None else text
+        body = body or ""
+        raw_entities = payload.caption_entities if payload.has_media else payload.entities
+        entities: List[Any] = list(raw_entities) if raw_entities else []
+        policy = cls.resolve_policy(
+            getattr(rule, "link_policy", None),
+            remove_links=bool(getattr(rule, "remove_links", False)),
+        )
+        if policy is LinkPolicy.PRESERVE_ALL or not body:
+            return body, entities, False
+        return cls.process_text_and_entities(
+            body,
+            entities or None,
+            policy,
+            allowlist=list(getattr(rule, "domain_allowlist", None) or []),
+            blocklist=list(getattr(rule, "domain_blocklist", None) or []),
+            rewrite_map=dict(getattr(rule, "link_rewrite_map", None) or {}),
+        )
 
     @classmethod
     def filter_inline_keyboard(
