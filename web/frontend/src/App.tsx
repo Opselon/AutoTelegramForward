@@ -78,7 +78,7 @@ import type {
   DiagnosticsResponse,
   MeInfo,
 } from './types'
-import { getToken, applySession } from './session'
+import { getToken, applySession, clearSession } from './session'
 
 // ---------------------------------------------------------------------------
 // Branding hop (A → C → B)
@@ -4635,9 +4635,10 @@ function UserBar({ lang }: { lang: 'fa' | 'en' }) {
 
   const handleLogout = () => {
     api.logout()
-    try {
-      localStorage.removeItem('auth_token')
-    } catch {}
+    // session-core is the one owner of the token: it removes the stored token
+    // (by its real key, not a copy of the literal) and emits `session_cleared`.
+    // `auth_required` is what Root listens to, so the dashboard still leaves.
+    clearSession()
     window.dispatchEvent(new Event('auth_required'))
   }
 
