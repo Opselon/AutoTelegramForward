@@ -146,6 +146,9 @@ class RegistryEditor:
     def label_for(self, key: str) -> str:
         return self._label(key)
 
+    def help_for(self, key: str) -> str:
+        return self._help(key)
+
     def _values(self, rule: Any) -> Dict[str, Any]:
         return read_settings(rule)
 
@@ -178,8 +181,28 @@ class RegistryEditor:
         typed the very word printed on the button in front of them found
         nothing. The raw key stays in as the stable technical alias.
         """
-        spec = SETTING_SPECS[key]
-        return " ".join((key, self._label(key), spec.help or "")).lower()
+        return " ".join((key, self._label(key), self._help(key))).lower()
+
+    def _help(self, key: str) -> str:
+        """The setting's description in the user's language.
+
+        `SettingSpec.help` is the operator's English schema text — the API and
+        the dashboard hand it out verbatim — and this panel printed it under
+        every setting that has one and inside the "send the new value" prompt:
+        a Persian user read a translated sentence around an English paragraph.
+        The description is UI copy, so `ui_reg_help_<key>` carries it, and a
+        setting whose translation is missing logs and falls back to the English
+        text rather than losing the explanation altogether.
+        """
+        catalog_key = f"ui_reg_help_{key}"
+        english = SETTING_SPECS[key].help or ""
+        if not english:
+            # No description at all: nothing to translate, so no missing key.
+            return ""
+        if self._has(catalog_key):
+            return self._t(catalog_key)
+        logger.error("no catalog entry for the setting help %r", catalog_key)
+        return english
 
     def _format(self, key: str, value: Any) -> str:
         spec = SETTING_SPECS[key]
@@ -391,8 +414,8 @@ class RegistryEditor:
                 "**" + self._t("ui_reg_source") + ":** "
                 + self._t("ui_reg_source_bot", label=f" ({name})" if name else "")
             )
-        if spec.help:
-            lines += ["", self._t("ui_reg_help", help=spec.help)]
+        if help_text := self._help(key):
+            lines += ["", self._t("ui_reg_help", help=help_text)]
         if spec.choices:
             lines += ["", self._t("ui_reg_choices", choices=", ".join(spec.choices))]
         if spec.minimum is not None or spec.maximum is not None:

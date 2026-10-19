@@ -6600,7 +6600,7 @@ class ProBotUI:
             await self._safe_edit(
                 cq,
                 self._t("ui_reg_prompt_value", label=editor.label_for(key), kind=spec.kind,
-                        help=(spec.help or hint)),
+                        help=(editor.help_for(key) or hint)),
             )
             await cq.answer()
 
