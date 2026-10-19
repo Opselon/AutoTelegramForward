@@ -22,7 +22,7 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 09 | Cleaner | FAIL → fixed | `ForwardRule.build_cleaner()` → `CleanerRule.clean()` in `DurableMessagePipeline._apply_transforms`; links/buttons/entities handled by the pipeline and `LinkManagementEngine` | Phones, inline buttons and empty lines were stored, rendered and counted but changed nothing; **Links/Remove (and every non-default link policy) dropped 100% of messages** (`apply_to_payload` did not exist, the `AttributeError` was swallowed by a bare `except`); the badge counted a hand-written subset |
 | 10 | Filters | FAIL → fixed | `DurableMessagePipeline` FILTER stage → `FilterEngine.evaluate`; screen `rfl_lnk:` / `rfl_vid:` / `rfl_aud:` / `rfl_stk:` / `rfl_txt:` / `rfl_voc:` | The six gates enforced correctly, but the `Filters (N)` badge counted **two different wrong subsets** (video/audio/text missing; one site also counted a duplicate-filter toggle owned by another screen), the attached `FilterRule` was fetched by id with **no owner check**, and user regexes were compiled unguarded (ReDoS) |
 | 11 | Set Delay | FAIL → fixed | `rdly_s:<rule_id>:<sec>` presets + typed step → `ForwardRule.delay_seconds` → `AdvancedSettingsEngine.get_dispatch_delay` → durable job claim gate (`next_retry_at`) | The delay was applied **twice** on the durable path (gate + an in-worker `asyncio.sleep`), a crafted preset stored `-600`/`inf`/`1e18` (and `nan` raised `NOT NULL constraint failed` on save), `inf` produced invalid JSON (`Infinity`) in the job payload, and the layers disagreed on the maximum (schema 86400 vs property 3600) |
-| 12 | Task Status | PENDING | — | — |
+| 12 | Task Status | FAIL → fixed | `ForwardRule.status_state()` → `IForwardRuleRepository.set_task_status()` (single conditional UPDATE) → the status button's `rtg:<id>:<state>` payload | The status line was rendered from `is_active` alone, so a task whose messages the pipeline was dropping and whose jobs the worker was postponing was displayed as **RUNNING 🟢**; the tap did `is_active = not is_active` — a blind flip of the row at tap time, not of what the screen showed, so a stale screen re-activated a paused task and two taps cancelled each other out; the button could not resume a paused task; `toggle()`/`toggle_owned()` exposed the same lost update to API callers |
 | 13 | Duplicate Task | PENDING | — | — |
 | 14 | Rename Task | PENDING | — | — |
 | 15 | Draft | PENDING | — | — |
@@ -556,3 +556,54 @@ elapses (the later job keeps its own configuration and gate; this is ordering, n
 cross-task leak); the delay is a scheduling gate, not a calendar schedule — it starts
 when the job is enqueued; and the non-durable dispatcher path still waits inline, because
 it has no durable queue to hold the job.
+
+## 12 — Task Status
+
+**Real states (measured, not assumed).** A task is stopped by *two* independent mechanisms and the engine
+obeys both. `is_active = false` is enforced by **routing**: `ForwardRule.matches_source()` answers False and
+the SQL never selects the row. A pause (`is_paused` + `paused_until`) is enforced **downstream**: routing still
+selects the task, the pipeline drops the message, and the durable worker postpones a job it has already
+accepted (`RETRY_WAIT`) or refuses one it dequeues after the task was switched off. So the honest state is a
+fold of both, and an *elapsed* `paused_until` is not a pause at all — `is_currently_paused()` has always said
+so, which is exactly what the UI was not asking.
+
+**Confirmed defect 1 — the screen showed RUNNING for a task the engine was dropping.** The status line was
+`ui_rule_status_running if rule.is_active else ui_rule_status_paused`. On a paused task `is_active` is still
+True, so the owner saw a green RUNNING task while every message was being dropped and every job postponed.
+`status_state()` (`RUNNING` / `PAUSED` / `PAUSED until <ts>` / `STOPPED`) is now the single authority for the
+status line, the button and the transition.
+
+**Confirmed defect 2 — the tap was a flip, not a transition.** The button carried only the rule id and the
+handler wrote `rule.is_active = not rule.is_active`: the new value depended on the row as it was at tap time,
+not on what the user was looking at. A screen rendered while the task ran, tapped after the dashboard had
+paused it, therefore re-activated it; a double tap (or two devices) cancelled itself out. The button now
+carries the state it was rendered from and `set_task_status()` applies a **single conditional UPDATE** keyed on
+that state, with ownership in the same statement — a stale or foreign transition writes nothing and returns
+False, and the screen is re-rendered with the truth plus `ui_rule_status_stale_alert`.
+
+**Confirmed defect 3 — the button could not resume.** Resuming only moved `is_active`, leaving `paused_until`
+in the future, so the pipeline kept dropping and jobs stayed postponed. A transition to active now clears the
+pause in the same statement.
+
+**Verified behaviour (27 tests, real store + real worker):** the four states and their derivation, including
+"an elapsed pause is RUNNING because the engine resumed it" and "only RUNNING means the forwarder would act";
+the rendered task screen agrees for all four states; the button payload carries the rendered state; all ten
+languages render and none falls back to another language's string; the current state flips and persists; two
+taps on one screen produce one transition; a stale screen cannot re-activate a paused task but can resume it
+from the state it now shows; an elapsed pause is not reported as a live pause; an untimed and a timed pause are
+different states; a transition from another owner writes nothing; the version moves so optimistic readers see
+the change; the state survives a reopen; `set_status` distinguishes `ok` / `stale` / `not found`; a paused task
+is resumed *as a resume* (`is_paused` cleared, `engine_accepts_new_work()` true); a job accepted while running
+is refused after the task is switched off; a job accepted before a pause is postponed, not sent; a job whose
+pause has elapsed *is* delivered (the worker and the screen agree); and a resume releases the postponed rows.
+With the pre-fix rendering and an unconditional write re-introduced, **4 of these fail** — they test the defect,
+not the fix.
+
+**Interface compatibility:** `set_task_status()` is concrete on the interface with a read-then-write fallback
+(the same precedent as `count_by_owner`), because the backup-service fakes subclass the interface — making it
+abstract broke 8 of their tests. Both production stores override it, and a guard test fails if either stops.
+
+**Recorded limitations:** SQLite is the live store in this environment; the Postgres store mirrors the
+statement and is covered by the same contract but was not executed against a live Postgres instance; a job that
+a worker has already leased when the task is switched off finishes as `FAILED` (`task disabled`) rather than
+being cancelled mid-`copy_message`.
