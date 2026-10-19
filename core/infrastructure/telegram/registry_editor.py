@@ -69,6 +69,27 @@ GROUP_ORDER: Sequence[str] = (
 Row = Tuple[str, str]
 Keyboard = List[List[Row]]
 
+#: A stored choice is one of our own value words — `any` on a button is English
+#: by accident, not by design. Each word is catalog copy, with one exception:
+#: the two delivery transports are already named on the task panel, and naming
+#: them again here is how one thing ends up with two wordings.
+_CHOICE_KEY_OVERRIDES = {
+    ("delivery_transport", "USER"): "ui_route_transport_account",
+    ("delivery_transport", "BOT"): "ui_route_transport_bot",
+}
+
+#: A rejected value, said in the user's language. `SettingError`'s prose is
+#: written for the operator (`whitelist_mode must be one of any, all, phrase`)
+#: and was reaching the panel verbatim; the code it carries picks the sentence,
+#: and the parameters come from the spec that did the rejecting.
+_BAD_REASON_KEYS = {
+    "unknown_setting": "ui_reg_bad_unknown",
+    "invalid_type": "ui_reg_bad_type",
+    "invalid_choice": "ui_reg_bad_choice",
+    "invalid_spec": "ui_reg_bad_spec",
+    "invalid_state": "ui_reg_bad_state",
+}
+
 
 def _truncate(text: str, limit: int = 34) -> str:
     text = str(text)
@@ -173,6 +194,68 @@ class RegistryEditor:
         spec = SETTING_SPECS[key]
         return spec.label or key.replace("_", " ").title()
 
+    def _choice_label(self, key: str, choice: Any) -> str:
+        """A stored choice word in the user's language.
+
+        `whitelist_mode` stores `any`, `all` or `phrase`, and the chooser went to
+        the trouble of translating its own title and then printed those three
+        slugs as buttons — a Persian user picked an English word, read it back
+        on the value line and again in the toast. The vocabulary is ours and
+        closed, so each word is catalog copy; a word this build does not know
+        (a legacy or hand-written value) is shown as stored rather than dropped,
+        with an ERROR line, which is the same rule the severities follow.
+        """
+        slug = str(choice or "").strip()
+        catalog_key = _CHOICE_KEY_OVERRIDES.get((key, slug), f"ui_reg_choice_{slug.lower()}")
+        if slug and self._has(catalog_key):
+            return self._t(catalog_key)
+        if slug and slug in getattr(SETTING_SPECS.get(key), "choices", ()):
+            logger.error("no catalog entry for the %r choice of %r", slug, key)
+        return slug
+
+    def _bad_reason(self, exc: Exception) -> str:
+        """Why a value was refused, in the user's language.
+
+        The registry's own message names the setting in English and quotes the
+        allowed slugs; it is the operator's line and stays in the log. What the
+        user is shown is built from the code the registry raised and the spec
+        that raised it, so "whitelist_mode must be one of any, all, phrase"
+        reaches a Persian user as a translated sentence naming the setting and
+        its three translated choices. A code this build has no sentence for
+        falls back to the operator's prose with an ERROR line.
+        """
+        code = str(getattr(exc, "code", "") or "")
+        key = str(getattr(exc, "key", "") or "")
+        spec = SETTING_SPECS.get(key)
+        template = _BAD_REASON_KEYS.get(code)
+        if code == "out_of_range" and spec is not None:
+            low, high = spec.minimum, spec.maximum
+            if low is not None and high is not None:
+                template = "ui_reg_bad_between"
+            elif low is not None:
+                template = "ui_reg_bad_too_small"
+            elif high is not None:
+                template = "ui_reg_bad_too_large"
+        if template is None or not self._has(template):
+            logger.error("no catalog entry for the %r validation failure", code)
+            return str(exc)
+        # The key can be one the registry does not know: `_label` raises on
+        # those, and a refusal that crashes is worse than a refusal in English.
+        params: Dict[str, Any] = {
+            "label": self._label(key) if key in SETTING_SPECS else key
+        }
+        if template == "ui_reg_bad_choice":
+            choices = getattr(spec, "choices", ()) if spec is not None else ()
+            params["choices"] = ", ".join(self._choice_label(key, c) for c in choices)
+        if template == "ui_reg_bad_between":
+            params["low"] = spec.minimum
+            params["high"] = spec.maximum
+        elif template == "ui_reg_bad_too_small":
+            params["low"] = spec.minimum
+        elif template == "ui_reg_bad_too_large":
+            params["high"] = spec.maximum
+        return self._t(template, **params)
+
     def _search_text(self, key: str) -> str:
         """Everything a search should be able to match for one setting.
 
@@ -223,6 +306,10 @@ class RegistryEditor:
             return _truncate(rendered)
         if value in ("", None):
             return self._t("ui_reg_empty")
+        if spec.choices:
+            # Read out with the word the chooser shows, not the slug that was
+            # stored, so the value line and the toast agree with the buttons.
+            return _truncate(self._choice_label(key, value))
         return _truncate(str(value))
 
     async def sources_for(self, rule: Any) -> Dict[str, Dict[str, Any]]:
@@ -417,7 +504,13 @@ class RegistryEditor:
         if help_text := self._help(key):
             lines += ["", self._t("ui_reg_help", help=help_text)]
         if spec.choices:
-            lines += ["", self._t("ui_reg_choices", choices=", ".join(spec.choices))]
+            lines += [
+                "",
+                self._t(
+                    "ui_reg_choices",
+                    choices=", ".join(self._choice_label(key, c) for c in spec.choices),
+                ),
+            ]
         if spec.minimum is not None or spec.maximum is not None:
             lines += [
                 "",
@@ -463,7 +556,7 @@ class RegistryEditor:
         # The list marks whichever choice is in force, inherited or chosen.
         current = self._effective(key, values, sources)
         rows: Keyboard = [
-            [(f"{'✅ ' if choice == current else ''}{choice}",
+            [(f"{'✅ ' if choice == current else ''}{self._choice_label(key, choice)}",
               f"rge:v:{rule.id}:{idx}:{pos}")]
             for pos, choice in enumerate(spec.choices)
         ]
@@ -604,7 +697,7 @@ class RegistryEditor:
         try:
             clear_setting(rule, key)
         except SettingError as exc:
-            return self._t("ui_reg_invalid", reason=exc.args[0] if exc.args else str(exc))
+            return self._t("ui_reg_invalid", reason=self._bad_reason(exc))
         except Exception as exc:  # pragma: no cover - defensive
             return self._t("ui_reg_invalid", reason=str(exc))
         try:
@@ -619,9 +712,9 @@ class RegistryEditor:
         try:
             apply_settings(rule, values)
         except SettingError as exc:
-            # The registry's own message is the useful one: it names the bound or
-            # the choice that was wrong.
-            return self._t("ui_reg_invalid", reason=exc.args[0] if exc.args else str(exc))
+            # The registry knows which bound or choice was wrong; say it in the
+            # user's language instead of pasting the operator's English line.
+            return self._t("ui_reg_invalid", reason=self._bad_reason(exc))
         except Exception as exc:  # pragma: no cover - defensive
             return self._t("ui_reg_invalid", reason=str(exc))
         try:
