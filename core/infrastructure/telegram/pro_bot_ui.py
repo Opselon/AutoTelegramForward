@@ -84,7 +84,7 @@ from ...application.use_cases import (
     SessionUseCases,
 )
 from ...domain import branding as branding_policy
-from ...domain.entities import AIConfig, FilterRule, ForwardRule
+from ...domain.entities import AIConfig, FilterRule, ForwardRule, clamp_delay_seconds
 from ...domain.value_objects import AIProviderType, ForwardMode, RoutingType, RoutingDecision
 from .client_pool import ClientPool
 from .errors import SEV_ERROR, SEV_FATAL, tg_detail, tg_error
@@ -6945,10 +6945,11 @@ class ProBotUI:
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            try:
-                rule.delay_seconds = float(sec_str)
-            except ValueError:
-                rule.delay_seconds = 0.0
+            # The callback payload is client-controlled: `rdly_s:<id>:nan` used to
+            # reach SQLite as NULL (NOT NULL violation), `inf` reached the job
+            # payload as invalid JSON, and a negative value left the screen showing
+            # a delay the queue ignored. Clamp to what the engine can honour.
+            rule.delay_seconds = clamp_delay_seconds(sec_str)
             await self._save_owned_rule(rule, uid)
             await cq.answer(self._t("ui_delay_status_alert", delay=f"{rule.delay_seconds:.0f}"))
             text, kbd = self._render_delay_menu(rule)
@@ -9458,7 +9459,9 @@ class ProBotUI:
             await self._persist(uid, st)
             return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
         try:
-            sec = max(0.0, float(text.strip()))
+            # Parse first so a typo is still reported as invalid, then clamp the
+            # number to a delay the workers can honour (0 .. 24h, finite).
+            sec = clamp_delay_seconds(float(text.strip()))
             rule.delay_seconds = sec
         except ValueError:
             return await message.reply_text(self._t("ui_step_delay_invalid_error"))

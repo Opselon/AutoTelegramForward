@@ -24,7 +24,7 @@ from typing import Any, Optional
 
 from ...application import branding_hop
 from ...domain import branding
-from ...domain.entities import MessagePayload
+from ...domain.entities import MessagePayload, MAX_FORWARD_DELAY_SECONDS
 from ...domain.services import AdvancedSettingsEngine, CaptionManagementEngine, safe_text_preview
 from ...domain.value_objects import ContentMode, ForwardMode
 from .album_aggregator import AlbumAggregator
@@ -527,14 +527,12 @@ class MessageDispatcher:
             logger.warning("No live client for session %s", rule.session_id)
             return False
 
-        # Phase 2: the advanced dispatch delay is the authoritative setting.
-        # The legacy `delay_seconds` field is preserved as a fallback so rules
-        # created before the advanced UI keep their original behaviour.
-        delay = float(getattr(rule, "forward_delay_seconds", None) or 0)
-        if delay <= 0:
-            delay = float(getattr(rule, "delay_seconds", 0) or 0)
+        # Phase 2: the advanced dispatch delay is the authoritative setting, and
+        # this is the path that actually waits (the durable path encodes it in the
+        # job's claim gate instead). The cap comes from the one shared constant.
+        delay = AdvancedSettingsEngine.get_dispatch_delay(rule)
         if delay > 0:
-            await asyncio.sleep(min(delay, 3600))
+            await asyncio.sleep(min(delay, MAX_FORWARD_DELAY_SECONDS))
         ok_any = False
         for target in targets:
             await self._throttle(target)
