@@ -183,8 +183,26 @@ class Console:
 
     # ------------------------------------------------------------------- data
     def json(self, payload: Any) -> None:
-        """Emit the machine-readable result. Always printed, never colourised."""
-        print(json.dumps(payload, indent=2, default=str, ensure_ascii=False), file=self.out)
+        """Emit the machine-readable result. Always printed, never colourised.
+
+        The document goes through the same secret barrier as every other write
+        (`redact`): a registered credential anywhere in the payload replaces the
+        whole document with a refusal, because a valid-looking JSON body with
+        one credential in it is still an incident, and silently omitting the
+        field would make the caller believe the value is empty.
+        """
+        text = json.dumps(payload, indent=2, default=str, ensure_ascii=False)
+        if self._secrets and any(secret in text for secret in self._secrets):
+            text = json.dumps(
+                {
+                    "ok": False,
+                    "redacted": True,
+                    "error": self.REDACTION_NOTICE,
+                    "hint": "the response contained a credential and was withheld",
+                },
+                indent=2,
+            )
+        print(text, file=self.out)
 
     def emit(self, payload: Any, human: str | None = None) -> None:
         """Print JSON in JSON mode, otherwise the human rendering."""
