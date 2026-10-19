@@ -37,10 +37,14 @@ COMMAND_MODULES: tuple[str, ...] = (
     "validate",
     "status",
     "rules",
+    "ai",
+    "prompts",
+    "filters",
     "sessions",
     "logs",
     "data",
     "admin",
+    "audit",
     "docker",
     "deploy",
     "db",
@@ -95,12 +99,21 @@ def _expand_aliases(argv: list[str]) -> list[str]:
 
 @dataclass
 class CliContext:
-    """Everything a command needs, built once per invocation."""
+    """Everything a command needs, built once per invocation.
+
+    ``repo`` is the host adapter (files, docker, subprocesses); ``uc`` is the
+    application layer. A command module should reach for ``ctx.uc`` — the
+    use cases — and only touch ``ctx.api``/``ctx.repo`` directly when it is
+    doing something the application layer does not model (a raw deploy step,
+    for instance).
+    """
 
     out: Console
     repo: RepoContext
     args: argparse.Namespace
     _api: ApiClient | None = None
+    _gateways: Any = None
+    _uc: Any = None
 
     @property
     def api(self) -> ApiClient:
@@ -127,8 +140,49 @@ class CliContext:
         except AtfError:
             return None
 
+    @property
+    def gateways(self) -> Any:
+        """The API adapters, built on first use (they require a credential)."""
+        if self._gateways is None:
+            from .infrastructure.http.gateways import HttpGateways
+
+            self._gateways = HttpGateways(self.api, host=self.repo)
+        return self._gateways
+
+    @property
+    def uc(self) -> Any:
+        """The use cases: what a command actually *does*."""
+        if self._uc is None:
+            from .application.container import build_use_cases
+
+            self._uc = build_use_cases(self.gateways, files=HostFiles(self.repo, self.out))
+        return self._uc
+
+    @property
+    def files(self) -> "HostFiles":
+        """The file-writing port, so a command can honour `--output`."""
+        return HostFiles(self.repo, self.out)
+
     def want_json(self) -> bool:
         return bool(getattr(self.args, "json", False))
+
+
+class HostFiles:
+    """The :class:`~atfcli.application.gateways.FileWriter` port over the host."""
+
+    def __init__(self, repo: RepoContext, out: Console) -> None:
+        self.repo = repo
+        self.out = out
+
+    def write_text(self, path: str, text: str) -> None:
+        target = self.repo.path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+
+    def write_bytes(self, path: str, payload: bytes) -> None:
+        target = self.repo.path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(payload)
 
 
 #: What a global flag means when nobody passed it. Kept beside `_global_flags`

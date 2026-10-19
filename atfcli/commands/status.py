@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 
-from ..context import CONTAINERS, SERVICES
+from ..domain.host import CONTAINERS, SERVICES
 from ..errors import AtfError
 from . import _shared as sh
 
@@ -52,6 +52,7 @@ def _board(ctx, args) -> int:
         "docker": {"available": docker.available, "version": docker.version, "error": docker.error},
         "services": services,
         "health": health,
+        "readiness": _readiness(ctx),
         "urls": _urls(ctx),
     }
 
@@ -85,10 +86,47 @@ def _board(ctx, args) -> int:
         )
     for name, state in (health.get("services") or {}).items():
         ctx.out.banner(name, state, good=state in ("online", "healthy", "up"))
+    readiness = payload["readiness"]
+    if readiness.get("summary"):
+        ctx.out.line()
+        ctx.out.banner("readiness", readiness["summary"], good=bool(readiness.get("ready")))
+        for item in readiness.get("missing") or []:
+            ctx.out.warn(f"missing required setting: {item}")
+        for step in (readiness.get("next_steps") or [])[:3]:
+            ctx.out.hint(step)
     urls = payload["urls"]
     ctx.out.line()
     ctx.out.kv([(k, v) for k, v in urls.items() if v])
     return 0
+
+
+def _readiness(ctx) -> dict:
+    """`/api/system/setup` through the ops use case: what this deployment still needs.
+
+    The same report the wizard and the web dashboard read, so all three surfaces
+    give the same verdict for the same server.
+    """
+    if ctx.api_or_none is None:
+        return {}
+    try:
+        report = ctx.uc.ops.readiness()
+    except AtfError as exc:
+        return {"summary": f"unavailable ({exc.message})", "ready": False}
+    if not report.raw:
+        return {}
+    online = f"{report.online_services}/{len(report.services)} services online" if report.services else ""
+    summary = "ready" if report.ready else "not ready"
+    if online:
+        summary += f" · {online}"
+    return {
+        "ready": report.ready,
+        "summary": summary,
+        "deployment": report.deployment,
+        "product_version": report.product_version,
+        "missing": list(report.missing_required),
+        "next_steps": list(report.next_steps),
+        "services": [service.to_json() for service in report.services],
+    }
 
 
 def _health(ctx) -> dict:

@@ -63,6 +63,19 @@ def help_handler(parser: argparse.ArgumentParser):
     return handler
 
 
+def wants_json(ctx, args=None) -> bool:
+    """`--json` from the arguments, or from the console the context carries.
+
+    Commands are driven directly by tests with a stub context that has an `out`
+    (sometimes a real Console in JSON mode) but no `want_json`; reading the flag
+    from both places keeps them drivable without a special case per command.
+    """
+    if args is not None and getattr(args, "json", False):
+        return True
+    checker = getattr(ctx, "want_json", None)
+    return bool(checker()) if callable(checker) else False
+
+
 def want_json(ctx) -> bool:
     return bool(getattr(ctx.args, "json", False))
 
@@ -146,8 +159,15 @@ def select(obj: dict, fields: Iterable[str] | None) -> dict:
 
 # ------------------------------------------------------------------ values
 def settings_from_args(args) -> dict:
-    """Collect `--set key=value` pairs into a nested dict."""
-    return collect_settings(getattr(args, "set", []) or [])
+    """Collect `--set key=value` pairs into a nested dict.
+
+    Accepts either the parsed namespace or the raw list of pairs, because both
+    call styles exist and `getattr(list, "set", [])` is `[]` — passing the list
+    to a namespace-only helper silently returned no settings at all, so
+    `--set clean_buttons=true` was accepted and ignored.
+    """
+    pairs = args if isinstance(args, (list, tuple)) else getattr(args, "set", [])
+    return collect_settings(pairs or [])
 
 
 def parse_bool(text: str) -> bool:
@@ -164,21 +184,39 @@ def require(text: str | None, what: str) -> str:
 
 
 # --------------------------------------------------------------- rendering
+def enabled_of(rule: dict) -> bool:
+    """The rule DTO's enabled flag is `is_active`; `is_enabled` is a legacy alias.
+
+    Every renderer goes through here so a task cannot read "on" in one column and
+    "off" in another.
+    """
+    for key in ("is_active", "is_enabled"):
+        value = rule.get(key)
+        if isinstance(value, bool):
+            return value
+    return False
+
+
+def chat_name_of(rule: dict, side: str) -> str:
+    """Titles are `source_chat_name`/`target_chat_name` in the DTO."""
+    return str(rule.get(f"{side}_chat_name") or rule.get(f"{side}_chat_title") or "")
+
+
 def rule_row(rule: dict) -> list[str]:
     sources = rule.get("source_chat_ids") or []
     if not isinstance(sources, list) or not sources:
         sources = [rule.get("source_chat_id", "")]
     extra = max(0, len([s for s in sources if s]) - 1)
-    state = "on" if rule.get("is_enabled") else "off"
+    state = "on" if enabled_of(rule) else "off"
     if rule.get("is_paused"):
         state = "paused"
     return [
         str(rule.get("id", ""))[:8],
-        truncate(rule.get("name") or rule.get("source_chat_title") or "—", 24),
+        truncate(rule.get("name") or chat_name_of(rule, "source") or "—", 24),
         state,
-        truncate(rule.get("source_chat_title") or rule.get("source_chat_id") or "—", 22)
+        truncate(chat_name_of(rule, "source") or rule.get("source_chat_id") or "—", 22)
         + (f" +{extra}" if extra else ""),
-        truncate(rule.get("target_chat_title") or rule.get("target_chat_id") or "—", 22),
+        truncate(chat_name_of(rule, "target") or rule.get("target_chat_id") or "—", 22),
     ]
 
 
@@ -190,10 +228,10 @@ def print_rule(ctx, rule: dict, *, deep: bool = False) -> None:
         [
             ("id", rule.get("id", "")),
             ("name", rule.get("name") or "—"),
-            ("enabled", "yes" if rule.get("is_enabled") else "no"),
+            ("enabled", "yes" if enabled_of(rule) else "no"),
             ("paused", "yes" if rule.get("is_paused") else "no"),
-            ("source", rule.get("source_chat_title") or rule.get("source_chat_id") or "—"),
-            ("target", rule.get("target_chat_title") or rule.get("target_chat_id") or "—"),
+            ("source", chat_name_of(rule, "source") or rule.get("source_chat_id") or "—"),
+            ("target", chat_name_of(rule, "target") or rule.get("target_chat_id") or "—"),
         ]
     )
     sources = rule.get("source_chat_ids") or []
