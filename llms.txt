@@ -9,10 +9,10 @@ Key facts, all derived from the repository at build time:
 - License: MIT
 - Services: 4 (core, logger, api/web gateway, bot UI)
 - UI languages: 10 (en, es, fa, fr, id, it, pt, ru, uz, zh) with enforced 1:1 catalog parity and strict English fallback
-- Localized strings: 1318
-- CLI command groups: 24
+- Localized strings: 1349
+- CLI command groups: 25
 - gRPC RPCs: 78
-- Registered REST routes parsed from api/main.go: 97
+- Registered REST routes parsed from api/main.go: 102
 - Media classes handled: 12
 
 ## Start here
@@ -27,7 +27,14 @@ Key facts, all derived from the repository at build time:
 - [Creating a forwarding task](https://opselon.github.io/AutoTelegramForward/features/task-creation/)
 - [Architecture](https://opselon.github.io/AutoTelegramForward/architecture/)
 - [Security model and tenant isolation](https://opselon.github.io/AutoTelegramForward/security/)
+- [Tenant isolation mechanics](https://opselon.github.io/AutoTelegramForward/security/tenant-isolation/)
+- [Secrets, encryption and rotation](https://opselon.github.io/AutoTelegramForward/security/secrets/)
+- [Request hardening and the SSRF guard](https://opselon.github.io/AutoTelegramForward/security/request-hardening/)
 - [REST API reference](https://opselon.github.io/AutoTelegramForward/api/)
+- [Endpoint reference (every route)](https://opselon.github.io/AutoTelegramForward/api/endpoints/)
+- [Response envelope and error codes](https://opselon.github.io/AutoTelegramForward/api/responses/)
+- [Rate limits and quotas](https://opselon.github.io/AutoTelegramForward/api/rate-limits/)
+- [Durable task lifecycle](https://opselon.github.io/AutoTelegramForward/api/task-lifecycle/)
 - [API authentication](https://opselon.github.io/AutoTelegramForward/api/authentication/)
 - [CLI reference](https://opselon.github.io/AutoTelegramForward/cli/)
 - [Operations and diagnostics](https://opselon.github.io/AutoTelegramForward/operations/)
@@ -48,7 +55,7 @@ Key facts, all derived from the repository at build time:
 - [Dedup, replies & edits](https://opselon.github.io/AutoTelegramForward/features/deduplication-and-replies/): SHA-256 content and album fingerprinting kills duplicate forwards, reply chains stay linked, and edits and deletions propagate within a bounded window.
 - [Clients & interfaces](https://opselon.github.io/AutoTelegramForward/features/clients-and-interfaces/): Telegram bot UI, React dashboard behind a Rust Axum gateway, Flutter client and a REST/gRPC control plane — all enforced against the same contract fixtures.
 - [Multilingual UI](https://opselon.github.io/AutoTelegramForward/features/multilingual-ui/): English, Persian, Russian, Chinese, Portuguese, Uzbek, Indonesian, Spanish, French and Italian share one catalog with enforced 1:1 parity.
-- [DevOps CLI & upgrades](https://opselon.github.io/AutoTelegramForward/features/devops-cli/): 24 command groups cover setup, tasks, logs, backups, docker, k8s and TLS, with a read-only validator for CI and an upgrade engine behind a health gate.
+- [DevOps CLI & upgrades](https://opselon.github.io/AutoTelegramForward/features/devops-cli/): 25 command groups cover setup, tasks, logs, backups, docker, k8s and TLS, with a read-only validator for CI and an upgrade engine behind a health gate.
 
 ## Documentation index
 
@@ -99,10 +106,17 @@ Key facts, all derived from the repository at build time:
 ### Reference
 
 - [REST API](https://opselon.github.io/AutoTelegramForward/api/): Control-plane endpoints, authentication and error model.
+- [Endpoint reference](https://opselon.github.io/AutoTelegramForward/api/endpoints/): Every registered route with its verb, auth level, fields and a real response.
+- [Response envelope](https://opselon.github.io/AutoTelegramForward/api/responses/): The three body shapes, every status code and the guard chain that produces it.
+- [Rate limits & quotas](https://opselon.github.io/AutoTelegramForward/api/rate-limits/): The six classes, how each key is derived and what happens when the store fails.
+- [Task lifecycle](https://opselon.github.io/AutoTelegramForward/api/task-lifecycle/): Durable jobs: states, transitions, idempotency, retries and bounds.
 - [API authentication](https://opselon.github.io/AutoTelegramForward/api/authentication/): Tokens, bearer headers, rate limits, error codes and curl recipes.
 - [CLI reference](https://opselon.github.io/AutoTelegramForward/cli/): Every command group, with examples.
 - [Architecture](https://opselon.github.io/AutoTelegramForward/architecture/): Services, pipeline stages, queues and storage.
 - [Security model](https://opselon.github.io/AutoTelegramForward/security/): Tenant isolation, encryption and redaction.
+- [Tenant isolation](https://opselon.github.io/AutoTelegramForward/security/tenant-isolation/): Owner scoping per surface, the three refusals and the owner-zero trap.
+- [Secrets & keys](https://opselon.github.io/AutoTelegramForward/security/secrets/): What is encrypted, what is write-only, redaction and rotation.
+- [Request hardening](https://opselon.github.io/AutoTelegramForward/security/request-hardening/): Body caps, timeouts, the SSRF guard on AI endpoints and shutdown.
 - [Operations & diagnostics](https://opselon.github.io/AutoTelegramForward/operations/): Runbooks for the failures you will actually meet.
 - [Troubleshooting](https://opselon.github.io/AutoTelegramForward/operations/troubleshooting/): Symptom, cause, fix — and what to collect before asking for help.
 - [AI providers & prompts](https://opselon.github.io/AutoTelegramForward/operations/ai-providers/): Keys, check-key probes, the endpoint guard, failover and what a broken provider does to delivery.
