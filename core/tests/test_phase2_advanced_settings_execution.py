@@ -15,7 +15,11 @@ import asyncio
 
 import pytest
 
-from core.domain.entities import ForwardRule, MessagePayload
+from core.domain.entities import (
+    MAX_FORWARD_DELAY_SECONDS,
+    ForwardRule,
+    MessagePayload,
+)
 from core.domain.services import AdvancedSettingsEngine
 from core.domain.value_objects import MediaType
 
@@ -63,8 +67,14 @@ class TestAdvancedEntityProperties:
         rule = _rule()
         rule.forward_delay_seconds = -10.0
         assert rule.forward_delay_seconds == 0.0
+        # The bound is the one the settings schema advertises (86400 s), not a
+        # second, smaller number invented here: the property used to truncate to
+        # 3600 s while the advanced screen validated and displayed up to 86400 s,
+        # so a configured 7200 s silently became one hour.
         rule.forward_delay_seconds = 999999.0
-        assert rule.forward_delay_seconds == 3600.0
+        assert rule.forward_delay_seconds == MAX_FORWARD_DELAY_SECONDS == 86400.0
+        rule.forward_delay_seconds = 43200.0
+        assert rule.forward_delay_seconds == 43200.0
 
     def test_forward_delay_rejects_garbage(self):
         rule = _rule()

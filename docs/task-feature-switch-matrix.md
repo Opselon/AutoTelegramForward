@@ -21,7 +21,7 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 08 | Whitelist | FAIL → fixed | bot menu `rfl_wl:` → `ForwardRule.whitelist` → `policy_chain` → `ContentPolicy.evaluate` | Same inert storage, plus: the same key was the keyword-reply add-on's keyword list, so one list carried two unrelated meanings and neither was the allow-list the menu promises |
 | 09 | Cleaner | FAIL → fixed | `ForwardRule.build_cleaner()` → `CleanerRule.clean()` in `DurableMessagePipeline._apply_transforms`; links/buttons/entities handled by the pipeline and `LinkManagementEngine` | Phones, inline buttons and empty lines were stored, rendered and counted but changed nothing; **Links/Remove (and every non-default link policy) dropped 100% of messages** (`apply_to_payload` did not exist, the `AttributeError` was swallowed by a bare `except`); the badge counted a hand-written subset |
 | 10 | Filters | FAIL → fixed | `DurableMessagePipeline` FILTER stage → `FilterEngine.evaluate`; screen `rfl_lnk:` / `rfl_vid:` / `rfl_aud:` / `rfl_stk:` / `rfl_txt:` / `rfl_voc:` | The six gates enforced correctly, but the `Filters (N)` badge counted **two different wrong subsets** (video/audio/text missing; one site also counted a duplicate-filter toggle owned by another screen), the attached `FilterRule` was fetched by id with **no owner check**, and user regexes were compiled unguarded (ReDoS) |
-| 11 | Set Delay | PENDING | — | — |
+| 11 | Set Delay | FAIL → fixed | `rdly_s:<rule_id>:<sec>` presets + typed step → `ForwardRule.delay_seconds` → `AdvancedSettingsEngine.get_dispatch_delay` → durable job claim gate (`next_retry_at`) | The delay was applied **twice** on the durable path (gate + an in-worker `asyncio.sleep`), a crafted preset stored `-600`/`inf`/`1e18` (and `nan` raised `NOT NULL constraint failed` on save), `inf` produced invalid JSON (`Infinity`) in the job payload, and the layers disagreed on the maximum (schema 86400 vs property 3600) |
 | 12 | Task Status | PENDING | — | — |
 | 13 | Duplicate Task | PENDING | — | — |
 | 14 | Rename Task | PENDING | — | — |
@@ -491,3 +491,68 @@ listing its conditions); `block_voice` drops both voice notes and audio files an
 `block_audio` covers both too, matching the screen's grouping; and the ReDoS
 guard refuses rather than rewriting a pathological pattern, so a user who types
 one gets no regex filtering from it (never a drop).
+
+## 11 — Set Delay
+
+**Expected behaviour (from the code):** a task can be given a forwarding delay from
+the bot's Delay screen — presets (`rdly_s:<rule_id>:<sec>`) plus a typed step — which
+writes `ForwardRule.delay_seconds`, and from the advanced settings' "dispatch delay"
+(`forward_delay_seconds` in the task metadata). `AdvancedSettingsEngine.get_dispatch_delay`
+resolves the two, and the delay must reach the real dispatch path: the durable job must
+not become claimable before the delay has elapsed, must keep its task/config, and must
+survive a restart.
+
+**Confirmed defect 1 — the delay was applied twice on the durable path.** The job's
+claim gate was written as `next_retry_at = now + rule.delay_seconds` while the worker,
+*after* claiming, slept `min(data["advanced_delay_seconds"], 3600)`. For a rule whose
+advanced delay is unset — the default, since `forward_delay_seconds` falls back to
+`delay_seconds` — both numbers are the same, so a configured 300 s delay delivered after
+600 s. Adding to it, that in-worker sleep dies with the process (a restart lost the rest
+of the wait) and holds a worker slot and a lease for up to an hour.
+
+**Confirmed defect 2 — the value a client sent was never validated.** The preset handler
+did `rule.delay_seconds = float(sec_str)` on a callback payload, so `rdly_s:<id>:-600`
+stored a negative delay that the screens displayed and the queue ignored,
+`rdly_s:<id>:inf` (or `1e400`) stored `inf`, and `rdly_s:<id>:nan` was worse: SQLite
+stores NaN as NULL, so the save raised `NOT NULL constraint failed:
+forward_rules.delay_seconds` — a client-triggered exception in the write path. An
+`inf` delay then reached the job payload, where `json.dumps` writes `Infinity`: not
+valid JSON, and rejected outright by strict parsers such as Go's `encoding/json`, so
+the job row became unreadable to the control plane.
+
+**Confirmed defect 3 — the layers disagreed about the maximum.** The advanced-settings
+schema advertises `0 .. 86400` s and validates that, but `forward_delay_seconds`
+silently truncated to 3600 s, so a user who configured 7200 s in the advanced screen got
+one hour with no indication.
+
+**Fix:** one shared bound and one shared validator
+(`MAX_FORWARD_DELAY_SECONDS = 86400`, `clamp_delay_seconds()`), applied at construction
+(so every writer — bot screens, Go API → RPC, web dashboard, backup restore, duplication —
+is covered, since all of them build a `ForwardRule`), in both bot handlers, and in the
+advanced property, which now agrees with the schema instead of truncating. The delay is
+now enforced **once, durably**: the claim gate is written from the single authority
+(`get_dispatch_delay`) and the worker no longer sleeps for a delay the gate already
+honoured — so a restart preserves the remaining wait instead of losing it, and no worker
+slot is burned. The non-durable dispatcher path still waits inline (it has no gate) and
+uses the same cap.
+
+**Verified behaviour (35 tests, real store + real worker dispatch):** the whole
+validation table (`nan`/`inf`/`-inf`/`1e400`/negative/garbage → `0.0`, `86400.5` and
+`1e18` → `86400`, `"3.5"` → `3.5`); construction normalizes the first-class field and
+the advanced property no longer truncates at 3600; a crafted preset payload can no
+longer break the save (`nan` through the handler's own arithmetic writes `0.0`); the
+typed step still reports a typo as invalid while clamping an out-of-range number; each
+task keeps its own delay across a reopen; a delayed task never gates another task's
+destination; the gate carries the configured delay (`now + 8s`), the advanced value wins
+the gate, `0` is instantly claimable, and a **restarted** worker still refuses to deliver
+early; the real dispatch of a job whose gate has elapsed performs **no sleep** for the
+delay (the pre-fix code slept the full 8 s — verified by re-adding the old line and
+watching this test fail); and every job payload parses under a strict JSON reader, with
+no `NaN`/`Infinity` anywhere.
+
+**Recorded limitations:** one destination is deliberately a single ordered lane, so an
+earlier still-waiting job for the same target holds that target until its own delay
+elapses (the later job keeps its own configuration and gate; this is ordering, not a
+cross-task leak); the delay is a scheduling gate, not a calendar schedule — it starts
+when the job is enqueued; and the non-durable dispatcher path still waits inline, because
+it has no durable queue to hold the job.
