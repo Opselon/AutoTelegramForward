@@ -7,7 +7,7 @@
       irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install.ps1 | iex
 
   What this does:
-    1. Makes sure git and Python >= 3.10 (with pip + venv) are available,
+    1. Makes sure git and Python 3.11-3.13 (with pip + venv) are available,
        installing them with winget if they are missing.
     2. Clones AutoTelegramForward (unless you are already inside a copy).
     3. Hands off to:   python atf.py setup
@@ -24,6 +24,9 @@
 .PARAMETER WithGo
   Also install the Go toolchain (optional REST API).
 
+.PARAMETER Quick
+  Ask only for the bot token; keep every other default (env: ATF_QUICK).
+
 .PARAMETER Force
   Replace an existing clone.
 #>
@@ -32,6 +35,7 @@ param(
   [string]$Dir = $env:ATF_INSTALL_DIR,
   [string]$Branch = $(if ($env:ATF_BRANCH) { $env:ATF_BRANCH } else { "master" }),
   [switch]$WithGo,
+  [switch]$Quick,
   [switch]$Force
 )
 
@@ -87,11 +91,14 @@ foreach ($cand in @("python", "py")) {
   try {
     $v = & $cand --version 2>&1
     if ($v -match "Python\s+(\d+)\.(\d+)") {
-      if ([int]$Matches[1] -gt 3 -or ([int]$Matches[1] -eq 3 -and [int]$Matches[2] -ge 10)) {
+      # 3.11-3.13 only: the ceiling is real (pyrogram's sync layer needs the
+      # implicit event loop Python 3.14 removed, see atfcli/platforms.py).
+      if ([int]$Matches[1] -eq 3 -and [int]$Matches[2] -ge 11 -and [int]$Matches[2] -le 13) {
         $py = $cand
         Write-Info "Python: $v"
         break
       }
+      Write-Info "Python $($Matches[1]).$($Matches[2]) is outside the supported range 3.11-3.13 — skipping it"
     }
   } catch { }
 }
@@ -103,7 +110,9 @@ if (-not $py) {
                 [Environment]::GetEnvironmentVariable("Path", "User")
     if (Have-Command "python") { $py = "python" }
   }
-  if (-not $py) { Fail "Python >= 3.10 is required. Install it from https://www.python.org and re-run." }
+  if (-not $py) {
+    Fail "Python 3.11-3.13 is required (3.14 is not supported yet). Install it from https://www.python.org and re-run."
+  }
 }
 
 if ($WithGo -and -not (Have-Command "go")) {
@@ -161,8 +170,16 @@ Write-Host ""
 # in place, then runs the wizard — which uses Docker Desktop when it is
 # available and falls back to source mode when it is not.
 $bootstrap = Join-Path $PWD "scripts\bootstrap.py"
+# `--quick` is the wizard's own flag: it asks for the bot token — the one answer
+# it cannot invent — and keeps the defaults for everything else. Mirrors
+# install.sh --quick so both installers offer the same shortest path.
+$setupArgs = @()
+if ($Quick) {
+  $setupArgs += "--quick"
+  Write-Info "Quick mode: the wizard will ask only for the bot token."
+}
 if (Test-Path $bootstrap) {
-  & $py $bootstrap
+  & $py $bootstrap @setupArgs
 } else {
-  & $py atf.py setup
+  & $py atf.py setup @setupArgs
 }

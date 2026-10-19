@@ -34,6 +34,10 @@ def _platform(ctx, args) -> int:
                     "is_wsl": host.is_wsl,
                     "in_container": host.in_container,
                     "python": host.python,
+                    "python_version": host.python_version,
+                    "python_supported": host.python_supported,
+                    "python_problem": plat.python_problem(host.python_version_info),
+                    "supported_python": plat.SUPPORTED_PYTHON,
                     "systemd": host.systemd,
                     "shell": host.shell,
                 },
@@ -60,7 +64,7 @@ def _platform(ctx, args) -> int:
         [
             ("host", host.label),
             ("os", f"{host.os}{' (' + host.distro + ')' if host.distro else ''}"),
-            ("python", host.python),
+            ("python", f"{host.python_version or '?'}  {host.python}"),
             ("shell", host.shell or "—"),
             ("systemd", "yes" if host.systemd else "no"),
             ("workdir", str(ctx.repo.root)),
@@ -79,6 +83,17 @@ def _platform(ctx, args) -> int:
     )
 
     ctx.out.line()
+    python_verdict = plat.python_problem(host.python_version_info)
+    if python_verdict:
+        # Say it here rather than letting source mode fail after the build: the
+        # operator reads this before choosing a mode.
+        ctx.out.warn(python_verdict)
+        ctx.out.line("  " + ctx.out.paint("install a supported interpreter:", "bold"))
+        for what, command in plat.python_install_guidance(host):
+            ctx.out.line(f"    {ctx.out.paint('•', 'cyan')} {what}")
+            ctx.out.line(f"      {ctx.out.paint(command, 'grey')}")
+        ctx.out.line()
+
     if docker.usable:
         ctx.out.ok("this machine can run the docker stack")
     else:

@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Python-3.11--3.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11-3.13">
   <img src="https://img.shields.io/badge/Go-1.27+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Rust-1.90+-DEA584?style=flat-square&logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/Flutter-3.29+-02569B?style=flat-square&logo=flutter&logoColor=white" alt="Flutter">
@@ -38,9 +38,12 @@ git clone https://github.com/Opselon/AutoTelegramForward && cd AutoTelegramForwa
 ./scripts/setup.sh            # venv + deps + `atf` on PATH + guided setup
 ./scripts/setup.sh --check    # read-only readiness report, changes nothing
 ```
-`scripts/setup.sh` hands over to `scripts/bootstrap.py`, which finds a Python
-3.11+, creates `.venv`, installs dependencies, symlinks `atf` into
-`/usr/local/bin`, and starts the wizard.
+`scripts/setup.sh` hands over to `scripts/bootstrap.py`, which picks a Python in
+the supported range (**3.11–3.13**), creates `.venv`, installs dependencies,
+symlinks `atf` into `/usr/local/bin`, and starts the wizard. If your `python3` is
+3.14 it will say so and use `python3.13`/`3.12`/`3.11` instead — 3.14 is not
+usable here, because the pinned pyrogram imports an event loop that 3.14 no
+longer creates implicitly (docker images pin 3.11, so docker mode is unaffected).
 
 ### 🪟 Windows (PowerShell, or Git Bash/WSL)
 ```powershell
@@ -61,7 +64,7 @@ irm https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/install
 Both install Python/git when missing, clone the repo, and end in the same wizard.
 
 ### 📦 Portable single file (no install, no venv, no checkout)
-Needs only Python 3.11+ on the target machine:
+Needs only Python 3.11–3.13 on the target machine:
 ```bash
 python3 atf.pyz platform      # what this host is, and the exact docker install commands for it
 python3 atf.pyz setup         # the same wizard
@@ -86,8 +89,8 @@ the overlay is fully functional, it just cannot resolve `9router`).
 
 | You have | Use | Result |
 | --- | --- | --- |
-| docker + python 3.11+ | `./scripts/setup.sh` | docker mode: full stack, verified, boot service optional |
-| python 3.11+ only | `atf setup --source-wizard` | source mode: venv + supervised local processes |
+| docker + python 3.11–3.13 | `./scripts/setup.sh` | docker mode: full stack, verified, boot service optional |
+| python 3.11–3.13 only | `atf setup --source-wizard` | source mode: venv + supervised local processes |
 | neither, want one file | `atf release portable` → `atf.pyz` | portable: copy one file, run `setup` |
 | Windows + Docker Desktop | `python scripts\bootstrap.py` | docker mode on WSL2 |
 | only want the containers | `docker compose up -d` | the stack, managed by hand |
@@ -367,7 +370,9 @@ atf status                  # live board: services, ports, rules
 atf system services         # microservice table: state, health, reachability, endpoint, version
 atf platform                # what this host is + how to install docker on it
 atf doctor --fix            # repair whatever the checks flag
-atf system upgrade          # git pull → build → recreate → alias repair → health gate
+atf upgrade check           # is a newer revision available? (exit 10 = yes, for cron)
+atf upgrade apply           # preflight → backup → pull → build → recreate → verify, with a rollback point
+atf system upgrade          # docker-only shortcut: pull → build → recreate → alias repair → health gate
 atf system service install  # start the stack at boot (systemd unit)
 atf release portable        # build dist/atf.pyz — the single-file CLI
 ```
@@ -414,6 +419,119 @@ Every command supports `--json` (one JSON document on stdout, placed before or
 after the group name), and every line the CLI writes goes through a single
 redaction filter, so a leaked bot token or API key cannot appear in a transcript.
 
+### Upgrading the stack (`atf upgrade`)
+
+`atf update` is an alias of `atf upgrade`. The engine answers one question —
+*what exactly will change, and how do I get back?* — before it changes anything.
+
+```bash
+atf upgrade check            # installed vs available revision; exit 10 when an upgrade is available
+atf upgrade plan             # the 7 steps it would run, in order, changing nothing
+atf upgrade apply            # do it
+atf upgrade rollback         # return to the revision recorded before the last upgrade
+atf upgrade history          # every recorded upgrade and rollback
+```
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | up to date, or the upgrade succeeded |
+| `1` | the upgrade ran and failed (the failing step is named) |
+| `3` | it cannot upgrade in this state — dirty tree, detached HEAD, diverged branch |
+| `10` | an upgrade is available (`upgrade check` only — cron-friendly) |
+
+An upgrade is a fixed sequence, and `plan` prints the same list `apply` executes:
+
+1. **preflight** — git checkout, docker, free disk
+2. **backup** — snapshot the database before anything is touched
+3. **move** — fast-forward to the target revision (never a merge, never a reset)
+4. **build** — `docker compose build`
+5. **recreate** — `docker compose up -d`, containers replaced and aliases repaired
+6. **verify** — doctor checks plus port diagnosis
+7. **record** — the previous revision is written to `.atf/upgrade-state.json`
+
+The state file is written *before* the move, so `rollback` always has a way back
+even if the build fails halfway. Uncommitted work is a refusal, not a surprise:
+`--stash` parks it (`git stash pop` brings it back) and `--force` overrides.
+
+```bash
+atf upgrade apply --no-build --no-verify      # reuse the current images; verify by hand later
+atf upgrade apply --stash                     # park a dirty tree instead of refusing
+atf upgrade apply --ref v2.1.0                # an exact tag, branch or commit
+atf upgrade check --no-fetch                  # never contact the remote
+```
+
+On a **source** install (no docker) the engine adapts instead of refusing: it
+refreshes the virtualenv where the docker path would rebuild images, skips the
+container recreate and the database snapshot, and picks the doctor checks that
+apply to a bare metal deployment. `--dry-run` never writes — but it still reads
+the repository, so `atf --dry-run upgrade plan` reports the real revision, branch
+and ahead/behind instead of claiming the checkout is missing.
+
+### `atf doctor --only` — one check at a time
+
+```bash
+atf doctor --only ports            # just the port diagnosis
+atf doctor --only docker repo disk # as many as you name
+atf doctor --fix --rebind-ports    # repair aliases and move services off a foreign port
+```
+
+The names are the check names: `docker`, `python`, `repo`, `containers`,
+`aliases`, `ports`, `firewall`, `api`, `services`, `database`, `logs`, `session`,
+`certificate`, `disk`, `ai`. An unknown name is refused, the closest match is
+named, and the real list is printed:
+
+```
+✗ unknown check 'doctro' — did you mean 'docker'?
+  hint: available checks: docker, python, repo, containers, aliases, ports, firewall, api, …
+```
+
+The same names are what `--help` prints, so the two cannot drift. Exit code is `0`
+when nothing failed and `1` when any selected check failed.
+
+### Port conflicts (`atf net port`)
+
+When a foreign process owns a host port, the symptom is a container that exits
+immediately; the fix is to find who holds it and move the service, not to kill a
+stranger's process.
+
+```bash
+atf net port status          # who holds each port: our stack, a foreign process, or nobody
+atf net port free web        # the first free port near 8088 (never another service's port)
+atf net port fix web         # move web onto it: writes .env, re-creates that container
+```
+
+```
+Host ports
+  SERVICE              PORT   STATUS  OPEN  HELD BY                            ALT
+  api — atf-api        8080   OK      yes   docker-proxy, pid 15522, via ss    —
+  web — atf-web        8088   CONFLICT yes  nginx, pid 3972267, via ss         8089
+```
+
+A port held by *our* stack is `OK`; only a foreign holder is a conflict. The
+alternative is verified bindable before it is offered — a "free" port that cannot
+actually be bound would just move the failure.
+
+### The validator contract
+
+Every value a human can type at this CLI passes through one validator
+(`atfcli/validators.py`), used by the wizard prompts, by `argparse`, and by the
+API-facing commands alike. Two rules matter at the terminal:
+
+* **A refusal names the reason and the likely intent.** `atf docker logs webhook`
+  → `unknown service 'webhook' — did you mean 'web'?`; `atf setup --admin-id xyz`
+  → `a Telegram user id is numeric — send /id to @userinfobot to get yours`. A
+  usage error exits `2`, so a wrapper script can tell "you typed it wrong" from
+  "the command failed".
+* **A filter's empty value is not a value.** `--level ""` and `--service ""` mean
+  "no filter" and are accepted; every non-empty value is still policed. The
+  service vocabulary is one vocabulary: `atf docker logs atf-core` and
+  `atf docker logs core` both resolve to `core` (the container name is an alias,
+  not a second name).
+
+Numeric flags (`--limit`, `--hours`, `--tail`, `--wait`, `--port`,
+`--older-than-days`) arrive at the command as real integers, so they can be
+counted with; text-valued flags (Telegram ids, tokens, paths) stay strings.
+
 
 ## 🧙 The setup wizard (`atf setup`)
 
@@ -422,13 +540,20 @@ then verifies — in that order, and it refuses a wrong answer instead of storin
 
 ```bash
 atf setup                          # interactive wizard
+atf setup --quick                  # ask only for the bot token; keep every default
 atf setup --check                  # read-only readiness report (safe before anything exists)
 atf setup --yes                    # take every default, never prompt (CI/cron)
 atf setup --answers answers.json   # non-interactive answers
 atf setup --print-answers          # emit the answers template
+atf setup --admin-id 5094837833    # pre-answer the admin user id
 atf setup --no-build --no-start    # prepare .env only
 atf setup --source-wizard          # bare-metal path for a machine without docker
 ```
+
+`--quick` is the shortest path to a running stack: it asks for the bot token —
+the one answer it cannot invent — keeps the defaults for everything else, and
+says which questions it skipped (`--quick kept the defaults for: api_id,
+api_hash, …`) so a wrong default is never silent.
 
 ### What it asks, and how each answer is validated
 
@@ -502,9 +627,12 @@ your machine without touching it.
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `docker is not usable here` | no docker / daemon down | run `atf platform` for this host's exact install command; or `atf setup --source-wizard` |
+| Installer refuses your Python, or `import pyrogram` raises `RuntimeError: There is no current event loop in thread 'MainThread'` | your interpreter is 3.14 (or older than 3.11); the pinned pyrogram needs the implicit event loop that 3.14 removed | install 3.13/3.12/3.11 (`atf platform` prints the command for your distro) and re-run the setup, **or** use docker mode, whose images pin 3.11. `atf doctor --only python` reports which you are on |
 | `port 8088 is already in use` | something else owns the port | `atf validate --runtime` reports the owner (`ports` check) |
 | Bot says it is unconfigured although `.env` is filled | the container predates the `.env` change | `atf system restart` (`container-env` check detects exactly this) |
 | `container-env` warns `/api/system/env unavailable` | older api image | `atf system restart` to pick up the current image |
 | Upstream disconnected | Telegram session not authorised | `atf sessions list`, then re-login |
-| Wizard hangs on a piped stdin | it is waiting for a human | use `--yes`, `--answers file.json`, or a terminal |
+| Wizard hangs on a piped stdin | it is waiting for a human | use `--yes`, `--answers file.json`, `--quick`, or a terminal |
+| `atf upgrade apply` refuses: "uncommitted changes" | the tree is dirty, so a fast-forward could lose work | `--stash` (restore with `git stash pop`) or `--force`; exit code `3` |
+| `atf upgrade apply` fails at build or verify | the new revision is bad, or a dependency did not load | `atf upgrade rollback` returns to the revision in `.atf/upgrade-state.json`; `atf upgrade history` shows what ran |
 | Colours look wrong / logs are noisy | ANSI in a pipe | `NO_COLOR=1`, `--no-color`, or `--json` |

@@ -6,7 +6,9 @@ import json
 import time
 from typing import Any
 
+from .. import validators
 from ..console import human_duration
+from ..context import SERVICES
 from ..errors import UsageError
 from . import _shared as sh
 
@@ -175,20 +177,25 @@ def add_parser(subparsers, parents) -> None:
     p = sub.add_parser("query", aliases=["search"], help="query historical logs with filters", parents=parents)
     p.add_argument("-n", "--limit", type=int, default=50, help="max records to return")
     p.add_argument("--offset", type=int, default=0, help="starting record offset")
-    p.add_argument("--level", default="", help="filter by level (INFO/WARN/ERROR)")
-    p.add_argument("--service", default="", help="filter by service (core/api/web/logger)")
+    p.add_argument("--level", type=validators.argparse_type("level", optional=True), default="",
+                   help=f"filter by level ({validators.describe_choices(validators.LEVELS)})")
+    p.add_argument("--service", type=validators.service_argparse_type(optional=True), default="",
+                   help=f"filter by service ({validators.describe_choices(SERVICES)}, container names accepted)")
     p.add_argument("-s", "--search", default="", help="text search in message/detail")
     p.add_argument("-r", "--rule", default="", help="filter by rule/task ID")
     p.add_argument("--corr", default="", help="filter by correlation ID")
-    p.add_argument("--hours", type=int, help="only records in the last N hours")
+    p.add_argument("--hours", type=validators.argparse_type("int", minimum=1, maximum=8760),
+                   help="only records in the last N hours")
     p.add_argument("--asc", action="store_true", help="order ascending (oldest first)")
     p.set_defaults(func=_query)
 
     p = sub.add_parser("tail", help="tail and follow logs in real time", parents=parents)
     p.add_argument("-f", "--follow", action="store_true", help="follow new lines continuously")
     p.add_argument("-n", "--lines", type=int, default=20, help="number of lines to show")
-    p.add_argument("--service", default="", help="filter by service")
-    p.add_argument("--level", default="", help="filter by level")
+    p.add_argument("--service", type=validators.service_argparse_type(optional=True), default="",
+                   help=f"filter by service ({validators.describe_choices(SERVICES)})")
+    p.add_argument("--level", type=validators.argparse_type("level", optional=True), default="",
+                   help=f"filter by level ({validators.describe_choices(validators.LEVELS)})")
     p.add_argument("-s", "--search", default="", help="search term")
     p.add_argument("-r", "--rule", default="", help="filter by rule ID")
     p.add_argument("--interval", type=float, default=2.0, help="poll interval in seconds")
@@ -197,11 +204,14 @@ def add_parser(subparsers, parents) -> None:
     p = sub.add_parser("export", help="export logs to JSON or CSV", parents=parents)
     p.add_argument("--format", choices=["json", "csv"], default="json", help="export format")
     p.add_argument("-o", "--output", default="", help="output file path (defaults to stdout)")
-    p.add_argument("--service", default="", help="filter by service")
-    p.add_argument("--level", default="", help="filter by level")
+    p.add_argument("--service", type=validators.service_argparse_type(optional=True), default="",
+                   help="filter by service")
+    p.add_argument("--level", type=validators.argparse_type("level", optional=True), default="",
+                   help="filter by level")
     p.add_argument("-s", "--search", default="", help="filter by search query")
     p.add_argument("-r", "--rule", default="", help="filter by rule ID")
-    p.add_argument("--hours", type=int, help="only logs from the last N hours")
+    p.add_argument("--hours", type=validators.argparse_type("int", minimum=1, maximum=8760),
+                   help="only logs from the last N hours")
     p.set_defaults(func=_export)
 
     p = sub.add_parser("purge", help="delete old log records", parents=parents)

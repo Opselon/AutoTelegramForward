@@ -15,6 +15,8 @@ import re
 import sys
 from typing import Callable, Iterable, Sequence
 
+from . import validators
+
 RGB = tuple[int, int, int]
 
 #: Brand ramp: sky → violet. Used for headings and box borders.

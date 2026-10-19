@@ -31,6 +31,7 @@ from .errors import AtfError, EXIT_FAILURE, EXIT_OK
 COMMAND_MODULES: tuple[str, ...] = (
     "auth",
     "setup",
+    "upgrade",
     "platform",
     "doctor",
     "validate",
@@ -61,6 +62,7 @@ ALIASES: dict[str, list[str]] = {
     "up": ["system", "start"],
     "down": ["system", "stop"],
     "restart": ["system", "restart"],
+    "update": ["upgrade"],
 }
 
 
