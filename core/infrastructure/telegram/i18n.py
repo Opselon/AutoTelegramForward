@@ -1,8 +1,15 @@
 """i18n manager with locale-tag normalization and safe {placeholder} formatting."""
 
 import json
+import logging
+import re
 from pathlib import Path
 from typing import Dict, Optional
+
+logger = logging.getLogger("atf.i18n")
+
+#: A `{name}` or `{name:spec}` field in a catalog value.
+PLACEHOLDER = re.compile(r"(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)(?:[!:][^}]*)?\}(?!\})")
 
 SUPPORTED_LANGUAGES = ["en", "fa", "ru", "zh", "pt", "uz", "id", "es", "fr", "it"]
 DEFAULT_LANGUAGE = "en"
@@ -41,11 +48,25 @@ class I18n:
         requested = normalize_language(lang or self.current) or _FALLBACK
         table = self._catalog.get(requested) or self._catalog.get(_FALLBACK, {})
         english = self._catalog.get(_FALLBACK, {})
-        template = table.get(key) or english.get(key, key)
+        template = table.get(key) or english.get(key)
+        if template is None:
+            # A key no catalog defines renders as the key itself. That is the
+            # raw-key leak a user sees in the chat, and it is silent otherwise:
+            # name it, so the next one is found before a user reports it.
+            logger.error("no catalog entry for key %r (lang=%s)", key, requested)
+            return key
         try:
             return template.format(**kwargs) if kwargs else template
-        except (KeyError, IndexError, ValueError):
-            # Preserve a usable message if a caller has incomplete parameters.
+        except (KeyError, IndexError, ValueError) as exc:
+            # Preserve a usable message if a caller has incomplete parameters —
+            # but a rendered template with braces in it is still a leak, so say
+            # which field the call site did not fill.
+            missing = [name for name in PLACEHOLDER.findall(template) if name not in kwargs]
+            logger.error(
+                "translation %r (lang=%s) could not be formatted (%s); "
+                "unfilled placeholder(s): %s",
+                key, requested, exc, ", ".join(missing) or "none",
+            )
             return template
 
     def contains(self, key: str) -> bool:
