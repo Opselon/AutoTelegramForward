@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { api } from '../api'
 import type { SetupReport } from '../types'
+import { makeT, type UiLang } from '../locales'
 
 /**
  * System panel — the web twin of the mobile System screen and of `atf setup`'s
@@ -31,8 +32,8 @@ import type { SetupReport } from '../types'
  * An older server without this endpoint answers 404: the panel then says so
  * instead of rendering an error the operator cannot act on.
  */
-export function SystemPanel({ isRtl }: { isRtl: boolean }) {
-  const t = (fa: string, en: string) => (isRtl ? fa : en)
+export function SystemPanel({ lang }: { lang: UiLang }) {
+  const t = makeT(lang)
   const [report, setReport] = useState<SetupReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [unsupported, setUnsupported] = useState(false)
@@ -69,10 +70,10 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
 
   const levelLabel = (level: string) =>
     level === 'required'
-      ? t('الزامی', 'required')
+      ? t('ui_required')
       : level === 'recommended'
-        ? t('پیشنهادی', 'recommended')
-        : t('اختیاری', 'optional')
+        ? t('ui_recommended')
+        : t('ui_optional')
 
   return (
     <section className="syspanel" aria-live="polite">
@@ -80,7 +81,7 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
         <div className="syspanel-hero-main">
           <div className="syspanel-hero-title">
             {ready ? <ShieldCheck size={18} /> : <AlertTriangle size={18} />}
-            <span>{ready ? t('آماده', 'Ready') : t('آماده نیست', 'Not ready')}</span>
+            <span>{ready ? t('ui_ready') : t('ui_not_ready')}</span>
             {report && (
               <span className="syspanel-verdict">
                 {report.deployment || 'unknown'}
@@ -90,24 +91,21 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
             )}
           </div>
           <div className="syspanel-hero-sub">
-            {t(
-              'آمادگی سرور، چیدمان سرویس‌ها و قرارداد تنظیمات — همان گزارشی که ویزارد atf و اپ موبایل می‌خوانند.',
-              'Server readiness, service topology and the configuration contract — the same report the atf wizard and the mobile app read.',
-            )}
+            {t('ui_server_readiness_service_topology_and_the_configuration_contract')}
           </div>
           <div className="syspanel-hero-stats">
             <span>
-              <Server size={14} /> {t('سرویس‌های فعال', 'services online')}{' '}
+              <Server size={14} /> {t('ui_services_online')}{' '}
               <strong>
                 {online}/{services.length}
               </strong>
             </span>
             <span>
-              <Sparkles size={14} /> {t('قابلیت‌ها', 'capabilities')}{' '}
+              <Sparkles size={14} /> {t('ui_capabilities')}{' '}
               <strong>{report?.features.length ?? 0}</strong>
             </span>
             <span>
-              <Gauge size={14} /> {t('کلیدهای تنظیم‌شده', 'keys set')}{' '}
+              <Gauge size={14} /> {t('ui_keys_set')}{' '}
               <strong>
                 {contract.filter((c) => c.set).length}/{contract.length}
               </strong>
@@ -121,7 +119,7 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
         </div>
         <button className="btn syspanel-refresh" onClick={() => void load()} disabled={loading}>
           <RefreshCw size={15} className={loading ? 'spin' : undefined} />
-          <span>{t('بررسی مجدد', 'Re-probe')}</span>
+          <span>{t('ui_re_probe')}</span>
         </button>
       </div>
 
@@ -129,10 +127,7 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
         <div className="syspanel-warning">
           <AlertTriangle size={15} />
           <span>
-            {t(
-              `${missing.length} تنظیم الزامی تنظیم نشده است`,
-              `${missing.length} required setting(s) missing`,
-            )}
+            {t('ui_missing_2_required_setting_s_missing', { missing_2: missing.length })}
           </span>
           <code>{missing.join(', ')}</code>
         </div>
@@ -142,10 +137,7 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
         <div className="syspanel-empty">
           <CloudOff size={16} />
           <span>
-            {t(
-              'این سرور مسیر وضعیت سیستم را ارائه نمی‌دهد. برای دیدن آمادگی، سرور را به‌روز کنید.',
-              'This server does not expose the system status endpoint. Update the server to see readiness here.',
-            )}
+            {t('ui_this_server_does_not_expose_the_system_status_endpoint_update_th')}
           </span>
         </div>
       )}
@@ -168,7 +160,7 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
               </div>
               <div className="syspanel-card-detail">{s.detail || '—'}</div>
               <div className="syspanel-card-foot">
-                {s.online ? t('آنلاین', 'Online') : t('آفلاین', 'Offline')} · {s.latency_ms} ms
+                {s.online ? t('ui_system_online') : t('ui_system_offline')} · {s.latency_ms} ms
               </div>
             </div>
           ))}
@@ -177,7 +169,7 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
 
       {(report?.features.length ?? 0) > 0 && (
         <div className="syspanel-section">
-          <h4>{t('قابلیت‌ها', 'Capabilities')}</h4>
+          <h4>{t('ui_system_capabilities')}</h4>
           <div className="syspanel-chips">
             {report!.features.map((f) => (
               <span key={f} className="syspanel-chip">
@@ -190,7 +182,7 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
 
       {contract.length > 0 && (
         <div className="syspanel-section">
-          <h4>{t('قرارداد تنظیمات', 'Configuration contract')}</h4>
+          <h4>{t('ui_configuration_contract')}</h4>
           <div className="syspanel-contract">
             {contract.map((c) => (
               <div key={c.key} className={`syspanel-check ${c.set ? 'is-set' : 'is-unset'}`}>
@@ -198,7 +190,7 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
                   <span className="syspanel-check-key">{c.key}</span>
                   <span className="syspanel-check-badge">
                     {levelLabel(c.level)} ·{' '}
-                    {c.set ? t('تنظیم شده', 'set') : t('تنظیم نشده', 'missing')}
+                    {c.set ? t('ui_set') : t('ui_missing')}
                   </span>
                 </div>
                 {c.reason && <div className="syspanel-check-reason">{c.reason}</div>}
@@ -211,7 +203,7 @@ export function SystemPanel({ isRtl }: { isRtl: boolean }) {
 
       {(report?.next_steps.length ?? 0) > 0 && (
         <div className="syspanel-section">
-          <h4>{t('گام‌های بعدی', 'Next steps')}</h4>
+          <h4>{t('ui_next_steps')}</h4>
           <ul className="syspanel-steps">
             {report!.next_steps.map((step) => (
               <li key={step}>

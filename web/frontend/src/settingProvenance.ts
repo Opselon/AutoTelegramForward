@@ -4,6 +4,12 @@
  * Kept out of the component so the rules can be run directly (see
  * `scripts/verify_setting_provenance.mjs`) rather than only exercised by
  * clicking around: the interesting cases are all about absent data.
+ *
+ * The badge carries catalog keys, not sentences: the panel translates them in
+ * whichever language is active, so a Russian or Chinese user reads "BOT" as
+ * the language they read everything else in. Nothing here imports the catalog —
+ * it stays a plain module with type-only imports, so the CI job can compile it
+ * on its own.
  */
 import type { SettingSourceInfo } from './types'
 
@@ -49,30 +55,37 @@ export function canReset(key: string, edits: SettingMap, sources: SourceMap): bo
 }
 
 export interface RowBadge {
-  text: string
+  /** Catalog key for the badge's own label ("TASK", "BOT", "DEFAULT"). */
+  textKey: string
+  /** The bot's name, when the badge names one; '' otherwise. */
+  suffix: string
   color: string
   background: string
-  title: string
+  /** Catalog key for the tooltip that explains where the value came from. */
+  titleKey: string
 }
 
-const BADGES: Record<string, { text: string; color: string; background: string; title: string }> = {
+const BADGES: Record<
+  string,
+  { textKey: string; color: string; background: string; titleKey: string }
+> = {
   task: {
-    text: 'TASK',
+    textKey: 'ui_badge_task',
     color: '#4ade80',
     background: 'rgba(34,197,94,0.14)',
-    title: 'This task chose this value; a bot default will not change it',
+    titleKey: 'ui_badge_task_title',
   },
   bot: {
-    text: 'BOT',
+    textKey: 'ui_badge_bot',
     color: '#c4b5fd',
     background: 'rgba(139,92,246,0.16)',
-    title: "Inherited from the bot's default for this setting",
+    titleKey: 'ui_badge_bot_title',
   },
   default: {
-    text: 'DEFAULT',
+    textKey: 'ui_badge_default',
     color: '#94a3b8',
     background: 'rgba(148,163,184,0.14)',
-    title: "Nothing overrides the registry's default",
+    titleKey: 'ui_badge_default_title',
   },
 }
 
@@ -87,9 +100,9 @@ export function badgeFor(info: SettingSourceInfo | undefined): RowBadge | null {
   if (!info) return null
   const base = BADGES[info.source] ?? BADGES.default
   if (base === BADGES.bot && info.bot_label) {
-    return { ...base, text: `BOT ${info.bot_label}` }
+    return { ...base, suffix: info.bot_label }
   }
-  return { ...base }
+  return { ...base, suffix: '' }
 }
 
 /** Whether the row's value is one this task inherited rather than chose. */

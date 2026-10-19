@@ -1,10 +1,15 @@
 import React, { useState } from 'react'
 import { api } from '../api'
+import { LanguagePicker } from '../components/LanguagePicker'
 
 import { applySession } from '../session'
+import { isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from '../locales'
 
 export default function Auth({ onLogin }: { onLogin: () => void }) {
-  const [lang, setLang] = useState<'fa' | 'en'>('fa')
+  // The login page is the first screen a user sees, so it must not guess: the
+  // stored choice wins, then the browser's own language, then English. A
+  // hardcoded 'fa' here rendered Persian to everybody who had never chosen.
+  const [lang, setLang] = useState<UiLang>(() => preferredLang())
   const [isRegister, setIsRegister] = useState(false)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -12,7 +17,8 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const isRtl = lang === 'fa'
+  const isRtl = isRtlLang(lang)
+  const t = makeT(lang)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -21,11 +27,11 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
     try {
       if (isRegister) {
         if (!username || !password) {
-          throw new Error(isRtl ? 'نام کاربری و رمز عبور الزامی است' : 'Username and password are required')
+          throw new Error(t('ui_username_and_password_are_required'))
         }
         const resp = await api.register({ username, password, display_name: displayName })
         if (!resp.success) {
-          throw new Error(resp.message || (isRtl ? 'ثبت‌نام ناموفق بود' : 'Registration failed'))
+          throw new Error(resp.message || (t('ui_registration_failed')))
         }
         // Auto-login immediately upon registration
         const loginResp = await api.login({ username, password })
@@ -35,22 +41,22 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
           return
         }
         setIsRegister(false)
-        setError(isRtl ? 'حساب کاربری ایجاد شد. لطفاً وارد شوید.' : 'Account created. Please sign in.')
+        setError(t('ui_account_created_please_sign_in'))
       } else {
         if (!username || !password) {
-          throw new Error(isRtl ? 'نام کاربری و رمز عبور الزامی است' : 'Username and password are required')
+          throw new Error(t('ui_username_and_password_are_required'))
         }
         const resp = await api.login({ username, password })
         if (!resp.success) {
-          throw new Error(resp.message || (isRtl ? 'نام کاربری یا رمز عبور اشتباه است' : 'Invalid credentials'))
+          throw new Error(resp.message || (t('ui_invalid_credentials')))
         }
         const token = resp.token
-        if (!token) throw new Error(isRtl ? 'توکن ورود دریافت نشد' : 'No token received')
+        if (!token) throw new Error(t('ui_no_token_received'))
         applySession(token)
         onLogin()
       }
     } catch (err: any) {
-      setError(err.message || (isRtl ? 'عملیات با خطا مواجه شد' : 'Operation failed'))
+      setError(err.message || (t('ui_operation_failed')))
     } finally {
       setLoading(false)
     }
@@ -73,22 +79,23 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
         fontFamily: "'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
-      {/* Language Switcher */}
-      <div style={{ width: '100%', maxWidth: 390, display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <button
-          onClick={() => setLang(lang === 'fa' ? 'en' : 'fa')}
-          style={{
-            background: 'rgba(255, 255, 255, 0.06)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            color: '#cbd5e1',
-            borderRadius: 8,
-            padding: '6px 12px',
-            fontSize: '0.8rem',
-            cursor: 'pointer',
+      {/* Language picker: the same ten catalogs the dashboard uses */}
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 390,
+          display: 'flex',
+          justifyContent: 'flex-end',
+          marginBottom: 12,
+        }}
+      >
+        <LanguagePicker
+          lang={lang}
+          onChange={(next) => {
+            setLang(next)
+            rememberLang(next)
           }}
-        >
-          {lang === 'fa' ? '🌐 English' : '🌐 فارسی'}
-        </button>
+        />
       </div>
 
       <div
@@ -128,12 +135,8 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
           </h2>
           <p style={{ margin: 0, fontSize: '0.825rem', color: '#94a3b8', lineHeight: 1.5 }}>
             {isRegister
-              ? isRtl
-                ? 'ثبت‌نام و ایجاد حساب کاربری داشبورد'
-                : 'Create your control panel account'
-              : isRtl
-              ? 'ورود به پنل مدیریت هوشمند و فوروارد'
-              : 'Sign in to your control panel'}
+              ? t('ui_create_your_control_panel_account')
+              : t('ui_sign_in_to_your_control_panel')}
           </p>
         </div>
 
@@ -150,15 +153,7 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
             color: '#c7d2fe',
           }}
         >
-          {isRtl ? (
-            <>
-              💡 <b>راهنمایی:</b> نام کاربری و رمز اختصاصی خود را می‌توانید مستقیماً از ربات تلگرام با لمس دکمه <b>«💻 داشبورد وب»</b> دریافت کنید.
-            </>
-          ) : (
-            <>
-              💡 <b>Tip:</b> You can get your dedicated username and password directly from the Telegram bot via the <b>Web Dashboard</b> button.
-            </>
-          )}
+          💡 <b>{t('ui_tip_label')}:</b> {t('ui_telegram_bot_hint')}
         </div>
 
         {error && (
@@ -182,11 +177,11 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
           {isRegister && (
             <div>
               <label style={{ display: 'block', fontSize: '0.775rem', color: '#94a3b8', marginBottom: 6 }}>
-                {isRtl ? 'نام نمایشی (اختیاری)' : 'Display Name (optional)'}
+                {t('ui_display_name_optional')}
               </label>
               <input
                 type="text"
-                placeholder={isRtl ? 'مثلاً: مدیر فروش' : 'e.g. John Doe'}
+                placeholder={t('ui_e_g_john_doe')}
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 className="input-field"
@@ -197,11 +192,11 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
 
           <div>
             <label style={{ display: 'block', fontSize: '0.775rem', color: '#94a3b8', marginBottom: 6 }}>
-              {isRtl ? 'نام کاربری' : 'Username'}
+              {t('ui_username')}
             </label>
             <input
               type="text"
-              placeholder={isRtl ? 'نام کاربری (حداقل ۴ حرف)' : 'Username (min 4 chars)'}
+              placeholder={t('ui_username_min_4_chars')}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -215,11 +210,11 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
 
           <div>
             <label style={{ display: 'block', fontSize: '0.775rem', color: '#94a3b8', marginBottom: 6 }}>
-              {isRtl ? 'رمز عبور' : 'Password'}
+              {t('ui_password')}
             </label>
             <input
               type="password"
-              placeholder={isRtl ? 'رمز عبور امن (حداقل ۶ حرف)' : 'Secure password (min 6 chars)'}
+              placeholder={t('ui_secure_password_min_6_chars')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -242,12 +237,12 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
               marginTop: 4,
             }}
           >
-            {loading ? (isRtl ? 'در حال برقراری ارتباط...' : 'Please wait...') : isRegister ? (isRtl ? 'ثبت‌نام حساب جدید' : 'Create Account') : (isRtl ? 'ورود به داشبورد' : 'Sign In')}
+            {loading ? (t('ui_please_wait')) : isRegister ? (t('ui_create_account')) : (t('ui_sign_in'))}
           </button>
         </form>
 
         <div style={{ marginTop: 20, textAlign: 'center', fontSize: '0.825rem', color: '#94a3b8' }}>
-          {isRegister ? (isRtl ? 'از قبل حساب دارید؟' : 'Already have an account?') : (isRtl ? 'حساب کاربری ندارید؟' : "Don't have an account?")}{' '}
+          {isRegister ? (t('ui_already_have_an_account')) : (t('ui_don_t_have_an_account'))}{' '}
           <button
             type="button"
             onClick={() => {
@@ -265,7 +260,7 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
               fontFamily: 'inherit',
             }}
           >
-            {isRegister ? (isRtl ? 'ورود' : 'Sign In') : (isRtl ? 'ثبت‌نام در پنل' : 'Register')}
+            {isRegister ? (t('ui_sign_in')) : (t('ui_register'))}
           </button>
         </div>
       </div>

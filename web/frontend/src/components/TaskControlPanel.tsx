@@ -10,36 +10,27 @@ import type {
 } from '../types'
 import { BotRouteField } from './BotRouteField'
 import { badgeFor, canReset, isInherited, rowValue } from '../settingProvenance'
+import { isRtlLang, makeT, type UiLang } from '../locales'
+import { SETTING_GROUPS, SETTING_HELP, SETTING_LABELS } from '../settingLabels.generated'
 
 interface Props {
   rule: ForwardRule
-  lang?: 'fa' | 'en'
+  lang?: UiLang
   /** Sources/targets are rule fields, so they flow into the modal's own draft + save. */
   onRulePatch: (patch: Partial<ForwardRule>) => void
   onSaved?: () => void
 }
 
-const GROUP_LABELS: Record<string, string> = {
-  general: 'General',
-  cleanup: 'Cleanup',
-  content: 'Content Rules',
-  media: 'Media',
-  sending: 'Sending',
-  keywords: 'Keywords & Replies',
-  audience: 'Audience Filters',
-  ai: 'AI',
-  automation: 'Automation',
-  // A → C → B: the task delivers through one of our own channels (C) so the
-  // final target's forward header names C. The server lists these under its
-  // `branding` group; without this label the panel would fall back to the raw
-  // group key ("Branding").
-  branding: 'Branding hop (A → C → B)',
-  // Who the copy is sent as: this task's account, or a bot the owner attached.
-  route: 'Delivery route',
-}
-
-function groupLabel(group: string): string {
-  return GROUP_LABELS[group] || group.charAt(0).toUpperCase() + group.slice(1)
+/**
+ * The heading of a settings group.
+ *
+ * The bot's catalog carries `ui_reg_group_<group>` for every group the core
+ * ships — the same registry the panel reads its rows from — so the dashboard
+ * takes the group's name from there, in all ten languages. A group added on the
+ * server lands on the English fallback, never on a raw snake_case key.
+ */
+function groupLabel(group: string, lang: UiLang): string {
+  return SETTING_GROUPS[group]?.[lang] ?? group.charAt(0).toUpperCase() + group.slice(1)
 }
 
 /**
@@ -90,6 +81,7 @@ function namesFor(rule: ForwardRule, side: 'source' | 'target'): string[] {
  */
 export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Props) {
   const isRtl = lang === 'fa'
+  const t = makeT(lang)
   const [schema, setSchema] = useState<RuleSettingsSchema | null>(null)
   // What the task itself stores, and separately what the forwarder will use with
   // its bot's defaults applied. The two are shown apart on purpose: saving a
@@ -134,7 +126,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
       setSettingSources(res?.sources ?? {})
       setEdits({})
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load task settings')
+      setError(err instanceof Error ? err.message : t('ui_could_not_load_task_settings'))
     } finally {
       setLoading(false)
     }
@@ -162,17 +154,17 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
         setError(
           res.message
             ? `${res.error_code ? res.error_code + ': ' : ''}${res.message}`
-            : 'The server rejected these settings',
+            : t('ui_the_server_rejected_these_settings'),
         )
         return
       }
       if (res?.settings) setSettings(res.settings)
       setSettingSources(res?.sources ?? settingSources)
       setEdits({})
-      setNotice(res?.message || 'Settings saved')
+      setNotice(res?.message || t('ui_settings_saved'))
       onSaved?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save settings')
+      setError(err instanceof Error ? err.message : t('ui_could_not_save_settings'))
     } finally {
       setSaving(false)
     }
@@ -195,7 +187,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
         setError(
           res.message
             ? `${res.error_code ? res.error_code + ': ' : ''}${res.message}`
-            : 'The server refused to reset this setting',
+            : t('ui_the_server_refused_to_reset_this_setting'),
         )
         return
       }
@@ -207,10 +199,10 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
         delete next[key]
         return next
       })
-      setNotice(res?.message || 'Handed back to the default')
+      setNotice(res?.message || t('ui_handed_back_to_the_default'))
       onSaved?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not reset this setting')
+      setError(err instanceof Error ? err.message : t('ui_could_not_reset_setting'))
     } finally {
       setResetting(null)
     }
@@ -264,24 +256,24 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
   // the server agree on what counts as a repeat or an overlap.
   const validateSource = (raw: string): string | null => {
     const n = normalizeChat(raw)
-    if (!n) return 'Enter a chat, a numeric id or a link.'
+    if (!n) return t('ui_chat_required')
     if (sources.some((s) => normalizeChat(s) === n)) {
-      return `"${raw.trim()}" is already in the source list (duplicate source:${raw.trim()}).`
+      return t('ui_chat_already_source', { chat: raw.trim() })
     }
-    if (targets.some((t) => normalizeChat(t) === n)) {
-      return `"${raw.trim()}" is already a target of this task — a chat cannot be both source and target (source_target_overlap:${raw.trim()}).`
+    if (targets.some((t2) => normalizeChat(t2) === n)) {
+      return t('ui_chat_source_target_overlap', { chat: raw.trim() })
     }
     return null
   }
 
   const validateTarget = (raw: string): string | null => {
     const n = normalizeChat(raw)
-    if (!n) return 'Enter a chat, a numeric id or a link.'
-    if (targets.some((t) => normalizeChat(t) === n)) {
-      return `"${raw.trim()}" is already in the target list (duplicate target:${raw.trim()}).`
+    if (!n) return t('ui_chat_required')
+    if (targets.some((t2) => normalizeChat(t2) === n)) {
+      return t('ui_chat_already_target', { chat: raw.trim() })
     }
     if (sources.some((s) => normalizeChat(s) === n)) {
-      return `"${raw.trim()}" is already a source of this task — a chat cannot be both source and target (source_target_overlap:${raw.trim()}).`
+      return t('ui_chat_source_target_overlap', { chat: raw.trim() })
     }
     return null
   }
@@ -327,43 +319,43 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
       {/* ---------------------------------------------------------- sources */}
       <div style={card}>
         <ChatListEditor
-          title="Sources"
+          title={t('ui_sources')}
           count={sources.length}
-          hint="This task forwards from every source below into every target. Messages from any of them are treated as the same task."
+          hint={t('ui_this_task_forwards_from_every_source_below_into_every_target_mes')}
           items={sources}
-          primaryLabel="PRIMARY"
-          placeholder="@channel, t.me/xxx or -1001234567890"
-          isRtl={isRtl}
+          primaryLabel={t('ui_primary')}
+          placeholder={t('ui_channel_t_me_xxx_or_1001234567890')}
+          lang={lang}
           inputStyle={inputStyle}
           hintStyle={hint}
           canRemove={sources.length > 1}
-          removeDisabledHint="A task needs at least one source"
+          removeDisabledHint={t('ui_a_task_needs_at_least_one_source')}
           onAdd={addSource}
           onRemove={removeSource}
           validate={validateSource}
         />
-        <div style={hint}>Save the task to apply source changes.</div>
+        <div style={hint}>{t('ui_save_the_task_to_apply_source_changes')}</div>
       </div>
 
       {/* ---------------------------------------------------------- targets */}
       <div style={card}>
         <ChatListEditor
-          title="Targets"
+          title={t('ui_targets')}
           count={targets.length}
-          hint="Every message is delivered into every target below. Order is kept and the first entry is the primary target."
+          hint={t('ui_every_message_is_delivered_into_every_target_below_order_is_kept')}
           items={targets}
-          primaryLabel="PRIMARY"
-          placeholder="@channel, t.me/xxx or -1001234567890"
-          isRtl={isRtl}
+          primaryLabel={t('ui_primary')}
+          placeholder={t('ui_channel_t_me_xxx_or_1001234567890')}
+          lang={lang}
           inputStyle={inputStyle}
           hintStyle={hint}
           canRemove={targets.length > 1}
-          removeDisabledHint="A task needs at least one target"
+          removeDisabledHint={t('ui_a_task_needs_at_least_one_target')}
           onAdd={addTarget}
           onRemove={removeTarget}
           validate={validateTarget}
         />
-        <div style={hint}>Save the task to apply target changes.</div>
+        <div style={hint}>{t('ui_save_the_task_to_apply_target_changes')}</div>
       </div>
 
       {/* --------------------------------------------------------- settings */}
@@ -371,12 +363,12 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc' }}>
-              All task settings
+              {t('ui_all_task_settings')}
             </div>
             <div style={hint}>
               {schema
-                ? `Every setting this task supports (${schema.count}), validated by the server.`
-                : 'Loading the settings schema…'}
+                ? t('ui_every_setting_this_task_supports_schema_2_validated_by_the_serve', { schema_2: schema.count })
+                : t('ui_loading_the_settings_schema')}
             </div>
           </div>
           {loading && <Loader2 size={16} className="spin" color="#93c5fd" />}
@@ -433,7 +425,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
                 marginBottom: '8px',
               }}
             >
-              {groupLabel(group)}
+              {groupLabel(group, lang)}
             </div>
             {specs.map((spec) => (
               <SettingRow
@@ -448,7 +440,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
                     ? () => void handleResetSetting(spec.key)
                     : undefined
                 }
-                isRtl={isRtl}
+                lang={lang}
                 labelStyle={labelStyle}
                 inputStyle={inputStyle}
                 hintStyle={hint}
@@ -495,7 +487,9 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
             }}
           >
             {saving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
-            {saving ? 'Saving…' : `Save settings${dirtyKeys.length ? ` (${dirtyKeys.length})` : ''}`}
+            {saving
+              ? t('ui_app_saving')
+              : `${t('ui_save_settings')}${dirtyKeys.length ? ` (${dirtyKeys.length})` : ''}`}
           </button>
           {dirtyKeys.length > 0 && (
             <button
@@ -509,7 +503,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
                 cursor: 'pointer',
               }}
             >
-              Discard
+              {t('ui_discard')}
             </button>
           )}
         </div>
@@ -525,7 +519,7 @@ interface ChatListEditorProps {
   items: string[]
   primaryLabel: string
   placeholder: string
-  isRtl: boolean
+  lang: UiLang
   inputStyle: React.CSSProperties
   hintStyle: React.CSSProperties
   canRemove: boolean
@@ -548,7 +542,7 @@ function ChatListEditor({
   items,
   primaryLabel,
   placeholder,
-  isRtl,
+  lang,
   inputStyle,
   hintStyle,
   canRemove,
@@ -557,6 +551,8 @@ function ChatListEditor({
   onRemove,
   validate,
 }: ChatListEditorProps) {
+  const isRtl = isRtlLang(lang)
+  const t = makeT(lang)
   const [draft, setDraft] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
 
@@ -625,7 +621,7 @@ function ChatListEditor({
             type="button"
             onClick={() => onRemove(entry)}
             disabled={!canRemove}
-            title={canRemove ? `Remove ${entry}` : removeDisabledHint}
+            title={canRemove ? t('ui_remove_name', { name: entry }) : removeDisabledHint}
             style={{
               background: 'none',
               border: 'none',
@@ -674,7 +670,7 @@ function ChatListEditor({
             whiteSpace: 'nowrap',
           }}
         >
-          <Plus size={14} /> Add
+          <Plus size={14} /> {t('ui_add')}
         </button>
       </div>
       {localError && (
@@ -700,7 +696,7 @@ interface RowProps {
   spec: RuleSettingSpec
   value: any
   changed: boolean
-  isRtl: boolean
+  lang: UiLang
   /** Owner's bots, the pending route (for the BOT-without-token warning) and a reload hook. */
   bots?: BotTokenInfo[]
   botsError?: string | null
@@ -725,7 +721,7 @@ function SettingRow({
   sourceInfo,
   resetting = false,
   onReset,
-  isRtl,
+  lang,
   inputStyle,
   hintStyle,
   onChange,
@@ -734,6 +730,8 @@ function SettingRow({
   botRoute = false,
   reloadBots,
 }: RowProps) {
+  const isRtl = isRtlLang(lang)
+  const t = makeT(lang)
   const rowStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
@@ -754,14 +752,14 @@ function SettingRow({
             fontWeight: changed ? 700 : 500,
           }}
         >
-          {spec.label}
+          {SETTING_LABELS[spec.key]?.[lang] ?? spec.label}
         </span>
         {changed && (
-          <span style={{ fontSize: '9px', color: '#fbbf24', fontWeight: 700 }}>EDITED</span>
+          <span style={{ fontSize: '9px', color: '#fbbf24', fontWeight: 700 }}>{t('ui_edited')}</span>
         )}
         {badge && !changed && (
           <span
-            title={badge.title}
+            title={t(badge.titleKey)}
             style={{
               fontSize: '9px',
               color: badge.color,
@@ -773,7 +771,8 @@ function SettingRow({
               whiteSpace: 'nowrap',
             }}
           >
-            {badge.text}
+            {t(badge.textKey)}
+            {badge.suffix ? ` ${badge.suffix}` : ''}
           </span>
         )}
         {onReset && !changed && (
@@ -781,7 +780,7 @@ function SettingRow({
             type="button"
             onClick={onReset}
             disabled={resetting}
-            title="Use the default for this setting"
+            title={t('ui_use_the_default_for_this_setting')}
             style={{
               fontSize: '9px',
               color: resetting ? '#64748b' : '#7dd3fc',
@@ -792,11 +791,15 @@ function SettingRow({
               cursor: resetting ? 'default' : 'pointer',
             }}
           >
-            {resetting ? '…' : isRtl ? 'پیش‌فرض' : 'use default'}
+            {resetting ? '…' : t('ui_use_default')}
           </button>
         )}
       </div>
-      {spec.help && <div style={hintStyle}>{spec.help}</div>}
+      {spec.help && (
+        <div style={hintStyle}>
+          {SETTING_HELP[spec.key]?.[lang] ?? spec.help}
+        </div>
+      )}
     </div>
   )
 
@@ -843,6 +846,7 @@ function SettingRow({
         <DictEditor
           spec={spec}
           value={value}
+          lang={lang}
           inputStyle={inputStyle}
           hintStyle={hintStyle}
           onChange={onChange}
@@ -855,7 +859,14 @@ function SettingRow({
     return (
       <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch' }}>
         {label}
-        <ListEditor spec={spec} value={value} inputStyle={inputStyle} hintStyle={hintStyle} onChange={onChange} />
+        <ListEditor
+          spec={spec}
+          value={value}
+          lang={lang}
+          inputStyle={inputStyle}
+          hintStyle={hintStyle}
+          onChange={onChange}
+        />
       </div>
     )
   }
@@ -869,6 +880,7 @@ function SettingRow({
         {label}
         <div style={{ maxWidth: '58%', flex: 1, minWidth: 0 }}>
           <BotRouteField
+            lang={lang}
             bots={bots}
             value={value ?? ''}
             inputStyle={inputStyle}
@@ -929,6 +941,7 @@ function SettingRow({
 
 interface ListEditorProps {
   spec: RuleSettingSpec
+  lang: UiLang
   value: any
   inputStyle: React.CSSProperties
   hintStyle: React.CSSProperties
@@ -940,7 +953,8 @@ interface ListEditorProps {
  * The whole list is kept in the edit buffer and written as an array, so a word
  * containing a comma (a regex alternation, say) is never split in half.
  */
-function ListEditor({ spec, value, inputStyle, hintStyle, onChange }: ListEditorProps) {
+function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: ListEditorProps) {
+  const t = makeT(lang)
   const items: string[] = Array.isArray(value) ? value.map((v) => String(v)) : []
   const [draft, setDraft] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
@@ -949,7 +963,7 @@ function ListEditor({ spec, value, inputStyle, hintStyle, onChange }: ListEditor
     const entry = draft.trim()
     if (!entry) return
     if (items.includes(entry)) {
-      setLocalError(`"${entry}" is already in this list.`)
+      setLocalError(t('ui_already_in_list', { entry }))
       return
     }
     onChange([...items, entry])
@@ -986,7 +1000,7 @@ function ListEditor({ spec, value, inputStyle, hintStyle, onChange }: ListEditor
               <button
                 type="button"
                 onClick={() => removeAt(idx)}
-                title={`Remove ${entry}`}
+                title={t('ui_remove_name', { name: entry })}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -1006,7 +1020,9 @@ function ListEditor({ spec, value, inputStyle, hintStyle, onChange }: ListEditor
         <input
           style={{ ...inputStyle, direction: 'ltr' }}
           value={draft}
-          placeholder={spec.item_kind === 'str' ? 'add one word…' : 'add one entry…'}
+          placeholder={
+            spec.item_kind === 'str' ? t('ui_add_one_word') : t('ui_add_one_entry')
+          }
           onChange={(e) => {
             setDraft(e.target.value)
             if (localError) setLocalError(null)
@@ -1037,11 +1053,11 @@ function ListEditor({ spec, value, inputStyle, hintStyle, onChange }: ListEditor
             whiteSpace: 'nowrap',
           }}
         >
-          <Plus size={14} /> Add
+          <Plus size={14} /> {t('ui_add')}
         </button>
       </div>
       <div style={hintStyle}>
-        {items.length === 0 ? 'No entries yet.' : `${items.length} entr${items.length === 1 ? 'y' : 'ies'}.`}
+        {items.length === 0 ? t('ui_no_entries_yet') : t('ui_entries_count', { count: items.length })}
       </div>
       {localError && (
         <div
@@ -1065,6 +1081,7 @@ function ListEditor({ spec, value, inputStyle, hintStyle, onChange }: ListEditor
 interface DictEditorProps {
   spec: RuleSettingSpec
   value: any
+  lang: UiLang
   inputStyle: React.CSSProperties
   hintStyle: React.CSSProperties
   onChange: (value: any) => void
@@ -1075,7 +1092,8 @@ interface DictEditorProps {
  * as JSON: the raw text is kept while it does not parse yet, so a half-typed
  * object is not thrown away, and a red hint marks the invalid state.
  */
-function DictEditor({ spec, value, inputStyle, hintStyle, onChange }: DictEditorProps) {
+function DictEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: DictEditorProps) {
+  const t = makeT(lang)
   const text = typeof value === 'string' ? value : JSON.stringify(value ?? {}, null, 2)
   const invalid = typeof value === 'string'
   return (
@@ -1104,7 +1122,11 @@ function DictEditor({ spec, value, inputStyle, hintStyle, onChange }: DictEditor
         }}
       />
       <div style={{ ...hintStyle, color: invalid ? '#fca5a5' : hintStyle.color }}>
-        {invalid ? 'Not valid JSON yet — fix it before saving.' : spec.help || 'JSON object.'}
+        {invalid
+          ? t('ui_not_valid_json_yet_fix_it_before_saving')
+          : spec.help
+            ? SETTING_HELP[spec.key]?.[lang] ?? spec.help
+            : t('ui_json_object')}
       </div>
     </div>
   )

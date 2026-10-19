@@ -11,9 +11,10 @@ import {
 } from 'lucide-react'
 import { api } from '../api'
 import type { AuditEventEntry } from '../types'
+import { makeT, type UiLang } from '../locales'
 
 interface Props {
-  lang: 'fa' | 'en'
+  lang: UiLang
 }
 
 const outcomeIcon = (outcome?: string) => {
@@ -48,7 +49,7 @@ const fmtTs = (ts: number) => {
 }
 
 export function AuditEventsPanel({ lang }: Props) {
-  const isRtl = lang === 'fa'
+  const t = makeT(lang)
   const [events, setEvents] = useState<AuditEventEntry[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -71,7 +72,7 @@ export function AuditEventsPanel({ lang }: Props) {
       setEvents(res.events || [])
       setTotal(res.total || 0)
     } catch (e: any) {
-      setError(e?.message || 'failed to load audit events')
+      setError(e?.message || t('ui_could_not_load_audit_events'))
       setEvents([])
       setTotal(0)
     } finally {
@@ -89,17 +90,15 @@ export function AuditEventsPanel({ lang }: Props) {
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10 }}>
             <Activity size={22} color="#4ade80" />
-            <span>{isRtl ? 'حسابرسی رویدادها و تضمین اجرا' : 'Audit Events & Execution Assurance'}</span>
+            <span>{t('ui_audit_events_execution_assurance')}</span>
           </h2>
           <p style={{ fontSize: '0.825rem', color: '#94a3b8', marginTop: 4 }}>
-            {isRtl
-              ? 'رویدادهای حسابرسی پایدار (PostgreSQL) با جستجوی correlation ID — موفقیت واقعی، نه لاگ‌های خوش‌بینانه'
-              : 'Durable PostgreSQL audit events with correlation-ID search — actual outcomes, not optimistic logging'}
+            {t('ui_durable_postgresql_audit_events_with_correlation_id_search_actua')}
           </p>
         </div>
         <button onClick={fetchEvents} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
           <RefreshCw size={14} />
-          <span>{isRtl ? 'بروزرسانی' : 'Refresh'}</span>
+          <span>{t('ui_refresh')}</span>
         </button>
       </div>
 
@@ -110,7 +109,7 @@ export function AuditEventsPanel({ lang }: Props) {
           <input
             value={corrSearch}
             onChange={(e) => setCorrSearch(e.target.value)}
-            placeholder={isRtl ? 'جستجو بر اساس Correlation ID…' : 'Search by correlation ID…'}
+            placeholder={t('ui_search_by_correlation_id')}
             onKeyDown={(e) => e.key === 'Enter' && fetchEvents()}
             style={{
               width: '100%', padding: '8px 10px 8px 32px', borderRadius: 8,
@@ -124,7 +123,7 @@ export function AuditEventsPanel({ lang }: Props) {
           onChange={(e) => setFService(e.target.value)}
           style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.1)', color: '#e2e8f0', fontSize: '0.825rem' }}
         >
-          <option value="">{isRtl ? 'همه سرویس‌ها' : 'All services'}</option>
+          <option value="">{t('ui_audit_events_all_services')}</option>
           <option value="core">core</option>
           <option value="api">api</option>
           <option value="logger">logger</option>
@@ -135,12 +134,12 @@ export function AuditEventsPanel({ lang }: Props) {
           onChange={(e) => setFOutcome(e.target.value)}
           style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.1)', color: '#e2e8f0', fontSize: '0.825rem' }}
         >
-          <option value="">{isRtl ? 'همه نتایج' : 'All outcomes'}</option>
-          <option value="SUCCEEDED">SUCCEEDED</option>
-          <option value="FAILED">FAILED</option>
-          <option value="ACCEPTED">ACCEPTED</option>
-          <option value="IN_PROGRESS">IN_PROGRESS</option>
-          <option value="OUTCOME_UNCONFIRMED">OUTCOME_UNCONFIRMED</option>
+          <option value="">{t('ui_all_outcomes')}</option>
+          <option value="SUCCEEDED">{t('ui_outcome_succeeded')}</option>
+          <option value="FAILED">{t('ui_outcome_failed')}</option>
+          <option value="ACCEPTED">{t('ui_outcome_accepted')}</option>
+          <option value="IN_PROGRESS">{t('ui_outcome_in_progress')}</option>
+          <option value="OUTCOME_UNCONFIRMED">{t('ui_outcome_unconfirmed')}</option>
         </select>
       </div>
 
@@ -153,17 +152,17 @@ export function AuditEventsPanel({ lang }: Props) {
 
       {/* Summary line */}
       <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 10 }}>
-        {isRtl ? `${total} رویداد` : `${total} event(s)`}
-        {loading ? (isRtl ? ' — در حال بارگذاری…' : ' — loading…') : ''}
+        {t('ui_total_2_event_s', { total_2: total })}
+        {loading ? (t('ui_loading')) : ''}
       </div>
 
       {/* Event list */}
       {events.length === 0 && !loading && !error ? (
         <div style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
           <Activity size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-          <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{isRtl ? 'هیچ رویدادی یافت نشد' : 'No audit events found'}</div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{t('ui_no_audit_events_found')}</div>
           <div style={{ fontSize: '0.8rem', marginTop: 6 }}>
-            {isRtl ? 'با عبور پیام از خط لوله، رویدادهای حسابرسی اینجا نمایش داده می‌شوند' : 'Audit events appear here as messages flow through the pipeline'}
+            {t('ui_audit_events_appear_here_as_messages_flow_through_the_pipeline')}
           </div>
         </div>
       ) : (
@@ -234,7 +233,7 @@ export function AuditEventsPanel({ lang }: Props) {
           </div>
           {selected.metadata_json && selected.metadata_json !== '{}' && (
             <div style={{ marginTop: 12, fontSize: '0.75rem' }}>
-              <div style={{ color: '#64748b', marginBottom: 4 }}>metadata</div>
+              <div style={{ color: '#64748b', marginBottom: 4 }}>{t('ui_metadata')}</div>
               <pre style={{ color: '#94a3b8', background: 'rgba(2, 6, 23, 0.6)', padding: 10, borderRadius: 8, overflow: 'auto', margin: 0, fontSize: '0.72rem' }}>
                 {selected.metadata_json}
               </pre>

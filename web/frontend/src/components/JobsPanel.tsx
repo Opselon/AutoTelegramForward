@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, Plus, X, Ban, RotateCw, Loader2 } from 'lucide-react'
 import { api } from '../api'
 import type { UserTask, TaskKind } from '../types'
+import { makeT, type UiLang } from '../locales'
 
 /**
  * The web dashboard's view of the per-user task lifecycle (the same
@@ -22,11 +23,14 @@ const STATUS_ORDER: Record<string, number> = {
 
 // Bounded job kinds the panel exposes as one-click submissions — these are the
 // same kind values the Go API allowlists before the RPC.
-const KIND_OPTIONS: { value: TaskKind; fa: string; en: string; hintEn: string; hintFa: string; fields: number }[] = [
-  { value: 'session.backup', fa: 'پشتیبان‌گیری سشن', en: 'Backup a session', hintEn: 'Session id from the Sessions tab', hintFa: 'شناسه سشن از تب سشن‌ها', fields: 1 },
-  { value: 'dlq.replay', fa: 'اجرای مجدد رد شده‌ها', en: 'Replay dead letters', hintEn: 'Delivery id from the DLQ list', hintFa: 'شناسه تحویل از فهرست DLQ', fields: 1 },
-  { value: 'dlq.purge', fa: 'پاکسازی رد شده‌ها', en: 'Purge dead letters', hintEn: 'Optional: rule id; or "all"', hintFa: 'اختیاری: شناسه قانون یا همه', fields: 1 },
-  { value: 'backup.export', fa: 'خروجی پشتیبان', en: 'Export a backup', hintEn: 'No additional fields', hintFa: 'بدون فیلد اضافه', fields: 0 },
+// Bounded job kinds the panel exposes as one-click submissions — these are the
+// same kind values the Go API allowlists before the RPC. The label and its hint
+// are catalog keys, so a submission form is readable in every language.
+const KIND_OPTIONS: { value: TaskKind; labelKey: string; hintKey: string; fields: number }[] = [
+  { value: 'session.backup', labelKey: 'ui_job_backup_session', hintKey: 'ui_job_backup_session_hint', fields: 1 },
+  { value: 'dlq.replay', labelKey: 'ui_job_replay_dead_letters', hintKey: 'ui_job_replay_dead_letters_hint', fields: 1 },
+  { value: 'dlq.purge', labelKey: 'ui_job_purge_dead_letters', hintKey: 'ui_job_purge_dead_letters_hint', fields: 1 },
+  { value: 'backup.export', labelKey: 'ui_job_export_backup', hintKey: 'ui_job_export_backup_hint', fields: 0 },
 ]
 
 function fmt(ts?: number): string {
@@ -38,12 +42,11 @@ export function JobsPanel({
   lang,
   onPendingChange,
 }: {
-  lang: 'fa' | 'en'
+  lang: UiLang
   /** Optional report of the pending/running count for the tab badge. */
   onPendingChange?: (n: number) => void
 }) {
-  const isFa = lang === 'fa'
-  const t = (en: string, fa: string) => (isFa ? fa : en)
+  const t = makeT(lang)
   const [tasks, setTasks] = useState<UserTask[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -63,7 +66,7 @@ export function JobsPanel({
       setTotal(page.total ?? sorted.length)
       setError(null)
     } catch (e: any) {
-      setError(e?.message || 'Failed to load')
+      setError(e?.message || t('ui_failed_to_load'))
     } finally {
       setLoading(false)
     }
@@ -93,7 +96,7 @@ export function JobsPanel({
       await (op === 'cancel' ? api.cancelTask(task.id) : api.retryTask(task.id))
       await refresh()
     } catch (e: any) {
-      setError(e?.message || 'Failed')
+      setError(e?.message || t('ui_failed'))
     } finally {
       setBusy(null)
     }
@@ -110,17 +113,17 @@ export function JobsPanel({
   return (
     <div className="panel-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0, fontSize: '1.15rem' }}>{t('My Jobs', 'وظایف من')}</h2>
+        <h2 style={{ margin: 0, fontSize: '1.15rem' }}>{t('ui_my_jobs')}</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setAutoRefresh((v) => !v)}
             style={{ background: autoRefresh ? 'rgba(20, 184, 166, 0.2)' : 'transparent', color: autoRefresh ? '#2dd4bf' : '#94a3b8' }}>
             <RefreshCw size={14} />
-            <span>{t('Auto-renew', 'به‌روزرسانی خودکار')}</span>
+            <span>{t('ui_auto_renew')}</span>
           </button>
           <button className="btn" onClick={() => setOpenCreate(true)}
             style={{ background: 'rgba(20, 184, 166, 0.2)', color: '#2dd4bf', border: '1px solid rgba(20, 184, 166, 0.4)' }}>
             <Plus size={14} />
-            <span>{t('New job', 'وظیفه جدید')}</span>
+            <span>{t('ui_new_job')}</span>
           </button>
         </div>
       </div>
@@ -133,17 +136,16 @@ export function JobsPanel({
 
       {loading ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8' }}>
-          <Loader2 size={15} />{t('Loading jobs…', 'در حال بارگذاری…')}
+          <Loader2 size={15} />{t('ui_loading_jobs')}
         </div>
       ) : tasks.length === 0 ? (
         <div style={{ color: '#94a3b8', textAlign: 'center', padding: '32px 0' }}>
-          {t('No jobs yet. Long-running operations (session backups, DLQ replays/purges, exports) appear here with their progress and result.',
-             'هیچ وظیفه‌ای نیست. عملیات طولانی (پشتیبان‌گیری سشن، اجرای مجدد/پاکسازی DLQ، خروجی پشتیبان) با پیشرفت و نتیجه در این‌جا نمایش داده می‌شوند.')}
+          {t('ui_no_jobs_yet_long_running_operations_session_backups_dlq_replays')}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-            {t('showing', 'نمایش')} {tasks.length} / {total}
+            {t('ui_showing')} {tasks.length} / {total}
           </div>
           {tasks.map((task) => {
             const canCancel = task.status === 'PENDING'
@@ -175,14 +177,14 @@ export function JobsPanel({
                     <button className="btn" onClick={() => act(task, 'cancel')} disabled={busy === task.id + 'cancel'}
                       style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.4)', padding: '4px 8px' }}>
                       {busy === task.id + 'cancel' ? <Loader2 size={13} /> : <Ban size={13} />}
-                      <span>{t('Cancel', 'لغو')}</span>
+                      <span>{t('ui_cancel')}</span>
                     </button>
                   )}
                   {canRetry && (
                     <button className="btn" onClick={() => act(task, 'retry')} disabled={busy === task.id + 'retry'}
                       style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.4)', padding: '4px 8px' }}>
                       {busy === task.id + 'retry' ? <Loader2 size={13} /> : <RotateCw size={13} />}
-                      <span>{t('Retry', 'اجرای مجدد')}</span>
+                      <span>{t('ui_retry')}</span>
                     </button>
                   )}
                 </div>
@@ -199,9 +201,8 @@ export function JobsPanel({
   )
 }
 
-function CreateTaskModal({ lang, onClose, onCreated }: { lang: 'fa' | 'en'; onClose: () => void; onCreated: () => void }) {
-  const isFa = lang === 'fa'
-  const t = (en: string, fa: string) => (isFa ? fa : en)
+function CreateTaskModal({ lang, onClose, onCreated }: { lang: UiLang; onClose: () => void; onCreated: () => void }) {
+  const t = makeT(lang)
   const [kind, setKind] = useState<TaskKind>('session.backup')
   const [field0, setField0] = useState('')
   const [err, setErr] = useState<string | null>(null)
@@ -215,7 +216,7 @@ function CreateTaskModal({ lang, onClose, onCreated }: { lang: 'fa' | 'en'; onCl
       const payload: Record<string, any> = {}
       if (opt.fields > 0) {
         const v = field0.trim()
-        if (!v) throw new Error(opt.hintEn)
+        if (!v) throw new Error(t(opt.hintKey))
         if (kind === 'session.backup') payload.session_id = v
         else if (kind === 'dlq.replay') payload.delivery_id = v
         else if (kind === 'dlq.purge') payload.rule_id = v === 'all' ? undefined : v
@@ -235,7 +236,7 @@ function CreateTaskModal({ lang, onClose, onCreated }: { lang: 'fa' | 'en'; onCl
       <div onClick={(e) => e.stopPropagation()}
         style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 20, width: '100%', maxWidth: 420, direction: 'ltr' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-          <h3 style={{ margin: 0 }}>{t('New background job', 'وظیفه پس‌زمینه جدید')}</h3>
+          <h3 style={{ margin: 0 }}>{t('ui_new_background_job')}</h3>
           <button className="btn" onClick={onClose} style={{ padding: '4px 8px' }}><X size={15} /></button>
         </div>
 
@@ -244,21 +245,21 @@ function CreateTaskModal({ lang, onClose, onCreated }: { lang: 'fa' | 'en'; onCl
             <label key={o.value} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
               <input type="radio" checked={kind === o.value} onChange={() => { setKind(o.value); setField0('') }} />
               <div>
-                <div style={{ fontSize: '0.9rem' }}>{isFa ? o.fa : o.en}</div>
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{isFa ? o.hintFa : o.hintEn}</div>
+                <div style={{ fontSize: '0.9rem' }}>{t(o.labelKey)}</div>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{t(o.hintKey)}</div>
               </div>
             </label>
           ))}
           {opt.fields > 0 && (
             <input className="input" value={field0} onChange={(e) => setField0(e.target.value)}
-              placeholder={isFa ? opt.hintFa : opt.hintEn}
+              placeholder={t(opt.hintKey)}
               style={{ border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: 8, background: 'rgba(0,0,0,0.3)' }} />
           )}
           {err && <div style={{ color: '#f87171', fontSize: '0.8rem' }}>{err}</div>}
           <button className="btn" onClick={submit} disabled={submitting}
             style={{ background: 'rgba(20, 184, 166, 0.25)', color: '#2dd4bf', justifySelf: 'end' }}>
             {submitting ? <Loader2 size={14} /> : <Plus size={14} />}
-            <span>{t('Submit', 'ارسال')}</span>
+            <span>{t('ui_submit')}</span>
           </button>
         </div>
       </div>

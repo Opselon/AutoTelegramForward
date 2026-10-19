@@ -19,6 +19,8 @@ import {
   ScrollText,
 } from 'lucide-react'
 import type { ForwardRule } from '../types'
+import { makeT, type UiLang } from '../locales'
+import { ADDONS, OVERVIEW_ADDONS } from '../addons'
 import { TaskControlPanel } from './TaskControlPanel'
 import { TaskLogsPanel } from './TaskLogsPanel'
 
@@ -28,7 +30,7 @@ interface Props {
   onClose: () => void
   onSave: (updated: ForwardRule) => Promise<void>
   onDelete?: (id: string) => Promise<void>
-  lang?: 'fa' | 'en'
+  lang?: UiLang
 }
 
 type TabType =
@@ -56,6 +58,7 @@ export function TaskOverviewModal({
   if (!isOpen || !rule) return null
 
   const isRtl = lang === 'fa'
+  const t = makeT(lang)
   const [currentTab, setCurrentTab] = useState<TabType>('overview')
   const [activeGroup, setActiveGroup] = useState<FeatureGroupType>('all')
   const [draft, setDraft] = useState<ForwardRule>({ ...rule })
@@ -113,26 +116,6 @@ export function TaskOverviewModal({
     }
   }
 
-  const allAddonsCatalog = [
-    { key: 'channel_comments', title: 'Channel Comments', desc: 'Forward and sync discussion replies', locked: false },
-    { key: 'every_n', title: 'Forward Every N Messages', desc: 'Batch and sample messages rate-limit', locked: true },
-    { key: 'kw_confirm', title: 'Keyword Confirmation', desc: 'Require approval when trigger words match', locked: true },
-    { key: 'kw_reply', title: 'Keyword Reply Thread', desc: 'Auto-reply in topic threads', locked: true },
-    { key: 'auto_del', title: 'Auto Delete Messages', desc: 'Self-destruct forwarded messages after TTL', locked: true },
-    { key: 'webhook', title: 'Outbound Webhooks', desc: 'Dispatch HTTP webhook payload on message', locked: true },
-    { key: 'crypto', title: 'Crypto Signal Mode', desc: 'Clean, format and parse trade signals', locked: true },
-    { key: 'affiliate', title: 'Affiliate Kit', desc: 'Swap referral links and IDs dynamically', locked: true },
-    { key: 'link_buttons', title: 'Link Buttons', desc: 'Inject custom interactive inline buttons', locked: false },
-    { key: 'watermark', title: 'Watermark Protection', desc: 'Brand images and videos with logo/text', locked: true },
-    { key: 'duplicate', title: 'Duplicate Filters', desc: 'Deep fingerprint media & text deduplication', locked: false },
-    { key: 'cleaner', title: 'Cleaner Protocol', desc: 'Strip links, tags, phones and emojis', locked: false },
-    { key: 'scheduler', title: 'Auto Post Scheduler', desc: 'Queue messages and post on schedule', locked: false },
-    { key: 'power_schedule', title: 'Power On/Off Schedule', desc: 'Limit forwarding during business hours', locked: false },
-    { key: 'raw_text', title: 'Process Raw Text', desc: 'Normalize formatting, entities, and styles', locked: false },
-    { key: 'button_to_text', title: 'Button To Text', desc: 'Convert inline keyboard buttons to hyperlinks', locked: false },
-    { key: 'ocr_ai', title: 'OCR Image AI', desc: 'Extract text from pictures via vision AI', locked: false },
-    { key: 'ai_rewrite', title: 'Smart AI Rewrite', desc: 'Rephrase tone and language via LLM', locked: false },
-  ]
 
   const taskName = draft.name || `af_route_lab_${draft.id.slice(0, 4)}`
   const sourceName = draft.source_chat_name || draft.source_chat_id || 'AF Route Lab Source'
@@ -196,7 +179,7 @@ export function TaskOverviewModal({
                   fontSize: '13px',
                 }}
               >
-                ← Back
+                {t('ui_back')}
               </button>
             )}
             {isEditingName ? (
@@ -237,7 +220,7 @@ export function TaskOverviewModal({
               <button
                 type="button"
                 onClick={() => onDelete(draft.id)}
-                title="Delete Task"
+                title={t('ui_delete_task')}
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -287,9 +270,9 @@ export function TaskOverviewModal({
                     marginBottom: '14px',
                   }}
                 >
-                  <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 600 }}>Task Overview</span>
+                  <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 600 }}>{t('ui_task_overview')}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Forwarding Status</span>
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>{t('ui_forwarding_status')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('is_active')}
@@ -309,7 +292,7 @@ export function TaskOverviewModal({
                       }}
                     >
                       {isRunning ? <Play size={10} fill="#fff" /> : <Pause size={10} fill="#fff" />}
-                      {isRunning ? 'RUNNING' : 'PAUSED'}
+                      {isRunning ? t('ui_running') : t('ui_paused')}
                     </button>
                   </div>
                 </div>
@@ -327,15 +310,15 @@ export function TaskOverviewModal({
                   }}
                 >
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>Source</div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>{t('ui_source')}</div>
                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>{sourceName}</div>
-                    <div style={{ fontSize: '11px', color: '#38bdf8' }}>Telegram</div>
+                    <div style={{ fontSize: '11px', color: '#38bdf8' }}>{t('ui_telegram')}</div>
                   </div>
                   <ArrowRight size={18} color="#64748b" style={{ margin: '0 10px' }} />
                   <div style={{ flex: 1, textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>Target</div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>{t('ui_target')}</div>
                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>{targetName}</div>
-                    <div style={{ fontSize: '11px', color: '#38bdf8' }}>Telegram</div>
+                    <div style={{ fontSize: '11px', color: '#38bdf8' }}>{t('ui_telegram')}</div>
                   </div>
                 </div>
 
@@ -350,7 +333,7 @@ export function TaskOverviewModal({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12px', color: '#cbd5e1' }}>Show Forward Header</span>
+                    <span style={{ fontSize: '12px', color: '#cbd5e1' }}>{t('ui_show_forward_header')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('show_forward_header')}
@@ -365,12 +348,12 @@ export function TaskOverviewModal({
                         cursor: 'pointer',
                       }}
                     >
-                      {draft.show_forward_header ? 'Yes' : 'No'}
+                      {draft.show_forward_header ? t('ui_yes') : t('ui_no')}
                     </button>
                   </div>
                   {draft.show_forward_header && (
                     <div style={{ fontSize: '10px', color: '#ef4444', fontStyle: 'italic' }}>
-                      *Reply, Edit, Replace, Translate will not work when show header
+                      {t('ui_reply_edit_replace_translate_will_not_work_when_show_header')}
                     </div>
                   )}
                 </div>
@@ -387,7 +370,7 @@ export function TaskOverviewModal({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Bug size={14} color="#94a3b8" />
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Debug mode</span>
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>{t('ui_debug_mode')}</span>
                   </div>
                   <button
                     type="button"
@@ -403,7 +386,7 @@ export function TaskOverviewModal({
                       cursor: 'pointer',
                     }}
                   >
-                    {debugOn ? 'on' : 'off'}
+                    {debugOn ? t('ui_on') : t('ui_off')}
                   </button>
                 </div>
               </div>
@@ -421,9 +404,9 @@ export function TaskOverviewModal({
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Sender Type</div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t('ui_sender_type')}</div>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>
-                    {draft.sender_type || 'Personal Telegram Account'}
+                    {draft.sender_type || t('ui_personal_telegram_account')}
                   </div>
                 </div>
                 <select
@@ -438,23 +421,23 @@ export function TaskOverviewModal({
                     fontSize: '12px',
                   }}
                 >
-                  <option value="Personal Telegram Account">Personal Telegram Account</option>
-                  <option value="Bot Account">Bot Account</option>
-                  <option value="MTProto Premium Userbot">MTProto Premium Userbot</option>
+                  <option value="Personal Telegram Account">{t('ui_personal_telegram_account')}</option>
+                  <option value="Bot Account">{t('ui_bot_account')}</option>
+                  <option value="MTProto Premium Userbot">{t('ui_mtproto_premium_userbot')}</option>
                 </select>
               </div>
 
               {/* Edit Task Section: 4 Distinct Action Buttons (Screen 1 & 5) */}
               <div>
                 <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginBottom: '8px' }}>
-                  Edit Task
+                  {t('ui_edit_task')}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                   {/* Green Button: Edit Source */}
                   <button
                     type="button"
                     onClick={() => {
-                      const newSrc = prompt('Enter Source Chat ID or Title:', draft.source_chat_id)
+                      const newSrc = prompt(t('ui_enter_source_chat_id_or_title'), draft.source_chat_id)
                       if (newSrc) setDraft({ ...draft, source_chat_id: newSrc, source_chat_name: newSrc })
                     }}
                     style={{
@@ -473,14 +456,14 @@ export function TaskOverviewModal({
                       boxShadow: '0 4px 6px -1px rgba(22, 163, 74, 0.3)',
                     }}
                   >
-                    Edit Source
+                    {t('ui_edit_source')}
                   </button>
 
                   {/* Red Button: Edit Target */}
                   <button
                     type="button"
                     onClick={() => {
-                      const newDst = prompt('Enter Target Chat ID or Title:', draft.target_chat_id)
+                      const newDst = prompt(t('ui_enter_target_chat_id_or_title'), draft.target_chat_id)
                       if (newDst) setDraft({ ...draft, target_chat_id: newDst, target_chat_name: newDst })
                     }}
                     style={{
@@ -499,7 +482,7 @@ export function TaskOverviewModal({
                       boxShadow: '0 4px 6px -1px rgba(220, 38, 38, 0.3)',
                     }}
                   >
-                    Edit Target
+                    {t('ui_edit_target')}
                   </button>
                 </div>
 
@@ -526,7 +509,7 @@ export function TaskOverviewModal({
                   }}
                 >
                   <Hash size={14} />
-                  Set up Forwarding Topic {draft.topic_id ? `(#${draft.topic_id})` : ''}
+                  {t('ui_set_up_forwarding_topic')} {draft.topic_id ? `(#${draft.topic_id})` : ''}
                 </button>
 
                 {showTopicPrompt && (
@@ -542,7 +525,7 @@ export function TaskOverviewModal({
                   >
                     <input
                       type="number"
-                      placeholder="Topic Thread ID (0 to remove)"
+                      placeholder={t('ui_topic_thread_id_0_to_remove')}
                       value={draft.topic_id || ''}
                       onChange={(e) => setDraft({ ...draft, topic_id: e.target.value })}
                       style={{
@@ -568,7 +551,7 @@ export function TaskOverviewModal({
                         fontWeight: 600,
                       }}
                     >
-                      Done
+                      {t('ui_done')}
                     </button>
                   </div>
                 )}
@@ -594,7 +577,7 @@ export function TaskOverviewModal({
                   }}
                 >
                   <SlidersHorizontal size={14} />
-                  Advanced Settings
+                  {t('ui_advanced_settings')}
                 </button>
 
                 {/* Full per-task control: multi-source + every setting the
@@ -619,7 +602,7 @@ export function TaskOverviewModal({
                   }}
                 >
                   <SlidersHorizontal size={14} />
-                  Full Control & Sources
+                  {t('ui_full_control_sources')}
                 </button>
 
                 {/* This task's complete history: paged, searchable, exportable. */}
@@ -644,7 +627,7 @@ export function TaskOverviewModal({
                   }}
                 >
                   <ScrollText size={14} />
-                  Task Logs
+                  {t('ui_task_logs')}
                 </button>
               </div>
 
@@ -665,20 +648,20 @@ export function TaskOverviewModal({
                     marginBottom: '12px',
                   }}
                 >
-                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#f1f5f9' }}>Features</span>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#f1f5f9' }}>{t('ui_features')}</span>
                   <span style={{ fontSize: '11px', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                    Explain &gt;
+                    {t('ui_explain')} &gt;
                   </span>
                 </div>
 
                 {/* 5 Toggle Pills matching screenshot (top half of Features) */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
                   {[
-                    { key: 'sync_edits' as const, label: 'Edit', active: Boolean(draft.sync_edits ?? true) },
-                    { key: 'sync_deletes' as const, label: 'Delete', active: Boolean(draft.sync_deletes ?? true) },
-                    { key: 'sync_replies' as const, label: 'Reply', active: Boolean(draft.sync_replies ?? true) },
-                    { key: 'show_forward_header' as const, label: 'Show Forward Header', active: Boolean(draft.show_forward_header) },
-                    { key: 'duplicate_filters' as const, label: 'Duplicate Filters', active: Boolean(draft.duplicate_filters ?? true) },
+                    { key: 'sync_edits' as const, label: t('ui_edit'), active: Boolean(draft.sync_edits ?? true) },
+                    { key: 'sync_deletes' as const, label: t('ui_delete'), active: Boolean(draft.sync_deletes ?? true) },
+                    { key: 'sync_replies' as const, label: t('ui_reply'), active: Boolean(draft.sync_replies ?? true) },
+                    { key: 'show_forward_header' as const, label: t('ui_show_forward_header'), active: Boolean(draft.show_forward_header) },
+                    { key: 'duplicate_filters' as const, label: t('ui_duplicate_filters'), active: Boolean(draft.duplicate_filters ?? true) },
                   ].map((item) => (
                     <button
                       key={item.key}
@@ -709,45 +692,45 @@ export function TaskOverviewModal({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   {[
                     {
-                      title: 'Replace',
+                      title: t('ui_replace'),
                       icon: '< >',
                       iconColor: '#a855f7',
-                      status: `Activated: ${Object.keys((draft as any).replacements || {}).length}`,
+                      status: `${t('ui_activated')} ${Object.keys((draft as any).replacements || {}).length}`,
                       onClick: () => setCurrentTab('replace'),
                     },
                     {
-                      title: 'Blacklist',
+                      title: t('ui_task_overview_modal_blacklist'),
                       icon: '≡ₓ',
                       iconColor: '#ef4444',
-                      status: `Activated: ${(draft.blacklist_keywords || []).length}`,
+                      status: `${t('ui_activated')} ${(draft.blacklist_keywords || []).length}`,
                       onClick: () => setCurrentTab('blacklist'),
                     },
                     {
-                      title: 'Whitelist',
+                      title: t('ui_whitelist'),
                       icon: '≡✓',
                       iconColor: '#22c55e',
-                      status: `Activated: ${(draft.whitelist_keywords || []).length}`,
+                      status: `${t('ui_activated')} ${(draft.whitelist_keywords || []).length}`,
                       onClick: () => setCurrentTab('whitelist'),
                     },
                     {
-                      title: 'Cleaner',
+                      title: t('ui_cleaner'),
                       icon: '∷',
                       iconColor: '#f97316',
-                      status: `Activated: ${draft.cleaner_enabled ? '1' : '0'}`,
+                      status: `${t('ui_activated')} ${draft.cleaner_enabled ? '1' : '0'}`,
                       onClick: () => setCurrentTab('cleaner'),
                     },
                     {
-                      title: 'Filters',
+                      title: t('ui_filters'),
                       icon: '⊶',
                       iconColor: '#3b82f6',
-                      status: `Activated: ${((draft.duplicate_filters ? 1 : 0) + [draft.block_text, draft.block_links, draft.block_voice, draft.block_stickers, draft.block_video, draft.block_audio].filter(Boolean).length)}`,
+                      status: `${t('ui_activated')} ${((draft.duplicate_filters ? 1 : 0) + [draft.block_text, draft.block_links, draft.block_voice, draft.block_stickers, draft.block_video, draft.block_audio].filter(Boolean).length)}`,
                       onClick: () => setCurrentTab('filters'),
                     },
                     {
-                      title: 'Set Delay',
+                      title: t('ui_set_delay'),
                       icon: '⏱',
                       iconColor: '#eab308',
-                      status: `Delay Current: ${draft.forward_delay_seconds || draft.delay_seconds || 0}s`,
+                      status: `${t('ui_delay_current')} ${draft.forward_delay_seconds || draft.delay_seconds || 0}s`,
                       onClick: () => setCurrentTab('delay'),
                     },
                   ].map((card) => (
@@ -778,15 +761,15 @@ export function TaskOverviewModal({
               {/* Feature Groups Filter Chips */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>Feature groups</span>
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>Choose & customize tools</span>
+                  <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>{t('ui_feature_groups')}</span>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>{t('ui_choose_customize_tools')}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
                   {[
-                    { id: 'all', label: 'All' },
-                    { id: 'crypto', label: '₿ Crypto' },
-                    { id: 'mmo', label: 'MMO / Affiliate' },
-                    { id: 'content', label: 'Content' },
+                    { id: 'all', label: t('ui_all') },
+                    { id: 'crypto', label: t('ui_crypto') },
+                    { id: 'mmo', label: t('ui_mmo_affiliate') },
+                    { id: 'content', label: t('ui_content') },
                   ].map((grp) => (
                     <button
                       key={grp.id}
@@ -829,8 +812,8 @@ export function TaskOverviewModal({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Sparkles size={14} color="#f59e0b" />
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#f59e0b' }}>PAID ADDON</span>
-                    <span title="Unlock premium features with credits" style={{ display: 'inline-flex' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#f59e0b' }}>{t('ui_paid_addon')}</span>
+                    <span title={t('ui_unlock_premium_features_with_credits')} style={{ display: 'inline-flex' }}>
                       <Info size={13} color="#64748b" />
                     </span>
                   </div>
@@ -849,20 +832,13 @@ export function TaskOverviewModal({
                       gap: '2px',
                     }}
                   >
-                    View all (18) <ChevronRight size={14} />
+                    {t('ui_view_all_18')} <ChevronRight size={14} />
                   </button>
                 </div>
 
                 {/* 2x3 Grid of Addons matching reference Image 4 */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  {[
-                    { key: 'channel_comments', title: 'Channel Comments', locked: false, badge: 'Addon' },
-                    { key: 'every_n', title: 'Forward Every N Messages', locked: true, badge: 'Addon' },
-                    { key: 'kw_confirm', title: 'Keyword Confirmation', locked: true, badge: 'Addon' },
-                    { key: 'kw_reply', title: 'Keyword Reply Thread', locked: true, badge: 'Addon' },
-                    { key: 'auto_del', title: 'Auto Delete Messages', locked: true, badge: 'Addon' },
-                    { key: 'webhook', title: 'Outbound Webhooks', locked: true, badge: 'Addon' },
-                  ].map((item) => {
+                  {OVERVIEW_ADDONS.map((item) => {
                     const isEnabled = draft.paid_addons?.[item.key] ?? false
                     return (
                       <div
@@ -884,7 +860,7 @@ export function TaskOverviewModal({
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 600 }}>
                             {item.locked && <Lock size={10} style={{ display: 'inline', marginRight: 3 }} />}
-                            ★ {item.badge}
+                            ★ {t('ui_addon')}
                           </span>
                           <span
                             style={{
@@ -896,11 +872,11 @@ export function TaskOverviewModal({
                               fontWeight: 700,
                             }}
                           >
-                            {isEnabled ? 'ON' : 'OFF'}
+                            {isEnabled ? t('ui_task_overview_modal_on') : t('ui_task_overview_modal_off')}
                           </span>
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', marginTop: '6px' }}>
-                          {item.title}
+                          {t(item.labelKey)}
                         </div>
                       </div>
                     )
@@ -923,11 +899,11 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Shield size={14} color="#38bdf8" /> Filters (?)
+                  <Shield size={14} color="#38bdf8" /> {t('ui_task_overview_modal_filters')}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Duplicate Filters</span>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_duplicate_filters')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('duplicate_filters')}
@@ -942,12 +918,12 @@ export function TaskOverviewModal({
                         cursor: 'pointer',
                       }}
                     >
-                      {draft.duplicate_filters ? 'on' : 'off'}
+                      {draft.duplicate_filters ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Crypto Mode</span>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_crypto_mode')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('crypto_mode')}
@@ -962,14 +938,14 @@ export function TaskOverviewModal({
                         cursor: 'pointer',
                       }}
                     >
-                      {draft.crypto_mode ? 'on' : 'off'}
+                      {draft.crypto_mode ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Blacklist & Whitelist</span>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_blacklist_whitelist')}</span>
                     <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                      Activated: {(draft.domain_blocklist?.length || 0) + (draft.domain_allowlist?.length || 0)}
+                      {t('ui_activated')} {(draft.domain_blocklist?.length || 0) + (draft.domain_allowlist?.length || 0)}
                     </span>
                   </div>
                 </div>
@@ -985,11 +961,11 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Clock size={14} color="#f59e0b" /> Schedules (?)
+                  <Clock size={14} color="#f59e0b" /> {t('ui_schedules')}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Auto Posting</span>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_auto_posting')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('auto_posting')}
@@ -1004,12 +980,12 @@ export function TaskOverviewModal({
                         cursor: 'pointer',
                       }}
                     >
-                      {draft.auto_posting ? 'on' : 'off'}
+                      {draft.auto_posting ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Power Control</span>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_power_control')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('power_control')}
@@ -1024,7 +1000,7 @@ export function TaskOverviewModal({
                         cursor: 'pointer',
                       }}
                     >
-                      {draft.power_control ? 'on' : 'off'}
+                      {draft.power_control ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
                 </div>
@@ -1040,12 +1016,12 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Clock size={14} color="#a855f7" /> Time Forward (?)
+                  <Clock size={14} color="#a855f7" /> {t('ui_time_forward')}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div>
                     <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
-                      Delay (seconds)
+                      {t('ui_delay_seconds')}
                     </label>
                     <input
                       type="number"
@@ -1064,7 +1040,7 @@ export function TaskOverviewModal({
                   </div>
                   <div>
                     <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
-                      Edit Time Limit (s)
+                      {t('ui_edit_time_limit_s')}
                     </label>
                     <input
                       type="number"
@@ -1094,11 +1070,11 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
-                  Processing Messages (?)
+                  {t('ui_processing_messages')}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Process Raw Text</span>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_process_raw_text')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('process_raw_text')}
@@ -1113,11 +1089,11 @@ export function TaskOverviewModal({
                         cursor: 'pointer',
                       }}
                     >
-                      {draft.process_raw_text ? 'on' : 'off'}
+                      {draft.process_raw_text ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Button To Text</span>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_button_to_text')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('button_to_text')}
@@ -1132,7 +1108,7 @@ export function TaskOverviewModal({
                         cursor: 'pointer',
                       }}
                     >
-                      {draft.button_to_text ? 'on' : 'off'}
+                      {draft.button_to_text ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
                 </div>
@@ -1148,16 +1124,16 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
-                  Modify Content (?)
+                  {t('ui_modify_content')}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div>
                     <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
-                      Header
+                      {t('ui_task_overview_modal_header')}
                     </label>
                     <input
                       type="text"
-                      placeholder="HEADER EMPTY"
+                      placeholder={t('ui_header_empty')}
                       value={draft.custom_header || ''}
                       onChange={(e) => setDraft({ ...draft, custom_header: e.target.value })}
                       style={{
@@ -1173,11 +1149,11 @@ export function TaskOverviewModal({
                   </div>
                   <div>
                     <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
-                      Footer
+                      {t('ui_footer')}
                     </label>
                     <input
                       type="text"
-                      placeholder="FOOTER EMPTY"
+                      placeholder={t('ui_footer_empty')}
                       value={draft.custom_footer || ''}
                       onChange={(e) => setDraft({ ...draft, custom_footer: e.target.value })}
                       style={{
@@ -1193,11 +1169,11 @@ export function TaskOverviewModal({
                   </div>
                   <div>
                     <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
-                      Watermark
+                      {t('ui_watermark')}
                     </label>
                     <input
                       type="text"
-                      placeholder="Empty"
+                      placeholder={t('ui_empty')}
                       value={draft.watermark_text || ''}
                       onChange={(e) => setDraft({ ...draft, watermark_text: e.target.value })}
                       style={{
@@ -1233,7 +1209,7 @@ export function TaskOverviewModal({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Wand2 size={14} color="#818cf8" />
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6' }}>AI Features</span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6' }}>{t('ui_ai_features')}</span>
                   </div>
                   <span
                     style={{
@@ -1244,13 +1220,13 @@ export function TaskOverviewModal({
                       borderRadius: '10px',
                     }}
                   >
-                    Creativity {draft.ai_creativity ?? 0.7} - Max Tokens {draft.ai_max_tokens ?? 600}
+                    {t('ui_creativity')} {draft.ai_creativity ?? 0.7} - {t('ui_max_tokens')} {draft.ai_max_tokens ?? 600}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>OCR Image AI</span>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_ocr_image_ai')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('ocr_image_ai')}
@@ -1265,12 +1241,12 @@ export function TaskOverviewModal({
                         cursor: 'pointer',
                       }}
                     >
-                      {draft.ocr_image_ai ? 'on' : 'off'}
+                      {draft.ocr_image_ai ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Smart AI Rewrite</span>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_smart_ai_rewrite')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('smart_ai_rewrite')}
@@ -1285,7 +1261,7 @@ export function TaskOverviewModal({
                         cursor: 'pointer',
                       }}
                     >
-                      {draft.smart_ai_rewrite ? 'on' : 'off'}
+                      {draft.smart_ai_rewrite ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
                 </div>
@@ -1297,10 +1273,10 @@ export function TaskOverviewModal({
           {currentTab === 'all_addons' && (
             <div>
               <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '12px' }}>
-                Modular Extensions Catalogue — Toggle features for this task:
+                {t('ui_modular_extensions_catalogue_toggle_features_for_this_task')}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {allAddonsCatalog.map((item) => {
+                {ADDONS.map((item) => {
                   const isEnabled = draft.paid_addons?.[item.key] ?? false
                   return (
                     <div
@@ -1320,9 +1296,9 @@ export function TaskOverviewModal({
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           {item.locked && <Lock size={12} color="#f59e0b" />}
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>{item.title}</span>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>{t(item.labelKey)}</span>
                         </div>
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{item.desc}</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{t(item.descKey)}</div>
                       </div>
                       <span
                         style={{
@@ -1334,7 +1310,7 @@ export function TaskOverviewModal({
                           fontWeight: 700,
                         }}
                       >
-                        {isEnabled ? 'ACTIVE' : 'OFF'}
+                        {isEnabled ? t('ui_active') : t('ui_task_overview_modal_off')}
                       </span>
                     </div>
                   )
@@ -1362,7 +1338,7 @@ export function TaskOverviewModal({
                     padding: 0,
                   }}
                 >
-                  ← Back to Task Overview
+                  {t('ui_back_to_task_overview')}
                 </button>
                 <button
                   type="button"
@@ -1378,7 +1354,7 @@ export function TaskOverviewModal({
                     cursor: 'pointer',
                   }}
                 >
-                  {draft.cleaner_enabled ? '● Cleaner Active' : '○ Cleaner Inactive'}
+                  {draft.cleaner_enabled ? t('ui_cleaner_active') : t('ui_cleaner_inactive')}
                 </button>
               </div>
 
@@ -1391,21 +1367,21 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '4px' }}>
-                  Automatic Stripping Rules
+                  {t('ui_automatic_stripping_rules')}
                 </div>
                 <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '12px' }}>
-                  Cleaned content is stripped before forwarding so sensitive elements never leak to targets.
+                  {t('ui_cleaned_content_is_stripped_before_forwarding_so_sensitive_eleme')}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   {[
-                    { key: 'remove_urls', label: '🔗 Strip URLs' },
-                    { key: 'remove_mentions', label: '👤 Strip Mentions (@)' },
-                    { key: 'remove_hashtags', label: '#️⃣ Strip Hashtags (#)' },
-                    { key: 'remove_emojis', label: '😀 Strip Emojis' },
-                    { key: 'apply_to_caption', label: '📝 Clean Captions' },
-                    { key: 'case_sensitive', label: '🔤 Case Sensitive' },
-                    { key: 'use_regex', label: '⚙️ Regex Engine' },
+                    { key: 'remove_urls', label: t('ui_strip_urls') },
+                    { key: 'remove_mentions', label: t('ui_strip_mentions') },
+                    { key: 'remove_hashtags', label: t('ui_strip_hashtags') },
+                    { key: 'remove_emojis', label: t('ui_task_overview_modal_strip_emojis') },
+                    { key: 'apply_to_caption', label: t('ui_clean_captions') },
+                    { key: 'case_sensitive', label: t('ui_case_sensitive') },
+                    { key: 'use_regex', label: t('ui_regex_engine') },
                   ].map((opt) => {
                     const cfg = (draft.cleaner_config || {}) as any
                     const isActive = Boolean(cfg[opt.key] ?? false)
@@ -1454,12 +1430,12 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  Custom Patterns to Strip
+                  {t('ui_custom_patterns_to_strip')}
                 </div>
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
                   <input
                     type="text"
-                    placeholder="Enter word, phrase, or ad text..."
+                    placeholder={t('ui_enter_word_phrase_or_ad_text')}
                     value={newCleanerPattern}
                     onChange={(e) => setNewCleanerPattern(e.target.value)}
                     onKeyDown={(e) => {
@@ -1513,7 +1489,7 @@ export function TaskOverviewModal({
                       cursor: 'pointer',
                     }}
                   >
-                    Add
+                    {t('ui_add')}
                   </button>
                 </div>
 
@@ -1559,7 +1535,7 @@ export function TaskOverviewModal({
                     </span>
                   ))}
                   {listPatterns((draft.cleaner_config as any)?.patterns).length === 0 && (
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>No custom strip patterns added yet.</span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>{t('ui_no_custom_strip_patterns_added_yet')}</span>
                   )}
                 </div>
               </div>
@@ -1582,10 +1558,10 @@ export function TaskOverviewModal({
                     padding: 0,
                   }}
                 >
-                  ← Back to Task Overview
+                  {t('ui_back_to_task_overview')}
                 </button>
                 <span style={{ fontSize: '12px', color: '#a855f7', fontWeight: 600 }}>
-                  Active Rules: {Object.keys((draft as any).replacements || {}).length}
+                  {t('ui_task_overview_modal_active_rules')} {Object.keys((draft as any).replacements || {}).length}
                 </span>
               </div>
 
@@ -1598,12 +1574,12 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  Add Text Replacement
+                  {t('ui_add_text_replacement')}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px', gap: '8px' }}>
                   <input
                     type="text"
-                    placeholder="Find text..."
+                    placeholder={t('ui_find_text')}
                     value={newReplaceFrom}
                     onChange={(e) => setNewReplaceFrom(e.target.value)}
                     style={{
@@ -1617,7 +1593,7 @@ export function TaskOverviewModal({
                   />
                   <input
                     type="text"
-                    placeholder="Replace with..."
+                    placeholder={t('ui_replace_with')}
                     value={newReplaceTo}
                     onChange={(e) => setNewReplaceTo(e.target.value)}
                     style={{
@@ -1648,7 +1624,7 @@ export function TaskOverviewModal({
                       cursor: 'pointer',
                     }}
                   >
-                    Add
+                    {t('ui_add')}
                   </button>
                 </div>
               </div>
@@ -1663,7 +1639,7 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
-                  Active Replacements
+                  {t('ui_active_replacements')}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {Object.entries((draft as any).replacements || {}).map(([from, to], idx) => (
@@ -1704,7 +1680,7 @@ export function TaskOverviewModal({
                     </div>
                   ))}
                   {Object.keys((draft as any).replacements || {}).length === 0 && (
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>No text replacements configured.</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>{t('ui_no_text_replacements_configured')}</div>
                   )}
                 </div>
               </div>
@@ -1727,10 +1703,10 @@ export function TaskOverviewModal({
                     padding: 0,
                   }}
                 >
-                  ← Back to Task Overview
+                  {t('ui_back_to_task_overview')}
                 </button>
                 <span style={{ fontSize: '12px', color: '#ef4444', fontWeight: 600 }}>
-                  Blacklisted: {(draft.blacklist_keywords || []).length}
+                  {t('ui_blacklisted')} {(draft.blacklist_keywords || []).length}
                 </span>
               </div>
 
@@ -1743,12 +1719,12 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  Add Blacklisted Keyword or Domain
+                  {t('ui_add_blacklisted_keyword_or_domain')}
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
-                    placeholder="Enter banned word or phrase..."
+                    placeholder={t('ui_enter_banned_word_or_phrase')}
                     value={newBlWord}
                     onChange={(e) => setNewBlWord(e.target.value)}
                     onKeyDown={(e) => {
@@ -1792,7 +1768,7 @@ export function TaskOverviewModal({
                       cursor: 'pointer',
                     }}
                   >
-                    Add
+                    {t('ui_add')}
                   </button>
                 </div>
               </div>
@@ -1806,7 +1782,7 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
-                  Blocked Words
+                  {t('ui_blocked_words')}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                   {(draft.blacklist_keywords || []).map((w, idx) => (
@@ -1846,7 +1822,7 @@ export function TaskOverviewModal({
                     </span>
                   ))}
                   {(draft.blacklist_keywords || []).length === 0 && (
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>No words in blacklist.</span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>{t('ui_no_words_in_blacklist')}</span>
                   )}
                 </div>
               </div>
@@ -1869,10 +1845,10 @@ export function TaskOverviewModal({
                     padding: 0,
                   }}
                 >
-                  ← Back to Task Overview
+                  {t('ui_back_to_task_overview')}
                 </button>
                 <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: 600 }}>
-                  Whitelisted: {(draft.whitelist_keywords || []).length}
+                  {t('ui_whitelisted')} {(draft.whitelist_keywords || []).length}
                 </span>
               </div>
 
@@ -1885,12 +1861,12 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  Add Required Keyword or Domain
+                  {t('ui_add_required_keyword_or_domain')}
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
-                    placeholder="Enter required word or phrase..."
+                    placeholder={t('ui_enter_required_word_or_phrase')}
                     value={newWlWord}
                     onChange={(e) => setNewWlWord(e.target.value)}
                     onKeyDown={(e) => {
@@ -1934,7 +1910,7 @@ export function TaskOverviewModal({
                       cursor: 'pointer',
                     }}
                   >
-                    Add
+                    {t('ui_add')}
                   </button>
                 </div>
               </div>
@@ -1948,7 +1924,7 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
-                  Required Whitelist Words
+                  {t('ui_required_whitelist_words')}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                   {(draft.whitelist_keywords || []).map((w, idx) => (
@@ -1988,7 +1964,7 @@ export function TaskOverviewModal({
                     </span>
                   ))}
                   {(draft.whitelist_keywords || []).length === 0 && (
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>No whitelist restrictions (all permitted).</span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>{t('ui_no_whitelist_restrictions_all_permitted')}</span>
                   )}
                 </div>
               </div>
@@ -2011,9 +1987,9 @@ export function TaskOverviewModal({
                     padding: 0,
                   }}
                 >
-                  ← Back to Task Overview
+                  {t('ui_back_to_task_overview')}
                 </button>
-                <span style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 600 }}>Media & Type Filters</span>
+                <span style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 600 }}>{t('ui_media_type_filters')}</span>
               </div>
 
               <div
@@ -2025,17 +2001,17 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  Filter Message Types
+                  {t('ui_filter_message_types')}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {[
-                    { key: 'duplicate_filters' as const, label: '🔀 Duplicate Filters (SHA-256 Fingerprint)', active: Boolean(draft.duplicate_filters) },
-                    { key: 'block_text' as const, label: '📝 Block Text Messages', active: Boolean(draft.block_text) },
-                    { key: 'block_voice' as const, label: '🎙 Block Voice Messages', active: Boolean(draft.block_voice) },
-                    { key: 'block_stickers' as const, label: '🎭 Block Stickers', active: Boolean(draft.block_stickers) },
-                    { key: 'block_links' as const, label: '🔗 Block Links', active: Boolean(draft.block_links) },
-                    { key: 'block_video' as const, label: '🎬 Block Video Messages', active: Boolean(draft.block_video) },
-                    { key: 'block_audio' as const, label: '🎵 Block Audio Files', active: Boolean(draft.block_audio) },
+                    { key: 'duplicate_filters' as const, label: t('ui_duplicate_filters_sha_256_fingerprint'), active: Boolean(draft.duplicate_filters) },
+                    { key: 'block_text' as const, label: t('ui_block_text_messages'), active: Boolean(draft.block_text) },
+                    { key: 'block_voice' as const, label: t('ui_block_voice_messages'), active: Boolean(draft.block_voice) },
+                    { key: 'block_stickers' as const, label: t('ui_task_overview_modal_block_stickers'), active: Boolean(draft.block_stickers) },
+                    { key: 'block_links' as const, label: t('ui_block_links'), active: Boolean(draft.block_links) },
+                    { key: 'block_video' as const, label: t('ui_block_video_messages'), active: Boolean(draft.block_video) },
+                    { key: 'block_audio' as const, label: t('ui_block_audio_files'), active: Boolean(draft.block_audio) },
                   ].map((f) => (
                     <div
                       key={f.key}
@@ -2064,7 +2040,7 @@ export function TaskOverviewModal({
                           cursor: 'pointer',
                         }}
                       >
-                        {f.active ? 'BLOCKED' : 'ALLOWED'}
+                        {f.active ? t('ui_blocked') : t('ui_allowed')}
                       </button>
                     </div>
                   ))}
@@ -2089,10 +2065,10 @@ export function TaskOverviewModal({
                     padding: 0,
                   }}
                 >
-                  ← Back to Task Overview
+                  {t('ui_back_to_task_overview')}
                 </button>
                 <span style={{ fontSize: '12px', color: '#eab308', fontWeight: 600 }}>
-                  Current Delay: {draft.forward_delay_seconds || draft.delay_seconds || 0}s
+                  {t('ui_current_delay')} {draft.forward_delay_seconds || draft.delay_seconds || 0}s
                 </span>
               </div>
 
@@ -2105,15 +2081,15 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '6px' }}>
-                  Configure Forward Delay
+                  {t('ui_configure_forward_delay')}
                 </div>
                 <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '14px' }}>
-                  Adds an asynchronous pause before forwarding each message to prevent Telegram rate limits and simulate natural human posting.
+                  {t('ui_adds_an_asynchronous_pause_before_forwarding_each_message_to_pre')}
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '6px' }}>
-                    Delay in Seconds: <strong>{draft.forward_delay_seconds || draft.delay_seconds || 0}s</strong>
+                    {t('ui_delay_in_seconds')} <strong>{draft.forward_delay_seconds || draft.delay_seconds || 0}s</strong>
                   </label>
                   <input
                     type="range"
@@ -2129,11 +2105,11 @@ export function TaskOverviewModal({
                 </div>
 
                 <div style={{ fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '8px' }}>
-                  Quick Presets:
+                  {t('ui_quick_presets')}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
                   {[
-                    { label: '⚡ 0s (Instant)', sec: 0 },
+                    { label: t('ui_0s_instant'), sec: 0 },
                     { label: '⏱ 3s', sec: 3 },
                     { label: '⏱ 5s', sec: 5 },
                     { label: '⏱ 10s', sec: 10 },
@@ -2205,7 +2181,7 @@ export function TaskOverviewModal({
               cursor: 'pointer',
             }}
           >
-            Cancel
+            {t('ui_cancel')}
           </button>
           {currentTab === 'logs' && <TaskLogsPanel ruleId={draft.id} lang={lang} />}
 
@@ -2235,7 +2211,7 @@ export function TaskOverviewModal({
               gap: '6px',
             }}
           >
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? t('ui_saving') : t('ui_save_changes')}
           </button>
         </div>
       </div>

@@ -293,6 +293,22 @@ jobs:
             --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
           node tests/sessionIdentity.test.mjs
 
+      - name: UI catalog contract
+        # The dashboard ships one key set across the ten locales, so a locale
+        # that lags is a defect rather than an English screen: this test counts
+        # the keys, keeps every `{placeholder}` set equal to the English
+        # reference, refuses an RTL leak under `en` and mojibake anywhere, and
+        # fails on a `t('…')` key no catalog carries. The catalog is compiled
+        # standalone with the bundled typescript, exactly as the test documents.
+        working-directory: web/frontend
+        run: |
+          node node_modules/typescript/bin/tsc src/locales/types.ts src/locales/index.ts \
+            src/locales/en.ts src/locales/fa.ts src/locales/pt.ts src/locales/uz.ts \
+            src/locales/ru.ts src/locales/id.ts src/locales/es.ts src/locales/fr.ts \
+            src/locales/it.ts src/locales/zh.ts --ignoreConfig --outDir .catalog-build \
+            --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
+          node tests/uiCatalog.test.mjs
+
       - name: Build
         working-directory: web/frontend
         run: npm run build

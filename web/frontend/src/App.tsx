@@ -11,7 +11,6 @@ import {
   Layers,
   Shield,
   Zap,
-  Globe,
   ChevronRight,
   ChevronLeft,
   ArrowDown,
@@ -43,7 +42,9 @@ import {
 import { api } from './api'
 import { isAccepted, purgedCount, refusalReason } from './actionResult'
 import { describeKeyCheck, describeSaveFailure } from './providerKey'
+import { SUPPORTED_LANGS, isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from './locales'
 import { AdminPanel } from './components/AdminPanel'
+import { LanguagePicker } from './components/LanguagePicker'
 import { AuditEventsPanel } from './components/AuditEventsPanel'
 import { ClientSettings } from './components/ClientSettings'
 import { TaskOverviewModal } from './components/TaskOverviewModal'
@@ -163,51 +164,48 @@ function brandingTextToList(raw: string): string[] {
  * `require_forward` is a gate on top of the match, and `force_forward` is what
  * makes B show C's header (a copy from C would not).
  */
-function brandingHopSummary(isRtl: boolean, hop: BrandingHopConfig, route: string): string {
+function brandingHopSummary(lang: UiLang, hop: BrandingHopConfig, route: string): string {
+  const t = makeT(lang)
   const delivery = hop.force_forward
-    ? (isRtl ? 'ارسال نیتیو از C (B هدر C را نشان می‌دهد)' : 'native forward from C (B shows C)')
-    : (isRtl ? 'کپی از C (بدون هدر برند)' : 'copy from C (no branded header)')
+    ? t('ui_native_forward_from_c_b_shows_c')
+    : t('ui_copy_from_c_no_branded_header')
   const gate = hop.triggers_enabled && hop.require_forward
-    ? (isRtl ? ' · فقط اگر پیام خودش فوروارد باشد' : ' · only if the message is itself a forward')
+    ? t('ui_only_if_the_message_is_itself_a_forward')
     : ''
   if (!hop.triggers_enabled) {
-    return isRtl
-      ? `${route}: همه پیام‌ها · ${delivery}`
-      : `${route}: every message · ${delivery}`
+    return t('ui_hop_summary_every_message', { route, delivery })
   }
   const parts: string[] = []
   const origins = [...hop.origin_titles, ...hop.origin_ids]
   if (origins.length) {
-    parts.push(isRtl ? `فورواردشده از ${origins.join(' / ')}` : `forwarded from ${origins.join(' / ')}`)
+    parts.push(t('ui_forwarded_from_origins', { origins: origins.join(' / ') }))
   }
   if (hop.keywords.length) {
-    parts.push(isRtl ? `حاوی ${hop.keywords.join(' / ')}` : `containing ${hop.keywords.join(' / ')}`)
+    parts.push(t('ui_containing_keywords', { keywords: hop.keywords.join(' / ') }))
   }
   if (!parts.length) {
-    return isRtl
-      ? `${route}: همه پیام‌ها · ${delivery}${gate}`
-      : `${route}: every message · ${delivery}${gate}`
+    return t('ui_hop_summary_every_message_gate', { route, delivery, gate })
   }
-  const joiner = hop.match_mode === 'all' ? (isRtl ? ' و ' : ' and ') : (isRtl ? ' یا ' : ' or ')
-  const scope = isRtl ? 'فقط پیام‌هایی که' : 'only messages'
-  return `${route}: ${scope} ${parts.join(joiner)} · ${delivery}${gate}`
+  const joiner = hop.match_mode === 'all' ? t('ui_and') : t('ui_or')
+  return t('ui_hop_summary_only_matching', {
+    route,
+    scope: t('ui_only_messages'),
+    parts: parts.join(joiner),
+    delivery,
+    gate,
+  })
 }
 
 export function App({ me }: { me?: MeInfo } = {}) {
-  // Language follows the user, not a hardcoded default:
-  // previously this defaulted to 'fa' so every user's first dashboard render
-  // was Persian even when their account language was English.
-  const [lang, setLang] = useState<'fa' | 'en'>(() => {
-    try {
-      const stored = localStorage.getItem('atf_lang')
-      if (stored === 'fa' || stored === 'en') return stored
-    } catch { /* storage blocked */ }
-    const nav = (navigator.language || 'en').toLowerCase()
-    return nav.startsWith('fa') ? 'fa' : 'en'
-  })
+  // Language follows the user, not a hardcoded default: the stored choice
+  // wins, then the browser's own language, then English. It used to default to
+  // 'fa' with a two-way `en` branch, so every user's first dashboard render was
+  // Persian and a pt/ru/zh browser had only two options.
+  const [lang, setLang] = useState<UiLang>(() => preferredLang())
 
+  // Persist the choice so the next visit — and the login page — opens in it.
   useEffect(() => {
-    try { localStorage.setItem('atf_lang', lang) } catch { /* ignore */ }
+    rememberLang(lang)
   }, [lang])
   const [activeTab, setActiveTab] = useState<'system' | 'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'jobs' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('system')
   // Identity starts from the session-core's verified answer when mounted with one.
@@ -318,7 +316,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
   const [pvSaving, setPvSaving] = useState(false)
   const [pvPreset, setPvPreset] = useState<'casual' | 'business' | 'short' | 'custom'>('casual')
 
-  const isRtl = lang === 'fa'
+  const isRtl = isRtlLang(lang)
+  const t = makeT(lang)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -393,7 +392,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
         setSimSelectedRuleId(r[0].id)
       }
     } catch (e: any) {
-      showToast(e.message || 'Error loading dashboard data')
+      showToast(e.message || t('ui_error_loading_dashboard_data'))
     } finally {
       setLoading(false)
     }
@@ -442,9 +441,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
         rule_id: logFilterRule !== 'all' ? logFilterRule : undefined,
         format,
       })
-      showToast(isRtl ? 'خروجی لاگ دانلود شد' : 'Log export downloaded')
+      showToast(t('ui_log_export_downloaded'))
     } catch (e: any) {
-      showToast(e?.message || (isRtl ? 'خطا در خروجی گرفتن' : 'Export failed'))
+      showToast(e?.message || (t('ui_export_failed')))
     } finally {
       setLogExporting(false)
     }
@@ -460,12 +459,19 @@ export function App({ me }: { me?: MeInfo } = {}) {
     // Asking for the refusal anyway would just look like a broken button.
     const purgeRuleId = logFilterRule !== 'all' ? logFilterRule : undefined
     if (!currentUser?.is_admin && !purgeRuleId) {
-      showToast(isRtl ? 'برای پاک‌سازی، یک تسک را انتخاب کنید' : 'Select a task before purging its logs')
+      showToast(t('ui_select_a_task_before_purging_its_logs'))
       return
     }
-    const label = keepH > 0 ? `قدیمی‌تر از ${keepH} ساعت` : 'تمام لاگ‌ها (بدون حفاظت زمانی)'
-    const ruleLabel = logFilterRule !== 'all' ? `تسک ${logFilterRule.slice(0, 8)} ` : ''
-    if (!window.confirm(`حذف ${ruleLabel}${logFilterLevel !== 'all' ? `سطح ${logFilterLevel} ` : ''}${logFilterService !== 'all' ? `سرویس ${logFilterService} ` : ''}${label}؟ این عمل قابل بازگشت نیست.`)) return
+    const ageWindow = keepH > 0 ? t('ui_older_than_hours', { hours: keepH }) : t('ui_all_logs_no_time_bound')
+    // The confirm names what is about to be deleted, filter by filter.
+    const scope = [
+      logFilterRule !== 'all' ? t('ui_task_scope_prefix', { task: logFilterRule.slice(0, 8) }) : '',
+      logFilterLevel !== 'all' ? t('ui_level_scope_prefix', { level: logFilterLevel }) : '',
+      logFilterService !== 'all' ? t('ui_service_scope_prefix', { service: logFilterService }) : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    if (!window.confirm(t('ui_confirm_purge_logs', { scope: scope ? `${scope} · ` : '', window: ageWindow }))) return
     setPurging(true)
     setPurgeResult(null)
     try {
@@ -477,13 +483,13 @@ export function App({ me }: { me?: MeInfo } = {}) {
       })
       if (res?.success) {
         setPurgeResult({ purged: res.purged, remaining: res.remaining })
-        showToast(`${res.purged} لاگ حذف شد · ${res.remaining} باقی ماند`)
+        showToast(t('ui_logs_purged', { purged: res.purged, remaining: res.remaining }))
         await fetchLogs()
       } else {
-        showToast(res?.error || 'خطا در پاکسازی لاگ‌ها')
+        showToast(res?.error || t('ui_error_purging_logs'))
       }
     } catch (e: any) {
-      showToast(e.message || 'خطا در پاکسازی لاگ‌ها')
+      showToast(e.message || t('ui_error_purging_logs'))
     } finally {
       setPurging(false)
     }
@@ -493,7 +499,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
   // contains live credentials; a passphrase encrypts it with AES-GCM.
   const handleBackupExport = async () => {
     if (backupBusy) return
-    if (!backupPassphrase && !window.confirm('بدون رمز عبور، فایل بکاپ حاوی اطلاعات حساس به‌صورت متن ساده خواهد بود. ادامه می‌دهید؟')) return
+    if (!backupPassphrase && !window.confirm(t('ui_confirm_backup_without_passphrase'))) return
     setBackupBusy(true)
     setBackupCounts(null)
     try {
@@ -509,12 +515,18 @@ export function App({ me }: { me?: MeInfo } = {}) {
         a.download = `atf-backup-${stamp}${res.encrypted ? '.enc' : '.json'}`
         a.click()
         URL.revokeObjectURL(url)
-        showToast(`بکاپ ساخته شد · ${Object.values(res.counts || {}).reduce((a, b) => a + b, 0)} رکورد${res.encrypted ? ' · 🔒 رمزگذاری‌شده' : ''}`)
+        const rows = Object.values(res.counts || {}).reduce((a, b) => a + b, 0)
+        showToast(
+          t('ui_backup_created', {
+            rows,
+            encryption: res.encrypted ? t('ui_backup_encrypted_suffix') : '',
+          }),
+        )
       } else {
-        showToast(res?.error || 'خطا در ساخت بکاپ')
+        showToast(res?.error || t('ui_error_creating_backup'))
       }
     } catch (e: any) {
-      showToast(e.message || 'خطا در ساخت بکاپ')
+      showToast(e.message || t('ui_error_creating_backup'))
     } finally {
       setBackupBusy(false)
     }
@@ -525,17 +537,18 @@ export function App({ me }: { me?: MeInfo } = {}) {
     if (backupBusy) return
     const bundle = importText.trim()
     if (!bundle) {
-      showToast('متن فایل بکاپ را وارد کنید یا فایل را انتخاب کنید')
+      showToast(t('ui_backup_contents_required'))
       return
     }
     const looksEncrypted = bundle.startsWith('enc:')
     if (looksEncrypted && !importPassphrase) {
-      showToast('این فایل رمزگذاری شده است؛ رمز عبور را وارد کنید')
+      showToast(t('ui_backup_passphrase_required'))
       return
     }
     const totalRows = importStats ? Object.values(importStats).reduce((s, v) => s + v.imported + v.skipped + v.failed, 0) : 0
-    const verb = importOverwrite ? 'جایگزینی کامل' : 'ادغام'
-    if (!window.confirm(`${verb} تنظیمات از فایل بکاپ${importOverwrite ? ' (سطرهای موجود بازنویسی می‌شوند)' : ''}؟${totalRows ? ` شامل ${totalRows} رکورد.` : ''} این عمل قابل بازگشت نیست.`)) return
+    const verb = importOverwrite ? t('ui_replace_all') : t('ui_merge')
+    const rowsNote = totalRows ? t('ui_import_rows_note', { rows: totalRows }) : ''
+    if (!window.confirm(t('ui_confirm_backup_restore', { verb, rows: rowsNote }))) return
     setBackupBusy(true)
     setImportStats(null)
     try {
@@ -548,14 +561,19 @@ export function App({ me }: { me?: MeInfo } = {}) {
         setImportStats(res.stats || {})
         const imported = Object.values(res.stats || {}).reduce((s, v) => s + v.imported, 0)
         const failed = Object.values(res.stats || {}).reduce((s, v) => s + v.failed, 0)
-        showToast(`بازیابی کامل · ${imported} رکورد وارد شد${failed ? ` · ⚠️ ${failed} ناموفق` : ''}`)
+        showToast(
+          t('ui_restore_complete', {
+            rows: imported,
+            failed: failed ? t('ui_restore_failed_note', { count: failed }) : '',
+          }),
+        )
         // everything the UI shows may have changed underneath it
         await loadData()
       } else {
-        showToast(res?.error || 'خطا در بازیابی بکاپ')
+        showToast(res?.error || t('ui_error_restoring_backup'))
       }
     } catch (e: any) {
-      showToast(e.message || 'خطا در بازیابی بکاپ')
+      showToast(e.message || t('ui_error_restoring_backup'))
     } finally {
       setBackupBusy(false)
     }
@@ -587,7 +605,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               setCurrentUser(info)
             }).catch(() => {})
             loadData()
-            showToast(isRtl ? 'ورود خودکار مینی‌اپ تلگرام انجام شد' : 'Telegram Mini App auto-authenticated')
+            showToast(t('ui_telegram_mini_app_auto_authenticated'))
           }
         }).catch(() => {})
       }
@@ -630,19 +648,19 @@ export function App({ me }: { me?: MeInfo } = {}) {
     try {
       const updated = await api.toggleRule(id)
       setRules((prev) => prev.map((r) => (r.id === id ? updated : r)))
-      showToast(isRtl ? 'وضعیت قانون با موفقیت تغییر کرد' : 'Rule status updated')
+      showToast(t('ui_rule_status_updated'))
     } catch (e: any) {
       showToast(e.message)
     }
   }
 
   const handleDeleteRule = async (id: string) => {
-    if (!confirm(isRtl ? 'آیا از حذف این قانون اطمینان دارید؟' : 'Are you sure you want to delete this rule?')) return
+    if (!confirm(t('ui_are_you_sure_you_want_to_delete_this_rule'))) return
     try {
       await api.deleteRule(id)
       setRules((prev) => prev.filter((r) => r.id !== id))
       setIsTaskOverviewOpen(false)
-      showToast(isRtl ? 'قانون با موفقیت حذف شد' : 'Rule deleted successfully')
+      showToast(t('ui_rule_deleted_successfully'))
     } catch (e: any) {
       showToast(e.message)
     }
@@ -652,9 +670,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
     try {
       const cloned = await api.duplicateRule(id)
       setRules((prev) => [cloned, ...prev])
-      showToast(isRtl ? 'قانون با موفقیت تکثیر شد' : 'Task duplicated successfully')
+      showToast(t('ui_task_duplicated_successfully'))
     } catch (e: any) {
-      showToast(e.message || (isRtl ? 'خطا در تکثیر قانون' : 'Failed to duplicate task'))
+      showToast(e.message || (t('ui_failed_to_duplicate_task')))
     }
   }
 
@@ -662,9 +680,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
     try {
       const res = await api.saveRule(updated as any)
       setRules((prev) => prev.map((r) => (r.id === res.id ? res : r)))
-      showToast(isRtl ? 'تسک با موفقیت به‌روزرسانی شد' : 'Task updated successfully')
+      showToast(t('ui_task_updated_successfully'))
     } catch (e: any) {
-      showToast(e.message || (isRtl ? 'خطا در ذخیره تسک' : 'Failed to save task'))
+      showToast(e.message || (t('ui_failed_to_save_task')))
     }
   }
 
@@ -674,7 +692,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
         path_type: pathType,
       })
       setRules((prev) => prev.map((r) => (r.id === ruleId ? updated : r)))
-      showToast(isRtl ? 'مسیر قانون با موفقیت تغییر یافت' : 'Rule route switched successfully')
+      showToast(t('ui_rule_route_switched_successfully'))
     } catch (e: any) {
       showToast(e.message)
     }
@@ -714,41 +732,12 @@ export function App({ me }: { me?: MeInfo } = {}) {
     patchBrandingHop({ [key]: brandingTextToList(raw) } as Partial<BrandingHopConfig>)
   }
 
-  const PV_PRESETS = {
-    casual: {
-      label_fa: '😃 خودمانی و صمیمی (پیش‌فرض)',
-      label_en: '😃 Friendly & Natural (Default)',
-      prompt: `شما صاحب این اکانت شخصی تلگرام هستید و دارید مستقیماً به پیام‌های شخصی (پی‌وی) مخاطبان و دوستان خود پاسخ می‌دهید.
-
-قوانین حیاتی و شیوه صحبت کردن:
-۱. لحن شما باید کاملاً خودمانی، بسیار جذاب، صمیمی، محترمانه و زنده به زبان فارسی باشد؛ دقیقاً مانند یک جوان هوشمند، خوش‌برخورد و امروزی ایرانی در چت تلگرام.
-۲. هرگز و تحت هیچ شرایطی نگو که ربات، هوش مصنوعی، مدل زبانی یا دستیار مجازی هستی! وانمود کن که خود کاربر هستی.
-۳. پاسخ‌ها کوتاه، صمیمانه، خوش‌طبع و موجز باشند (از پاسخ‌های طولانی، رسمی یا مقاله‌ای پرهیز کن).
-۴. از اموجی‌های متناسب و طبیعی چت (مانند 🙏، 😉، 🤝، 😂، ✌️) به‌جا و به اندازه استفاده کن.
-۵. اگر سوال فنی یا کاری پرسیدند، هوشمندانه و کوتاه راهنمایی کن. اگر گفت‌وگوی احوال‌پرسی است، گرم و صمیمی باش.`,
-    },
-    business: {
-      label_fa: '💼 کاری، مؤدبانه و رسمی',
-      label_en: '💼 Professional & Polite',
-      prompt: `شما صاحب این اکانت شخصی تلگرام هستید. پاسخ‌های شما در پی‌وی به مراجعین و همکاران باید بسیار مؤدبانه، حرفه‌ای، محترمانه و سازنده باشد.
-قوانین:
-۱. از زبان فارسی شیک و کلمات محترمانه استفاده کنید.
-۲. تحت هیچ عنوان هویت ربات یا هوش مصنوعی را بروز ندهید؛ خود شخص پشت این اکانت هستید.
-۳. پاسخ‌ها دقیق، روشن و با رعایت نزاکت کاری باشند.`,
-    },
-    short: {
-      label_fa: '⚡ پاسخ‌های فوق‌العاده کوتاه',
-      label_en: '⚡ Ultra-Short & Casual',
-      prompt: `شما صاحب این اکانت تلگرام هستید. پاسخ‌ها بسیار کوتاه (حداکثر ۱ یا ۲ جمله)، کاملاً عامیانه، صمیمی و شبیه چت سریع جوانان در تلگرام باشد. هیچ مقدمه، موخوره یا توضیحات اضافه نده. هرگز نگو ربات هستی!`,
-    },
-  }
-
   const handleSavePV = async (updated?: Partial<PVResponderConfig>) => {
     setPvSaving(true)
     try {
       const cfg: PVResponderConfig = {
         enabled: pvConfig?.enabled ?? false,
-        persona_prompt: pvConfig?.persona_prompt || PV_PRESETS.casual.prompt,
+        persona_prompt: pvConfig?.persona_prompt || t('ui_pv_preset_casual_prompt'),
         typing_delay_min: pvConfig?.typing_delay_min ?? 2.0,
         typing_delay_max: pvConfig?.typing_delay_max ?? 4.5,
         cooldown_seconds: pvConfig?.cooldown_seconds ?? 15,
@@ -759,9 +748,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
       }
       const saved = await api.savePVResponder(cfg)
       setPvConfig(saved)
-      showToast(isRtl ? 'تنظیمات دستیار پی‌وی ذخیره شد' : 'PV Assistant config saved successfully')
+      showToast(t('ui_pv_assistant_config_saved_successfully'))
     } catch (e: any) {
-      showToast(e.message || 'Error saving PV Assistant config')
+      showToast(e.message || t('ui_error_saving_pv_config'))
     } finally {
       setPvSaving(false)
     }
@@ -771,19 +760,19 @@ export function App({ me }: { me?: MeInfo } = {}) {
     e.preventDefault()
     try {
       if (!ruleFormData.source_chat_id || !ruleFormData.target_chat_id) {
-        showToast(isRtl ? 'لطفا شناسه‌های مبدا و مقصد را وارد کنید' : 'Source and target IDs are required')
+        showToast(t('ui_source_and_target_ids_are_required'))
         return
       }
       const s = (ruleFormData.source_chat_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
-      const t = (ruleFormData.target_chat_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
-      if (s === t) {
-        showToast(isRtl ? 'خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است!' : 'Routing Loop Detected: Source and target IDs cannot be identical!')
+      const targetId = (ruleFormData.target_chat_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
+      if (s === targetId) {
+        showToast(t('ui_routing_loop_detected_source_and_target_ids_cannot_be_identical'))
         return
       }
       if (ruleFormData.use_intermediate && ruleFormData.intermediate_channel_id) {
         const im = (ruleFormData.intermediate_channel_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
-        if (im === s || im === t) {
-          showToast(isRtl ? 'خطای حلقه: کانال واسط نمی‌تواند با مبدأ یا مقصد یکسان باشد!' : 'Routing Loop Detected: Intermediate channel cannot match source or target!')
+        if (im === s || im === targetId) {
+          showToast(t('ui_routing_loop_detected_intermediate_channel_cannot_match_source_o'))
           return
         }
       }
@@ -818,18 +807,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
         return [saved, ...prev]
       })
       setIsRuleModalOpen(false)
-      showToast(isRtl ? 'قانون با موفقیت ذخیره شد' : 'Rule saved successfully')
+      showToast(t('ui_rule_saved_successfully'))
     } catch (e: any) {
-      let msg = e.message || 'Error'
+      let msg = e.message || t('ui_error')
       if (msg.includes('loop_detected') || msg.includes('Invalid rule endpoints')) {
-        msg = isRtl
-          ? 'خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است و امکان ارسال به مبدأ وجود ندارد'
-          : 'Routing Loop Detected: Source and target endpoints cannot be identical'
+        msg = t('ui_routing_loop_detected_source_and_target_endpoints_cannot_be_iden')
       }
       if (msg.includes('not_numeric') || msg.includes('resolve_failed')) {
-        msg = isRtl
-          ? 'شناسه چنل نامعتبر است: آیدی باید عددی باشد یا با اتصال ربات قابل رزولوشن باشد (اسم چنل را وارد کنید و مطمئن شوید ربات عضو آن چنل است)'
-          : 'Invalid chat id: use a numeric id, or a username the connected account can resolve (make sure the account has joined that channel)'
+        msg = t('ui_invalid_chat_id_use_a_numeric_id_or_a_username_the_connected_acc')
       }
       showToast(msg)
     }
@@ -840,7 +825,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
     e.preventDefault()
     try {
       if (!aiFormData.name || !aiFormData.provider || !aiFormData.model) {
-        showToast(isRtl ? 'نام، ارائه‌دهنده و مدل الزامی هستند' : 'Name, provider, and model are required')
+        showToast(t('ui_name_provider_and_model_are_required'))
         return
       }
       const saved = await api.saveAIConfig(aiFormData as SaveAIConfigRequest)
@@ -854,19 +839,19 @@ export function App({ me }: { me?: MeInfo } = {}) {
         return [saved, ...prev]
       })
       setIsAiModalOpen(false)
-      showToast(isRtl ? 'پیکربندی هوش مصنوعی ذخیره شد' : 'AI Config saved successfully')
+      showToast(t('ui_ai_config_saved_successfully'))
     } catch (e: any) {
       // A refused endpoint arrives as its code; say what it means.
-      showToast(describeSaveFailure(e?.message || '', isRtl))
+      showToast(describeSaveFailure(e?.message || '', lang))
     }
   }
 
   const handleDeleteAI = async (id: string) => {
-    if (!confirm(isRtl ? 'آیا از حذف این پیکربندی هوش مصنوعی مطمئن هستید؟' : 'Delete this AI Config?')) return
+    if (!confirm(t('ui_delete_this_ai_config'))) return
     try {
       await api.deleteAIConfig(id)
       setAiConfigs((prev) => prev.filter((a) => a.id !== id))
-      showToast(isRtl ? 'تنظیمات هوش مصنوعی حذف شد' : 'AI Config deleted')
+      showToast(t('ui_ai_config_deleted'))
     } catch (e: any) {
       showToast(e.message)
     }
@@ -877,7 +862,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
     e.preventDefault()
     try {
       if (!filterFormData.name) {
-        showToast(isRtl ? 'نام فیلتر الزامی است' : 'Filter name is required')
+        showToast(t('ui_filter_name_is_required'))
         return
       }
       const saved = await api.saveFilter(filterFormData as SaveFilterRuleRequest)
@@ -891,18 +876,18 @@ export function App({ me }: { me?: MeInfo } = {}) {
         return [saved, ...prev]
       })
       setIsFilterModalOpen(false)
-      showToast(isRtl ? 'قاعده فیلتر ذخیره شد' : 'Filter rule saved successfully')
+      showToast(t('ui_filter_rule_saved_successfully'))
     } catch (e: any) {
       showToast(e.message)
     }
   }
 
   const handleDeleteFilter = async (id: string) => {
-    if (!confirm(isRtl ? 'آیا از حذف این فیلتر مطمئن هستید؟' : 'Delete this filter rule?')) return
+    if (!confirm(t('ui_delete_this_filter_rule'))) return
     try {
       await api.deleteFilter(id)
       setFilterRules((prev) => prev.filter((f) => f.id !== id))
-      showToast(isRtl ? 'قاعده فیلتر حذف شد' : 'Filter rule deleted')
+      showToast(t('ui_filter_rule_deleted'))
     } catch (e: any) {
       showToast(e.message)
     }
@@ -918,12 +903,12 @@ export function App({ me }: { me?: MeInfo } = {}) {
       // omits the field as a replay that happened. The decision lives in
       // `actionResult.ts`, which the CI job compiles and asserts on.
       if (!isAccepted(resp)) {
-        showToast(`${isRtl ? 'تلاش مجدد رد شد' : 'Retry refused'} (${refusalReason(resp)})`)
+        showToast(`${t('ui_retry_refused')} (${refusalReason(resp)})`)
         await loadData()
         return
       }
       setDlqJobs((prev) => prev.filter((j) => j.id !== id))
-      showToast(isRtl ? 'پیام برای تلاش مجدد به صف بازگردانده شد' : 'Job requeued for retry')
+      showToast(t('ui_job_requeued_for_retry'))
       await loadData()
     } catch (e: any) {
       showToast(e.message)
@@ -931,11 +916,11 @@ export function App({ me }: { me?: MeInfo } = {}) {
   }
 
   const handlePurgeDLQ = async () => {
-    if (!confirm(isRtl ? 'آیا از پاک‌سازی کامل صف خطاهای ناموفق اطمینان دارید؟' : 'Purge all DLQ entries?')) return
+    if (!confirm(t('ui_purge_all_dlq_entries'))) return
     try {
       const resp: any = await api.purgeDLQ()
       if (!isAccepted(resp)) {
-        showToast(`${isRtl ? 'تخلیه انجام نشد' : 'Purge failed'} (${refusalReason(resp, 'purge_failed')})`)
+        showToast(`${t('ui_purge_failed')} (${refusalReason(resp, 'purge_failed')})`)
         return
       }
       setDlqJobs([])
@@ -944,8 +929,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
       const count = purgedCount(resp)
       showToast(
         count !== null
-          ? (isRtl ? `صف DLQ تخلیه شد (${count})` : `DLQ purged (${count})`)
-          : (isRtl ? 'صف DLQ تخلیه شد' : 'DLQ purged'),
+          ? (t('ui_dlq_purged_count_2', { count_2: count }))
+          : (t('ui_dlq_purged')),
       )
       await loadData()
     } catch (e: any) {
@@ -958,7 +943,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
     try {
       await api.pauseRule(id)
       setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: true } : r)))
-      showToast(isRtl ? 'قانون متوقف شد' : 'Rule paused')
+      showToast(t('ui_rule_paused'))
     } catch (e: any) {
       showToast(e.message)
     }
@@ -968,7 +953,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
     try {
       await api.resumeRule(id)
       setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: false } : r)))
-      showToast(isRtl ? 'قانون از سر گرفته شد' : 'Rule resumed')
+      showToast(t('ui_rule_resumed'))
     } catch (e: any) {
       showToast(e.message)
     }
@@ -988,9 +973,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
-        showToast(isRtl ? 'بکاپ سشن دانلود شد' : 'Session backup downloaded')
+        showToast(t('ui_session_backup_downloaded'))
       } else {
-        showToast(res.message || (isRtl ? 'بکاپ ناموفق بود' : 'Backup failed'))
+        showToast(res.message || (t('ui_backup_failed')))
       }
     } catch (e: any) {
       showToast(e.message)
@@ -998,14 +983,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
   }
 
   const handleTerminateSession = async (sess: Session) => {
-    if (!confirm(isRtl ? `آیا از قطع سشن ${sess.first_name || sess.username || sess.id} مطمئن هستید؟` : `Terminate session ${sess.first_name || sess.username || sess.id}?`)) return
+    if (!confirm(t('ui_terminate_session_sess_2', { sess_2: sess.first_name || sess.username || sess.id }))) return
     try {
       const res = await api.terminateSession(sess.id)
       if (res.success) {
         setSessions((prev) => prev.filter((s) => s.id !== sess.id))
-        showToast(isRtl ? 'سشن قطع شد' : 'Session terminated')
+        showToast(t('ui_session_terminated'))
       } else {
-        showToast(res.message || (isRtl ? 'قطع ناموفق بود' : 'Terminate failed'))
+        showToast(res.message || (t('ui_terminate_failed')))
       }
     } catch (e: any) {
       showToast(e.message)
@@ -1027,7 +1012,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
       })
       setSimResult(res)
     } catch (e: any) {
-      showToast(e.message || 'Simulation error')
+      showToast(e.message || t('ui_simulation_error'))
     } finally {
       setSimulating(false)
     }
@@ -1071,7 +1056,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               setErrorBanner(null)
             }}
             style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 2, flexShrink: 0 }}
-            title={isRtl ? 'بستن' : 'Dismiss'}
+            title={t('ui_dismiss')}
           >
             <X size={14} />
           </button>
@@ -1143,9 +1128,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               </span>
             </div>
             <p className="text-balance" style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2, margin: 0 }}>
-              {isRtl
-                ? 'سامانه یکپارچه فوروارد هوشمند، میکروسرویس Rust + React و درگاه DevOps'
-                : 'Unified Smart Telegram Forwarding Gateway & Microservice Platform'}
+              {t('ui_unified_smart_telegram_forwarding_gateway_microservice_platform')}
             </p>
           </div>
         </div>
@@ -1224,15 +1207,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <span style={{ color: '#cbd5e1' }}>Web:8088</span>
           </div>
 
-          {/* Language Toggle */}
-          <button
-            onClick={() => setLang(lang === 'fa' ? 'en' : 'fa')}
-            className="btn btn-secondary"
-            style={{ padding: '5px 10px', fontSize: '0.78rem' }}
-          >
-            <Globe size={13} />
-            <span>{lang === 'fa' ? 'English' : 'فارسی'}</span>
-          </button>
+          {/* Language picker: all ten catalogs, by endonym */}
+          <LanguagePicker lang={lang} onChange={setLang} compact />
 
           {/* Reload Button */}
           <button
@@ -1240,7 +1216,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             disabled={loading}
             className="btn btn-secondary"
             style={{ padding: '5px 10px', fontSize: '0.78rem' }}
-            title={isRtl ? 'به‌روزرسانی داده‌ها' : 'Refresh'}
+            title={t('ui_refresh')}
           >
             <RotateCcw size={13} />
           </button>
@@ -1262,7 +1238,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <Layers size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{isRtl ? 'کل قوانین فعال' : 'Active Rules'}</div>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{t('ui_active_rules')}</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>
               {stats?.active_rules ?? 0} <span style={{ fontSize: '0.8rem', color: '#64748b' }}>/ {stats?.total_rules ?? 0}</span>
             </div>
@@ -1274,7 +1250,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <Send size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{isRtl ? 'فوروارد ۲۴ ساعت' : 'Forwarded 24h'}</div>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{t('ui_forwarded_24h')}</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fbbf24' }}>
               {stats?.total_forwarded_24h ?? 0}
             </div>
@@ -1286,7 +1262,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <Users size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{isRtl ? 'سشن‌های متصل' : 'Connected Sessions'}</div>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{t('ui_connected_sessions')}</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>
               {stats?.active_sessions ?? 0} <span style={{ fontSize: '0.8rem', color: '#64748b' }}>/ {stats?.total_sessions ?? 0}</span>
             </div>
@@ -1298,7 +1274,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <Activity size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{isRtl ? 'صف خطاها (DLQ)' : 'Dead Letter Queue'}</div>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{t('ui_dead_letter_queue')}</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: dlqJobs.length > 0 ? '#ef4444' : '#94a3b8' }}>
               {dlqJobs.length}
             </div>
@@ -1332,7 +1308,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <Server size={15} />
-          <span>{isRtl ? 'وضعیت سیستم' : 'System'}</span>
+          <span>{t('ui_system')}</span>
         </button>
 
         <button
@@ -1348,7 +1324,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <Radio size={15} />
-          <span>{isRtl ? 'قوانین و مسیرها' : 'Rules & Routes'}</span>
+          <span>{t('ui_rules_routes')}</span>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({rules.length})</span>
         </button>
 
@@ -1365,8 +1341,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <PlayCircle size={15} />
-          <span>{isRtl ? 'شبیه‌ساز زنده مسیر' : 'Smart Simulator'}</span>
-          <span className="badge badge-vip" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>TEST</span>
+          <span>{t('ui_smart_simulator')}</span>
+          <span className="badge badge-vip" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>{t('ui_env_test')}</span>
         </button>
 
         <button
@@ -1382,7 +1358,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <Bot size={15} />
-          <span>{isRtl ? 'هوش مصنوعی' : 'AI Intelligence'}</span>
+          <span>{t('ui_ai_intelligence')}</span>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({aiConfigs.length})</span>
         </button>
 
@@ -1402,7 +1378,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <MessageSquare size={15} />
-          <span>{isRtl ? 'دستیار پی‌وی' : 'PV Assistant'}</span>
+          <span>{t('ui_pv_assistant')}</span>
           {pvConfig?.enabled && (
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
           )}
@@ -1421,7 +1397,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <Filter size={15} />
-          <span>{isRtl ? 'فیلترهای پیشرفته' : 'Advanced Filters'}</span>
+          <span>{t('ui_advanced_filters')}</span>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({filterRules.length})</span>
         </button>
 
@@ -1438,7 +1414,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <Users size={15} />
-          <span>{isRtl ? 'سشن‌های تلگرام' : 'Telegram Sessions'}</span>
+          <span>{t('ui_telegram_sessions')}</span>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({sessions.length})</span>
         </button>
 
@@ -1455,7 +1431,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <Inbox size={15} />
-          <span>{isRtl ? 'صف تحویل و DLQ' : 'Queue & DLQ'}</span>
+          <span>{t('ui_queue_dlq')}</span>
           {dlqJobs.length > 0 && (
             <span style={{ background: '#ef4444', color: '#fff', borderRadius: '50%', padding: '1px 6px', fontSize: '0.7rem' }}>
               {dlqJobs.length}
@@ -1476,7 +1452,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <ListTodo size={15} />
-          <span>{isRtl ? 'وظایف من' : 'My Jobs'}</span>
+          <span>{t('ui_my_jobs')}</span>
           {jobsPending > 0 && (
             <span style={{ background: '#14b8a6', color: '#fff', borderRadius: '50%', padding: '1px 6px', fontSize: '0.7rem' }}>
               {jobsPending}
@@ -1497,7 +1473,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <Server size={15} />
-          <span>{isRtl ? 'درگاه DevOps' : 'DevOps & Logs'}</span>
+          <span>{t('ui_devops_logs')}</span>
         </button>
 
         <button
@@ -1513,7 +1489,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <Activity size={15} />
-          <span>{isRtl ? 'حسابرسی رویدادها' : 'Audit Events'}</span>
+          <span>{t('ui_audit_events')}</span>
         </button>
 
         <button
@@ -1529,7 +1505,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           }}
         >
           <Sliders size={15} />
-          <span>{isRtl ? 'تنظیمات کاربر' : 'Client Settings'}</span>
+          <span>{t('ui_client_settings')}</span>
         </button>
 
         {currentUser?.is_admin && (
@@ -1546,14 +1522,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
             }}
           >
             <ShieldAlert size={15} />
-            <span>{isRtl ? '🛡 پنل مدیریت کلان' : 'Master Admin'}</span>
-            <span className="badge badge-vip" style={{ fontSize: '0.65rem', padding: '1px 6px', background: '#ef4444', color: '#fff' }}>ADMIN</span>
+            <span>{t('ui_master_admin')}</span>
+            <span className="badge badge-vip" style={{ fontSize: '0.65rem', padding: '1px 6px', background: '#ef4444', color: '#fff' }}>{t('ui_role_admin')}</span>
           </button>
         )}
       </div>
 
       {/* TAB 0: SYSTEM — readiness, topology, contract */}
-      {activeTab === 'system' && <SystemPanel isRtl={isRtl} />}
+      {activeTab === 'system' && <SystemPanel lang={lang} />}
 
       {/* TAB 1: RULES & ROUTES */}
       {activeTab === 'rules' && (
@@ -1562,17 +1538,15 @@ export function App({ me }: { me?: MeInfo } = {}) {
             report={diagnostics}
             loading={diagLoading}
             onRefresh={refreshDiagnostics}
-            isRtl={isRtl}
+            lang={lang}
           />
           <div className="hero-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
-                {isRtl ? 'قوانین فوروارد و مسیریابی هوشمند' : 'Smart Forwarding & Routing Rules'}
+                {t('ui_smart_forwarding_routing_rules')}
               </h2>
               <p className="text-balance" style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: 4, margin: 0 }}>
-                {isRtl
-                  ? 'تعریف مسیرهای سه‌گانه، سیاست‌های بازنویسی، کنترل حفاظت تلگرام و سوئیچ سریع مسیر'
-                  : 'Configure triple-routes, branding hops, bypass policies, and channel mappings'}
+                {t('ui_configure_triple_routes_branding_hops_bypass_policies_and_channe')}
               </p>
             </div>
             <button
@@ -1603,7 +1577,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               className="hero-add-btn btn btn-primary"
             >
               <Plus size={16} />
-              <span>{isRtl ? 'افزودن قانون جدید +' : 'New Rule +'}</span>
+              <span>{t('ui_new_rule')}</span>
             </button>
           </div>
 
@@ -1632,19 +1606,19 @@ export function App({ me }: { me?: MeInfo } = {}) {
                         {isVipHop && (
                           <span className="badge badge-vip" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
                             <Sparkles size={11} />
-                            {isRtl ? 'مسیر ۲: برندینگ VIP' : 'Route 2: VIP Hop'}
+                            {t('ui_route_2_vip_hop')}
                           </span>
                         )}
                         {isDirectCopy && (
                           <span className="badge badge-direct" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
                             <Copy size={11} />
-                            {isRtl ? 'مسیر ۱: کپی مستقیم' : 'Route 1: Direct Copy'}
+                            {t('ui_route_1_direct_copy')}
                           </span>
                         )}
                         {isNative && (
                           <span className="badge badge-native" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
                             <Send size={11} />
-                            {isRtl ? 'مسیر ۳: نیتیو' : 'Route 3: Native'}
+                            {t('ui_route_3_native')}
                           </span>
                         )}
                         {rule.source_chat_id && rule.target_chat_id &&
@@ -1660,7 +1634,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                             }}
                           >
                             <Shield size={11} color="#ef4444" />
-                            {isRtl ? 'خطای حلقه' : 'Loop'}
+                            {t('ui_loop')}
                           </span>
                         )}
                         <span className="badge badge-gray" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
@@ -1697,7 +1671,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                           border: rule.is_active ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
                         }}
                       >
-                        {rule.is_active ? (isRtl ? 'فعال' : 'ACTIVE') : (isRtl ? 'غیرفعال' : 'PAUSED')}
+                        {rule.is_active ? (t('ui_active')) : (t('ui_paused'))}
                       </button>
 
                       {rule.is_paused ? (
@@ -1705,20 +1679,20 @@ export function App({ me }: { me?: MeInfo } = {}) {
                           onClick={() => handleResumeRule(rule.id)}
                           className="btn btn-secondary icon-btn"
                           style={{ padding: '4px 8px', fontSize: '0.72rem', color: '#34d399' }}
-                          title={isRtl ? 'از سر گیری' : 'Resume'}
+                          title={t('ui_resume')}
                         >
                           <PlayCircle size={12} />
-                          <span>{isRtl ? 'ادامه' : 'Resume'}</span>
+                          <span>{t('ui_resume')}</span>
                         </button>
                       ) : (
                         <button
                           onClick={() => handlePauseRule(rule.id)}
                           className="btn btn-secondary icon-btn"
                           style={{ padding: '4px 8px', fontSize: '0.72rem', color: '#fbbf24' }}
-                          title={isRtl ? 'توقف' : 'Pause'}
+                          title={t('ui_pause')}
                         >
                           <Clock size={12} />
-                          <span>{isRtl ? 'توقف' : 'Pause'}</span>
+                          <span>{t('ui_pause')}</span>
                         </button>
                       )}
 
@@ -1729,7 +1703,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                         }}
                         className="btn btn-secondary icon-btn"
                         style={{ padding: '5px', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', borderColor: 'rgba(59, 130, 246, 0.4)' }}
-                        title={isRtl ? 'نمای تسک و تنظیمات پیشرفته (Task Overview)' : 'Task Overview & Advanced Settings'}
+                        title={t('ui_task_overview_advanced_settings')}
                       >
                         <SlidersHorizontal size={13} />
                       </button>
@@ -1750,7 +1724,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                         }}
                         className="btn btn-secondary icon-btn"
                         style={{ padding: '5px' }}
-                        title={isRtl ? 'ویرایش' : 'Edit'}
+                        title={t('ui_edit')}
                       >
                         <Edit3 size={13} />
                       </button>
@@ -1759,7 +1733,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                         onClick={() => handleDuplicateRule(rule.id)}
                         className="btn btn-secondary icon-btn"
                         style={{ padding: '5px' }}
-                        title={isRtl ? 'کپی و تکثیر تسک' : 'Duplicate Task'}
+                        title={t('ui_duplicate_task')}
                       >
                         <Copy size={13} />
                       </button>
@@ -1768,7 +1742,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                         onClick={() => handleDeleteRule(rule.id)}
                         className="btn btn-danger icon-btn"
                         style={{ padding: '5px' }}
-                        title={isRtl ? 'حذف' : 'Delete'}
+                        title={t('ui_delete')}
                       >
                         <Trash2 size={13} />
                       </button>
@@ -1780,7 +1754,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0 }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>
-                          {isRtl ? 'کانال مبدأ (A)' : 'Source A'}
+                          {t('ui_source_a')}
                           {extraSourceCount(rule) > 0 && (
                             <span className="badge" style={{ fontSize: '0.62rem', marginInlineStart: 6, background: 'rgba(59, 130, 246, 0.18)', color: '#93c5fd' }}>
                               +{extraSourceCount(rule)}
@@ -1799,7 +1773,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '2px 0' }}>
                       <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
                       <span className="badge badge-direct" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
-                        <ArrowDown size={11} /> {rule.use_intermediate ? (isRtl ? 'واسط برند C' : 'Hop C') : (isRtl ? 'مستقیم' : 'Direct')}
+                        <ArrowDown size={11} /> {rule.use_intermediate ? (t('ui_hop_c')) : (t('ui_direct'))}
                       </span>
                       <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
                     </div>
@@ -1807,7 +1781,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     {rule.use_intermediate && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0, background: 'rgba(245, 158, 11, 0.08)', padding: '6px 10px', borderRadius: 6 }}>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ color: '#fbbf24', fontSize: '0.68rem' }}>{isRtl ? 'کانال واسط (C)' : 'Hop C'}</div>
+                          <div style={{ color: '#fbbf24', fontSize: '0.68rem' }}>{t('ui_hop_c')}</div>
                           <div style={{ fontWeight: 600, color: '#fbbf24', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {rule.intermediate_channel_name || rule.intermediate_channel_id}
                           </div>
@@ -1820,7 +1794,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0 }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>{isRtl ? 'مقصد نهایی (B)' : 'Target B'}</div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>{t('ui_target_b')}</div>
                         <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {rule.target_chat_name || rule.target_chat_id}
                         </div>
@@ -1847,7 +1821,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{isRtl ? 'کانال مبدا (A)' : 'Source A'}</div>
+                      <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{t('ui_source_a')}</div>
                       <div style={{ fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {rule.source_chat_name || rule.source_chat_id}
                       </div>
@@ -1859,32 +1833,32 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     {rule.use_intermediate ? (
                       <>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#fbbf24', flexShrink: 0 }}>
-                          <span style={{ fontSize: '0.65rem' }}>Hop</span>
+                          <span style={{ fontSize: '0.65rem' }}>{t('ui_hop')}</span>
                           <ArrowRightLeft size={14} />
                         </div>
                         <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
-                          <div style={{ color: '#fbbf24', fontSize: '0.7rem' }}>{isRtl ? 'واسط برند (C)' : 'Brand C'}</div>
+                          <div style={{ color: '#fbbf24', fontSize: '0.7rem' }}>{t('ui_brand_c')}</div>
                           <div style={{ fontWeight: 600, color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {rule.intermediate_channel_name || rule.intermediate_channel_id || 'Channel C'}
+                            {rule.intermediate_channel_name || rule.intermediate_channel_id || t('ui_channel_c')}
                           </div>
                           <div style={{ fontSize: '0.7rem', color: '#b45309' }}>
                             <span className="font-mono-ltr">{rule.intermediate_channel_id}</span>
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#10b981', flexShrink: 0 }}>
-                          <span style={{ fontSize: '0.65rem' }}>Native</span>
+                          <span style={{ fontSize: '0.65rem' }}>{t('ui_native')}</span>
                           {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
                         </div>
                       </>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#3b82f6', padding: '0 8px', flexShrink: 0 }}>
-                        <span style={{ fontSize: '0.65rem' }}>Direct</span>
+                        <span style={{ fontSize: '0.65rem' }}>{t('ui_direct')}</span>
                         {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
                       </div>
                     )}
 
                     <div style={{ flex: 1, minWidth: 0, textAlign: isRtl ? 'left' : 'right' }}>
-                      <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{isRtl ? 'مقصد نهایی (B)' : 'Target B'}</div>
+                      <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>{t('ui_target_b')}</div>
                       <div style={{ fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {rule.target_chat_name || rule.target_chat_id}
                       </div>
@@ -1898,7 +1872,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 12 }}>
                     {rule.custom_header && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <span style={{ color: '#94a3b8' }}>{isRtl ? 'هدر پیام:' : 'Header:'}</span>
+                        <span style={{ color: '#94a3b8' }}>{t('ui_header')}</span>
                         <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4, color: '#fbbf24' }}>
                           {rule.custom_header}
                         </code>
@@ -1910,7 +1884,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       </span>
                       {rule.filter_rule_id && (
                         <span className="badge badge-direct" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
-                          <Filter size={9} /> Filter
+                          <Filter size={9} /> {t('ui_filter')}
                         </span>
                       )}
                       {rule.ai_config_id && (
@@ -1920,7 +1894,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       )}
                       {rule.fallback_enabled && (
                         <span className="badge badge-gray" style={{ fontSize: '0.68rem', padding: '2px 6px', color: '#a7f3d0' }}>
-                          <Shield size={9} /> Fallback: {rule.fallback_mode}
+                          <Shield size={9} /> {t('ui_fallback')} {rule.fallback_mode}
                         </span>
                       )}
                     </div>
@@ -1941,15 +1915,15 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       }}
                     >
                       <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: 'rgba(16, 185, 129, 0.10)', textAlign: 'center' }}>
-                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'فوروارد' : 'FWD'}</div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{t('ui_fwd')}</div>
                         <div style={{ fontWeight: 800, color: '#34d399', lineHeight: 1.35 }}>{liveStat.forwarded ?? 0}</div>
                       </div>
                       <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: 'rgba(59, 130, 246, 0.10)', textAlign: 'center' }}>
-                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'فیلتر' : 'FILT'}</div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{t('ui_filt')}</div>
                         <div style={{ fontWeight: 800, color: '#60a5fa', lineHeight: 1.35 }}>{liveStat.filtered ?? 0}</div>
                       </div>
                       <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: liveStat.errors > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.07)', textAlign: 'center' }}>
-                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{isRtl ? 'خطا' : 'ERR'}</div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.64rem', fontWeight: 600 }}>{t('ui_err')}</div>
                         <div style={{ fontWeight: 800, color: liveStat.errors > 0 ? '#fca5a5' : '#64748b', lineHeight: 1.35 }}>{liveStat.errors ?? 0}</div>
                       </div>
                       <div
@@ -1961,7 +1935,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                           textAlign: 'center',
                         }}
                       >
-                        <span style={{ color: '#64748b', fontSize: '0.62rem' }}>{isRtl ? 'آخرین فوروارد' : 'LAST'}</span>
+                        <span style={{ color: '#64748b', fontSize: '0.62rem' }}>{t('ui_last')}</span>
                         <span style={{ fontWeight: 700, color: '#818cf8', fontSize: '0.7rem' }}>
                           {liveStat.last_forward_ts
                             ? new Date(liveStat.last_forward_ts * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
@@ -2003,7 +1977,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                         className={`route-switch-btn btn ${isDirectCopy ? 'btn-primary' : 'btn-secondary'}`}
                       >
                         <Copy size={11} />
-                        <span>{isRtl ? 'مسیر ۱: مستقیم' : 'Route 1: Direct'}</span>
+                        <span>{t('ui_route_1_direct')}</span>
                       </button>
 
                       <button
@@ -2011,7 +1985,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                         className={`route-switch-btn btn ${isVipHop ? 'btn-vip' : 'btn-secondary'}`}
                       >
                         <Sparkles size={11} />
-                        <span>{isRtl ? 'مسیر ۲: VIP' : 'Route 2: VIP'}</span>
+                        <span>{t('ui_route_2_vip')}</span>
                       </button>
 
                       <button
@@ -2019,7 +1993,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                         className={`route-switch-btn btn ${isNative ? 'btn-primary' : 'btn-secondary'}`}
                       >
                         <Send size={11} />
-                        <span>{isRtl ? 'مسیر ۳: نیتیو' : 'Route 3: Native'}</span>
+                        <span>{t('ui_route_3_native')}</span>
                       </button>
                     </div>
                   </div>
@@ -2037,17 +2011,15 @@ export function App({ me }: { me?: MeInfo } = {}) {
           <div className="glass-panel" style={{ padding: 24 }}>
             <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
               <PlayCircle size={20} color="#fbbf24" />
-              <span>{isRtl ? 'شبیه‌ساز تصمیم‌گیری و آزمون زنده' : 'Live Smart Simulator'}</span>
+              <span>{t('ui_live_smart_simulator')}</span>
             </h2>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: 20 }}>
-              {isRtl
-                ? 'ارزیابی رفتار موتور روتینگ، تطبیق VIP، بای‌پس محتوای قفل‌شده و پیش‌نمایش خروجی پیام قبل از ارسال واقعی'
-                : 'Test routing engine decisions, VIP origin criteria, and protected content bypass'}
+              {t('ui_test_routing_engine_decisions_vip_origin_criteria_and_protected')}
             </p>
 
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6 }}>
-                {isRtl ? 'انتخاب قانون برای شبیه‌سازی:' : 'Select Target Rule:'}
+                {t('ui_select_target_rule')}
               </label>
               <select
                 value={simSelectedRuleId}
@@ -2057,7 +2029,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 {(Array.isArray(rules) ? rules : []).map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.source_chat_name || r.source_chat_id} ➔ {r.target_chat_name || r.target_chat_id} (
-                    {r.use_intermediate ? 'VIP Hop via C' : r.forward_mode})
+                    {r.use_intermediate ? t('ui_vip_hop_via_c') : r.forward_mode})
                   </option>
                 ))}
               </select>
@@ -2065,7 +2037,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
 
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6 }}>
-                {isRtl ? 'متن پیام آزمایشی:' : 'Simulated Message Text:'}
+                {t('ui_simulated_message_text')}
               </label>
               <textarea
                 rows={4}
@@ -2079,7 +2051,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6 }}>
-                  {isRtl ? 'شناسه منشأ فوروارد (Chat ID):' : 'Forward Origin Chat ID:'}
+                  {t('ui_forward_origin_chat_id')}
                 </label>
                 <input
                   type="text"
@@ -2092,21 +2064,21 @@ export function App({ me }: { me?: MeInfo } = {}) {
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6 }}>
-                  {isRtl ? 'نام نمایشی کانال منشأ:' : 'Forward Origin Title:'}
+                  {t('ui_forward_origin_title')}
                 </label>
                 <input
                   type="text"
                   value={simOriginTitle}
                   onChange={(e) => setSimOriginTitle(e.target.value)}
                   className="input-field"
-                  placeholder="Forex VIP Channel"
+                  placeholder={t('ui_forex_vip_channel')}
                 />
               </div>
             </div>
 
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6 }}>
-                {isRtl ? 'یوزرنیم کانال منشأ (Username):' : 'Forward Origin Username:'}
+                {t('ui_forward_origin_username')}
               </label>
               <input
                 type="text"
@@ -2126,7 +2098,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 />
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Lock size={14} color="#f87171" />
-                  {isRtl ? 'کانال منبع محافظت‌شده است (Protected/No-Forward)' : 'Protected Content Channel'}
+                  {t('ui_protected_content_channel')}
                 </span>
               </label>
 
@@ -2136,7 +2108,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   checked={simHasMedia}
                   onChange={(e) => setSimHasMedia(e.target.checked)}
                 />
-                <span>{isRtl ? 'پیام دارای تصویر/مدیا است' : 'Has Media'}</span>
+                <span>{t('ui_has_media')}</span>
               </label>
             </div>
 
@@ -2147,14 +2119,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
               style={{ width: '100%', padding: '12px' }}
             >
               <Zap size={18} />
-              <span>{simulating ? (isRtl ? 'در حال شبیه‌سازی...' : 'Simulating...') : (isRtl ? 'اجرای ارزیابی هوشمند' : 'Run Decision Engine')}</span>
+              <span>{simulating ? (t('ui_simulating')) : (t('ui_run_decision_engine'))}</span>
             </button>
           </div>
 
           {/* Results Panel */}
           <div className="glass-panel" style={{ padding: 24 }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 14 }}>
-              {isRtl ? 'نتیجه تحلیل و جریان انتقال' : 'Engine Decision & Workflow Trace'}
+              {t('ui_engine_decision_workflow_trace')}
             </h3>
 
             {simResult ? (
@@ -2182,7 +2154,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>{isRtl ? 'تصمیم پای نهایی' : 'Decision'}</div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>{t('ui_decision')}</div>
                     <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>
                       {isRtl ? simResult.route_label_fa : simResult.route_label_en}
                     </div>
@@ -2198,7 +2170,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
 
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 4 }}>
-                    {isRtl ? 'دلیل تصمیم موتور:' : 'Decision Reason:'}
+                    {t('ui_decision_reason')}
                   </div>
                   <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem' }}>
                     {simResult.reason}
@@ -2222,16 +2194,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   >
                     <Shield size={16} />
                     <span>
-                      {isRtl
-                        ? '🛡 بای‌پس حفاظت تلگرام: دانلود محتوای قفل‌شده و ارسال مجدد بدون نقض قوانین کپی‌رایت'
-                        : 'Bypass Activated: Protected content will be re-uploaded directly.'}
+                      {t('ui_bypass_activated_protected_content_will_be_re_uploaded_directly')}
                     </span>
                   </div>
                 )}
 
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 6 }}>
-                    {isRtl ? 'گام‌های عملیاتی پایپ‌لاین:' : 'Pipeline Execution Steps:'}
+                    {t('ui_pipeline_execution_steps')}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {(Array.isArray(simResult?.action_steps) ? simResult.action_steps : []).map((st, idx) => (
@@ -2255,7 +2225,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 {simResult.preview_message && (
                   <div>
                     <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: 6 }}>
-                      {isRtl ? 'پیش‌نمایش خروجی پیام ارسالی به مقصد:' : 'Output Message Preview:'}
+                      {t('ui_output_message_preview')}
                     </div>
                     <pre
                       style={{
@@ -2277,7 +2247,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             ) : (
               <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
                 <Activity size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                <p>{isRtl ? 'هنوز شبیه‌سازی انجام نشده است. روی دکمه اجرای ارزیابی کلیک کنید.' : 'No simulation run yet. Click Run to evaluate.'}</p>
+                <p>{t('ui_no_simulation_run_yet_click_run_to_evaluate')}</p>
               </div>
             )}
           </div>
@@ -2290,12 +2260,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-                {isRtl ? 'پیکربندی هوش مصنوعی و بازنویسی خودکار' : 'AI Intelligence & Rewriting Engines'}
+                {t('ui_ai_intelligence_rewriting_engines')}
               </h2>
               <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
-                {isRtl
-                  ? 'یکپارچه‌سازی با OpenAI، Anthropic و مدل‌های سفارشی جهت ترجمه، سیگنال‌یابی و بازنویسی'
-                  : 'Configure LLM models for auto-rewriting, signal parsing, and translations'}
+                {t('ui_configure_llm_models_for_auto_rewriting_signal_parsing_and_trans')}
               </p>
             </div>
             <button
@@ -2314,7 +2282,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               className="btn btn-primary"
             >
               <Plus size={16} />
-              <span>{isRtl ? 'افزودن مدل هوش مصنوعی' : 'New AI Engine'}</span>
+              <span>{t('ui_new_ai_engine')}</span>
             </button>
           </div>
 
@@ -2355,24 +2323,24 @@ export function App({ me }: { me?: MeInfo } = {}) {
 
                 <div style={{ fontSize: '0.8rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>API Key: </span>
-                    <code>{ai.api_key_masked || 'None / Environment'}</code>
+                    <span style={{ color: '#94a3b8' }}>{t('ui_api_key')}</span>
+                    <code>{ai.api_key_masked || (t('ui_none_environment'))}</code>
                   </div>
                   <div style={{ overflowWrap: 'anywhere' }}>
                     <span style={{ color: '#94a3b8' }}>
-                      {isRtl ? 'آدرس سرویس‌دهنده: ' : 'Endpoint: '}
+                      {t('ui_endpoint')}
                     </span>
-                    <code dir="ltr">{ai.base_url || (isRtl ? 'پیش‌فرض ارائه‌دهنده' : 'provider default')}</code>
+                    <code dir="ltr">{ai.base_url || (t('ui_provider_default'))}</code>
                   </div>
-                  <ProviderKeyCheck aiConfigId={ai.id} isRtl={isRtl} compact />
+                  <ProviderKeyCheck aiConfigId={ai.id} lang={lang} compact />
                   <div>
-                    <span style={{ color: '#94a3b8' }}>Temperature: </span>
-                    <span>{ai.temperature}</span> | <span style={{ color: '#94a3b8' }}>Lang: </span>
+                    <span style={{ color: '#94a3b8' }}>{t('ui_temperature')}</span>
+                    <span>{ai.temperature}</span> | <span style={{ color: '#94a3b8' }}>{t('ui_lang')}</span>
                     <span>{ai.target_language}</span>
                   </div>
                   {ai.system_prompt && (
                     <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: 8, borderRadius: 6, marginTop: 4 }}>
-                      <span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'block' }}>System Prompt:</span>
+                      <span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'block' }}>{t('ui_system_prompt')}</span>
                       <span style={{ fontSize: '0.75rem' }}>{ai.system_prompt}</span>
                     </div>
                   )}
@@ -2390,7 +2358,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           aiConfigs={Array.isArray(aiConfigs) ? aiConfigs : []}
           onSaved={async () => setPromptTemplates(await api.getPromptTemplates().catch(() => []))}
           onToast={showToast}
-          isRtl={isRtl}
+          lang={lang}
         />
       )}
 
@@ -2403,12 +2371,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
               <div>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
                   <MessageSquare size={22} color="#ec4899" />
-                  <span>{isRtl ? 'دستیار هوشمند پی‌وی (PV Assistant)' : 'AI PV Assistant'}</span>
+                  <span>{t('ui_ai_pv_assistant')}</span>
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
-                  {isRtl
-                    ? 'پاسخگویی خودکار، کاملاً انسانی، صمیمی و محاوره‌ای به پیام‌های خصوصی تلگرام'
-                    : 'Human-like conversational auto-responder for Telegram private messages'}
+                  {t('ui_human_like_conversational_auto_responder_for_telegram_private_me')}
                 </p>
               </div>
 
@@ -2440,21 +2406,21 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     marginRight: isRtl ? 0 : 8,
                   }}
                 />
-                <span>{pvConfig?.enabled ? (isRtl ? 'فعال (روشن)' : 'ENABLED') : (isRtl ? 'غیرفعال (خاموش)' : 'DISABLED')}</span>
+                <span>{pvConfig?.enabled ? (t('ui_enabled')) : (t('ui_disabled'))}</span>
               </button>
             </div>
 
             {/* Persona Preset Buttons */}
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 8, fontWeight: 600 }}>
-                {isRtl ? 'لحن و پرسونا آماده:' : 'Persona & Tone Presets:'}
+                {t('ui_persona_tone_presets')}
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
                 <button
                   type="button"
                   onClick={() => {
                     setPvPreset('casual')
-                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: PV_PRESETS.casual.prompt } : null)
+                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: t('ui_pv_preset_casual_prompt') } : null)
                   }}
                   className="btn"
                   style={{
@@ -2466,13 +2432,13 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     textAlign: 'center',
                   }}
                 >
-                  {isRtl ? PV_PRESETS.casual.label_fa : PV_PRESETS.casual.label_en}
+                  {t('ui_pv_preset_casual_label')}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setPvPreset('business')
-                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: PV_PRESETS.business.prompt } : null)
+                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: t('ui_pv_preset_business_prompt') } : null)
                   }}
                   className="btn"
                   style={{
@@ -2484,13 +2450,13 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     textAlign: 'center',
                   }}
                 >
-                  {isRtl ? PV_PRESETS.business.label_fa : PV_PRESETS.business.label_en}
+                  {t('ui_pv_preset_business_label')}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setPvPreset('short')
-                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: PV_PRESETS.short.prompt } : null)
+                    setPvConfig((prev) => prev ? { ...prev, persona_prompt: t('ui_pv_preset_short_prompt') } : null)
                   }}
                   className="btn"
                   style={{
@@ -2502,7 +2468,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     textAlign: 'center',
                   }}
                 >
-                  {isRtl ? PV_PRESETS.short.label_fa : PV_PRESETS.short.label_en}
+                  {t('ui_pv_preset_short_label')}
                 </button>
               </div>
             </div>
@@ -2510,7 +2476,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             {/* Persona Prompt Textarea */}
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6, fontWeight: 600 }}>
-                {isRtl ? 'دستورالعمل و پرامپت پرسونا (Persona Prompt):' : 'Persona Prompt Instructions:'}
+                {t('ui_persona_prompt_instructions')}
               </label>
               <textarea
                 rows={9}
@@ -2521,14 +2487,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 }}
                 className="input-field"
                 style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.825rem', lineHeight: 1.6 }}
-                placeholder={isRtl ? 'دستورالعمل رفتار هوش مصنوعی در چت پی‌وی...' : 'AI behavior prompt for private chats...'}
+                placeholder={t('ui_ai_behavior_prompt_for_private_chats')}
               />
             </div>
 
             {/* Connect to AI Config */}
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6 }}>
-                {isRtl ? 'مدل هوش مصنوعی متصل:' : 'Linked AI Model Configuration:'}
+                {t('ui_linked_ai_model_configuration')}
               </label>
               <select
                 value={pvConfig?.ai_config_id || ''}
@@ -2536,7 +2502,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 className="input-field"
                 style={{ width: '100%' }}
               >
-                <option value="">{isRtl ? '🤖 مدل پیش‌فرض سیستم (Default)' : '🤖 System Default'}</option>
+                <option value="">{t('ui_system_default')}</option>
                 {aiConfigs.map((ai) => (
                   <option key={ai.id} value={ai.id}>
                     {ai.name} ({ai.provider} - {ai.model})
@@ -2549,7 +2515,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 18 }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {isRtl ? 'حداقل تایپینگ (ثانیه):' : 'Min Typing Delay (s):'}
+                  {t('ui_min_typing_delay_s')}
                 </label>
                 <input
                   type="number"
@@ -2564,7 +2530,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {isRtl ? 'حداکثر تایپینگ (ثانیه):' : 'Max Typing Delay (s):'}
+                  {t('ui_max_typing_delay_s')}
                 </label>
                 <input
                   type="number"
@@ -2579,7 +2545,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {isRtl ? 'کول‌داون پیام (ثانیه):' : 'Cooldown (s):'}
+                  {t('ui_cooldown_s')}
                 </label>
                 <input
                   type="number"
@@ -2593,7 +2559,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {isRtl ? 'حافظه تاریخچه چت:' : 'Chat History Limit:'}
+                  {t('ui_chat_history_limit')}
                 </label>
                 <input
                   type="number"
@@ -2615,7 +2581,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   onChange={(e) => setPvConfig((prev) => prev ? { ...prev, ignore_bots: e.target.checked } : null)}
                   style={{ accentColor: '#ec4899' }}
                 />
-                <span>{isRtl ? '🤖 نادیده‌گرفتن پیام‌های ربات‌ها' : 'Ignore Bot Messages'}</span>
+                <span>{t('ui_ignore_bot_messages')}</span>
               </label>
 
               <button
@@ -2626,7 +2592,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 style={{ background: '#ec4899', borderColor: '#db2777' }}
               >
                 <Check size={16} />
-                <span>{pvSaving ? (isRtl ? 'در حال ذخیره...' : 'Saving...') : (isRtl ? 'ذخیره تنظیمات پی‌وی' : 'Save PV Config')}</span>
+                <span>{pvSaving ? (t('ui_saving')) : (t('ui_save_pv_config'))}</span>
               </button>
             </div>
           </div>
@@ -2640,12 +2606,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-                {isRtl ? 'فیلترهای پیشرفته متن و رسانه' : 'Advanced Content & Media Filtering'}
+                {t('ui_advanced_content_media_filtering')}
               </h2>
               <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
-                {isRtl
-                  ? 'تنظیم لیست‌های سفید/سیاه، الگوهای عبارات باقاعده (Regex) و مسدودسازی رسانه‌ها'
-                  : 'Manage text blacklists/whitelists, Regex patterns, and media type policies'}
+                {t('ui_manage_text_blacklists_whitelists_regex_patterns_and_media_type')}
               </p>
             </div>
             <button
@@ -2665,7 +2629,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               className="btn btn-primary"
             >
               <Plus size={16} />
-              <span>{isRtl ? 'افزودن فیلتر جدید' : 'New Filter Rule'}</span>
+              <span>{t('ui_new_filter_rule')}</span>
             </button>
           </div>
 
@@ -2698,7 +2662,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 <div style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div>
                     <span style={{ color: '#f87171', display: 'block', marginBottom: 2 }}>
-                      {isRtl ? 'کلمات مسدود (Blacklist):' : 'Blacklist:'}
+                      {t('ui_blacklist')}
                     </span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                       {(Array.isArray(f?.blacklist_keywords) ? f.blacklist_keywords : []).map((w, idx) => (
@@ -2711,7 +2675,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
 
                   <div>
                     <span style={{ color: '#34d399', display: 'block', marginBottom: 2 }}>
-                      {isRtl ? 'رسانه‌های مجاز:' : 'Allowed Media:'}
+                      {t('ui_allowed_media')}
                     </span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                       {(Array.isArray(f?.allowed_media_types) ? f.allowed_media_types : []).map((m, idx) => (
@@ -2733,12 +2697,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
         <div>
           <div style={{ marginBottom: 20 }}>
             <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-              {isRtl ? 'سشن‌های متصل تلگرام (Userbots / Clients)' : 'Telegram MTProto Client Sessions'}
+              {t('ui_telegram_mtproto_client_sessions')}
             </h2>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
-              {isRtl
-                ? 'پایش حساب‌های تلگرام، وضعیت احراز هویت، پراکسی و کنترل نشست‌های فعال'
-                : 'Monitor connected userbot sessions, auth status, and proxies'}
+              {t('ui_monitor_connected_userbot_sessions_auth_status_and_proxies')}
             </p>
           </div>
 
@@ -2753,28 +2715,28 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     </span>
                   </div>
                   <span className={`badge ${sess.is_active ? 'badge-native' : 'badge-gray'}`}>
-                    {sess.is_active ? (isRtl ? 'متصل' : 'ONLINE') : (isRtl ? 'غیرفعال' : 'OFFLINE')}
+                    {sess.is_active ? (t('ui_online')) : (t('ui_offline'))}
                   </span>
                 </div>
 
                 <div style={{ fontSize: '0.8rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>Phone: </span>
-                    <span>{sess.phone_number || 'N/A'}</span>
+                    <span style={{ color: '#94a3b8' }}>{t('ui_phone')}</span>
+                    <span>{sess.phone_number || (t('ui_n_a'))}</span>
                   </div>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>User ID: </span>
+                    <span style={{ color: '#94a3b8' }}>{t('ui_user_id')}</span>
                     <span style={{ fontFamily: 'monospace' }}>{sess.user_id}</span>
                   </div>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>Auth Status: </span>
+                    <span style={{ color: '#94a3b8' }}>{t('ui_auth_status')}</span>
                     <span style={{ color: sess.is_authorized ? '#34d399' : '#f87171' }}>
-                      {sess.is_authorized ? 'Authorized ✓' : 'Unauthorized ✗'}
+                      {sess.is_authorized ? (t('ui_authorized')) : (t('ui_unauthorized'))}
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>Proxy: </span>
-                    <span>{sess.proxy || 'Direct (No Proxy)'}</span>
+                    <span style={{ color: '#94a3b8' }}>{t('ui_proxy')}</span>
+                    <span>{sess.proxy || (t('ui_direct_no_proxy'))}</span>
                   </div>
                 </div>
 
@@ -2785,7 +2747,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     style={{ flex: 1, fontSize: '0.75rem', padding: '6px 8px', minWidth: 110 }}
                   >
                     <Layers size={13} />
-                    <span>{isRtl ? 'بکاپ سشن' : 'Backup'}</span>
+                    <span>{t('ui_backup')}</span>
                   </button>
                   <button
                     onClick={() => handleTerminateSession(sess)}
@@ -2793,7 +2755,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     style={{ flex: 1, fontSize: '0.75rem', padding: '6px 8px', minWidth: 110 }}
                   >
                     <X size={13} />
-                    <span>{isRtl ? 'قطع سشن' : 'Terminate'}</span>
+                    <span>{t('ui_terminate')}</span>
                   </button>
                 </div>
               </div>
@@ -2808,18 +2770,16 @@ export function App({ me }: { me?: MeInfo } = {}) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-                {isRtl ? 'پایپ‌لاین ارسال و صف خطاهای DLQ' : 'Delivery Jobs & Dead Letter Queue (DLQ)'}
+                {t('ui_delivery_jobs_dead_letter_queue_dlq')}
               </h2>
               <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
-                {isRtl
-                  ? 'بررسی جاب‌های در حال انجام، خطاهای پایپ‌لاین و تلاش مجدد برای پیام‌های شکست‌خورده'
-                  : 'Track in-flight delivery jobs and recover failed telegram messages'}
+                {t('ui_track_in_flight_delivery_jobs_and_recover_failed_telegram_messag')}
               </p>
             </div>
             {dlqJobs.length > 0 && (
               <button onClick={handlePurgeDLQ} className="btn btn-danger">
                 <Trash2 size={16} />
-                <span>{isRtl ? 'تخلیه صف خطاهای DLQ' : 'Purge All DLQ'}</span>
+                <span>{t('ui_purge_all_dlq')}</span>
               </button>
             )}
           </div>
@@ -2836,11 +2796,11 @@ export function App({ me }: { me?: MeInfo } = {}) {
               }}
             >
               {[
-                { label: isRtl ? 'پردازش‌شده' : 'Processed', value: deliveryStats.processed_total ?? 0, color: '#818cf8' },
-                { label: isRtl ? 'فوروارد‌شده' : 'Forwarded', value: deliveryStats.forwarded_total ?? 0, color: '#34d399' },
-                { label: isRtl ? 'ناموفق' : 'Failed', value: deliveryStats.failed_total ?? 0, color: '#f87171' },
-                { label: isRtl ? 'فیلترشده' : 'Filtered', value: deliveryStats.filtered_total ?? 0, color: '#fbbf24' },
-                { label: isRtl ? 'در صف' : 'In Queue', value: deliveryStats.in_queue ?? 0, color: '#38bdf8' },
+                { label: t('ui_processed'), value: deliveryStats.processed_total ?? 0, color: '#818cf8' },
+                { label: t('ui_forwarded'), value: deliveryStats.forwarded_total ?? 0, color: '#34d399' },
+                { label: t('ui_failed'), value: deliveryStats.failed_total ?? 0, color: '#f87171' },
+                { label: t('ui_filtered'), value: deliveryStats.filtered_total ?? 0, color: '#fbbf24' },
+                { label: t('ui_in_queue'), value: deliveryStats.in_queue ?? 0, color: '#38bdf8' },
               ].map((m) => (
                 <div key={m.label} className="glass-panel" style={{ padding: '10px 14px' }}>
                   <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{m.label}</div>
@@ -2855,12 +2815,12 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <div className="glass-panel" style={{ padding: 20 }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Clock size={16} color="#818cf8" />
-                <span>{isRtl ? 'جاب‌های فعال در حال تحویل' : 'Recent Delivery Jobs'}</span>
+                <span>{t('ui_recent_delivery_jobs')}</span>
               </h3>
 
               {queueJobs.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 30, color: '#64748b', fontSize: '0.85rem' }}>
-                  {isRtl ? 'هیچ جابی در صف معلق نیست (همه تحویل شدند)' : 'No pending jobs in queue'}
+                  {t('ui_no_pending_jobs_in_queue')}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -2878,8 +2838,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       }}
                     >
                       <div>
-                        <div style={{ fontWeight: 600 }}>Msg #{q.source_message_id}</div>
-                        <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Stage: {q.delivery_stage}</div>
+                        <div style={{ fontWeight: 600 }}>{t('ui_msg')} #{q.source_message_id}</div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{t('ui_stage')} {q.delivery_stage}</div>
                       </div>
                       <span className="badge badge-direct">{q.status}</span>
                     </div>
@@ -2892,13 +2852,13 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <div className="glass-panel" style={{ padding: 20 }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Activity size={16} color="#ef4444" />
-                <span>{isRtl ? 'صف پیام‌های ناموفق (DLQ)' : 'Dead Letter Queue (DLQ)'}</span>
+                <span>{t('ui_dead_letter_queue_dlq')}</span>
                 <span className="badge badge-vip">{dlqJobs.length}</span>
               </h3>
 
               {dlqJobs.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 30, color: '#64748b', fontSize: '0.85rem' }}>
-                  {isRtl ? 'صف خطاهای DLQ خالی است ✓' : 'Dead Letter Queue is empty ✓'}
+                  {t('ui_dead_letter_queue_is_empty')}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -2921,7 +2881,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                           style={{ padding: '2px 8px', fontSize: '0.75rem' }}
                         >
                           <RefreshCw size={12} />
-                          <span>{isRtl ? 'تلاش مجدد' : 'Retry'}</span>
+                          <span>{t('ui_retry')}</span>
                         </button>
                       </div>
                       <div style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>{dlq.last_error}</div>
@@ -2941,12 +2901,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <div>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Terminal size={22} color="#818cf8" />
-                <span>{isRtl ? 'مرکز لاگر پیشرفته و مانیتورینگ زنده (Pro Active Logger)' : 'Pro Active Logger & Diagnostics'}</span>
+                <span>{t('ui_pro_active_logger_diagnostics')}</span>
               </h2>
               <p style={{ fontSize: '0.825rem', color: '#94a3b8', marginTop: 4 }}>
-                {isRtl
-                  ? 'سرویس لاگر مستقل بر بستر gRPC پورت 6002 با پایگاه داده SQLite WAL، فیلترینگ چندسطحی و استریم زنده'
-                  : 'High-throughput independent Logger microservice on gRPC :6002 with live auto-refresh and multi-tier filtering'}
+                {t('ui_high_throughput_independent_logger_microservice_on_grpc_6002_wit')}
               </p>
             </div>
 
@@ -2976,17 +2934,17 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     boxShadow: logAutoRefresh ? '0 0 8px #10b981' : 'none',
                   }}
                 />
-                <span>{logAutoRefresh ? (isRtl ? 'استریم زنده فعال (۳ ثانیه)' : 'Live Stream Active (3s)') : (isRtl ? 'استریم متوقف' : 'Live Stream Paused')}</span>
+                <span>{logAutoRefresh ? (t('ui_live_stream_active_3s')) : (t('ui_live_stream_paused'))}</span>
               </button>
 
               <button
                 onClick={() => fetchLogs()}
                 className="btn btn-secondary"
                 style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-                title={isRtl ? 'بروزرسانی دستی' : 'Refresh Now'}
+                title={t('ui_refresh_now')}
               >
                 <RefreshCw size={14} />
-                <span>{isRtl ? 'بروزرسانی' : 'Refresh'}</span>
+                <span>{t('ui_refresh')}</span>
               </button>
             </div>
           </div>
@@ -2996,10 +2954,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
             const hmap: Record<string, { online: boolean; detail: string; latency_ms: number } | undefined> = {}
             for (const s of servicesHealth?.services || []) hmap[s.name] = s
             const nodes = [
-              { key: 'web', title: isRtl ? 'درگاه وب (Rust)' : 'Web Gateway', sub: 'atf-web · :8088', color: '#f59e0b' },
-              { key: 'api', title: isRtl ? 'کنترل‌پلین REST (Go)' : 'REST Control Plane', sub: 'atf-api · :8080', color: '#a855f7' },
-              { key: 'core', title: isRtl ? 'هسته پایتون + MTProto' : 'Python Core & MTProto', sub: 'atf-core · gRPC :50051', color: '#38bdf8' },
-              { key: 'logger', title: isRtl ? 'لاگر مرکزی' : 'Central Logger', sub: 'atf-logger · gRPC :50052', color: '#34d399' },
+              { key: 'web', title: t('ui_web_gateway'), sub: 'atf-web · :8088', color: '#f59e0b' },
+              { key: 'api', title: t('ui_rest_control_plane'), sub: 'atf-api · :8080', color: '#a855f7' },
+              { key: 'core', title: t('ui_python_core_mtproto'), sub: 'atf-core · gRPC :50051', color: '#38bdf8' },
+              { key: 'logger', title: t('ui_central_logger'), sub: 'atf-logger · gRPC :50052', color: '#34d399' },
             ]
             const svc = (k: string) => hmap[k]
             return (
@@ -3007,7 +2965,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
                   <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <HeartPulse size={17} color={servicesHealth?.status === 'healthy' ? '#34d399' : '#ef4444'} />
-                    <span>{isRtl ? 'توپولوژی سرویس‌ها و سلامت زنده' : 'Services Topology & Live Health'}</span>
+                    <span>{t('ui_services_topology_live_health')}</span>
                   </h3>
                   <span
                     className="badge"
@@ -3020,9 +2978,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   >
                     {servicesHealth
                       ? servicesHealth.status === 'healthy'
-                        ? isRtl ? '✅ همه سرویس‌ها سالم' : '✅ All services healthy'
-                        : isRtl ? '⚠️ سرویس ناسالم' : '⚠️ Degraded'
-                      : isRtl ? '… در حال بررسی' : '… probing'}
+                        ? t('ui_all_services_healthy')
+                        : t('ui_degraded')
+                      : t('ui_probing')}
                   </span>
                 </div>
 
@@ -3039,10 +2997,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
                             <Cable size={12} color={online ? '#34d399' : '#ef4444'} />
                             <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
                               {i === 1
-                                ? isRtl ? 'پروکسی REST + JWT' : 'REST proxy + JWT'
+                                ? t('ui_rest_proxy_jwt')
                                 : i === 2
-                                ? isRtl ? 'gRPC کنترل' : 'gRPC control'
-                                : isRtl ? 'gRPC لاگ' : 'gRPC logs'}
+                                ? t('ui_grpc_control')
+                                : t('ui_grpc_logs')}
                             </span>
                           </div>
                         )}
@@ -3075,7 +3033,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                           </div>
                           <div style={{ textAlign: 'right', minWidth: 0, maxWidth: '100%' }} dir="ltr">
                             <div style={{ fontSize: '0.72rem', fontWeight: 700, color: online ? '#34d399' : '#f87171' }}>
-                              {online ? (isRtl ? 'آنلاین' : 'ONLINE') : (isRtl ? 'خاموش' : 'DOWN')}
+                              {online ? (t('ui_online')) : (t('ui_down'))}
                               {s && s.latency_ms > 0 ? ` · ${s.latency_ms}ms` : ''}
                             </div>
                             {s?.detail && (
@@ -3093,7 +3051,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 {/* Degraded-service hint — tell the operator which systemctl to poke */}
                 {servicesHealth && servicesHealth.status !== 'healthy' && (
                   <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', fontSize: '0.75rem', color: '#f87171' }}>
-                    {isRtl ? 'سرویس‌های خاموش: ' : 'Down services: '}
+                    {t('ui_down_services')}
                     {servicesHealth.services.filter((x) => !x.online).map((x) => x.name).join(', ')}
                     <span style={{ color: '#94a3b8' }}>
                       {' — '}systemctl --user restart {servicesHealth.services.filter((x) => !x.online).map((x) => x.name === 'core' ? 'atf' : x.name === 'logger' ? 'atf-logger' : x.name === 'api' ? 'atf-api' : 'atf-web').join(' ')}
@@ -3126,7 +3084,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
                 {/* Service Filter */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'سرویس:' : 'Service:'}</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{t('ui_service')}</span>
                   <select
                     value={logFilterService}
                     onChange={(e) => {
@@ -3142,18 +3100,18 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       fontSize: '0.8rem',
                     }}
                   >
-                    <option value="all">{isRtl ? 'همه سرویس‌ها' : 'All Services'}</option>
-                    <option value="core">core (پایتون هسته)</option>
-                    <option value="bot">bot (ربات تلگرام)</option>
-                    <option value="api">api (کنترل پلین Go)</option>
-                    <option value="pipeline">pipeline (پایپ‌لاین فوروارد)</option>
-                    <option value="boot">boot (راه‌اندازی سشن‌ها)</option>
+                    <option value="all">{t('ui_all_services')}</option>
+                    <option value="core">{t('ui_service_core')}</option>
+                    <option value="bot">{t('ui_service_bot')}</option>
+                    <option value="api">{t('ui_service_api')}</option>
+                    <option value="pipeline">{t('ui_service_pipeline')}</option>
+                    <option value="boot">{t('ui_service_boot')}</option>
                   </select>
                 </div>
 
                 {/* Level Filter */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'سطح لاگ:' : 'Level:'}</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{t('ui_level')}</span>
                   <select
                     value={logFilterLevel}
                     onChange={(e) => {
@@ -3169,11 +3127,11 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       fontSize: '0.8rem',
                     }}
                   >
-                    <option value="all">{isRtl ? 'همه سطوح' : 'All Levels'}</option>
-                    <option value="ERROR">❌ ERROR</option>
-                    <option value="WARN">⚠️ WARN</option>
-                    <option value="INFO">ℹ️ INFO</option>
-                    <option value="DEBUG">🔍 DEBUG</option>
+                    <option value="all">{t('ui_all_levels')}</option>
+                    <option value="ERROR">❌ {t('ui_level_error')}</option>
+                    <option value="WARN">⚠️ {t('ui_level_warn')}</option>
+                    <option value="INFO">ℹ️ {t('ui_level_info')}</option>
+                    <option value="DEBUG">🔍 {t('ui_level_debug')}</option>
                   </select>
                 </div>
 
@@ -3181,7 +3139,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     same attribution the per-task Logs tab renders, surfaced
                     where an operator already has the global view open. */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'تسک:' : 'Task:'}</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{t('ui_task')}</span>
                   <select
                     value={logFilterRule}
                     onChange={(e) => {
@@ -3199,7 +3157,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       maxWidth: 220,
                     }}
                   >
-                    <option value="all">{isRtl ? 'همه تسک‌ها' : 'All tasks'}</option>
+                    <option value="all">{t('ui_all_tasks')}</option>
                     {(Array.isArray(rules) ? rules : []).map((r: any) => (
                       <option key={r.id} value={r.id}>
                         {(r.name || r.id.slice(0, 8)).slice(0, 28)}
@@ -3211,7 +3169,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 {/* v18: read direction — newest-first for triage, oldest-first
                     for replaying how a task behaved. */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{isRtl ? 'ترتیب:' : 'Order:'}</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{t('ui_order')}</span>
                   <select
                     value={logOrder}
                     onChange={(e) => {
@@ -3229,8 +3187,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       fontSize: '0.8rem',
                     }}
                   >
-                    <option value="desc">{isRtl ? 'جدیدترین اول' : 'Newest first'}</option>
-                    <option value="asc">{isRtl ? 'قدیمی‌ترین اول' : 'Oldest first'}</option>
+                    <option value="desc">{t('ui_newest_first')}</option>
+                    <option value="asc">{t('ui_oldest_first')}</option>
                   </select>
                 </div>
               </div>
@@ -3239,7 +3197,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260, flex: 1, maxWidth: 380 }}>
                 <input
                   type="text"
-                  placeholder={isRtl ? 'جستجوی زنده در پیام و متن لاگ...' : 'Search logs live...'}
+                  placeholder={t('ui_search_logs_live')}
                   value={logSearch}
                   onChange={(e) => {
                     setLogSearch(e.target.value)
@@ -3272,28 +3230,28 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, fontSize: '0.75rem' }}>
               <span className="badge badge-gray">
                 {logTotal === 0
-                  ? (isRtl ? 'بدون رویداد' : 'no events')
+                  ? (t('ui_no_events'))
                   : `${logTotal === 0 ? 0 : logOffset + 1}–${logOffset + (Array.isArray(logs) ? logs.length : 0)} / ${logTotal.toLocaleString()}`}
               </span>
               {logStats?.oldest_ts ? (
-                <span className="badge badge-gray" title={isRtl ? 'قدیمی‌ترین رکورد موجود' : 'oldest record on disk'}>
-                  {isRtl ? 'تاریخچه از' : 'history from'}{' '}
+                <span className="badge badge-gray" title={t('ui_oldest_record_on_disk')}>
+                  {t('ui_history_from')}{' '}
                   {new Date(logStats.oldest_ts * 1000).toLocaleDateString()}
                 </span>
               ) : null}
               {logStats && (
                 <>
                   <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399' }}>
-                    INFO: {logStats.by_level?.INFO ?? 0}
+                    {t('ui_level_info')}: {logStats.by_level?.INFO ?? 0}
                   </span>
                   <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>
-                    WARN: {logStats.by_level?.WARN ?? 0}
+                    {t('ui_level_warn')}: {logStats.by_level?.WARN ?? 0}
                   </span>
                   <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
-                    ERROR: {logStats.by_level?.ERROR ?? 0}
+                    {t('ui_level_error')}: {logStats.by_level?.ERROR ?? 0}
                   </span>
                   <span className="badge badge-vip">
-                    TOTAL ARCHIVE: {logStats.total}
+                    {t('ui_total_archive')} {logStats.total}
                   </span>
                 </>
               )}
@@ -3307,7 +3265,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10,
             }}>
               <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                📜 {isRtl ? 'پیمایش تاریخچه:' : 'History:'}
+                📜 {t('ui_history')}
               </span>
               <button
                 onClick={() => {
@@ -3318,7 +3276,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 disabled={logOffset === 0}
                 className="btn btn-secondary" style={{ padding: '5px 12px', fontSize: '0.72rem' }}
               >
-                ⬆ {isRtl ? 'جدیدتر' : 'Newer'}
+                ⬆ {t('ui_newer')}
               </button>
               <button
                 onClick={() => {
@@ -3329,10 +3287,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 disabled={!logHasMore}
                 className="btn btn-secondary" style={{ padding: '5px 12px', fontSize: '0.72rem' }}
               >
-                ⬇ {isRtl ? 'قدیمی‌تر' : 'Older'}
+                ⬇ {t('ui_older')}
               </button>
               <label style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
-                {isRtl ? 'اندازه صفحه' : 'Page size'}
+                {t('ui_page_size')}
                 <select
                   value={logPageSize}
                   onChange={(e) => {
@@ -3348,8 +3306,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
               </label>
               <span style={{ fontSize: '0.68rem', color: logHasMore ? '#fbbf24' : '#34d399' }}>
                 {logHasMore
-                  ? (isRtl ? '⋯ رویدادهای قدیمی‌تری وجود دارد' : '⋯ older events exist')
-                  : (isRtl ? '✓ به انتهای تاریخچه رسیدید' : '✓ reached the end of history')}
+                  ? (t('ui_older_events_exist'))
+                  : (t('ui_reached_the_end_of_history'))}
               </span>
               <button
                 onClick={() => handleExportLogs('json')} disabled={logExporting}
@@ -3372,31 +3330,31 @@ export function App({ me }: { me?: MeInfo } = {}) {
               background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10,
             }}>
               <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                🧹 {isRtl ? 'پاکسازی آرشیو:' : 'Purge archive:'}
+                🧹 {t('ui_purge_archive')}
               </span>
               <label style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
-                {isRtl ? 'حفظ آخرین' : 'Keep last'}
+                {t('ui_keep_last')}
                 <input
                   type="number" min={0} max={720} step={1} value={purgeWindowH}
                   onChange={(e) => setPurgeWindowH(Math.max(0, Math.min(720, Number(e.target.value) || 0)))}
                   style={{ width: 64, background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '4px 6px', fontSize: '0.72rem' }}
                 />
-                {isRtl ? 'ساعت' : 'h'}
+                {t('ui_h')}
               </label>
               {(logFilterLevel !== 'all' || logFilterService !== 'all') && (
                 <span className="badge badge-gray" style={{ fontSize: '0.68rem' }}>
-                  {isRtl ? 'فقط:' : 'scoped:'} {[logFilterLevel !== 'all' && logFilterLevel, logFilterService !== 'all' && logFilterService].filter(Boolean).join(' · ')}
+                  {t('ui_scoped')} {[logFilterLevel !== 'all' && logFilterLevel, logFilterService !== 'all' && logFilterService].filter(Boolean).join(' · ')}
                 </span>
               )}
               <button
                 onClick={handlePurgeLogs} disabled={purging}
                 className="btn btn-secondary" style={{ padding: '5px 12px', fontSize: '0.72rem' }}
               >
-                {purging ? '⏳ ...' : (isRtl ? 'حذف لاگ‌های قدیمی' : 'Purge old logs')}
+                {purging ? '⏳ ...' : (t('ui_purge_old_logs'))}
               </button>
               {purgeResult && (
                 <span style={{ fontSize: '0.7rem', color: '#34d399' }}>
-                  ✓ {isRtl ? 'حذف شد' : 'purged'}: {purgeResult.purged} · {isRtl ? 'باقی' : 'left'}: {purgeResult.remaining}
+                  ✓ {t('ui_purged')}: {purgeResult.purged} · {t('ui_left')}: {purgeResult.remaining}
                 </span>
               )}
             </div>
@@ -3405,35 +3363,33 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <div className="glass-panel" style={{ padding: 18, marginBottom: 20 }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <Database size={17} color="#38bdf8" />
-                <span>{isRtl ? 'بکاپ‌گیری و بازیابی (انتقال بین سرورها)' : 'Backup & Restore (Server Migration)'}</span>
+                <span>{t('ui_backup_restore_server_migration')}</span>
               </h3>
               <p style={{ fontSize: '0.76rem', color: '#94a3b8', marginBottom: 14 }}>
-                {isRtl
-                  ? 'تمام تنظیمات، قوانین، فیلترها، پیکربندی‌های هوش مصنوعی و سشن‌های تلگرام در یک فایل JSON ذخیره می‌شود. برای انتقال به سرور جدید، این فایل را در سرور مقصد بازیابی کنید.'
-                  : 'Every setting, rule, filter, AI config and Telegram session is packed into one JSON bundle. Restore it on the new server to migrate.'}
+                {t('ui_every_setting_rule_filter_ai_config_and_telegram_session_is_pack')}
               </p>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
                 {/* EXPORT */}
                 <div style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(56, 189, 248, 0.18)', borderRadius: 10, padding: 14 }}>
                   <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#7dd3fc', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Download size={14} /> {isRtl ? '۱. گرفتن بکاپ از این سرور' : '1. Back up this server'}
+                    <Download size={14} /> {t('ui_1_back_up_this_server')}
                   </div>
                   <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
-                    {isRtl ? 'رمز عبور فایل (اختیاری، ولی توصیه می‌شود)' : 'File passphrase (optional, recommended)'}
+                    {t('ui_file_passphrase_optional_recommended')}
                   </label>
                   <input
                     type="password"
                     value={backupPassphrase}
                     onChange={(e) => setBackupPassphrase(e.target.value)}
-                    placeholder={isRtl ? 'رمز عبور قوی' : 'strong passphrase'}
+                    placeholder={t('ui_strong_passphrase')}
                     style={{ width: '100%', boxSizing: 'border-box', background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: '0.78rem', marginBottom: 10 }}
                   />
                   <button
                     onClick={handleBackupExport} disabled={backupBusy}
                     className="btn" style={{ width: '100%', justifyContent: 'center', padding: '8px 12px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}
                   >
-                    {backupBusy ? '⏳ ...' : (isRtl ? '📥 دانلود فایل بکاپ' : '📥 Download backup')}
+                    {backupBusy ? '⏳ ...' : (t('ui_download_backup'))}
                   </button>
                   {backupCounts && (
                     <div style={{ marginTop: 10, fontSize: '0.7rem', color: '#94a3b8' }}>
@@ -3449,7 +3405,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   )}
                   {!backupEncrypted && backupCounts && (
                     <div style={{ marginTop: 8, fontSize: '0.68rem', color: '#fbbf24' }}>
-                      ⚠️ {isRtl ? 'این فایل رمزگذاری نشده و حاوی اطلاعات حساس است.' : 'This file is unencrypted and holds live credentials.'}
+                      ⚠️ {t('ui_this_file_is_unencrypted_and_holds_live_credentials')}
                     </div>
                   )}
                 </div>
@@ -3457,10 +3413,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 {/* IMPORT */}
                 <div style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(168, 85, 247, 0.18)', borderRadius: 10, padding: 14 }}>
                   <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#c4b5fd', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Upload size={14} /> {isRtl ? '۲. بازیابی در این سرور' : '2. Restore on this server'}
+                    <Upload size={14} /> {t('ui_2_restore_on_this_server')}
                   </div>
                   <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
-                    {isRtl ? 'فایل بکاپ' : 'Backup file'}
+                    {t('ui_backup_file')}
                   </label>
                   <input
                     type="file" accept=".json,.enc,application/json"
@@ -3468,34 +3424,34 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     style={{ width: '100%', boxSizing: 'border-box', fontSize: '0.72rem', color: '#94a3b8', marginBottom: 8 }}
                   />
                   <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
-                    {isRtl ? 'یا چسباندن محتوای فایل' : 'Or paste the bundle'}
+                    {t('ui_or_paste_the_bundle')}
                   </label>
                   <textarea
                     value={importText}
                     onChange={(e) => { setImportText(e.target.value); setImportStats(null) }}
-                    placeholder={isRtl ? 'محتوای فایل بکاپ...' : 'bundle contents...'}
+                    placeholder={t('ui_bundle_contents')}
                     rows={3}
                     style={{ width: '100%', boxSizing: 'border-box', background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: '0.7rem', fontFamily: 'monospace', resize: 'vertical', marginBottom: 10 }}
                   />
                   <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
-                    {isRtl ? 'رمز عبور (در صورت رمزگذاری بودن فایل)' : 'Passphrase (if the file is encrypted)'}
+                    {t('ui_passphrase_if_the_file_is_encrypted')}
                   </label>
                   <input
                     type="password"
                     value={importPassphrase}
                     onChange={(e) => setImportPassphrase(e.target.value)}
-                    placeholder={isRtl ? 'رمز عبور فایل' : 'passphrase'}
+                    placeholder={t('ui_passphrase')}
                     style={{ width: '100%', boxSizing: 'border-box', background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: '0.78rem', marginBottom: 10 }}
                   />
                   <label style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                     <input type="checkbox" checked={importOverwrite} onChange={(e) => setImportOverwrite(e.target.checked)} />
-                    {isRtl ? 'جایگزینی کامل (بازنویسی سطرهای موجود)' : 'Full replace (overwrite existing rows)'}
+                    {t('ui_full_replace_overwrite_existing_rows')}
                   </label>
                   <button
                     onClick={handleBackupImport} disabled={backupBusy}
                     className="btn" style={{ width: '100%', justifyContent: 'center', padding: '8px 12px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#c4b5fd' }}
                   >
-                    {backupBusy ? '⏳ ...' : (isRtl ? '📤 بازیابی بکاپ' : '📤 Restore backup')}
+                    {backupBusy ? '⏳ ...' : (t('ui_restore_backup'))}
                   </button>
                   {importStats && (
                     <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -3528,7 +3484,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               {(!Array.isArray(logs) || logs.length === 0) ? (
                 <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
                   <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
-                  <div>{isRtl ? 'هیچ لاگی با فیلترهای جاری یافت نشد.' : 'No log events matching current filters.'}</div>
+                  <div>{t('ui_no_log_events_matching_current_filters')}</div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -3614,7 +3570,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                                 setLogOffset(0)
                                 fetchLogs(logFilterService, logFilterLevel, logSearch, { rule: l.rule_id as string, offset: 0 })
                               }}
-                              title={isRtl ? 'فیلتر روی این تسک' : 'Filter to this task'}
+                              title={t('ui_filter_to_this_task')}
                               style={{
                                 color: '#f472b6',
                                 background: 'rgba(236, 72, 153, 0.14)',
@@ -3627,7 +3583,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                                 fontFamily: 'inherit',
                               }}
                             >
-                              task:{(l.rule_id as string).slice(0, 8)}
+                              {t('ui_app_task')}{(l.rule_id as string).slice(0, 8)}
                             </button>
                           )}
                           {l.correlation_id && (
@@ -3637,7 +3593,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                                 setLogOffset(0)
                                 fetchLogs(logFilterService, logFilterLevel, l.correlation_id as string, { offset: 0 })
                               }}
-                              title={isRtl ? 'پیدا کردن کل مسیر این درخواست' : 'Trace this request end to end'}
+                              title={t('ui_trace_this_request_end_to_end')}
                               style={{
                                 color: '#38bdf8',
                                 background: 'rgba(56, 189, 248, 0.12)',
@@ -3650,7 +3606,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                                 fontFamily: 'inherit',
                               }}
                             >
-                              corr:{(l.correlation_id as string).slice(0, 8)}
+                              {t('ui_corr')}{(l.correlation_id as string).slice(0, 8)}
                             </button>
                           )}
 
@@ -3701,12 +3657,12 @@ export function App({ me }: { me?: MeInfo } = {}) {
                             gap: 4,
                             fontSize: '0.7rem',
                           }}
-                          title={isRtl ? 'کپی خط لاگ' : 'Copy log line'}
+                          title={t('ui_copy_log_line')}
                         >
                           {copiedLogId === logId ? (
                             <>
                               <Check size={12} />
-                              <span style={{ fontSize: '0.65rem' }}>{isRtl ? 'کپی شد' : 'Copied'}</span>
+                              <span style={{ fontSize: '0.65rem' }}>{t('ui_copied')}</span>
                             </>
                           ) : (
                             <Copy size={12} />
@@ -3723,7 +3679,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <div className="glass-panel" style={{ padding: 20, marginTop: 20 }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Activity size={16} color="#ef4444" />
-                <span>{isRtl ? 'آخرین خطاهای پایپ‌لاین (صف رفع اشکال)' : 'Recent Pipeline Errors (Triage Queue)'}</span>
+                <span>{t('ui_recent_pipeline_errors_triage_queue')}</span>
                 {(recentErrors || []).length > 0 && (
                   <span className="badge badge-vip" style={{ fontSize: '0.7rem' }}>{recentErrors.length}</span>
                 )}
@@ -3732,7 +3688,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               {(!Array.isArray(recentErrors) || recentErrors.length === 0) ? (
                 <div style={{ textAlign: 'center', padding: 26, color: '#64748b', fontSize: '0.85rem' }}>
                   <div style={{ fontSize: 22, marginBottom: 6 }}>✅</div>
-                  <div>{isRtl ? 'هیچ خطایی در پایپ‌لاین ثبت نشده است.' : 'No pipeline errors recorded. All healthy.'}</div>
+                  <div>{t('ui_no_pipeline_errors_recorded_all_healthy')}</div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -3845,7 +3801,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexShrink: 0 }}>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
-                {ruleFormData.id ? (isRtl ? 'ویرایش قانون فوروارد' : 'Edit Forward Rule') : (isRtl ? 'قانون فوروارد جدید' : 'New Forward Rule')}
+                {ruleFormData.id ? (t('ui_edit_forward_rule')) : (t('ui_new_forward_rule'))}
               </h3>
               <button onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary icon-btn" style={{ padding: 6 }}>
                 <X size={16} />
@@ -3857,7 +3813,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               <div className="rule-modal-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {isRtl ? 'شناسه کانال مبدأ (A):' : 'Source Chat ID (A):'} *
+                    {t('ui_source_chat_id_a')} *
                   </label>
                   <input
                     type="text"
@@ -3870,14 +3826,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {isRtl ? 'نام نمایشی مبدأ:' : 'Source Title:'}
+                    {t('ui_source_title')}
                   </label>
                   <input
                     type="text"
                     value={ruleFormData.source_chat_name || ''}
                     onChange={(e) => setRuleFormData({ ...ruleFormData, source_chat_name: e.target.value })}
                     className="input-field"
-                    placeholder="Forex Signals"
+                    placeholder={t('ui_forex_signals')}
                   />
                 </div>
               </div>
@@ -3885,7 +3841,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
               <div className="rule-modal-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {isRtl ? 'شناسه کانال مقصد (B):' : 'Target Chat ID (B):'} *
+                    {t('ui_target_chat_id_b')} *
                   </label>
                   <input
                     type="text"
@@ -3898,14 +3854,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {isRtl ? 'نام نمایشی مقصد:' : 'Target Title:'}
+                    {t('ui_target_title')}
                   </label>
                   <input
                     type="text"
                     value={ruleFormData.target_chat_name || ''}
                     onChange={(e) => setRuleFormData({ ...ruleFormData, target_chat_name: e.target.value })}
                     className="input-field"
-                    placeholder="USDJPY VIP"
+                    placeholder={t('ui_usdjpy_vip')}
                   />
                 </div>
               </div>
@@ -3914,8 +3870,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
               {(() => {
                 const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
                 const s = normEp(ruleFormData.source_chat_id)
-                const t = normEp(ruleFormData.target_chat_id)
-                const isLoop = Boolean(s && t && s === t)
+                const targetId = normEp(ruleFormData.target_chat_id)
+                const isLoop = Boolean(s && targetId && s === targetId)
                 if (!isLoop) return null
                 return (
                   <div
@@ -3934,9 +3890,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   >
                     <Shield size={16} color="#ef4444" style={{ flexShrink: 0 }} />
                     <span>
-                      {isRtl
-                        ? '⚠️ خطای حلقه (Loop Detected): شناسه کانال مبدأ و مقصد یکسان است! فوروارد پیام به مبدأ خود مجاز نیست.'
-                        : '⚠️ Routing Loop Detected: Source and target chat IDs cannot be identical! Forwarding back to source is blocked.'}
+                      {t('ui_routing_loop_detected_source_and_target_chat_ids_cannot_be_ident')}
                     </span>
                   </div>
                 )
@@ -3946,9 +3900,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 if (!ruleFormData.use_intermediate || !ruleFormData.intermediate_channel_id) return null
                 const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
                 const s = normEp(ruleFormData.source_chat_id)
-                const t = normEp(ruleFormData.target_chat_id)
+                const targetId = normEp(ruleFormData.target_chat_id)
                 const im = normEp(ruleFormData.intermediate_channel_id)
-                if (im && (im === s || im === t)) {
+                if (im && (im === s || im === targetId)) {
                   return (
                     <div
                       style={{
@@ -3966,9 +3920,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     >
                       <Shield size={16} color="#ef4444" style={{ flexShrink: 0 }} />
                       <span>
-                        {isRtl
-                          ? '⚠️ خطای حلقه: کانال واسط (Hop) نمی‌تواند با کانال مبدأ یا مقصد یکسان باشد!'
-                          : '⚠️ Routing Loop Detected: Intermediate hop channel cannot match source or target!'}
+                        {t('ui_routing_loop_detected_intermediate_hop_channel_cannot_match_sour')}
                       </span>
                     </div>
                   )
@@ -3994,7 +3946,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     onChange={(e) => setRuleFormData({ ...ruleFormData, use_intermediate: e.target.checked })}
                   />
                   <span style={{ fontWeight: 700, color: '#fbbf24' }}>
-                    {isRtl ? 'استفاده از هاپ برند واسط (کانال C) جهت تغییر هدر فوروارد' : 'Use Intermediate Branding Channel (Hop via C)'}
+                    {t('ui_use_intermediate_branding_channel_hop_via_c')}
                   </span>
                 </label>
 
@@ -4003,7 +3955,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                          {isRtl ? 'شناسه کانال واسط C:' : 'Intermediate Channel ID (C):'}
+                          {t('ui_intermediate_channel_id_c')}
                         </label>
                         <input
                           type="text"
@@ -4015,14 +3967,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                          {isRtl ? 'نام کانال واسط C:' : 'Intermediate Title:'}
+                          {t('ui_intermediate_title')}
                         </label>
                         <input
                           type="text"
                           value={ruleFormData.intermediate_channel_name || ''}
                           onChange={(e) => setRuleFormData({ ...ruleFormData, intermediate_channel_name: e.target.value })}
                           className="input-field"
-                          placeholder="My Brand Channel"
+                          placeholder={t('ui_my_brand_channel')}
                         />
                       </div>
                     </div>
@@ -4030,7 +3982,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     {/* Hop triggers — stored in the rule metadata under branding_hop */}
                     <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(245, 158, 11, 0.25)' }}>
                       <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#fbbf24', marginBottom: 8 }}>
-                        {isRtl ? 'شرط‌های طی کردن مسیر برند (اختیاری)' : 'Branding hop triggers (optional)'}
+                        {t('ui_branding_hop_triggers_optional')}
                       </div>
 
                       <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 10 }}>
@@ -4040,9 +3992,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                           onChange={(e) => patchBrandingHop({ triggers_enabled: e.target.checked })}
                         />
                         <span>
-                          {isRtl
-                            ? 'فقط پیام‌های مطابق شرط‌های زیر از کانال C عبور کنند (در غیر این صورت همه پیام‌ها)'
-                            : 'Only hop messages matching the triggers below (otherwise every matched message hops)'}
+                          {t('ui_only_hop_messages_matching_the_triggers_below_otherwise_every_ma')}
                         </span>
                       </label>
 
@@ -4051,24 +4001,22 @@ export function App({ me }: { me?: MeInfo } = {}) {
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                             <div>
                               <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                                {isRtl ? 'نام کانال مبدأ فوروارد (هدر «فوروارد از»):' : 'Forward-origin channel names:'}
+                                {t('ui_forward_origin_channel_names')}
                               </label>
                               <input
                                 type="text"
                                 value={brandingListValue('origin_titles')}
                                 onChange={(e) => onBrandingListInput('origin_titles', e.target.value)}
                                 className="input-field"
-                                placeholder="Premium Deals, Forex VIP"
+                                placeholder={t('ui_premium_deals_forex_vip')}
                               />
                               <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 4 }}>
-                                {isRtl
-                                  ? 'با کاما جدا کنید. تطبیق با نام کانال در هدر فوروارد انجام می‌شود، نه با متن پیام.'
-                                  : 'Comma separated. Matches the channel name in the forward header, not the message body.'}
+                                {t('ui_comma_separated_matches_the_channel_name_in_the_forward_header_n')}
                               </div>
                             </div>
                             <div>
                               <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                                {isRtl ? 'شناسه یا یوزرنیم کانال مبدأ فوروارد:' : 'Forward-origin channel IDs:'}
+                                {t('ui_forward_origin_channel_ids')}
                               </label>
                               <input
                                 type="text"
@@ -4082,21 +4030,21 @@ export function App({ me }: { me?: MeInfo } = {}) {
 
                           <div style={{ marginTop: 12 }}>
                             <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                              {isRtl ? 'کلمات کلیدی متن پیام:' : 'Message text keywords:'}
+                              {t('ui_message_text_keywords')}
                             </label>
                             <input
                               type="text"
                               value={brandingListValue('keywords')}
                               onChange={(e) => onBrandingListInput('keywords', e.target.value)}
                               className="input-field"
-                              placeholder="BUY, SIGNAL, طلا"
+                              placeholder={t('ui_example_keywords')}
                             />
                           </div>
 
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
                             <div>
                               <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                                {isRtl ? 'حالت تطبیق شرط‌ها:' : 'Trigger match mode:'}
+                                {t('ui_trigger_match_mode')}
                               </label>
                               <select
                                 value={brandingHop.match_mode}
@@ -4104,8 +4052,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
                                 className="input-field"
                                 style={{ width: '100%' }}
                               >
-                                <option value="any">{isRtl ? 'any — یکی از شرط‌ها کافی است' : 'any — one matching group is enough'}</option>
-                                <option value="all">{isRtl ? 'all — همه شرط‌ها باید مطابق باشند' : 'all — every matching group must match'}</option>
+                                <option value="any">{t('ui_any_one_matching_group_is_enough')}</option>
+                                <option value="all">{t('ui_all_every_matching_group_must_match')}</option>
                               </select>
                             </div>
                             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.78rem', color: '#cbd5e1', marginTop: 18 }}>
@@ -4114,7 +4062,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                                 checked={brandingHop.require_forward}
                                 onChange={(e) => patchBrandingHop({ require_forward: e.target.checked })}
                               />
-                              <span>{isRtl ? 'پیام‌های غیرفوروارد عبور نکنند' : 'Refuse messages that are not forwards'}</span>
+                              <span>{t('ui_refuse_messages_that_are_not_forwards')}</span>
                             </label>
                           </div>
                         </>
@@ -4127,9 +4075,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                           onChange={(e) => patchBrandingHop({ force_forward: e.target.checked })}
                         />
                         <span>
-                          {isRtl
-                            ? 'ارسال نیتیو از C (تنها حالتی که B هدر C را نشان می‌دهد)'
-                            : 'Native forward from C (the only way B shows C in the header)'}
+                          {t('ui_native_forward_from_c_the_only_way_b_shows_c_in_the_header')}
                         </span>
                       </label>
 
@@ -4148,7 +4094,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                         }}
                       >
                         {brandingHopSummary(
-                          isRtl,
+                          lang,
                           brandingHop,
                           `${ruleFormData.source_chat_name || ruleFormData.source_chat_id || 'A'} → ${ruleFormData.intermediate_channel_name || ruleFormData.intermediate_channel_id || 'C'} → ${ruleFormData.target_chat_name || ruleFormData.target_chat_id || 'B'}`,
                         )}
@@ -4162,19 +4108,19 @@ export function App({ me }: { me?: MeInfo } = {}) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {isRtl ? 'هدر سفارشی پیام:' : 'Custom Header:'}
+                    {t('ui_custom_header')}
                   </label>
                   <input
                     type="text"
                     value={ruleFormData.custom_header || ''}
                     onChange={(e) => setRuleFormData({ ...ruleFormData, custom_header: e.target.value })}
                     className="input-field"
-                    placeholder="💎 VIP FOREX"
+                    placeholder={t('ui_vip_forex')}
                   />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {isRtl ? 'فوتر سفارشی پیام:' : 'Custom Footer:'}
+                    {t('ui_custom_footer')}
                   </label>
                   <input
                     type="text"
@@ -4197,18 +4143,18 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 }}
               >
                 <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#a5b4fc', marginBottom: 10 }}>
-                  {isRtl ? 'تنظیمات رسانه و سینک (مشابه ربات)' : 'Media & Sync Settings (bot parity)'}
+                  {t('ui_media_sync_settings_bot_parity')}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
                   {([
-                    ['block_voice', '🎙', isRtl ? 'مسدود کردن ویس' : 'Block Voice'],
-                    ['block_stickers', '🎭', isRtl ? 'مسدود کردن استیکر' : 'Block Stickers'],
-                    ['block_video', '🎬', isRtl ? 'مسدود کردن ویدیو' : 'Block Video'],
-                    ['block_audio', '🎵', isRtl ? 'مسدود کردن صدا' : 'Block Audio'],
-                    ['block_text', '📝', isRtl ? 'مسدود کردن متن' : 'Block Text'],
-                    ['remove_emojis', '😀', isRtl ? 'پاکسازی ایموجی' : 'Strip Emojis'],
-                    ['sync_deletes', '🗑', isRtl ? 'همگام‌سازی حذف‌ها' : 'Sync Deletes'],
-                    ['ignore_edits', '✏️', isRtl ? 'نادیده گرفتن ادیت' : 'Ignore Edits'],
+                    ['block_voice', '🎙', t('ui_block_voice')],
+                    ['block_stickers', '🎭', t('ui_block_stickers')],
+                    ['block_video', '🎬', t('ui_block_video')],
+                    ['block_audio', '🎵', t('ui_block_audio')],
+                    ['block_text', '📝', t('ui_block_text')],
+                    ['remove_emojis', '😀', t('ui_strip_emojis')],
+                    ['sync_deletes', '🗑', t('ui_sync_deletes')],
+                    ['ignore_edits', '✏️', t('ui_ignore_edits')],
                   ] as const).map(([key, icon, label]) => (
                     <label
                       key={key}
@@ -4232,7 +4178,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 </div>
                 <div style={{ marginTop: 12 }}>
                   <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {isRtl ? 'حالت آلبوم:' : 'Album Mode:'}
+                    {t('ui_album_mode')}
                   </label>
                   <select
                     value={ruleMeta.album_mode || 'album'}
@@ -4240,9 +4186,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     className="input-field"
                     style={{ width: '100%' }}
                   >
-                    <option value="album">{isRtl ? '🖼 آلبوم کامل' : 'Full album'}</option>
-                    <option value="first">{isRtl ? '۱️⃣ فقط اولین مدیا' : 'First media only'}</option>
-                    <option value="split">{isRtl ? '🔀 تفکیک پیام‌ها' : 'Split messages'}</option>
+                    <option value="album">{t('ui_full_album')}</option>
+                    <option value="first">{t('ui_first_media_only')}</option>
+                    <option value="split">{t('ui_split_messages')}</option>
                   </select>
                 </div>
               </div>
@@ -4250,12 +4196,12 @@ export function App({ me }: { me?: MeInfo } = {}) {
               {/* AI Rewrite (per-rule) */}
               <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#c084fc', marginBottom: 10 }}>
-                  🤖 {isRtl ? 'بازنویسی هوشمند پیام (AI Rewrite)' : 'AI Message Rewrite'}
+                  🤖 {t('ui_ai_message_rewrite')}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                      {isRtl ? 'پیکربندی AI:' : 'AI Config:'}
+                      {t('ui_ai_config')}
                     </label>
                     <select
                       value={ruleFormData.ai_config_id || ''}
@@ -4263,7 +4209,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       className="input-field"
                       style={{ width: '100%' }}
                     >
-                      <option value="">{isRtl ? '❌ غیرفعال (بدون بازنویسی)' : '❌ Disabled (no rewrite)'}</option>
+                      <option value="">{t('ui_disabled_no_rewrite')}</option>
                       {(Array.isArray(aiConfigs) ? aiConfigs : []).map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.is_enabled ? '🟢' : '🔴'} {a.name} [{a.provider}/{a.model}]
@@ -4273,7 +4219,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                      {isRtl ? 'پرامپت بازنویسی:' : 'Rewrite Prompt:'}
+                      {t('ui_rewrite_prompt')}
                     </label>
                     <select
                       value={ruleMeta.prompt_id || ''}
@@ -4281,7 +4227,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       className="input-field"
                       style={{ width: '100%' }}
                     >
-                      <option value="">{isRtl ? 'پیش‌فرض (بدون پرامپت سیستمی)' : 'Default (no system prompt)'}</option>
+                      <option value="">{t('ui_default_no_system_prompt')}</option>
                       {(Array.isArray(promptTemplates) ? promptTemplates : []).map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.is_system ? '⭐' : '👤'} {p.name} (v{p.current_version})
@@ -4291,7 +4237,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                      {isRtl ? 'رفتار در خطای AI:' : 'On AI Failure:'}
+                      {t('ui_on_ai_failure')}
                     </label>
                     <select
                       value={ruleFormData.ai_fallback_policy || 'DROP'}
@@ -4299,15 +4245,15 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       className="input-field"
                       style={{ width: '100%' }}
                     >
-                      <option value="SEND_ORIGINAL">{isRtl ? '🟢 ارسال متن اصلی (Fail Open)' : '🟢 Send original (Fail Open)'}</option>
-                      <option value="DROP">{isRtl ? '🔴 عدم ارسال (Fail Closed)' : '🔴 Drop (Fail Closed)'}</option>
-                      <option value="RETRY">{isRtl ? '🔁 تلاش مجدد (Retry)' : '🔁 Retry'}</option>
-                      <option value="QUARANTINE">{isRtl ? '🔒 قرنطینه' : '🔒 Quarantine'}</option>
+                      <option value="SEND_ORIGINAL">{t('ui_send_original_fail_open')}</option>
+                      <option value="DROP">{t('ui_drop_fail_closed')}</option>
+                      <option value="RETRY">{t('ui_app_retry')}</option>
+                      <option value="QUARANTINE">{t('ui_quarantine')}</option>
                     </select>
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                      {isRtl ? 'Timeout (ثانیه):' : 'Timeout (s):'}
+                      {t('ui_timeout_s')}
                     </label>
                     <input
                       type="number"
@@ -4321,23 +4267,21 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   </div>
                 </div>
                 <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 8 }}>
-                  {isRtl
-                    ? '💡 در حالت Fail Open، اگر AI در دسترس نباشد پیام اصلی بدون تغییر ارسال می‌شود و رویداد در لاگ ثبت می‌گردد.'
-                    : '💡 Fail Open sends the original text if AI fails, and logs the fallback event.'}
+                  {t('ui_fail_open_sends_the_original_text_if_ai_fails_and_logs_the_fallb')}
                 </div>
               </div>
 
               <div className="modal-sheet-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
                 <button type="button" onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary">
-                  {isRtl ? 'انصراف' : 'Cancel'}
+                  {t('ui_cancel')}
                 </button>
                 {(() => {
                   const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
                   const s = normEp(ruleFormData.source_chat_id)
-                  const t = normEp(ruleFormData.target_chat_id)
+                  const targetId = normEp(ruleFormData.target_chat_id)
                   const im = normEp(ruleFormData.intermediate_channel_id)
-                  const hasLoop = Boolean(s && t && s === t) ||
-                    Boolean(ruleFormData.use_intermediate && im && (im === s || im === t))
+                  const hasLoop = Boolean(s && targetId && s === targetId) ||
+                    Boolean(ruleFormData.use_intermediate && im && (im === s || im === targetId))
                   return (
                     <button
                       type="submit"
@@ -4349,7 +4293,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       }}
                     >
                       <Check size={16} />
-                      <span>{isRtl ? 'ذخیره قانون' : 'Save Rule'}</span>
+                      <span>{t('ui_save_rule')}</span>
                     </button>
                   )
                 })()}
@@ -4393,7 +4337,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
-                {isRtl ? 'تنظیمات موتور هوش مصنوعی' : 'AI Engine Configuration'}
+                {t('ui_ai_engine_configuration')}
               </h3>
               <button onClick={() => setIsAiModalOpen(false)} className="btn btn-secondary" style={{ padding: 6 }}>
                 <X size={16} />
@@ -4403,7 +4347,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <form onSubmit={handleSaveAI}>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {isRtl ? 'نام پیکربندی:' : 'Configuration Name:'} *
+                  {t('ui_configuration_name')} *
                 </label>
                 <input
                   type="text"
@@ -4411,14 +4355,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   value={aiFormData.name || ''}
                   onChange={(e) => setAiFormData({ ...aiFormData, name: e.target.value })}
                   className="input-field"
-                  placeholder="OpenAI GPT-4o Fast"
+                  placeholder={t('ui_openai_gpt_4o_fast')}
                 />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {isRtl ? 'ارائه‌دهنده (Provider):' : 'Provider:'}
+                    {t('ui_provider')}
                   </label>
                   <select
                     value={providerId}
@@ -4430,7 +4374,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                       : [
                           { id: 'openai', label: 'OpenAI', default_base_url: '', models: [] },
                           { id: 'anthropic', label: 'Anthropic', default_base_url: '', models: [] },
-                          { id: 'custom', label: 'Custom (OpenAI-compatible)', default_base_url: '', models: [] },
+                          { id: 'custom', label: t('ui_custom_openai_compatible'), default_base_url: '', models: [] },
                         ]
                     ).map((prov) => (
                       <option key={prov.id} value={prov.id}>
@@ -4441,7 +4385,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {isRtl ? 'نام مدل:' : 'Model Name:'}
+                    {t('ui_model_name')}
                   </label>
                   <input
                     type="text"
@@ -4462,7 +4406,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
 
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {isRtl ? 'آدرس سرویس‌دهنده (Endpoint):' : 'Provider Endpoint (Base URL):'}
+                  {t('ui_provider_endpoint_base_url')}
                 </label>
                 <input
                   type="text"
@@ -4474,18 +4418,14 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 />
                 <span style={{ display: 'block', fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
                   {endpointHint
-                    ? isRtl
-                      ? `خالی بگذارید تا از پیش‌فرض این ارائه‌دهنده استفاده شود: ${endpointHint}`
-                      : `Leave blank to use this provider's default: ${endpointHint}`
-                    : isRtl
-                      ? 'برای ارائه‌دهنده سفارشی، آدرس کامل سرویس‌دهنده خود را وارد کنید'
-                      : 'For a custom provider, enter the full address of your own endpoint'}
+                    ? t('ui_leave_blank_to_use_this_provider_s_default_endpointhint_2', { endpointHint_2: endpointHint })
+                    : t('ui_for_a_custom_provider_enter_the_full_address_of_your_own_endpoin')}
                 </span>
               </div>
 
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  API Key:
+                  {t('ui_app_api_key')}
                 </label>
                 <input
                   type="password"
@@ -4497,12 +4437,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 />
                 <span style={{ display: 'block', fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
                   {aiFormData.id
-                    ? isRtl
-                      ? 'برای نگه داشتن کلید ذخیره‌شده این فیلد را خالی بگذارید'
-                      : 'Leave blank to keep the stored key'
-                    : isRtl
-                      ? 'کلید فقط روی سرور ذخیره می‌شود و هرگز به مرورگر بازنمی‌گردد'
-                      : 'Stored on the server only; it is never sent back to this page'}
+                    ? t('ui_leave_blank_to_keep_the_stored_key')
+                    : t('ui_stored_on_the_server_only_it_is_never_sent_back_to_this_page')}
                 </span>
                 <div style={{ marginTop: 8 }}>
                   <ProviderKeyCheck
@@ -4511,31 +4447,31 @@ export function App({ me }: { me?: MeInfo } = {}) {
                     model={aiFormData.model}
                     baseUrl={aiFormData.base_url}
                     apiKey={aiFormData.api_key}
-                    isRtl={isRtl}
+                    lang={lang}
                   />
                 </div>
               </div>
 
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  System Prompt:
+                  {t('ui_system_prompt')}
                 </label>
                 <textarea
                   rows={3}
                   value={aiFormData.system_prompt || ''}
                   onChange={(e) => setAiFormData({ ...aiFormData, system_prompt: e.target.value })}
                   className="input-field"
-                  placeholder="You are an expert forex signal translator..."
+                  placeholder={t('ui_you_are_an_expert_forex_signal_translator')}
                 />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" onClick={() => setIsAiModalOpen(false)} className="btn btn-secondary">
-                  {isRtl ? 'انصراف' : 'Cancel'}
+                  {t('ui_cancel')}
                 </button>
                 <button type="submit" className="btn btn-primary">
                   <Check size={16} />
-                  <span>{isRtl ? 'ذخیره' : 'Save'}</span>
+                  <span>{t('ui_save')}</span>
                 </button>
               </div>
             </form>
@@ -4569,7 +4505,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
-                {isRtl ? 'قاعده فیلتر محتوا' : 'Content Filter Rule'}
+                {t('ui_content_filter_rule')}
               </h3>
               <button onClick={() => setIsFilterModalOpen(false)} className="btn btn-secondary" style={{ padding: 6 }}>
                 <X size={16} />
@@ -4579,7 +4515,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             <form onSubmit={handleSaveFilter}>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {isRtl ? 'نام فیلتر:' : 'Filter Name:'} *
+                  {t('ui_filter_name')} *
                 </label>
                 <input
                   type="text"
@@ -4587,13 +4523,13 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   value={filterFormData.name || ''}
                   onChange={(e) => setFilterFormData({ ...filterFormData, name: e.target.value })}
                   className="input-field"
-                  placeholder="Anti-Spam Filter"
+                  placeholder={t('ui_anti_spam_filter')}
                 />
               </div>
 
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {isRtl ? 'کلمات مسدود (با ویرگول جدا کنید):' : 'Blacklist Keywords (comma-separated):'}
+                  {t('ui_blacklist_keywords_comma_separated')}
                 </label>
                 <input
                   type="text"
@@ -4611,11 +4547,11 @@ export function App({ me }: { me?: MeInfo } = {}) {
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
                 <button type="button" onClick={() => setIsFilterModalOpen(false)} className="btn btn-secondary">
-                  {isRtl ? 'انصراف' : 'Cancel'}
+                  {t('ui_cancel')}
                 </button>
                 <button type="submit" className="btn btn-primary">
                   <Check size={16} />
-                  <span>{isRtl ? 'ذخیره فیلتر' : 'Save Filter'}</span>
+                  <span>{t('ui_save_filter')}</span>
                 </button>
               </div>
             </form>
@@ -4639,7 +4575,8 @@ function extraSourceCount(rule: any): number {
   return names.length > 1 ? names.length - 1 : 0
 }
 
-function UserBar({ lang }: { lang: 'fa' | 'en' }) {
+function UserBar({ lang }: { lang: UiLang }) {
+  const t = makeT(lang)
   const [user, setUser] = useState<{ username: string; is_admin: boolean } | null>(null)
 
   useEffect(() => {
@@ -4678,7 +4615,7 @@ function UserBar({ lang }: { lang: 'fa' | 'en' }) {
         </span>
         {user.is_admin && (
           <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4, background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8' }}>
-            ADMIN
+            {t('ui_role_admin')}
           </span>
         )}
       </div>
@@ -4695,7 +4632,7 @@ function UserBar({ lang }: { lang: 'fa' | 'en' }) {
           fontWeight: 600,
         }}
       >
-        {lang === 'fa' ? 'خروج از حساب' : 'Logout'}
+        {t('ui_logout')}
       </button>
     </div>
   )
@@ -4717,7 +4654,7 @@ function ProviderKeyCheck({
   model,
   baseUrl,
   apiKey,
-  isRtl,
+  lang,
   compact,
 }: {
   aiConfigId?: string
@@ -4725,13 +4662,14 @@ function ProviderKeyCheck({
   model?: string
   baseUrl?: string
   apiKey?: string
-  isRtl?: boolean
+  lang: UiLang
   compact?: boolean
 }) {
+  const t = makeT(lang)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<CheckProviderKeyResponse | null>(null)
   const [failure, setFailure] = useState('')
-  const view = describeKeyCheck(result, !!isRtl, !(apiKey || '').trim())
+  const view = describeKeyCheck(result, lang, !(apiKey || '').trim())
 
   const run = async () => {
     setBusy(true)
@@ -4766,12 +4704,8 @@ function ProviderKeyCheck({
         <HeartPulse size={14} />
         <span>
           {busy
-            ? isRtl
-              ? 'در حال بررسی…'
-              : 'Checking…'
-            : isRtl
-              ? 'بررسی کلید و آدرس'
-              : 'Check key & endpoint'}
+            ? t('ui_checking')
+            : t('ui_check_key_endpoint')}
         </span>
       </button>
       {failure && <span style={{ fontSize: '0.75rem', color: '#f87171' }}>{failure}</span>}
@@ -4795,13 +4729,14 @@ function ProviderKeyCheck({
   )
 }
 
-function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
+function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }: {
   prompts: PromptTemplate[]
   aiConfigs: AIConfig[]
   onSaved: () => Promise<void>
   onToast: (msg: string) => void
-  isRtl: boolean
+  lang: UiLang
 }) {
+  const t = makeT(lang)
   const [selected, setSelected] = useState<PromptTemplate | null>(null)
   const [form, setForm] = useState({ name: '', description: '', system_prompt: '', user_prompt_template: '{text}', target_language: 'auto' })
   const [testText, setTestText] = useState('💎 XAUUSD SIGNAL: BUY NOW @ 2655 | TP 2680 | SL 2640 https://t.me/signal #gold')
@@ -4825,11 +4760,11 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
     setSaving(true)
     try {
       await api.savePromptTemplate({ ...form, id: selected?.id, current_version: selected?.current_version } as any)
-      onToast(isRtl ? 'پرامپت ذخیره شد' : 'Prompt saved')
+      onToast(t('ui_prompt_saved'))
       await onSaved()
       openEditor(null)
     } catch (e: any) {
-      onToast(e.message || 'Error saving prompt')
+      onToast(e.message || t('ui_error_saving_prompt'))
     } finally {
       setSaving(false)
     }
@@ -4838,11 +4773,11 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
   const handleDelete = async (id: string) => {
     try {
       await api.deletePromptTemplate(id)
-      onToast(isRtl ? 'پرامپت حذف شد' : 'Prompt deleted')
+      onToast(t('ui_prompt_deleted'))
       await onSaved()
       if (selected?.id === id) openEditor(null)
     } catch (e: any) {
-      onToast(e.message || 'Cannot delete system prompt')
+      onToast(e.message || t('ui_cannot_delete_system_prompt'))
     }
   }
 
@@ -4859,7 +4794,7 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
       })
       setTestResult(r)
     } catch (e: any) {
-      onToast(e.message || 'Test failed')
+      onToast(e.message || t('ui_test_failed'))
     } finally {
       setTesting(false)
     }
@@ -4870,16 +4805,14 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
-            ✍️ {isRtl ? 'پرامپت‌های بازنویسی (AI Rewrite Prompts)' : 'Rewrite Prompt Editor'}
+            ✍️ {t('ui_rewrite_prompt_editor')}
           </h2>
           <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
-            {isRtl
-              ? 'پرامپت‌های قابل استفاده در قوانین فوروارد. پرامپت‌های ⭐ سیستمی هستند و فقط قابل مشاهده.'
-              : 'Reusable rewrite prompts for forward rules. ⭐ = system prompts (read-only).'}
+            {t('ui_reusable_rewrite_prompts_for_forward_rules_system_prompts_read_o')}
           </p>
         </div>
         <button onClick={() => openEditor(null)} className="btn btn-primary" style={{ padding: '8px 14px' }}>
-          + {isRtl ? 'پرامپت جدید' : 'New Prompt'}
+          + {t('ui_new_prompt')}
         </button>
       </div>
 
@@ -4900,7 +4833,7 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
               <button
                 onClick={(e) => { e.stopPropagation(); handleDelete(p.id) }}
                 className="btn btn-danger icon-btn" style={{ padding: 4, marginTop: 8, float: 'right' }}
-                title={isRtl ? 'حذف' : 'Delete'}
+                title={t('ui_delete')}
               >
                 🗑
               </button>
@@ -4915,34 +4848,35 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                {isRtl ? 'نام:' : 'Name:'} *
+                {t('ui_name')} *
               </label>
               <input className="input-field" style={{ width: '100%' }} value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={isRtl ? 'مثلاً: بازنویسی رسمی' : 'e.g. Formal Rewrite'} />
+                onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('ui_e_g_formal_rewrite')} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                {isRtl ? 'زبان خروجی:' : 'Output Language:'}
+                {t('ui_output_language')}
               </label>
               <select className="input-field" style={{ width: '100%' }} value={form.target_language}
                 onChange={(e) => setForm({ ...form, target_language: e.target.value })}>
-                <option value="auto">Auto</option>
-                <option value="fa">فارسی</option>
-                <option value="en">English</option>
+                <option value="auto">{t('ui_auto_detect')}</option>
+                {SUPPORTED_LANGS.filter((l) => l.code === 'fa' || l.code === 'en').map((l) => (
+                  <option key={l.code} value={l.code}>{l.endonym}</option>
+                ))}
               </select>
             </div>
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-              {isRtl ? 'توضیحات:' : 'Description:'}
+              {t('ui_description')}
             </label>
             <input className="input-field" style={{ width: '100%' }} value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-              {isRtl ? 'System Prompt (دستور اصلی به AI):' : 'System Prompt:'} *
-              {selected?.is_system && <span style={{ color: '#f59e0b' }}> — {isRtl ? 'سیستمی، فقط‌خواندنی' : 'system, read-only'}</span>}
+              {t('ui_system_prompt')} *
+              {selected?.is_system && <span style={{ color: '#f59e0b' }}> — {t('ui_system_read_only')}</span>}
             </label>
             <textarea
               className="input-field"
@@ -4950,27 +4884,25 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
               value={form.system_prompt}
               readOnly={!!selected?.is_system}
               onChange={(e) => setForm({ ...form, system_prompt: e.target.value })}
-              placeholder={isRtl
-                ? 'متن را با حفظ اعداد، لینک‌ها و نام‌ها بازنویسی کن. اطلاعات جدید اختراع نکن. فقط متن بازنویسی‌شده را برگردان.'
-                : 'Rewrite the text preserving numbers, links, and names. Never invent facts. Return only the rewritten text.'}
+              placeholder={t('ui_rewrite_the_text_preserving_numbers_links_and_names_never_invent')}
             />
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-              {isRtl ? 'قالب پیام کاربر (User Template):' : 'User Prompt Template:'}
+              {t('ui_user_prompt_template')}
             </label>
             <input className="input-field" style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.78rem' }}
               value={form.user_prompt_template} readOnly={!!selected?.is_system}
               onChange={(e) => setForm({ ...form, user_prompt_template: e.target.value })} placeholder="{text}" />
             <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 4 }}>
-              {isRtl ? 'متغیر {text} جای متن پیام قرار می‌گیرد.' : '{text} is replaced with the message body.'}
+              {t('ui_text_is_replaced_with_the_message_body')}
             </div>
           </div>
 
           {/* Test panel */}
           <div style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: 10, padding: 14, border: '1px solid rgba(255,255,255,0.06)' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#a5b4fc', marginBottom: 8 }}>
-              🧪 {isRtl ? 'تست پرامپت (بدون ارسال پیام)' : 'Prompt Test (no message sent)'}
+              🧪 {t('ui_prompt_test_no_message_sent')}
             </div>
             <textarea className="input-field" style={{ width: '100%', minHeight: 60, marginBottom: 8, fontSize: '0.78rem' }}
               value={testText} onChange={(e) => setTestText(e.target.value)} />
@@ -4980,10 +4912,10 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
                 disabled={testing || !selected || !aiConfigs.length}
                 className="btn btn-secondary" style={{ padding: '6px 12px' }}
               >
-                {testing ? '⏳' : '▶'} {isRtl ? 'تست با AI' : 'Run AI Test'}
+                {testing ? '⏳' : '▶'} {t('ui_run_ai_test')}
               </button>
               {!aiConfigs.length && <span style={{ fontSize: '0.72rem', color: '#f87171' }}>
-                {isRtl ? 'اول یک پیکربندی AI بسازید' : 'Create an AI config first'}
+                {t('ui_create_an_ai_config_first')}
               </span>}
             </div>
             {testResult && (
@@ -5009,11 +4941,11 @@ function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, isRtl }: {
           {!selected?.is_system && form.system_prompt && (
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
               <button onClick={handleSave} disabled={saving || !form.name.trim()} className="btn btn-primary" style={{ padding: '8px 16px' }}>
-                💾 {saving ? (isRtl ? 'در حال ذخیره…' : 'Saving…') : (isRtl ? 'ذخیره پرامپت' : 'Save Prompt')}
+                💾 {saving ? (t('ui_app_saving')) : (t('ui_save_prompt'))}
               </button>
               {selected && (
                 <button onClick={() => openEditor(null)} className="btn btn-secondary" style={{ padding: '8px 16px' }}>
-                  {isRtl ? 'انصراف' : 'Cancel'}
+                  {t('ui_cancel')}
                 </button>
               )}
             </div>
