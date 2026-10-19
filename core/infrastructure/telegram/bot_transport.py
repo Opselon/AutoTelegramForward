@@ -325,31 +325,95 @@ class BotTransportCache:
     def __init__(self, token_repo: Any = None, ttl_seconds: float = 300.0) -> None:
         self._repo = token_repo
         self._ttl = ttl_seconds
-        self._entries: Dict[str, tuple[float, BotApiTransport]] = {}
+        self._entries: Dict[str, tuple[float, BotApiTransport, int]] = {}
         self._negative: Dict[str, float] = {}
+        #: (token, tenant) pairs that were refused because the token is not
+        #: theirs. Separate from `_negative`: a foreign-owner refusal must not
+        #: stop the real owner from using their own bot 30 seconds later.
+        self._denied: Dict[tuple[str, int], float] = {}
 
     def bind_repo(self, token_repo: Any) -> None:
         self._repo = token_repo
 
-    async def get(self, token_id: str) -> Optional[BotApiTransport]:
+    def _may_use(self, token_id: str, owner: int, wanted: int) -> bool:
+        """Whether ``wanted`` may deliver through a token recorded as ``owner``'s.
+
+        A token id travels in the rule metadata and in the job payload, and
+        anything that travels can be transplanted, so the owner is compared on
+        every call — including a cache hit, which is exactly where a pool keyed
+        only by token id would hand one tenant's connection to another tenant's
+        job.
+        """
+        if not owner:
+            if wanted:
+                logger.warning(
+                    "[BOT ROUTE] token %s was stored without an owner — account %s cannot claim "
+                    "it; re-attach the bot from this account to use it",
+                    token_id[:8],
+                    wanted,
+                )
+                return False
+            return True
+        if not wanted or owner == wanted:
+            return True
+        logger.warning(
+            "[BOT ROUTE] token %s belongs to account %s but this task's owner is %s — refusing "
+            "the bot route rather than posting as another tenant's bot",
+            token_id[:8],
+            owner,
+            wanted,
+        )
+        return False
+
+    async def get(self, token_id: str, owner_user_id: Optional[int] = None) -> Optional[BotApiTransport]:
+        """The pooled transport for ``token_id``, or ``None``.
+
+        ``owner_user_id`` is the tenant the caller is acting for. The worker has
+        the task in hand, so it always passes one.
+        """
         token_id = str(token_id or "").strip()
         if not token_id or self._repo is None:
             return None
 
+        wanted = int(owner_user_id or 0)
         now = time.monotonic()
         entry = self._entries.get(token_id)
         if entry and now - entry[0] < self._ttl:
-            return entry[1]
+            return entry[1] if self._may_use(token_id, entry[2], wanted) else None
         if not entry and self._negative.get(token_id, 0.0) > now:
             return None  # recent failure: do not hammer the database
+        if self._denied.get((token_id, wanted), 0.0) > now:
+            return None  # recently refused for this tenant
 
         try:
-            record = await self._repo.get_by_id(token_id)
+            # Ask for *this tenant's* row rather than reading any row and
+            # comparing afterwards: a transplanted id then never round-trips
+            # the secret at all.
+            if wanted:
+                record = await self._repo.get_owned(token_id, wanted)
+            else:
+                record = await self._repo.get_by_id(token_id)
         except Exception as exc:
             logger.warning("[BOT ROUTE] token %s lookup failed: %s", token_id[:8], exc)
             record = None
 
-        if record is None or not getattr(record, "is_active", False) or not getattr(record, "token", ""):
+        if record is None:
+            if wanted:
+                # "Not yours" and "does not exist" answer identically, so an id
+                # cannot be probed for existence.
+                self._denied[(token_id, wanted)] = now + 30.0
+                logger.warning(
+                    "[BOT ROUTE] token %s is not owned by account %s (or does not exist) — "
+                    "refusing the bot route",
+                    token_id[:8],
+                    wanted,
+                )
+                return None
+            logger.warning("[BOT ROUTE] bot token %s is missing, inactive or empty", token_id[:8])
+            self._negative[token_id] = now + 30.0
+            return None
+
+        if not getattr(record, "is_active", False) or not getattr(record, "token", ""):
             logger.warning("[BOT ROUTE] bot token %s is missing, inactive or empty", token_id[:8])
             self._negative[token_id] = now + 30.0
             return None
@@ -361,8 +425,13 @@ class BotTransportCache:
             self._negative[token_id] = now + 60.0
             return None
 
-        self._entries[token_id] = (now, transport)
+        owner = int(getattr(record, "owner_user_id", 0) or 0)
+        # Pooled even when this caller may not use it: the refusal is about the
+        # caller, not about the connection.
+        self._entries[token_id] = (now, transport, owner)
         self._negative.pop(token_id, None)
+        if not self._may_use(token_id, owner, wanted):
+            return None
         logger.info("[BOT ROUTE] attached bot %s (token %s) ready", transport.username or transport.bot_id, token_id[:8])
         return transport
 
@@ -380,6 +449,8 @@ class BotTransportCache:
         token_id = str(token_id or "").strip()
         entry = self._entries.pop(token_id, None)
         self._negative.pop(token_id, None)
+        for key in [k for k in self._denied if k[0] == token_id]:
+            self._denied.pop(key, None)
         if entry:
             transport = entry[1]
             try:
@@ -388,8 +459,8 @@ class BotTransportCache:
                 pass
 
     async def aclose(self) -> None:
-        for _, transport in self._entries.values():
-            await transport.aclose()
+        for _entry in self._entries.values():
+            await _entry[1].aclose()
         self._entries.clear()
 
 

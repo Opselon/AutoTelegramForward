@@ -594,6 +594,7 @@ class DurableQueueManager:
                     logger.debug("Failed checking time limit for %s: %s", session_id, exc)
 
         # Check if rule is still active or paused
+        rule_obj = None
         if self._rules is not None:
             rule_obj = await self._rules.get_by_id(job.rule_id)
             if rule_obj:
@@ -618,12 +619,16 @@ class DurableQueueManager:
         transport_wanted = str(job.payload_data.get("delivery_transport") or "USER").strip().upper()
         route = None
         if transport_wanted == "BOT":
-            route = await self._bot_route(job)
+            route = await self._bot_route(
+                job,
+                owner_user_id=int(getattr(rule_obj, "owner_user_id", 0) or 0) or None,
+            )
             if route is None:
                 _bump_target("retried")
                 logger.error(
-                    "[BOT ROUTE] [%s] job %s asks for the bot route but token %s is unusable; "
-                    "not falling back silently — fix the token or switch the task back to the account route",
+                    "[BOT ROUTE] [%s] job %s asks for the bot route but token %s is unusable "
+                    "for this task; not falling back silently — fix the token or switch the "
+                    "task back to the account route",
                     worker_id,
                     job.id,
                     str(job.payload_data.get("bot_token_id") or "")[:8] or "(none)",
@@ -1051,19 +1056,31 @@ class DurableQueueManager:
                 job_id, message_id, target, ttl, tg_detail(exc),
             )
 
-    async def _bot_route(self, job: DeliveryJob) -> Optional[Any]:
+    async def _bot_route(self, job: DeliveryJob, owner_user_id: Optional[int] = None) -> Optional[Any]:
         """A per-job delivery view onto the bot the task attached.
 
-        Returns ``None`` when the token is missing, inactive or unusable — the
-        caller then retries the job (it must not quietly post as the owner, which
-        would leak the sender identity the owner deliberately changed).
+        Returns ``None`` when the token is missing, inactive, unusable — or
+        **not owned by this task's owner**. The caller then retries the job (it
+        must not quietly post as the owner, which would leak the sender identity
+        the owner deliberately changed).
+
+        ``owner_user_id`` comes from the stored rule, never from the job
+        payload: the payload is what we are checking.
         """
         if self._bot_route_cache is None:
             logger.warning("[BOT ROUTE] job %s asks for the bot route but no token repository is wired here", job.id)
             return None
 
         token_id = str(job.payload_data.get("bot_token_id") or "")
-        transport = await self._bot_route_cache.get(token_id)
+        if not owner_user_id:
+            logger.warning(
+                "[BOT ROUTE] job %s has no task owner to check the attached token against "
+                "(rule %s not found) — refusing the bot route rather than guessing",
+                job.id,
+                job.rule_id[:8],
+            )
+            return None
+        transport = await self._bot_route_cache.get(token_id, owner_user_id)
         if transport is None:
             return None
 
