@@ -237,15 +237,45 @@ class UiStateManager:
 
     # ---- loading ------------------------------------------------------ #
     async def _ensure_loaded(self, uid: int) -> None:
-        if self._loaded.get(uid) or self._repo is None:
-            self._loaded[uid] = False  # absent row or no store: do not retry
+        """Resume the user's flow from the durable row — exactly once.
+
+        The repository interface is `get()/save()/clear()`. Reading it on every
+        touch would replace the live object with the persisted copy, so a row
+        that trails the live state (a persist that failed and was swallowed, a
+        replica, a write that lost a race) would overwrite newer edits on the
+        next press — the exact failure this module exists to prevent. One load
+        per process is therefore the guarantee, not an optimisation.
+
+        A load that raises is reported and left unloaded, so the next call can
+        still resume instead of the failure being cached for the life of the
+        process. The row is never applied over state the process already holds.
+        """
+        if self._loaded.get(uid):
+            return
+        if self._repo is None:
+            self._loaded[uid] = True
             return
         try:
-            row = await self._repo.load(uid)
-        except Exception:
-            row = None
-        if row:
-            st, stack = UiState_v2_from_payload(row)
+            row = await self._repo.get(uid)
+        except Exception as exc:
+            logger.warning("[UI_STATE:LOAD_FAILED] uid=%s: %s", uid, exc)
+            if self._log is not None:
+                try:
+                    self._log.info("ui", "state", f"resume failed for {uid}: {exc}")
+                except Exception:
+                    pass
+            return
+        if row and uid not in self._states:
+            payload = row.get("buffer") if isinstance(row, dict) else None
+            if isinstance(payload, dict) and any(
+                k in payload for k in ("step", "v", "screen_stack", "buffer")
+            ):
+                st, stack = UiState_v2_from_payload(payload)
+            else:
+                # a pre-manager row: `buffer` was the buffer itself
+                st = UiState.from_dict(
+                    {"step": (row or {}).get("step", ""), "buffer": payload or {}})
+                stack = []
             self._states[uid] = st
             self._stacks[uid] = stack
         self._loaded[uid] = True
@@ -383,16 +413,24 @@ class UiStateManager:
             return list(self._stacks.get(uid, []))
 
     # ---- existing-cache absorb ------------------------------------------ #
-    async def absorb(self, uid: int, st: UiState) -> None:
+    async def absorb(self, uid: int, st: UiState, stack: Optional[List[str]] = None,
+                     restore_stack: bool = False) -> None:
         """Validate, own and persist one externally built UiState.
 
         ProBotUI hands the manager the per-user UiState object its handlers
         already mutated; the manager stores it as THE durable object for this
         uid (single-writer), validates the namespace/bounds one last time and
         writes the versioned payload with the current screen stack.
+
+        `stack` + `restore_stack=True` is the bot UI's resume handover: it seeds
+        the navigation stack from the payload it just read, and only when this
+        process has no stack for the user yet, so a handover can restore `Back`
+        after a restart but can never rewind a live stack.
         """
         async with self._lock(uid):
             await self._ensure_loaded(uid)
+            if restore_stack and stack and not self._stacks.get(uid):
+                self._stacks[uid] = list(stack)[:MAX_STACK]
             current = self._states.setdefault(uid, UiState())
             if current is not st:
                 # Adopt the caller's values but keep the manager-owned object

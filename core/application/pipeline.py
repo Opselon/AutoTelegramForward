@@ -453,6 +453,22 @@ class DurableMessagePipeline:
         valid_rules = [r for r in matching if trigger in (getattr(r, "trigger_events", None) or ["NEW_MESSAGE"])]
 
         if not valid_rules:
+            # A paused task is not a "no rule matched": the rule is there and it
+            # watches this source, it is simply stopped by the user. Saying
+            # "none of N matched" sends an operator looking for a routing bug
+            # that does not exist (Part 2 STEER 05/09).
+            if active_rules and all(
+                bool(getattr(r, "is_currently_paused", lambda: False)()) for r in active_rules
+            ):
+                ctx.record_stage(PipelineStage.FILTER, False, reason="rule_paused")
+                await self._audit(ctx, "forward.dropped", "FAILED", reason_code="RULE_PAUSED",
+                                  message_id=str(payload.message_id),
+                                  result_summary=f"every task watching {payload.chat_id} is paused")
+                logger.info(
+                    "[PIPELINE:PAUSED] [%s] Message %s from chat %s: the task(s) watching this source are paused",
+                    ctx.correlation_id[:8], payload.message_id, payload.chat_id,
+                )
+                return ctx
             ctx.record_stage(PipelineStage.FILTER, False, reason="no_matching_rules")
             reason_code = "RULE_NOT_MATCHED" if active_rules else "RULE_DISABLED"
             await self._audit(ctx, "forward.dropped", "FAILED", reason_code=reason_code,
@@ -870,38 +886,46 @@ class DurableMessagePipeline:
             # task's own transforms are already applied (only the override's
             # rewrite runs here, on this target's copy of the text).
             target_text = ctx.transformed_text
-            if hasattr(rule, "policy_chain") and (rule.target_policies or rule.content_policy.has_rules):
-                chain = rule.policy_chain(source_chat_id=payload.chat_id, target_chat_id=target)
-                target_reject = None
-                for policy in chain:
-                    decision = policy.evaluate(target_text or "", m_type)
-                    if not decision.allowed:
-                        target_reject = (policy, decision)
-                        break
-                if target_reject is not None:
-                    policy, decision = target_reject
-                    self.metrics.filtered_total += 1
-                    ctx.record_stage(PipelineStage.ENQUEUE, False, reason=f"target_filtered:{target}")
-                    await self._audit(ctx, "forward.filtered", "REJECTED",
-                                      reason_code="CONTENT_POLICY_TARGET",
-                                      rule_id=rule.id, message_id=str(payload.message_id),
-                                      result_summary=f"{policy.source or 'task'}:{decision.reason} -> {target}")
-                    logger.info(
-                        "[PIPELINE:POLICY_TARGET] [%s] Rule %s msg %s NOT sent to target %s (%s at %s)",
-                        ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
-                        decision.reason, policy.source or "task",
-                    )
+            # Already decided: the task's own policy (and the source override)
+            # ran in the FILTER stage, on the *source* message. Re-deciding it
+            # here would judge the task's own transforms — a header/footer or a
+            # replacement that contains one of the task's own blacklist words
+            # used to reject every message the task ever forwarded, silently
+            # (Part 2 STEER 05). Only the target-scoped override, which the
+            # FILTER stage never saw, is decided here, on this target's copy.
+            chain = rule.policy_chain(source_chat_id=payload.chat_id, target_chat_id=target)
+            target_reject = None
+            for policy in chain:
+                if not str(getattr(policy, "source", "") or "").startswith("target:"):
                     continue
-                for policy in chain[1:]:
-                    if policy.is_active:
-                        rewritten, notes = policy.transform(target_text or "")
-                        if notes:
-                            target_text = rewritten
-                            logger.info(
-                                "[PIPELINE:POLICY_TARGET] [%s] Rule %s rewrote msg %s for target %s at %s: %s",
-                                ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
-                                policy.source or "target", notes,
-                            )
+                decision = policy.evaluate(target_text or "", m_type)
+                if not decision.allowed:
+                    target_reject = (policy, decision)
+                    break
+            if target_reject is not None:
+                policy, decision = target_reject
+                self.metrics.filtered_total += 1
+                ctx.record_stage(PipelineStage.ENQUEUE, False, reason=f"target_filtered:{target}")
+                await self._audit(ctx, "forward.filtered", "REJECTED",
+                                  reason_code="CONTENT_POLICY_TARGET",
+                                  rule_id=rule.id, message_id=str(payload.message_id),
+                                  result_summary=f"{policy.source or 'task'}:{decision.reason} -> {target}")
+                logger.info(
+                    "[PIPELINE:POLICY_TARGET] [%s] Rule %s msg %s NOT sent to target %s (%s at %s)",
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
+                    decision.reason, policy.source or "task",
+                )
+                continue
+            for policy in chain[1:]:
+                if policy.is_active:
+                    rewritten, notes = policy.transform(target_text or "")
+                    if notes:
+                        target_text = rewritten
+                        logger.info(
+                            "[PIPELINE:POLICY_TARGET] [%s] Rule %s rewrote msg %s for target %s at %s: %s",
+                            ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
+                            policy.source or "target", notes,
+                        )
             # Branding hop: post this target's processed text into C once, then
             # hand the plan to the queue so the worker reproduces the hop. The
             # outcome (including a failure) is cached per distinct text — C must
@@ -970,20 +994,29 @@ class DurableMessagePipeline:
                     if self._queue is None:
                         break
                     # job_kind="keyword_reply" gives the reply its own
-                    # delivery-job id so it is not deduplicated against the
-                    # primary forward for the same target.
-                    await self._queue.enqueue_delivery(
+                    # deliverable key (id + the table's UNIQUE key include the
+                    # kind) so it is not deduplicated against the primary
+                    # forward for the same target.
+                    queued = await self._queue.enqueue_delivery(
                         rule, payload, str(target), reply_text, eval_res,
                         job_kind="keyword_reply",
                         correlation_id=ctx.correlation_id,
                     )
+                    if queued is False:
+                        # A refused enqueue used to be invisible: the only log
+                        # line claimed the reply had shipped. Say what really
+                        # happened so an operator can see it in the console.
+                        logger.warning(
+                            "[PIPELINE:KEYWORD_REPLY] [%s] Rule %s msg %s — reply to %s was refused by the queue",
+                            ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
+                        )
                 ctx.record_stage(
                     PipelineStage.TRANSFORM, True,
                     reason="keyword_reply:matched",
                 )
                 logger.info(
                     "[PIPELINE:KEYWORD_REPLY] [%s] Rule %s keyword matched on msg %s — reply enqueued to %d target(s)",
-                    ctx.correlation_id[:8], rule.id[:8], payload.message_id, len(targets),
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id, len(delivery_targets),
                 )
         except Exception as exc:
             # The keyword reply is an add-on side effect: a failure here must
@@ -1257,7 +1290,9 @@ class DurableMessagePipeline:
             # Fallback legacy provider if available
             if self._ai_repo and self._ai_factory:
                 try:
-                    ai_cfg = await self._ai_repo.get_by_id(rule.ai_config_id)
+                    # Owner-scoped: a rule that names another tenant's config
+                    # must not spend that tenant's provider or API key.
+                    ai_cfg = await self._ai_repo.get_owned(rule.ai_config_id, getattr(rule, "owner_user_id", 0) or 0)
                     if ai_cfg and ai_cfg.is_enabled:
                         provider = self._ai_factory.get(ai_cfg)
                         rewritten = await provider.rewrite(ai_cfg, text)
@@ -1318,6 +1353,9 @@ class DurableMessagePipeline:
             req,
             primary_config_id=rule.ai_config_id,
             secondary_config_id=getattr(rule, "ai_secondary_config_id", None),
+            # The rewriting engine resolves the config owner-scoped: the rule's
+            # owner must own the config it names, or the transform is refused.
+            owner_user_id=getattr(rule, "owner_user_id", 0) or 0,
         )
 
         if resp.success:

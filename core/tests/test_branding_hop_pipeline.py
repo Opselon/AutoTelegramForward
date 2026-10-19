@@ -177,10 +177,22 @@ class FakeQueue:
 
 
 class FakeAIRepo:
+    """Mirrors ``IAIConfigRepository``: the engine reads a config owner-scoped.
+
+    ``get_owned`` is part of the interface (Part 2 STEER 10), so a double that
+    only implements ``get_by_id`` makes the pipeline's owner-scoped read raise,
+    which its handler correctly treats as "AI unavailable" and drops the
+    message. That is the fail-closed path working — and it means the test would
+    no longer be testing the hop at all.
+    """
+
     def __init__(self, cfg: Any) -> None:
         self.cfg = cfg
 
     async def get_by_id(self, cfg_id: str) -> Any:
+        return self.cfg
+
+    async def get_owned(self, cfg_id: str, owner_user_id: int = 0) -> Any:
         return self.cfg
 
 

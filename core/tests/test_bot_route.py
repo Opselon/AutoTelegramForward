@@ -238,16 +238,50 @@ async def test_media_groups_are_refused_so_the_worker_can_fall_back():
 
 
 class _TokenRepo:
-    def __init__(self, token: str = TOKEN, active: bool = True, hits: list | None = None):
+    """A two-method store, because ownership needs both.
+
+    ``get_by_id`` is the unscoped read (a delivery worker with no tenant
+    context, a probe), ``get_owned`` is the read a tenant's request goes
+    through: another owner's token is simply not found.
+    """
+
+    def __init__(
+        self,
+        token: str = TOKEN,
+        active: bool = True,
+        hits: list | None = None,
+        owner: int = 777,
+    ):
         self.token = token
         self.active = active
         self.hits = hits if hits is not None else []
+        self.owner = int(owner)
+        self.scopes: list[tuple[str, int]] = []
+
+    def _row(self, token_id):
+        return type(
+            "Row",
+            (),
+            {
+                "id": token_id,
+                "token": self.token,
+                "is_active": self.active,
+                "owner_user_id": self.owner,
+            },
+        )()
 
     async def get_by_id(self, token_id):
         self.hits.append(token_id)
         if not self.token:
             return None
-        return type("Row", (), {"id": token_id, "token": self.token, "is_active": self.active})()
+        return self._row(token_id)
+
+    async def get_owned(self, token_id, owner_user_id):
+        self.hits.append(token_id)
+        self.scopes.append((token_id, int(owner_user_id)))
+        if not self.token or int(owner_user_id) != self.owner:
+            return None  # a foreign id is not found, never read and then judged
+        return self._row(token_id)
 
 
 @pytest.mark.asyncio
@@ -334,13 +368,16 @@ async def test_the_worker_only_takes_the_bot_route_when_the_job_asks():
     cache = BotTransportCache(_TokenRepo())
     manager._bot_route_cache = cache
 
-    route = await manager._bot_route(_job(delivery_transport="BOT", bot_token_id=TOKEN_ID))
+    route = await manager._bot_route(
+        _job(delivery_transport="BOT", bot_token_id=TOKEN_ID), owner_user_id=777
+    )
     assert isinstance(route, BotRouteAdapter)
 
     # USER job with a token attached is still the account route.
-    assert await manager._bot_route(_job(delivery_transport="USER", bot_token_id=TOKEN_ID)) is not None, (
-        "the helper resolves a token, but the worker only calls it for BOT jobs"
-    )
+    assert (
+        await manager._bot_route(_job(delivery_transport="USER", bot_token_id=TOKEN_ID), owner_user_id=777)
+        is not None
+    ), "the helper resolves a token, but the worker only calls it for BOT jobs"
     await cache.aclose()
 
 
@@ -351,7 +388,12 @@ async def test_a_bot_job_without_a_usable_token_is_not_sent_as_the_owner():
     manager = DurableQueueManager.__new__(DurableQueueManager)
     manager._bot_route_cache = BotTransportCache(_TokenRepo(token=""))
 
-    assert await manager._bot_route(_job(delivery_transport="BOT", bot_token_id=TOKEN_ID)) is None
+    assert (
+        await manager._bot_route(
+            _job(delivery_transport="BOT", bot_token_id=TOKEN_ID), owner_user_id=777
+        )
+        is None
+    )
 
 
 def test_the_payload_carries_the_route_fields():
@@ -371,3 +413,107 @@ async def test_a_kept_open_transport_is_closed_once():
     await transport.aclose()
     await transport.aclose()  # idempotent: the cache may close it again
     assert asyncio.get_event_loop().is_running()
+
+
+# --------------------------------------------------------------------------- #
+# Ownership: a token id travels, so it cannot be proof of ownership
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_a_foreign_token_is_not_found_for_the_caller():
+    """The scoped read is used, so another tenant's token is never returned."""
+    repo = _TokenRepo(owner=777)
+    cache = BotTransportCache(repo)
+
+    assert await cache.get(TOKEN_ID, owner_user_id=555) is None
+    assert repo.scopes == [(TOKEN_ID, 555)], "the caller's own scope was not used for the read"
+    await cache.aclose()
+
+
+@pytest.mark.asyncio
+async def test_a_cached_transport_is_not_handed_to_another_tenant():
+    """The pool is keyed by token; the *caller* is checked on every hit.
+
+    This is the hole a cache keyed only by token id opens: the first tenant to
+    use a bot leaves a ready connection in the pool, and without an owner check
+    on the hit path every later job that names that id would reuse it.
+    """
+    repo = _TokenRepo(owner=777)
+    cache = BotTransportCache(repo)
+
+    mine = await cache.get(TOKEN_ID, owner_user_id=777)
+    assert mine is not None
+
+    assert await cache.get(TOKEN_ID, owner_user_id=555) is None, (
+        "a cached transport must not be usable by a task that does not own the bot"
+    )
+    assert await cache.get(TOKEN_ID, owner_user_id=777) is mine, (
+        "the refusal must not cost the real owner their pooled connection"
+    )
+    await cache.aclose()
+
+
+@pytest.mark.asyncio
+async def test_the_worker_refuses_a_route_it_cannot_attribute(caplog):
+    """No rule means no owner means no proof: the bot route is refused."""
+    from core.infrastructure.telegram.durable_queue import DurableQueueManager
+
+    manager = DurableQueueManager.__new__(DurableQueueManager)
+    manager._bot_route_cache = BotTransportCache(_TokenRepo(owner=777))
+
+    with caplog.at_level("WARNING"):
+        route = await manager._bot_route(_job(delivery_transport="BOT", bot_token_id=TOKEN_ID))
+
+    assert route is None
+    assert any("no task owner" in rec.getMessage() for rec in caplog.records), caplog.text
+    await manager._bot_route_cache.aclose()
+
+
+@pytest.mark.asyncio
+async def test_a_transplanted_token_does_not_deliver_for_the_other_tenant():
+    """The end that matters: whose bot the message comes out of.
+
+    The task belongs to 555 and the payload names 777's token. The worker must
+    refuse — not silently fall back to 555's account route, and not post through
+    777's bot. The same token for its real owner still resolves, so the refusal
+    is about ownership rather than about the token being broken.
+    """
+    from core.infrastructure.telegram.durable_queue import DurableQueueManager
+
+    repo = _TokenRepo(owner=777)
+    manager = DurableQueueManager.__new__(DurableQueueManager)
+    manager._bot_route_cache = BotTransportCache(repo)
+    job = _job(delivery_transport="BOT", bot_token_id=TOKEN_ID)
+
+    assert await manager._bot_route(job, owner_user_id=555) is None, (
+        "a task must not deliver through another tenant's bot"
+    )
+    assert await manager._bot_route(job, owner_user_id=777) is not None, (
+        "the bot's real owner can still use it"
+    )
+    await manager._bot_route_cache.aclose()
+
+
+@pytest.mark.asyncio
+async def test_a_token_stored_before_owners_existed_cannot_be_claimed(caplog):
+    """A legacy row has ``owner_user_id = 0``: nobody can be shown to own it.
+
+    Failing open here would mean the strictest reading of the boundary ("the
+    owner in the database decides") is skipped exactly for the rows with no
+    owner in the database, so a tenant cannot claim one; the log says what to do
+    about it, and the unscoped read (probes, the token list) still sees the row.
+    """
+    repo = _TokenRepo(owner=0)
+    cache = BotTransportCache(repo)
+
+    with caplog.at_level("WARNING"):
+        refused = await cache.get(TOKEN_ID, owner_user_id=777)
+
+    assert refused is None, "an ownerless token must not be claimed by a tenant"
+    # The refusal is deliberately indistinguishable from "no such token": an id
+    # must not be probeable for existence, and an ownerless row is not special
+    # enough to make an exception to that.
+    assert any("not owned by account 777" in rec.getMessage() for rec in caplog.records), caplog.text
+    assert await cache.get(TOKEN_ID) is not None, "an unscoped lookup still resolves the token"
+    await cache.aclose()

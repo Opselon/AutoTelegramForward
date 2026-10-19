@@ -26,3 +26,4 @@ dist-ssr
 # Compiled in CI to run the provenance rules directly
 .provenance-build/
 .actions-build/
+.identity-build/

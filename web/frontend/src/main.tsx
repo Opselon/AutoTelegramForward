@@ -12,6 +12,7 @@ import {
   isTokenJwtExpired,
   type SessionState,
 } from './session'
+import { appKey, isSessionStorageEvent } from './sessionIdentity'
 
 // Global error boundary to prevent any blank screen crash
 class ErrorBoundary extends React.Component<
@@ -206,6 +207,29 @@ function Root() {
     return () => window.removeEventListener('auth_required', handleAuthRequired)
   }, [])
 
+  // The token lives in `localStorage`, which every tab of this origin shares:
+  // a second tab can log in as another account, or log out, without this tab
+  // knowing. Reaching for the new token on the next request would then act as
+  // the other account while this screen still shows the previous one. So when
+  // the stored session changes elsewhere, this tab re-proves the session
+  // instead of keeping a dashboard it can no longer justify.
+  useEffect(() => {
+    const handleStorage = (ev: StorageEvent) => {
+      if (!isSessionStorageEvent(ev)) return
+      verifySession()
+        .then((st) => {
+          setSession(st)
+          setSettled(true)
+        })
+        .catch(() => {
+          setSession(null)
+          setSettled(true)
+        })
+    }
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [])
+
   if (exchanging) {
     return (
       <div
@@ -253,7 +277,10 @@ function Root() {
     return null
   }
 
-  return <App me={session.me} />
+  // `key` is the account: adopting a different identity must remount the whole
+  // dashboard, so no list, page or cached response fetched for the previous
+  // account can stay on screen behind the new one.
+  return <App key={appKey(session.me)} me={session.me} />
 }
 
 createRoot(document.getElementById('root')!).render(

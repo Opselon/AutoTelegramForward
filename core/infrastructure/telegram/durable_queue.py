@@ -301,8 +301,13 @@ class DurableQueueManager:
         # gate survives a restart.
         delay = AdvancedSettingsEngine.get_dispatch_delay(rule)
         next_retry_at = time.time() + delay if delay > 0 else 0.0
-        # The reply is a distinct deliverable, so it gets a distinct id —
-        # otherwise the primary forward's INSERT OR IGNORE swallows it.
+        # The reply is a distinct deliverable, so it gets a distinct id. The id
+        # alone is not enough: ``delivery_jobs`` carries a UNIQUE key on
+        # (rule, source_chat, source_message, target, job_kind), and the kind is
+        # part of that key so a forward and a keyword reply for the same event
+        # are two rows rather than one — with the kind omitted from the key the
+        # reply's INSERT OR IGNORE matched the forward's row, returned False and
+        # the reply was dropped in silence.
         suffix = "" if job_kind == "forward" else f":{job_kind}"
         job_id = f"{rule.id}:{payload.chat_id}:{payload.message_id}:{target_chat_id}{suffix}"
 
@@ -315,6 +320,7 @@ class DurableQueueManager:
             payload_data=payload_dict,
             status=DeliveryStatus.PENDING,
             next_retry_at=next_retry_at,
+            job_kind=job_kind,
             # Audit trail for the hop: which channel C carried this delivery and
             # which post in C the target is forwarded from (columns exist since
             # v9 and were never populated on the dispatch path).
@@ -360,6 +366,36 @@ class DurableQueueManager:
         res = await self._queue.enqueue(job)
         return True if res is None else bool(res)
 
+    async def _note_mapping(self, job: DeliveryJob, status, target_message_id=None) -> None:
+        """Record a delivery outcome on the job's source→target mapping.
+
+        Only the *primary forward* owns that row. ``message_map`` is keyed by
+        (rule, source_chat, source_message, target), so a keyword reply — a
+        second deliverable to the same target for the same source message —
+        shares the key with the forward. Letting it write there replaced the
+        forward's ``target_message_id`` with the reply's message id (so edit and
+        delete sync acted on the reply post instead of the forwarded copy) and
+        rewrote the forward's delivery status (a failed reply marked a delivered
+        forward as RETRY_WAIT/FAILED). The reply has its own ``delivery_jobs``
+        row; that is where its outcome is recorded.
+        """
+        kind = str(getattr(job, "job_kind", "forward") or "forward")
+        is_reply = bool((job.payload_data or {}).get("is_reply", False))
+        if kind != "forward" or is_reply:
+            logger.debug(
+                "[DURABLE_QUEUE] job %s is a %s deliverable — mapping row left to the forward",
+                job.id, kind,
+            )
+            return
+        await self._map.update_delivery(
+            rule_id=job.rule_id,
+            source_chat_id=job.source_chat_id,
+            source_message_id=job.source_message_id,
+            target_chat_id=job.target_chat_id,
+            target_message_id=target_message_id,
+            status=status,
+        )
+
     def _write_mapping_and_job(self, conn, mapping: MessageMapping, job: DeliveryJob) -> bool:
         """Both durable writes on one connection: commit together or roll back together.
 
@@ -370,25 +406,32 @@ class DurableQueueManager:
         """
         now = int(time.time())
         status_str = getattr(mapping.delivery_status, "value", str(mapping.delivery_status))
-        conn.execute(
-            """
-            INSERT INTO message_map (
-                id, rule_id, source_chat_id, source_message_id, target_chat_id,
-                target_message_id, media_group_id, delivery_status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET
-                target_message_id = COALESCE(excluded.target_message_id, message_map.target_message_id),
-                media_group_id = COALESCE(excluded.media_group_id, message_map.media_group_id),
-                delivery_status = excluded.delivery_status,
-                updated_at = excluded.updated_at
-            """,
-            (
-                mapping.id, mapping.rule_id,
-                str(mapping.source_chat_id), int(mapping.source_message_id),
-                str(mapping.target_chat_id), mapping.target_message_id,
-                mapping.media_group_id or "", status_str, mapping.created_at, now,
-            ),
-        )
+        job_kind = str(getattr(job, "job_kind", "forward") or "forward")
+        # The mapping row is the source→target relationship, established by the
+        # primary forward. A reply shares its key, so writing it here would
+        # refresh (`delivery_status`) a row that describes a different
+        # deliverable — a replay of the event could flip a SENT forward back to
+        # PENDING and make the source look undelivered.
+        if job_kind == "forward":
+            conn.execute(
+                """
+                INSERT INTO message_map (
+                    id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                    target_message_id, media_group_id, delivery_status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET
+                    target_message_id = COALESCE(excluded.target_message_id, message_map.target_message_id),
+                    media_group_id = COALESCE(excluded.media_group_id, message_map.media_group_id),
+                    delivery_status = excluded.delivery_status,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    mapping.id, mapping.rule_id,
+                    str(mapping.source_chat_id), int(mapping.source_message_id),
+                    str(mapping.target_chat_id), mapping.target_message_id,
+                    mapping.media_group_id or "", status_str, mapping.created_at, now,
+                ),
+            )
         payload_str = _dumps(job.payload_data)
         job_status = getattr(job.status, "value", str(job.status))
         try:
@@ -398,8 +441,9 @@ class DurableQueueManager:
                     id, rule_id, source_chat_id, source_message_id, target_chat_id,
                     payload_json, status, attempts, max_attempts, next_retry_at,
                     lease_until, worker_id, error_detail, created_at, updated_at,
-                    intermediate_chat_id, intermediate_message_id, delivery_stage
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    intermediate_chat_id, intermediate_message_id, delivery_stage,
+                    job_kind
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job.id, job.rule_id, str(job.source_chat_id),
@@ -409,11 +453,21 @@ class DurableQueueManager:
                     job.error_detail or "", job.created_at, job.updated_at,
                     str(job.intermediate_chat_id or "") if job.intermediate_chat_id else None,
                     job.intermediate_message_id, job.delivery_stage or "DIRECT",
+                    job_kind,
                 ),
             )
             return cur.rowcount > 0
         except sqlite3.OperationalError:
-            # Legacy table without the v9 intermediate/delivery_stage columns
+            # Legacy table without the v9 intermediate/delivery_stage columns.
+            # A non-forward deliverable cannot be stored there at all (the
+            # dedup key has no room for it), so say so instead of reporting a
+            # refusal as an ordinary replay.
+            if job_kind != "forward":
+                logger.warning(
+                    "[DURABLE_QUEUE] delivery_jobs table cannot store a %s row "
+                    "(legacy schema) — job %s not queued", job_kind, job.id,
+                )
+                return False
             cur = conn.execute(
                 """
                 INSERT OR IGNORE INTO delivery_jobs (
@@ -540,6 +594,7 @@ class DurableQueueManager:
                     logger.debug("Failed checking time limit for %s: %s", session_id, exc)
 
         # Check if rule is still active or paused
+        rule_obj = None
         if self._rules is not None:
             rule_obj = await self._rules.get_by_id(job.rule_id)
             if rule_obj:
@@ -564,12 +619,16 @@ class DurableQueueManager:
         transport_wanted = str(job.payload_data.get("delivery_transport") or "USER").strip().upper()
         route = None
         if transport_wanted == "BOT":
-            route = await self._bot_route(job)
+            route = await self._bot_route(
+                job,
+                owner_user_id=int(getattr(rule_obj, "owner_user_id", 0) or 0) or None,
+            )
             if route is None:
                 _bump_target("retried")
                 logger.error(
-                    "[BOT ROUTE] [%s] job %s asks for the bot route but token %s is unusable; "
-                    "not falling back silently — fix the token or switch the task back to the account route",
+                    "[BOT ROUTE] [%s] job %s asks for the bot route but token %s is unusable "
+                    "for this task; not falling back silently — fix the token or switch the "
+                    "task back to the account route",
                     worker_id,
                     job.id,
                     str(job.payload_data.get("bot_token_id") or "")[:8] or "(none)",
@@ -627,14 +686,7 @@ class DurableQueueManager:
                 self._queue_wait_sum += max(0.0, time.time() - float(job.created_at))
 
             # Delivery confirmed!
-            await self._map.update_delivery(
-                rule_id=job.rule_id,
-                source_chat_id=job.source_chat_id,
-                source_message_id=job.source_message_id,
-                target_chat_id=job.target_chat_id,
-                target_message_id=target_msg_id,
-                status=DeliveryStatus.SENT,
-            )
+            await self._note_mapping(job, DeliveryStatus.SENT, target_msg_id)
             self.stats["sent"] += 1
             logger.info(
                 "[PIPELINE:DELIVERED] [%s] Sent rule=%s src=%s:%s -> tgt=%s msg_id=%s (took %.2fs)",
@@ -708,14 +760,7 @@ class DurableQueueManager:
                     except Exception:
                         pass
                 await self._queue.mark_unknown(job.id, f"Telegram timeout: {err_msg}")
-                await self._map.update_delivery(
-                    rule_id=job.rule_id,
-                    source_chat_id=job.source_chat_id,
-                    source_message_id=job.source_message_id,
-                    target_chat_id=job.target_chat_id,
-                    target_message_id=None,
-                    status=DeliveryStatus.UNKNOWN,
-                )
+                await self._note_mapping(job, DeliveryStatus.UNKNOWN)
                 return None
 
             # 2. FloodWait / recoverable retry
@@ -747,14 +792,7 @@ class DurableQueueManager:
                     except Exception:
                         pass
                 await self._queue.mark_retry(job.id, err_msg, backoff_seconds=wait_sec)
-                await self._map.update_delivery(
-                    rule_id=job.rule_id,
-                    source_chat_id=job.source_chat_id,
-                    source_message_id=job.source_message_id,
-                    target_chat_id=job.target_chat_id,
-                    target_message_id=None,
-                    status=DeliveryStatus.RETRY_WAIT,
-                )
+                await self._note_mapping(job, DeliveryStatus.RETRY_WAIT)
                 return None
 
             # 3. Permanent or other transient error
@@ -833,14 +871,7 @@ class DurableQueueManager:
                     except Exception:
                         pass
                 await self._queue.mark_failed(job.id, err_msg)
-                await self._map.update_delivery(
-                    rule_id=job.rule_id,
-                    source_chat_id=job.source_chat_id,
-                    source_message_id=job.source_message_id,
-                    target_chat_id=job.target_chat_id,
-                    target_message_id=None,
-                    status=DeliveryStatus.FAILED,
-                )
+                await self._note_mapping(job, DeliveryStatus.FAILED)
             else:
                 # Transient retry with exponential backoff + jitter
                 attempts = job.attempts + 1
@@ -874,14 +905,7 @@ class DurableQueueManager:
                     except Exception:
                         pass
                 await self._queue.mark_retry(job.id, err_msg, backoff_seconds=backoff)
-                await self._map.update_delivery(
-                    rule_id=job.rule_id,
-                    source_chat_id=job.source_chat_id,
-                    source_message_id=job.source_message_id,
-                    target_chat_id=job.target_chat_id,
-                    target_message_id=None,
-                    status=DeliveryStatus.RETRY_WAIT,
-                )
+                await self._note_mapping(job, DeliveryStatus.RETRY_WAIT)
             return None
 
     async def _reupload_media(
@@ -1032,19 +1056,31 @@ class DurableQueueManager:
                 job_id, message_id, target, ttl, tg_detail(exc),
             )
 
-    async def _bot_route(self, job: DeliveryJob) -> Optional[Any]:
+    async def _bot_route(self, job: DeliveryJob, owner_user_id: Optional[int] = None) -> Optional[Any]:
         """A per-job delivery view onto the bot the task attached.
 
-        Returns ``None`` when the token is missing, inactive or unusable — the
-        caller then retries the job (it must not quietly post as the owner, which
-        would leak the sender identity the owner deliberately changed).
+        Returns ``None`` when the token is missing, inactive, unusable — or
+        **not owned by this task's owner**. The caller then retries the job (it
+        must not quietly post as the owner, which would leak the sender identity
+        the owner deliberately changed).
+
+        ``owner_user_id`` comes from the stored rule, never from the job
+        payload: the payload is what we are checking.
         """
         if self._bot_route_cache is None:
             logger.warning("[BOT ROUTE] job %s asks for the bot route but no token repository is wired here", job.id)
             return None
 
         token_id = str(job.payload_data.get("bot_token_id") or "")
-        transport = await self._bot_route_cache.get(token_id)
+        if not owner_user_id:
+            logger.warning(
+                "[BOT ROUTE] job %s has no task owner to check the attached token against "
+                "(rule %s not found) — refusing the bot route rather than guessing",
+                job.id,
+                job.rule_id[:8],
+            )
+            return None
+        transport = await self._bot_route_cache.get(token_id, owner_user_id)
         if transport is None:
             return None
 

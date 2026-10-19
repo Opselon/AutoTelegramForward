@@ -1243,6 +1243,19 @@ class ProBotUI:
         return self._kbd(rows)
 
     async def _render_admin_panel(self, uid: int) -> tuple[str, InlineKeyboardMarkup]:
+        # Fail closed at the renderer, not only at each caller. The panel body
+        # carries install-wide numbers (every tenant's user count, every active
+        # task, the dead-letter count) and the forced-subscription channel, so a
+        # single ungated caller — one was, the broadcast *cancel* button — used
+        # to hand all of it to whoever pressed. Asking here means a future
+        # caller cannot reopen that by forgetting a check.
+        if not self._is_admin(uid):
+            logger.warning("[ADMIN] refused to render the admin panel for non-admin uid=%s", uid)
+            lang = self._resolve_lang(uid)
+            return (
+                self._t("ui_rule_not_found_or_not_owner", lang=lang),
+                self._kbd([[(self._btn("ui_back_main_menu", lang=lang), CB["back"])]]),
+            )
         lang = self._resolve_lang(uid)
         total_users = 0
         active_rules = 0
@@ -5030,6 +5043,8 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_adm_bcast_cancel(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(uid)
             st.buffer.clear()
             await self._persist(uid, st)
@@ -6458,7 +6473,12 @@ class ProBotUI:
             draft["name"] = new_rule.name
             new_rule.apply_draft(draft)
             new_rule.owner_user_id = uid
-            saved = await self._save_owned_rule(new_rule, uid)
+            # A duplicate is a NEW row: it must go through `create`, not the
+            # owner-scoped update path. `_save_owned_rule` resolves ownership of
+            # an existing row, so it refuses a copy whose id does not exist yet —
+            # which is exactly what this handler builds, so every duplicate
+            # answered "not_owner" and quietly did nothing.
+            saved = await self._rules.create(new_rule)
             await cq.answer(self._t("ui_rule_duplicated_alert"), show_alert=True)
             text, kbd = self._render_rule_detail(saved)
             await self._safe_edit(cq, text, reply_markup=kbd)

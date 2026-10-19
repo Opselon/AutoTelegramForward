@@ -887,6 +887,7 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
             intermediate_chat_id=str(d.get("intermediate_chat_id")) if d.get("intermediate_chat_id") else None,
             intermediate_message_id=int(d["intermediate_message_id"]) if d.get("intermediate_message_id") is not None else None,
             delivery_stage=str(d.get("delivery_stage") or "DIRECT"),
+            job_kind=str(d.get("job_kind") or "forward"),
         )
 
     async def _fetch_all(self, query: str, params: tuple = ()) -> list:
@@ -902,9 +903,9 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
         INSERT INTO delivery_jobs (
             id, rule_id, source_chat_id, source_message_id, target_chat_id,
             payload_json, status, attempts, max_attempts, next_retry_at,
-            lease_until, worker_id, error_detail, created_at, updated_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO NOTHING
+            lease_until, worker_id, error_detail, created_at, updated_at, job_kind
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id, job_kind) DO NOTHING
         """
         res = await _execute_db(
             self._db,
@@ -925,6 +926,7 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
                 job.error_detail or "",
                 job.created_at,
                 job.updated_at,
+                str(getattr(job, "job_kind", "forward") or "forward"),
             ),
         )
         if isinstance(res, str) and res.startswith("INSERT "):

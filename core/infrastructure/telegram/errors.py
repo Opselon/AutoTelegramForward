@@ -154,7 +154,17 @@ _SECRET_VALUE = re.compile(
 _BEARER = re.compile(r"(?i)\b(authorization\s*:\s*bearer)\s+\S+")
 #: Telegram bot-token shape (`123456789:AA…`), which shows up without a key prefix
 #: whenever a request URL or an error string is logged.
-_BOT_TOKEN = re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{25,}\b")
+#:
+#: The left edge must *not* be a word boundary: the shape almost always arrives
+#: inside the API URL, i.e. glued to `bot` (`/bot123456789:AA…/sendMessage`), and
+#: `\b` between `t` and `1` does not exist — so `\b` silently matched only the
+#: spaced prose form and let every real request URL through in clear text.
+_BOT_TOKEN = re.compile(r"(?<![A-Za-z0-9])(?:bot)?\d{6,12}:[A-Za-z0-9_-]{25,}\b", re.IGNORECASE)
+#: Password in URL userinfo — `scheme://user:password@host`, and the password-only
+#: `scheme://:password@host` form. The Bot API is not the only place a credential
+#: rides along in a URL: a Redis/Postgres/webhook DSN does too, and an exception
+#: from any of those clients is logged and stored as a delivery failure reason.
+_URL_USERINFO = re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*://)([^:@/\s]*):([^@/\s]+)@")
 #: Pyrogram session blobs: long base64 with optional `=` padding.
 _SESSION_BLOB = re.compile(r"\b[A-Za-z0-9+/]{80,}={0,2}\b")
 _LONG_HEX = re.compile(r"\b[0-9a-fA-F]{32,}\b")
@@ -180,6 +190,7 @@ def redact(text: Any, *, keep_phone: bool = False) -> str:
         out = _SECRET_VALUE.sub(r"\1=" + _REDACTED, out)
         out = _SECRET_FIELD.sub(_REDACTED, out)
         out = _BOT_TOKEN.sub(_REDACTED, out)
+        out = _URL_USERINFO.sub(r"\1\2:" + _REDACTED + "@", out)
         out = _SESSION_BLOB.sub(_REDACTED, out)
         out = _LONG_HEX.sub(_REDACTED, out)
         if not keep_phone:

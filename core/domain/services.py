@@ -586,20 +586,36 @@ class SmartRoutingEngine:
 
     def matching_rules(self, payload: MessagePayload, rules: List[ForwardRule]) -> List[ForwardRule]:
         """Returns ordered list of matching rules. Evaluates in priority order
-        (highest priority first). Stops at first match unless rule has multi_route=True."""
+        (highest priority first). Stops at first match unless rule has
+        multi_route=True.
+
+        The single-match policy is applied **per owner**: one message is
+        consumed by exactly one task of a given tenant (the deterministic
+        highest-priority one, as before), but a task never consumes a message
+        on behalf of another tenant. Two tenants watching the same public
+        channel both forward it; before this, whichever rule sorted first won
+        and the other tenant's task was starved silently — and since the sort
+        key (`priority`, `execution_order`, `created_at`) is set by the
+        tenant, one tenant could starve another's tasks at will.
+        """
         sorted_rules = sorted(
             rules,
             key=lambda r: (-getattr(r, "priority", 10), getattr(r, "execution_order", 0), getattr(r, "created_at", 0)),
         )
 
         matches: List[ForwardRule] = []
+        consumed_owners: set = set()
         for rule in sorted_rules:
+            owner = getattr(rule, "owner_user_id", 0) or 0
+            if owner in consumed_owners:
+                continue
             matched, _ = self.evaluate_rule(payload, rule)
             if matched:
                 matches.append(rule)
                 if not getattr(rule, "multi_route", False):
-                    # Multi-route is not enabled on this rule: deterministic single-match policy
-                    break
+                    # Multi-route is not enabled on this rule: deterministic
+                    # single-match policy, per owner.
+                    consumed_owners.add(owner)
 
         return matches
 

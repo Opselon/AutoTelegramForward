@@ -250,6 +250,17 @@ jobs:
           # spinner and no reason to change anything.
           node tests/providerKey.test.mjs
 
+      - name: Session identity rules
+        # Which tab is looking at whose data: a second tab logging in or out must
+        # not leave this dashboard on screen, and a different account must
+        # remount the tree instead of reusing the previous account's state.
+        working-directory: web/frontend
+        run: |
+          node node_modules/typescript/bin/tsc src/sessionIdentity.ts \
+            --ignoreConfig --outDir .identity-build \
+            --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
+          node tests/sessionIdentity.test.mjs
+
       - name: Build
         working-directory: web/frontend
         run: npm run build

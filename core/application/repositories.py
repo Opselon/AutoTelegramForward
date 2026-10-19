@@ -227,6 +227,24 @@ class IAIConfigRepository(ABC):
     async def list_by_owner(self, owner_user_id: int) -> List[AIConfig]:
         ...
 
+    async def get_owned(self, config_id: str, owner_user_id: int) -> Optional[AIConfig]:
+        """The config, only when it belongs to ``owner_user_id``.
+
+        A config id is a *selector*, not proof of ownership: it arrives in a
+        callback payload, in an imported backup or in a rule row, and any of
+        those can name another tenant's config. Resolving one unscoped hands
+        that tenant's provider, base_url and API key to a task that does not own
+        it, so every engine-side read is owner-scoped and fails closed.
+
+        The default compares owners after an unscoped read, which makes any
+        implementation that has not overridden it safe rather than permissive;
+        the SQL implementations override it with a scoped query.
+        """
+        config = await self.get_by_id(config_id)
+        if config is None:
+            return None
+        return config if int(config.owner_user_id or 0) == int(owner_user_id or 0) else None
+
     @abstractmethod
     async def delete(self, config_id: str) -> bool:
         ...

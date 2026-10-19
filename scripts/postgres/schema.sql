@@ -33,8 +33,37 @@ CREATE TABLE IF NOT EXISTS delivery_jobs (
     intermediate_chat_id TEXT NOT NULL DEFAULT '',
     intermediate_message_id BIGINT,
     delivery_stage TEXT NOT NULL DEFAULT 'DIRECT',
-    CONSTRAINT delivery_jobs_unique UNIQUE (rule_id, source_chat_id, source_message_id, target_chat_id)
+    -- The deliverable kind ("forward" | "keyword_reply") is part of the dedup
+    -- key: one source message carries a forward *and* a keyword reply to the
+    -- same target, and with the kind left out of the key the reply collided
+    -- with the forward's row and was dropped by ON CONFLICT DO NOTHING.
+    job_kind TEXT NOT NULL DEFAULT 'forward',
+    CONSTRAINT delivery_jobs_unique UNIQUE (
+        rule_id, source_chat_id, source_message_id, target_chat_id, job_kind
+    )
 );
+
+-- Existing installs created before the deliverable kind was part of the key:
+-- widen the constraint once. Adding the column is additive-safe; the UNIQUE
+-- swap is idempotent because the constraint name is checked first.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'delivery_jobs' AND column_name = 'job_kind'
+    ) THEN
+        ALTER TABLE delivery_jobs ADD COLUMN job_kind TEXT NOT NULL DEFAULT 'forward';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'delivery_jobs_unique'
+          AND pg_get_constraintdef(oid) NOT LIKE '%job_kind%'
+    ) THEN
+        ALTER TABLE delivery_jobs DROP CONSTRAINT delivery_jobs_unique;
+        ALTER TABLE delivery_jobs ADD CONSTRAINT delivery_jobs_unique
+            UNIQUE (rule_id, source_chat_id, source_message_id, target_chat_id, job_kind);
+    END IF;
+END $$;
 
 -- Claim path: the WHERE clause is (status, next_retry_at, lease_until) and
 -- the query ORDERs BY created_at. Leading with all three predicate columns

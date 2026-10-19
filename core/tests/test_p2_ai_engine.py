@@ -370,6 +370,17 @@ async def test_transformer_circuit_breaker_and_failover():
 
     mock_repo.get_by_id.side_effect = get_cfg
 
+    # `get_owned` is part of the interface, so the double must answer it the way
+    # a real repository does. Left as an auto-created AsyncMock it returns a
+    # MagicMock "config" with no ``id`` — which passes every check, fails to
+    # match the factory's `c.id == "cfg-fail"` lookup, and quietly hands this
+    # test the backup provider. The configs here are ownerless and the caller
+    # names no owner, so an ownerless read legitimately returns them.
+    async def get_owned(cid, owner_user_id=0):
+        return cfg1 if cid == "cfg-fail" else cfg2
+
+    mock_repo.get_owned.side_effect = get_owned
+
     mock_fail_provider = AsyncMock()
     mock_fail_provider.rewrite.side_effect = RuntimeError("Provider down")
 

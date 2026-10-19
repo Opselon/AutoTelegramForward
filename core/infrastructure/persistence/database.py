@@ -290,7 +290,11 @@ MIGRATIONS = {
         error_detail TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
-        UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id)
+        -- v20: the deliverable kind is part of the dedup key. Without it a
+        -- keyword reply to a target the source message was also forwarded to
+        -- collided with the forward's row and INSERT OR IGNORE dropped it.
+        job_kind TEXT NOT NULL DEFAULT 'forward',
+        UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id, job_kind)
     );
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_poll ON delivery_jobs(status, next_retry_at, lease_until);
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_rule ON delivery_jobs(rule_id);
@@ -686,7 +690,54 @@ _ADDITIVE_COLUMNS = (
     # v20: per-bot defaults ("{}" = none, the behaviour of every bot attached
     # before this existed). Read with the token row, never queried on its own.
     ("bot_tokens", "defaults_json", "TEXT NOT NULL DEFAULT '{}'", ""),
+    # v20: the deliverable kind ("forward" | "keyword_reply") is part of a queue
+    # row's *identity*. The column is added here; the UNIQUE key that must
+    # include it cannot be altered in place, so an existing table is rebuilt by
+    # _rebuild_delivery_jobs_deliverable_key (called below, after this loop).
+    ("delivery_jobs", "job_kind", "TEXT NOT NULL DEFAULT 'forward'", ""),
 )
+
+# Columns the rebuilt delivery_jobs table must have. Each entry is applied as a
+# guarded ALTER before the rebuild copies rows, so a table restored from an old
+# backup lands on the same schema as a freshly created one.
+_DELIVERY_JOB_COLUMNS = (
+    ("job_kind", "TEXT NOT NULL DEFAULT 'forward'"),
+    ("intermediate_chat_id", "TEXT"),
+    ("intermediate_message_id", "INTEGER"),
+    ("delivery_stage", "TEXT NOT NULL DEFAULT 'DIRECT'"),
+)
+
+# The rebuilt table's UNIQUE key, compared against sqlite_master.sql with all
+# whitespace removed (SQLite stores the original text, whose spacing is not
+# guaranteed).
+_DELIVERY_JOB_UNIQUE_COLS = (
+    "rule_id", "source_chat_id", "source_message_id", "target_chat_id", "job_kind",
+)
+
+_DELIVERY_JOBS_REBUILD_DDL = """
+CREATE TABLE delivery_jobs_migrating (
+    id TEXT PRIMARY KEY,
+    rule_id TEXT NOT NULL,
+    source_chat_id TEXT NOT NULL,
+    source_message_id INTEGER NOT NULL,
+    target_chat_id TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 5,
+    next_retry_at REAL NOT NULL DEFAULT 0,
+    lease_until REAL NOT NULL DEFAULT 0,
+    worker_id TEXT,
+    error_detail TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    job_kind TEXT NOT NULL DEFAULT 'forward',
+    intermediate_chat_id TEXT,
+    intermediate_message_id INTEGER,
+    delivery_stage TEXT NOT NULL DEFAULT 'DIRECT',
+    UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id, job_kind)
+);
+"""
 
 
 class Row(dict):
@@ -850,6 +901,9 @@ class SqliteDatabase:
                 pass
 
         self._apply_scale_indexes()
+        # v20: widen the queue's dedup key (see the method for why an existing
+        # table must be rebuilt rather than ALTERed).
+        self._rebuild_delivery_jobs_deliverable_key()
 
         # v12: single-tenant upgrade reconciliation.
         # Legacy rows in api_credentials / prompt_templates were created before
@@ -861,6 +915,110 @@ class SqliteDatabase:
         # there are zero or several, leave them at 0 (admin/system scope) and
         # let the operator claim them explicitly.
         self._reconcile_legacy_ownership()
+
+    def _rebuild_delivery_jobs_deliverable_key(self) -> None:
+        """Widen ``delivery_jobs``' dedup key to include the deliverable kind.
+
+        The queue dedups with ``INSERT OR IGNORE`` on a UNIQUE key that used to
+        be (rule_id, source_chat_id, source_message_id, target_chat_id). A
+        keyword reply is delivered to the *same* target as the forward of the
+        same source message, so its row matched that key, the insert was
+        ignored, ``enqueue_delivery`` returned False and the reply never
+        shipped — while the pipeline logged that it had.
+
+        SQLite cannot alter a UNIQUE constraint in place, so the table is
+        rebuilt once: rows are copied into a new table whose key carries
+        ``job_kind``, the row counts are compared, and only then is the old
+        table dropped and the new one renamed over it. The swap runs inside a
+        SAVEPOINT, so a failure leaves the existing table and every queued job
+        exactly as they were.
+        """
+        try:
+            row = self._conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='delivery_jobs'"
+            ).fetchone()
+        except Exception:
+            return
+        if not row or not row["sql"]:
+            return
+        flat = "".join(str(row["sql"]).split()).lower()
+        wanted = "unique(" + ",".join(_DELIVERY_JOB_UNIQUE_COLS) + ")"
+        if wanted in flat:
+            return
+
+        # Every column the rebuild copies must exist first. The additive loop
+        # above already adds job_kind; the v9 hop columns may still be missing
+        # on a table restored from an older backup.
+        for column, decl in _DELIVERY_JOB_COLUMNS:
+            cols = {
+                str(r["name"])
+                for r in self._conn.execute("PRAGMA table_info(delivery_jobs)").fetchall()
+            }
+            if column in cols:
+                continue
+            try:
+                self._conn.execute(f"ALTER TABLE delivery_jobs ADD COLUMN {column} {decl}")
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("[DB:MIGRATION] delivery_jobs rebuild skipped: %s", exc)
+                return
+
+        cols = {
+            str(r["name"])
+            for r in self._conn.execute("PRAGMA table_info(delivery_jobs)").fetchall()
+        }
+        target_cols = [
+            "id", "rule_id", "source_chat_id", "source_message_id", "target_chat_id",
+            "payload_json", "status", "attempts", "max_attempts", "next_retry_at",
+            "lease_until", "worker_id", "error_detail", "created_at", "updated_at",
+            "job_kind", "intermediate_chat_id", "intermediate_message_id", "delivery_stage",
+        ]
+        # A column absent from the old table is left out of the INSERT so the
+        # new table's own default applies; only job_kind is derivable from the
+        # row itself (the reply's id carries its kind as a suffix).
+        copy_cols = [c for c in target_cols if c in cols]
+        exprs = [
+            "CASE WHEN id LIKE '%:keyword_reply' THEN 'keyword_reply' ELSE 'forward' END"
+            if c == "job_kind" else c
+            for c in copy_cols
+        ]
+
+        self._conn.execute("SAVEPOINT delivery_jobs_rebuild")
+        try:
+            before = self._conn.execute(
+                "SELECT COUNT(*) AS n FROM delivery_jobs"
+            ).fetchone()["n"]
+            self._conn.execute(_DELIVERY_JOBS_REBUILD_DDL)
+            self._conn.execute(
+                f"INSERT INTO delivery_jobs_migrating ({', '.join(copy_cols)}) "
+                f"SELECT {', '.join(exprs)} FROM delivery_jobs"
+            )
+            after = self._conn.execute(
+                "SELECT COUNT(*) AS n FROM delivery_jobs_migrating"
+            ).fetchone()["n"]
+            if int(after) != int(before):
+                raise RuntimeError(f"row count changed during rebuild: {before} -> {after}")
+            self._conn.execute("DROP TABLE delivery_jobs")
+            self._conn.execute("ALTER TABLE delivery_jobs_migrating RENAME TO delivery_jobs")
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_delivery_jobs_poll "
+                "ON delivery_jobs(status, next_retry_at, lease_until)"
+            )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_delivery_jobs_rule ON delivery_jobs(rule_id)"
+            )
+        except Exception as exc:
+            self._conn.execute("ROLLBACK TO delivery_jobs_rebuild")
+            self._conn.execute("RELEASE delivery_jobs_rebuild")
+            logger.error(
+                "[DB:MIGRATION] delivery_jobs deliverable-key rebuild failed, "
+                "table left untouched: %s", exc,
+            )
+            return
+        self._conn.execute("RELEASE delivery_jobs_rebuild")
+        logger.info(
+            "[DB:MIGRATION] delivery_jobs dedup key now includes job_kind (%s row(s) migrated)",
+            after,
+        )
 
     def _apply_scale_indexes(self) -> None:
         """Install the indexes that keep two hot reads bounded as tenants grow.

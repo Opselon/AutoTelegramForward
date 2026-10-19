@@ -23,23 +23,36 @@ from core.infrastructure.telegram.pro_bot_ui import UiState
 
 
 class FakeRepo:
-    """Same shape as SqliteUiStateRepository (async save/load/clear)."""
+    """The real `IUiStateRepository` shape: get/save/clear.
+
+    It used to expose `load()`, which the manager called and no real repository
+    implements — the double was written to the manager's assumption instead of
+    the interface, which is exactly how a resume path can be green here and dead
+    in production. `get()` returns the same envelope as
+    `SqliteUiStateRepository.get()`: the row's step plus the stored payload.
+    """
 
     def __init__(self) -> None:
         self.rows: dict[int, dict] = {}
+        self.steps: dict[int, str] = {}
         self.saved = 0
         self.cleared = 0
 
     async def save(self, user_id: int, step: str, payload: dict) -> None:
         self.saved += 1
+        self.steps[int(user_id)] = step
         self.rows[int(user_id)] = dict(payload)
 
-    async def load(self, user_id: int):
-        return self.rows.get(int(user_id))
+    async def get(self, user_id: int):
+        user_id = int(user_id)
+        if user_id not in self.rows:
+            return None
+        return {"step": self.steps.get(user_id, ""), "buffer": self.rows[user_id]}
 
     async def clear(self, user_id: int) -> None:
         self.cleared += 1
         self.rows.pop(int(user_id), None)
+        self.steps.pop(int(user_id), None)
 
 
 @pytest.mark.asyncio

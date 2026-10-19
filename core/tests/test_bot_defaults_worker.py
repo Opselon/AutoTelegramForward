@@ -91,12 +91,12 @@ class Env:
         return token_id
 
     async def add_rule(self, *, token_id: str = "", source: str = "-1001",
-                       rule_id: str = "", **settings):
+                       rule_id: str = "", owner: int = OWNER, **settings):
         rule = ForwardRule(
             id=rule_id or self._next_rule_id(), name="a task", session_id=self.session_id,
             source_chat_id=source, target_chat_id="-1002",
             routing_type=RoutingType.CHANNEL_TO_CHANNEL,
-            forward_mode=ForwardMode.COPY_MESSAGE, owner_user_id=OWNER,
+            forward_mode=ForwardMode.COPY_MESSAGE, owner_user_id=owner,
         )
         if token_id:
             rule.bot_token_id = token_id
@@ -294,3 +294,64 @@ async def test_two_tasks_on_different_bots_do_not_share_defaults(env):
 
     assert resolved_first.remove_emojis is True
     assert resolved_second is second and resolved_second.remove_emojis is False
+
+
+# --------------------------------------------------------------------------- #
+# Ownership: a task cannot inherit a bot it does not own
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_a_task_cannot_inherit_a_bot_another_tenant_owns(env):
+    """A transplanted token id must not hand the other tenant's settings over.
+
+    The token id lives in the rule's metadata, so it is a client-visible routing
+    identifier. Reading its defaults without the owner would copy another
+    tenant's configuration into this task (and, in the worker, deliver through
+    their credential).
+    """
+    other = 6278059256
+    await env.add_bot("tok-mine", defaults={"remove_emojis": True}, owner=OWNER)
+    await env.add_bot("tok-theirs", defaults={"remove_emojis": True}, owner=other)
+
+    mine = await env.add_rule(token_id="tok-mine")
+    transplanted = await env.add_rule(token_id="tok-theirs")
+
+    resolved_mine = await materialize(
+        await env.rules.get_by_id(mine.id), env.tokens
+    )
+    resolved_transplanted = await materialize(
+        await env.rules.get_by_id(transplanted.id), env.tokens
+    )
+
+    assert getattr(resolved_mine, INHERITED_MARK, None), "the task's own bot must still be inherited"
+    assert not getattr(resolved_transplanted, INHERITED_MARK, None), (
+        "a task must not inherit the defaults of a bot owned by somebody else"
+    )
+    assert read_settings(resolved_transplanted).get("remove_emojis") in (False, None), (
+        "another tenant's defaults leaked into this task"
+    )
+    # The row exists and is readable — the refusal is about ownership, not about
+    # the token having disappeared.
+    assert (await env.tokens.get_by_id("tok-theirs")) is not None
+
+
+@pytest.mark.asyncio
+async def test_a_foreign_bot_never_reaches_the_delivered_message(env):
+    """The same boundary, measured where it matters: the text that goes out."""
+    other = 6278059256
+    await env.add_bot("tok-theirs", defaults={"remove_emojis": True}, owner=other)
+    await env.add_rule(token_id="tok-theirs")
+    uc = env.use_case()
+    sent = {}
+
+    async def sender(payload, rule, text, evaluation):
+        sent["text"] = text
+        return True
+
+    uc.sender = sender
+    await uc.process_message(MessagePayload(message_id=1, chat_id="-1001", text=EMOJI_TEXT))
+
+    assert "\U0001F600" in sent["text"], (
+        "another tenant's \"remove emojis\" default was applied to this task's message"
+    )

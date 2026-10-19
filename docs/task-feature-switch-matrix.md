@@ -23,7 +23,7 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 10 | Filters | FAIL → fixed | `DurableMessagePipeline` FILTER stage → `FilterEngine.evaluate`; screen `rfl_lnk:` / `rfl_vid:` / `rfl_aud:` / `rfl_stk:` / `rfl_txt:` / `rfl_voc:` | The six gates enforced correctly, but the `Filters (N)` badge counted **two different wrong subsets** (video/audio/text missing; one site also counted a duplicate-filter toggle owned by another screen), the attached `FilterRule` was fetched by id with **no owner check**, and user regexes were compiled unguarded (ReDoS) |
 | 11 | Set Delay | FAIL → fixed | `rdly_s:<rule_id>:<sec>` presets + typed step → `ForwardRule.delay_seconds` → `AdvancedSettingsEngine.get_dispatch_delay` → durable job claim gate (`next_retry_at`) | The delay was applied **twice** on the durable path (gate + an in-worker `asyncio.sleep`), a crafted preset stored `-600`/`inf`/`1e18` (and `nan` raised `NOT NULL constraint failed` on save), `inf` produced invalid JSON (`Infinity`) in the job payload, and the layers disagreed on the maximum (schema 86400 vs property 3600) |
 | 12 | Task Status | FAIL → fixed | `ForwardRule.status_state()` → `IForwardRuleRepository.set_task_status()` (single conditional UPDATE) → the status button's `rtg:<id>:<state>` payload | The status line was rendered from `is_active` alone, so a task whose messages the pipeline was dropping and whose jobs the worker was postponing was displayed as **RUNNING 🟢**; the tap did `is_active = not is_active` — a blind flip of the row at tap time, not of what the screen showed, so a stale screen re-activated a paused task and two taps cancelled each other out; the button could not resume a paused task; `toggle()`/`toggle_owned()` exposed the same lost update to API callers |
-| 13 | Duplicate Task | PENDING | — | — |
+| 13 | Duplicate Task | FAIL → fixed | Bot screen | the copy was saved through the owner-scoped *update* path, which refuses a row that does not exist yet, so every duplicate answered "📑 Rule duplicated successfully!" and created nothing. Part 2 STEER 02 found it (the alert lied while the row count stayed put); the copy now goes through `create`. |
 | 14 | Rename Task | PENDING | — | — |
 | 15 | Draft | PENDING | — | — |
 | 16 | Advanced Settings | PENDING | — | — |
@@ -35,8 +35,8 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 22 | Back to Rules | PENDING | — | — |
 | 23 | Channel Comments | PENDING | — | — |
 | 24 | Forward Every N | PENDING | — | — |
-| 25 | Keyword Confirmation | PENDING | — | — |
-| 26 | Keyword Reply Threshold | PENDING | — | — |
+| 25 | Keyword Confirmation | FAIL → fixed (engine) / NOT_IMPLEMENTED (UI) (Part 2 STEER 06) | no bot-menu callback exists — the switch is the rule field only: `ForwardRule.keyword_confirmation` + `keyword_reply` (metadata, `rule_settings`) → `AdvancedSettingsEngine.classify_keyword_trigger` → `DurableQueueManager.enqueue_delivery(job_kind="keyword_reply")` → `delivery_jobs` | The reply **could not be stored**: `delivery_jobs` deduped on `UNIQUE(rule, source_chat, source_message, target)`, so the reply to a target the source was also forwarded to matched the forward's row, `INSERT OR IGNORE` dropped it, and the pipeline logged "reply enqueued" anyway. Its outcome also overwrote the forward's `message_map` row (edit/delete sync then aimed at the reply) | `job_kind` is now a column *and* part of the queue's UNIQUE key (SQLite rebuild inside a SAVEPOINT; Postgres constraint widened), the pipeline logs a refusal instead of claiming success, and only the forward writes the mapping row | `test_the_pipeline_stores_both_deliverables_for_a_keyword_match` (real pipeline → real DB → 2 rows), `test_a_keyword_reply_is_not_deduplicated_away_by_the_forward`, `test_a_reply_outcome_never_rewrites_the_forwards_mapping`, `test_a_legacy_table_is_rebuilt_with_its_rows_intact` |
+| 26 | Keyword Reply Threshold | PARTIAL (Part 2 STEER 06) | same switch owner as 25 — confirmation and threshold are one path (`classify_keyword_trigger`: reply text truncated to `KEYWORD_REPLY_MAX_LEN`, add-on entitlement checked, a whitelisted keyword must match) | the store-level defect of 25 blocked every reply, so no threshold could ever be observed; the gate itself (entitlement + truncation) is enforced, but there is no per-interval counter — "threshold" currently means "the reply is only sent when a keyword matches", not a rate | same fix as 25 | same evidence as 25, plus `test_a_burst_leaves_in_source_order_for_one_target` (a burst of matched messages drains one lane in source order, so replies cannot overtake forwards) |
 | 27 | Auto Delete Message | PENDING | — | — |
 | 28 | Outbound Webhook | PENDING | — | — |
 
@@ -607,3 +607,38 @@ abstract broke 8 of their tests. Both production stores override it, and a guard
 statement and is covered by the same contract but was not executed against a live Postgres instance; a job that
 a worker has already leased when the task is switched off finishes as `FAILED` (`task disabled`) rather than
 being cancelled mid-`copy_message`.
+
+
+## 13 — Duplicate Task (Part 2 STEER 02/03)
+
+**Confirmed defect.** `_cb_rule_duplicate` built the copy with a fresh id and then persisted it with
+`_save_owned_rule`, which is `ForwardRuleUseCases.update_owned` — that resolves ownership of an **existing**
+row and raises `PermissionError("not_owner")` when the id is unknown. The copy's id is always unknown, so the
+handler never reached its success alert: the raise escaped into pyrogram's dispatcher, which logged the
+update and dropped it, so the user saw a tap that did nothing — no copy, no alert, no error. The dashboard route (`POST /api/rules/{id}/duplicate` → `CreateRule`) was never affected:
+it clones the proto and calls create, with the owner taken from the JWT identity.
+
+**Root cause:** a create was written as an update. **Fix:** `self._rules.create(new_rule)`.
+
+**Evidence.** `core/tests/test_cross_tenant_boundaries.py::test_duplicating_a_task_creates_an_independent_copy_for_the_owner`
+presses the real `rdup:<task>` button through the registered handler: with the pre-fix line restored it fails
+with `PermissionError: not_owner` and no row; with the fix the copy exists, is owned by the duplicator, keeps the
+original's routing, and deleting it leaves the original byte-identical. `…_duplicating_another_tenants_task_creates_nothing`
+presses the same button as the other tenant and asserts neither a new row nor a changed victim row.
+
+## 14 — Cross-feature interactions (Part 2 STEER 05)
+
+Run with all switches on at once, the pipeline had three interaction defects that no single-switch test could
+see. Detail, root cause and evidence are in `docs/feature-coverage-matrix.md` § "Part 2 STEER 05":
+
+1. **Content policy applied twice** — the task's own header/footer/replacement text was re-checked against the
+   task's own blacklist at the per-target gate, so a task could reject 100% of its own messages. Status:
+   `FAIL → fixed`. Only `target:`-scoped overrides decide at the gate now.
+2. **Cross-tenant starvation** — the single-match routing policy was global, so on a shared source channel one
+   tenant's task silently consumed every message and the other tenant's task never fired. Status:
+   `FAIL → fixed` (per-owner single match).
+3. **Paused task logged as a routing miss** — a stopped task produced `no_matching_rules`/`RULE_NOT_MATCHED`
+   and no pause-specific log line, which sends an operator hunting for a routing bug that does not exist.
+   Status: `FAIL → fixed` (`rule_paused` / `RULE_PAUSED`).
+
+Regression tests: `core/tests/test_combined_pipeline_stages.py` (13 tests, real pipeline + real SQLite).

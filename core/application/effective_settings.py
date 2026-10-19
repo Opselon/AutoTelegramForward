@@ -8,8 +8,13 @@ Two callers, two scopes
 -----------------------
 * A **human** path passes ``owner_user_id``, so the lookup goes through the
   owner-scoped read and another tenant's bot is simply not found.
-* The **worker** has no request context — it resolves a token by id, exactly as
-  it does for delivery. It never passes an owner and never receives one.
+* The **worker** has no request context, but it does have the task, and a task
+  knows its owner — so the owner is taken from the argument when given and from
+  the rule otherwise. A token id stored on the rule is a routing identifier, and
+  an id that names another tenant's bot would otherwise hand that tenant's
+  defaults to this task (and, in the worker, deliver through their credential).
+  Only a task that knows no owner either (a row written before owners existed)
+  falls back to the unscoped read.
 
 Both paths read the same row and the same domain resolver, so what a user sees
 on a settings screen is what the forwarder uses.
@@ -25,18 +30,22 @@ from ..domain.bot_defaults import describe, effective
 async def attached_defaults(rule: Any, tokens: Any, owner_user_id: Optional[int] = None) -> Dict[str, Any]:
     """The defaults of the bot ``rule`` has attached, or ``{}``.
 
-    No attached bot, a missing row, or a row whose defaults cannot be read all
-    mean the same thing to a forwarder: run on the registry defaults. A failure
-    to read a *convenience* setting must never stop a task from forwarding.
+    No attached bot, a missing row, a row that is not this task's owner's, or a
+    row whose defaults cannot be read all mean the same thing to a forwarder:
+    run on the registry defaults. A failure to read a *convenience* setting must
+    never stop a task from forwarding.
     """
     if tokens is None:
         return {}
     token_id = str(getattr(rule, "bot_token_id", "") or "").strip()
     if not token_id:
         return {}
+    # The rule is the authority for its own owner: a caller that forgets to pass
+    # one must not silently turn a scoped read into an unscoped one.
+    owner = int(owner_user_id or 0) or int(getattr(rule, "owner_user_id", 0) or 0)
     try:
-        if owner_user_id:
-            record = await tokens.get_owned(token_id, int(owner_user_id))
+        if owner:
+            record = await tokens.get_owned(token_id, owner)
         else:
             record = await tokens.get_by_id(token_id)
     except Exception:
