@@ -4203,6 +4203,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   {([
                     ['block_voice', '🎙', isRtl ? 'مسدود کردن ویس' : 'Block Voice'],
                     ['block_stickers', '🎭', isRtl ? 'مسدود کردن استیکر' : 'Block Stickers'],
+                    ['block_video', '🎬', isRtl ? 'مسدود کردن ویدیو' : 'Block Video'],
+                    ['block_audio', '🎵', isRtl ? 'مسدود کردن صدا' : 'Block Audio'],
+                    ['block_text', '📝', isRtl ? 'مسدود کردن متن' : 'Block Text'],
                     ['remove_emojis', '😀', isRtl ? 'پاکسازی ایموجی' : 'Strip Emojis'],
                     ['sync_deletes', '🗑', isRtl ? 'همگام‌سازی حذف‌ها' : 'Sync Deletes'],
                     ['ignore_edits', '✏️', isRtl ? 'نادیده گرفتن ادیت' : 'Ignore Edits'],

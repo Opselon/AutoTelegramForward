@@ -124,6 +124,12 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     "block_stickers": _s(kind="bool", default=False, group="media"),
     "block_links": _s(kind="bool", default=False, group="media",
                       help="Drop messages that contain a link."),
+    # The allow side of the same gate. Stored in its own forward_rules column
+    # (not metadata) because backups and the REST contract already carry it;
+    # non-empty means "forward only these types", which is a stricter statement
+    # than any single block flag and is evaluated first by the engine.
+    "allowed_media_types": _s(kind="list", item_kind="str", default=[], group="media",
+                              help="Allow-list: when non-empty, only these message types are forwarded."),
     "album_mode": _s(kind="str", default="album", group="media",
                      help="How grouped albums are delivered."),
     "watermark": _s(kind="str", default="", group="media"),

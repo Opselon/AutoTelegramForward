@@ -39,6 +39,7 @@ from pyrogram.types import (
 )
 
 from ...domain.rule_settings import SETTING_SPECS
+from ...domain.profile_recovery import reset_rule_settings
 from . import diagnostics
 from .reason_text import reason_label
 from .registry_editor import RegistryEditor
@@ -705,6 +706,46 @@ class ProBotUI:
         # Explicit locale wins; otherwise use the current update's isolated locale.
         cur_lang = lang or _BOT_RENDER_LANGUAGE.get() or "en"
         return self.i18n.t(key, lang=cur_lang, **kw)
+
+    async def notify_task_event(self, owner_user_id: int, rule: Any, payload: Dict[str, Any]) -> bool:
+        """Tell a task's owner that the engine changed the task's state.
+
+        Called from the delivery worker (auto-pause on a dead chat, an account
+        that cannot send). Best effort by contract: it returns False instead of
+        raising, because a failed notification must never fail a delivery.
+        """
+        try:
+            lang = self._lang_for(rule)
+            kind = str(payload.get("kind") or "")
+            if kind == "task_paused":
+                text = self._t(
+                    "ui_task_pause_reason",
+                    lang=lang,
+                    reason=payload.get("code") or payload.get("reason") or "?",
+                    chat=payload.get("chat_id") or "\u2014",
+                    scope=payload.get("scope") or "chat",
+                )
+                kbd = self._kbd([[
+                    (self._t("ui_task_paused_btn", lang=lang), f"rap_check:{rule.id}"),
+                ]])
+            elif kind == "account_restricted":
+                text = self._t(
+                    "ui_account_restricted",
+                    lang=lang,
+                    minutes=int(payload.get("minutes") or 1),
+                )
+                kbd = None
+            else:
+                text = self._t("ui_account_blocked", lang=lang, code=payload.get("code") or "?")
+                kbd = None
+            await self.bot.send_message(owner_user_id, text, reply_markup=kbd)
+            return True
+        except Exception as exc:
+            logger.warning(
+                "[PIPELINE:NOTIFY] could not deliver %s notice for rule %s: %s",
+                payload.get("kind"), str(getattr(rule, "id", "?"))[:8], exc,
+            )
+            return False
 
     def _logic_word(self, mode: str, lang: Optional[str] = None) -> str:
         """The stored condition logic as a word: `ALL` -> "all conditions".
@@ -1491,6 +1532,18 @@ class ProBotUI:
         fl_count = rule.filter_active_option_count
         rep_count = len(rule.replacements)
         delay_val = f"{rule.delay_seconds:.0f}s" if rule.delay_seconds > 0 else "0s"
+        # An engine pause (dead source/target) must be visible *here*: the
+        # generic "PAUSED" alone tells the owner nothing about what to fix.
+        ap = rule.auto_pause if getattr(rule, "auto_pause", None) else None
+        if ap:
+            status_text = self._t("ui_task_paused_status", lang=lang)
+            warning_line = "\n" + self._t(
+                "ui_task_pause_reason",
+                lang=lang,
+                reason=ap.get("reason", "unavailable"),
+                chat=ap.get("chat_id", "") or "\u2014",
+                scope=ap.get("scope", "") or "chat",
+            )
         # Who the copies are sent as. The bot route only shows as "Bot" when a
         # token is actually attached and active, so the button never promises a
         # sender the task cannot use.
@@ -1575,6 +1628,11 @@ class ProBotUI:
             # Task operations
             [
                 (self._t("ui_rule_btn_status", lang=lang, status_text=status_text), f"rtg:{rule.id}:{rule.status_state()}"),
+            ]
+            + ([
+                (self._t("ui_task_paused_btn", lang=lang), f"rap_check:{rule.id}"),
+            ] if ap else [])
+            + [
                 (self._t("ui_rule_btn_duplicate", lang=lang), f"rdup:{rule.id}"),
                 (self._t("ui_rule_btn_rename", lang=lang), f"rrn:{rule.id}"),
                 (self._t("ui_rule_btn_draft", lang=lang), f"re:{rule.id}"),
@@ -6164,9 +6222,14 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^pr_restart$"))
         @self._localized_handler
         async def _cb_profile_restart_setup(_, cq: CallbackQuery):
+            # Restart *setup* — not the account. The UI state is the only thing
+            # reset: rules, sessions and every per-task setting survive, so the
+            # owner walks the onboarding again with their config intact.
             uid = cq.from_user.id if cq.from_user else 0
             st = UiState()
             await self._persist(uid, st)
+            rules = await self._rules.list_by_owner(uid) if uid else []
+            logger.info("[PROFILE:RESTART_SETUP] uid=%s re-entered setup (%d rule(s) kept)", uid, len(rules))
             await cq.answer(self._t("ui_setup_reset_done"))
             sessions = await self._sessions.list_by_owner(uid) if (self._sessions and uid) else []
             if not sessions:
@@ -6192,17 +6255,21 @@ class ProBotUI:
         @b.on_callback_query(filters.regex(r"^pr_reset_cfg_yes$"))
         @self._localized_handler
         async def _cb_profile_reset_cfg_confirm(_, cq: CallbackQuery):
+            # Reset exactly what the confirmation screen names — headers,
+            # footers, cleaner, filters and blocked words — through one helper
+            # (`domain.profile_recovery`) so the promise on screen, the code and
+            # the tests cannot drift apart. Sessions, rule ids, routing and
+            # `is_active` are never touched, so a misclick cannot delete a
+            # working task or log a session out.
             uid = cq.from_user.id if cq.from_user else 0
             rules = await self._rules.list_by_owner(uid) if uid else []
+            touched = 0
             for r in rules:
-                r.custom_header = ""
-                r.custom_footer = ""
-                if not isinstance(r.metadata, dict):
-                    r.metadata = {}
-                r.metadata = {"replacements": {}}
-                r.max_time_edit = 86400
-                r.remove_links = False
-                await self._save_owned_rule(r, uid)
+                changed = reset_rule_settings(r)
+                if changed:
+                    await self._save_owned_rule(r, uid)
+                    touched += 1
+            logger.info("[PROFILE:RESET_CONFIG] uid=%s reset settings on %d/%d rule(s)", uid, touched, len(rules))
             await cq.answer(self._t("ui_all_configs_reset_alert"), show_alert=True)
             body, kbd = await self._render_profile_menu(uid, cq.from_user)
             await self._safe_edit(cq, body, reply_markup=kbd)
@@ -6369,6 +6436,54 @@ class ProBotUI:
             text, kbd = self._render_rule_detail(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
+        @b.on_callback_query(filters.regex(r"^rap_check:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_auto_pause_check(_, cq: CallbackQuery):
+            """Recovery path for an engine pause: verify the chat, then resume.
+
+            Only a successful Telegram lookup clears the pause — pressing the
+            button is not proof the chat exists, and resuming on a guess would
+            just fail (and notify) again on the next message.
+            """
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner_alert"), show_alert=True)
+            ap = rule.auto_pause
+            if not ap:
+                return await cq.answer(self._t("ui_rule_status_alert", status=self._status_label(rule)))
+            chat_id = ap.get("chat_id") or rule.source_chat_id
+            client = self._pool.get(rule.session_id) if self._pool is not None else None
+            if client is None:
+                return await cq.answer(
+                    self._t("ui_rule_paused_check_failed", code="NO_CLIENT"), show_alert=True
+                )
+            try:
+                await client.get_chat(chat_id)
+            except Exception as exc:
+                code = tg_detail(exc)[:120] or type(exc).__name__
+                logger.info(
+                    "[PIPELINE:AUTO_PAUSE] owner %s re-checked %s on rule %s: still failing (%s)",
+                    uid, chat_id, rule.id[:8], code,
+                )
+                return await cq.answer(
+                    self._t("ui_rule_paused_check_failed", code=code,
+                            lang=self._lang_for(rule)),
+                    show_alert=True,
+                )
+            rule.clear_auto_pause()
+            await self._save_owned_rule(rule, uid)
+            logger.info(
+                "[PIPELINE:AUTO_PAUSE] rule %s resumed by owner %s after %s resolved",
+                rule.id[:8], uid, chat_id,
+            )
+            await cq.answer(self._t("ui_task_paused_resume_ok", lang=self._lang_for(rule)))
+            fresh = await self._owned_rule(rule_id, uid) or rule
+            text, kbd = self._render_rule_detail(fresh)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
         @b.on_callback_query(filters.regex(r"^rtg:(.+)$"))
         @self._localized_handler
         async def _cb_rule_toggle_active(_, cq: CallbackQuery):
@@ -6405,6 +6520,12 @@ class ProBotUI:
                     text, kbd = self._render_rule_detail(fresh)
                     await self._safe_edit(cq, text, reply_markup=kbd)
                 return
+            # Resuming is the owner's override: drop the stored engine pause
+            # (its reason is stale the moment they say the chat is fixed), or
+            # the task would stay "auto-paused" forever.
+            if fresh.is_active and not fresh.is_currently_paused() and fresh.auto_pause:
+                fresh.clear_auto_pause()
+                await self._save_owned_rule(fresh, uid)
             status = self._status_label(fresh, lang=self._lang_for(fresh))
             await cq.answer(self._t("ui_rule_status_alert", status=status))
             text, kbd = self._render_rule_detail(fresh)

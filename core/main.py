@@ -25,6 +25,7 @@ from core.domain.services import FilterEngine, RoutingPolicy  # noqa: E402
 from core.infrastructure.ai.providers import AIProviderFactory  # noqa: E402
 from core.infrastructure.grpc_server import servicers  # noqa: E402
 from core.infrastructure.persistence.database import SqliteDatabase  # noqa: E402
+from core.infrastructure.persistence.account_limits import AccountLimitStore  # noqa: E402
 from core.infrastructure.persistence.log_policy_store import LogPolicyStore  # noqa: E402
 from core.infrastructure.persistence.postgres_repositories import (  # noqa: E402
     PostgresDeliveryQueueRepository,
@@ -247,7 +248,13 @@ def build_container(cfg: Config) -> dict:
         # one the Telegram bot and the reply/PV flows run through.
         bot_tokens=token_repo,
     )
-    pool = ClientPool(cfg.api_id, cfg.api_hash)
+    pool = ClientPool(cfg.api_id, cfg.api_hash, limit_store=AccountLimitStore(db))
+    # A restriction that outlives the process must outlive the process: load
+    # live suspensions before any worker can send.
+    try:
+        pool.hydrate_limits()
+    except Exception as exc:
+        logger.warning("Could not restore account limits: %s", exc)
     sync_engine = SyncEngine(msg_map_repo, rule_repo, pool, filter_repo=filter_repo)
     # LogClient is created later (line ~291); queue_manager receives it via a
     # late attribute set right after the client exists (see below).
@@ -814,6 +821,14 @@ async def main() -> None:
         # it answers; otherwise BotManager (commands) answers. No doubles.
         bot.bot_ui = ui
         bot.ui_step_checker = lambda uid: bool(ui._state(uid).step)
+
+        # Engine → owner notices ride the same bot: the delivery worker pauses
+        # a task when its source/target is gone, and the owner has to hear
+        # about it (with the reason and a recovery button), not discover it.
+        try:
+            container["queue_manager"]._owner_notifier = ui.notify_task_event
+        except Exception as exc:
+            logger.warning("Could not wire owner notifications: %s", exc)
 
         # Opt-in diagnostic: ATF_BUTTON_STYLE_PROBE=<chat id> sends ONE message
         # with a styled keyboard through the live client, which is the only way

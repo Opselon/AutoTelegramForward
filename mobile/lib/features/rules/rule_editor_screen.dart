@@ -145,6 +145,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   Map<String, bool> _paidAddons = {};
   bool _blockVoice = false;
   bool _blockStickers = false;
+  bool _blockVideo = false;
+  bool _blockAudio = false;
+  bool _blockText = false;
   bool _removeEmojis = false;
   bool _syncDeletes = false;
   bool _ignoreEdits = false;
@@ -218,6 +221,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _selectedAiConfigId = r?.aiConfigId ?? '';
     _blockVoice = r?.blockVoice ?? false;
     _blockStickers = r?.blockStickers ?? false;
+    _blockVideo = r?.blockVideo ?? false;
+    _blockAudio = r?.blockAudio ?? false;
+    _blockText = r?.blockText ?? false;
     _removeEmojis = r?.removeEmojis ?? false;
     _syncDeletes = r?.syncDeletes ?? false;
     _ignoreEdits = r?.ignoreEdits ?? false;
@@ -513,6 +519,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       paidAddons: _paidAddons,
       blockVoice: _blockVoice,
       blockStickers: _blockStickers,
+      blockVideo: _blockVideo,
+      blockAudio: _blockAudio,
+      blockText: _blockText,
       removeEmojis: _removeEmojis,
       syncDeletes: _syncDeletes,
       ignoreEdits: _ignoreEdits,
@@ -1050,6 +1059,36 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                         ),
                         value: _blockStickers,
                         onChanged: (v) => setState(() => _blockStickers = v),
+                      ),
+                      SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(t.get('rules_block_video')),
+                        secondary: const Icon(
+                          Icons.videocam_off_outlined,
+                          size: 20,
+                        ),
+                        value: _blockVideo,
+                        onChanged: (v) => setState(() => _blockVideo = v),
+                      ),
+                      SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(t.get('rules_block_audio')),
+                        secondary: const Icon(
+                          Icons.audiotrack_outlined,
+                          size: 20,
+                        ),
+                        value: _blockAudio,
+                        onChanged: (v) => setState(() => _blockAudio = v),
+                      ),
+                      SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(t.get('rules_block_text')),
+                        secondary: const Icon(Icons.notes_outlined, size: 20),
+                        value: _blockText,
+                        onChanged: (v) => setState(() => _blockText = v),
                       ),
                       SwitchListTile(
                         dense: true,

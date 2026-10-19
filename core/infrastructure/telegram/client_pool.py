@@ -82,11 +82,15 @@ class ClientPool:
     (the one from config.yaml) is used when a session has none.
     """
 
-    def __init__(self, api_id: int = 0, api_hash: str = "") -> None:
+    def __init__(self, api_id: int = 0, api_hash: str = "", limit_store: Any = None) -> None:
         self._default = (api_id, api_hash)
         self._clients: Dict[str, ClientState] = {}
         self._credentials: Dict[str, tuple] = {}
         self._time_limits: Dict[str, float] = {}
+        # Durable coordination (see persistence.account_limits): the dict above
+        # is the fast path, the row is the truth shared with every replica and
+        # every restart. Optional so unit tests and embeddings stay unchanged.
+        self._limit_store = limit_store
         if api_id and api_hash:
             self._credentials["default"] = self._default
         # session_id -> [{handler, event_type}] specs re-installed on reconnect.
@@ -97,22 +101,83 @@ class ClientPool:
     # ------------------------------------------------------------------ #
     # Account Time-Limit Management
     # ------------------------------------------------------------------ #
-    def set_time_limit(self, session_id: str, duration_seconds: float) -> None:
-        """Mark a session as time-limited until now + duration_seconds."""
+    def set_time_limit(
+        self,
+        session_id: str,
+        duration_seconds: float,
+        *,
+        code: str = "FLOOD_WAIT",
+        reason: str = "",
+    ) -> None:
+        """Suspend a session for Telegram's own duration.
+
+        The duration is never invented: callers pass ``wait_seconds(exc)``, and
+        only a real flood/limit error reaches this method. The deadline is
+        written to the database so a restart or a second replica observes the
+        same suspension instead of retrying into a longer one.
+        """
+        if not session_id:
+            return
         until = time.time() + max(1.0, float(duration_seconds))
+        # A later, shorter wait must not shorten a suspension already imposed.
+        if self._time_limits.get(session_id, 0.0) >= until:
+            return
         self._time_limits[session_id] = until
+        if self._limit_store is not None:
+            try:
+                self._limit_store.set(session_id, until, code=code, reason=reason)
+            except Exception as exc:  # persistence must never block suspension
+                logger.debug("account limit store unavailable: %s", exc)
         logger.warning(
-            "[ACCOUNT:TIME_LIMIT] Session %s paused for %.1fs (until %s)",
-            session_id[:8] if session_id else "?",
+            "[ACCOUNT:TIME_LIMIT] Session %s paused for %.1fs (until %s, code=%s)",
+            session_id[:8],
             duration_seconds,
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(until)),
+            code,
         )
 
+    def hydrate_limits(self) -> int:
+        """Load live suspensions from the store (call once at startup).
+
+        Without this a restart forgets a restriction that is still in force —
+        the exact behaviour that turns one flood wait into a longer one.
+        """
+        if self._limit_store is None:
+            return 0
+        loaded = 0
+        try:
+            for limit in self._limit_store.list_active():
+                if limit.until > self._time_limits.get(limit.session_id, 0.0):
+                    self._time_limits[limit.session_id] = limit.until
+                    loaded += 1
+        except Exception as exc:
+            logger.warning("Could not hydrate account limits: %s", exc)
+        if loaded:
+            logger.warning("[ACCOUNT:TIME_LIMIT] restored %d live suspension(s) from the database", loaded)
+        return loaded
+
     def is_time_limited(self, session_id: str) -> bool:
-        """Return True if session is currently time-limited."""
+        """True while this account is suspended — checked in memory *and* in the DB.
+
+        The database read happens only when memory has no entry, so the hot
+        path stays a dict lookup while a fresh process (or a replica that never
+        saw the error) still respects the suspension.
+        """
+        if not session_id:
+            return False
         until = self._time_limits.get(session_id, 0.0)
         if time.time() < until:
             return True
+        if self._limit_store is not None:
+            try:
+                persisted = self._limit_store.get(session_id)
+            except Exception:
+                persisted = None
+            if persisted is not None:
+                if persisted.until > time.time():
+                    self._time_limits[session_id] = persisted.until
+                    return True
+                self._limit_store.clear(session_id)
         if session_id in self._time_limits:
             self._time_limits.pop(session_id, None)
             logger.info("[ACCOUNT:TIME_LIMIT_EXPIRED] Session %s resumed automatically", session_id[:8])
@@ -120,11 +185,40 @@ class ClientPool:
 
     def remaining_limit_seconds(self, session_id: str) -> float:
         """Return remaining seconds in limit, or 0.0 if not limited."""
+        if not session_id:
+            return 0.0
         until = self._time_limits.get(session_id, 0.0)
         rem = max(0.0, until - time.time())
         if rem <= 0.0 and session_id in self._time_limits:
             self._time_limits.pop(session_id, None)
+        if rem <= 0.0 and self._limit_store is not None:
+            try:
+                persisted = self._limit_store.get(session_id)
+                if persisted is not None:
+                    rem = persisted.remaining
+                    if rem > 0:
+                        self._time_limits[session_id] = persisted.until
+                    else:
+                        self._limit_store.clear(session_id)
+            except Exception:
+                pass
         return rem
+
+    def resume_account(self, session_id: str) -> bool:
+        """Lift a suspension (owner action): memory and database together."""
+        if not session_id:
+            return False
+        existed = session_id in self._time_limits
+        self._time_limits.pop(session_id, None)
+        if self._limit_store is not None:
+            try:
+                existed = existed or self._limit_store.get(session_id) is not None
+                self._limit_store.clear(session_id)
+            except Exception:
+                pass
+        if existed:
+            logger.info("[ACCOUNT:TIME_LIMIT_RESUMED] Session %s resumed by an operator", session_id[:8])
+        return existed
 
     # ------------------------------------------------------------------ #
     # Credentials

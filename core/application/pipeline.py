@@ -29,6 +29,11 @@ from ..domain.entities import (
     MessagePayload,
 )
 from ..domain.content_policy import ContentPolicy, has_link
+from ..domain.media_filter import (
+    link_block_reason,
+    media_block_reason,
+    normalise_media_type,
+)
 from ..domain.services import (
     AdvancedSettingsEngine,
     FilterEngine,
@@ -690,7 +695,11 @@ class DurableMessagePipeline:
             )
             return
 
-        # Check if session is time-limited
+        # Check if session is time-limited. The message is *not* dropped: the
+        # account is suspended for a bounded time Telegram itself reported, so
+        # the job is enqueued and the delivery worker defers it until the
+        # suspension expires. Dropping here lost every message that arrived
+        # during a flood wait, which is not "suspended" — it is lost.
         if self._pool is not None and hasattr(self._pool, "is_time_limited"):
             sid = getattr(rule, "session_id", "")
             if sid:
@@ -699,48 +708,30 @@ class DurableMessagePipeline:
                     if type(is_lim).__name__ != "MagicMock" and is_lim:
                         raw_rem = self._pool.remaining_limit_seconds(sid)
                         rem = float(raw_rem) if isinstance(raw_rem, (int, float)) else 0.0
-                        ctx.record_stage(PipelineStage.FILTER, False, reason="session_time_limited")
+                        ctx.record_stage(PipelineStage.FILTER, True, reason="session_time_limited_deferred")
                         logger.info(
-                            "[PIPELINE:TIME_LIMITED] [%s] Session %s is time-limited (%.1fs remaining). Dropping msg %s",
+                            "[PIPELINE:TIME_LIMITED] [%s] Session %s is time-limited (%.1fs remaining). Queuing msg %s for the end of the suspension",
                             ctx.correlation_id[:8], sid[:8], rem, payload.message_id,
                         )
-                        return
                 except Exception as exc:
                     logger.debug("Failed checking time limit for %s: %s", sid, exc)
 
-        # Additional media & content filters
-        m_type = str(getattr(payload.media_type, "value", payload.media_type)).lower()
-        if getattr(rule, "block_voice", False) and m_type in ("voice", "audio"):
-            ctx.record_stage(PipelineStage.FILTER, False, reason="voice_blocked")
+        # Additional media & content filters. One shared decision
+        # (`domain.media_filter`) so this path and the reply/PV use case cannot
+        # disagree about which types a task blocks — the use case used to
+        # enforce only voice and stickers.
+        m_type = normalise_media_type(payload.media_type)
+        media_reason = media_block_reason(rule, m_type) or link_block_reason(
+            rule, payload.effective_text
+        )
+        if media_reason:
+            ctx.record_stage(PipelineStage.FILTER, False, reason=media_reason)
             self.metrics.filtered_total += 1
-            logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: voice blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
+            logger.info(
+                "[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: %s",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id, media_reason,
+            )
             return
-        if getattr(rule, "block_stickers", False) and m_type == "sticker":
-            ctx.record_stage(PipelineStage.FILTER, False, reason="sticker_blocked")
-            self.metrics.filtered_total += 1
-            logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: sticker blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
-            return
-        if getattr(rule, "block_video", False) and m_type in ("video", "video_note"):
-            ctx.record_stage(PipelineStage.FILTER, False, reason="video_blocked")
-            self.metrics.filtered_total += 1
-            logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: video blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
-            return
-        if getattr(rule, "block_audio", False) and m_type in ("audio", "voice"):
-            ctx.record_stage(PipelineStage.FILTER, False, reason="audio_blocked")
-            self.metrics.filtered_total += 1
-            logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: audio blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
-            return
-        if getattr(rule, "block_text", False) and m_type == "text":
-            ctx.record_stage(PipelineStage.FILTER, False, reason="text_blocked")
-            self.metrics.filtered_total += 1
-            logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: text blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
-            return
-        if getattr(rule, "block_links", False):
-            if has_link(payload.effective_text or ""):
-                ctx.record_stage(PipelineStage.FILTER, False, reason="link_blocked")
-                self.metrics.filtered_total += 1
-                logger.info("[PIPELINE:FILTER] [%s] Rule %s dropped msg %s: link blocked", ctx.correlation_id[:8], rule.id[:8], payload.message_id)
-                return
 
         # 4b. PER-TASK CONTENT RULES (blacklist / whitelist-only / block links),
         # source-scoped. Runs after the media gates and *before* any transform:

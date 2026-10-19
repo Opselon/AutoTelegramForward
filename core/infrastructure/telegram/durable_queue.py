@@ -27,6 +27,7 @@ from ...domain.entities import DeliveryJob, DeliveryStatus, ForwardMode, Message
 from ...domain.services import AdvancedSettingsEngine
 from ...domain.value_objects import ContentMode
 from .errors import tg_detail, tg_error, wait_seconds
+from .failure_policy import classify_failure, error_code, rate_limit_seconds
 from .bot_transport import BotRouteAdapter, BotTransportCache, BotTransportUnsupported
 
 logger = logging.getLogger("atf.durable_queue")
@@ -67,6 +68,7 @@ class DurableQueueManager:
         batch_size: int = 8,
         bot_route: Optional[BotTransportCache] = None,
         lease_coordinator: Any = None,
+        owner_notifier: Optional[Callable[..., Any]] = None,
     ) -> None:
         self._queue = queue_repo
         self._map = message_map_repo
@@ -91,6 +93,14 @@ class DurableQueueManager:
         # lost while it is held, so it can never be what makes delivery
         # idempotent.
         self._lease = lease_coordinator
+
+        # Tells a task's owner that the engine had to pause it (dead source or
+        # target) or that their account cannot send. Wired in main.py to the
+        # bot; `None` keeps every unit test and embedding working unchanged.
+        self._owner_notifier = owner_notifier
+        # session_id -> the deadline we already told the owner about; a queue of
+        # jobs hitting the same suspension must not send one message each.
+        self._account_notices: Dict[str, float] = {}
 
         self._workers: List[asyncio.Task] = []
         self._watchdog_task: Optional[asyncio.Task] = None
@@ -549,6 +559,160 @@ class DurableQueueManager:
                 logger.exception("[%s] Unexpected error in worker loop", worker_id)
                 await asyncio.sleep(0.5)
 
+    async def _diagnose_failure_chat(
+        self, client: Any, job: DeliveryJob, target: str,
+    ) -> tuple:
+        """Which chat is actually unreachable: the target, or the source?
+
+        A delivery call reports one error for the whole operation, and
+        ``CHANNEL_INVALID`` does not say which side it means. Resolving both
+        chats costs one request per permanent failure (never on the hot path)
+        and turns "something is broken" into the chat the owner must fix.
+        """
+        if client is None or not hasattr(client, "get_chat"):
+            return target, "target"
+        try:
+            await client.get_chat(target)
+        except Exception:
+            return target, "target"
+        try:
+            await client.get_chat(job.source_chat_id)
+        except Exception:
+            return str(job.source_chat_id), "source"
+        # Both resolve but Telegram still refuses the send (ChatWriteForbidden,
+        # ChatAdminRequired): the target's permissions are the blocker.
+        return target, "target"
+
+    async def _pause_task_for_failure(
+        self,
+        worker_id: str,
+        client: Any,
+        job: DeliveryJob,
+        decision: Any,
+        target: str,
+        err_msg: str,
+    ) -> None:
+        """Pause the one task that owns this chat, persist why, notify the owner."""
+        if self._rules is None:
+            return
+        try:
+            rule_obj = await self._rules.get_by_id(job.rule_id)
+        except Exception as exc:
+            logger.error("Failed to load rule %s for auto-pause: %s", job.rule_id[:8], exc)
+            return
+        if rule_obj is None:
+            return
+        chat_id, scope = await self._diagnose_failure_chat(client, job, target)
+        code = decision.code or "CHAT_UNAVAILABLE"
+        changed = False
+        if hasattr(rule_obj, "mark_auto_paused"):
+            changed = rule_obj.mark_auto_paused(
+                code, code, chat_id=chat_id, scope=scope, detail=err_msg,
+            )
+        elif getattr(rule_obj, "is_active", False):
+            # An older entity without the pause model: keep the task stopped
+            # (the pre-existing behaviour) rather than forwarding into a void.
+            rule_obj.is_active = False
+            changed = True
+        if not changed:
+            return
+        try:
+            await self._rules.update(rule_obj)
+        except Exception as exc:
+            logger.error(
+                "[PIPELINE:AUTO_PAUSE] could not persist the pause on rule %s: %s",
+                job.rule_id[:8], exc,
+            )
+            return
+        logger.warning(
+            "[PIPELINE:AUTO_PAUSE] [%s] Task %s paused: %s on %s %s (owner=%s)",
+            worker_id, job.rule_id[:8], code, scope, chat_id,
+            getattr(rule_obj, "owner_user_id", "?"),
+        )
+        await self._notify_owner(
+            worker_id, job,
+            {
+                "kind": "task_paused",
+                "code": code,
+                "reason": code,
+                "chat_id": chat_id,
+                "scope": scope,
+                "detail": err_msg,
+                "rule": rule_obj,
+            },
+        )
+
+    async def _notify_account_limited(
+        self,
+        worker_id: str,
+        job: DeliveryJob,
+        rule_obj: Any,
+        session_id: str,
+        seconds: int,
+        code: str,
+    ) -> None:
+        """Tell the owner once that Telegram suspended their account.
+
+        Keyed by the suspension deadline: the same wait is announced once, a
+        *new* wait (a later error with a different deadline) is announced too.
+        """
+        if not session_id:
+            return
+        key = session_id
+        deadline = time.time() + max(1, int(seconds))
+        already = self._account_notices.get(key, 0.0)
+        if abs(already - deadline) < 30.0:
+            return
+        self._account_notices[key] = deadline
+        if len(self._account_notices) > 256:
+            now = time.time()
+            self._account_notices = {k: v for k, v in self._account_notices.items() if v > now}
+        if rule_obj is None and self._rules is not None:
+            try:
+                rule_obj = await self._rules.get_by_id(job.rule_id)
+            except Exception:
+                rule_obj = None
+        if rule_obj is None:
+            return
+        await self._notify_owner(
+            worker_id, job,
+            {
+                "kind": "account_restricted",
+                "code": code,
+                "reason": "telegram_rate_limit",
+                "chat_id": "",
+                "scope": "account",
+                "detail": f"{code} {int(seconds)}s",
+                "minutes": max(1, int(round(seconds / 60.0))) if seconds >= 60 else 1,
+                "rule": rule_obj,
+            },
+        )
+
+    async def _notify_owner(self, worker_id: str, job: DeliveryJob, payload: Dict[str, Any]) -> None:
+        """Best effort: a notification failure must never fail a delivery."""
+        notifier = self._owner_notifier
+        if notifier is None:
+            return
+        rule_obj = payload.pop("rule", None)
+        owner = int(getattr(rule_obj, "owner_user_id", 0) or 0) if rule_obj is not None else 0
+        if rule_obj is None and self._rules is not None:
+            try:
+                rule_obj = await self._rules.get_by_id(job.rule_id)
+                owner = int(getattr(rule_obj, "owner_user_id", 0) or 0) if rule_obj is not None else 0
+            except Exception:
+                rule_obj = None
+        if not owner or rule_obj is None:
+            return
+        try:
+            result = notifier(owner, rule_obj, payload)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as exc:
+            logger.warning(
+                "[PIPELINE:NOTIFY] [%s] owner notification failed for rule %s: %s",
+                worker_id, job.rule_id[:8], exc,
+            )
+
     async def _defer_job(self, job: DeliveryJob, reason: str, backoff: float) -> None:
         """Postpone a job whose blocker is transient, without spending an attempt.
 
@@ -632,6 +796,18 @@ class DurableQueueManager:
             if not rule_obj.is_active:
                 logger.info("[PIPELINE:DROP] [%s] Rule %s is disabled. Dropping job %s", worker_id, job.rule_id[:8], job.id)
                 await self._queue.mark_failed(job.id, "Rule disabled")
+                return None
+            auto_pause = getattr(rule_obj, "auto_pause", None) or {}
+            if isinstance(auto_pause, dict) and auto_pause.get("reason"):
+                # The engine paused this task for a dead source/target. The
+                # message cannot be delivered until the owner fixes the chat,
+                # so failing it with the reason beats deferring it forever.
+                reason = str(auto_pause.get("reason"))
+                logger.info(
+                    "[PIPELINE:DROP] [%s] Rule %s is auto-paused (%s). Dropping job %s",
+                    worker_id, job.rule_id[:8], reason, job.id,
+                )
+                await self._queue.mark_failed(job.id, f"Task paused: {reason}")
                 return None
             if getattr(rule_obj, "is_paused", False) and getattr(rule_obj, "is_currently_paused", lambda: True)():
                 backoff = 5.0
@@ -797,12 +973,27 @@ class DurableQueueManager:
                 await self._note_mapping(job, DeliveryStatus.UNKNOWN)
                 return None
 
-            # 2. FloodWait / recoverable retry
+            # 2. FloodWait / recoverable retry. Only a *real* rate-limit error
+            # suspends the account, for Telegram's own duration; every other
+            # recoverable error is an ordinary retry. The old branch suspended
+            # the account on any "recoverable" error and used the jittered
+            # backoff as the duration, which both invented a limit and made a
+            # network blip stop every task on that account.
+            limit_seconds = rate_limit_seconds(exc)
             if "FloodWait" in str(type(exc).__name__) or recoverable:
-                wait_sec = float(wait_seconds(exc, default=5) + random.uniform(0.5, 2.0))
-                # Automatically stop all forward actions for time-limited account
-                if self._pool is not None and hasattr(self._pool, "set_time_limit") and session_id:
-                    self._pool.set_time_limit(session_id, wait_sec)
+                backoff = wait_seconds(exc, default=5) + random.uniform(0.5, 2.0)
+                if limit_seconds:
+                    wait_sec = float(limit_seconds) + random.uniform(0.5, 2.0)
+                    if self._pool is not None and hasattr(self._pool, "set_time_limit") and session_id:
+                        self._pool.set_time_limit(
+                            session_id, float(limit_seconds),
+                            code=error_code(exc) or "FLOOD_WAIT", reason="telegram_rate_limit",
+                        )
+                    await self._notify_account_limited(
+                        worker_id, job, rule_obj, session_id, limit_seconds, error_code(exc) or "FLOOD_WAIT",
+                    )
+                else:
+                    wait_sec = float(backoff)
                 self.stats["floodwait_hits"] += 1
                 self.stats["retried"] += 1
                 _bump_target("retried")
@@ -829,65 +1020,31 @@ class DurableQueueManager:
                 await self._note_mapping(job, DeliveryStatus.RETRY_WAIT)
                 return None
 
-            # 3. Permanent or other transient error
+            # 3. Classify: a chat that is permanently gone, an account that
+            # cannot send at all, or something worth retrying. One decision
+            # (`failure_policy`) reads the normalized error model; the old
+            # inline list also treated every CRITICAL error as permanent, which
+            # paused tasks for network blips that fixed themselves.
             exc_name = str(type(exc).__name__)
-            is_permanent = (
-                sev == "CRITICAL"
-                or any(
-                    p in err_msg.upper()
-                    for p in (
-                        "CHAT_WRITE_FORBIDDEN",
-                        "USER_BANNED_IN_CHANNEL",
-                        "CHAT_ADMIN_REQUIRED",
-                        "PEER_ID_INVALID",
-                        "CHANNEL_PRIVATE",
-                        "CHAT_RESTRICTED",
-                        "CHANNEL_INVALID",
-                        "CHAT_ID_INVALID",
-                        "USERNAME_INVALID",
-                        "USERNAME_NOT_OCCUPIED",
-                    )
-                )
-                or any(
-                    p in exc_name
-                    for p in (
-                        "ChatWriteForbidden",
-                        "UserBannedInChannel",
-                        "ChatAdminRequired",
-                        "PeerIdInvalid",
-                        "ChannelPrivate",
-                        "ChatRestricted",
-                        "ChannelInvalid",
-                        "UsernameInvalid",
-                        "UsernameNotOccupied",
-                    )
-                )
-            )
-            if is_permanent:
+            decision = classify_failure(exc)
+            if decision.kind == "permanent":
                 self.stats["failed"] += 1
                 _bump_target("failed")
                 logger.error(
-                    "[PIPELINE:DELIVERY_FAIL] [%s] Permanent failure delivering to %s (rule=%s, src=%s:%s): %s. Marking job FAILED.",
+                    "[PIPELINE:DELIVERY_FAIL] [%s] Permanent failure delivering to %s (rule=%s, src=%s:%s, code=%s): %s. Marking job FAILED.",
                     worker_id,
                     target,
                     job.rule_id[:8],
                     job.source_chat_id,
                     job.source_message_id,
+                    decision.code or "?",
                     err_msg,
                 )
-                # Automatically disable task forward when source or target fails or is banned
-                if self._rules is not None:
-                    try:
-                        rule_obj = await self._rules.get_by_id(job.rule_id)
-                        if rule_obj and rule_obj.is_active:
-                            rule_obj.is_active = False
-                            await self._rules.update(rule_obj)
-                            logger.warning(
-                                "[PIPELINE:AUTO_DISABLE] Automatically disabled task forward rule %s (source/target failed or banned: %s)",
-                                job.rule_id[:8], err_msg,
-                            )
-                    except Exception as dis_err:
-                        logger.error("Failed to auto-disable rule %s: %s", job.rule_id[:8], dis_err)
+                # Pause only the task that owns this chat: other tasks are
+                # unaffected, and the owner gets a reason plus a way back.
+                await self._pause_task_for_failure(
+                    worker_id, client, job, decision, str(target), err_msg,
+                )
                 if self._log_client is not None:
                     try:
                         self._log_client.error(
@@ -906,6 +1063,30 @@ class DurableQueueManager:
                         pass
                 await self._queue.mark_failed(job.id, err_msg)
                 await self._note_mapping(job, DeliveryStatus.FAILED)
+            elif decision.kind == "account":
+                # The session itself cannot send (revoked, unregistered,
+                # banned). Nothing about this task is wrong and a re-login
+                # fixes it, so keep the message and tell the owner once instead
+                # of dead-lettering a queue's worth of work.
+                self.stats["retried"] += 1
+                _bump_target("retried")
+                logger.error(
+                    "[PIPELINE:ACCOUNT_BLOCKED] [%s] Session %s cannot send (code=%s): %s. Deferring job %s.",
+                    worker_id, str(session_id or "?")[:8], decision.code or "?", err_msg, job.id,
+                )
+                await self._notify_owner(
+                    worker_id, job,
+                    {
+                        "kind": "account_blocked",
+                        "code": decision.code or "ACCOUNT",
+                        "reason": decision.code or "ACCOUNT",
+                        "chat_id": "",
+                        "scope": "account",
+                        "detail": err_msg,
+                    },
+                )
+                await self._defer_job(job, f"account: {decision.code or 'blocked'}", 60.0)
+                await self._note_mapping(job, DeliveryStatus.RETRY_WAIT)
             else:
                 # Transient retry with exponential backoff + jitter
                 attempts = job.attempts + 1

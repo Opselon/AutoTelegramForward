@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock, AsyncMock
 import pytest
+from pyrogram.errors import ChatWriteForbidden
 
 from core.domain.entities import ForwardRule, FilterRule, MessagePayload, MediaType
 from core.application.pipeline import DurableMessagePipeline
@@ -94,8 +95,12 @@ async def test_durable_queue_permanent_failure_logging():
     pool = MagicMock()
 
     client = MagicMock()
-    client.send_message = AsyncMock(side_effect=Exception("CHAT_WRITE_FORBIDDEN"))
-    client.copy_message = AsyncMock(side_effect=Exception("CHAT_WRITE_FORBIDDEN"))
+    # A real MTProto error, not a bare Exception whose *message* happens to
+    # spell a code: the classifier reads Telegram's error id, so a test double
+    # must carry one. (A string in a generic exception was what the old
+    # substring list matched — the reason a network error could look permanent.)
+    client.send_message = AsyncMock(side_effect=ChatWriteForbidden())
+    client.copy_message = AsyncMock(side_effect=ChatWriteForbidden())
     pool.get.return_value = client
 
     log_client = MockLogClient()
