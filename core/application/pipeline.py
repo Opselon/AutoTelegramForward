@@ -83,6 +83,10 @@ class PipelineContext:
     target_jobs: Dict[str, DeliveryJob] = field(default_factory=dict)
     stage_results: List[StageResult] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
+    # Rule id -> content fingerprint claimed at the DEDUPLICATE stage but not
+    # yet earned by a delivery. Consumed when the message is accepted for
+    # delivery, released otherwise (see DurableMessagePipeline._release_content_claim).
+    content_claims: Dict[str, str] = field(default_factory=dict)
 
     def record_stage(self, stage: PipelineStage, success: bool, reason: str = "", duration_ms: float = 0.0, data: Any = None, error: Optional[str] = None) -> None:
         self.stage_results.append(StageResult(
@@ -471,7 +475,13 @@ class DurableMessagePipeline:
         )
 
         for rule in valid_rules:
-            await self._process_for_rule(ctx, rule)
+            try:
+                await self._process_for_rule(ctx, rule)
+            finally:
+                # A content-dedup claim is only earned when the message reached
+                # the delivery queue. Anything left here was dropped after the
+                # dedup stage, so give the fingerprint back.
+                await self._release_content_claim(ctx, rule)
 
         logger.info(
             "[PIPELINE:COMPLETE] [%s] Pipeline finished in %.2fms. Target jobs enqueued=%d",
@@ -484,6 +494,32 @@ class DurableMessagePipeline:
     @staticmethod
     def _content_fingerprint(payload: "MessagePayload") -> str:
         return _content_fingerprint(payload)
+
+    async def _release_content_claim(self, ctx: PipelineContext, rule: ForwardRule) -> None:
+        """Give back a Duplicate Filters claim the message never earned.
+
+        The claim is taken at the dedup stage so concurrent workers cannot both
+        forward identical content, and it is consumed once the message is
+        accepted for delivery. If processing ended any other way — filtered
+        out, keyword rule, AI drop, backpressure, an exception — nothing
+        reached the targets, so the fingerprint is returned. Without this the
+        task would treat the next legitimate post of the same text as a
+        duplicate and silently drop it.
+        """
+        claim = ctx.content_claims.pop(rule.id, None)
+        if not claim or self._map is None:
+            return
+        try:
+            await self._map.release_content_hash(rule.id, claim)
+            logger.info(
+                "[PIPELINE:DUP_FILTER] [%s] Rule %s released content claim %s (message not delivered)",
+                ctx.correlation_id[:8], rule.id[:8], claim[:8],
+            )
+        except Exception as exc:
+            logger.warning(
+                "[PIPELINE:DUP_FILTER] [%s] Rule %s could not release content claim %s: %s",
+                ctx.correlation_id[:8], rule.id[:8], claim[:8], exc,
+            )
 
     async def _process_for_rule(self, ctx: PipelineContext, rule: ForwardRule) -> None:
         payload = ctx.payload
@@ -559,13 +595,31 @@ class DurableMessagePipeline:
         # was already forwarded under this rule, even when it is a different
         # message id. Two different ids carrying byte-identical text (a channel
         # re-posting the same announcement) would otherwise both be delivered.
-        # The hash is scoped to (rule, target set, normalized body + media kind)
-        # so the same text going to a different audience is not collapsed.
+        # The fingerprint is scoped to the rule (its body + media kind), so the
+        # same text under another task is a different message and is forwarded.
+        #
+        # The claim is atomic (the store's UNIQUE(rule_id, content_hash) index
+        # picks the winner) but it is only *earned* when the message is accepted
+        # for delivery; see `_release_content_claim`. Recording it here and
+        # never giving it back marked content as forwarded that never reached a
+        # target, so a later legitimate post of the same text was silently
+        # dropped.
         if bool(getattr(rule, "duplicate_filters", False)) and self._map is not None:
             content_hash = self._content_fingerprint(payload)
             if content_hash:
+                already = False
                 try:
-                    already = await self._map.was_content_forwarded(rule.id, content_hash)
+                    claim = getattr(self._map, "claim_content_hash", None)
+                    if claim is None:
+                        # A store written before the atomic claim existed: check
+                        # without claiming, so there is nothing to release.
+                        already = await self._map.was_content_forwarded(rule.id, content_hash)
+                    else:
+                        claimed = await claim(rule.id, content_hash)
+                        if claimed:
+                            ctx.content_claims[rule.id] = content_hash
+                        else:
+                            already = True
                 except Exception:
                     already = False  # a dedup-store hiccup must never drop a message
                 if already:
@@ -576,10 +630,6 @@ class DurableMessagePipeline:
                         ctx.correlation_id[:8], rule.id[:8], payload.message_id, content_hash[:8],
                     )
                     return
-                try:
-                    await self._map.record_content_hash(rule.id, content_hash)
-                except Exception:
-                    pass  # best-effort: recording failure only weakens dedup
 
         ctx.record_stage(PipelineStage.DEDUPLICATE, True, reason="unique", duration_ms=(time.monotonic() - t0) * 1000)
 
@@ -950,6 +1000,12 @@ class DurableMessagePipeline:
                     getattr(ctx, "correlation_id", "?"),
                     rule.id[:8], payload.chat_id, payload.message_id,
                 )
+
+        # The message reached the delivery queue, so the content fingerprint is
+        # earned: forget the claim (it stays in the store) and a later replay of
+        # the same content under this rule stays a duplicate.
+        if enqueued_any:
+            ctx.content_claims.pop(rule.id, None)
 
     async def _apply_transforms(
         self, ctx: PipelineContext, payload: MessagePayload, rule: ForwardRule, evaluation: EvaluationResult

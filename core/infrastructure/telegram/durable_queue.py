@@ -1368,6 +1368,17 @@ class DurableQueueManager:
                     try:
                         await self._queue.cleanup()
                         await self._map.cleanup()
+                        # Duplicate Filters keeps its own memory; it expires on
+                        # the same 30-day window as the message map, otherwise an
+                        # identical post months later would still be dropped as a
+                        # "duplicate" by a rule that never repeats anything.
+                        purged = await self._map.purge_content_hashes_all(
+                            int(time.time()) - 60 * 60 * 24 * 30
+                        )
+                        if purged:
+                            logger.info(
+                                "Content-dedup retention purged %d fingerprint(s).", purged
+                            )
                     except Exception:
                         logger.debug("Periodic retention cleanup failed", exc_info=True)
             except asyncio.CancelledError:

@@ -764,6 +764,31 @@ class PostgresMessageMapRepository(IMessageMapRepository):
         count = getattr(res, "rowcount", None)
         return count if count is not None else 0
 
+    async def claim_content_hash(self, rule_id: str, content_hash: str) -> bool:
+        """Atomic claim decided by the UNIQUE(rule_id, content_hash) index."""
+        now = int(time.time())
+        query = """
+        INSERT INTO content_dedup (rule_id, content_hash, created_at)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (rule_id, content_hash) DO NOTHING
+        RETURNING 1
+        """
+        row = await self._fetch_one(query, (rule_id, content_hash, now))
+        return row is not None
+
+    async def release_content_hash(self, rule_id: str, content_hash: str) -> None:
+        """Give a claim back when the message was never delivered."""
+        query = "DELETE FROM content_dedup WHERE rule_id = %s AND content_hash = %s"
+        await _execute_db(self._db, query, (rule_id, content_hash))
+
+    async def purge_content_hashes_all(self, before_ts: int) -> int:
+        query = "DELETE FROM content_dedup WHERE created_at < %s"
+        res = await _execute_db(self._db, query, (int(before_ts),))
+        if isinstance(res, str) and res.startswith("DELETE "):
+            return int(res.split()[-1])
+        count = getattr(res, "rowcount", None)
+        return count if count is not None else 0
+
 
 class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
     """PostgreSQL implementation of IDeliveryQueueRepository."""

@@ -15,7 +15,7 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 02 | Delete ON/OFF | PASS | `SyncEngine.handle_delete` / `handle_delete_without_chat` via `MessageDispatcher` (DELETED_MESSAGES) | On/off, unmapped, cross-rule isolation, flood retry — `test_sync_switches_end_to_end.py` |
 | 03 | Reply ON/OFF | FAIL → fixed | `SyncEngine.handle_reply` via `MessageDispatcher._route_reply` (**new**) | The switch had **no production caller**; a reply was never mirrored |
 | 04 | Header NO/YES | FAIL → fixed | `FilterEngine.transform_text` → `apply_header_footer`; caption path `CaptionManagementEngine.format_caption` | Clear was inert (wrong metadata key); **17 owner-facing toggles were admin-gated while reading the rule unscoped** |
-| 05 | Duplicate Filters | PENDING | — | — |
+| 05 | Duplicate Filters | FAIL → fixed | `DurableMessagePipeline` DEDUPLICATE stage → `IMessageMapRepository.claim_content_hash` | The fingerprint was written **before** delivery and never released — undelivered content blocked later legitimate posts; check was read-then-write, not atomic |
 | 06 | Replace | PENDING | — | — |
 | 07 | Blacklist | PENDING | — | — |
 | 08 | Whitelist | PENDING | — | — |
@@ -160,3 +160,68 @@ headers survive byte-for-byte; an empty or whitespace header adds nothing;
 replacements still run before the header and are not applied to it; one task's
 header never renders for another; the round trip (SQLite) keeps the header and
 the clear lands on disk.
+
+## 05 — Duplicate Filters
+
+**What a duplicate is here.** Two layers, both rule-scoped:
+
+* *identity* — `skip_history` + `processed_messages(rule_id, chat_id,
+  message_id)`: the same Telegram event replayed is skipped. Written only once
+  the message was accepted for delivery.
+* *content* — the toggle's own layer: `sha256(normalized text||caption + media
+  kind [+ album id])`, keyed `UNIQUE(rule_id, content_hash)` in `content_dedup`.
+  Whitespace and case are normalized, so a re-post of the same announcement
+  under a new message id is a duplicate; the same text under **another task** is
+  not (different rule id).
+
+**Confirmed defect 1 — an undelivered message consumed the claim.** The
+fingerprint was inserted at the DEDUPLICATE stage, which runs *before* the
+filters, the keyword rules, the AI stage and the enqueue — and there were ~14
+ways to return without delivering in between. A message the task's own filter
+rejected, or that the queue refused under backpressure, or that threw mid-
+transform, permanently marked its content as "already forwarded": the next
+legitimate post of that text was dropped with no signal. The identity layer, by
+contrast, was already written on delivery only (`enqueued_any`) — this was the
+one that disagreed.
+
+**Confirmed defect 2 — the check was not atomic.** `was_content_forwarded` →
+`record_content_hash` is a read-then-write: two workers, or two replicas, both
+read "not seen" and both forward, even though the store already had the
+`UNIQUE(rule_id, content_hash)` index that could decide a winner. The steers
+require an atomic claim or unique constraint where the mechanism allows it; the
+constraint existed and was unused.
+
+**Confirmed defect 3 — the dedup memory never expired.**
+`purge_content_hashes(rule_id, before_ts)` existed but had **no caller
+anywhere**, so `content_dedup` grew without bound and an identical post months
+later was still collapsed by a task that never repeats anything.
+
+**Fix:** `claim_content_hash` (atomic, `INSERT OR IGNORE` / `ON CONFLICT DO
+NOTHING RETURNING`, decided by the unique index) replaces the read-then-write
+check; the claim is recorded on the context and is only *earned* when the
+message is accepted for delivery, otherwise `release_content_hash` gives it
+back — from the per-rule `finally` in `process()`, so filters, keyword rules, AI
+drops, backpressure and exceptions all return it; the hourly retention sweep now
+purges fingerprints older than the same 30-day window as the message map.
+Interface defaults keep third-party adapters working (read-then-write, no
+release), and the SQL stores override them.
+
+**Verified behaviour (17 tests, real pipeline + real SQLite store):** identical
+content forwards once; toggle off forwards both; different content is not a
+duplicate; whitespace/case variants are; another task keeps its own copy; the
+memory survives a process restart; a filter-rejected message gives the claim
+back and a later post ships; a refused enqueue does not claim; a mid-processing
+exception does not poison the memory; a delivered message keeps its claim; a
+dedup-store failure fails *open* (a hiccup never drops a message); eight
+concurrent claims produce exactly one winner; five concurrent identical messages
+produce exactly one delivery; release is scoped to its own task; retention
+purges old fingerprints and keeps fresh ones.
+
+**Recorded limitation (not a silent gap):** the legacy fallback path
+(`MessageForwardingUseCase`, used only when no durable pipeline is wired — the
+production wiring passes `durable_pipeline`) has no content-level dedup at all,
+so the toggle does not apply there. The production path is the durable pipeline.
+A terminal delivery failure after the enqueue leaves the fingerprint in place
+(the claim is earned at "accepted for delivery", mirroring the identity marker);
+retention bounds that, and the alternative would need a delivery-result callback
+into the pipeline.
