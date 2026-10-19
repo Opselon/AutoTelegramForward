@@ -509,12 +509,38 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
         return [self._row_to_entity(r) for r in rows]
 
     async def delete(self, rule_id: str) -> bool:
-        query = "DELETE FROM forward_rules WHERE id = %s"
-        res = await _execute_db(self._db, query, (rule_id,))
-        count = getattr(res, "rowcount", None)
-        if count is not None:
-            return count > 0
-        return True
+        """Delete the task and its own bookkeeping in one statement.
+
+        Data-modifying CTEs make it atomic — there is no window in which the
+        rule is gone but its mappings are not. A leftover ``message_map`` row
+        claims the task already delivered a source message, so a re-created task
+        could silently skip it; jobs, dead letters, counters and error rows would
+        keep a deleted task visible in every operator view that reads them.
+        """
+        query = """
+            WITH deleted AS (
+                DELETE FROM forward_rules WHERE id = %s RETURNING id
+            ), mappings AS (
+                DELETE FROM message_map WHERE rule_id IN (SELECT id FROM deleted)
+            ), jobs AS (
+                DELETE FROM delivery_jobs WHERE rule_id IN (SELECT id FROM deleted)
+            ), letters AS (
+                DELETE FROM dead_letter_queue WHERE rule_id IN (SELECT id FROM deleted)
+            ), counters AS (
+                DELETE FROM rule_stats WHERE rule_id IN (SELECT id FROM deleted)
+            ), errors AS (
+                DELETE FROM error_log WHERE rule_id IN (SELECT id FROM deleted)
+            )
+            SELECT COUNT(*) AS deleted_count FROM deleted
+        """
+        row = await _fetch_one_db(self._db, query, (rule_id,))
+        if row is None:
+            return False
+        try:
+            count = int(row["deleted_count"])
+        except (TypeError, KeyError, IndexError):
+            count = int(row[0])
+        return count > 0
 
     async def set_task_status(
         self,
