@@ -144,6 +144,16 @@ LANG_FLAG = dict(LANG_ENDONYM)
 #: The flags alone, for the picker's leading-flag form.
 LANG_FLAG_EMOJI = {code: row.rpartition(" ")[2] for code, row in LANG_ENDONYM.items()}
 
+#: The condition logic a task stores (`detection_criteria["match_mode"]`).
+#:
+#: `ANY` and `ALL` are our own value words, and the smart panel printed them
+#: raw — next to a translated description, on the toggle button, and on the
+#: simulator's "combined logic" line — so a Persian user read `ANY` in three
+#: places. They are the same two words the toggle's own alert already names
+#: (`ui_logic_all` / `ui_logic_any`), which is why this is a mapping and not a
+#: second vocabulary.
+LOGIC_WORDS = {"ALL": "ui_logic_all", "ANY": "ui_logic_any"}
+
 
 def language_row(code: str) -> Tuple[str, str]:
     """(endonym, flag) for one language — `(code.upper(), "")` when unknown."""
@@ -688,6 +698,19 @@ class ProBotUI:
         # Explicit locale wins; otherwise use the current update's isolated locale.
         cur_lang = lang or _BOT_RENDER_LANGUAGE.get() or "en"
         return self.i18n.t(key, lang=cur_lang, **kw)
+
+    def _logic_word(self, mode: str, lang: Optional[str] = None) -> str:
+        """The stored condition logic as a word: `ALL` -> "all conditions".
+
+        A value we do not know is shown as stored — the toggle only ever writes
+        the two, but stored criteria come from older builds, and a raw `ANY` is
+        a smaller failure than a crash or an empty line.
+        """
+        code = str(mode or "").strip().upper()
+        catalog_key = LOGIC_WORDS.get(code)
+        if catalog_key is None:
+            return str(mode or "")
+        return self._t(catalog_key, lang=lang)
 
     def _btn(self, key: str, lang: Optional[str] = None, style: Optional[str] = None, **kw) -> str:
         """A localized button label with its canonical style glyph.
@@ -3394,7 +3417,9 @@ class ProBotUI:
             self._t("ui_smart_brand_state", lang=lang, state=brand_state),
             self._t("ui_smart_brand_origins", lang=lang, origins=origins_display),
             self._t("ui_smart_brand_words", lang=lang, words=words_display),
-            self._t("ui_smart_match_logic", lang=lang, match_mode=match_mode, mode_desc=mode_desc),
+            # The description says which logic is in force; the raw `ANY`/`ALL`
+            # token beside it said the same thing in English.
+            self._t("ui_smart_match_logic", lang=lang, mode_desc=mode_desc),
             self._t("ui_smart_keywords", lang=lang, keywords=kw_display),
             self._t("ui_smart_regex", lang=lang, regex=regex_display),
             self._t("ui_smart_custom_header", lang=lang, header=hdr_display),
@@ -3408,7 +3433,8 @@ class ProBotUI:
         rows: List[List[Tuple[str, str]]] = [
             [(self._t("ui_smart_btn_change_path", lang=lang, path_tag=path_tag[:20]), f"rsmpth:{rule.id}")],
             [
-                (self._t("ui_smart_btn_logic", lang=lang, match_mode=match_mode), f"rsmmod:{rule.id}"),
+                (self._t("ui_smart_btn_logic", lang=lang,
+                         mode=self._logic_word(match_mode, lang=lang)), f"rsmmod:{rule.id}"),
                 (self._t("ui_smart_btn_mid", lang=lang), f"rsmw:{rule.id}"),
             ],
             [
@@ -11364,7 +11390,7 @@ class ProBotUI:
             "────────────────────\n"
             f"📋 **Task:** `{rule.id[:8]}` ({rule.source_chat_name or rule.source_chat_id} ➔ {rule.target_chat_name or rule.target_chat_id})\n"
             + self._t("ui_sim_match_summary", match=match_status_text, cat=cat_labels.get(detected_cat, detected_cat), route=route_label)
-            + self._t("ui_sim_analysis", mode=m_mode, kws=', '.join(kws) if kws else self._t("ui_clean_not_set"), rx=rx if rx else self._t("ui_clean_not_set"), reason=route_reason or reason)
+            + self._t("ui_sim_analysis", mode=self._logic_word(m_mode), kws=', '.join(kws) if kws else self._t("ui_clean_not_set"), rx=rx if rx else self._t("ui_clean_not_set"), reason=route_reason or reason)
             + "\n".join(action_lines) + "\n\n"
             + self._t("ui_sim_footer_notes")
         )
