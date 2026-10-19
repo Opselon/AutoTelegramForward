@@ -1469,6 +1469,33 @@ class SqliteMessageMapRepository(IMessageMapRepository):
         )
         return cur.rowcount
 
+    async def claim_content_hash(self, rule_id: str, content_hash: str) -> bool:
+        """Atomic claim: True when this caller owns the fingerprint.
+
+        ``INSERT OR IGNORE`` plus ``rowcount`` lets the UNIQUE(rule_id,
+        content_hash) index decide the winner instead of a read-then-write
+        race, so two workers cannot both forward the same content.
+        """
+        cur = self._db.execute(
+            "INSERT OR IGNORE INTO content_dedup (rule_id, content_hash, created_at)"
+            " VALUES (?, ?, ?)",
+            (rule_id, content_hash, _now()),
+        )
+        return int(getattr(cur, "rowcount", 0) or 0) == 1
+
+    async def release_content_hash(self, rule_id: str, content_hash: str) -> None:
+        """Give a claim back when the message was never delivered."""
+        self._db.execute(
+            "DELETE FROM content_dedup WHERE rule_id=? AND content_hash=?",
+            (rule_id, content_hash),
+        )
+
+    async def purge_content_hashes_all(self, before_ts: int) -> int:
+        cur = self._db.execute(
+            "DELETE FROM content_dedup WHERE created_at < ?", (int(before_ts),)
+        )
+        return cur.rowcount
+
 
 class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
     """SQLite implementation of the durable delivery jobs queue."""

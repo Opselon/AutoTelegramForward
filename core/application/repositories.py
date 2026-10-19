@@ -519,6 +519,41 @@ class IMessageMapRepository(ABC):
     async def record_content_hash(self, rule_id: str, content_hash: str) -> None:
         ...
 
+    async def claim_content_hash(self, rule_id: str, content_hash: str) -> bool:
+        """Atomically claim a content fingerprint for this rule.
+
+        True means *this caller* just claimed it and may forward; False means
+        another worker (or an earlier delivery) already owns it, so the message
+        is a duplicate. The unique constraint decides the winner, so two
+        workers processing identical content concurrently cannot both forward.
+
+        The default keeps third-party adapters working (read-then-write, not
+        atomic); the SQL/Postgres stores override it with an atomic insert.
+        """
+        if await self.was_content_forwarded(rule_id, content_hash):
+            return False
+        await self.record_content_hash(rule_id, content_hash)
+        return True
+
+    async def release_content_hash(self, rule_id: str, content_hash: str) -> None:
+        """Give a claim back.
+
+        A claim is only earned once the message is accepted for delivery. A
+        message dropped after the dedup stage (filter, keyword rule, AI drop,
+        backpressure) never reached its targets, so keeping its fingerprint
+        would silently discard the next legitimate post of the same content.
+        """
+        return None
+
+    async def purge_content_hashes_all(self, before_ts: int) -> int:
+        """Drop every content fingerprint older than ``before_ts``.
+
+        The dedup memory must expire with the rest of the retention windows:
+        otherwise an identical announcement posted months later, by a channel
+        that never repeats anything, is still silently dropped forever.
+        """
+        return 0
+
     @abstractmethod
     async def purge_content_hashes(self, rule_id: str, before_ts: int) -> int:
         ...

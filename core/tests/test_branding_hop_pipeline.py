@@ -139,6 +139,14 @@ class FakeMapRepo:
     async def record_content_hash(self, *args, **kwargs) -> None:  # noqa: D102
         return None
 
+    async def claim_content_hash(self, *args, **kwargs) -> bool:  # noqa: D102
+        # Pre-fix semantics: the pipeline still consults the old check; a store
+        # that has only the read-only interface is honoured by the pipeline.
+        return not self.seen
+
+    async def release_content_hash(self, *args, **kwargs) -> None:  # noqa: D102
+        return None
+
 
 class FakeQueue:
     """The durable queue's enqueue interface, capturing the hop job state."""
