@@ -108,11 +108,14 @@ class _FakeMessage:
 class CallbackQuery:
     """The shape the UI reads, plus a record of what it told the user."""
 
-    def __init__(self, data: str, user_id: int, chat_id: int = 5094837833) -> None:
+    def __init__(self, data: str, user_id: int, chat_id: int = 5094837833, matches=None) -> None:
         self.data = data
         self.from_user = SimpleNamespace(id=user_id, first_name="U", username="u",
                                          language_code="en", is_bot=False)
         self.message = _FakeMessage(chat_id=chat_id)
+        #: pyrogram fills this from the matcher that claimed the update; handlers
+        #: read the capture groups out of it (`int(cq.matches[0].group(1))`).
+        self.matches = list(matches or [])
         self.answers = _Answers("answer")
         self.propagated = False
 
@@ -140,6 +143,10 @@ class _RegexFilter:
 
     def matches(self, data: str) -> bool:
         return bool(self._re.match(data or ""))
+
+    def match(self, data: str):
+        """The match object pyrogram would attach to the update."""
+        return self._re.match(data or "")
 
 
 class _AnythingFilter:
@@ -355,6 +362,26 @@ class BotHarness:
     # ------------------------------------------------------------------ #
     # Dispatch
     # ------------------------------------------------------------------ #
+    def handlers_and_matches(self, data: str) -> list:
+        """`(handler, match)` pairs, in the order pyrogram would try them.
+
+        The match object is per handler — pyrogram attaches the one that claimed
+        the update — and handlers read their capture groups out of it
+        (`int(cq.matches[0].group(1))`), so a harness that omits it cannot drive
+        the payload-taking callbacks at all.
+        """
+        hits = [
+            (group, index, flt, func)
+            for index, (group, flt, func) in enumerate(self.bot.callback_handlers)
+            if group >= 0 and (flt is None or getattr(flt, "matches", lambda _d: True)(data))
+        ]
+        hits.sort(key=lambda item: (item[0], item[1]))
+        out = []
+        for _group, _index, flt, func in hits:
+            matcher = getattr(flt, "match", None)
+            out.append((func, matcher(data) if callable(matcher) else None))
+        return out
+
     def handlers_for(self, data: str) -> list:
         """The handlers a dispatcher would reach for this payload.
 
@@ -362,22 +389,18 @@ class BotHarness:
         returns without handling anything), so running it tells the test
         nothing. Everything else is returned in the order pyrogram would try it.
         """
-        hits = [
-            (group, index, func)
-            for index, (group, flt, func) in enumerate(self.bot.callback_handlers)
-            if group >= 0 and (flt is None or getattr(flt, "matches", lambda _d: True)(data))
-        ]
-        hits.sort(key=lambda item: (item[0], item[1]))
-        return [func for _g, _i, func in hits]
+        return [func for func, _match in self.handlers_and_matches(data)]
 
     async def press(self, data: str, user_id: int, chat_id: int | None = None):
         """Press a button as `user_id`; returns the callback query as it ended.
 
         Every handler that claims the payload runs, in group order, so the test
-        sees the same side effects the user's press would cause.
+        sees the same side effects the user's press would cause. `cq.matches` is
+        set to the claiming handler's own match, as the framework does.
         """
         cq = CallbackQuery(data, user_id, chat_id=chat_id or user_id)
-        for func in self.handlers_for(data):
+        for func, match in self.handlers_and_matches(data):
+            cq.matches = [match] if match is not None else []
             try:
                 await func(self.bot, cq)
             except ContinuePropagation:

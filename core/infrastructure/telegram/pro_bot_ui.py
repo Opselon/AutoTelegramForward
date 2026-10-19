@@ -1243,6 +1243,19 @@ class ProBotUI:
         return self._kbd(rows)
 
     async def _render_admin_panel(self, uid: int) -> tuple[str, InlineKeyboardMarkup]:
+        # Fail closed at the renderer, not only at each caller. The panel body
+        # carries install-wide numbers (every tenant's user count, every active
+        # task, the dead-letter count) and the forced-subscription channel, so a
+        # single ungated caller — one was, the broadcast *cancel* button — used
+        # to hand all of it to whoever pressed. Asking here means a future
+        # caller cannot reopen that by forgetting a check.
+        if not self._is_admin(uid):
+            logger.warning("[ADMIN] refused to render the admin panel for non-admin uid=%s", uid)
+            lang = self._resolve_lang(uid)
+            return (
+                self._t("ui_rule_not_found_or_not_owner", lang=lang),
+                self._kbd([[(self._btn("ui_back_main_menu", lang=lang), CB["back"])]]),
+            )
         lang = self._resolve_lang(uid)
         total_users = 0
         active_rules = 0
@@ -5030,6 +5043,8 @@ class ProBotUI:
         @self._localized_handler
         async def _cb_adm_bcast_cancel(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
+            if not self._is_admin(uid):
+                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(uid)), show_alert=True)
             st = self._state(uid)
             st.buffer.clear()
             await self._persist(uid, st)
