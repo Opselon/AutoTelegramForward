@@ -460,8 +460,9 @@ export const endpointDetail: Record<string, EndpointDetail> = {
     statuses: auth,
   },
   'POST /api/logs/purge': {
-    summary: 'Deletes the caller’s stored log history inside the requested window.',
-    statuses: write,
+    summary:
+      'Deletes the caller’s stored log history inside the requested window. A tenant must name one of their own tasks: the archive is one shared store with no tenant column on this path, so the installation-wide purge is administrator-only and answers 403 otherwise.',
+    statuses: ['200', '400', '401', '403', '404'],
   },
   'POST /api/logs/diagnostics/start': {
     summary: 'Starts a bounded diagnostic capture for support. Administrator-only.',

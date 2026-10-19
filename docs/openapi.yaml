@@ -1,37 +1,90 @@
 openapi: 3.1.0
 info:
   title: AutoTelegramForward API
-  version: "2.3.0"
+  version: "1.0.0"
   description: |
     The Go API is the single authoritative entry point for every
     client-facing operation (web dashboard, Telegram bot surface, Telegram
     Mini App, Flutter mobile clients, CLI). Identity is verified once
-    (Bearer JWT or Telegram TMA exchange) and every request is scoped to that
-    verified tenant server-side — client-supplied owner fields are ignored.
+    (Bearer JWT or a Telegram Mini App exchange) and every request is scoped to
+    that verified tenant server-side -- client-supplied owner fields are
+    ignored.
 
-    Identity binding (per network transport):
-    - HTT> requests: `Authorization: Bearer <JWT>`; optional signed-session
-      binding via `X-Session-Id` (the Go API verifies the signed session
-      header before proxying the request to gRPC with the verified session
-      attached).
-    - Telegram: TMA `initData` (signature-verified) exchanged at
-      `/api/auth/tma` for the same JWT; the Task lifecycle does NOT accept
-      `owner_user_id` in any request body — it is derived strictly from the
+    `info.version` tracks the API contract version owned by the Go module
+    (`APIVersion` in `api/internal/handlers/version.go`), NOT the product
+    version; `GET /api/version` reports both. A test
+    (`scripts/tests/test_openapi_route_parity.py`) fails the build when this
+    file and `api/main.go` disagree about which routes exist or about which of
+    them are public, user-scoped or administrator-only.
+
+    Identity binding (per transport):
+    - HTTP requests: `Authorization: Bearer <jwt>`, optional signed-session
+      binding via `X-Session-Id` (the Go API verifies the signed session header
+      before proxying the request to gRPC with the verified session attached).
+    - Telegram: Mini App `initData` (signature-verified) exchanged at
+      `/api/auth/tma` for the same JWT; the task lifecycle does NOT accept
+      `owner_user_id` in any request body -- it is derived strictly from the
       verified identity at the gRPC boundary and echoed in the response
-      envelope (`X-Request-Id` per Correlation from middleware/correlation.go).
+      envelope (`X-Request-Id` per middleware/correlation.go).
 
-    The per-user task lifecycle (`/api/tasks`) gives every long-running user
-    operation a durable, tenant-owned state machine in the authoritative
-    database. States: `PENDING → RUNNING → SUCCEEDED | RETRY_WAIT →
-    PENDING (retry) | FAILED | CANCELLED`.
+    Cross-cutting responses, returned by any authenticated route and therefore
+    not repeated on every operation below:
+    - `401` no verified identity (`{"error","error_code"}`);
+    - `403` an authenticated caller refused by an authorization rule;
+    - `413` `{"error","error_code":"body_too_large"}` -- a request body over the
+      endpoint's cap (1 MiB for JSON, 64 MiB for `/api/backup/import`);
+    - `429` the rate limiter refused (with `Retry-After`) or the limiter could
+      not be evaluated on a fail-closed class (`rate_limit_unavailable`, 503);
+    - `502` the core (or the logger) is not answering.
 
-externalDocs:
-  description: Phase 2 architecture notes
-  url: https://github.com/Opselon/AutoTelegramForward/blob/master/docs/api-phase2.md
+    The per-user task lifecycle gives every long-running user operation a
+    durable, tenant-owned state machine in the authoritative database. States:
+    `PENDING -> RUNNING -> SUCCEEDED | RETRY_WAIT -> PENDING (retry) | FAILED |
+    CANCELLED`. Submitting the same `(owner, kind, idempotency_key)` returns the
+    original task with `200` + `already_existed: true` instead of a duplicate.
 
 servers:
-  - url: /api
-    description: Current deployment (proxied by atf-web with HTTPS)
+  - url: /
+    description: The deployment root. Every path below is absolute (the public prefix is `/api`).
+
+tags:
+  - name: system
+    description: 'Probes, versions and the setup/environment contract. Public: these describe HOW to authenticate.'
+  - name: auth
+    description: 'Identity. A Telegram user id is public, so a session is only ever minted from a single-use login code or from verified Mini App `init_data`.'
+  - name: rules
+    description: 'Forwarding tasks ("rules") and their per-task settings. Tenant-scoped everywhere.'
+  - name: sessions
+    description: 'Telegram MTProto sessions owned by the caller.'
+  - name: bot-tokens
+    description: 'The bot credentials a task forwards *as*.'
+  - name: ai
+    description: 'Per-tenant AI configurations. The API key is write-only.'
+  - name: filters
+    description: 'Content filters applied on the caller''s own traffic.'
+  - name: prompts
+    description: 'AI rewrite prompt templates.'
+  - name: tasks
+    description: 'The per-user durable task lifecycle (`PENDING -> RUNNING -> RETRY_WAIT -> ... -> SUCCEEDED | FAILED | CANCELLED`).'
+  - name: queue
+    description: 'Delivery queue and dead-letter queue.'
+  - name: simulator
+    description: 'Pipeline dry-run.'
+  - name: pv-responder
+    description: 'Private-chat auto-responder.'
+  - name: logs
+    description: 'The task-scoped log archive and the collection policy.'
+  - name: audit
+    description: 'Centralized audit events.'
+  - name: devops
+    description: 'Diagnostics and whole-installation backup/restore.'
+  - name: client
+    description: 'Per-client settings and personal credentials.'
+  - name: admin
+    description: 'Administrator control plane. Strictly gated by a server-verified `ADMIN_IDS` membership.'
+
+security:
+  - bearerAuth: []
 
 components:
   securitySchemes:
@@ -45,7 +98,27 @@ components:
       in: path
       required: true
       schema: { type: string }
+  responses:
+    Unauthorized: { description: "No verified identity", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
+    Forbidden: { description: "Authenticated but not entitled (e.g. an administrator-only control, or `rule_scope_required`)", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
+    BadRequest: { description: "Refused: malformed body, unknown kind, invalid state transition", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
+    NotFound: { description: "Not found. A resource belonging to another tenant is deliberately indistinguishable from a missing one.", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
+    BodyTooLarge: { description: "`error_code: body_too_large`", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
+    CoreUnavailable: { description: "A backend service (core or logger) is not answering", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
   schemas:
+    Refusal:
+      type: object
+      description: The one refusal shape every route uses, so a client renders it instead of printing an identifier it does not know.
+      properties:
+        error:
+          type: string
+          description: Human-readable reason.
+        error_code:
+          type: string
+          description: Stable machine-readable reason (e.g. `not_found`, `rule_scope_required`, `body_too_large`).
+        code:
+          type: string
+          description: Legacy alias of `error_code` kept for older clients.
     UserTask:
       type: object
       properties:
@@ -79,7 +152,7 @@ components:
         task: { $ref: '#/components/schemas/UserTask' }
         already_existed:
           type: boolean
-          description: "true → the idempotency key matched an existing task (HTTP 200); false → created (HTTP 201)"
+          description: "true -> the idempotency key matched an existing task (HTTP 200); false -> created (HTTP 201)"
         id: { type: string }
         status: { type: string }
     TaskPage:
@@ -88,132 +161,1587 @@ components:
         tasks:
           type: array
           items: { $ref: '#/components/schemas/UserTask' }
-        total: { type: integer }
+        total: { type: integer, description: "Total matching rows in the CALLER's scope" }
         limit: { type: integer, maximum: 200 }
         offset: { type: integer, minimum: 0 }
-    Refusal:
-      type: object
-      properties:
-        error: { type: string }
-        error_code: { type: string }
-
-  responses:
-    NotFound: { description: "Not found (a foreign task is deliberately indistinguishable from a missing one)", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
-    BadRequest: { description: "Refused: unknown kind, malformed payload, invalid state transition", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
-    Unauthorized: { description: "No verified identity", content: { application/json: { schema: { $ref: '#/components/schemas/Refusal' } } } }
 
 paths:
-  /auth/login:
-    post:
-      tags: [auth]
-      summary: Password login → JWT (also /auth/register, /auth/exchange-bot-token, /auth/tma)
-      responses: { "200": { description: OK } }
-
-  /auth/bot-login-link:
+  /healthz:
     get:
-      tags: [auth]
-      summary: Mint the caller's own single-use dashboard login link
-      description: |
-        Requires a valid Bearer JWT. The core mints one one-time code for the
-        verified identity and the reply carries a relative URL the client can
-        open. A short cooldown (60 s) applies per user: while a code is still
-        live and unused, the endpoint answers 429 + Retry-After instead of
-        minting another, so double clicks never invalidate the live link.
-        Codes self-destruct after 10 minutes or one single use.
-      security: [{ bearerAuth: [] }]
+      tags: [system]
+      summary: 'Liveness probe (never gated by a dependency)'
+      operationId: getHealthz
+      security: []
+      x-atf-authorization: public
+      responses:
+        "200": { description: OK }
+  /health:
+    get:
+      tags: [system]
+      summary: 'Liveness probe alias'
+      operationId: getHealth
+      security: []
+      x-atf-authorization: public
+      responses:
+        "200": { description: OK }
+  /readyz:
+    get:
+      tags: [system]
+      summary: 'Readiness: answers 503 while a fail-closed dependency cannot enforce its promise'
+      operationId: getReadyz
+      security: []
+      x-atf-authorization: public
+      responses:
+        "200": { description: OK }
+  /ready:
+    get:
+      tags: [system]
+      summary: 'Readiness probe alias'
+      operationId: getReady
+      security: []
+      x-atf-authorization: public
+      responses:
+        "200": { description: OK }
+  /api/version:
+    get:
+      tags: [system]
+      summary: 'Product version, API version, minimum supported client and capability keys'
+      operationId: getApiVersion
+      security: []
+      x-atf-authorization: public
       responses:
         "200":
-          description: OK, content: { application/json: { schema: { type: object, properties: { code: { type: string }, expires_at: { type: integer }, link: { type: string } } } } }
-        "401": { $ref: '#/components/responses/Unauthorized' }
-        "429": { description: Inside the mint cooldown; Retry-After carries seconds }
-
-  /tasks:
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /api/openapi.yaml:
     get:
-      tags: [tasks]
-      summary: List the caller's async jobs
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - { name: status, in: query, schema: { type: string, enum: [PENDING, RUNNING, RETRY_WAIT, SUCCEEDED, FAILED, CANCELLED] } }
-        - { name: kind, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
-        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      tags: [system]
+      summary: 'This document'
+      operationId: getApiOpenapi.Yaml
+      security: []
+      x-atf-authorization: public
       responses:
-        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TaskPage' } } } }
-        "401": { $ref: '#/components/responses/Unauthorized' }
+        "200": { description: "The document itself", content: { application/yaml: {} } }
+  /api/health/services:
+    get:
+      tags: [system]
+      summary: 'Health of every service in the chain (core, api, web, logger, redis)'
+      operationId: getApiHealthServices
+      security: []
+      x-atf-authorization: public
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /api/v1/health/services:
+    get:
+      tags: [system]
+      summary: 'Health of every service in the chain (v1 alias)'
+      operationId: getApiV1HealthServices
+      security: []
+      x-atf-authorization: public
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /api/system/setup:
+    get:
+      tags: [system]
+      summary: 'What this deployment is configured with (booleans only, never a secret value)'
+      operationId: getApiSystemSetup
+      security: []
+      x-atf-authorization: public
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /api/v1/system/setup:
+    get:
+      tags: [system]
+      summary: 'Setup report (v1 alias)'
+      operationId: getApiV1SystemSetup
+      security: []
+      x-atf-authorization: public
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /api/system/env:
+    get:
+      tags: [system]
+      summary: 'The environment contract the deployment is running under'
+      operationId: getApiSystemEnv
+      security: []
+      x-atf-authorization: public
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /api/v1/system/env:
+    get:
+      tags: [system]
+      summary: 'Environment contract (v1 alias)'
+      operationId: getApiV1SystemEnv
+      security: []
+      x-atf-authorization: public
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /api/auth/register:
     post:
-      tags: [tasks]
-      summary: Submit an async job (idempotent)
-      description: |
-        The identity is taken from the verified token; `owner_user_id` in
-        the body is ignored. Resubmitting with the same `idempotency_key`
-        returns the original task with HTTP 200 + `already_existed: true`.
-      security: [{ bearerAuth: [] }]
+      tags: [auth]
+      summary: 'Create an account'
+      operationId: postApiAuthRegister
+      security: []
+      x-atf-authorization: public
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [kind]
-              properties:
-                kind: { type: string, enum: [session.backup, dlq.replay, dlq.purge, backup.export] }
-                payload: { type: object, description: "kind-specific; bounded to 64 KiB" }
-                idempotency_key: { type: string, maxLength: 200 }
-                max_attempts: { type: integer, minimum: 1, maximum: 8 }
+            schema: { type: object }
       responses:
-        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/CreateTaskReply' } } } }
-        "200": { description: "Idempotent replay of an existing task", content: { application/json: { schema: { $ref: '#/components/schemas/CreateTaskReply' } } } }
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
         "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: 'Password login, answers a Bearer JWT'
+      operationId: postApiAuthLogin
+      security: []
+      x-atf-authorization: public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auth/exchange-bot-token:
+    post:
+      tags: [auth]
+      summary: 'Exchange a single-use login code for a session; posting a Telegram user id is refused'
+      operationId: postApiAuthExchange-Bot-Token
+      security: []
+      x-atf-authorization: public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auth/tma:
+    post:
+      tags: [auth]
+      summary: 'Exchange Telegram Mini App `init_data` (HMAC-SHA256 verified against the bot token) for the same JWT'
+      operationId: postApiAuthTma
+      security: []
+      x-atf-authorization: public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auth/change-password:
+    patch:
+      tags: [auth]
+      summary: 'Change the caller''s own password; the subject is the token''s user and a body `user_id` naming anybody else is 403'
+      operationId: patchApiAuthChange-Password
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
         "401": { $ref: '#/components/responses/Unauthorized' }
-
-  /tasks/{id}:
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: 'The caller''s own verified identity'
+      operationId: getApiAuthMe
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/auth/bot-login-link:
+    get:
+      tags: [auth]
+      summary: 'Mint the caller''s own single-use dashboard login link (429 + Retry-After inside the 60 s cooldown)'
+      operationId: getApiAuthBot-Login-Link
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/stats:
+    get:
+      tags: [rules]
+      summary: 'The caller''s own counters (rules, sessions, queue depth)'
+      operationId: getApiStats
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/rules:
+    get:
+      tags: [rules]
+      summary: 'List the caller''s forwarding rules (tenant-scoped, bounded page)'
+      operationId: getApiRules
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [rules]
+      summary: 'Create a forwarding rule'
+      operationId: postApiRules
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/rules/{id}:
+    get:
+      tags: [rules]
+      summary: 'One rule the caller owns'
+      operationId: getApiRulesId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [rules]
+      summary: 'Replace a rule the caller owns'
+      operationId: putApiRulesId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [rules]
+      summary: 'Partial update: the body carries only what changes and `update_mask` (body array or `?update_mask=a,b`) names it'
+      operationId: patchApiRulesId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [rules]
+      summary: 'Delete a rule the caller owns'
+      operationId: deleteApiRulesId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/rules/{id}/toggle:
+    post:
+      tags: [rules]
+      summary: 'Enable or disable a rule'
+      operationId: postApiRulesIdToggle
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/rules/{id}/duplicate:
+    post:
+      tags: [rules]
+      summary: 'Duplicate a rule into a new one'
+      operationId: postApiRulesIdDuplicate
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/rules/{id}/stop:
+    post:
+      tags: [rules]
+      summary: 'Stop a rule'
+      operationId: postApiRulesIdStop
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/rules/{id}/restart:
+    post:
+      tags: [rules]
+      summary: 'Restart a stopped rule'
+      operationId: postApiRulesIdRestart
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/rules/{id}/pause:
+    post:
+      tags: [rules]
+      summary: 'Pause a rule until `until` (epoch seconds); the body is optional'
+      operationId: postApiRulesIdPause
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/rules/{id}/resume:
+    post:
+      tags: [rules]
+      summary: 'Resume a paused rule'
+      operationId: postApiRulesIdResume
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/rules/{id}/route-path:
+    post:
+      tags: [rules]
+      summary: 'Quick-set the source and target path of a rule'
+      operationId: postApiRulesIdRoute-Path
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/rules/settings/schema:
+    get:
+      tags: [rules]
+      summary: 'The per-task settings schema (needs no rule, so an editor can be built before the user owns anything)'
+      operationId: getApiRulesSettingsSchema
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/rules/{id}/settings:
+    get:
+      tags: [rules]
+      summary: 'The full per-task settings surface the Telegram bot edits'
+      operationId: getApiRulesIdSettings
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [rules]
+      summary: 'Replace a task''s settings'
+      operationId: putApiRulesIdSettings
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [rules]
+      summary: 'Partial settings update (`update_mask`, plus `edited`/`resets` hints)'
+      operationId: patchApiRulesIdSettings
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/rules/{id}/logs:
+    get:
+      tags: [rules]
+      summary: 'One task''s log history, ownership-checked before the read'
+      operationId: getApiRulesIdLogs
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/sessions:
+    get:
+      tags: [sessions]
+      summary: 'List the caller''s Telegram sessions'
+      operationId: getApiSessions
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/sessions/{sessionId}/chats:
+    get:
+      tags: [sessions]
+      summary: 'Browse a session''s dialogs for the source/target pickers; a session that exists but has no live client is 503'
+      operationId: getApiSessionsSessionidChats
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/sessions/{id}/backup:
+    post:
+      tags: [sessions]
+      summary: 'Back up one of the caller''s sessions'
+      operationId: postApiSessionsIdBackup
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/sessions/{id}:
+    delete:
+      tags: [sessions]
+      summary: 'Terminate one of the caller''s sessions'
+      operationId: deleteApiSessionsId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/bot-tokens:
+    get:
+      tags: [bot-tokens]
+      summary: 'List the bots the caller forwards as (never the token value)'
+      operationId: getApiBot-Tokens
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [bot-tokens]
+      summary: 'Attach a bot credential the caller owns'
+      operationId: postApiBot-Tokens
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/bot-tokens/{id}:
+    delete:
+      tags: [bot-tokens]
+      summary: 'Detach a bot credential'
+      operationId: deleteApiBot-TokensId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/bot-tokens/{id}/defaults:
+    get:
+      tags: [bot-tokens]
+      summary: 'The defaults every task attached to this bot inherits'
+      operationId: getApiBot-TokensIdDefaults
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [bot-tokens]
+      summary: 'Replace per-bot defaults'
+      operationId: putApiBot-TokensIdDefaults
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/ai-configs:
+    get:
+      tags: [ai]
+      summary: 'List the caller''s AI configurations (the key is write-only and never returned)'
+      operationId: getApiAi-Configs
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [ai]
+      summary: 'Create an AI configuration'
+      operationId: postApiAi-Configs
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/ai-configs/{id}:
+    put:
+      tags: [ai]
+      summary: 'Update an AI configuration'
+      operationId: putApiAi-ConfigsId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [ai]
+      summary: 'Delete an AI configuration'
+      operationId: deleteApiAi-ConfigsId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/ai-configs/providers:
+    get:
+      tags: [ai]
+      summary: 'The provider catalogue the tenant can choose from'
+      operationId: getApiAi-ConfigsProviders
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/ai-configs/check-key:
+    post:
+      tags: [ai]
+      summary: 'Health-probe a provider key before it is stored; a named config must be the caller''s'
+      operationId: postApiAi-ConfigsCheck-Key
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/filters:
+    get:
+      tags: [filters]
+      summary: 'List the caller''s content filters'
+      operationId: getApiFilters
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [filters]
+      summary: 'Create a content filter'
+      operationId: postApiFilters
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/filters/{id}:
+    put:
+      tags: [filters]
+      summary: 'Update a content filter'
+      operationId: putApiFiltersId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [filters]
+      summary: 'Delete a content filter'
+      operationId: deleteApiFiltersId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/prompts:
+    get:
+      tags: [prompts]
+      summary: 'List the caller''s AI rewrite prompt templates'
+      operationId: getApiPrompts
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [prompts]
+      summary: 'Create a prompt template'
+      operationId: postApiPrompts
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/prompts/{id}:
+    put:
+      tags: [prompts]
+      summary: 'Update a prompt template'
+      operationId: putApiPromptsId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [prompts]
+      summary: 'Delete a prompt template'
+      operationId: deleteApiPromptsId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/prompts/test:
+    post:
+      tags: [prompts]
+      summary: 'Render and try a prompt template'
+      operationId: postApiPromptsTest
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/tasks:
     get:
       tags: [tasks]
-      summary: Poll one job (state, attempt, structured error)
+      summary: 'List the caller''s async jobs (`status`/`kind` filters, bounded `limit`, `offset`)'
+      operationId: getApiTasks
       security: [{ bearerAuth: [] }]
-      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      x-atf-authorization: user
       responses:
-        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TaskEnvelope' } } } }
-        "404": { $ref: '#/components/responses/NotFound' }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
         "401": { $ref: '#/components/responses/Unauthorized' }
-
-  /tasks/{id}/cancel:
     post:
       tags: [tasks]
-      summary: Cancel a queued job (before a worker claims it)
+      summary: 'Submit an async job (idempotent on `(owner, kind, idempotency_key)`); `?kind=` alone is the no-body form'
+      operationId: postApiTasks
       security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/tasks/{id}:
+    get:
+      tags: [tasks]
+      summary: 'Poll one job (state, attempt, structured error); another tenant''s task is a 404 with no existence oracle'
+      operationId: getApiTasksId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
       parameters: [{ $ref: '#/components/parameters/taskId' }]
       responses:
-        "200": { description: Cancelled (or already cancelled — idempotent) }
-        "400": { $ref: '#/components/responses/BadRequest' }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
         "404": { $ref: '#/components/responses/NotFound' }
-
-  /tasks/{id}/retry:
+  /api/tasks/{id}/cancel:
     post:
       tags: [tasks]
-      summary: Re-queue a FAILED job (attempt budget resets)
+      summary: 'Cancel a queued job before a worker claims it'
+      operationId: postApiTasksIdCancel
       security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/tasks/{id}/retry:
+    post:
+      tags: [tasks]
+      summary: 'Re-queue a FAILED job with a fresh attempt budget'
+      operationId: postApiTasksIdRetry
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/queue:
+    get:
+      tags: [queue]
+      summary: 'Delivery queue statistics for the caller''s own rules'
+      operationId: getApiQueue
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/dlq:
+    get:
+      tags: [queue]
+      summary: 'List dead letters (scope resolved server-side from the caller''s rule ids)'
+      operationId: getApiDlq
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [queue]
+      summary: 'Purge dead letters in the caller''s scope (body optional)'
+      operationId: deleteApiDlq
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/dlq/{id}/retry:
+    post:
+      tags: [queue]
+      summary: 'Replay one dead letter; answers a documented `error_code` (`requeued`, `not_found`, `already_pending`, `already_sent`, `replay_failed`)'
+      operationId: postApiDlqIdRetry
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/simulate:
+    post:
+      tags: [simulator]
+      summary: 'Dry-run the caller''s pipeline against a synthetic message'
+      operationId: postApiSimulate
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/pv-responder:
+    get:
+      tags: [pv-responder]
+      summary: 'The caller''s private-chat auto-responder configuration'
+      operationId: getApiPv-Responder
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [pv-responder]
+      summary: 'Set the private-chat auto-responder configuration'
+      operationId: postApiPv-Responder
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+    put:
+      tags: [pv-responder]
+      summary: 'Set the private-chat auto-responder configuration (idempotent form)'
+      operationId: putApiPv-Responder
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/logs:
+    get:
+      tags: [logs]
+      summary: 'Query the task-scoped log archive'
+      operationId: getApiLogs
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/logs/stats:
+    get:
+      tags: [logs]
+      summary: 'Volume breakdowns for the archive'
+      operationId: getApiLogsStats
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/logs/export:
+    get:
+      tags: [logs]
+      summary: 'Download the filtered history (`format=json|csv`)'
+      operationId: getApiLogsExport
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/logs/health:
+    get:
+      tags: [logs]
+      summary: 'Logger pipeline health'
+      operationId: getApiLogsHealth
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/logs/policy:
+    get:
+      tags: [logs]
+      summary: 'The effective log collection policy'
+      operationId: getApiLogsPolicy
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [admin]
+      summary: 'Change what atf-core collects, through the process that enforces it; administrator-only and audited'
+      operationId: putApiLogsPolicy
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/logs/purge:
+    post:
+      tags: [logs]
+      summary: 'Purge log history. A non-administrator MUST name a task they own (`rule_id`); the installation-wide form is administrator-only and answers 403 `rule_scope_required` otherwise. Body optional.'
+      operationId: postApiLogsPurge
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/audit/events:
+    get:
+      tags: [audit]
+      summary: 'Centralized audit events, tenant-scoped server-side'
+      operationId: getApiAuditEvents
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/diagnostics:
+    get:
+      tags: [devops]
+      summary: 'Preflight diagnostics scoped to the caller''s own rules/sessions/AI configs'
+      operationId: getApiDiagnostics
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/backup/export:
+    post:
+      tags: [devops]
+      summary: 'Export everything the caller owns as a migration bundle (live credentials; `passphrase` encrypts it). Body optional.'
+      operationId: postApiBackupExport
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/backup/import:
+    post:
+      tags: [devops]
+      summary: 'Apply a migration bundle onto this box; lands in the caller''s own tenant unless an administrator names another'
+      operationId: postApiBackupImport
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/client/settings:
+    get:
+      tags: [client]
+      summary: 'The client''s own stored settings'
+      operationId: getApiClientSettings
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/client/credentials:
+    post:
+      tags: [client]
+      summary: 'Store the caller''s own personal API credentials'
+      operationId: postApiClientCredentials
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/admin/overview:
+    get:
+      tags: [admin]
+      summary: 'Installation overview'
+      operationId: getApiAdminOverview
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/users:
+    get:
+      tags: [admin]
+      summary: 'List users (paging is clamped, never wrapped)'
+      operationId: getApiAdminUsers
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/users/{id}/status:
+    post:
+      tags: [admin]
+      summary: 'Set a user''s status'
+      operationId: postApiAdminUsersIdStatus
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/admin/broadcast:
+    post:
+      tags: [admin]
+      summary: 'Broadcast a message to users'
+      operationId: postApiAdminBroadcast
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/admin/settings:
+    get:
+      tags: [admin]
+      summary: 'Read installation settings'
+      operationId: getApiAdminSettings
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [admin]
+      summary: 'Write installation settings'
+      operationId: postApiAdminSettings
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/admin/admins:
+    get:
+      tags: [admin]
+      summary: 'List administrators'
+      operationId: getApiAdminAdmins
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [admin]
+      summary: 'Grant administrator rights'
+      operationId: postApiAdminAdmins
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/admin/admins/{id}:
+    delete:
+      tags: [admin]
+      summary: 'Revoke administrator rights'
+      operationId: deleteApiAdminAdminsId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
       parameters: [{ $ref: '#/components/parameters/taskId' }]
       responses:
-        "200": { description: Re-queued as PENDING (or already queued — idempotent) }
-        "400": { $ref: '#/components/responses/BadRequest' }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
         "404": { $ref: '#/components/responses/NotFound' }
-
-  /rules:
-    get: { tags: [rules], summary: "List the caller's forwarding rules (tenant-scoped)", security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
-    post: { tags: [rules], summary: Create a rule, security: [{ bearerAuth: [] }], responses: { "201": { description: Created } } }
-
-  /sessions:
-    get: { tags: [sessions], summary: "List the caller's Telegram sessions", security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
-
-  /queue:
-    get: { tags: [queue], summary: Delivery queue statistics, security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
-
-  /dlq:
-    get: { tags: [queue], summary: List dead letters (owner rule-scope enforced in Core), security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
-
-  /logs:
-    get: { tags: [logs], summary: Query the tenant's audit/observability logs, security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
-
-  /admin/overview:
-    get: { tags: [admin], summary: Administrator control plane (RequireAdmin + audited), security: [{ bearerAuth: [] }], responses: { "200": { description: OK } } }
+  /api/admin/extensions:
+    get:
+      tags: [admin]
+      summary: 'List extensions'
+      operationId: getApiAdminExtensions
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/extensions/{id}/toggle:
+    post:
+      tags: [admin]
+      summary: 'Enable or disable an extension'
+      operationId: postApiAdminExtensionsIdToggle
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/admin/ratelimit:
+    get:
+      tags: [admin]
+      summary: 'The limiter''s effective configuration and live counters'
+      operationId: getApiAdminRatelimit
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+  /api/logs/diagnostics/start:
+    post:
+      tags: [admin]
+      summary: 'Start a log-diagnostics capture; decides what the evidence trail keeps, so it is administrator-only and audited'
+      operationId: postApiLogsDiagnosticsStart
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/logs/diagnostics/stop:
+    post:
+      tags: [admin]
+      summary: 'Stop the log-diagnostics capture'
+      operationId: postApiLogsDiagnosticsStop
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
