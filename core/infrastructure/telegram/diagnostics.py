@@ -20,7 +20,12 @@ Two rules hold this together:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+import logging
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
+
+from .errors import CATEGORIES, SEVERITIES
+
+logger = logging.getLogger("atf.botui.diagnostics")
 
 #: Queue states that mean "something is waiting or going wrong".
 _ATTENTION_STATES = ("RETRY", "FAILED", "UNKNOWN", "PENDING", "PROCESSING")
@@ -28,6 +33,111 @@ _ATTENTION_STATES = ("RETRY", "FAILED", "UNKNOWN", "PENDING", "PROCESSING")
 #: Counters a rule-stats row may carry; summed defensively because the store is
 #: allowed to grow new ones without this screen breaking.
 _STAT_KEYS = ("forwarded", "filtered", "errors", "sent", "skipped", "retried")
+
+#: Severity → the glyph this module prints in front of it. Kept here rather than
+#: at the call sites so every screen decorates a severity the same way.
+SEVERITY_ICON = {"info": "ℹ️", "warn": "⚠️", "error": "❌", "auth": "🔐", "fatal": "💀"}
+
+#: The stores do not agree on a spelling: the pipeline writes `warn`/`fatal`,
+#: the dashboard's own error table writes `WARNING`/`CRITICAL`. One severity has
+#: one word, whichever table the row came from.
+_SEVERITY_ALIASES = {
+    "warning": "warn",
+    "critical": "fatal",
+    "information": "info",
+    "authentication": "auth",
+}
+
+
+def severity_slug(value: Any) -> str:
+    """The taxonomy slug for a stored severity, normalised and lowercased."""
+    slug = str(value or "").strip().lower()
+    return _SEVERITY_ALIASES.get(slug, slug)
+
+
+def _label(t: Callable[..., str], prefix: str, value: Any, known: Sequence[str]) -> str:
+    """A stored taxonomy slug as words in the user's language.
+
+    Severities and diagnostic categories are stored as slugs (`warn`, `forward`)
+    and the screens printed them verbatim: an English word in the middle of a
+    Persian sentence. Both vocabularies are ours and closed, so a slug that the
+    catalog does not carry is a translation gap worth an ERROR line — while a
+    value this build does not know at all (an older row, a store that grew a new
+    category) is passed through unchanged, because inventing a label for it would
+    hide the fact instead of showing it.
+    """
+    raw = str(value or "").strip()
+    slug = raw.lower()
+    if not slug:
+        return ""
+    if slug not in known:
+        # A value from a store this build does not know (an older row, a new
+        # category): show it as stored. Asking the catalog about it would make
+        # every unknown row look like a translation gap.
+        return raw
+    key = f"{prefix}{slug}"
+    text = t(key)
+    if text and text != key:
+        return text
+    logger.error("no catalog entry for the diagnostics label %r", key)
+    return raw
+
+
+def severity_label(t: Callable[..., str], value: Any) -> str:
+    """The severity in the user's language, whatever spelling the store used."""
+    return _label(t, "ui_diag_sev_", severity_slug(value), SEVERITIES)
+
+
+def category_label(t: Callable[..., str], value: Any) -> str:
+    """The failure category in the user's language (a translated word, not a slug)."""
+    return _label(t, "ui_diag_cat_", value, CATEGORIES)
+
+
+def counter_label(t: Callable[..., str], value: Any) -> str:
+    """A per-task counter name in the user's language (a translated word)."""
+    return _label(t, "ui_counter_", value, _STAT_KEYS)
+
+
+def severity_icon(value: Any) -> str:
+    """The glyph for a severity, whatever case the store kept it in.
+
+    Rows written by the pipeline carry `error`, rows from the dashboard's own
+    table carry `ERROR`; the dict lookup used to miss the second kind and drew a
+    ❓ in front of a perfectly well-known failure.
+    """
+    return SEVERITY_ICON.get(severity_slug(value), "❓")
+
+
+def severity_count_line(t: Callable[..., str], severity: Any, count: Any) -> str:
+    """One line of the "errors in the last 24h" breakdown."""
+    return f"{severity_icon(severity)} {severity_label(t, severity)}: {_as_int(count)}"
+
+
+def error_line(t: Callable[..., str], row: Dict[str, Any], retryable: bool = False) -> str:
+    """One row of the log screens: what failed, and in which category.
+
+    The error's own name is a Python/TDLib class name (`FloodWait`) — a token the
+    operator quotes when asking for help — so it stays as it is. Everything else
+    here is ours: the category is translated, and a retryable row is marked with
+    a word instead of the old `recoverable=True`, which put a Python boolean in
+    front of the user and said nothing in any language.
+    """
+    name = str(row.get("error_name") or "?").strip() or "?"
+    category = category_label(t, row.get("category"))
+    line = f"{severity_icon(row.get('severity'))} `{name}`"
+    if category:
+        line += f" [{category}]"
+    if retryable:
+        line += f" · {t('ui_logs_recoverable')}"
+    return line
+
+
+def stat_line(t: Callable[..., str], counters: Dict[str, Any]) -> str:
+    """A task's counters as one line, in the user's language."""
+    return ", ".join(
+        f"{counter_label(t, key)} {_as_int(value)}"
+        for key, value in sorted((counters or {}).items())
+    )
 
 
 async def _call(source: Any, name: str, *args, **kwargs) -> Any:
@@ -221,16 +331,17 @@ def render_report(t, report: Dict[str, Any]) -> str:
     errors = report.get("errors") or {}
     if errors.get("total"):
         by_sev = ", ".join(
-            f"{sev} {n}" for sev, n in sorted((errors.get("counts") or {}).items()) if n
+            f"{severity_label(t, sev)} {n}"
+            for sev, n in sorted((errors.get("counts") or {}).items()) if n
         )
         lines.append(t("ui_diag_errors", by_severity=by_sev))
     recent = errors.get("recent") or []
     if recent:
         lines += ["", t("ui_diag_recent")]
         for item in recent:
-            label = item.get("category") or item.get("error_name") or "?"
+            label = category_label(t, item.get("category")) or str(item.get("error_name") or "?")
             if item.get("error_name") and item.get("category"):
-                label = f"{item['category']} · {item['error_name']}"
+                label = f"{label} · {item['error_name']}"
             suffix = ""
             if item.get("rule_id"):
                 suffix = t("ui_diag_on_task", task=str(item["rule_id"])[:8])
@@ -268,8 +379,7 @@ def render_report(t, report: Dict[str, Any]) -> str:
     if tasks:
         lines += ["", t("ui_diag_tasks")]
         for task in tasks[:5]:
-            counters = task.get("counters") or {}
-            detail = ", ".join(f"{k} {v}" for k, v in sorted(counters.items()))
+            detail = stat_line(t, task.get("counters") or {})
             lines.append(
                 f"• `{str(task['rule_id'])[:8]}` — {detail}"
                 if detail
