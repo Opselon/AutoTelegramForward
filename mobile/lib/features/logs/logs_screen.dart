@@ -364,18 +364,20 @@ class _LogsScreenState extends State<LogsScreen> {
         context.read<AppState>().markExpired();
         return;
       }
+      final t = AppMessages.of(context);
       setState(
         () => _error = exc.error.message.isNotEmpty
             ? exc.error.message
-            : 'Logger request failed',
+            : t.get('logs_logger_request_failed'),
       );
     } catch (exc) {
       if (!mounted) return;
       // Never swallow: a dead endpoint must not masquerade as "no logs".
+      final t = AppMessages.of(context);
       setState(
-        () => _error =
-            'Cannot reach the log service: '
-            '${exc.toString().split('(').first.trim()}',
+        () => _error = t.get('logs_service_unreachable', params: {
+          'error': '${exc.toString().split('(').first.trim()}',
+        }),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -403,17 +405,19 @@ class _LogsScreenState extends State<LogsScreen> {
       }
       // Audit events are a newer endpoint; an older server may not ship it.
       // Degrade to "unavailable", do not block the log view.
+      final t = AppMessages.of(context);
       setState(
         () => _auditError = exc.error.message.isNotEmpty
             ? exc.error.message
-            : 'Audit events unavailable on this server',
+            : t.get('logs_audit_unavailable'),
       );
     } catch (exc) {
       if (!mounted) return;
+      final t = AppMessages.of(context);
       setState(
-        () => _auditError =
-            'Audit events unavailable: '
-            '${exc.toString().split('(').first.trim()}',
+        () => _auditError = t.get('logs_audit_unavailable_detail', params: {
+          'error': '${exc.toString().split('(').first.trim()}',
+        }),
       );
     } finally {
       if (mounted) setState(() => _loadingAudit = false);

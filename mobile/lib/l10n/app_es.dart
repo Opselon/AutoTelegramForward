@@ -213,6 +213,10 @@ class AppMessagesEs {
     'logs_audit_empty_sub': 'Los eventos de garantía de ejecución aparecen aquí a medida que los mensajes pasan por el pipeline; los fallos muestran el código de motivo y el trabajo pendiente queda distinto del éxito.',
     'logs_audit_empty_title': 'Todavía no hay eventos de auditoría',
     'logs_audit_search_hint': 'Buscar por ID de correlación…',
+    'logs_audit_unavailable':
+        'Los eventos de auditoría no están disponibles en este servidor',
+    'logs_audit_unavailable_detail':
+        'Eventos de auditoría no disponibles: {error}',
     'logs_copy': 'Copiar',
     'logs_detail_label': 'detalles',
     'logs_empty': 'No errors recorded.',
@@ -231,6 +235,8 @@ class AppMessagesEs {
     'logs_level_errors': 'Errores',
     'logs_level_info': 'Información',
     'logs_level_warnings': 'Avisos',
+    'logs_logger_request_failed':
+        'Error en la solicitud al servicio de registros',
     'logs_newer': 'Más recientes',
     'logs_older': 'Más antiguos',
     'logs_order_toggle_desc':
@@ -271,6 +277,8 @@ class AppMessagesEs {
     'logs_scope_task': 'Tarea',
     'logs_scope_task_chip': 'tarea:{id}',
     'logs_search_hint': 'Buscar mensaje y detalles…',
+    'logs_service_unreachable':
+        'No se pudo contactar con el servicio de registros: {error}',
     'logs_show_all_tasks': 'Mostrar todas las tareas',
     'logs_tab_audit': 'Auditoría',
     'logs_tab_policy': 'Política',

@@ -213,6 +213,10 @@ class AppMessagesFr {
     'logs_audit_empty_sub': 'Les événements de garantie d\'exécution apparaissent ici au fil des messages dans le pipeline; les échecs indiquent le code de raison et le travail en attente reste distinct du succès.',
     'logs_audit_empty_title': 'Aucun événement d\'audit pour l\'instant',
     'logs_audit_search_hint': 'Rechercher par ID de corrélation…',
+    'logs_audit_unavailable':
+        'Les événements d\'audit ne sont pas disponibles sur ce serveur',
+    'logs_audit_unavailable_detail':
+        'Événements d\'audit indisponibles : {error}',
     'logs_copy': 'Copier',
     'logs_detail_label': 'détails',
     'logs_empty': 'No errors recorded.',
@@ -231,6 +235,8 @@ class AppMessagesFr {
     'logs_level_errors': 'Erreurs',
     'logs_level_info': 'Infos',
     'logs_level_warnings': 'Avertissements',
+    'logs_logger_request_failed':
+        'Échec de la requête au service de journalisation',
     'logs_newer': 'Plus récent',
     'logs_older': 'Plus ancien',
     'logs_order_toggle_desc':
@@ -270,6 +276,8 @@ class AppMessagesFr {
     'logs_scope_task': 'Tâche',
     'logs_scope_task_chip': 'tâche:{id}',
     'logs_search_hint': 'Rechercher message et détails…',
+    'logs_service_unreachable':
+        'Impossible de joindre le service de journalisation : {error}',
     'logs_show_all_tasks': 'Afficher toutes les tâches',
     'logs_tab_audit': 'Audit',
     'logs_tab_policy': 'Politique',

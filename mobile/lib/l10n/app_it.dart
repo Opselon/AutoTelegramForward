@@ -216,6 +216,9 @@ class AppMessagesIt {
     'logs_audit_empty_sub': 'Gli eventi di garanzia di esecuzione compaiono qui mentre i messaggi attraversano la pipeline; gli errori mostrano il codice del motivo e il lavoro in sospeso resta distinto dal successo.',
     'logs_audit_empty_title': 'Nessun evento di audit finora',
     'logs_audit_search_hint': 'Cerca per ID di correlazione…',
+    'logs_audit_unavailable':
+        'Gli eventi di audit non sono disponibili su questo server',
+    'logs_audit_unavailable_detail': 'Eventi di audit non disponibili: {error}',
     'logs_copy': 'Copia',
     'logs_detail_label': 'dettagli',
     'logs_empty': 'No errors recorded.',
@@ -235,6 +238,7 @@ class AppMessagesIt {
     'logs_level_errors': 'Errori',
     'logs_level_info': 'Informazioni',
     'logs_level_warnings': 'Avvisi',
+    'logs_logger_request_failed': 'Richiesta al servizio log non riuscita',
     'logs_newer': 'Più recenti',
     'logs_older': 'Più vecchi',
     'logs_order_toggle_desc': 'Più recenti prima — tocca per più vecchi prima',
@@ -274,6 +278,8 @@ class AppMessagesIt {
     'logs_scope_task': 'Attività',
     'logs_scope_task_chip': 'attività:{id}',
     'logs_search_hint': 'Cerca messaggio e dettagli…',
+    'logs_service_unreachable':
+        'Impossibile raggiungere il servizio log: {error}',
     'logs_show_all_tasks': 'Mostra tutte le attività',
     'logs_tab_audit': 'Audit',
     'logs_tab_policy': 'Politica',

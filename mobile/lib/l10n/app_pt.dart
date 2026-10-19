@@ -215,6 +215,10 @@ class AppMessagesPt {
     'logs_audit_empty_sub': 'Os eventos de garantia de execução aparecem aqui conforme as mensagens passam pelo pipeline; as falhas mostram o código do motivo e o trabalho pendente fica distinto do sucesso.',
     'logs_audit_empty_title': 'Ainda não há eventos de auditoria',
     'logs_audit_search_hint': 'Pesquisar por ID de correlação…',
+    'logs_audit_unavailable':
+        'Eventos de auditoria indisponíveis neste servidor',
+    'logs_audit_unavailable_detail':
+        'Eventos de auditoria indisponíveis: {error}',
     'logs_copy': 'Copiar',
     'logs_detail_label': 'detalhes',
     'logs_empty': 'No errors recorded.',
@@ -233,6 +237,7 @@ class AppMessagesPt {
     'logs_level_errors': 'Erros',
     'logs_level_info': 'Informação',
     'logs_level_warnings': 'Avisos',
+    'logs_logger_request_failed': 'Falha na solicitação ao serviço de logs',
     'logs_newer': 'Mais recentes',
     'logs_older': 'Mais antigos',
     'logs_order_toggle_desc':
@@ -273,6 +278,8 @@ class AppMessagesPt {
     'logs_scope_task': 'Tarefa',
     'logs_scope_task_chip': 'tarefa:{id}',
     'logs_search_hint': 'Pesquisar mensagem e detalhes…',
+    'logs_service_unreachable':
+        'Não foi possível acessar o serviço de logs: {error}',
     'logs_show_all_tasks': 'Mostrar todas as tarefas',
     'logs_tab_audit': 'Auditoria',
     'logs_tab_policy': 'Política',
