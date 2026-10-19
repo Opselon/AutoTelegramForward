@@ -236,7 +236,9 @@ def test_main_menu_multilingual_labels():
     ui._resolve_lang = lambda uid=None, user_obj=None: "en"
     menu_en = ui._main_menu(uid=5094837833)
     labels_en = [b.text for row in menu_en.inline_keyboard for b in row]
-    assert "Forward" in labels_en
+    # The dashboard renders through the style funnel: catalog copy in the
+    # user's language, decorated with the language-neutral class glyph.
+    assert any(lbl.endswith("Forward") for lbl in labels_en)
     assert any("Settings" in lbl for lbl in labels_en)
 
     ui._resolve_lang = lambda uid=None, user_obj=None: "fa"
@@ -244,3 +246,7 @@ def test_main_menu_multilingual_labels():
     labels_fa = [b.text for row in menu_fa.inline_keyboard for b in row]
     assert any("فوروارد" in lbl for lbl in labels_fa)
     assert any("تنظیمات" in lbl for lbl in labels_fa)
+    # Same decoration in every locale: only the copy is translated.
+    assert [lbl.split(" ", 1)[0] for lbl in labels_en] == [
+        lbl.split(" ", 1)[0] for lbl in labels_fa
+    ]

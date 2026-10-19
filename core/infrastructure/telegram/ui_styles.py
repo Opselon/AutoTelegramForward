@@ -17,6 +17,21 @@ from the language: there is no per-locale branching in this module. The
 glyph is applied *after* the catalog lookup, so all 10 locales render the
 same decoration, and a label that already carries a glyph is never
 decorated twice (the helpers are idempotent).
+
+A third drift is the *namespace*. The dashboard's keys (``ui_main_menu_*``)
+name the panel a button lives on, not the action it performs, and the rule
+table read that namespace as an action: ``ui_main_menu_forward`` matched
+``main|menu`` and resolved to ``nav``, so every glyph-less dashboard entry
+was one ``decorate`` call away from rendering as a back arrow ("⬅️
+Forward"). The surface prefix is stripped before the rules run (see
+:data:`SURFACE_PREFIXES`), so a dashboard key inherits the semantics of its
+own action — and a new dashboard entry added tomorrow cannot silently turn
+into a "back" button.
+
+Because the dashboard is the first screen every user sees, its four
+glyph-less entries carry an explicit class (``forward`` / ``copy`` /
+``filter`` / ``primary``) and colour marks only the action to take next:
+the two create/forward paths in primary, the upgrade path in success.
 """
 
 from __future__ import annotations
@@ -38,7 +53,9 @@ DANGER = "danger"
 __all__ = [
     "ButtonStyle",
     "STYLES",
+    "SURFACE_PREFIXES",
     "style_for_key",
+    "action_part",
     "style_glyph",
     "color_for_key",
     "color_for_label",
@@ -73,7 +90,21 @@ STYLES: dict[str, ButtonStyle] = {
     "info": ButtonStyle("info", "ℹ️", None),
     "open": ButtonStyle("open", "🌐", PRIMARY),
     "neutral": ButtonStyle("neutral", "", None),
+    # Dashboard classes. The main menu's own actions had no semantic home, and
+    # the generic rules gave them nothing usable: "Forward" is not "add" and
+    # "Clone" is not "sync". One class per action keeps the dashboard's four
+    # glyph-less entries readable without painting the whole panel.
+    "forward": ButtonStyle("forward", "📤", PRIMARY),
+    "copy": ButtonStyle("copy", "📋", None),
+    "filter": ButtonStyle("filter", "🛡️", None),
 }
+
+#: Key prefixes that name the *surface* a button belongs to rather than the
+#: action it performs. Stripped before the rule table runs: without this,
+#: ``ui_main_menu_{forward,clone}`` matched ``main|menu`` and resolved to
+#: ``nav`` — a ⬅️ back arrow on the dashboard's Forward entry. Only the
+#: namespace is dropped; the overrides below still match the full key.
+SURFACE_PREFIXES: tuple[str, ...] = ("ui_main_menu_",)
 
 #: Drift observed in production: one action, two glyphs. Aliases are
 #: canonicalised to the glyph of their style.
@@ -104,9 +135,17 @@ KEY_STYLE_OVERRIDES: dict[str, str] = {
     "ui_logs_recent": "info",
     "ui_logs_stats": "info",
     "ui_main_menu_publish": "primary",
-    "ui_main_menu_forward": "primary",
-    "ui_main_menu_clone": "refresh",
-    "ui_main_menu_filters": "info",
+    "ui_main_menu_forward": "forward",
+    "ui_main_menu_clone": "copy",
+    "ui_main_menu_filters": "filter",
+    # The dashboard's upgrade entry is the one purchase path in the panel:
+    # green marks it without painting any of the navigation entries.
+    "ui_main_menu_upgrade": "success",
+    # "My Telegram API credentials" is the settings surface's main action —
+    # without it a new account cannot forward anything at all.
+    "ui_settings_creds": "primary",
+    # Broadcast is the admin panel's only create/send action.
+    "ui_admin_btn_broadcast": "primary",
 }
 
 #: Key-token -> style, evaluated in order, first match wins. Matching the
@@ -127,8 +166,15 @@ KEY_STYLE_RULES: tuple[tuple[str, str], ...] = (
 
 #: Glyphs that carry a background when they were authored in the catalog
 #: instead of being applied by a style. Everything else stays unstyled.
+#:
+#: 🌐 is deliberately absent. It is both the ``open`` class glyph and the
+#: globe this catalog uses for *navigation* copy ("🌐 Language", "🌐 Choose
+#: language", the base-URL prompts), so reading it as a primary action
+#: painted the language entry blue in every panel that rendered it — the
+#: class colour of an ``open`` button now comes from its key
+#: (``color_for_key``), never from the authored copy.
 AUTHORED_PRIMARY_GLYPHS: frozenset[str] = frozenset(
-    {"➕", "🔄", "🌐", "📤", "📥", "✏️", "💾", "🔗"}
+    {"➕", "🔄", "📤", "📥", "✏️", "💾", "🔗"}
 )
 
 #: The characters that count as a leading glyph. Published because the
@@ -157,13 +203,27 @@ ANY_GLYPH = re.compile(GLYPH_TOKEN)
 # --------------------------------------------------------------------------- #
 # resolution
 # --------------------------------------------------------------------------- #
+def action_part(key: str) -> str:
+    """The action a key performs, with its surface namespace removed.
+
+    ``ui_main_menu_forward`` is the Forward entry *of* the main menu; the
+    rules must see ``forward``, not the panel's name, or every dashboard
+    entry reads as "main menu" and resolves to the nav class.
+    """
+    name = (key or "").strip().lower()
+    for prefix in SURFACE_PREFIXES:
+        if name.startswith(prefix):
+            return name[len(prefix):]
+    return name
+
+
 def style_for_key(key: str) -> str:
     """Return the semantic style of a catalog key (``neutral`` if unknown)."""
     name = (key or "").strip().lower()
     if name in KEY_STYLE_OVERRIDES:
         return KEY_STYLE_OVERRIDES[name]
     for pattern, style in KEY_STYLE_RULES:
-        if re.search(pattern, name):
+        if re.search(pattern, action_part(name)):
             return style
     return "neutral"
 

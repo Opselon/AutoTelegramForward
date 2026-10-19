@@ -59,6 +59,7 @@ from .button_style import (
     styles_enabled,
 )
 from .ui_styles import (
+    color_for_key,
     color_for_label,
     decorate as decorate_button_label,
     style_label as style_button_label,
@@ -1055,44 +1056,65 @@ class ProBotUI:
         rows = []
         if is_adm:
             rows.append([
-                InlineKeyboardButton(
-                    self._t("ui_main_menu_admin", lang=cur_lang),
-                    callback_data=CB["admin"],
-                )
+                (self._btn("ui_main_menu_admin", lang=cur_lang), CB["admin"]),
             ])
 
+        # Every dashboard row goes through the same funnel as the rest of the
+        # bot: `_kbd` applies the canonical glyph of the catalog key and the
+        # background colour of its action class. Built directly as
+        # InlineKeyboardButton this panel was the one surface in the bot that
+        # never reached the funnel — 450 of 450 dashboard buttons rendered
+        # without a colour, and the four glyph-less entries (Forward / Spam /
+        # Publish / Clone) sat as bare grey text beside their decorated
+        # neighbours in all 10 locales.
         rows.extend([
             [
-                InlineKeyboardButton(self._t("ui_main_menu_forward", lang=cur_lang), callback_data=CB["rules"]),
-                InlineKeyboardButton(self._t("ui_main_menu_filters", lang=cur_lang), callback_data=CB["filters"]),
+                # The dashboard's class colour comes from the key, never from
+                # the authored copy: "🌐 Language" is navigation text that used
+                # to be read as an open action and painted blue.
+                (self._btn("ui_main_menu_forward", lang=cur_lang), CB["rules"],
+                 color_for_key("ui_main_menu_forward")),
+                (self._btn("ui_main_menu_filters", lang=cur_lang), CB["filters"],
+                 color_for_key("ui_main_menu_filters")),
             ],
             [
-                InlineKeyboardButton(self._t("ui_main_menu_publish", lang=cur_lang), callback_data=CB["rule_add"]),
-                InlineKeyboardButton(self._t("ui_main_menu_clone", lang=cur_lang), callback_data=CB["ai"]),
+                (self._btn("ui_main_menu_publish", lang=cur_lang), CB["rule_add"],
+                 color_for_key("ui_main_menu_publish")),
+                (self._btn("ui_main_menu_clone", lang=cur_lang), CB["ai"],
+                 color_for_key("ui_main_menu_clone")),
             ],
             [
-                InlineKeyboardButton(self._t("ui_main_menu_settings", lang=cur_lang), callback_data=CB["settings"]),
-                InlineKeyboardButton(self._t("ui_main_menu_web", lang=cur_lang), callback_data=CB["dashboard"]),
+                (self._btn("ui_main_menu_settings", lang=cur_lang), CB["settings"],
+                 color_for_key("ui_main_menu_settings")),
+                (self._btn("ui_main_menu_web", lang=cur_lang), CB["dashboard"],
+                 color_for_key("ui_main_menu_web")),
             ],
             [
-                InlineKeyboardButton(self._t("ui_main_menu_upgrade", lang=cur_lang), callback_data=CB["upgrade"]),
-                InlineKeyboardButton(self._t("ui_main_menu_stats", lang=cur_lang), callback_data=CB["stats"]),
+                # The account's one purchase path carries green.
+                (self._btn("ui_main_menu_upgrade", lang=cur_lang), CB["upgrade"],
+                 color_for_key("ui_main_menu_upgrade")),
+                (self._btn("ui_main_menu_stats", lang=cur_lang), CB["stats"],
+                 color_for_key("ui_main_menu_stats")),
             ],
             [
-                InlineKeyboardButton(self._t("ui_main_menu_diag", lang=cur_lang), callback_data=CB["diag"]),
+                (self._btn("ui_main_menu_diag", lang=cur_lang), CB["diag"],
+                 color_for_key("ui_main_menu_diag")),
             ],
             [
-                InlineKeyboardButton(self._t("ui_main_menu_help", lang=cur_lang), callback_data=CB["help"]),
-                InlineKeyboardButton(self._t("ui_main_menu_lang", lang=cur_lang), callback_data=CB["lang"]),
+                (self._btn("ui_main_menu_help", lang=cur_lang), CB["help"],
+                 color_for_key("ui_main_menu_help")),
+                (self._btn("ui_main_menu_lang", lang=cur_lang), CB["lang"],
+                 color_for_key("ui_main_menu_lang")),
             ],
             [
-                InlineKeyboardButton(self._t("ui_main_menu_support", lang=cur_lang), url="https://t.me/Capxi"),
+                (self._btn("ui_main_menu_support", lang=cur_lang), "https://t.me/Capxi"),
             ],
             [
-                InlineKeyboardButton(self._t("ui_main_menu_sessions", lang=cur_lang), callback_data=CB["sessions"]),
+                (self._btn("ui_main_menu_sessions", lang=cur_lang), CB["sessions"],
+                 color_for_key("ui_main_menu_sessions")),
             ],
         ])
-        return InlineKeyboardMarkup(rows)
+        return self._kbd(rows)
 
     def _cancelled_connect_texts(self, lang: str) -> Tuple[str, str, str]:
         """The cancelled-connect screen: (message, retry label, menu label).
@@ -1116,17 +1138,23 @@ class ProBotUI:
         lang = self._resolve_lang(uid)
         is_admin = self._is_admin(uid) if uid else False
         rows = [
-            [InlineKeyboardButton(self._t("ui_settings_creds", lang=lang), callback_data=CB["client_creds"])],
+            [(self._btn("ui_settings_creds", lang=lang), CB["client_creds"],
+              color_for_key("ui_settings_creds"))],
             [
-                InlineKeyboardButton(self._t("ui_settings_lang", lang=lang), callback_data=CB["lang"]),
-                InlineKeyboardButton(self._t("ui_settings_plan", lang=lang), callback_data=CB["upgrade"]),
+                (self._btn("ui_settings_lang", lang=lang), CB["lang"],
+                 color_for_key("ui_settings_lang")),
+                (self._btn("ui_settings_plan", lang=lang), CB["upgrade"],
+                 color_for_key("ui_settings_plan")),
             ],
-            [InlineKeyboardButton(self._t("ui_settings_webtoken", lang=lang), callback_data=CB["webpass"])],
+            [(self._btn("ui_settings_webtoken", lang=lang), CB["webpass"],
+              color_for_key("ui_settings_webtoken"))],
         ]
         if is_admin:
-            rows.append([InlineKeyboardButton(self._t("ui_settings_admin", lang=lang), callback_data=CB["admin"])])
-        rows.append([InlineKeyboardButton(self._t("ui_back_main_menu", lang=lang), callback_data=CB["main"])])
-        return InlineKeyboardMarkup(rows)
+            rows.append([(self._btn("ui_settings_admin", lang=lang), CB["admin"],
+                          color_for_key("ui_settings_admin"))])
+        rows.append([(self._btn("ui_back_main_menu", lang=lang), CB["main"],
+                      color_for_key("ui_back_main_menu"))])
+        return self._kbd(rows)
 
     async def _render_admin_panel(self, uid: int) -> tuple[str, InlineKeyboardMarkup]:
         lang = self._resolve_lang(uid)
@@ -1173,24 +1201,33 @@ class ProBotUI:
         )
         rows = [
             [
-                InlineKeyboardButton(self._t("ui_admin_btn_metrics", lang=lang), callback_data=CB["adm_stats"]),
-                InlineKeyboardButton(self._t("ui_admin_btn_users", lang=lang), callback_data=CB["adm_users"]),
+                (self._btn("ui_admin_btn_metrics", lang=lang), CB["adm_stats"],
+                 color_for_key("ui_admin_btn_metrics")),
+                (self._btn("ui_admin_btn_users", lang=lang), CB["adm_users"],
+                 color_for_key("ui_admin_btn_users")),
             ],
             [
-                InlineKeyboardButton(self._t("ui_admin_btn_broadcast", lang=lang), callback_data=CB["adm_bcast"]),
-                InlineKeyboardButton(self._t("ui_admin_btn_force_sub", lang=lang), callback_data=CB["adm_forcesub"]),
+                (self._btn("ui_admin_btn_broadcast", lang=lang), CB["adm_bcast"],
+                 color_for_key("ui_admin_btn_broadcast")),
+                (self._btn("ui_admin_btn_force_sub", lang=lang), CB["adm_forcesub"],
+                 color_for_key("ui_admin_btn_force_sub")),
             ],
             [
-                InlineKeyboardButton(self._t("ui_admin_btn_admins", lang=lang), callback_data=CB["adm_admins"]),
-                InlineKeyboardButton(self._t("ui_admin_btn_credentials", lang=lang), callback_data=CB["creds"]),
+                (self._btn("ui_admin_btn_admins", lang=lang), CB["adm_admins"],
+                 color_for_key("ui_admin_btn_admins")),
+                (self._btn("ui_admin_btn_credentials", lang=lang), CB["creds"],
+                 color_for_key("ui_admin_btn_credentials")),
             ],
             [
-                InlineKeyboardButton(self._t("ui_admin_btn_config", lang=lang), callback_data=CB["adm_config"]),
-                InlineKeyboardButton(self._t("ui_admin_btn_migrate", lang=lang), callback_data=CB["migrate"]),
+                (self._btn("ui_admin_btn_config", lang=lang), CB["adm_config"],
+                 color_for_key("ui_admin_btn_config")),
+                (self._btn("ui_admin_btn_migrate", lang=lang), CB["migrate"],
+                 color_for_key("ui_admin_btn_migrate")),
             ],
-            [InlineKeyboardButton(self._t("ui_back_main_menu", lang=lang), callback_data=CB["main"])],
+            [(self._btn("ui_back_main_menu", lang=lang), CB["main"],
+              color_for_key("ui_back_main_menu"))],
         ]
-        return body, InlineKeyboardMarkup(rows)
+        return body, self._kbd(rows)
 
     def _migrate_menu(self) -> InlineKeyboardMarkup:
         return self._kbd([
@@ -4216,9 +4253,9 @@ class ProBotUI:
         @b.on_callback_query(filters.regex("^" + CB["stats"] + "$"))
         @self._localized_handler
         async def _cb_stats(_, cq: CallbackQuery):
-            kbd = InlineKeyboardMarkup([
-                [InlineKeyboardButton(self._btn("ui_refresh"), callback_data=CB["refresh"])],
-                [InlineKeyboardButton(self._btn("ui_back"), callback_data=CB["main"])],
+            kbd = self._kbd([
+                [(self._btn("ui_refresh"), CB["refresh"])],
+                [(self._btn("ui_back"), CB["main"])],
             ])
             await self._safe_edit(cq, 
                 await self._dashboard_body(), reply_markup=kbd)
@@ -4266,17 +4303,14 @@ class ProBotUI:
             except Exception:
                 stuck = 0
             rows = [
-                [InlineKeyboardButton(self._btn("ui_refresh"), callback_data=CB["diag"])]
+                [(self._btn("ui_refresh"), CB["diag"])]
             ]
             if stuck > 0:
                 rows.insert(0, [
-                    InlineKeyboardButton(
-                        self._t("ui_dlq_open", count=stuck),
-                        callback_data=CB["diag_dlq"],
-                    )
+                    (self._t("ui_dlq_open", count=stuck), CB["diag_dlq"]),
                 ])
-            kbd = InlineKeyboardMarkup(rows + [
-                [InlineKeyboardButton(self._btn("ui_back"), callback_data=CB["main"])]
+            kbd = self._kbd(rows + [
+                [(self._btn("ui_back"), CB["main"])]
             ])
             await self._safe_edit(cq, body, reply_markup=kbd)
             await cq.answer()
@@ -4444,9 +4478,9 @@ class ProBotUI:
         @b.on_callback_query(filters.regex("^" + CB["refresh"] + "$"))
         @self._localized_handler
         async def _cb_refresh(_, cq: CallbackQuery):
-            kbd = InlineKeyboardMarkup([
-                [InlineKeyboardButton(self._btn("ui_refresh"), callback_data=CB["refresh"])],
-                [InlineKeyboardButton(self._btn("ui_back"), callback_data=CB["main"])],
+            kbd = self._kbd([
+                [(self._btn("ui_refresh"), CB["refresh"])],
+                [(self._btn("ui_back"), CB["main"])],
             ])
             await self._safe_edit(cq, 
                 await self._dashboard_body(), reply_markup=kbd)
@@ -9745,11 +9779,11 @@ class ProBotUI:
 
         text = "\n".join(lines)
         buttons = [
-            [InlineKeyboardButton(self._btn("ui_dashboard_open"), url=magic_link)],
-            [InlineKeyboardButton(self._btn("ui_webpass_reset_btn"), callback_data=CB["webpass_reset"])],
-            [InlineKeyboardButton(self._btn("ui_back"), callback_data=CB["main"])],
+            [(self._btn("ui_dashboard_open"), magic_link)],
+            [(self._btn("ui_webpass_reset_btn"), CB["webpass_reset"])],
+            [(self._btn("ui_back"), CB["main"])],
         ]
-        kbd = InlineKeyboardMarkup(buttons)
+        kbd = self._kbd(buttons)
         try:
             await self._safe_edit(cq, text, reply_markup=kbd, disable_web_page_preview=True)
         except Exception:

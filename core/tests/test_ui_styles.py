@@ -147,6 +147,45 @@ def test_colour_derived_from_a_rendered_label() -> None:
     assert ui_styles.color_for_label("7") is None
 
 
+def test_navigation_copy_is_not_read_as_a_primary_action() -> None:
+    """🌐 is the globe of "🌐 Language", not a call to action.
+
+    The authored-glyph heuristic painted every language entry blue because
+    🌐 was listed as a primary glyph and is also the ``open`` class glyph.
+    A class colour comes from the key (``color_for_key``), never from copy.
+    """
+    assert "🌐" not in ui_styles.AUTHORED_PRIMARY_GLYPHS
+    assert ui_styles.color_for_label("🌐 Language") is None
+    assert ui_styles.color_for_label("🌐 Choose language") is None
+    # the open class still carries its colour, from the key
+    assert ui_styles.color_for_key("ui_dashboard_open") == PRIMARY
+
+
+def test_the_dashboard_namespace_never_resolves_to_the_back_class() -> None:
+    """`ui_main_menu_forward` matched main|menu and read as "back" (⬅️ Forward)."""
+    keys = [
+        key
+        for table in _catalog().values()
+        for key in table
+        if key.startswith("ui_main_menu_")
+    ]
+    assert keys, "the dashboard keyspace disappeared from the catalog"
+    for key in keys:
+        assert ui_styles.style_for_key(key) != "nav", key
+        assert ui_styles.style_glyph(key) not in ("⬅️", "🔙"), key
+
+
+def test_only_the_surface_namespace_is_stripped_before_matching() -> None:
+    assert ui_styles.action_part("ui_main_menu_forward") == "forward"
+    assert ui_styles.action_part("ui_back_main_menu") == "ui_back_main_menu"
+    # a real back button keeps the navigation class…
+    assert ui_styles.style_for_key("ui_back_main_menu") == "nav"
+    # …and the stripped dashboard entry keeps its own action class
+    assert ui_styles.style_for_key("ui_main_menu_forward") == "forward"
+    assert ui_styles.style_for_key("ui_main_menu_filters") == "filter"
+    assert ui_styles.style_for_key("ui_main_menu_clone") == "copy"
+
+
 def test_glyph_and_colour_are_identical_in_every_locale() -> None:
     i18n = I18n(str(CATALOG_PATH))
     keys = ("ui_back", "ui_cancel", "ui_refresh", "ui_login_retry", "ui_dashboard_open")
