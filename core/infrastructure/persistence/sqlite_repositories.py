@@ -627,6 +627,65 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         cur = self._db.execute("DELETE FROM forward_rules WHERE id=?", (rule_id,))
         return cur.rowcount > 0
 
+    async def set_task_status(
+        self,
+        rule_id: str,
+        *,
+        target_active: bool,
+        expected_state: str,
+        owner_user_id: Optional[int] = None,
+        now: Optional[float] = None,
+    ) -> bool:
+        """Atomic on/off transition, conditional on the state the caller saw.
+
+        One conditional UPDATE, so two taps on the same screen cannot both win and
+        a screen that is no longer true cannot overwrite a newer change. The
+        condition is the exact state the caller was shown (`status_state()`), so
+        e.g. an untimed pause is not confused with a timed one that has already
+        elapsed.
+        """
+        from ...domain.entities import (
+            STATUS_DISABLED,
+            STATUS_PAUSED,
+            STATUS_PAUSED_UNTIL,
+            STATUS_RUNNING,
+        )
+
+        ts = time.time() if now is None else float(now)
+        # `paused_now` is the engine's own "still paused" test.
+        paused_now = "(is_paused = 1 AND (paused_until = 0 OR paused_until > ?))"
+        if target_active:
+            conditions = {
+                STATUS_DISABLED: ("is_active = 0", []),
+                STATUS_PAUSED: ("is_active = 1 AND is_paused = 1 AND paused_until = 0", []),
+                STATUS_PAUSED_UNTIL: ("is_active = 1 AND is_paused = 1 AND paused_until > ?", [ts]),
+            }
+        else:
+            conditions = {STATUS_RUNNING: (f"is_active = 1 AND NOT {paused_now}", [ts])}
+        if expected_state not in conditions:
+            # A caller that believes a running task is off (or the reverse) is
+            # working from a screen that is already wrong: refuse, never flip.
+            return False
+        condition, cond_params = conditions[expected_state]
+
+        if target_active:
+            sql = (
+                "UPDATE forward_rules SET is_active=1, is_paused=0, paused_until=0,"
+                " version=version+1, updated_at=?"
+                f" WHERE id=? AND {condition}"
+            )
+        else:
+            sql = (
+                "UPDATE forward_rules SET is_active=0, version=version+1, updated_at=?"
+                f" WHERE id=? AND {condition}"
+            )
+        params: List[Any] = [_now(), rule_id, *cond_params]
+        if owner_user_id:
+            sql += " AND owner_user_id=?"
+            params.append(int(owner_user_id))
+        cur = self._db.execute(sql, tuple(params))
+        return cur.rowcount > 0
+
 
 class SqliteFilterRuleRepository(IFilterRuleRepository):
     def __init__(self, db: SqliteDatabase) -> None:

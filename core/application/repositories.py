@@ -136,6 +136,49 @@ class IForwardRuleRepository(ABC):
     async def delete(self, rule_id: str) -> bool:
         ...
 
+    async def set_task_status(
+        self,
+        rule_id: str,
+        *,
+        target_active: bool,
+        expected_state: str,
+        owner_user_id: Optional[int] = None,
+        now: Optional[float] = None,
+    ) -> bool:
+        """Turn a task on/off, but only from the state the caller was shown.
+
+        ``expected_state`` is a `ForwardRule.status_state()` value — the state the
+        screen displayed when the button was rendered. The transition happens only
+        if the stored state still matches it; otherwise nothing is written and the
+        method returns False, which is how a stale screen or a concurrent change
+        (dashboard pause, another device) is refused instead of silently inverted.
+
+        Backends **must** override this with a *single conditional UPDATE*: the
+        read-then-write fallback below is what let two taps collapse into one flip,
+        and let a screen rendered while running re-activate a task that had since
+        been paused elsewhere. Ownership is enforced in the same statement when
+        ``owner_user_id`` is given.
+
+        Concrete, not abstract, for the same reason as ``count_by_owner`` above:
+        it keeps the interface additive for implementations that are not stores
+        (test doubles, the backup-service fakes) while the two production stores
+        override it — and ``test_task_status_end_to_end.py`` fails if either of
+        them ever stops doing so.
+        """
+        rule = await self.get_by_id(rule_id)
+        if rule is None:
+            return False
+        if owner_user_id is not None and rule.owner_user_id != owner_user_id:
+            return False
+        if rule.status_state(now) != expected_state:
+            return False
+        rule.is_active = target_active
+        if target_active:
+            rule.is_paused = False
+            rule.paused_until = 0
+        await self.update(rule)
+        return True
+
 
 class IFilterRuleRepository(ABC):
     @abstractmethod

@@ -211,12 +211,17 @@ class ForwardRuleUseCases:
         return await self._repo.list_all()
 
     async def toggle(self, rule_id: str) -> Optional[ForwardRule]:
+        """Legacy admin flip: read the state now, then transition atomically.
+
+        Returns ``None`` when the task moved between the read and the write
+        (instead of the pre-fix behaviour of writing whatever the stale read
+        implied) — callers that need to tell those apart use `set_status`.
+        """
         r = await self._repo.get_by_id(rule_id)
-        if r:
-            r.is_active = not r.is_active
-            r.mark_updated()
-            return await self._repo.update(r)
-        return None
+        if r is None:
+            return None
+        outcome, fresh = await self.set_status(rule_id, r.status_state(), None)
+        return fresh if outcome == self.STATUS_OK else None
 
     # -- v12.1: owner-guarded mutations -------------------------------------
     # The Telegram bot resolves entities by callback id, so an IDOR guard must
@@ -254,12 +259,50 @@ class ForwardRuleUseCases:
         return await self._repo.delete(rule_id)
 
     async def toggle_owned(self, rule_id: str, owner_user_id: Optional[int]) -> Optional[ForwardRule]:
+        """Legacy owner-scoped flip, now an atomic transition (see `set_status`)."""
+        r = await self.get_owned(rule_id, owner_user_id)
+        if r is None:
+            return None
+        outcome, fresh = await self.set_status(rule_id, r.status_state(), owner_user_id)
+        return fresh if outcome == self.STATUS_OK else None
+
+    #: Outcomes of `set_status`, so a caller can answer honestly instead of
+    #: guessing from a ``None``: the task moved, the caller's screen was stale,
+    #: or the task is not theirs / does not exist.
+    STATUS_OK = "ok"
+    STATUS_STALE = "stale"
+    STATUS_NOT_FOUND = "not_found"
+
+    async def set_status(
+        self,
+        rule_id: str,
+        expected_state: str,
+        owner_user_id: Optional[int] = None,
+        now: Optional[float] = None,
+    ) -> tuple:
+        """Turn a task on if it is off, off if it is running, atomically.
+
+        ``expected_state`` is what the caller's screen showed
+        (`ForwardRule.status_state()`). The transition is conditional on the
+        stored state still being that, so a stale screen (the task was paused from
+        the dashboard, or a second device changed it) is refused with
+        ``STATUS_STALE`` and the caller is handed the *current* task to re-render
+        — never a silent flip of a state the user is not looking at.
+        """
+        from ..domain.entities import STATUS_RUNNING
+
         r = await self._repo.get_by_id(rule_id)
         if r is None or not self._owns(getattr(r, "owner_user_id", 0), owner_user_id):
-            return None
-        r.is_active = not r.is_active
-        r.mark_updated()
-        return await self._repo.update(r)
+            return self.STATUS_NOT_FOUND, None
+        moved = await self._repo.set_task_status(
+            rule_id,
+            target_active=expected_state != STATUS_RUNNING,
+            expected_state=expected_state,
+            owner_user_id=owner_user_id,
+            now=now,
+        )
+        fresh = await self._repo.get_by_id(rule_id)
+        return (self.STATUS_OK if moved else self.STATUS_STALE), fresh
 
     async def delete(self, rule_id: str) -> bool:
         return await self._repo.delete(rule_id)

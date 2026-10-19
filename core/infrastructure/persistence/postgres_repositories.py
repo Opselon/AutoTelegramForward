@@ -516,6 +516,59 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
             return count > 0
         return True
 
+    async def set_task_status(
+        self,
+        rule_id: str,
+        *,
+        target_active: bool,
+        expected_state: str,
+        owner_user_id: Optional[int] = None,
+        now: Optional[float] = None,
+    ) -> bool:
+        """Atomic on/off transition, conditional on the state the caller saw.
+
+        Mirrors the SQLite implementation: a single conditional UPDATE whose
+        condition is the exact state the caller was shown, so a stale screen or a
+        concurrent change cannot be overwritten (it returns False instead).
+        """
+        from ...domain.entities import (
+            STATUS_DISABLED,
+            STATUS_PAUSED,
+            STATUS_PAUSED_UNTIL,
+            STATUS_RUNNING,
+        )
+
+        ts = time.time() if now is None else float(now)
+        paused_now = "(is_paused = TRUE AND (paused_until = 0 OR paused_until > %s))"
+        if target_active:
+            conditions = {
+                STATUS_DISABLED: ("is_active = FALSE", []),
+                STATUS_PAUSED: ("is_active = TRUE AND is_paused = TRUE AND paused_until = 0", []),
+                STATUS_PAUSED_UNTIL: ("is_active = TRUE AND is_paused = TRUE AND paused_until > %s", [ts]),
+            }
+        else:
+            conditions = {STATUS_RUNNING: (f"is_active = TRUE AND NOT {paused_now}", [ts])}
+        if expected_state not in conditions:
+            return False
+        condition, cond_params = conditions[expected_state]
+
+        if target_active:
+            set_clause = "is_active = TRUE, is_paused = FALSE, paused_until = 0, version = version + 1, updated_at = %s"
+        else:
+            set_clause = "is_active = FALSE, version = version + 1, updated_at = %s"
+        params: List[Any] = [int(time.time()), *cond_params, rule_id]
+        where_owner = ""
+        if owner_user_id:
+            where_owner = " AND owner_user_id = %s"
+        query = f"UPDATE forward_rules SET {set_clause} WHERE {condition} AND id = %s{where_owner}"
+        if owner_user_id:
+            params.append(int(owner_user_id))
+        res = await _execute_db(self._db, query, tuple(params))
+        count = getattr(res, "rowcount", None)
+        if count is not None:
+            return count > 0
+        return True
+
     @staticmethod
     def _row_to_entity(row: Any) -> ForwardRule:
         d = dict(row) if hasattr(row, "keys") else row

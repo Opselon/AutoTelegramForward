@@ -84,7 +84,13 @@ from ...application.use_cases import (
     SessionUseCases,
 )
 from ...domain import branding as branding_policy
-from ...domain.entities import AIConfig, FilterRule, ForwardRule, clamp_delay_seconds
+from ...domain.entities import (
+    AIConfig,
+    FilterRule,
+    ForwardRule,
+    TASK_STATUSES,
+    clamp_delay_seconds,
+)
 from ...domain.value_objects import AIProviderType, ForwardMode, RoutingType, RoutingDecision
 from .client_pool import ClientPool
 from .errors import SEV_ERROR, SEV_FATAL, tg_detail, tg_error
@@ -1410,6 +1416,35 @@ class ProBotUI:
 
         return "\n".join(lines), self._rules_menu(rules_list, page=page, page_size=page_size, lang=lang)
 
+    def _status_label(self, rule, lang: Optional[str] = None) -> str:
+        """The task's status as the user must read it: the engine's own state.
+
+        Derived from `ForwardRule.status_state()`, which folds both mechanisms
+        that stop a task (the on/off switch and the dashboard pause) into one
+        value. Reading `is_active` alone is what displayed a paused task — one
+        whose messages the pipeline was dropping and whose jobs the worker was
+        postponing — as "RUNNING".
+        """
+        from ...domain.entities import (
+            STATUS_PAUSED,
+            STATUS_PAUSED_UNTIL,
+            STATUS_RUNNING,
+        )
+
+        state = rule.status_state() if hasattr(rule, "status_state") else (
+            STATUS_RUNNING if getattr(rule, "is_active", False) else STATUS_PAUSED
+        )
+        if state == STATUS_RUNNING:
+            return self._t("ui_rule_status_running", lang=lang)
+        if state == STATUS_PAUSED_UNTIL:
+            until = time.strftime(
+                "%Y-%m-%d %H:%M", time.localtime(int(getattr(rule, "paused_until", 0) or 0))
+            )
+            return self._t("ui_rule_status_paused_until", lang=lang, until=until)
+        if state == STATUS_PAUSED:
+            return self._t("ui_rule_status_paused_manual", lang=lang)
+        return self._t("ui_rule_status_paused", lang=lang)
+
     def _render_rule_detail(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
         lang = self._lang_for(rule)
         """Render the complete Task Management & Routing Overview (Screens 1, 4, 5)."""
@@ -1419,7 +1454,7 @@ class ProBotUI:
             rule.target_chat_name or rule.target_chat_id or self._t("ui_rule_target_fallback", lang=lang)
         )
 
-        status_text = self._t("ui_rule_status_running", lang=lang) if rule.is_active else self._t("ui_rule_status_paused", lang=lang)
+        status_text = self._status_label(rule, lang=lang)
         debug_text = self._t("ui_rule_on", lang=lang) if rule.debug_mode else self._t("ui_rule_off", lang=lang)
         sender_type = rule.sender_type or self._t("ui_rule_sender_personal", lang=lang)
         topic_str = f"#{rule.topic_id}" if rule.topic_id else self._t("ui_none_label", lang=lang)
@@ -1525,7 +1560,7 @@ class ProBotUI:
             ],
             # Task operations
             [
-                (self._t("ui_rule_btn_status", lang=lang, status_text=status_text), f"rtg:{rule.id}"),
+                (self._t("ui_rule_btn_status", lang=lang, status_text=status_text), f"rtg:{rule.id}:{rule.status_state()}"),
                 (self._t("ui_rule_btn_duplicate", lang=lang), f"rdup:{rule.id}"),
                 (self._t("ui_rule_btn_rename", lang=lang), f"rrn:{rule.id}"),
                 (self._t("ui_rule_btn_draft", lang=lang), f"re:{rule.id}"),
@@ -6323,15 +6358,40 @@ class ProBotUI:
         async def _cb_rule_toggle_active(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
-            rule_id = raw.split(":", 1)[1]
+            parts = raw.split(":")
+            rule_id = parts[1]
+            # The button carries the state it was rendered from, so the write can
+            # be conditional on it: a stale screen (the task was paused from the
+            # dashboard, or changed on another device) is refused and re-rendered
+            # instead of being silently inverted. Buttons from before this change
+            # carry no state — those fall back to the stored state, which keeps
+            # the old "flip it" meaning while still being a single atomic UPDATE.
+            expected = parts[2] if len(parts) > 2 and parts[2] in TASK_STATUSES else None
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found_or_not_owner_alert"), show_alert=True)
-            rule.is_active = not rule.is_active
-            await self._save_owned_rule(rule, uid)
-            status = self._t("ui_rule_status_on") if rule.is_active else self._t("ui_rule_status_off")
+            observed = expected or rule.status_state()
+            outcome, fresh = await self._rules.set_status(
+                rule_id, observed, self._scope_uid(uid)
+            )
+            if outcome != self._rules.STATUS_OK or fresh is None:
+                if outcome == self._rules.STATUS_STALE and fresh is not None:
+                    await cq.answer(
+                        self._t(
+                            "ui_rule_status_stale_alert",
+                            status=self._status_label(fresh, lang=self._lang_for(fresh)),
+                        ),
+                        show_alert=True,
+                    )
+                else:
+                    await cq.answer(self._t("ui_rule_not_found_or_not_owner_alert"), show_alert=True)
+                if fresh is not None:
+                    text, kbd = self._render_rule_detail(fresh)
+                    await self._safe_edit(cq, text, reply_markup=kbd)
+                return
+            status = self._status_label(fresh, lang=self._lang_for(fresh))
             await cq.answer(self._t("ui_rule_status_alert", status=status))
-            text, kbd = self._render_rule_detail(rule)
+            text, kbd = self._render_rule_detail(fresh)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rrm:(.+)$"))

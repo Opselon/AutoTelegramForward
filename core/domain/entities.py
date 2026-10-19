@@ -95,6 +95,15 @@ def _now() -> int:
 #: so a value the UI accepts is a value the worker actually honours.
 MAX_FORWARD_DELAY_SECONDS = 86400.0
 
+#: Effective task statuses (see ``ForwardRule.status_state``). "Running" is the
+#: only state in which the forwarder acts on a new message; the other three all
+#: mean work is stopped, and each says *why* so the UI can be honest about it.
+STATUS_RUNNING = "running"
+STATUS_PAUSED = "paused"
+STATUS_PAUSED_UNTIL = "paused_until"
+STATUS_DISABLED = "disabled"
+TASK_STATUSES = (STATUS_RUNNING, STATUS_PAUSED, STATUS_PAUSED_UNTIL, STATUS_DISABLED)
+
 
 def clamp_delay_seconds(value: Any, *, maximum: float = MAX_FORWARD_DELAY_SECONDS) -> float:
     """Return a delay the forwarding engine can honour, whatever the client sent.
@@ -207,6 +216,36 @@ class ForwardRule:
             if current_ts >= self.paused_until:
                 return False
         return True
+
+    # -- effective task status (one authority for UI + engine) ---------------
+    #
+    # Two independent mechanisms stop a task, and the engine obeys both:
+    #   * the owner's on/off switch (`is_active`) — off means the task is not
+    #     routed at all (`matches_source` is False, the SQL never selects it);
+    #   * the timed pause (`is_paused` + `paused_until`) — the routing still
+    #     selects it, and the pipeline drops the message while the durable worker
+    #     postpones any job it had already accepted.
+    # Reading `is_active` alone is how a paused task came to be displayed as
+    # RUNNING while nothing was being forwarded, so every surface derives its
+    # status from `status_state()` instead.
+    def status_state(self, now: Optional[float] = None) -> str:
+        """The task's real status: RUNNING | PAUSED | PAUSED_UNTIL | DISABLED.
+
+        An expired ``paused_until`` is RUNNING: the pause has elapsed, and
+        ``is_currently_paused()`` — what the engine asks — reports False too.
+        """
+        if not self.is_active:
+            return STATUS_DISABLED
+        if not self.is_paused:
+            return STATUS_RUNNING
+        if self.paused_until and self.paused_until > 0:
+            current_ts = time.time() if now is None else now
+            return STATUS_PAUSED_UNTIL if current_ts < self.paused_until else STATUS_RUNNING
+        return STATUS_PAUSED
+
+    def engine_accepts_new_work(self, now: Optional[float] = None) -> bool:
+        """True only when the forwarder would really act on a new message."""
+        return bool(self.is_active) and not self.is_currently_paused(now)
     filter_rule_id: Optional[str] = None
     ai_config_id: Optional[str] = None
     remove_links: bool = False
