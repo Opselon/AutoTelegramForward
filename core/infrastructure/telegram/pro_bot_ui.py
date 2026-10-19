@@ -6458,7 +6458,12 @@ class ProBotUI:
             draft["name"] = new_rule.name
             new_rule.apply_draft(draft)
             new_rule.owner_user_id = uid
-            saved = await self._save_owned_rule(new_rule, uid)
+            # A duplicate is a NEW row: it must go through `create`, not the
+            # owner-scoped update path. `_save_owned_rule` resolves ownership of
+            # an existing row, so it refuses a copy whose id does not exist yet —
+            # which is exactly what this handler builds, so every duplicate
+            # answered "not_owner" and quietly did nothing.
+            saved = await self._rules.create(new_rule)
             await cq.answer(self._t("ui_rule_duplicated_alert"), show_alert=True)
             text, kbd = self._render_rule_detail(saved)
             await self._safe_edit(cq, text, reply_markup=kbd)

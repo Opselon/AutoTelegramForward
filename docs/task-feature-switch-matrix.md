@@ -23,7 +23,7 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 10 | Filters | FAIL → fixed | `DurableMessagePipeline` FILTER stage → `FilterEngine.evaluate`; screen `rfl_lnk:` / `rfl_vid:` / `rfl_aud:` / `rfl_stk:` / `rfl_txt:` / `rfl_voc:` | The six gates enforced correctly, but the `Filters (N)` badge counted **two different wrong subsets** (video/audio/text missing; one site also counted a duplicate-filter toggle owned by another screen), the attached `FilterRule` was fetched by id with **no owner check**, and user regexes were compiled unguarded (ReDoS) |
 | 11 | Set Delay | FAIL → fixed | `rdly_s:<rule_id>:<sec>` presets + typed step → `ForwardRule.delay_seconds` → `AdvancedSettingsEngine.get_dispatch_delay` → durable job claim gate (`next_retry_at`) | The delay was applied **twice** on the durable path (gate + an in-worker `asyncio.sleep`), a crafted preset stored `-600`/`inf`/`1e18` (and `nan` raised `NOT NULL constraint failed` on save), `inf` produced invalid JSON (`Infinity`) in the job payload, and the layers disagreed on the maximum (schema 86400 vs property 3600) |
 | 12 | Task Status | FAIL → fixed | `ForwardRule.status_state()` → `IForwardRuleRepository.set_task_status()` (single conditional UPDATE) → the status button's `rtg:<id>:<state>` payload | The status line was rendered from `is_active` alone, so a task whose messages the pipeline was dropping and whose jobs the worker was postponing was displayed as **RUNNING 🟢**; the tap did `is_active = not is_active` — a blind flip of the row at tap time, not of what the screen showed, so a stale screen re-activated a paused task and two taps cancelled each other out; the button could not resume a paused task; `toggle()`/`toggle_owned()` exposed the same lost update to API callers |
-| 13 | Duplicate Task | PENDING | — | — |
+| 13 | Duplicate Task | FAIL → fixed | Bot screen | the copy was saved through the owner-scoped *update* path, which refuses a row that does not exist yet, so every duplicate answered "📑 Rule duplicated successfully!" and created nothing. Part 2 STEER 02 found it (the alert lied while the row count stayed put); the copy now goes through `create`. |
 | 14 | Rename Task | PENDING | — | — |
 | 15 | Draft | PENDING | — | — |
 | 16 | Advanced Settings | PENDING | — | — |
@@ -607,3 +607,21 @@ abstract broke 8 of their tests. Both production stores override it, and a guard
 statement and is covered by the same contract but was not executed against a live Postgres instance; a job that
 a worker has already leased when the task is switched off finishes as `FAILED` (`task disabled`) rather than
 being cancelled mid-`copy_message`.
+
+
+## 13 — Duplicate Task (Part 2 STEER 02/03)
+
+**Confirmed defect.** `_cb_rule_duplicate` built the copy with a fresh id and then persisted it with
+`_save_owned_rule`, which is `ForwardRuleUseCases.update_owned` — that resolves ownership of an **existing**
+row and raises `PermissionError("not_owner")` when the id is unknown. The copy's id is always unknown, so the
+handler never reached its success alert: the raise escaped into pyrogram's dispatcher, which logged the
+update and dropped it, so the user saw a tap that did nothing — no copy, no alert, no error. The dashboard route (`POST /api/rules/{id}/duplicate` → `CreateRule`) was never affected:
+it clones the proto and calls create, with the owner taken from the JWT identity.
+
+**Root cause:** a create was written as an update. **Fix:** `self._rules.create(new_rule)`.
+
+**Evidence.** `core/tests/test_cross_tenant_boundaries.py::test_duplicating_a_task_creates_an_independent_copy_for_the_owner`
+presses the real `rdup:<task>` button through the registered handler: with the pre-fix line restored it fails
+with `PermissionError: not_owner` and no row; with the fix the copy exists, is owned by the duplicator, keeps the
+original's routing, and deleting it leaves the original byte-identical. `…_duplicating_another_tenants_task_creates_nothing`
+presses the same button as the other tenant and asserts neither a new row nor a changed victim row.
