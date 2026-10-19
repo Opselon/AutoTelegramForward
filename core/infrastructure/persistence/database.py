@@ -642,6 +642,22 @@ MIGRATIONS = {
     -- are never eligible, so the sweep's predicate starts with status.
     CREATE INDEX IF NOT EXISTS idx_user_tasks_finished ON user_tasks(status, finished_at);
     """,
+    26: """
+    -- v26: account-level suspensions are database state, not process memory.
+    -- A Telegram flood wait can outlast the process that received it; keeping
+    -- it in a dict meant a restart (or a second replica) saw a free account and
+    -- sent again, which Telegram punishes by extending the wait. `until` is
+    -- Telegram's own deadline, `code` the error id that imposed it, and the
+    -- row is deleted when it expires so "resumed" is a fact every process sees.
+    CREATE TABLE IF NOT EXISTS account_limits (
+        session_id TEXT PRIMARY KEY,
+        until REAL NOT NULL,
+        code TEXT NOT NULL DEFAULT '',
+        reason TEXT NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_account_limits_until ON account_limits(until);
+    """,
     19: """
     -- v19: bot tokens are per-owner. The column + index are added by
     -- _apply_additive_columns (which runs after this script and is idempotent);
