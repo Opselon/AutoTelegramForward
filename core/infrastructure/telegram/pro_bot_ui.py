@@ -332,7 +332,9 @@ ROUTE_PARSE_KEYS = {
     ROUTE_EMPTY_TARGETS: "ui_route_err_empty_targets",
 }
 
-SEV_ICON = {"info": "ℹ️", "warn": "⚠️", "error": "❌", "auth": "🔐", "fatal": "💀"}
+#: Severity → glyph. One definition, owned by the diagnostics renderer, so the
+#: logs screens and the report cannot decorate the same severity differently.
+SEV_ICON = diagnostics.SEVERITY_ICON
 
 
 
@@ -9013,9 +9015,7 @@ class ProBotUI:
                     if not rows:
                         lines.append(self._t("ui_none"))
                     for r in rows:
-                        sev = SEV_ICON.get(r.get("severity", ""), "❓")
-                        lines.append(
-                            f"{sev} `{r.get('error_name', '?')}` [{r.get('category', '?')}]")
+                        lines.append(diagnostics.error_line(self._t, r))
                         det = (r.get("detail") or "")[:90]
                         if det:
                             lines.append(f"     {det}")
@@ -9037,10 +9037,8 @@ class ProBotUI:
                     if not rows:
                         lines.append(self._t("ui_none"))
                     for r in rows:
-                        sev = SEV_ICON.get(r.get("severity", ""), "❓")
-                        lines.append(
-                            f"{sev} `{r.get('error_name', '?')}` [{r.get('category', '?')}]"
-                            f" recoverable={bool(r.get('recoverable'))}")
+                        lines.append(diagnostics.error_line(
+                            self._t, r, retryable=bool(r.get("recoverable"))))
                         det = (r.get("detail") or "")[:90]
                         if det:
                             lines.append(f"     {det}")
@@ -9062,7 +9060,7 @@ class ProBotUI:
                     if not counts:
                         lines.append(self._t("ui_none"))
                     for sev, n in sorted(counts.items()):
-                        lines.append(f"{SEV_ICON.get(sev, '❓')} {sev}: {n}")
+                        lines.append(diagnostics.severity_count_line(self._t, sev, n))
                 except Exception as exc:
                     lines.append("⚠️ " + tg_detail(exc))
             else:
@@ -9889,7 +9887,8 @@ class ProBotUI:
                 hourly = await self._metrics.hourly(24)
                 if hourly:
                     total = sum(h["forwarded"] for h in hourly)
-                    lines.append(f"📈 24h: {total} {self._t('ui_stat_forwarded').lower()}")
+                    lines.append(f"📈 {self._t('ui_perf_window')}: {total} "
+                                 f"{self._t('ui_stat_forwarded').lower()}")
             except Exception:
                 pass
         return "\n".join(lines)
@@ -9905,14 +9904,14 @@ class ProBotUI:
             q = getattr(self._dispatcher, "queue_size", None)
             if q is not None:
                 try:
-                    lines.append(f"📦 queue depth: {q()}")
+                    lines.append(f"📦 {self._t('ui_debug_queue_depth')}: {q()}")
                 except Exception:
                     pass
         if self._error_log is not None:
             try:
                 since = int(time.time()) - 24 * 3600
                 counts = await self._error_log.counts_by_severity(since)
-                lines.append(f"⚠️ errors 24h: {sum(counts.values())}")
+                lines.append(f"⚠️ {self._t('ui_debug_errors_24h')}: {sum(counts.values())}")
             except Exception:
                 pass
         return "\n".join(lines)

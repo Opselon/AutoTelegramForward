@@ -19,6 +19,8 @@ from .content_policy import compile_user_regex
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 URL_REGEX = re.compile(
     r"(https?://[^\s]+|www\.[^\s]+|(?:https?://)?(?:t(?:elegram)?\.(?:me|dog))/[^\s]+|@[A-Za-z0-9_]{3,32})",
     re.IGNORECASE,
