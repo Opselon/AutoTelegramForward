@@ -642,6 +642,25 @@ class DurableMessagePipeline:
                 filter_rule = await self._filters.get_by_id(rule.filter_rule_id)
             except Exception as exc:
                 logger.warning("[%s] Filter fetch failed: %s", ctx.correlation_id, exc)
+            # The id comes from the task's own row, but the row it points at is
+            # read by id alone: a task must never be filtered by another
+            # tenant's rule. A rule owned by somebody else is ignored (and
+            # logged); an id with no owner (0) is a pre-ownership row and is
+            # still the task's own configuration.
+            owner = getattr(filter_rule, "owner_user_id", 0) if filter_rule is not None else 0
+            task_owner = getattr(rule, "owner_user_id", 0)
+            if filter_rule is not None and owner not in (0, task_owner):
+                logger.warning(
+                    "[PIPELINE:FILTER_OWNERSHIP] [%s] Rule %s (owner %s) references filter %s owned "
+                    "by %s — ignoring the filter",
+                    ctx.correlation_id[:8], rule.id[:8], task_owner,
+                    str(rule.filter_rule_id)[:8], owner,
+                )
+                await self._audit(
+                    ctx, "filter.denied", "REJECTED", reason_code="FILTER_NOT_OWNED",
+                    rule_id=rule.id, result_summary=f"filter_owner={owner}",
+                )
+                filter_rule = None
 
         eval_res = self._filter_engine.evaluate(payload, filter_rule)
         ctx.filter_result = eval_res

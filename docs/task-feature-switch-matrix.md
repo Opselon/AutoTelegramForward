@@ -20,7 +20,7 @@ paths unverified · `NOT_IMPLEMENTED` no engine support · `PENDING` not yet aud
 | 07 | Blacklist | FAIL → fixed | bot menu `rfl_bl:` → `ForwardRule.blacklist` → `policy_chain` → `ContentPolicy.evaluate` | The menu stored words under the pre-policy key `metadata["blacklist"]`, which no forwarding code reads: the word was saved, rendered and counted, and the message was sent anyway |
 | 08 | Whitelist | FAIL → fixed | bot menu `rfl_wl:` → `ForwardRule.whitelist` → `policy_chain` → `ContentPolicy.evaluate` | Same inert storage, plus: the same key was the keyword-reply add-on's keyword list, so one list carried two unrelated meanings and neither was the allow-list the menu promises |
 | 09 | Cleaner | FAIL → fixed | `ForwardRule.build_cleaner()` → `CleanerRule.clean()` in `DurableMessagePipeline._apply_transforms`; links/buttons/entities handled by the pipeline and `LinkManagementEngine` | Phones, inline buttons and empty lines were stored, rendered and counted but changed nothing; **Links/Remove (and every non-default link policy) dropped 100% of messages** (`apply_to_payload` did not exist, the `AttributeError` was swallowed by a bare `except`); the badge counted a hand-written subset |
-| 10 | Filters | PENDING | — | — |
+| 10 | Filters | FAIL → fixed | `DurableMessagePipeline` FILTER stage → `FilterEngine.evaluate`; screen `rfl_lnk:` / `rfl_vid:` / `rfl_aud:` / `rfl_stk:` / `rfl_txt:` / `rfl_voc:` | The six gates enforced correctly, but the `Filters (N)` badge counted **two different wrong subsets** (video/audio/text missing; one site also counted a duplicate-filter toggle owned by another screen), the attached `FilterRule` was fetched by id with **no owner check**, and user regexes were compiled unguarded (ReDoS) |
 | 11 | Set Delay | PENDING | — | — |
 | 12 | Task Status | PENDING | — | — |
 | 13 | Duplicate Task | PENDING | — | — |
@@ -428,3 +428,66 @@ button text; the link pass runs on the cleaned text, so a policy cannot
 re-introduce content the cleaner removed; and importing `pro_bot_ui` after an
 event loop has been closed raises inside pyrogram (a test-hygiene constraint, not
 a runtime path).
+
+## 10 — Filters
+
+**Expected behaviour (from the code):** the Filters screen (`rfl:` …) owns six
+toggles — link, video, audio, sticker, text, voice — written by the
+`rfl_lnk:`/`rfl_vid:`/`rfl_aud:`/`rfl_stk:`/`rfl_txt:`/`rfl_voc:` callbacks into
+`rule.block_links`/`block_video`/`block_audio`/`block_stickers`/`block_text`/
+`block_voice`, and enforced by `DurableMessagePipeline`'s FILTER stage. A task may
+also attach an advanced `FilterRule` (keyword lists, media allow/deny lists,
+length bounds, regex patterns; edited from the web dashboard via `filter_rule_id`)
+which `FilterEngine.evaluate` applies.
+
+**Confirmed defect 1 — the badge counted two different wrong subsets.** The
+rule-list render site computed `duplicate_filters + block_links + block_voice +
+block_stickers` (video, audio and text missing, and a toggle that belongs to the
+duplicate-filter screen added), and the rule-detail site computed only
+`filter_rule_id` — a field the bot never writes. The same task therefore showed
+two different numbers, and neither matched the six toggles the screen owns.
+
+**Confirmed defect 2 — the attached filter rule was read without an owner
+check.** The pipeline fetched it with `self._filters.get_by_id(rule.filter_rule_id)`
+— by id alone. The id comes from the task's own row, but nothing verified that the
+row it points at belongs to the same account.
+
+**Confirmed defect 3 — user regexes were compiled unguarded.**
+`FilterEngine.evaluate` used a bare `re.compile(pattern, ...)` from the rule's
+`regex_patterns`, so a nested-quantifier pattern such as `(a+)+$` evaluated
+against a 4096-character body could occupy a worker for minutes. The content
+policy already had a guarded compiler (`_compile_user_regex`, refusing patterns
+over 1000 characters or carrying a nested quantifier) — the filter engine just
+did not use it.
+
+**Fix:** `ForwardRule.filter_active_option_count` is the single source for both
+render sites and derives the count from the same six flags the engine reads (plus
+one for an attached advanced rule, which the screen now also names in a localized
+line, `ui_fl_advanced`, added in all ten languages); the pipeline verifies the
+attached rule's owner (a rule owned by another account is ignored, with a
+`[PIPELINE:FILTER_OWNERSHIP]` warning and an audit record, while a pre-ownership
+row with owner 0 stays the task's own); and the guarded compiler was promoted to
+`compile_user_regex` and is now shared by the content policy and `FilterEngine`,
+so the guard cannot be forgotten in one place.
+
+**Verified behaviour (38 tests, real `DurableMessagePipeline` + real SQLite
+store):** with nothing set, a text and a video both go out; each of the six
+toggles drops exactly the content it names and keeps the rest (link, text vs
+caption-only photo, video + video note, audio, sticker, voice note); the flags
+survive a restart and are re-read from the store; one task's filters never touch
+another task's message; an attached rule applies its blacklist, whitelist
+(requires a match), min/max length, blocked-media list and regex (matching passes,
+mismatch drops); a malformed pattern and an oversized pattern are ignored rather
+than applied; a `(a+)+$` pattern against a 4000-character body is refused — the
+message is delivered and the measured elapsed time proves the pattern never ran; a
+filter rule owned by another account is ignored; a legacy owner-0 row still
+applies; the badge equals the six flags (and does **not** count the
+duplicate-filter toggle); and the new label exists in all ten languages without
+being an English placeholder.
+
+**Recorded limitations:** the badge counts an attached advanced rule once,
+however many conditions that rule carries (the screen names it rather than
+listing its conditions); `block_voice` drops both voice notes and audio files and
+`block_audio` covers both too, matching the screen's grouping; and the ReDoS
+guard refuses rather than rewriting a pathological pattern, so a user who types
+one gets no regex filtering from it (never a drop).

@@ -752,6 +752,32 @@ class ForwardRule:
         count = sum(1 for flag in self.CLEANER_OPTION_FLAGS if getattr(self, flag, False))
         return count + (1 if self.clean_custom_words else 0)
 
+    #: The Filters screen's media/content toggles, named by their flag. These are
+    #: exactly the gates `DurableMessagePipeline` applies in its FILTER stage.
+    FILTER_OPTION_FLAGS: "ClassVar[Tuple[str, ...]]" = (
+        "block_links",
+        "block_video",
+        "block_audio",
+        "block_stickers",
+        "block_text",
+        "block_voice",
+    )
+
+    @property
+    def filter_active_option_count(self) -> int:
+        """How many content filters the engine will actually apply.
+
+        The `ui_rule_btn_filters` badge opens the Filters screen (`rfl:`), which
+        owns six toggles — so the badge counts the toggles the pipeline enforces,
+        plus one when an advanced filter rule is attached (it is a single rule
+        object carrying its own keyword/media/length/regex conditions, and the
+        screen names it). Both render sites read this, and the count is derived
+        from the same flags the engine reads, so the badge cannot disagree with
+        either the screen or the pipeline.
+        """
+        count = sum(1 for flag in self.FILTER_OPTION_FLAGS if getattr(self, flag, False))
+        return count + (1 if self.filter_rule_id else 0)
+
     @property
     def cleaner_config(self) -> dict:
         if not isinstance(self.metadata, dict):

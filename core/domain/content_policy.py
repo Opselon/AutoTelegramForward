@@ -274,12 +274,14 @@ def contains_word(
 
 
 @lru_cache(maxsize=2048)
-def _compile_user_regex(pattern: str) -> Optional[re.Pattern]:
+def compile_user_regex(pattern: str) -> Optional[re.Pattern]:
     """Compile a user-supplied pattern, or None when it is unusable.
 
     Refuses patterns that are long or carry a nested quantifier: those are the
     shapes that turn a crafted message into minutes of backtracking. A refused
-    pattern never drops a message — it is simply not consulted.
+    pattern never drops a message — it is simply not consulted. Shared by every
+    stage that evaluates a pattern a user typed (the content policy and
+    `FilterEngine`), so the guard cannot be forgotten in one place.
     """
     if not pattern or len(pattern) > _MAX_PATTERN_LEN:
         return None
@@ -289,6 +291,11 @@ def _compile_user_regex(pattern: str) -> Optional[re.Pattern]:
         return re.compile(pattern, re.IGNORECASE | re.MULTILINE)
     except re.error:
         return None
+
+
+#: Kept so existing callers inside this module (and any third-party importer)
+#: keep working; `compile_user_regex` is the name to use.
+_compile_user_regex = compile_user_regex
 
 
 # --------------------------------------------------------------------------
