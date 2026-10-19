@@ -7,9 +7,9 @@
   "version": "2.2.4",
   "releaseTag": "v2.2.4",
   "releaseDate": "2026-10-16",
-  "gitCommit": "c4e8da9",
-  "gitDate": "2026-10-19T07:32:44+03:30",
-  "syncTimestamp": "2026-10-19T04:10:08.106Z",
+  "gitCommit": "13b37ed",
+  "gitDate": "2026-10-19T12:47:26Z",
+  "syncTimestamp": "2026-10-19T12:48:40.178Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -28,16 +28,16 @@
     "uz",
     "zh"
   ],
-  "i18nKeyCount": 1551,
+  "i18nKeyCount": 1552,
   "stats": {
-    "pythonTests": 132,
-    "goTests": 39,
+    "pythonTests": 148,
+    "goTests": 43,
     "grpcRpcCount": 78,
     "cliGroups": 29,
     "featureCatalogEntries": 18,
     "services": 4,
     "locales": 10,
-    "i18nKeys": 1551,
+    "i18nKeys": 1552,
     "implementedFeatures": 14,
     "partialFeatures": 2,
     "plannedFeatures": 2,
@@ -505,7 +505,7 @@
   "supportedShortcodes": [
     {
       "code": "[[ORIGIN_TEXT]]",
-      "desc": "Message body after cleaner and policy passes",
+      "desc": "Message body after the cleaner and policy passes",
       "example": "Breaking market report..."
     },
     {
@@ -520,7 +520,7 @@
     },
     {
       "code": "[[ORIGIN_USERID]]",
-      "desc": "Numerical Telegram id of the author / sender",
+      "desc": "Numeric Telegram id of the sender",
       "example": "10842918"
     },
     {
@@ -530,7 +530,7 @@
     },
     {
       "code": "[[ORIGIN_CHAT_ID]]",
-      "desc": "Numerical id of the source channel",
+      "desc": "Numeric id of the source channel",
       "example": "-1001695513745"
     },
     {
@@ -545,17 +545,17 @@
     },
     {
       "code": "[[SOURCE_NAME]]",
-      "desc": "Alias for the source channel name",
+      "desc": "Alias for the source channel title",
       "example": "Crypto News Daily"
     },
     {
       "code": "[[SENDER_CHAT]]",
-      "desc": "Chat id or title the post was sent in",
+      "desc": "Chat id the post was sent in",
       "example": "-1001695513745"
     },
     {
       "code": "[[FORWARD_FROM_CHAT]]",
-      "desc": "Original channel when the incoming post was itself a forward",
+      "desc": "Original chat when the incoming post was itself a forward",
       "example": "Reuters Telegram"
     },
     {
@@ -652,203 +652,1016 @@
   ],
   "cliGroups": [
     {
-      "group": "setup",
-      "what": "Guided wizard: detect the platform, validate every answer, build, then prove each service is serving",
-      "examples": [
-        "atf setup",
-        "atf setup --check",
-        "atf setup --yes",
-        "atf setup --answers answers.json"
-      ]
-    },
-    {
-      "group": "status",
-      "what": "Live service board with ports, reachability, task counts and the dashboard URL",
-      "examples": [
-        "atf status",
-        "atf status --watch"
-      ]
-    },
-    {
-      "group": "system",
-      "what": "Stack lifecycle plus boot persistence and the full upgrade path",
-      "examples": [
-        "atf system services",
-        "atf system upgrade",
-        "atf system service install"
-      ]
-    },
-    {
-      "group": "validate",
-      "what": "Read-only checks: layout, env, compose, catalog parity, secrets scan, database, proto, ports",
-      "examples": [
-        "atf validate",
-        "atf validate --runtime",
-        "atf validate --strict --json",
-        "atf validate --deep"
-      ]
-    },
-    {
-      "group": "doctor",
-      "what": "Deep diagnosis across DB, binaries, ports and gRPC, with --fix to repair",
-      "examples": [
-        "atf doctor",
-        "atf doctor --fix"
-      ]
-    },
-    {
-      "group": "rules",
-      "what": "Task control: list, show, create, update, clone, enable/disable, pause/resume, sources, path, simulate, settings",
-      "examples": [
-        "atf rules list --json",
-        "atf rules sources <id> add <chat>",
-        "atf rules simulate <id> --text \"hello\"",
-        "atf rules settings set <id> clean_buttons=true"
-      ]
-    },
-    {
-      "group": "logs",
-      "what": "Log archive access from the terminal: tail, query, search, stats, export, purge",
-      "examples": [
-        "atf logs tail --follow -n 50",
-        "atf logs query --level ERROR",
-        "atf logs stats"
-      ]
-    },
-    {
-      "group": "data",
-      "what": "Queue and DLQ inspection, aggregate stats, encrypted backup export / import",
-      "examples": [
-        "atf data queue",
-        "atf data dlq --replay",
-        "atf data backup-export --out atf.atf"
-      ]
-    },
-    {
-      "group": "sessions",
-      "what": "Telegram session inventory, encrypted backup and terminate",
-      "examples": [
-        "atf sessions list",
-        "atf sessions backup --out session.bak"
-      ]
-    },
-    {
       "group": "auth",
-      "what": "Dashboard / API authentication for the CLI itself",
+      "what": "Manage credentials, tokens, and authenticated sessions",
       "examples": [
-        "atf auth token --save",
-        "atf auth whoami"
+        "atf auth whoami",
+        "atf auth token",
+        "atf auth login",
+        "atf auth logout"
+      ],
+      "name": "auth",
+      "help": "Manage credentials, tokens, and authenticated sessions",
+      "summary": "Authentication and credential management.",
+      "module": "atfcli/commands/auth.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "whoami",
+          "aliases": []
+        },
+        {
+          "verb": "token",
+          "aliases": []
+        },
+        {
+          "verb": "login",
+          "aliases": []
+        },
+        {
+          "verb": "logout",
+          "aliases": []
+        }
       ]
     },
     {
-      "group": "admin",
-      "what": "Administration: users, admins, settings, extensions, broadcast, overview",
+      "group": "setup",
+      "what": "One-command first-run setup: platform check, questionnaire, secrets, build, verify",
       "examples": [
-        "atf admin overview",
-        "atf admin users list",
-        "atf admin broadcast --text \"maintenance\""
-      ]
+        "atf setup"
+      ],
+      "name": "setup",
+      "help": "One-command first-run setup: platform check, questionnaire, secrets, build, verify",
+      "summary": "Guided first-run setup: platform, questionnaire, secrets, build, verify.",
+      "module": "atfcli/commands/setup.py",
+      "collection": false,
+      "subcommands": []
     },
     {
-      "group": "config",
-      "what": "Read and write configuration values with validation",
+      "group": "upgrade",
+      "what": "Upgrade the stack: check for a newer revision, apply it, or roll back",
       "examples": [
-        "atf config list",
-        "atf config set ATF_BOT_TOKEN"
-      ]
-    },
-    {
-      "group": "db",
-      "what": "Database inspection, integrity status, snapshot and backup",
-      "examples": [
-        "atf db status",
-        "atf db snapshot"
-      ]
-    },
-    {
-      "group": "docker",
-      "what": "Compose lifecycle for the four containers",
-      "examples": [
-        "atf docker up",
-        "atf docker ps",
-        "atf docker logs core"
-      ]
-    },
-    {
-      "group": "deploy",
-      "what": "Build, recreate and verify in one gated command",
-      "examples": [
-        "atf deploy --build"
-      ]
-    },
-    {
-      "group": "certs",
-      "what": "TLS certificate inspection, expiry checks and renewal",
-      "examples": [
-        "atf certs check",
-        "atf certs renew"
-      ]
-    },
-    {
-      "group": "net",
-      "what": "Network inspection and the AI bridge reconnect path",
-      "examples": [
-        "atf net inspect",
-        "atf net reconnect"
+        "atf upgrade check",
+        "atf upgrade plan",
+        "atf upgrade apply",
+        "atf upgrade rollback"
+      ],
+      "name": "upgrade",
+      "help": "Upgrade the stack: check for a newer revision, apply it, or roll back",
+      "summary": "The work lives in atfcli.upgrade; this module is the argument surface.",
+      "module": "atfcli/commands/upgrade.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "check",
+          "aliases": []
+        },
+        {
+          "verb": "plan",
+          "aliases": []
+        },
+        {
+          "verb": "apply",
+          "aliases": []
+        },
+        {
+          "verb": "rollback",
+          "aliases": []
+        },
+        {
+          "verb": "history",
+          "aliases": []
+        }
       ]
     },
     {
       "group": "platform",
-      "what": "Host detection plus the exact docker install commands for this distribution",
+      "what": "Detect this host and print the exact steps to run ATF here",
       "examples": [
-        "atf platform",
-        "atf platform --json"
+        "atf platform"
+      ],
+      "name": "platform",
+      "help": "Detect this host and print the exact steps to run ATF here",
+      "summary": "This is the one command that works with no checkout, no docker and no venv:",
+      "module": "atfcli/commands/platform.py",
+      "collection": false,
+      "subcommands": []
+    },
+    {
+      "group": "doctor",
+      "what": "Diagnose the whole stack (and --fix the repairs that are safe)",
+      "examples": [
+        "atf doctor"
+      ],
+      "name": "doctor",
+      "help": "Diagnose the whole stack (and --fix the repairs that are safe)",
+      "summary": "Each check answers a question an operator actually asks when something is",
+      "module": "atfcli/commands/doctor.py",
+      "collection": false,
+      "subcommands": []
+    },
+    {
+      "group": "validate",
+      "what": "Validate config, secrets, catalogs, contracts, and data (CI-safe, read-only)",
+      "examples": [
+        "atf validate"
+      ],
+      "name": "validate",
+      "help": "Validate config, secrets, catalogs, contracts, and data (CI-safe, read-only)",
+      "summary": "Deep validation of configuration, contracts, catalogs, and data.",
+      "module": "atfcli/commands/validate.py",
+      "collection": false,
+      "subcommands": []
+    },
+    {
+      "group": "status",
+      "what": "Show service, port and health status for the whole stack",
+      "examples": [
+        "atf status"
+      ],
+      "name": "status",
+      "help": "Show service, port and health status for the whole stack",
+      "summary": "Live service status board: what is running, what is healthy, what is exposed.",
+      "module": "atfcli/commands/status.py",
+      "collection": false,
+      "subcommands": []
+    },
+    {
+      "group": "rules",
+      "what": "Manage forwarding tasks: list, show, edit, pause, clone, settings, sources",
+      "examples": [
+        "atf rules list",
+        "atf rules show",
+        "atf rules logs",
+        "atf rules create"
+      ],
+      "name": "rules",
+      "help": "Manage forwarding tasks: list, show, edit, pause, clone, settings, sources",
+      "summary": "The group an operator lives in.",
+      "module": "atfcli/commands/rules.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "list",
+          "aliases": [
+            "ls"
+          ]
+        },
+        {
+          "verb": "show",
+          "aliases": []
+        },
+        {
+          "verb": "logs",
+          "aliases": [
+            "history"
+          ]
+        },
+        {
+          "verb": "create",
+          "aliases": []
+        },
+        {
+          "verb": "update",
+          "aliases": [
+            "edit"
+          ]
+        },
+        {
+          "verb": "delete",
+          "aliases": [
+            "rm"
+          ]
+        },
+        {
+          "verb": "duplicate",
+          "aliases": [
+            "clone"
+          ]
+        },
+        {
+          "verb": "path",
+          "aliases": []
+        },
+        {
+          "verb": "simulate",
+          "aliases": [
+            "test-message"
+          ]
+        },
+        {
+          "verb": "settings",
+          "aliases": []
+        },
+        {
+          "verb": "schema",
+          "aliases": []
+        },
+        {
+          "verb": "get",
+          "aliases": []
+        },
+        {
+          "verb": "set",
+          "aliases": []
+        },
+        {
+          "verb": "reset",
+          "aliases": []
+        },
+        {
+          "verb": "sources",
+          "aliases": []
+        },
+        {
+          "verb": "add",
+          "aliases": []
+        },
+        {
+          "verb": "remove",
+          "aliases": [
+            "rm"
+          ]
+        }
       ]
     },
     {
-      "group": "release",
-      "what": "Version, manifest, verification and the portable single-file build",
+      "group": "ai",
+      "what": "AI provider configurations: list, create, check a key, switch the active model",
       "examples": [
-        "atf release version",
-        "atf release verify",
-        "atf release portable"
+        "atf ai list",
+        "atf ai show",
+        "atf ai create",
+        "atf ai update"
+      ],
+      "name": "ai",
+      "help": "AI provider configurations: list, create, check a key, switch the active model",
+      "summary": "New surface: ai-configs existed in the API and the web dashboard but not in the",
+      "module": "atfcli/commands/ai.py",
+      "collection": true,
+      "subcommands": [
+        {
+          "verb": "list",
+          "aliases": [
+            "ls"
+          ]
+        },
+        {
+          "verb": "show",
+          "aliases": []
+        },
+        {
+          "verb": "create",
+          "aliases": []
+        },
+        {
+          "verb": "update",
+          "aliases": [
+            "edit"
+          ]
+        },
+        {
+          "verb": "delete",
+          "aliases": [
+            "rm"
+          ]
+        },
+        {
+          "verb": "providers",
+          "aliases": [
+            "kinds"
+          ]
+        },
+        {
+          "verb": "check-key",
+          "aliases": []
+        }
       ]
     },
     {
-      "group": "ci",
-      "what": "Pipeline status, logs and live watch for GitHub Actions runs",
+      "group": "prompts",
+      "what": "Prompt templates: list, create, test against a live AI config",
       "examples": [
-        "atf ci status",
-        "atf ci watch"
+        "atf prompts list",
+        "atf prompts show",
+        "atf prompts create",
+        "atf prompts update"
+      ],
+      "name": "prompts",
+      "help": "Prompt templates: list, create, test against a live AI config",
+      "summary": "Prompt templates were reachable from the dashboard but not from the CLI; a",
+      "module": "atfcli/commands/prompts.py",
+      "collection": true,
+      "subcommands": [
+        {
+          "verb": "list",
+          "aliases": [
+            "ls"
+          ]
+        },
+        {
+          "verb": "show",
+          "aliases": []
+        },
+        {
+          "verb": "create",
+          "aliases": []
+        },
+        {
+          "verb": "update",
+          "aliases": [
+            "edit"
+          ]
+        },
+        {
+          "verb": "delete",
+          "aliases": [
+            "rm"
+          ]
+        },
+        {
+          "verb": "test",
+          "aliases": [
+            "preview"
+          ]
+        },
+        {
+          "verb": "languages",
+          "aliases": [
+            "coverage"
+          ]
+        }
       ]
     },
     {
-      "group": "i18n",
-      "what": "Cross-language catalog audits: parity, placeholders and RTL leakage",
+      "group": "filters",
+      "what": "Message filters: list, create, and see exactly what a filter drops",
       "examples": [
-        "atf i18n"
+        "atf filters list",
+        "atf filters show",
+        "atf filters create",
+        "atf filters update"
+      ],
+      "name": "filters",
+      "help": "Message filters: list, create, and see exactly what a filter drops",
+      "summary": "Filters decide what never leaves the source channel; getting one wrong either",
+      "module": "atfcli/commands/filters.py",
+      "collection": true,
+      "subcommands": [
+        {
+          "verb": "list",
+          "aliases": [
+            "ls"
+          ]
+        },
+        {
+          "verb": "show",
+          "aliases": []
+        },
+        {
+          "verb": "create",
+          "aliases": []
+        },
+        {
+          "verb": "update",
+          "aliases": [
+            "edit"
+          ]
+        },
+        {
+          "verb": "delete",
+          "aliases": [
+            "rm"
+          ]
+        },
+        {
+          "verb": "explain",
+          "aliases": [
+            "inspect"
+          ]
+        }
       ]
     },
     {
-      "group": "proto",
-      "what": "Regenerate and verify gRPC stubs against the .proto sources",
+      "group": "sessions",
+      "what": "Manage connected Telegram client sessions",
       "examples": [
-        "atf proto"
+        "atf sessions list",
+        "atf sessions chats",
+        "atf sessions backup",
+        "atf sessions terminate"
+      ],
+      "name": "sessions",
+      "help": "Manage connected Telegram client sessions",
+      "summary": "Verbs: list, chats (new), backup, terminate.",
+      "module": "atfcli/commands/sessions.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "list",
+          "aliases": [
+            "ls"
+          ]
+        },
+        {
+          "verb": "chats",
+          "aliases": []
+        },
+        {
+          "verb": "backup",
+          "aliases": []
+        },
+        {
+          "verb": "terminate",
+          "aliases": [
+            "rm"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "logs",
+      "what": "Query, tail, export, and manage system and per-task logs",
+      "examples": [
+        "atf logs stats",
+        "atf logs query",
+        "atf logs tail",
+        "atf logs export"
+      ],
+      "name": "logs",
+      "help": "Query, tail, export, and manage system and per-task logs",
+      "summary": "This module only parses flags and renders.",
+      "module": "atfcli/commands/logs.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "stats",
+          "aliases": []
+        },
+        {
+          "verb": "query",
+          "aliases": [
+            "search"
+          ]
+        },
+        {
+          "verb": "tail",
+          "aliases": []
+        },
+        {
+          "verb": "export",
+          "aliases": []
+        },
+        {
+          "verb": "purge",
+          "aliases": []
+        },
+        {
+          "verb": "policy",
+          "aliases": []
+        },
+        {
+          "verb": "show",
+          "aliases": []
+        },
+        {
+          "verb": "set",
+          "aliases": []
+        },
+        {
+          "verb": "health",
+          "aliases": []
+        },
+        {
+          "verb": "diagnostics",
+          "aliases": []
+        },
+        {
+          "verb": "start",
+          "aliases": []
+        },
+        {
+          "verb": "stop",
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "group": "data",
+      "what": "Manage backups, delivery queues, dead-letter items, and system statistics",
+      "examples": [
+        "atf data stats",
+        "atf data queue",
+        "atf data backup-export",
+        "atf data backup-import"
+      ],
+      "name": "data",
+      "help": "Manage backups, delivery queues, dead-letter items, and system statistics",
+      "summary": "Two contract details this module gets right by going through the use cases:",
+      "module": "atfcli/commands/data.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "stats",
+          "aliases": []
+        },
+        {
+          "verb": "queue",
+          "aliases": []
+        },
+        {
+          "verb": "backup-export",
+          "aliases": [
+            "export"
+          ]
+        },
+        {
+          "verb": "backup-import",
+          "aliases": [
+            "import"
+          ]
+        },
+        {
+          "verb": "backup-inspect",
+          "aliases": [
+            "inspect"
+          ]
+        },
+        {
+          "verb": "dlq",
+          "aliases": []
+        },
+        {
+          "verb": "list",
+          "aliases": [
+            "ls"
+          ]
+        },
+        {
+          "verb": "retry",
+          "aliases": []
+        },
+        {
+          "verb": "retry-all",
+          "aliases": []
+        },
+        {
+          "verb": "purge",
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "group": "admin",
+      "what": "Manage system users, administrators, extensions, and global settings",
+      "examples": [
+        "atf admin overview",
+        "atf admin broadcast",
+        "atf admin users",
+        "atf admin list"
+      ],
+      "name": "admin",
+      "help": "Manage system users, administrators, extensions, and global settings",
+      "summary": "Users, administrators, extensions, platform settings and broadcasts.",
+      "module": "atfcli/commands/admin.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "overview",
+          "aliases": []
+        },
+        {
+          "verb": "broadcast",
+          "aliases": []
+        },
+        {
+          "verb": "users",
+          "aliases": []
+        },
+        {
+          "verb": "list",
+          "aliases": [
+            "ls"
+          ]
+        },
+        {
+          "verb": "status",
+          "aliases": []
+        },
+        {
+          "verb": "settings",
+          "aliases": []
+        },
+        {
+          "verb": "get",
+          "aliases": []
+        },
+        {
+          "verb": "set",
+          "aliases": []
+        },
+        {
+          "verb": "admins",
+          "aliases": []
+        },
+        {
+          "verb": "add",
+          "aliases": []
+        },
+        {
+          "verb": "remove",
+          "aliases": [
+            "rm"
+          ]
+        },
+        {
+          "verb": "extensions",
+          "aliases": []
+        },
+        {
+          "verb": "toggle",
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "group": "audit",
+      "what": "Query the audit trail: who did what, scoped to this tenant",
+      "examples": [
+        "atf audit events",
+        "atf audit outcomes"
+      ],
+      "name": "audit",
+      "help": "Query the audit trail: who did what, scoped to this tenant",
+      "summary": "Every privileged action (login, status change, credential write, broadcast) is",
+      "module": "atfcli/commands/audit.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "events",
+          "aliases": [
+            "list",
+            "ls",
+            "query"
+          ]
+        },
+        {
+          "verb": "outcomes",
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "group": "docker",
+      "what": "Manage Docker containers, images, logs, builds, and lifecycle",
+      "examples": [
+        "atf docker ps",
+        "atf docker up",
+        "atf docker down",
+        "atf docker restart"
+      ],
+      "name": "docker",
+      "help": "Manage Docker containers, images, logs, builds, and lifecycle",
+      "summary": "Docker container and image operations.",
+      "module": "atfcli/commands/docker.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "ps",
+          "aliases": []
+        },
+        {
+          "verb": "up",
+          "aliases": []
+        },
+        {
+          "verb": "down",
+          "aliases": []
+        },
+        {
+          "verb": "restart",
+          "aliases": []
+        },
+        {
+          "verb": "logs",
+          "aliases": []
+        },
+        {
+          "verb": "build",
+          "aliases": []
+        },
+        {
+          "verb": "prune",
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "group": "deploy",
+      "what": "Orchestrate full zero-downtime stack builds, recreations, network alias repairs, and health verification",
+      "examples": [
+        "atf deploy"
+      ],
+      "name": "deploy",
+      "help": "Orchestrate full zero-downtime stack builds, recreations, network alias repairs, and health verification",
+      "summary": "Full deployment engine: build, recreate, reconnect network aliases, and health-check.",
+      "module": "atfcli/commands/deploy.py",
+      "collection": false,
+      "subcommands": []
+    },
+    {
+      "group": "db",
+      "what": "Inspect, snapshot, and manage SQLite or PostgreSQL database state",
+      "examples": [
+        "atf db inspect",
+        "atf db backup"
+      ],
+      "name": "db",
+      "help": "Inspect, snapshot, and manage SQLite or PostgreSQL database state",
+      "summary": "Database management, migrations, inspection, and snapshots.",
+      "module": "atfcli/commands/db.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "inspect",
+          "aliases": [
+            "status"
+          ]
+        },
+        {
+          "verb": "backup",
+          "aliases": [
+            "snapshot"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "certs",
+      "what": "Inspect, verify, and renew TLS/SSL certificates",
+      "examples": [
+        "atf certs inspect",
+        "atf certs renew"
+      ],
+      "name": "certs",
+      "help": "Inspect, verify, and renew TLS/SSL certificates",
+      "summary": "TLS/SSL certificate management and renewal.",
+      "module": "atfcli/commands/certs.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "inspect",
+          "aliases": [
+            "check"
+          ]
+        },
+        {
+          "verb": "renew",
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "group": "net",
+      "what": "Manage Docker networks, DNS aliases, host ports, and inter-service connectivity",
+      "examples": [
+        "atf net inspect",
+        "atf net reconnect",
+        "atf net port",
+        "atf net status"
+      ],
+      "name": "net",
+      "help": "Manage Docker networks, DNS aliases, host ports, and inter-service connectivity",
+      "summary": "Network, DNS, bridge alias, and host-port management.",
+      "module": "atfcli/commands/net.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "inspect",
+          "aliases": []
+        },
+        {
+          "verb": "reconnect",
+          "aliases": []
+        },
+        {
+          "verb": "port",
+          "aliases": []
+        },
+        {
+          "verb": "status",
+          "aliases": [
+            "list"
+          ]
+        },
+        {
+          "verb": "fix",
+          "aliases": []
+        },
+        {
+          "verb": "free",
+          "aliases": []
+        }
       ]
     },
     {
       "group": "test",
-      "what": "Run the test suites: python, go, flutter or all",
+      "what": "Run automated test suites across Python, Go, and Flutter",
       "examples": [
-        "atf test py",
-        "atf test all"
+        "atf test"
+      ],
+      "name": "test",
+      "help": "Run automated test suites across Python, Go, and Flutter",
+      "summary": "Test runner for Python, Go, and Flutter suites.",
+      "module": "atfcli/commands/test.py",
+      "collection": false,
+      "subcommands": []
+    },
+    {
+      "group": "i18n",
+      "what": "Audit and enforce strict 1:1 translation catalog parity across all 10 locales",
+      "examples": [
+        "atf i18n"
+      ],
+      "name": "i18n",
+      "help": "Audit and enforce strict 1:1 translation catalog parity across all 10 locales",
+      "summary": "Internationalization & localization parity audits across 10 locales.",
+      "module": "atfcli/commands/i18n.py",
+      "collection": false,
+      "subcommands": []
+    },
+    {
+      "group": "proto",
+      "what": "Compile protocol buffers across Python and Go services",
+      "examples": [
+        "atf proto"
+      ],
+      "name": "proto",
+      "help": "Compile protocol buffers across Python and Go services",
+      "summary": "Protocol buffer compilation and generation.",
+      "module": "atfcli/commands/proto.py",
+      "collection": false,
+      "subcommands": []
+    },
+    {
+      "group": "release",
+      "what": "Manage release versions, checksum manifests, and integrity checks",
+      "examples": [
+        "atf release version",
+        "atf release manifest",
+        "atf release verify",
+        "atf release portable"
+      ],
+      "name": "release",
+      "help": "Manage release versions, checksum manifests, and integrity checks",
+      "summary": "Release engineering and manifest validation.",
+      "module": "atfcli/commands/release.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "version",
+          "aliases": []
+        },
+        {
+          "verb": "manifest",
+          "aliases": []
+        },
+        {
+          "verb": "verify",
+          "aliases": []
+        },
+        {
+          "verb": "portable",
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "group": "ci",
+      "what": "Inspect GitHub Actions CI runs, check annotations, and monitor workflows",
+      "examples": [
+        "atf ci status",
+        "atf ci view",
+        "atf ci watch"
+      ],
+      "name": "ci",
+      "help": "Inspect GitHub Actions CI runs, check annotations, and monitor workflows",
+      "summary": "GitHub Actions CI inspection and run status.",
+      "module": "atfcli/commands/ci.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "status",
+          "aliases": []
+        },
+        {
+          "verb": "view",
+          "aliases": []
+        },
+        {
+          "verb": "watch",
+          "aliases": []
+        }
       ]
     },
     {
       "group": "watch",
-      "what": "Continuous supervision of the running stack",
+      "what": "Live streaming terminal dashboard",
       "examples": [
         "atf watch"
+      ],
+      "name": "watch",
+      "help": "Live streaming terminal dashboard",
+      "summary": "Live system monitor and dashboard.",
+      "module": "atfcli/commands/watch.py",
+      "collection": false,
+      "subcommands": []
+    },
+    {
+      "group": "system",
+      "what": "Manage full system lifecycle, version upgrades, and host diagnostics",
+      "examples": [
+        "atf system info",
+        "atf system upgrade",
+        "atf system start",
+        "atf system stop"
+      ],
+      "name": "system",
+      "help": "Manage full system lifecycle, version upgrades, and host diagnostics",
+      "summary": "System-wide management, upgrades, and platform diagnostics.",
+      "module": "atfcli/commands/system.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "info",
+          "aliases": []
+        },
+        {
+          "verb": "upgrade",
+          "aliases": []
+        },
+        {
+          "verb": "start",
+          "aliases": []
+        },
+        {
+          "verb": "stop",
+          "aliases": []
+        },
+        {
+          "verb": "restart",
+          "aliases": []
+        },
+        {
+          "verb": "services",
+          "aliases": []
+        },
+        {
+          "verb": "service",
+          "aliases": []
+        },
+        {
+          "verb": "install",
+          "aliases": []
+        },
+        {
+          "verb": "status",
+          "aliases": []
+        },
+        {
+          "verb": "uninstall",
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "group": "config",
+      "what": "Manage environment variables and configuration files (.env)",
+      "examples": [
+        "atf config list",
+        "atf config get",
+        "atf config set"
+      ],
+      "name": "config",
+      "help": "Manage environment variables and configuration files (.env)",
+      "summary": "Configuration and environment (.env) management.",
+      "module": "atfcli/commands/config.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "list",
+          "aliases": [
+            "ls"
+          ]
+        },
+        {
+          "verb": "get",
+          "aliases": []
+        },
+        {
+          "verb": "set",
+          "aliases": []
+        }
       ]
     }
   ],
@@ -1837,7 +2650,7 @@
         [
           "POST",
           "/api/logs/purge",
-          "Purge log history for the caller's scope"
+          "Purge log history for one of the caller's own tasks (the installation-wide purge is administrator-only)"
         ],
         [
           "GET",

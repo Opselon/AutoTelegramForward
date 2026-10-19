@@ -399,6 +399,11 @@ const cliGroups = cliModuleOrder
       return true;
     });
     return {
+      group: name,
+      what: help || moduleSummary(name, source),
+      examples: subcommands.length > 0
+        ? subcommands.slice(0, 4).map((s) => `atf ${name} ${s.verb}`)
+        : [`atf ${name}`],
       name,
       help,
       summary: moduleSummary(name, source),
