@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { KeyRound, Shield, UserCheck, CheckCircle2, AlertCircle, Save } from 'lucide-react'
 import { api } from '../api'
+import { makeT, type UiLang } from '../locales'
 
 interface Props {
-  lang: 'fa' | 'en'
+  lang: UiLang
 }
 
 export function ClientSettings({ lang }: Props) {
   const isRtl = lang === 'fa'
+  const t = makeT(lang)
   const [settings, setSettings] = useState<any>(null)
   const [apiId, setApiId] = useState('')
   const [apiHash, setApiHash] = useState('')
@@ -33,14 +35,14 @@ export function ClientSettings({ lang }: Props) {
     const cleanHash = apiHash.trim()
     if (!numId || numId <= 0) {
       setStatusMsg({
-        text: isRtl ? 'لطفاً یک API ID معتبر وارد نمایید.' : 'Please provide a valid numeric API ID.',
+        text: t('ui_please_provide_a_valid_numeric_api_id'),
         ok: false,
       })
       return
     }
     if (cleanHash.length !== 32) {
       setStatusMsg({
-        text: isRtl ? 'API Hash باید دقیقاً ۳۲ کاراکتر هگزادسیمال باشد.' : 'API Hash must be 32 hexadecimal characters.',
+        text: t('ui_api_hash_must_be_32_hexadecimal_characters'),
         ok: false,
       })
       return
@@ -50,11 +52,11 @@ export function ClientSettings({ lang }: Props) {
     setStatusMsg(null)
     try {
       const res = await api.clientSaveCredentials(numId, cleanHash)
-      setStatusMsg({ text: res.message || (isRtl ? 'کلیدهای اختصاصی ذخیره شد.' : 'Credentials saved.'), ok: true })
+      setStatusMsg({ text: res.message || (t('ui_credentials_saved')), ok: true })
       setApiHash('')
       loadSettings()
     } catch (e: any) {
-      setStatusMsg({ text: e?.message || (isRtl ? 'خطا در ذخیره کلیدها' : 'Error saving credentials'), ok: false })
+      setStatusMsg({ text: e?.message || (t('ui_error_saving_credentials')), ok: false })
     } finally {
       setSaving(false)
     }
@@ -88,12 +90,10 @@ export function ClientSettings({ lang }: Props) {
           </div>
           <div>
             <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#818cf8' }}>
-              {isRtl ? 'تنظیمات و کلیدهای شخصی تلگرام' : 'Client Settings & Credentials'}
+              {t('ui_client_settings_credentials')}
             </h2>
             <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8' }}>
-              {isRtl
-                ? 'پیکربندی اختصاصی کلیدهای API ID و API Hash مستقل برای هر کاربر و مدیریت سهمیه'
-                : 'Isolated workspace credentials, personal Telegram API keys, and account preferences'}
+              {t('ui_isolated_workspace_credentials_personal_telegram_api_keys_and_ac')}
             </p>
           </div>
         </div>
@@ -118,32 +118,32 @@ export function ClientSettings({ lang }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <UserCheck size={20} color="#38bdf8" />
             <h3 style={{ margin: 0, fontSize: '1rem', color: '#f8fafc' }}>
-              {isRtl ? 'اطلاعات حساب و دسترسی' : 'Account & Quota Overview'}
+              {t('ui_account_quota_overview')}
             </h3>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: '0.88rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ color: '#94a3b8' }}>{isRtl ? 'شناسه کاربری عددی:' : 'Numeric User ID:'}</span>
+              <span style={{ color: '#94a3b8' }}>{t('ui_numeric_user_id')}</span>
               <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#f8fafc' }}>{settings?.user_id || '—'}</span>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ color: '#94a3b8' }}>{isRtl ? 'سطح اشتراک (Plan):' : 'Subscription Plan:'}</span>
+              <span style={{ color: '#94a3b8' }}>{t('ui_subscription_plan')}</span>
               <span className="badge badge-vip" style={{ textTransform: 'uppercase' }}>{settings?.plan || 'FREE'}</span>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ color: '#94a3b8' }}>{isRtl ? 'پیام‌های فورواردشده:' : 'Forwarded Messages:'}</span>
+              <span style={{ color: '#94a3b8' }}>{t('ui_forwarded_messages')}</span>
               <span style={{ fontWeight: 700, color: '#34d399' }}>{settings?.quota_forwarded ?? 0}</span>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-              <span style={{ color: '#94a3b8' }}>{isRtl ? 'وضعیت کلید اختصاصی:' : 'Custom Credentials:'}</span>
+              <span style={{ color: '#94a3b8' }}>{t('ui_custom_credentials')}</span>
               <span style={{ color: settings?.has_custom_credentials ? '#4ade80' : '#fbbf24', fontWeight: 600 }}>
                 {settings?.has_custom_credentials
-                  ? (isRtl ? '✅ فعال و رمزنگاری‌شده' : 'Active & Encrypted')
-                  : (isRtl ? 'استفاده از پیش‌فرض سامانه' : 'Using System Default')}
+                  ? (t('ui_active_encrypted'))
+                  : (t('ui_using_system_default'))}
               </span>
             </div>
           </div>
@@ -161,19 +161,17 @@ export function ClientSettings({ lang }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <Shield size={20} color="#818cf8" />
             <h3 style={{ margin: 0, fontSize: '1rem', color: '#f8fafc' }}>
-              {isRtl ? 'کلیدهای اختصاصی API تلگرام' : 'Custom Telegram API Credentials'}
+              {t('ui_custom_telegram_api_credentials')}
             </h3>
           </div>
 
           <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: '#94a3b8' }}>
-            {isRtl
-              ? 'در صورتی که می‌خواهید فورواردها با شناسه برنامه اختصاصی شما در my.telegram.org انجام شوند، اطلاعات زیر را وارد نمایید.'
-              : 'Enter your own API ID and API Hash from my.telegram.org to run your MTProto sessions under your own developer keys.'}
+            {t('ui_enter_your_own_api_id_and_api_hash_from_my_telegram_org_to_run_y')}
           </p>
 
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'block', fontSize: '0.82rem', color: '#cbd5e1', marginBottom: 6 }}>
-              {isRtl ? 'Telegram API ID (عدد):' : 'Telegram API ID (Numeric):'}
+              {t('ui_telegram_api_id_numeric')}
             </label>
             <input
               type="number"
@@ -194,7 +192,7 @@ export function ClientSettings({ lang }: Props) {
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: '0.82rem', color: '#cbd5e1', marginBottom: 6 }}>
-              {isRtl ? 'Telegram API Hash (۳۲ کاراکتر):' : 'Telegram API Hash (32 characters):'}
+              {t('ui_telegram_api_hash_32_characters')}
             </label>
             <input
               type="password"
@@ -220,7 +218,7 @@ export function ClientSettings({ lang }: Props) {
             style={{ width: '100%', padding: '10px 0', fontWeight: 600 }}
           >
             <Save size={16} />
-            <span>{saving ? (isRtl ? 'در حال ذخیره‌سازی...' : 'Saving...') : (isRtl ? 'ذخیره کلیدهای اختصاصی' : 'Save Custom Keys')}</span>
+            <span>{saving ? (t('ui_saving')) : (t('ui_save_custom_keys'))}</span>
           </button>
 
           {statusMsg && (

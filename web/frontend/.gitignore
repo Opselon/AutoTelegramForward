@@ -27,3 +27,6 @@ dist-ssr
 .provenance-build/
 .actions-build/
 .identity-build/
+
+# Compiled in CI to run the catalog parity test directly
+.catalog-build/

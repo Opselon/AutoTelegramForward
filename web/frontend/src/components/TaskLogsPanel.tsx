@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertCircle, ChevronDown, ChevronRight, ChevronUp, Copy, Download, Loader2, RefreshCw } from 'lucide-react'
 import { api } from '../api'
 import type { LogItem, LogPage } from '../types'
+import { makeT, type UiLang } from '../locales'
 
 interface Props {
   ruleId: string
-  lang?: 'fa' | 'en'
+  lang?: UiLang
 }
 
 const LEVEL_COLORS: Record<string, { fg: string; bg: string }> = {
@@ -35,6 +36,7 @@ function fmtTime(ts: number): string {
  */
 export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
   const isRtl = lang === 'fa'
+  const t = makeT(lang)
   const [page, setPage] = useState<LogPage | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -177,7 +179,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
       >
         <div style={{ display: 'flex', gap: 4 }}>{['ERROR', 'WARN', 'INFO', 'DEBUG'].map(chip)}</div>
         <input
-          placeholder={isRtl ? 'جستجو در پیام و جزئیات…' : 'Search message + detail…'}
+          placeholder={t('ui_search_message_detail')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
@@ -190,28 +192,28 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
           onClick={() => setAppliedSearch(search.trim())}
           style={{ ...controls, cursor: 'pointer', fontWeight: 600 }}
         >
-          {isRtl ? 'جستجو' : 'Search'}
+          {t('ui_search')}
         </button>
         <select
           value={hours}
           onChange={(e) => setHours(Number(e.target.value))}
           style={controls}
-          title={isRtl ? 'بازه زمانی' : 'Time window'}
+          title={t('ui_time_window')}
         >
-          <option value={0}>{isRtl ? 'همه زمان‌ها' : 'All time'}</option>
-          <option value={1}>{isRtl ? '۱ ساعت اخیر' : 'Last hour'}</option>
-          <option value={24}>{isRtl ? '۲۴ ساعت اخیر' : 'Last 24h'}</option>
-          <option value={168}>{isRtl ? '۷ روز اخیر' : 'Last 7d'}</option>
-          <option value={720}>{isRtl ? '۳۰ روز اخیر' : 'Last 30d'}</option>
+          <option value={0}>{t('ui_all_time')}</option>
+          <option value={1}>{t('ui_last_hour')}</option>
+          <option value={24}>{t('ui_last_24h')}</option>
+          <option value={168}>{t('ui_last_7d')}</option>
+          <option value={720}>{t('ui_last_30d')}</option>
         </select>
         <select
           value={order}
           onChange={(e) => setOrder(e.target.value as 'asc' | 'desc')}
           style={controls}
-          title={isRtl ? 'ترتیب' : 'Order'}
+          title={t('ui_task_logs_order')}
         >
-          <option value="desc">{isRtl ? 'جدیدترین اول' : 'Newest first'}</option>
-          <option value="asc">{isRtl ? 'قدیمی‌ترین اول' : 'Oldest first'}</option>
+          <option value="desc">{t('ui_newest_first')}</option>
+          <option value="asc">{t('ui_oldest_first')}</option>
         </select>
         <select
           value={pageSize}
@@ -220,7 +222,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
         >
           {[25, 50, 100, 200].map((n) => (
             <option key={n} value={n}>
-              {n} / {isRtl ? 'صفحه' : 'page'}
+              {n} / {t('ui_page')}
             </option>
           ))}
         </select>
@@ -230,7 +232,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
           disabled={loading}
           style={{ ...controls, cursor: loading ? 'wait' : 'pointer', display: 'flex', gap: 5, alignItems: 'center' }}
         >
-          <RefreshCw size={12} /> {isRtl ? 'بروزرسانی' : 'Refresh'}
+          <RefreshCw size={12} /> {t('ui_refresh')}
         </button>
         <button
           type="button"
@@ -254,7 +256,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10, fontSize: '0.72rem' }}>
         <span className="badge badge-gray">
           {total === 0
-            ? isRtl ? 'بدون لاگ' : 'no log events'
+            ? t('ui_no_log_events')
             : `${first}–${last} / ${total.toLocaleString()}`}
         </span>
         <button
@@ -263,7 +265,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
           disabled={offset === 0 || loading}
           style={{ ...controls, padding: '3px 10px', cursor: offset === 0 ? 'not-allowed' : 'pointer' }}
         >
-          <ChevronUp size={12} style={{ verticalAlign: 'middle' }} /> {isRtl ? 'جدیدتر' : 'Newer'}
+          <ChevronUp size={12} style={{ verticalAlign: 'middle' }} /> {t('ui_newer')}
         </button>
         <button
           type="button"
@@ -275,9 +277,9 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
             cursor: page?.has_more ? 'pointer' : 'not-allowed',
           }}
         >
-          <ChevronDown size={12} style={{ verticalAlign: 'middle' }} /> {isRtl ? 'قدیمی‌تر' : 'Older'}
+          <ChevronDown size={12} style={{ verticalAlign: 'middle' }} /> {t('ui_older')}
         </button>
-        {exporting && <span style={{ color: '#93c5fd' }}>{isRtl ? 'در حال آماده‌سازی…' : 'preparing export…'}</span>}
+        {exporting && <span style={{ color: '#93c5fd' }}>{t('ui_preparing_export')}</span>}
       </div>
 
       {error && (
@@ -315,11 +317,11 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
       >
         {loading && !logs.length ? (
           <div style={{ textAlign: 'center', padding: '28px 0', color: '#64748b' }}>
-            <Loader2 size={18} className="spin" /> {isRtl ? 'بارگذاری…' : 'loading…'}
+            <Loader2 size={18} className="spin" /> {t('ui_task_logs_loading')}
           </div>
         ) : logs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '28px 0', color: '#64748b' }}>
-            {isRtl ? 'رویدادی برای این تسک ثبت نشده است.' : 'No log events recorded for this task yet.'}
+            {t('ui_no_log_events_recorded_for_this_task_yet')}
           </div>
         ) : (
           logs.map((item, idx) => {
@@ -344,7 +346,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                     type="button"
                     onClick={() => toggle(key)}
                     style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0, marginTop: 2 }}
-                    title={isRtl ? 'نمایش جزئیات' : 'Show detail'}
+                    title={t('ui_show_detail')}
                   >
                     {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                   </button>
@@ -374,7 +376,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                     type="button"
                     onClick={() => void copyRow(item, key)}
                     style={{ background: 'none', border: 'none', color: copied === key ? '#34d399' : '#64748b', cursor: 'pointer', padding: 0 }}
-                    title={isRtl ? 'کپی' : 'Copy row'}
+                    title={t('ui_copy_row')}
                   >
                     <Copy size={11} />
                   </button>
@@ -383,7 +385,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                   <div style={{ marginTop: 5, marginInlineStart: 20, fontSize: '0.68rem' }}>
                     {item.correlation_id && (
                       <div style={{ color: '#64748b' }}>
-                        corr: <span style={{ color: '#93c5fd' }}>{item.correlation_id}</span>
+                        {t('ui_corr')} <span style={{ color: '#93c5fd' }}>{item.correlation_id}</span>
                       </div>
                     )}
                     {isOpen && item.detail && (
@@ -418,9 +420,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
       </div>
 
       <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: 8 }}>
-        {isRtl
-          ? 'این پنل کل تاریخچهٔ این تسک را با صفحه‌بندی نشان می‌دهد؛ جستجو روی پیام و جزئیات ساختاریافته اعمال می‌شود.'
-          : 'This panel pages through the task’s entire history — search matches both the message and the structured detail.'}
+        {t('ui_this_panel_pages_through_the_task_s_entire_history_search_matche')}
       </div>
     </div>
   )

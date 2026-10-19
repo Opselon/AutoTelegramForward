@@ -70,7 +70,7 @@ test('a task that chose the registry default is still the task', () => {
   const settings = { remove_emojis: false }
   const sources = { remove_emojis: SETTLE(false, 'task', { default: false, pinned: true }) }
   assert.equal(rowValue('remove_emojis', {}, settings, sources), false)
-  assert.equal(badgeFor(sources.remove_emojis).text, 'TASK')
+  assert.equal(badgeFor(sources.remove_emojis).textKey, 'ui_badge_task')
   assert.equal(canReset('remove_emojis', {}, sources), true)
 })
 
@@ -89,17 +89,21 @@ test('only a task-owned or edited row can be handed back', () => {
 
 test('the bot badge names the bot that supplies the value', () => {
   const badge = badgeFor(SETTLE(true, 'bot', { bot_label: '@fwd_bot' }))
-  assert.equal(badge.text, 'BOT @fwd_bot')
-  assert.match(badge.title, /Inherited/)
+  // The badge is a catalog key now: the panel renders it in the active
+  // language, and the bot's name rides along as an untranslated suffix.
+  assert.equal(badge.textKey, 'ui_badge_bot')
+  assert.equal(badge.suffix, '@fwd_bot')
+  assert.equal(badge.titleKey, 'ui_badge_bot_title')
 })
 
 test('a nameless bot still gets a bot badge, not a default one', () => {
-  assert.equal(badgeFor(SETTLE(true, 'bot')).text, 'BOT')
+  assert.equal(badgeFor(SETTLE(true, 'bot')).textKey, 'ui_badge_bot')
+  assert.equal(badgeFor(SETTLE(true, 'bot')).suffix, '')
   assert.equal(badgeFor(SETTLE(true, 'bot')).color, '#c4b5fd')
 })
 
 test('an unknown source and an absent one are both shown as the default', () => {
-  assert.equal(badgeFor(SETTLE(true, 'something_new')).text, 'DEFAULT')
+  assert.equal(badgeFor(SETTLE(true, 'something_new')).textKey, 'ui_badge_default')
   assert.equal(badgeFor(undefined), null)
 })
 

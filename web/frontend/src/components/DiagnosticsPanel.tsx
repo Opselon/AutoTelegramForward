@@ -1,5 +1,6 @@
 import { ShieldAlert, AlertTriangle, Info, CheckCircle2, RefreshCw } from 'lucide-react'
 import type { DiagnosticsResponse, DiagnosticFinding } from '../types'
+import { makeT, type UiLang } from '../locales'
 
 /**
  * Preflight diagnostics panel — renders the /api/diagnostics report as ranked,
@@ -15,14 +16,14 @@ export function DiagnosticsPanel({
   report,
   loading,
   onRefresh,
-  isRtl,
+  lang,
 }: {
   report: DiagnosticsResponse | null
   loading: boolean
   onRefresh: () => void
-  isRtl: boolean
+  lang: UiLang
 }) {
-  const t = (fa: string, en: string) => (isRtl ? fa : en)
+  const t = makeT(lang)
 
   const sevIcon = (s: string) =>
     s === 'error' ? (
@@ -49,23 +50,17 @@ export function DiagnosticsPanel({
                 color={status === 'critical' ? 'var(--critical)' : 'var(--warning)'}
               />
             )}
-            <span>{t('بررسی پیش‌پرواز سیستم', 'System Preflight')}</span>
+            <span>{t('ui_system_preflight')}</span>
             {report && <span className="preflight-score">· {report.score}/100</span>}
           </div>
           <div className="preflight-meta">
             {report
-              ? t(
-                  `${report.counts.error} خطا · ${report.counts.warning} هشدار · ${report.counts.info} اطلاع`,
-                  `${report.counts.error} errors · ${report.counts.warning} warnings · ${report.counts.info} info`,
-                )
-              : t('در حال بررسی…', 'Scanning…')}
+              ? t('ui_report_4_errors_report_5_warnings_report_6_info', { report_4: report.counts.error, report_5: report.counts.warning, report_6: report.counts.info })
+              : t('ui_scanning')}
             {report?.scanned ? (
               <>
                 {' — '}
-                {t(
-                  `${report.scanned.rules} تسک و ${report.scanned.ai_configs} پیکربندی AI بررسی شد`,
-                  `checked ${report.scanned.rules} tasks, ${report.scanned.ai_configs} AI configs`,
-                )}
+                {t('ui_checked_report_3_tasks_report_4_ai_configs', { report_3: report.scanned.rules, report_4: report.scanned.ai_configs })}
               </>
             ) : null}
           </div>
@@ -78,7 +73,7 @@ export function DiagnosticsPanel({
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}
         >
           <RefreshCw size={14} className={loading ? 'spin' : undefined} />
-          {t('بررسی مجدد', 'Re-run check')}
+          {t('ui_re_run_check')}
         </button>
       </div>
 
@@ -98,10 +93,7 @@ export function DiagnosticsPanel({
 
       {report && findings.length === 0 ? (
         <p className="preflight-ok">
-          {t(
-            'هیچ مشکلی پیدا نشد — همه تسک‌ها سالم هستند.',
-            'No problems found — every task is healthy.',
-          )}
+          {t('ui_no_problems_found_every_task_is_healthy')}
         </p>
       ) : (
         <div className="preflight-findings">

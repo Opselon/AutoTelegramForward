@@ -14,13 +14,15 @@ import {
   Sliders,
 } from 'lucide-react'
 import { api } from '../api'
+import { makeT, type UiLang } from '../locales'
 
 interface Props {
-  lang: 'fa' | 'en'
+  lang: UiLang
 }
 
 export function AdminPanel({ lang }: Props) {
   const isRtl = lang === 'fa'
+  const t = makeT(lang)
   const [activeSection, setActiveSection] = useState<'overview' | 'users' | 'broadcast' | 'forcesub' | 'admins' | 'settings'>('overview')
   const [overview, setOverview] = useState<any>(null)
   const [users, setUsers] = useState<any[]>([])
@@ -151,7 +153,7 @@ export function AdminPanel({ lang }: Props) {
   }
 
   const handleRemoveAdmin = async (uid: number) => {
-    if (!confirm(isRtl ? `حذف دسترسی مدیریت کاربر ${uid}؟` : `Remove admin access for ${uid}?`)) return
+    if (!confirm(t('ui_remove_admin_access_for_uid_2', { uid_2: uid }))) return
     try {
       await api.adminRemoveAdmin(uid)
       loadAdmins()
@@ -188,12 +190,10 @@ export function AdminPanel({ lang }: Props) {
           </div>
           <div>
             <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#f87171' }}>
-              {isRtl ? 'مرکز فرماندهی و مدیریت کلان سامانه' : 'Master Administrative Control Plane'}
+              {t('ui_master_administrative_control_plane')}
             </h2>
             <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8' }}>
-              {isRtl
-                ? 'نظارت بلادرنگ بر کاربران، ارسال همگانی، عضویت اجباری و کنترل دسترسی مدیران'
-                : 'Real-time multi-tenant governance, background broadcasting, force-subscription & admin RBAC'}
+              {t('ui_real_time_multi_tenant_governance_background_broadcasting_force')}
             </p>
           </div>
         </div>
@@ -209,7 +209,7 @@ export function AdminPanel({ lang }: Props) {
           style={{ background: 'rgba(255,255,255,0.06)', color: '#cbd5e1' }}
         >
           <RefreshCw size={15} />
-          <span>{isRtl ? 'بروزرسانی' : 'Refresh'}</span>
+          <span>{t('ui_refresh')}</span>
         </button>
       </div>
 
@@ -234,7 +234,7 @@ export function AdminPanel({ lang }: Props) {
           }}
         >
           <Activity size={16} />
-          <span>{isRtl ? 'وضعیت سامانه' : 'System Overview'}</span>
+          <span>{t('ui_system_overview')}</span>
         </button>
 
         <button
@@ -247,7 +247,7 @@ export function AdminPanel({ lang }: Props) {
           }}
         >
           <Users size={16} />
-          <span>{isRtl ? 'مدیریت کاربران' : 'User Governance'}</span>
+          <span>{t('ui_user_governance')}</span>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({totalUsers})</span>
         </button>
 
@@ -261,7 +261,7 @@ export function AdminPanel({ lang }: Props) {
           }}
         >
           <Send size={16} />
-          <span>{isRtl ? 'ارسال همگانی' : 'Broadcast Queue'}</span>
+          <span>{t('ui_broadcast_queue')}</span>
         </button>
 
         <button
@@ -274,7 +274,7 @@ export function AdminPanel({ lang }: Props) {
           }}
         >
           <Lock size={16} />
-          <span>{isRtl ? 'عضویت اجباری' : 'Force-Subscription'}</span>
+          <span>{t('ui_force_subscription')}</span>
         </button>
 
         <button
@@ -287,7 +287,7 @@ export function AdminPanel({ lang }: Props) {
           }}
         >
           <ShieldAlert size={16} />
-          <span>{isRtl ? 'مدیران سامانه' : 'Administrators'}</span>
+          <span>{t('ui_administrators')}</span>
         </button>
 
         <button
@@ -300,7 +300,7 @@ export function AdminPanel({ lang }: Props) {
           }}
         >
           <Sliders size={16} />
-          <span>{isRtl ? 'پیکربندی و افزونه‌ها' : 'Settings & Extensions'}</span>
+          <span>{t('ui_settings_extensions')}</span>
         </button>
       </div>
 
@@ -317,7 +317,7 @@ export function AdminPanel({ lang }: Props) {
           >
             <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 18, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.85rem' }}>
-                <span>{isRtl ? 'کل کاربران سامانه' : 'Total Registered Users'}</span>
+                <span>{t('ui_total_registered_users')}</span>
                 <Users size={18} color="#60a5fa" />
               </div>
               <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: 8, color: '#f8fafc' }}>
@@ -327,7 +327,7 @@ export function AdminPanel({ lang }: Props) {
 
             <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 18, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.85rem' }}>
-                <span>{isRtl ? 'قوانین فوروارد فعال' : 'Active Rules'}</span>
+                <span>{t('ui_active_rules')}</span>
                 <Radio size={18} color="#34d399" />
               </div>
               <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: 8, color: '#34d399' }}>
@@ -337,7 +337,7 @@ export function AdminPanel({ lang }: Props) {
 
             <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 18, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.85rem' }}>
-                <span>{isRtl ? 'پیام‌های در صف' : 'Pending in Queue'}</span>
+                <span>{t('ui_pending_in_queue')}</span>
                 <Activity size={18} color="#fbbf24" />
               </div>
               <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: 8, color: '#fbbf24' }}>
@@ -347,12 +347,12 @@ export function AdminPanel({ lang }: Props) {
 
             <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 18, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.85rem' }}>
-                <span>{isRtl ? 'وضعیت سلامت هسته' : 'Core Daemon Status'}</span>
+                <span>{t('ui_core_daemon_status')}</span>
                 <Server size={18} color="#4ade80" />
               </div>
               <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: 12, color: '#4ade80', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <CheckCircle2 size={18} />
-                <span>{overview?.core_online ? 'ONLINE (gRPC 50051)' : 'STANDBY'}</span>
+                <span>{overview?.core_online ? t('ui_online_grpc_50051') : t('ui_standby')}</span>
               </div>
             </div>
           </div>
@@ -363,18 +363,18 @@ export function AdminPanel({ lang }: Props) {
       {activeSection === 'users' && (
         <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
           <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: '#f8fafc' }}>
-            {isRtl ? 'فهرست کاربران و کنترل دسترسی چندمستاجره' : 'Registered Tenants & Lifecycle Control'}
+            {t('ui_registered_tenants_lifecycle_control')}
           </h3>
 
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: isRtl ? 'right' : 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8' }}>
-                  <th style={{ padding: '10px 12px' }}>{isRtl ? 'شناسه تلگرام' : 'User ID'}</th>
-                  <th style={{ padding: '10px 12px' }}>{isRtl ? 'نام کاربری' : 'Username'}</th>
-                  <th style={{ padding: '10px 12px' }}>{isRtl ? 'پلن' : 'Plan'}</th>
-                  <th style={{ padding: '10px 12px' }}>{isRtl ? 'وضعیت' : 'Status'}</th>
-                  <th style={{ padding: '10px 12px' }}>{isRtl ? 'عملیات' : 'Actions'}</th>
+                  <th style={{ padding: '10px 12px' }}>{t('ui_admin_user_id')}</th>
+                  <th style={{ padding: '10px 12px' }}>{t('ui_username')}</th>
+                  <th style={{ padding: '10px 12px' }}>{t('ui_plan')}</th>
+                  <th style={{ padding: '10px 12px' }}>{t('ui_status')}</th>
+                  <th style={{ padding: '10px 12px' }}>{t('ui_actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -383,7 +383,7 @@ export function AdminPanel({ lang }: Props) {
                   return (
                     <tr key={u.user_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                       <td style={{ padding: '12px', fontFamily: 'monospace', color: '#e2e8f0' }}>
-                        {u.user_id} {u.is_admin ? <span className="badge badge-vip">ADMIN</span> : null}
+                        {u.user_id} {u.is_admin ? <span className="badge badge-vip">{t('ui_role_admin')}</span> : null}
                       </td>
                       <td style={{ padding: '12px', color: '#cbd5e1' }}>{u.username ? `@${u.username}` : '—'}</td>
                       <td style={{ padding: '12px', color: '#94a3b8', textTransform: 'uppercase' }}>{u.plan}</td>
@@ -399,7 +399,7 @@ export function AdminPanel({ lang }: Props) {
                             color: isSuspended ? '#f87171' : '#4ade80',
                           }}
                         >
-                          {isSuspended ? (isRtl ? 'معلق‌شده' : 'SUSPENDED') : (isRtl ? 'فعال' : 'ACTIVE')}
+                          {isSuspended ? (t('ui_suspended')) : (t('ui_active'))}
                         </span>
                       </td>
                       <td style={{ padding: '12px' }}>
@@ -415,7 +415,7 @@ export function AdminPanel({ lang }: Props) {
                               border: isSuspended ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(239,68,68,0.4)',
                             }}
                           >
-                            {isSuspended ? (isRtl ? 'فعال‌سازی' : 'Activate') : (isRtl ? 'تعلیق کاربر' : 'Suspend')}
+                            {isSuspended ? (t('ui_activate')) : (t('ui_suspend'))}
                           </button>
                         )}
                       </td>
@@ -432,23 +432,21 @@ export function AdminPanel({ lang }: Props) {
       {activeSection === 'broadcast' && (
         <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
           <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#f8fafc' }}>
-            {isRtl ? 'ارسال پیام همگانی به کاربران ربات تلگرام' : 'Asynchronous Broadcast Dispatcher'}
+            {t('ui_asynchronous_broadcast_dispatcher')}
           </h3>
           <p style={{ margin: '0 0 16px', fontSize: '0.84rem', color: '#94a3b8' }}>
-            {isRtl
-              ? 'پیام‌ها در صف ذخیره شده و با محدودیت نرخ استاندارد (۲۵ پیام در ثانیه) بدون مسدود شدن هسته ربات ارسال می‌گردند.'
-              : 'Messages are asynchronously queued and dispatched at 25 msgs/sec with automatic FloodWait retry protection.'}
+            {t('ui_messages_are_asynchronously_queued_and_dispatched_at_25_msgs_sec')}
           </p>
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: 6 }}>
-              {isRtl ? 'متن پیام همگانی (Markdown / Emojis پشتیبانی می‌شود):' : 'Broadcast Message Body (Markdown supported):'}
+              {t('ui_broadcast_message_body_markdown_supported')}
             </label>
             <textarea
               rows={5}
               value={bcastText}
               onChange={(e) => setBcastText(e.target.value)}
-              placeholder={isRtl ? 'متن اطلاعیه مهم را اینجا بنویسید...' : 'Type broadcast announcement here...'}
+              placeholder={t('ui_type_broadcast_announcement_here')}
               style={{
                 width: '100%',
                 padding: 12,
@@ -476,7 +474,7 @@ export function AdminPanel({ lang }: Props) {
               }}
             >
               <Send size={16} />
-              <span>{bcastSending ? (isRtl ? 'در حال آغاز...' : 'Dispatching...') : (isRtl ? 'ارسال همگانی' : 'Dispatch Broadcast')}</span>
+              <span>{bcastSending ? (t('ui_dispatching')) : (t('ui_dispatch_broadcast'))}</span>
             </button>
           </div>
 
@@ -491,9 +489,9 @@ export function AdminPanel({ lang }: Props) {
                 fontSize: '0.88rem',
               }}
             >
-              ✅ {bcastResult.message || 'Broadcast queued successfully.'}
+              ✅ {bcastResult.message || t('ui_broadcast_queued_successfully')}
               <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#86efac' }}>
-                Broadcast ID: <code>{bcastResult.broadcast_id}</code> | Recipients: <b>{bcastResult.total_recipients}</b>
+                {t('ui_broadcast_id')} <code>{bcastResult.broadcast_id}</code> | {t('ui_recipients')} <b>{bcastResult.total_recipients}</b>
               </div>
             </div>
           )}
@@ -504,12 +502,10 @@ export function AdminPanel({ lang }: Props) {
       {activeSection === 'forcesub' && (
         <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
           <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#f8fafc' }}>
-            {isRtl ? 'تنظیمات قفل عضویت اجباری کانال (Force-Subscription Gate)' : 'Channel Force-Subscription Gate'}
+            {t('ui_channel_force_subscription_gate')}
           </h3>
           <p style={{ margin: '0 0 16px', fontSize: '0.84rem', color: '#94a3b8' }}>
-            {isRtl
-              ? 'در صورت فعال‌سازی، کاربران ربات قبل از دسترسی به هرگونه امکاناتی باید در کانال مشخص‌شده عضو شوند.'
-              : 'Enforce mandatory channel membership prior to granting access to bot capabilities.'}
+            {t('ui_enforce_mandatory_channel_membership_prior_to_granting_access_to')}
           </p>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -521,19 +517,19 @@ export function AdminPanel({ lang }: Props) {
               style={{ width: 18, height: 18, accentColor: '#ef4444' }}
             />
             <label htmlFor="fsToggle" style={{ color: '#f8fafc', fontWeight: 600, fontSize: '0.92rem' }}>
-              {isRtl ? 'فعال‌سازی قفل عضویت اجباری' : 'Enable Mandatory Channel Subscription'}
+              {t('ui_enable_mandatory_channel_subscription')}
             </label>
           </div>
 
           <div style={{ marginBottom: 20, maxWidth: 450 }}>
             <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: 6 }}>
-              {isRtl ? 'شناسه یا یوزرنیم کانال الزامی:' : 'Required Channel Username or Numeric ID:'}
+              {t('ui_required_channel_username_or_numeric_id')}
             </label>
             <input
               type="text"
               value={fsChannel}
               onChange={(e) => setFsChannel(e.target.value)}
-              placeholder="@MyChannel or -100123456789"
+              placeholder={t('ui_mychannel_or_100123456789')}
               style={{
                 width: '100%',
                 padding: 10,
@@ -547,9 +543,9 @@ export function AdminPanel({ lang }: Props) {
           </div>
 
           <button onClick={handleSaveSettings} className="btn btn-primary" style={{ padding: '8px 20px' }}>
-            <span>{saveStatus === 'saving' ? (isRtl ? 'در حال ذخیره...' : 'Saving...') : (isRtl ? 'ذخیره تنظیمات' : 'Save Gate Settings')}</span>
+            <span>{saveStatus === 'saving' ? (t('ui_saving')) : (t('ui_save_gate_settings'))}</span>
           </button>
-          {saveStatus === 'saved' && <span style={{ marginLeft: 12, color: '#4ade80', fontSize: '0.85rem' }}>✅ {isRtl ? 'ذخیره شد' : 'Saved'}</span>}
+          {saveStatus === 'saved' && <span style={{ marginLeft: 12, color: '#4ade80', fontSize: '0.85rem' }}>✅ {t('ui_saved')}</span>}
         </div>
       )}
 
@@ -557,13 +553,13 @@ export function AdminPanel({ lang }: Props) {
       {activeSection === 'admins' && (
         <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
           <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#f8fafc' }}>
-            {isRtl ? 'فهرست مدیران دارای دسترسی به کنترل پنل' : 'Authorized Administrators (RBAC)'}
+            {t('ui_authorized_administrators_rbac')}
           </h3>
 
           <div style={{ display: 'flex', gap: 10, marginBottom: 20, maxWidth: 400 }}>
             <input
               type="number"
-              placeholder={isRtl ? 'شناسه عددی تلگرام کاربر...' : 'Numeric Telegram User ID...'}
+              placeholder={t('ui_numeric_telegram_user_id')}
               value={newAdminId}
               onChange={(e) => setNewAdminId(e.target.value)}
               style={{
@@ -578,7 +574,7 @@ export function AdminPanel({ lang }: Props) {
             />
             <button onClick={handleAddAdmin} className="btn btn-primary" style={{ padding: '0 16px' }}>
               <Plus size={16} />
-              <span>{isRtl ? 'افزودن مدیر' : 'Add Admin'}</span>
+              <span>{t('ui_add_admin')}</span>
             </button>
           </div>
 
@@ -611,7 +607,7 @@ export function AdminPanel({ lang }: Props) {
                     style={{ padding: '4px 8px', color: '#f87171', background: 'rgba(239,68,68,0.1)' }}
                   >
                     <Trash2 size={14} />
-                    <span>{isRtl ? 'حذف' : 'Remove'}</span>
+                    <span>{t('ui_remove')}</span>
                   </button>
                 )}
               </div>
@@ -625,11 +621,11 @@ export function AdminPanel({ lang }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#f8fafc' }}>
-              {isRtl ? 'دامنه وب و آدرس عمومی داشبورد' : 'Public Web Domain Configuration'}
+              {t('ui_public_web_domain_configuration')}
             </h3>
             <div style={{ marginBottom: 16, maxWidth: 500 }}>
               <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: 6 }}>
-                {isRtl ? 'آدرس HTTPS داشبورد (جهت دکمه وب‌اپ در ربات):' : 'Dashboard Public URL:'}
+                {t('ui_dashboard_public_url')}
               </label>
               <input
                 type="text"
@@ -649,13 +645,13 @@ export function AdminPanel({ lang }: Props) {
             </div>
 
             <button onClick={handleSaveSettings} className="btn btn-primary" style={{ padding: '8px 20px' }}>
-              <span>{isRtl ? 'ذخیره دامنه' : 'Save Domain'}</span>
+              <span>{t('ui_save_domain')}</span>
             </button>
           </div>
 
           <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#f8fafc' }}>
-              {isRtl ? 'ماژول‌ها و افزونه‌های اختیاری سامانه' : 'Platform Extensions & Core Engines'}
+              {t('ui_platform_extensions_core_engines')}
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
               {extensions.map((ext) => (

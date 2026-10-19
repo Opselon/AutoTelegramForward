@@ -2,8 +2,11 @@ import { useState } from 'react'
 import { AlertCircle, Check, KeyRound, Loader2, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import type { BotTokenInfo } from '../types'
+import { makeT, type UiLang } from '../locales'
 
 interface Props {
+  /** The panel's language; the field owns no copy of its own otherwise. */
+  lang?: UiLang
   /** The owner's attached bots: the only ids the server will accept here. */
   bots: BotTokenInfo[]
   /** The selected bot id (the setting's current value). */
@@ -32,6 +35,7 @@ interface Props {
  * rules, and a second copy of them here would drift.
  */
 export function BotRouteField({
+  lang = 'en',
   bots,
   value,
   inputStyle,
@@ -40,6 +44,7 @@ export function BotRouteField({
   reloadBots,
   botRoute,
 }: Props) {
+  const t = makeT(lang)
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [token, setToken] = useState('')
@@ -65,7 +70,7 @@ export function BotRouteField({
       if (info?.id) onChange(info.id)
       setNotice(`Attached ${info?.label || 'the bot'} — Telegram accepted it.`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Telegram refused this token')
+      setError(err instanceof Error ? err.message : t('ui_telegram_refused_this_token'))
     } finally {
       setBusy(false)
     }
@@ -79,11 +84,11 @@ export function BotRouteField({
       await api.deleteBotToken(id)
       await reloadBots()
       if (value === id) onChange('')
-      setNotice('Bot removed. Its token is gone from this account.')
+      setNotice(t('ui_bot_removed_its_token_is_gone_from_this_account'))
     } catch (err) {
       // "still used by N task(s)" arrives here: the server refuses to pull a
       // credential out from under a running task.
-      setError(err instanceof Error ? err.message : 'Could not remove this bot')
+      setError(err instanceof Error ? err.message : t('ui_could_not_remove_this_bot'))
     } finally {
       setBusy(false)
     }
@@ -119,7 +124,9 @@ export function BotRouteField({
           onChange={(e) => onChange(e.target.value)}
           disabled={!bots.length}
         >
-          <option value="">{bots.length ? '— none —' : 'no bot attached yet'}</option>
+          <option value="">
+            {bots.length ? t('ui_none') : t('ui_no_bot_attached_yet')}
+          </option>
           {bots.map((b) => (
             <option key={b.id} value={b.id}>
               {b.label}
@@ -129,7 +136,7 @@ export function BotRouteField({
         {selected && (
           <button
             type="button"
-            title="Remove this bot from the account"
+            title={t('ui_remove_this_bot_from_the_account')}
             onClick={() => void remove(selected.id)}
             disabled={busy}
             style={{ ...smallButton, color: '#fca5a5' }}
@@ -139,7 +146,7 @@ export function BotRouteField({
         )}
         <button type="button" onClick={() => setOpen((v) => !v)} style={smallButton}>
           <KeyRound size={12} />
-          {open ? 'Cancel' : 'Attach bot'}
+          {open ? t('ui_cancel') : t('ui_attach_bot')}
         </button>
       </div>
 
@@ -154,13 +161,12 @@ export function BotRouteField({
           }}
         >
           <div style={hintStyle}>
-            Paste the token @BotFather gave you. It is sent once, checked with Telegram, and
-            stored encrypted — it is never shown again, not even here.
+            {t('ui_paste_the_token_botfather_gave_you_it_is_sent_once_checked_with')}
           </div>
           <div style={rowStyle}>
             <input
               style={{ ...inputStyle, maxWidth: '34%' }}
-              placeholder="label (optional)"
+              placeholder={t('ui_label_optional')}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
             />
@@ -190,18 +196,17 @@ export function BotRouteField({
                 cursor: token.trim() && !busy ? 'pointer' : 'not-allowed',
               }}
             >
-              {busy ? <Loader2 size={12} /> : <Check size={12} />} Add
+              {busy ? <Loader2 size={12} /> : <Check size={12} />} {t('ui_add')}
             </button>
           </div>
           {botRoute && (
             <div style={{ ...hintStyle, marginTop: '6px' }}>
-              This task delivers as a bot, so it needs one attached before the token can be
-              cleared.
+              {t('ui_this_task_delivers_as_a_bot_so_it_needs_one_attached_before_the')}
             </div>
           )}
           {bots.length > 0 && (
             <div style={{ ...hintStyle, marginTop: '6px' }}>
-              Attached: {bots.map((b) => b.label).join(', ')}
+              {t('ui_attached')} {bots.map((b) => b.label).join(', ')}
             </div>
           )}
         </div>
@@ -227,8 +232,7 @@ export function BotRouteField({
       )}
       {botRoute && !bots.length && !open && (
         <div style={{ ...hintStyle, color: '#fbbf24' }}>
-          This task is set to deliver as a bot but none is attached — attach one, or switch the
-          route back to the account.
+          {t('ui_this_task_is_set_to_deliver_as_a_bot_but_none_is_attached_attach')}
         </div>
       )}
     </div>

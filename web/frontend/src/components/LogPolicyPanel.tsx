@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Gauge, RefreshCw, ShieldAlert } from 'lucide-react'
 import { api } from '../api'
 import type { LogPolicyScopes, LogPolicyScope } from '../types'
+import { makeT, type UiLang } from '../locales'
 
 /**
  * Operator control for the collection policy, per producer.
@@ -55,9 +56,8 @@ function Levels({
   )
 }
 
-export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
-  const isRtl = lang === 'fa'
-  const t = (fa: string, en: string) => (isRtl ? fa : en)
+export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
+  const t = makeT(lang)
 
   const [scopes, setScopes] = useState<LogPolicyScopes | null>(null)
   const [loading, setLoading] = useState(true)
@@ -111,11 +111,8 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
       setScopes((prev) => (prev ? { ...prev, core: res.scope } : prev))
       setNotice(
         res.persisted
-          ? t('تغییر اعمال و ذخیره شد (پس از راه‌اندازی مجدد باقی می‌ماند)', 'Applied and saved (survives a restart)')
-          : t(
-              'تغییر اعمال شد اما ذخیره نشد؛ پس از راه‌اندازی مجدد بازنشانی می‌شود',
-              'Applied, but not saved: it will be reset by a restart',
-            ),
+          ? t('ui_applied_and_saved_survives_a_restart')
+          : t('ui_applied_but_not_saved_it_will_be_reset_by_a_restart'),
       )
     } catch (err) {
       setError(messageOf(err))
@@ -147,39 +144,36 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
       </div>
       {!scope?.available ? (
         <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
-          {t('در دسترس نیست: ', 'Unavailable: ')}
-          {scope?.reason || t('دلیل نامشخص', 'no reason given')}
+          {t('ui_unavailable')}
+          {scope?.reason || t('ui_no_reason_given')}
         </div>
       ) : (
         <>
           <div style={{ fontSize: '0.78rem', marginBottom: 6 }}>
-            <span className="muted">{t('سطح‌های تنظیم‌شده', 'Configured levels')}: </span>
+            <span className="muted">{t('ui_configured_levels')}: </span>
             <Levels levels={scope.configured_levels} tone="configured" />
           </div>
           <div style={{ fontSize: '0.78rem', marginBottom: 6 }}>
-            <span className="muted">{t('در حال جمع‌آوری', 'Collecting now')}: </span>
+            <span className="muted">{t('ui_collecting_now')}: </span>
             <Levels levels={scope.effective_levels} tone="effective" />
           </div>
           <div style={{ fontSize: '0.78rem', marginBottom: 6 }}>
-            <span className="muted">{t('سقف نرخ', 'Rate ceiling')}: </span>
+            <span className="muted">{t('ui_rate_ceiling')}: </span>
             {scope.verbose_rate_per_second
-              ? t(`${scope.verbose_rate_per_second} رویداد در ثانیه`, `${scope.verbose_rate_per_second} events/s`)
-              : t('بدون محدودیت', 'unlimited')}
+              ? t('ui_scope_2_events_s', { scope_2: scope.verbose_rate_per_second })
+              : t('ui_unlimited')}
           </div>
           {scope.diagnostic_active && (
             <div style={{ fontSize: '0.78rem', color: '#fbbf24', marginBottom: 6 }}>
-              {t('حالت تشخیصی فعال است', 'Diagnostic window active')} ·{' '}
+              {t('ui_diagnostic_window_active')} ·{' '}
               {scope.diagnostic_seconds_remaining
-                ? t(`${scope.diagnostic_seconds_remaining} ثانیه باقی‌مانده`, `${scope.diagnostic_seconds_remaining}s left`)
+                ? t('ui_scope_2_s_left', { scope_2: scope.diagnostic_seconds_remaining })
                 : new Date((scope.diagnostic_until ?? 0) * 1000).toISOString()}
             </div>
           )}
           {scope.counters && (
             <div className="muted" style={{ fontSize: '0.72rem' }}>
-              {t(
-                `${scope.counters.emitted} ارسال‌شده · ${scope.counters.suppressed_level} حذف‌شده با سطح · ${scope.counters.suppressed_rate} حذف‌شده با نرخ`,
-                `${scope.counters.emitted} emitted · ${scope.counters.suppressed_level} dropped by level · ${scope.counters.suppressed_rate} dropped by rate`,
-              )}
+              {t('ui_scope_4_emitted_scope_5_dropped_by_level_scope_6_dropped_by_rate', { scope_4: scope.counters.emitted, scope_5: scope.counters.suppressed_level, scope_6: scope.counters.suppressed_rate })}
             </div>
           )}
         </>
@@ -192,7 +186,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Gauge size={17} color="#38bdf8" />
-          <span>{t('سیاست جمع‌آوری لاگ (هر سرویس)', 'Log Collection Policy (per service)')}</span>
+          <span>{t('ui_log_collection_policy_per_service')}</span>
         </h3>
         <button
           onClick={() => void load()}
@@ -201,15 +195,12 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
           disabled={loading}
         >
           <RefreshCw size={14} />
-          <span>{t('بروزرسانی', 'Refresh')}</span>
+          <span>{t('ui_refresh')}</span>
         </button>
       </div>
 
       <p className="muted" style={{ fontSize: '0.78rem', margin: '8px 0 14px' }}>
-        {t(
-          'سیاست برای هر فرایند جداگانه اعمال می‌شود؛ اعداد و سطوح زیر همان چیزی است که خود سرویس گزارش می‌دهد. تغییر فقط توسط ادمین و از طریق هسته اعمال می‌شود.',
-          'The policy is enforced per process, so each card is that process’s own answer. Changes are admin-only and are applied by the core that enforces them.',
-        )}
+        {t('ui_the_policy_is_enforced_per_process_so_each_card_is_that_process')}
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
@@ -226,7 +217,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <ShieldAlert size={15} color="#f59e0b" />
           <strong style={{ fontSize: '0.85rem' }}>
-            {t('تغییر سیاست هسته (atf-core)', 'Change core policy (atf-core)')}
+            {t('ui_change_core_policy_atf_core')}
           </strong>
         </div>
 
@@ -245,7 +236,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
                   background: on ? 'rgba(56,189,248,0.18)' : 'rgba(15,23,42,0.6)',
                   color: on ? '#38bdf8' : '#94a3b8',
                 }}
-                title={t('برای تغییر کلیک کنید', 'Click to toggle')}
+                title={t('ui_click_to_toggle')}
               >
                 {level}
               </button>
@@ -255,7 +246,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
           <label style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">{t('سقف نرخ (۰ = بدون محدودیت)', 'Rate ceiling (0 = unlimited)')}</span>
+            <span className="muted">{t('ui_rate_ceiling_0_unlimited')}</span>
             <input
               type="number"
               min={0}
@@ -265,7 +256,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
             />
           </label>
           <label style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="muted">{t('پنجره تشخیصی (ثانیه)', 'Diagnostic window (seconds)')}</span>
+            <span className="muted">{t('ui_diagnostic_window_seconds')}</span>
             <input
               type="number"
               min={1}
@@ -287,19 +278,13 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
               const parsedSeconds = Number(seconds)
               if (!Number.isFinite(parsedRate) || parsedRate < 0) {
                 setError(
-                  t(
-                    'سقف نرخ باید عددی نامنفی باشد (۰ = بدون محدودیت)',
-                    'The rate ceiling must be a non-negative number (0 = unlimited)',
-                  ),
+                  t('ui_the_rate_ceiling_must_be_a_non_negative_number_0_unlimited'),
                 )
                 return
               }
               if (!Number.isFinite(parsedSeconds) || parsedSeconds < 1 || parsedSeconds > 3600) {
                 setError(
-                  t(
-                    'پنجره تشخیصی باید بین ۱ تا ۳۶۰۰ ثانیه باشد',
-                    'The diagnostic window must be between 1 and 3600 seconds',
-                  ),
+                  t('ui_the_diagnostic_window_must_be_between_1_and_3600_seconds'),
                 )
                 return
               }
@@ -310,20 +295,20 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: string }) {
               })
             }}
           >
-            {t('اعمال سطح‌ها و نرخ', 'Apply levels and rate')}
+            {t('ui_apply_levels_and_rate')}
           </button>
           <button
             className="btn btn-secondary"
             disabled={saving || !core?.available}
             onClick={() => void apply({ disable_diagnostics: true })}
           >
-            {t('پایان حالت تشخیصی', 'Stop diagnostics')}
+            {t('ui_stop_diagnostics')}
           </button>
         </div>
 
         {levels.length === 0 && (
           <div style={{ fontSize: '0.75rem', color: '#fbbf24', marginTop: 8 }}>
-            {t('حداقل یک سطح باید انتخاب شود', 'At least one level must be selected')}
+            {t('ui_at_least_one_level_must_be_selected')}
           </div>
         )}
 
