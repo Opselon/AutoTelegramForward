@@ -248,3 +248,24 @@ Pre-fix all 5 tests fail (the defect reproduces on the real repository and the r
 the AI, pipeline and boundary suites. `test_p2_ai_engine.py`'s failover double was also corrected: its `AsyncMock` auto-created
 `get_owned` as a MagicMock "config" with no `id`, which passed every check, failed the factory's id lookup and quietly handed the
 test the backup provider — the same shape of bug the interface change was meant to expose.
+
+## Part 2 STEER 11 — worker-restart durability findings
+
+A redeploy, an OOM kill and a crashed worker all look the same to the pipeline: the process disappears between two statements.
+Everything the next process needs must therefore already be in the database. Each test below drives the real pipeline and the
+real ``DurableQueueManager``, then **closes the database and opens a new one** — the closest thing to a restart a single process
+can perform — and asserts what survived. Proven: nothing is lost, nothing is delivered twice, a scheduled delay is not released
+early, a live lease is not stolen, and the branded stage does not lose the post it must reproduce.
+
+| ID | Property | Verdict | Evidence |
+|----|----------|---------|----------|
+| D11-1 | The queued job survives a restart with its payload, id and kind | **PASS** (verified, not assumed) | `test_a_queued_job_survives_a_restart_with_its_payload` |
+| D11-2 | A source message replayed after a restart produces no second delivery | **PASS** | `test_a_replay_after_a_restart_is_still_deduped` |
+| D11-3 | A delayed job stays gated after a restart (the delay is `next_retry_at`, not a timer that dies with the process) and is released exactly when it should | **PASS** | `test_a_delayed_job_is_still_gated_after_a_restart` |
+| D11-4 | A job claimed by the dead worker is reclaimed once its lease expires — as the *same* job row, never a fork | **PASS** | `test_a_job_held_by_the_dead_worker_is_reclaimed_as_the_same_job` |
+| D11-5 | The branded stage keeps the C reference (chat, post, stage) the worker must reproduce from | **PASS** | `test_a_branded_job_keeps_the_post_it_must_forward_from` |
+
+No defect found: the durability model was designed correctly (ACID job+mapping insert, claim gate as the delay authority, lease
+recovery as re-claim rather than re-enqueue). The five tests exist because the steer demands proof of that on the real objects,
+and because each property is one refactor away from being lost — the delay in particular survives only as long as it stays in
+`next_retry_at` and out of any in-process timer.
