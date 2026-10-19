@@ -16,6 +16,7 @@ from ..domain.entities import EvaluationResult, FilterRule, ForwardRule, Message
 from ..domain.value_objects import DeliveryStatus, FilterAction, LinkPolicy, MediaType, RoutingDecision
 from . import branding
 from .content_policy import compile_user_regex
+from .media_filter import media_block_reason
 
 logger = logging.getLogger(__name__)
 
@@ -512,11 +513,11 @@ class SmartRoutingEngine:
             if is_vip:
                 return False, f"category_regular_unmatched:{reason}"
 
-        # Media filters
-        if rule.block_voice and payload.media_type.value == "voice":
-            return False, "blocked_voice"
-        if rule.block_stickers and payload.media_type.value == "sticker":
-            return False, "blocked_stickers"
+        # Media filters — the shared decision, so the rule preview shown by the
+        # bot and the gRPC test endpoint cannot disagree with the engine.
+        media_reason = media_block_reason(rule, payload.media_type)
+        if media_reason:
+            return False, media_reason
 
         handling = (rule.media_handling or "AUTO").upper()
         if handling == "TEXT_ONLY" and payload.has_media:

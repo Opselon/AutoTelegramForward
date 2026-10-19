@@ -291,6 +291,9 @@ class ForwardRule {
     this.useVipRouting = false,
     this.blockVoice = false,
     this.blockStickers = false,
+    this.blockVideo = false,
+    this.blockAudio = false,
+    this.blockText = false,
     this.removeEmojis = false,
     this.syncDeletes = false,
     this.ignoreEdits = false,
@@ -421,9 +424,14 @@ class ForwardRule {
   /// pipeline in deterministic order; empty string replaces with removal.
   final Map<String, String> replacements;
 
-  /// Bot & Web parity media toggles
+  /// Bot & Web parity media toggles. Every type filter the core engine
+  /// enforces is editable here, so the app cannot offer a toggle that only
+  /// the bot honours.
   final bool blockVoice;
   final bool blockStickers;
+  final bool blockVideo;
+  final bool blockAudio;
+  final bool blockText;
   final bool removeEmojis;
   final bool syncDeletes;
   final bool ignoreEdits;
@@ -457,6 +465,9 @@ class ForwardRule {
     Map<String, String>? replacements,
     bool? blockVoice,
     bool? blockStickers,
+    bool? blockVideo,
+    bool? blockAudio,
+    bool? blockText,
     bool? removeEmojis,
     bool? syncDeletes,
     bool? ignoreEdits,
@@ -515,6 +526,9 @@ class ForwardRule {
     replacements: replacements ?? this.replacements,
     blockVoice: blockVoice ?? this.blockVoice,
     blockStickers: blockStickers ?? this.blockStickers,
+    blockVideo: blockVideo ?? this.blockVideo,
+    blockAudio: blockAudio ?? this.blockAudio,
+    blockText: blockText ?? this.blockText,
     removeEmojis: removeEmojis ?? this.removeEmojis,
     syncDeletes: syncDeletes ?? this.syncDeletes,
     ignoreEdits: ignoreEdits ?? this.ignoreEdits,
@@ -601,6 +615,9 @@ class ForwardRule {
     if (promptId.isNotEmpty) 'prompt_id': promptId,
     'block_voice': blockVoice,
     'block_stickers': blockStickers,
+    'block_video': blockVideo,
+    'block_audio': blockAudio,
+    'block_text': blockText,
     'remove_emojis': removeEmojis,
     'sync_deletes': syncDeletes,
     'ignore_edits': ignoreEdits,
@@ -782,6 +799,15 @@ class ForwardRule {
       blockStickers:
           (json['block_stickers'] as bool?) ??
           (meta['block_stickers'] as bool? ?? false),
+      blockVideo:
+          (json['block_video'] as bool?) ??
+          (meta['block_video'] as bool? ?? false),
+      blockAudio:
+          (json['block_audio'] as bool?) ??
+          (meta['block_audio'] as bool? ?? false),
+      blockText:
+          (json['block_text'] as bool?) ??
+          (meta['block_text'] as bool? ?? false),
       removeEmojis:
           (json['remove_emojis'] as bool?) ??
           (meta['remove_emojis'] as bool? ?? false),

@@ -457,6 +457,11 @@ func enrichCustomMetadata(rawBody []byte, rule *pb.ForwardRule) {
 		// replace rules, content trimming, blocking, routing extras.
 		"replacements", "header", "footer",
 		"block_voice", "block_stickers", "remove_emojis",
+		// The other four type filters the engine enforces. They were missing
+		// from this list, so a dashboard/app task saved with "block video"
+		// round-tripped through the modal and never reached the rule — the
+		// engine kept forwarding it.
+		"block_text", "block_video", "block_audio", "block_links",
 		"link_replacement", "album_mode", "clean_words",
 		"message_category", "detection_criteria", "use_intermediate",
 		"intermediate_mode", "fallback_mode", "priority", "multi_route",
@@ -523,6 +528,10 @@ func normalizeAdvancedMetadata(meta map[string]any) {
 		"keyword_confirmation", "ocr_image_ai", "smart_ai_rewrite", "news_digest",
 		// v2.0 app update sync flags + cleaner gate.
 		"sync_replies", "sync_edits", "sync_deletes", "cleaner_enabled",
+		// Type filters: a JSON string ("false") or 0 must not reach the rule
+		// as a truthy value and silently drop every message of that type.
+		"block_text", "block_video", "block_audio", "block_links",
+		"block_voice", "block_stickers",
 	} {
 		if v, ok := meta[k]; ok {
 			meta[k] = toBool(v)

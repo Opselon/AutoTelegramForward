@@ -17,6 +17,11 @@ from ..domain.entities import (
     TelegramSession,
 )
 from ..domain.services import FilterEngine, RoutingPolicy
+from ..domain.media_filter import (
+    link_block_reason,
+    media_block_reason,
+    normalise_media_type,
+)
 from .repositories import (
     IAIConfigRepository,
     IFilterRuleRepository,
@@ -861,16 +866,45 @@ class MessageForwardingUseCase:
             logger.warning("Use case: Rule %s DROPPED msg %s by filter rule %s: %s", rule.id[:8], payload.message_id, rule.filter_rule_id or "none", evaluation.reason)
             return PipelineOutcome(False, evaluation.reason, evaluation)
 
-        # --- media blocks (voice / stickers) --------------------------
-        m_type = str(getattr(payload.media_type, "value", payload.media_type)).lower()
-        if rule.block_voice and m_type in ("voice", "audio"):
-            logger.warning("Use case: Rule %s DROPPED msg %s: voice/audio blocked", rule.id[:8], payload.message_id)
-            return PipelineOutcome(False, "voice_blocked", evaluation)
-        if rule.block_stickers and m_type in ("sticker",):
-            logger.warning("Use case: Rule %s DROPPED msg %s: sticker blocked", rule.id[:8], payload.message_id)
-            return PipelineOutcome(False, "sticker_blocked", evaluation)
+        # --- media & content blocks (voice / audio / video / stickers / text /
+        # link) — the same decision the durable pipeline applies, so a reply or
+        # PV delivery cannot forward a type the task blocks.
+        m_type = normalise_media_type(payload.media_type)
+        media_reason = media_block_reason(rule, m_type) or link_block_reason(
+            rule, payload.effective_text
+        )
+        if media_reason:
+            logger.warning(
+                "Use case: Rule %s DROPPED msg %s: %s",
+                rule.id[:8], payload.message_id, media_reason,
+            )
+            return PipelineOutcome(False, media_reason, evaluation)
 
         text = payload.effective_text
+        # The per-task cleaner must run on *every* forwarding path. It was only
+        # applied by the durable pipeline, so a reply/PV delivery forwarded the
+        # raw text with links, @mentions and custom words the owner had asked to
+        # strip. Same cleaner, same order (before link/text transforms).
+        cleaner = rule.build_cleaner() if hasattr(rule, "build_cleaner") else None
+        if cleaner is not None:
+            try:
+                cleaned = cleaner.clean(text)
+                if cleaned != text:
+                    logger.info(
+                        "[CLEANER:USE_CASE] Rule %s cleaned msg %s: len %d -> %d",
+                        rule.id[:8], payload.message_id, len(text), len(cleaned),
+                    )
+                    text = cleaned
+                if getattr(cleaner, "strip_buttons", False) and getattr(payload, "reply_markup", None) is not None:
+                    payload.reply_markup = None
+                    logger.info("[CLEANER:USE_CASE] Rule %s removed the inline keyboard of msg %s",
+                                rule.id[:8], payload.message_id)
+            except Exception as exc:
+                # Never drop a message because the cleaner failed.
+                logger.warning(
+                    "[CLEANER:USE_CASE] Rule %s cleaner failed (%s) — delivering uncleaned text",
+                    rule.id[:8], exc,
+                )
         if rule.link_replacement:
             text = self._filter_engine.replace_links(text, rule.link_replacement)
             evaluation.links_removed = True

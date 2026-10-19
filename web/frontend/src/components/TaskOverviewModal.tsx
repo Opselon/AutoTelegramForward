@@ -740,7 +740,7 @@ export function TaskOverviewModal({
                       title: 'Filters',
                       icon: '⊶',
                       iconColor: '#3b82f6',
-                      status: `Activated: ${((draft.duplicate_filters ? 1 : 0) + [draft.block_text, draft.block_links, draft.block_voice, draft.block_stickers].filter(Boolean).length)}`,
+                      status: `Activated: ${((draft.duplicate_filters ? 1 : 0) + [draft.block_text, draft.block_links, draft.block_voice, draft.block_stickers, draft.block_video, draft.block_audio].filter(Boolean).length)}`,
                       onClick: () => setCurrentTab('filters'),
                     },
                     {

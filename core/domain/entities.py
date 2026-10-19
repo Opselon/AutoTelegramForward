@@ -217,6 +217,78 @@ class ForwardRule:
                 return False
         return True
 
+    # -- engine-initiated pause (invalid source/target) ----------------------
+    #
+    # A task whose source or target no longer exists must stop — but it must
+    # stop *visibly*: the owner has to know which chat failed, why, and how to
+    # resume once it is fixed. Disabling `is_active` (what the queue used to
+    # do) is indistinguishable from the owner switching the task off, survives
+    # no reason, and sends no notification. The pause lives in metadata so it
+    # needs no migration, and `is_paused` is the same switch the engine, the
+    # bot and the API already read.
+    @property
+    def auto_pause(self) -> Dict[str, Any]:
+        """``{code, reason, chat_id, scope, at}`` when the engine paused this task."""
+        raw = self.metadata.get("auto_pause") if isinstance(self.metadata, dict) else None
+        return dict(raw) if isinstance(raw, dict) else {}
+
+    @property
+    def auto_pause_reason(self) -> str:
+        return str(self.auto_pause.get("reason") or "")
+
+    def mark_auto_paused(
+        self,
+        code: str,
+        reason: str,
+        *,
+        chat_id: str = "",
+        scope: str = "",
+        detail: str = "",
+        at: Optional[float] = None,
+    ) -> bool:
+        """Pause this task because the engine found a permanent failure.
+
+        Returns True when this call *changed* the task (a repeat failure of the
+        same code is a no-op, so a queue full of jobs for one dead target does
+        not write the rule and notify the owner once per job).
+        """
+        code = str(code or "UNKNOWN").upper()
+        current = self.auto_pause
+        if current.get("code") == code and current.get("chat_id", "") == str(chat_id):
+            return False
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        prev = {
+            "was_paused": bool(self.is_paused and not current),
+            "paused_until": float(self.paused_until or 0),
+        }
+        self.metadata["auto_pause"] = {
+            "code": code,
+            "reason": str(reason or code),
+            "chat_id": str(chat_id or ""),
+            "scope": str(scope or ""),
+            "detail": str(detail or "")[:500],
+            "at": float(at if at is not None else time.time()),
+            "prev": prev,
+        }
+        self.is_paused = True
+        self.paused_until = 0
+        return True
+
+    def clear_auto_pause(self) -> bool:
+        """Remove the engine pause and restore the owner's previous pause state."""
+        current = self.auto_pause
+        if not current:
+            return False
+        if isinstance(self.metadata, dict):
+            self.metadata.pop("auto_pause", None)
+        prev = current.get("prev") or {}
+        # An owner who had paused the task before it broke keeps their pause:
+        # resuming must not silently start forwarding for them.
+        self.is_paused = bool(prev.get("was_paused", False))
+        self.paused_until = int(prev.get("paused_until") or 0) if self.is_paused else 0
+        return True
+
     # -- effective task status (one authority for UI + engine) ---------------
     #
     # Two independent mechanisms stop a task, and the engine obeys both:
@@ -1796,6 +1868,13 @@ class ForwardRule:
             "split_long_caption": bool(getattr(self, "split_long_caption", True)),
             "block_voice": bool(self.block_voice),
             "block_stickers": bool(self.block_stickers),
+            # Every filter the engine enforces travels with the draft: a
+            # recorder/duplicate flow that re-saved a task without these keys
+            # silently switched the owner's video/audio/text blocks back off.
+            "block_video": bool(self.block_video),
+            "block_audio": bool(self.block_audio),
+            "block_text": bool(self.block_text),
+            "block_links": bool(self.block_links),
             "remove_emojis": bool(self.remove_emojis),
             "ignore_edits": bool(self.ignore_edits),
             "sync_deletes": bool(self.sync_deletes),
@@ -1810,6 +1889,17 @@ class ForwardRule:
             "custom_header": str(self.custom_header),
             "custom_footer": str(self.custom_footer),
             "replacements": dict(self.replacements),
+            # The Cleaner travels with the draft for the same reason the filters
+            # do: a recorder/duplicate flow re-saves the draft, and a missing key
+            # used to switch the owner's cleaner silently back off.
+            "cleaner_enabled": bool(self.cleaner_enabled),
+            "cleaner_config": dict(self.cleaner_config),
+            "clean_usernames": bool(self.clean_usernames),
+            "clean_hashtags": bool(self.clean_hashtags),
+            "clean_phones": bool(self.clean_phones),
+            "clean_empty_lines": bool(self.clean_empty_lines),
+            "clean_buttons": bool(self.clean_buttons),
+            "clean_custom_words": list(self.clean_custom_words),
             # Per-task content rules travel with the draft: they are part of the
             # task, and every surface (bot, web, app, CLI) edits through it.
             "content_policy": self.content_policy_config,
@@ -1872,6 +1962,23 @@ class ForwardRule:
             self.custom_header = str(draft["custom_header"])
         if "custom_footer" in draft and draft["custom_footer"] is not None:
             self.custom_footer = str(draft["custom_footer"])
+        # --- Cleaner round-trip -------------------------------------------
+        if "cleaner_config" in draft and isinstance(draft["cleaner_config"], dict):
+            self.cleaner_config = dict(draft["cleaner_config"])
+        for _ck in ("clean_usernames", "clean_hashtags", "clean_phones",
+                    "clean_empty_lines", "clean_buttons", "remove_emojis"):
+            if _ck in draft:
+                setattr(self, _ck, bool(draft[_ck]))
+        if "clean_custom_words" in draft and isinstance(draft["clean_custom_words"], list):
+            self.clean_custom_words = [str(w) for w in draft["clean_custom_words"]]
+        if "cleaner_enabled" in draft:
+            self.cleaner_enabled = bool(draft["cleaner_enabled"])
+        elif any(draft.get(k) for k in ("clean_usernames", "clean_hashtags", "clean_phones",
+                                        "clean_empty_lines", "clean_buttons", "remove_emojis",
+                                        "remove_links")) or draft.get("clean_custom_words") or draft.get("cleaner_config"):
+            # Saving a legacy draft that only carries option flags keeps the
+            # master switch consistent with them instead of silently disabling.
+            self.cleaner_enabled = True
         # AI Rewrite (pipeline stage)
         if "ai_config_id" in draft:
             self.ai_config_id = str(draft.get("ai_config_id") or "") or None
@@ -1981,6 +2088,21 @@ class ForwardRule:
 
         if "block_stickers" in draft:
             self.metadata["block_stickers"] = bool(draft["block_stickers"])
+
+        if "block_video" in draft:
+            self.metadata["block_video"] = bool(draft["block_video"])
+
+        if "block_audio" in draft:
+            self.metadata["block_audio"] = bool(draft["block_audio"])
+
+        if "block_text" in draft:
+            self.metadata["block_text"] = bool(draft["block_text"])
+
+        if "block_links" in draft:
+            self.metadata["block_links"] = bool(draft["block_links"])
+
+        if "allowed_media_types" in draft and isinstance(draft["allowed_media_types"], list):
+            self.allowed_media_types = [str(x) for x in draft["allowed_media_types"]]
 
         if "remove_emojis" in draft:
             self.metadata["remove_emojis"] = bool(draft["remove_emojis"])
