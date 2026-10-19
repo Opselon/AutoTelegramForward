@@ -973,6 +973,16 @@ class ForwardRule:
             cfg = {**cfg, "block_links": True}
         if not cfg.get("remove_links") and getattr(self, "remove_links", False):
             cfg = {**cfg, "remove_links": True}
+        # Pre-policy rows kept the word lists in their own metadata keys. Fold
+        # them in (only when the policy has none) so a task configured before
+        # the content policy existed is still filtered instead of silently
+        # forwarding everything it used to block.
+        legacy_bl = self.metadata.get("blacklist") if isinstance(self.metadata, dict) else None
+        if not cfg.get("blacklist_words") and isinstance(legacy_bl, list) and legacy_bl:
+            cfg = {**cfg, "blacklist_words": [str(w) for w in legacy_bl]}
+        legacy_wl = self.metadata.get("whitelist") if isinstance(self.metadata, dict) else None
+        if not cfg.get("whitelist_words") and isinstance(legacy_wl, list) and legacy_wl:
+            cfg = {**cfg, "whitelist_words": [str(w) for w in legacy_wl]}
         return ContentPolicy.from_dict(cfg, source="task")
 
     def policy_chain(
@@ -1035,31 +1045,47 @@ class ForwardRule:
             self.metadata = {}
         self.metadata["crypto_mode"] = bool(val)
 
+    # --- blocked / required words -----------------------------------------
+    # One authoritative home: the content policy
+    # (`metadata["content_policy"]["blacklist_words"] / ["whitelist_words"]`).
+    # That is what `policy_chain()` hands the forwarding engine, what
+    # `rule_settings.py` exposes to the settings surface, and what backup
+    # carries. These two pairs are the compatibility view the Telegram menus
+    # have always written through: a write lands in the policy, a read falls
+    # back to the pre-policy keys so a task configured before the policy
+    # existed keeps its line instead of silently forwarding everything.
+
     @property
     def blacklist(self) -> List[str]:
+        words = list(self.blacklist_words)
+        if words:
+            return words
         if not isinstance(self.metadata, dict):
             return []
-        bl = self.metadata.get("blacklist", [])
-        return list(bl) if isinstance(bl, list) else []
+        legacy = self.metadata.get("blacklist", [])
+        return [str(w) for w in legacy] if isinstance(legacy, list) else []
 
     @blacklist.setter
     def blacklist(self, val: List[str]) -> None:
-        if not isinstance(self.metadata, dict):
-            self.metadata = {}
-        self.metadata["blacklist"] = list(val or [])
+        self.blacklist_words = list(val or [])
+        if isinstance(self.metadata, dict):
+            self.metadata.pop("blacklist", None)
 
     @property
     def whitelist(self) -> List[str]:
+        words = list(self.whitelist_words)
+        if words:
+            return words
         if not isinstance(self.metadata, dict):
             return []
-        wl = self.metadata.get("whitelist", [])
-        return list(wl) if isinstance(wl, list) else []
+        legacy = self.metadata.get("whitelist", [])
+        return [str(w) for w in legacy] if isinstance(legacy, list) else []
 
     @whitelist.setter
     def whitelist(self, val: List[str]) -> None:
-        if not isinstance(self.metadata, dict):
-            self.metadata = {}
-        self.metadata["whitelist"] = list(val or [])
+        self.whitelist_words = list(val or [])
+        if isinstance(self.metadata, dict):
+            self.metadata.pop("whitelist", None)
 
     @property
     def blacklist_users(self) -> List[str]:
