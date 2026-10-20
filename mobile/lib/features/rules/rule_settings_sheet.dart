@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
+import '../../core/layout.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../../l10n/app_messages.dart';
@@ -1326,9 +1327,9 @@ class _PairEditorState extends State<_PairEditor> {
                       onChanged: (_) => _emit(),
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6),
-                    child: Icon(Icons.arrow_forward, size: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Icon(AppIcons.arrow(context), size: 16),
                   ),
                   Expanded(
                     child: TextField(

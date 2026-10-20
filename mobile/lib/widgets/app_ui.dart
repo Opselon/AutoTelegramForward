@@ -13,6 +13,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../core/layout.dart';
+
 import '../core/theme.dart';
 import '../l10n/app_messages.dart';
 import 'app_card.dart';
@@ -361,7 +363,7 @@ class ReadinessHero extends StatelessWidget {
                     borderRadius: AppRadii.allPill,
                   ),
                 ),
-                icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                icon: Icon(AppIcons.arrow(context), size: 16),
                 label: Text(
                   openLabel,
                   style: const TextStyle(fontWeight: FontWeight.w700),

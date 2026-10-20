@@ -97,7 +97,7 @@ class AppButton extends StatelessWidget {
       ),
       AppButtonVariant.danger => FilledButton.styleFrom(
         backgroundColor: palette.danger,
-        foregroundColor: palette.onPrimary,
+        foregroundColor: palette.readableOn(palette.danger),
         minimumSize: Size(0, height),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.allMd),

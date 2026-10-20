@@ -17,6 +17,34 @@ import 'package:flutter/material.dart';
 
 import 'design_tokens.dart';
 
+/// Direction-aware icons.
+///
+/// A chevron that means "go deeper" points right in LTR and left in RTL; a
+/// hard-coded `chevron_right` is a bug a Persian or Arabic user sees on every
+/// row. Kept next to the layout contract because it is about direction, not
+/// decoration.
+class AppIcons {
+  const AppIcons._();
+
+  /// "There is more this way" — list rows, disclosure, drill-in.
+  static IconData forward(BuildContext context) =>
+      Directionality.of(context) == TextDirection.rtl
+      ? Icons.chevron_left
+      : Icons.chevron_right;
+
+  /// Rounded disclosure chevron, same rule.
+  static IconData forwardRounded(BuildContext context) =>
+      Directionality.of(context) == TextDirection.rtl
+      ? Icons.chevron_left_rounded
+      : Icons.chevron_right_rounded;
+
+  /// Arrow used to mean "this goes to that" (source → target).
+  static IconData arrow(BuildContext context) =>
+      Directionality.of(context) == TextDirection.rtl
+      ? Icons.arrow_back_rounded
+      : Icons.arrow_forward_rounded;
+}
+
 /// The three size classes from the spec.
 enum AppWindowSize { compact, medium, expanded }
 

@@ -647,7 +647,11 @@ class _RuleMasterRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: AppSpacing.xs),
-                  Icon(Icons.chevron_right, size: 18, color: palette.textMuted),
+                  Icon(
+                    AppIcons.forward(context),
+                    size: 18,
+                    color: palette.textMuted,
+                  ),
                 ],
               ),
             ),
@@ -722,7 +726,7 @@ class _RouteVisualiser extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                 child: Icon(
                   // Directional icon: mirrored in RTL by the framework.
-                  Icons.arrow_forward_rounded,
+                  AppIcons.arrow(context),
                   size: 16,
                   color: palette.textMuted,
                 ),

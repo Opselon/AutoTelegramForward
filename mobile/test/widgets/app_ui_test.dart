@@ -76,20 +76,34 @@ void main() {
     testWidgets('online and offline use different colours', (tester) async {
       // The pill's wording is the catalog's, so the test feeds it the same way
       // the screens do: through the English catalog, not a bare literal.
+      //
+      // The colour is read from the same palette the widget reads, not from a
+      // literal hex: the palette's tones are tuned for contrast, so pinning
+      // `AppTheme.success` here asserted a value the pill was deliberately
+      // moved off. What must stay true is that each state paints its own
+      // semantic role and that the two never collide.
       const en = AppMessages(Locale('en'));
+      late AppPalette palette;
       await tester.pumpWidget(
-        _host(StatusPill.online(true, label: en.get('status_online'))),
+        _host(
+          Builder(
+            builder: (context) {
+              palette = AppColors.of(context);
+              return StatusPill.online(true, label: en.get('status_online'));
+            },
+          ),
+        ),
       );
       final up = tester.widget<Text>(find.text('Online'));
-      // The healthy colour is the success hue; the brand hue means brand.
-      expect(up.style?.color, AppTheme.statusColor(true));
-      expect(AppTheme.statusColor(true), AppTheme.success);
+      expect(up.style?.color, palette.success);
+      expect(up.style?.color, isNot(palette.danger));
 
       await tester.pumpWidget(
         _host(StatusPill.online(false, label: en.get('status_offline'))),
       );
       final down = tester.widget<Text>(find.text('Offline'));
-      expect(down.style?.color, AppTheme.error);
+      expect(down.style?.color, palette.danger);
+      expect(down.style?.color, isNot(up.style?.color));
     });
 
     testWidgets('severity colours match the shared palette', (tester) async {

@@ -174,6 +174,29 @@ class AppPalette extends ThemeExtension<AppPalette> {
   Color soft(Color role, {double alpha = 0.14}) =>
       role.withValues(alpha: alpha);
 
+  /// Foreground that reaches 4.5:1 on [background] — white or the slate ink,
+  /// whichever measures higher. Filled surfaces (buttons, toasts, avatars) use
+  /// this instead of assuming white, which fails on every light role.
+  Color readableOn(Color background) =>
+      contrastRatio(background, const Color(0xFFFFFFFF)) >=
+          contrastRatio(background, const Color(0xFF0F172A))
+      ? const Color(0xFFFFFFFF)
+      : const Color(0xFF0F172A);
+
+  /// WCAG 2.1 relative-luminance contrast ratio, 1..21. Public because the
+  /// palette contract is verified by a test, not by eye.
+  static double contrastRatio(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final hi = la > lb ? la : lb;
+    final lo = la > lb ? lb : la;
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  /// Dark roles are the *light* end of each hue on purpose: a mid-tone
+  /// (indigo 500, emerald 500) reads at 2.5–4.0:1 on a slate background, under
+  /// the 4.5:1 floor. Each value here is measured against [surface] and
+  /// [surface2] by `test/core/palette_contrast_test.dart`.
   static const AppPalette dark = AppPalette(
     surface: Color(0xFF0F172A),
     surface2: Color(0xFF1E293B),
@@ -181,13 +204,13 @@ class AppPalette extends ThemeExtension<AppPalette> {
     border: Color(0xFF334155),
     text: Color(0xFFE2E8F0),
     textMuted: Color(0xFF94A3B8),
-    primary: Color(0xFF6366F1),
-    primaryHover: Color(0xFF4F46E5),
-    onPrimary: Color(0xFFFFFFFF),
-    success: Color(0xFF10B981),
-    warning: Color(0xFFF59E0B),
-    danger: Color(0xFFEF4444),
-    info: Color(0xFF3B82F6),
+    primary: Color(0xFFA5B4FC),
+    primaryHover: Color(0xFF818CF8),
+    onPrimary: Color(0xFF0F172A),
+    success: Color(0xFF34D399),
+    warning: Color(0xFFFBBF24),
+    danger: Color(0xFFFCA5A5),
+    info: Color(0xFF60A5FA),
     neutral: Color(0xFF94A3B8),
   );
 
@@ -201,9 +224,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     primary: Color(0xFF4F46E5),
     primaryHover: Color(0xFF4338CA),
     onPrimary: Color(0xFFFFFFFF),
-    success: Color(0xFF047857),
-    warning: Color(0xFFB45309),
-    danger: Color(0xFFDC2626),
+    success: Color(0xFF065F46),
+    warning: Color(0xFF92400E),
+    danger: Color(0xFFB91C1C),
     info: Color(0xFF1D4ED8),
     neutral: Color(0xFF64748B),
   );

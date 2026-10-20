@@ -43,6 +43,16 @@ class AppToast {
       ..showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 3),
+          // A tinted panel with the message in body colour, not white on the
+          // role colour: white on emerald measures 2.5:1 and white on amber
+          // 2.2:1, and in dark mode the default SnackBar surface is light, so
+          // forced white text disappeared entirely.
+          backgroundColor: palette.surface2,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.allMd,
+            side: BorderSide(color: color.withValues(alpha: 0.5)),
+          ),
           content: Semantics(
             liveRegion: true,
             label: message,
@@ -54,10 +64,7 @@ class AppToast {
                   child: Text(
                     message,
                     maxLines: 3,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: AppType.md,
-                    ),
+                    style: TextStyle(color: palette.text, fontSize: AppType.md),
                   ),
                 ),
               ],
