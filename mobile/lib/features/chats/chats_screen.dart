@@ -242,72 +242,90 @@ class _ChatsScreenState extends State<ChatsScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _loadChats,
-        child: ListView(
-          padding: AppSpacing.screen,
-          children: [
-            GradientHeader(
-              title: t.get('chats_title'),
-              subtitle: t.get('chats_subtitle'),
-              icon: Icons.forum_rounded,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _sessionSelector(t),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              key: const ValueKey<String>('chats_search'),
-              controller: _searchCtrl,
-              style: const TextStyle(fontSize: 14),
-              decoration: InputDecoration(
-                isDense: true,
-                prefixIcon: const Icon(Icons.search, size: 20),
-                hintText: t.get('chats_search_hint'),
-                suffixIcon: _loading
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : null,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final entry in <(String, String)>[
-                    ('all', 'chats_picker_filter_all'),
-                    ('channels', 'chats_picker_filter_channels'),
-                    ('groups', 'chats_picker_filter_groups'),
-                    ('users', 'chats_picker_filter_users'),
-                  ])
-                    Padding(
-                      padding: const EdgeInsetsDirectional.only(
-                        end: AppSpacing.sm,
-                      ),
-                      child: ChoiceChip(
-                        key: ValueKey<String>('chats_filter_${entry.$1}'),
-                        label: Text(t.get(entry.$2)),
-                        selected: _typeFilter == entry.$1,
-                        onSelected: (_) =>
-                            setState(() => _typeFilter = entry.$1),
+        // A sliver list, not a Column of tiles: an account with a thousand
+        // chats used to build and lay out a thousand rows on every frame. The
+        // header stays a single adapter sliver; the chats below it are only
+        // built as they scroll into view.
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: AppSpacing.screen,
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GradientHeader(
+                      title: t.get('chats_title'),
+                      subtitle: t.get('chats_subtitle'),
+                      icon: Icons.forum_rounded,
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    _sessionSelector(t),
+                    const SizedBox(height: AppSpacing.md),
+                    TextField(
+                      key: const ValueKey<String>('chats_search'),
+                      controller: _searchCtrl,
+                      style: const TextStyle(fontSize: 14),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        hintText: t.get('chats_search_hint'),
+                        suffixIcon: _loading
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
                     ),
-                ],
+                    const SizedBox(height: AppSpacing.sm),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final entry in <(String, String)>[
+                            ('all', 'chats_picker_filter_all'),
+                            ('channels', 'chats_picker_filter_channels'),
+                            ('groups', 'chats_picker_filter_groups'),
+                            ('users', 'chats_picker_filter_users'),
+                          ])
+                            Padding(
+                              padding: const EdgeInsetsDirectional.only(
+                                end: AppSpacing.sm,
+                              ),
+                              child: ChoiceChip(
+                                key: ValueKey<String>(
+                                  'chats_filter_${entry.$1}',
+                                ),
+                                label: Text(t.get(entry.$2)),
+                                selected: _typeFilter == entry.$1,
+                                onSelected: (_) =>
+                                    setState(() => _typeFilter = entry.$1),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    if (_loadError != null)
+                      InlineBanner(
+                        message: _loadError!,
+                        severity: 'warning',
+                        onRetry: _loadChats,
+                        retryLabel: t.get('chats_picker_reload'),
+                      ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            if (_loadError != null)
-              InlineBanner(
-                message: _loadError!,
-                severity: 'warning',
-                onRetry: _loadChats,
-                retryLabel: t.get('chats_picker_reload'),
-              ),
-            _list(t),
+            _listSliver(t),
           ],
         ),
       ),
@@ -356,42 +374,63 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
-  Widget _list(AppMessages t) {
+  /// The chats themselves, as a lazily built sliver.
+  Widget _listSliver(AppMessages t) {
     if (_loading && _chats.isEmpty) {
       // Skeleton, not a spinner on a blank page: the rows land where the
       // placeholders already are, so the list does not jump.
-      return const LoadingList(rows: 5, itemExtent: 76, shrinkWrap: true);
+      return const SliverPadding(
+        padding: AppSpacing.screen,
+        sliver: SliverToBoxAdapter(child: LoadingList(rows: 5, itemExtent: 76)),
+      );
     }
     final visible = _visible;
     if (visible.isEmpty) {
-      return EmptyStateView(
-        message: _chats.isEmpty
-            ? t.get('chats_empty')
-            : t.get('chats_picker_filtered_empty'),
-        icon: Icons.forum_outlined,
+      return SliverPadding(
+        padding: AppSpacing.screen,
+        sliver: SliverToBoxAdapter(
+          child: EmptyStateView(
+            message: _chats.isEmpty
+                ? t.get('chats_empty')
+                : t.get('chats_picker_filtered_empty'),
+            icon: Icons.forum_outlined,
+          ),
+        ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_truncated)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Text(
-              t.get(
-                'chats_picker_total',
-                params: {'shown': '${_chats.length}', 'total': '$_total'},
+    return SliverPadding(
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.xxl,
+      ),
+      sliver: SliverList.builder(
+        itemCount: visible.length + (_truncated ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (_truncated && index == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Text(
+                t.get(
+                  'chats_picker_total',
+                  params: {'shown': '${_chats.length}', 'total': '$_total'},
+                ),
+                style: Theme.of(context).textTheme.bodySmall,
               ),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        for (final chat in visible)
-          _ChatTile(
+            );
+          }
+          final chat = visible[_truncated ? index - 1 : index];
+          return _ChatTile(
+            // Keyed so the viewport can recycle rows by identity, and so a
+            // test can count how many rows are actually mounted.
+            key: ValueKey<String>('chat_tile_${chat.chatId}'),
             chat: chat,
             usage: _usage(chat.chatId),
             onTap: () => _openActions(chat),
-          ),
-      ],
+          );
+        },
+      ),
     );
   }
 
@@ -580,6 +619,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
 /// One chat row: what it is, and how it is used today.
 class _ChatTile extends StatelessWidget {
   const _ChatTile({
+    super.key,
     required this.chat,
     required this.usage,
     required this.onTap,

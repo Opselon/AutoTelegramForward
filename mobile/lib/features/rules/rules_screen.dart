@@ -28,7 +28,10 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_list.dart';
 import '../../widgets/status_badge.dart';
-import 'rule_editor_screen.dart';
+// Deferred: the editor is the largest screen in the app (1.6k lines) and is
+// opened from a button, never on first paint. Deferring it keeps it out of the
+// startup kernel/asset load; `loadLibrary()` is a no-op once loaded.
+import 'rule_editor_screen.dart' deferred as rule_editor;
 import 'rule_settings_sheet.dart';
 import '../logs/logs_screen.dart';
 
@@ -200,9 +203,13 @@ class _RulesScreenState extends State<RulesScreen> {
   }
 
   Future<void> _openEditor([ForwardRule? rule]) async {
+    await rule_editor.loadLibrary();
+    if (!mounted) return;
     final updated = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => RuleEditorScreen(rule: rule)),
+      MaterialPageRoute(
+        builder: (_) => rule_editor.RuleEditorScreen(rule: rule),
+      ),
     );
     if (updated == true) {
       await _load();
