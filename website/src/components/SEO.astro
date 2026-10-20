@@ -86,6 +86,7 @@ const graph: Record<string, unknown>[] = [
     '@id': `${baseUrl}/#website`,
     url: `${baseUrl}/`,
     name: 'AutoTelegramForward',
+    alternateName: ['ATF', 'Auto Telegram Forward'],
     description:
       'Documentation, reference and live playground for AutoTelegramForward, a self-hosted Telegram message routing platform.',
     inLanguage: 'en',
@@ -95,14 +96,13 @@ const graph: Record<string, unknown>[] = [
     '@type': 'SoftwareApplication',
     '@id': `${baseUrl}/#software`,
     name: 'AutoTelegramForward',
-    description: repoInfo.verifiedFeatures
-      .flatMap((g: { items: string[] }) => g.items)
-      .slice(0, 12)
-      .join('; '),
+    description:
+      'Self-hosted Telegram message forwarding and automation platform. One task routes many source chats to many targets, with per-task content rules, templates, optional AI rewriting and durable ordered delivery.',
     applicationCategory: 'CommunicationApplication',
     applicationSubCategory: 'Telegram message routing and forwarding',
     operatingSystem: 'Linux, Windows, macOS, Docker, Kubernetes',
     softwareVersion: repoInfo.version,
+    softwareRequirements: 'Python 3.11+, Docker Compose or a native install',
     softwareHelp: `${baseUrl}/`,
     releaseNotes: absolute('/releases/'),
     downloadUrl: `${repoUrl}/releases/latest`,
@@ -120,6 +120,7 @@ const graph: Record<string, unknown>[] = [
     '@id': `${repoUrl}#organization`,
     name: 'Opselon',
     url: 'https://github.com/Opselon',
+    logo: { '@type': 'ImageObject', url: `${baseUrl}/assets/icon-512.png`, width: 512, height: 512 },
     sameAs: [repoUrl],
   },
   {
@@ -133,6 +134,7 @@ const graph: Record<string, unknown>[] = [
     inLanguage: 'en',
     isPartOf: { '@id': `${baseUrl}/#website` },
     about: { '@id': `${baseUrl}/#software` },
+    mainEntityOfPage: { '@id': `${canonicalUrl}#page` },
     primaryImageOfPage: { '@type': 'ImageObject', url: fullImageUrl },
     datePublished: articleDate || repoInfo.releaseDate,
     dateModified: modified,
@@ -143,6 +145,8 @@ const graph: Record<string, unknown>[] = [
           author: { '@id': `${repoUrl}#organization` },
           publisher: { '@id': `${repoUrl}#organization` },
           proficiencyLevel: 'Expert',
+          ...(breadcrumbs && breadcrumbs.length > 1 ? { articleSection: breadcrumbs[0].name } : {}),
+          keywords: keywords.slice(0, 10).join(', '),
         }
       : {}),
   },
@@ -226,11 +230,19 @@ const schema = { '@context': 'https://schema.org', '@graph': graph };
 <meta property="og:title" content={fullTitle} />
 <meta property="og:description" content={description} />
 <meta property="og:image" content={fullImageUrl} />
+<meta property="og:image:secure_url" content={fullImageUrl} />
+<meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1280" />
 <meta property="og:image:height" content="640" />
 <meta property="og:image:alt" content={imageAlt} />
 {articleDate && <meta property="article:published_time" content={articleDate} />}
 {articleModified && <meta property="article:modified_time" content={articleModified} />}
+{type === 'article' && breadcrumbs && breadcrumbs.length > 1 && (
+  <meta property="article:section" content={breadcrumbs[0].name} />
+)}
+{type === 'article' && keywords.slice(0, 4).map((keyword) => (
+  <meta property="article:tag" content={keyword} />
+))}
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image" />

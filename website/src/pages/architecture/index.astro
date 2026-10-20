@@ -7,7 +7,7 @@ import Icon from '../../components/Icon.astro';
 import repoInfo from '../../data/repo-info.json';
 import { url } from '../../utils/paths';
 
-const pageTitle = 'Architecture';
+const pageTitle = 'Forwarding Architecture & Pipeline';
 const pageDesc = `How AutoTelegramForward is put together: ${repoInfo.stats.services} services, a ${repoInfo.stats.grpcRpcCount}-method gRPC contract, the ingest-to-delivery pipeline, ordered lanes and the durable queue.`;
 
 const toc = [
@@ -91,6 +91,7 @@ const stages = [
 ---
 
 <DocsLayout
+  heading="Architecture"
   title={pageTitle}
   description={pageDesc}
   path="/architecture/"

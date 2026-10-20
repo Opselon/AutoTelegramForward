@@ -9,6 +9,7 @@ import interLatin from '../assets/fonts/inter-var-latin.woff2?url';
 import monoLatin from '../assets/fonts/jetbrains-mono-var-latin.woff2?url';
 import '../styles/fonts.css';
 import '../styles/global.css';
+import '../styles/refine.css';
 
 interface HowToStep {
   name: string;
@@ -55,7 +56,8 @@ const favicon =
   <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href={favicon} />
-    <link rel="apple-touch-icon" href={`${base}/assets/og-image.png`} />
+    <link rel="icon" type="image/png" sizes="192x192" href={`${base}/assets/icon-192.png`} />
+    <link rel="apple-touch-icon" sizes="180x180" href={`${base}/assets/apple-touch-icon.png`} />
 
     <!--
       Theme boot. Runs before first paint so the stored choice is applied

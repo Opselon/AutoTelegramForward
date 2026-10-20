@@ -3,10 +3,13 @@ import BaseLayout from './BaseLayout.astro';
 import Breadcrumbs from '../components/Breadcrumbs.astro';
 import Icon from '../components/Icon.astro';
 import { docsNav, docsOrder, allDocLinks } from '../data/docs-nav';
+import repoInfo from '../data/repo-info.json';
 import { url } from '../utils/paths';
 
 interface Props {
   title: string;
+  /** Visible H1 when the SEO title needs more context than a heading should carry. */
+  heading?: string;
   description: string;
   breadcrumbs: Array<{ name: string; href?: string }>;
   /** Path of this page, base-less, e.g. "/features/text-cleaner/". Used for sidebar state and paging. */
@@ -24,6 +27,7 @@ interface Props {
 
 const {
   title,
+  heading,
   description,
   breadcrumbs,
   path,
@@ -82,6 +86,37 @@ const autoNext =
 
 const prevLink = prev ?? autoPrev;
 const nextLink = next ?? autoNext;
+
+/**
+ * Related links are internal links a crawler can follow out of a leaf page and
+ * a reader can actually want: the two neighbours either side of this entry in
+ * the same navigation section, wrapping at the ends.
+ */
+const relatedSection = docsNav.find((section) =>
+  section.items.some((item) => normalise(item.path) === here),
+);
+const related = (() => {
+  if (!relatedSection) return [];
+  const items = relatedSection.items;
+  const index = items.findIndex((item) => normalise(item.path) === here);
+  if (index < 0 || items.length < 3) return [];
+  const picked: typeof items = [];
+  for (const offset of [1, -1, 2, -2]) {
+    const item = items[(index + offset + items.length) % items.length];
+    if (item && normalise(item.path) !== here && !picked.includes(item)) picked.push(item);
+    if (picked.length === 3) break;
+  }
+  return picked;
+})();
+
+const updatedLabel = (() => {
+  const raw = repoInfo.gitDate;
+  if (!raw) return '';
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+})();
 ---
 
 <BaseLayout
@@ -160,7 +195,7 @@ const nextLink = next ?? autoNext;
           </div>
         </details>
 
-        <header class="mb-7 pb-5 border-b border-slate-800">
+        <header class="article-head mb-7 pb-5 border-b border-slate-800">
           {
             isCategoryActive([{ path: here }]) && breadcrumbs.length > 0 && (
               <p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-400">
@@ -168,8 +203,14 @@ const nextLink = next ?? autoNext;
               </p>
             )
           }
-          <h1 class="display-2 text-white mb-3">{title}</h1>
+          <h1 class="display-2 text-white mb-3">{heading || title}</h1>
           <p class="text-base sm:text-lg text-slate-300 leading-relaxed">{description}</p>
+          {updatedLabel && (
+            <p class="mt-3 mb-0 text-xs text-slate-500 flex items-center gap-1.5">
+              <Icon name="check" class="w-3.5 h-3.5 text-emerald-400" strokeWidth={2.4} />
+              Verified against the checkout built for v{repoInfo.version} · updated {updatedLabel}
+            </p>
+          )}
         </header>
 
         <!-- On-page contents: inline on small screens, sticky column on XL -->
@@ -195,12 +236,30 @@ const nextLink = next ?? autoNext;
         </div>
 
         {
+          related.length > 0 && (
+            <section aria-labelledby="related-heading" class="mt-12">
+              <h2 id="related-heading" class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 mb-3">
+                Related in this section
+              </h2>
+              <div class="related-grid">
+                {related.map((item) => (
+                  <a href={url(item.path)} class="related-link">
+                    <span>{item.title}</span>
+                    <span>{item.desc}</span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )
+        }
+
+        {
           (prevLink || nextLink) && (
             <nav aria-label="Page navigation" class="mt-12 pt-6 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
               {prevLink ? (
                 <a
                   href={prevLink.href}
-                  class="p-4 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-800/60 transition-colors group flex flex-col items-start min-h-[64px]"
+                  class="prevnext-card p-4 border border-slate-800 bg-slate-900/40 group flex flex-col items-start min-h-[64px]"
                 >
                   <span class="text-xs text-slate-400 font-medium flex items-center gap-1 group-hover:text-sky-400 transition-colors">
                     <Icon name="chevron-right" class="w-3.5 h-3.5 rotate-180" />
@@ -215,7 +274,7 @@ const nextLink = next ?? autoNext;
               {nextLink ? (
                 <a
                   href={nextLink.href}
-                  class="p-4 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-800/60 transition-colors group flex flex-col items-end text-right min-h-[64px]"
+                  class="prevnext-card p-4 border border-slate-800 bg-slate-900/40 group flex flex-col items-end text-right min-h-[64px]"
                 >
                   <span class="text-xs text-slate-400 font-medium flex items-center gap-1 group-hover:text-sky-400 transition-colors">
                     Next

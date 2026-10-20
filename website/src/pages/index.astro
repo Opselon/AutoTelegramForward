@@ -16,7 +16,7 @@ import { atlas, number, compact } from '../data/system';
 import repoInfo from '../data/repo-info.json';
 import { url } from '../utils/paths';
 
-const pageTitle = 'AutoTelegramForward — Telegram Forwarding & Routing';
+const pageTitle = 'Self-Hosted Telegram Forwarding — AutoTelegramForward';
 const pageDesc =
   'Self-hosted Telegram routing: many sources to many targets per task, per-task content rules, optional AI rewriting and ordered, fail-closed delivery.';
 
@@ -192,12 +192,13 @@ const marqueeItems = repoInfo.featureCatalog.slice(0, 8);
   }}
 >
   <!-- ======================================================================= hero -->
-  <section class="relative overflow-hidden">
+  <section class="hero-shell relative overflow-hidden">
     <div class="aurora"></div>
     <div class="grid-veil"></div>
+    <div class="hero-orbs" aria-hidden="true"><span></span><span></span></div>
 
     <div class="container-x relative pt-10 pb-4 sm:pt-14 lg:pt-16">
-      <div class="grid gap-10 lg:grid-cols-12 lg:gap-8 items-center">
+      <div class="grid gap-10 lg:grid-cols-12 lg:gap-12 items-center">
         <div class="lg:col-span-6">
           <a href={url('/status/')} class="pill-live mb-6 hover:border-sky-600 transition-colors">
             <span class="pill-live-dot" aria-hidden="true"></span>
@@ -236,7 +237,7 @@ const marqueeItems = repoInfo.featureCatalog.slice(0, 8);
             </a>
           </div>
 
-          <ul class="flex flex-wrap items-center gap-2 mb-7 list-none p-0">
+          <ul class="hero-chips grid grid-cols-2 gap-2 mb-7 list-none p-0 sm:flex sm:flex-wrap sm:items-center">
             <li class="chip"><Icon name="lock" class="w-3.5 h-3.5" /> Fail-closed isolation</li>
             <li class="chip"><Icon name="globe" class="w-3.5 h-3.5" /> {site.stats.locales} languages, 1:1 parity</li>
             <li class="chip"><Icon name="shield" class="w-3.5 h-3.5" /> AES-256-GCM at rest</li>
@@ -254,14 +255,14 @@ const marqueeItems = repoInfo.featureCatalog.slice(0, 8);
                   <dd class="m-0 text-xl font-extrabold text-white tabular" data-count-to={item.value}>
                     {item.value}
                   </dd>
-                  <dt class="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-slate-500">{item.label}</dt>
+                  <dt class="mt-0.5 text-[11px] tracking-[0.04em] text-slate-500">{item.label}</dt>
                 </div>
               ))
             }
           </dl>
         </div>
 
-        <div class="lg:col-span-6 min-w-0">
+        <div class="hero-console lg:col-span-6 min-w-0">
           <DeliveryConsole />
         </div>
       </div>

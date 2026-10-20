@@ -122,6 +122,16 @@ if (!fs.existsSync(robotsPath)) {
 const basePrefix = (process.env.BASE_PATH || '/AutoTelegramForward').replace(/\/$/, '');
 const stripBase = (href) => (basePrefix && href.startsWith(basePrefix) ? href.slice(basePrefix.length) || '/' : href);
 
+const pngSize = (file) => {
+  try {
+    const buffer = fs.readFileSync(file);
+    if (buffer.length < 24 || buffer.toString('ascii', 1, 4) !== 'PNG') return null;
+    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+  } catch {
+    return null;
+  }
+};
+
 const distHas = (href) => {
   const clean = href.split('#')[0].split('?')[0];
   if (!clean || clean === '/') return fs.existsSync(path.join(distDir, 'index.html'));
@@ -387,6 +397,53 @@ for (const file of htmlFiles) {
   }
 }
 console.log(`🆔 ${idChecked} element ids across ${htmlFiles.length} pages are unique.`);
+
+// 9. The web app manifest is generated (src/pages/site.webmanifest.ts) so its
+//    scope follows BASE_PATH, and its icons must be real square PNGs the
+//    browser can install. The previous static manifest advertised the 1280x640
+//    social card as a 512x512 icon, which no browser will accept.
+const manifestPath = path.join(distDir, 'site.webmanifest');
+if (!fs.existsSync(manifestPath)) {
+  console.error('❌ dist/site.webmanifest is missing — the manifest route did not render.');
+  errors++;
+} else {
+  let manifest = null;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch (error) {
+    console.error(`❌ dist/site.webmanifest is not valid JSON: ${error.message}`);
+    errors++;
+  }
+  if (manifest) {
+    if (!manifest.start_url?.startsWith(basePrefix || '/')) {
+      console.error(`❌ manifest start_url "${manifest.start_url}" ignores the deploy base path.`);
+      errors++;
+    }
+    if (!Array.isArray(manifest.icons) || manifest.icons.length === 0) {
+      console.error('❌ manifest declares no icons.');
+      errors++;
+    } else {
+      for (const icon of manifest.icons) {
+        const iconPath = icon.src.replace(basePrefix, '').replace(/^\//, '');
+        const onDisk = path.join(distDir, iconPath);
+        if (!fs.existsSync(onDisk)) {
+          console.error(`❌ manifest icon ${icon.src} does not exist in dist/.`);
+          errors++;
+          continue;
+        }
+        const declared = (icon.sizes || '').match(/^(\d+)x(\d+)$/);
+        const actual = pngSize(onDisk);
+        if (!declared || !actual || declared[1] !== String(actual.width) || declared[2] !== String(actual.height)) {
+          console.error(
+            `❌ manifest icon ${icon.src} declares ${icon.sizes} but is ${actual ? `${actual.width}x${actual.height}` : 'not a PNG'}.`,
+          );
+          errors++;
+        }
+      }
+    }
+  }
+  if (errors === 0) console.log(`📱 Web app manifest: ${manifest.icons.length} installable icons, scope-aware.`);
+}
 
 const totalWords = [...headingCounts.values()].reduce((sum, n) => sum + n, 0);
 console.log(`🧭 ${headingCounts.size} pages, ${totalWords} headings, snippet budgets enforced.`);
