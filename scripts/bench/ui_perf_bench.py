@@ -35,14 +35,17 @@ ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT / ".env"
 OUT_DIR = ROOT / "docs" / "benchmarks"
 
+# Sample counts: p99 out of 30 samples is the second-largest observation, so a
+# single hiccup moves it 40 %. Tails are only meaningful from ~80 samples up;
+# below that the compare gate reports phantom regressions.
 ENDPOINTS = [
     ("version", "/api/version", 60),
     ("health_services", "/api/v1/health/services", 60),
-    ("rules_list", "/api/rules", 40),
-    ("tasks_list", "/api/tasks", 40),
-    ("logs_tail", "/api/logs?limit=50", 30),
-    ("logs_stats", "/api/logs/stats", 30),
-    ("settings_schema", "/api/rules/settings/schema", 30),
+    ("rules_list", "/api/rules", 80),
+    ("tasks_list", "/api/tasks", 80),
+    ("logs_tail", "/api/logs?limit=50", 80),
+    ("logs_stats", "/api/logs/stats", 80),
+    ("settings_schema", "/api/rules/settings/schema", 80),
 ]
 
 TOKEN_CACHE = Path("/tmp/atf-bench-web-token.json")
