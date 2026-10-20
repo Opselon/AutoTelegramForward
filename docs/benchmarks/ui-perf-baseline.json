@@ -1,0 +1,85 @@
+{
+  "label": "baseline",
+  "started_at": "2026-10-20T02:54:57Z",
+  "http": {
+    "version": {
+      "path": "/api/version",
+      "status": 200,
+      "n": 60,
+      "mean_ms": 1.15,
+      "p50_ms": 0.88,
+      "p95_ms": 3.9,
+      "p99_ms": 4.8,
+      "max_ms": 4.8,
+      "rps": 869.7
+    },
+    "health_services": {
+      "path": "/api/v1/health/services",
+      "status": 200,
+      "n": 60,
+      "mean_ms": 56.63,
+      "p50_ms": 52.42,
+      "p95_ms": 67.37,
+      "p99_ms": 173.96,
+      "max_ms": 173.96,
+      "rps": 17.7
+    },
+    "rules_list": {
+      "path": "/api/rules",
+      "status": 200,
+      "n": 40,
+      "mean_ms": 2.97,
+      "p50_ms": 2.91,
+      "p95_ms": 3.89,
+      "p99_ms": 4.3,
+      "max_ms": 4.3,
+      "rps": 336.9
+    },
+    "tasks_list": {
+      "path": "/api/tasks",
+      "status": 200,
+      "n": 40,
+      "mean_ms": 3.23,
+      "p50_ms": 2.98,
+      "p95_ms": 5.53,
+      "p99_ms": 7.44,
+      "max_ms": 7.44,
+      "rps": 309.5
+    },
+    "logs_tail": {
+      "path": "/api/logs?limit=50",
+      "status": 200,
+      "n": 30,
+      "mean_ms": 3.27,
+      "p50_ms": 3.08,
+      "p95_ms": 5.76,
+      "p99_ms": 6.0,
+      "max_ms": 6.0,
+      "rps": 306.2
+    },
+    "logs_stats": {
+      "path": "/api/logs/stats",
+      "status": 200,
+      "n": 30,
+      "mean_ms": 28.67,
+      "p50_ms": 42.89,
+      "p95_ms": 51.04,
+      "p99_ms": 53.7,
+      "max_ms": 53.7,
+      "rps": 34.9
+    },
+    "settings_schema": {
+      "path": "/api/rules/settings/schema",
+      "status": 200,
+      "n": 30,
+      "mean_ms": 3.77,
+      "p50_ms": 3.48,
+      "p95_ms": 6.29,
+      "p99_ms": 6.97,
+      "max_ms": 6.97,
+      "rps": 265.5
+    }
+  },
+  "auth": "jwt",
+  "http_failures": {}
+}

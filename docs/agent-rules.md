@@ -212,6 +212,42 @@ Before pushing changes or submitting PRs, agents must run and pass the following
 
 ---
 
+## 🎨 3.5 UI/UX & Performance Contract (binding for every UI change)
+
+[`docs/ui-ux-system.md`](ui-ux-system.md) is the design contract for the dashboard,
+the mobile client and the bot: design tokens, breakpoints, the six shared
+primitives, accessibility thresholds and the performance budgets. A screen that
+renders but ignores a token, a breakpoint or a budget is not done.
+
+1. **No magic values in UI code.** Colours come from role tokens, spacing/radius/
+   type/motion from the token scale. A new hex literal or an ad-hoc `margin: 13px`
+   in a component is a review failure.
+2. **Every data screen has four states** — loading (skeleton), empty (with a call
+   to action), error (with retry) and success. Blank screens and raw
+   `Error.toString()` never ship.
+3. **Accessibility is part of the definition of done:** 44 px / 48 dp targets, a
+   visible focus ring, `aria-label`/`Semantics` on icon-only controls, contrast
+   ≥ 4.5:1 in both themes, reduced-motion respected, text scaling 0.8–1.3 without
+   clipping, and logical (`*-inline`) properties so RTL flips correctly.
+4. **Measure, don't assert.** Any change to a screen on a hot path, to the web
+   build or to a bot render path must show numbers:
+   ```bash
+   python3 scripts/bench/ui_perf_bench.py --label before
+   # ...change...
+   python3 scripts/bench/ui_perf_bench.py --label after
+   python3 scripts/bench/ui_perf_compare.py docs/benchmarks/ui-perf-before.json \
+       docs/benchmarks/ui-perf-after.json
+   ```
+   The compare gate fails on +15% latency, +5% bundle growth, a vanished endpoint
+   or a collapsed code-split chunk. Paste the output in the PR.
+5. **Feature reachability is tracked, not assumed:**
+   ```bash
+   python3 scripts/audit_feature_ui_coverage.py --gaps
+   ```
+   A feature counts as reachable on a surface only when a control exists, it is
+   labelled in all ten locales, and a test exercises it — see
+   [`docs/feature-ui-coverage.md`](feature-ui-coverage.md).
+
 ## 🚀 4. Deployment & Service Recreate Protocol
 
 1. **Docker Compose Rebuilds:**
