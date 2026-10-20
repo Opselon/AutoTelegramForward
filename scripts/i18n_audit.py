@@ -424,6 +424,10 @@ class SourceAudit(ast.NodeVisitor):
         self.dynamic_prefixes: Set[str] = set()
         self.handlers = 0
         self.wrapped_handlers = 0
+        self.t_calls = 0
+        self.t_calls_without_lang = 0
+        self.visible_calls = 0
+        self.hardcoded = 0
         self._translated_names: Set[str] = set()
 
     # -- helpers -------------------------------------------------------- #
@@ -544,6 +548,9 @@ class SourceAudit(ast.NodeVisitor):
         name = call_name(node.func)
 
         if name in KEY_CALLS and node.args:
+            self.t_calls += 1
+            if not any(kw.arg == "lang" for kw in node.keywords):
+                self.t_calls_without_lang += 1
             first = node.args[0]
             text, static = literal_text(first)
             if static:
@@ -557,6 +564,7 @@ class SourceAudit(ast.NodeVisitor):
                           hint="enumerate the possible keys and assert each exists, or use contains()")
 
         if name in VISIBLE_CALLS:
+            self.visible_calls += 1
             for arg in node.args:
                 self._check_visible_expression(arg, name)
             for kw in node.keywords:
@@ -622,6 +630,7 @@ def audit_sources(root: Path, catalog: Dict[str, Dict[str, str]]) -> Tuple[List[
     handlers = wrapped = 0
     parsed = 0
     sources: Dict[str, str] = {}
+    module_rows: List[Dict[str, object]] = []
 
     files = ui_files(root)
     for path in files:
@@ -642,6 +651,17 @@ def audit_sources(root: Path, catalog: Dict[str, Dict[str, str]]) -> Tuple[List[
         visitor = SourceAudit(path, source, catalog)
         visitor.visit(tree)
         findings.extend(visitor.findings)
+        module_rows.append({
+            "path": str(path.relative_to(root)),
+            "lines": source.count("\n") + 1,
+            "handlers": visitor.handlers,
+            "locale_bound": visitor.wrapped_handlers,
+            "t_calls": visitor.t_calls,
+            "t_without_lang": visitor.t_calls_without_lang,
+            "visible_calls": visitor.visible_calls,
+            "hardcoded": sum(1 for f in visitor.findings if f.kind == "HARDCODED_USER_TEXT"),
+            "keys": len(visitor.keys_used),
+        })
         used |= visitor.keys_used
         prefixes |= visitor.dynamic_prefixes
         handlers += visitor.handlers
@@ -680,6 +700,7 @@ def audit_sources(root: Path, catalog: Dict[str, Dict[str, str]]) -> Tuple[List[
         "keys_referenced": len(used),
         "keys_dynamic_families": len(dynamic_families),
         "dynamic_prefixes": sorted(prefixes),
+        "modules": sorted(module_rows, key=lambda row: str(row["path"])),
     }
 
 
