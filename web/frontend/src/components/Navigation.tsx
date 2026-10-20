@@ -99,7 +99,9 @@ export function Navigation({
 
   const close = useCallback(() => onOpenChange(false), [onOpenChange])
 
-  // Remember who opened the drawer so closing it puts focus back there.
+  // Remember who opened the drawer so closing it puts focus back there, and
+  // move focus *into* the drawer on open — the Tab trap below is useless if the
+  // first Tab press starts from the trigger and walks the page behind it.
   useEffect(() => {
     if (!open) {
       restoreRef.current?.focus?.()
@@ -107,6 +109,18 @@ export function Navigation({
       return
     }
     restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const el = asideRef.current
+    if (!el) return
+    // Deferred by a frame: the drawer is still clipped to zero width while
+    // `is-open` lands, and focusing a clipped element is a no-op in some
+    // engines.
+    const handle = window.requestAnimationFrame(() => {
+      const target =
+        el.querySelector<HTMLElement>('[aria-current="page"]') ??
+        el.querySelector<HTMLElement>(FOCUSABLE)
+      target?.focus()
+    })
+    return () => window.cancelAnimationFrame(handle)
   }, [open])
 
   // A closed drawer is clipped, not unmounted, so it must leave the tab order
