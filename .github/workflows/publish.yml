@@ -100,6 +100,13 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: false
+          # The revision the image was built from, baked in by Dockerfile.api
+          # (ldflags CommitSHA + the OCI revision label). Without it a deployed
+          # API answers "unknown" to /api/version, so the host cannot prove
+          # which commit is live. Dockerfiles that do not declare the arg
+          # simply ignore it.
+          build-args: |
+            ATF_COMMIT_SHA=${{ github.sha }}
           cache-from: type=gha,scope=ci-${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=ci-${{ matrix.service }}
           tags: |
