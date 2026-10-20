@@ -24,6 +24,23 @@ logger = logging.getLogger("atf.autoreply.botui")
 _PAGE = 8
 
 
+#: Target-mode labels, spelled out so no key is ever built from a value.
+#: `I18n.t` answers an unknown key with the key itself, and a mode that reached a
+#: screen as `ui_ar_mode_something` would be a raw key leak.
+_MODE_LABELS = {
+    "EVERYONE": "ui_ar_mode_everyone",
+    "SELECTED_ONLY": "ui_ar_mode_selected_only",
+    "ALL_EXCEPT": "ui_ar_mode_all_except",
+    "MANUAL": "ui_ar_mode_manual",
+}
+
+
+def _mode_key(mode: Any) -> str:
+    """The catalog key for a target mode, defaulting to the widest one."""
+    value = str(getattr(mode, "value", mode) or "").upper()
+    return _MODE_LABELS.get(value, _MODE_LABELS["EVERYONE"])
+
+
 def _job_time(ts: int) -> str:
     if not ts:
         return "—"
@@ -75,7 +92,7 @@ class AutoReplyBotMixin:
             return _t("ui_ar_not_loaded"), self._kbd([[(self._btn("ui_back"), "pv:menu")]])
 
         status = _t("ui_ar_status_on") if settings.enabled else _t("ui_ar_status_off")
-        mode = _t(f"ui_ar_mode_{str(settings.target_mode.value).lower()}")
+        mode = _t(_mode_key(settings.target_mode))
         default_prompt = next((p.name for p in prompts if p.id == settings.prompt_id), "")
         provider = settings.ai_config_id or _t("ui_ar_none")
         enabled_contacts = sum(1 for t in targets if t.is_enabled)
@@ -159,7 +176,7 @@ class AutoReplyBotMixin:
         rows: List[list] = []
         if targets:
             body = _t("ui_ar_contacts_title",
-                      mode=_t(f"ui_ar_mode_{str(settings.target_mode.value).lower()}"),
+                      mode=_t(_mode_key(settings.target_mode)),
                       enabled=sum(1 for t in targets if t.is_enabled), total=len(targets))
             for t in targets[:_PAGE]:
                 label = ("✅ " if t.is_enabled else "⬜️ ") + (t.title or t.chat_id)
@@ -277,7 +294,7 @@ class AutoReplyBotMixin:
                 return await cq.answer(self._t("ui_internal_error"), show_alert=True)
             lang = await self._get_user_lang(uid)
             await cq.answer(self._t("ui_ar_mode_set", lang=lang,
-                                    mode=self._t(f"ui_ar_mode_{saved.target_mode.value.lower()}",
+                                    mode=self._t(_mode_key(saved.target_mode),
                                                  lang=lang)))
             await _render(cq, uid, self._render_ar_menu)
 

@@ -80,6 +80,8 @@ tags:
     description: 'Diagnostics and whole-installation backup/restore.'
   - name: client
     description: 'Per-client settings and personal credentials.'
+  - name: autoreply
+    description: 'AI private-message auto-reply: settings, personal prompt library, contact targeting, ranked rules and the durable reply queue. Tenant-scoped everywhere.'
   - name: admin
     description: 'Administrator control plane. Strictly gated by a server-verified `ADMIN_IDS` membership.'
 
@@ -1258,6 +1260,375 @@ paths:
         "401": { $ref: '#/components/responses/Unauthorized' }
         "400": { $ref: '#/components/responses/BadRequest' }
         "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auto-reply/settings:
+    get:
+      tags: [autoreply]
+      summary: 'The caller''s auto-reply configuration: master switch, target mode, tone, language, response length and limits'
+      operationId: getApiAutoReplySettings
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [autoreply]
+      summary: 'Update the auto-reply configuration; the owner is taken from the bearer token, never from the body'
+      operationId: putApiAutoReplySettings
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auto-reply/prompts:
+    get:
+      tags: [autoreply]
+      summary: 'The caller''s saved prompt templates, including the built-in default'
+      operationId: getApiAutoReplyPrompts
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [autoreply]
+      summary: 'Create a personal prompt template'
+      operationId: postApiAutoReplyPrompts
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auto-reply/prompts/export:
+    get:
+      tags: [autoreply]
+      summary: 'The caller''s prompt library as a portable bundle'
+      operationId: getApiAutoReplyPromptsExport
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/auto-reply/prompts/import:
+    post:
+      tags: [autoreply]
+      summary: 'Import prompt templates from a bundle; ids owned by someone else are re-issued, never adopted'
+      operationId: postApiAutoReplyPromptsImport
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auto-reply/prompts/{id}:
+    put:
+      tags: [autoreply]
+      summary: 'Update one of the caller''s prompt templates'
+      operationId: putApiAutoReplyPromptsId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+    delete:
+      tags: [autoreply]
+      summary: 'Delete one of the caller''s prompt templates; another tenant''s id answers 404, not 403'
+      operationId: deleteApiAutoReplyPromptsId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/auto-reply/prompts/{id}/duplicate:
+    post:
+      tags: [autoreply]
+      summary: 'Copy one of the caller''s prompt templates into a new one'
+      operationId: postApiAutoReplyPromptsIdDuplicate
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/auto-reply/targets:
+    get:
+      tags: [autoreply]
+      summary: 'The caller''s contact targets, each with its own enabled flag'
+      operationId: getApiAutoReplyTargets
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [autoreply]
+      summary: 'Add contact targets to the addressing list (bulk; duplicates update in place)'
+      operationId: postApiAutoReplyTargets
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+    delete:
+      tags: [autoreply]
+      summary: 'Remove contact targets from the addressing list (bulk)'
+      operationId: deleteApiAutoReplyTargets
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auto-reply/targets/resolve:
+    post:
+      tags: [autoreply]
+      summary: 'Resolve chat ids to titles through the caller''s live sessions; a session id owned by someone else is refused'
+      operationId: postApiAutoReplyTargetsResolve
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auto-reply/targets/{chatId}:
+    put:
+      tags: [autoreply]
+      summary: 'Update one contact target, including its per-chat enabled flag'
+      operationId: putApiAutoReplyTargetsChatId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auto-reply/rules:
+    get:
+      tags: [autoreply]
+      summary: 'The caller''s rules in the order the engine applies them (highest priority first)'
+      operationId: getApiAutoReplyRules
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [autoreply]
+      summary: 'Create or update a rule; regex conditions are compiled and length-capped before they are stored'
+      operationId: postApiAutoReplyRules
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auto-reply/rules/reorder:
+    post:
+      tags: [autoreply]
+      summary: 'Persist an explicit priority order for the caller''s rules'
+      operationId: postApiAutoReplyRulesReorder
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/auto-reply/rules/{id}:
+    put:
+      tags: [autoreply]
+      summary: 'Update one of the caller''s rules'
+      operationId: putApiAutoReplyRulesId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+    delete:
+      tags: [autoreply]
+      summary: 'Delete one of the caller''s rules; queued replies that referenced it are cancelled, not sent rule-less'
+      operationId: deleteApiAutoReplyRulesId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/auto-reply/jobs:
+    get:
+      tags: [autoreply]
+      summary: 'A page of the caller''s reply jobs, filterable by status and chat'
+      operationId: getApiAutoReplyJobs
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/auto-reply/jobs/{id}/cancel:
+    post:
+      tags: [autoreply]
+      summary: 'Cancel one of the caller''s queued or retrying jobs'
+      operationId: postApiAutoReplyJobsIdCancel
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/auto-reply/jobs/{id}/retry:
+    post:
+      tags: [autoreply]
+      summary: 'Requeue one of the caller''s dead-lettered jobs for another attempt'
+      operationId: postApiAutoReplyJobsIdRetry
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/auto-reply/stats:
+    get:
+      tags: [autoreply]
+      summary: 'Counters for the caller: sent, failed in the last day, queue depth, enabled chats and median latency'
+      operationId: getApiAutoReplyStats
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/auto-reply/preview:
+    post:
+      tags: [autoreply]
+      summary: 'Generate a sample reply for one of the caller''s chats without sending it'
+      operationId: postApiAutoReplyPreview
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+
   /api/pv-responder:
     get:
       tags: [pv-responder]

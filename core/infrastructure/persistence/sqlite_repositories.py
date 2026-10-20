@@ -789,6 +789,11 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         "error_log",
         "content_dedup",
         "rule_counters",
+        # The auto-reply queue: a job whose rule is gone has nothing left to
+        # enforce (cooldowns, exclusions, prompt choice), so sending it would
+        # bypass the rule the owner just removed. The FK semantics live in
+        # autoreply_rules, but the generic table sweep cannot know that.
+        "autoreply_jobs",
     )
 
     async def delete(self, rule_id: str) -> bool:
