@@ -169,6 +169,7 @@ class _AiConfigEditorDialogState extends State<AiConfigEditorDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DropdownButtonFormField<String>(
+              isExpanded: true,
               key: const ValueKey('ai_provider_select'),
               decoration: InputDecoration(
                 labelText: t.get('ai_field_provider'),

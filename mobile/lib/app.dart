@@ -32,6 +32,21 @@ class AutoTelegramForwardApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      // Text scaling is clamped to the range the layouts are verified at
+      // (0.8–1.3, per the UI contract). Below 0.8 text is unreadable, and above
+      // 1.3 the dense operational rows would have to clip; clamping here keeps
+      // one honest rule instead of a different overflow per screen.
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        final scaled = media.textScaler.clamp(
+          minScaleFactor: 0.8,
+          maxScaleFactor: 1.3,
+        );
+        return MediaQuery(
+          data: media.copyWith(textScaler: scaled),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: _buildHome(state),
     );
   }

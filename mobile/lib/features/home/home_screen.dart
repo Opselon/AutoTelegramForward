@@ -1,18 +1,29 @@
-/// Root navigation shell.
+/// Root navigation shell: adaptive by window size class.
 ///
-/// Nine top-level destinations do not fit a Material bottom navigation bar on
-/// a phone — labels collide and targets drop below the 48dp touch minimum. So
-/// the shell is adaptive:
-///   * wide windows (>= 900dp, tablet / desktop / landscape) get a labelled
-///     [NavigationRail] down the side, where nine entries fit comfortably;
-///   * narrow windows get a bottom [NavigationBar] that drops to icons with the
-///     selected label, keeping every target tappable at nine entries.
-/// Both surfaces are generated from one destination list so they can never
-/// drift apart, and the selected index is preserved across layout changes.
+/// Nine top-level destinations cannot fit a Material bottom bar on a phone:
+/// M3 recommends three to five, and nine equal slices are narrower than their
+/// own labels (the first and last used to be clipped by the screen edges). The
+/// shell therefore follows the size classes in `docs/ui-ux-system.md`:
+///
+///   * **compact** (`< 600 dp`) — a five-slot [NavigationBar]: the four
+///     destinations an operator uses constantly plus **More**, which opens a
+///     sheet with the rest. Every destination stays one tap away, every target
+///     is 48 dp, and no label is ever clipped.
+///   * **medium** (`600–839 dp`) — a labelled [NavigationRail] where the
+///     vertical space allows all nine labels, and icon+selected-label where a
+///     landscape window is too short for them.
+///   * **expanded** (`>= 840 dp`) — the same rail, and the screens behind it
+///     get two panes (rules, logs) through [MasterDetailPane].
+///
+/// A landscape phone (short height) keeps the bottom bar: a nine-entry rail
+/// does not fit in 360 dp of height, and squeezing it is how entries become
+/// unreachable. Both surfaces are generated from one destination list, so they
+/// cannot drift apart, and the selected index survives a layout change.
 library;
 
 import 'package:flutter/material.dart';
 
+import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../ai/ai_screen.dart';
@@ -46,14 +57,12 @@ class _Destination {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const int _railBreakpoint = 900;
-
   int _currentIndex = 0;
 
-  /// Screens are created lazily on first visit. Mounting all seven at startup
-  /// fires seven simultaneous API requests and does work for tabs the user may
+  /// Screens are created lazily on first visit. Mounting all nine at startup
+  /// fires nine simultaneous API requests and does work for tabs the user may
   /// never open; once visited a screen is kept alive so its scroll position and
-  /// loaded data survive tab switches.
+  /// loaded data survive tab switches (and a rotation into the rail layout).
   final Set<int> _visited = {0};
 
   static const List<_Destination> _destinations = [
@@ -121,6 +130,11 @@ class _HomeScreenState extends State<HomeScreen> {
     SettingsScreen(),
   ];
 
+  /// The four destinations a phone shows directly. Order is the bar's order,
+  /// not the destination list's: dashboard, rules, logs, settings are the ones
+  /// an operator opens every day.
+  static const List<int> _compactSlots = [0, 1, 6, 8];
+
   void _select(int idx) {
     if (idx == _currentIndex) return;
     setState(() {
@@ -132,27 +146,47 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final t = AppMessages.of(context);
-    final wide = MediaQuery.sizeOf(context).width >= _railBreakpoint;
+    final window = AppWindow.of(context);
+
+    // A rail needs vertical room for nine entries: 9 × 56 dp plus the brand
+    // mark. Below that a landscape phone would lose the tail of the list, so it
+    // keeps the horizontal bar instead.
+    final railFits = window.size.height >= 580;
+    final useRail = window.size.width >= AppBreakpoints.medium && railFits;
+
     final body = IndexedStack(
       index: _currentIndex,
       children: [
         for (var i = 0; i < _screens.length; i++)
           // Unvisited tabs stay as an empty placeholder: cheap to keep in the
           // stack, but nothing is built, fetched or subscribed until opened.
-          if (_visited.contains(i)) _screens[i] else const SizedBox.shrink(),
+          if (!_visited.contains(i))
+            const SizedBox.shrink()
+          // Rules and logs own their width: they lay out a two-pane
+          // master-detail on an expanded window and must not be capped to a
+          // single readable column.
+          else if (i == 1 || i == 6)
+            _screens[i]
+          else
+            _ContentWidth(child: _screens[i]),
       ],
     );
 
-    if (wide) {
+    if (useRail) {
       return Scaffold(
         body: Row(
           children: [
             NavigationRail(
               selectedIndex: _currentIndex,
               onDestinationSelected: _select,
-              labelType: NavigationRailLabelType.all,
+              // All nine labels when the height allows; icon plus the selected
+              // label on a short landscape window, where nine labelled rows
+              // would overflow.
+              labelType: window.size.height >= 700
+                  ? NavigationRailLabelType.all
+                  : NavigationRailLabelType.selected,
               leading: const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                 child: _BrandMark(),
               ),
               destinations: [
@@ -173,195 +207,170 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       body: body,
-      bottomNavigationBar: _ScrollableDestinationBar(
+      bottomNavigationBar: _CompactNavigationBar(
         destinations: _destinations,
+        slots: _compactSlots,
         selectedIndex: _currentIndex,
         onSelected: _select,
+        onMore: () => _openMoreSheet(context),
         labelOf: (d) => t.get(d.labelKey),
       ),
     );
   }
-}
 
-/// The bottom bar for narrow windows.
-///
-/// Nine labelled destinations do not fit a phone's width, and Material's
-/// [NavigationBar] splits the bar into nine equal slices — narrower than the
-/// labels themselves — so its row overflowed the screen and the first and last
-/// labels were clipped by the edges. Every destination here keeps a fixed,
-/// tappable width and the strip scrolls horizontally instead of clipping, and
-/// the selected destination is scrolled into view so the active page can never
-/// sit off-screen.
-class _ScrollableDestinationBar extends StatefulWidget {
-  const _ScrollableDestinationBar({
-    required this.destinations,
-    required this.selectedIndex,
-    required this.onSelected,
-    required this.labelOf,
-  });
+  Future<void> _openMoreSheet(BuildContext context) async {
+    final t = AppMessages.of(context);
+    final secondary = [
+      for (var i = 0; i < _destinations.length; i++)
+        if (!_compactSlots.contains(i)) i,
+    ];
 
-  final List<_Destination> destinations;
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-  final String Function(_Destination) labelOf;
-
-  /// Wide enough for the longest shipped label on one line, and taller than the
-  /// 48dp touch minimum.
-  static const double itemWidth = 84;
-  static const double barHeight = 68;
-
-  @override
-  State<_ScrollableDestinationBar> createState() =>
-      _ScrollableDestinationBarState();
-}
-
-class _ScrollableDestinationBarState extends State<_ScrollableDestinationBar> {
-  final ScrollController _controller = ScrollController();
-  late List<GlobalKey> _itemKeys;
-
-  @override
-  void initState() {
-    super.initState();
-    _itemKeys = List.generate(widget.destinations.length, (_) => GlobalKey());
-  }
-
-  @override
-  void didUpdateWidget(covariant _ScrollableDestinationBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedIndex != widget.selectedIndex) _revealSelected();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  /// Bring the active destination into view — the case that matters is a
-  /// rotation from a wide window into a narrow one with a late destination
-  /// selected. `Scrollable.ensureVisible` is used instead of arithmetic on the
-  /// scroll offset because it is direction-aware, and in an RTL locale the
-  /// strip starts from the right edge.
-  void _revealSelected() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _itemKeys[widget.selectedIndex].currentContext;
-      if (ctx == null) return;
-      Scrollable.ensureVisible(
-        ctx,
-        alignment: 0.5,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Material(
-      color: theme.colorScheme.surface,
-      child: SafeArea(
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
         top: false,
-        child: Container(
-          height: _ScrollableDestinationBar.barHeight,
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: theme.dividerColor, width: 1),
-            ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: AppBreakpoints.contentMax,
           ),
-          child: SingleChildScrollView(
-            key: const ValueKey<String>('nav_bar_scroll'),
-            controller: _controller,
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-            child: Row(
-              children: [
-                for (var i = 0; i < widget.destinations.length; i++)
-                  SizedBox(
-                    key: _itemKeys[i],
-                    width: _ScrollableDestinationBar.itemWidth,
-                    child: _DestinationButton(
-                      destination: widget.destinations[i],
-                      label: widget.labelOf(widget.destinations[i]),
-                      selected: i == widget.selectedIndex,
-                      onTap: () => widget.onSelected(i),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// One destination in the narrow-window bar.
-class _DestinationButton extends StatelessWidget {
-  const _DestinationButton({
-    required this.destination,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _Destination destination;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = selected
-        ? theme.colorScheme.primary
-        : theme.colorScheme.onSurfaceVariant;
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
-      child: Tooltip(
-        message: label,
-        child: InkWell(
-          key: ValueKey<String>('nav_item_${destination.labelKey}'),
-          onTap: onTap,
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            key: const ValueKey<String>('nav_more_sheet'),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.xs,
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.sm,
                 ),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? color.withValues(alpha: 0.16)
-                      : Colors.transparent,
-                  borderRadius: AppRadii.allMd,
-                ),
-                child: Icon(
-                  selected ? destination.selectedIcon : destination.icon,
-                  size: 22,
-                  color: color,
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    t.get('nav_more_title'),
+                    style: Theme.of(ctx).textTheme.titleMedium,
+                  ),
                 ),
               ),
-              const SizedBox(height: 2),
-              // One line, and never wrapped mid-word: the width is fixed, so a
-              // label too long for it is ellipsised rather than clipped.
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              for (final i in secondary)
+                ListTile(
+                  key: ValueKey<String>(
+                    'nav_more_item_${_destinations[i].labelKey}',
+                  ),
+                  leading: Icon(
+                    i == _currentIndex
+                        ? _destinations[i].selectedIcon
+                        : _destinations[i].icon,
+                    color: i == _currentIndex
+                        ? Theme.of(ctx).colorScheme.primary
+                        : null,
+                  ),
+                  title: Text(t.get(_destinations[i].labelKey)),
+                  selected: i == _currentIndex,
+                  minVerticalPadding: AppSpacing.md,
+                  onTap: () => Navigator.of(ctx).pop(i),
                 ),
-              ),
+              const SizedBox(height: AppSpacing.sm),
             ],
           ),
         ),
       ),
+    );
+
+    if (picked != null && mounted) _select(picked);
+  }
+}
+
+/// The bottom bar for compact windows: four primary destinations plus More.
+///
+/// Uses the real [NavigationBar], so the M3 indicator, ripple, semantics and
+/// 48 dp targets come from the framework instead of a hand-rolled strip. The
+/// More slot adopts the icon and label of the secondary destination that is
+/// currently open, so the bar always names the page you are on.
+class _CompactNavigationBar extends StatelessWidget {
+  const _CompactNavigationBar({
+    required this.destinations,
+    required this.slots,
+    required this.selectedIndex,
+    required this.onSelected,
+    required this.onMore,
+    required this.labelOf,
+  });
+
+  final List<_Destination> destinations;
+  final List<int> slots;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  final VoidCallback onMore;
+  final String Function(_Destination) labelOf;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppMessages.of(context);
+    final palette = AppColors.of(context);
+    final inSlots = slots.contains(selectedIndex);
+    final moreLabel = inSlots
+        ? t.get('nav_more')
+        : labelOf(destinations[selectedIndex]);
+
+    return NavigationBar(
+      key: const ValueKey<String>('nav_bar'),
+      selectedIndex: inSlots ? slots.indexOf(selectedIndex) : slots.length,
+      onDestinationSelected: (slot) {
+        if (slot < slots.length) {
+          onSelected(slots[slot]);
+        } else {
+          onMore();
+        }
+      },
+      backgroundColor: palette.surface2,
+      destinations: [
+        for (final i in slots)
+          NavigationDestination(
+            key: ValueKey<String>('nav_dest_${destinations[i].labelKey}'),
+            icon: Icon(destinations[i].icon),
+            selectedIcon: Icon(destinations[i].selectedIcon),
+            label: labelOf(destinations[i]),
+          ),
+        NavigationDestination(
+          key: const ValueKey<String>('nav_dest_more'),
+          icon: inSlots
+              ? const Icon(Icons.more_horiz)
+              : Icon(destinations[selectedIndex].selectedIcon),
+          label: moreLabel,
+        ),
+      ],
+    );
+  }
+}
+
+/// Caps a single-column screen at a readable width and centres it.
+///
+/// Without this a tablet renders one column of forms across 1280 dp — the
+/// "stretched phone UI" the UI contract forbids. The cap is a constraint, not a
+/// layout branch: the screen keeps its own Scaffold and AppBar, it simply does
+/// not grow past [AppBreakpoints.contentMax] + a wide-screen margin.
+class _ContentWidth extends StatelessWidget {
+  const _ContentWidth({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const cap = AppBreakpoints.contentMax + 240;
+        if (constraints.maxWidth <= cap) return child;
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: cap),
+            child: child,
+          ),
+        );
+      },
     );
   }
 }
@@ -372,15 +381,18 @@ class _BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        gradient: AppGradients.brand,
-        borderRadius: AppRadii.allMd,
-        boxShadow: AppShadows.dark(Theme.of(context).brightness),
+    return Semantics(
+      label: AppMessages.of(context).get('app_name'),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          gradient: AppGradients.brand,
+          borderRadius: AppRadius.allMd,
+          boxShadow: AppElevation.shadows(context, level: 1),
+        ),
+        child: const Icon(Icons.bolt, color: Colors.white, size: 22),
       ),
-      child: const Icon(Icons.bolt, color: Colors.white, size: 22),
     );
   }
 }

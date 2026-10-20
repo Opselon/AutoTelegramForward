@@ -193,7 +193,7 @@ class _LogPolicyTabState extends State<LogPolicyTab> {
 
     final scopes = _scopes();
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 24),
       children: [
         _healthCard(t),
         const SizedBox(height: AppSpacing.md),

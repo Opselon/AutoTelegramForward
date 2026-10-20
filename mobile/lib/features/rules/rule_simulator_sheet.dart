@@ -149,7 +149,7 @@ class _RuleSimulatorSheetState extends State<RuleSimulatorSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(
+                padding: const EdgeInsetsDirectional.fromSTEB(
                   AppSpacing.lg,
                   0,
                   AppSpacing.sm,
@@ -191,7 +191,7 @@ class _RuleSimulatorSheetState extends State<RuleSimulatorSheet> {
               const Divider(height: 1),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(
+                  padding: const EdgeInsetsDirectional.fromSTEB(
                     AppSpacing.lg,
                     AppSpacing.md,
                     AppSpacing.lg,
@@ -229,6 +229,7 @@ class _RuleSimulatorSheetState extends State<RuleSimulatorSheet> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       key: const ValueKey<String>('simulate_media'),
                       initialValue: _mediaType,
                       isDense: true,

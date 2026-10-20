@@ -17,11 +17,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
+import '../../core/layout.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../../widgets/app_ui.dart';
+import '../../widgets/loading_list.dart';
 
 class SystemStatusScreen extends StatefulWidget {
   const SystemStatusScreen({super.key});
@@ -134,11 +136,12 @@ class _SystemStatusScreenState extends State<SystemStatusScreen> {
             AppSpacing.gapLg,
 
             if (_loading && report == null)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.xl),
-                  child: CircularProgressIndicator(),
-                ),
+              const LoadingList(
+                rows: 5,
+                itemExtent: 84,
+                showAvatar: false,
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
               ),
 
             if (_unsupported)
@@ -314,10 +317,10 @@ class _SystemStatusScreenState extends State<SystemStatusScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 3),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
                         child: Icon(
-                          Icons.chevron_right_rounded,
+                          AppIcons.forwardRounded(context),
                           size: 16,
                           color: AppTheme.sky,
                         ),

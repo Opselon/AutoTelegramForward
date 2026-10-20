@@ -257,7 +257,7 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
             _header(t, theme),
             const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.fromLTRB(
+              padding: const EdgeInsetsDirectional.fromSTEB(
                 AppSpacing.lg,
                 AppSpacing.md,
                 AppSpacing.lg,
@@ -300,8 +300,8 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
                           ('users', 'chats_picker_filter_users'),
                         ])
                           Padding(
-                            padding: const EdgeInsets.only(
-                              right: AppSpacing.sm,
+                            padding: const EdgeInsetsDirectional.only(
+                              end: AppSpacing.sm,
                             ),
                             child: ChoiceChip(
                               key: ValueKey<String>(
@@ -341,7 +341,12 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
 
   Widget _header(AppMessages t, ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.sm, 0),
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.sm,
+        0,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -489,7 +494,7 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
         .toList(growable: false);
     if (extras.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         AppSpacing.lg,
         AppSpacing.sm,
         AppSpacing.lg,
@@ -501,7 +506,7 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
           children: [
             for (final entry in extras)
               Padding(
-                padding: const EdgeInsets.only(right: AppSpacing.sm),
+                padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
                 child: InputChip(
                   key: ValueKey<String>('chat_picker_extra_${entry.value}'),
                   avatar: const Icon(Icons.tag, size: 16),
@@ -520,7 +525,7 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
   /// blocks configuring a task.
   Widget _manualRow(AppMessages t) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         AppSpacing.lg,
         AppSpacing.sm,
         AppSpacing.lg,
@@ -557,7 +562,7 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
 
   Widget _actions(AppMessages t) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         AppSpacing.lg,
         AppSpacing.sm,
         AppSpacing.lg,

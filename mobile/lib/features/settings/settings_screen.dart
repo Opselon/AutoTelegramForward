@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_state.dart';
+import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../../widgets/server_connection_dialog.dart';
@@ -37,7 +38,7 @@ class SettingsScreen extends StatelessWidget {
             leading: const Icon(Icons.dns_outlined),
             title: Text(t.get('settings_server_current')),
             subtitle: Text(state.serverUrl),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: Icon(AppIcons.forward(context)),
             onTap: () => _changeServer(context),
           ),
           const Divider(),

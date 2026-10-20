@@ -222,6 +222,7 @@ class AppMessagesPt {
     'logs_copy': 'Copiar',
     'logs_detail_label': 'detalhes',
     'logs_empty': 'No errors recorded.',
+    'logs_empty_sub': 'Os registros aparecem aqui assim que o motor os grava.',
     'logs_end_of_history': 'Fim do histórico',
     'logs_export_copied': 'Exportação copiada',
     'logs_export_csv': 'Exportar como CSV',
@@ -278,6 +279,9 @@ class AppMessagesPt {
     'logs_scope_task': 'Tarefa',
     'logs_scope_task_chip': 'tarefa:{id}',
     'logs_search_hint': 'Pesquisar mensagem e detalhes…',
+    'logs_select_hint':
+        'Escolha um registro na lista para ler o conteúdo e a origem.',
+    'logs_select_prompt': 'Selecione um registro de log',
     'logs_service_unreachable':
         'Não foi possível acessar o serviço de logs: {error}',
     'logs_show_all_tasks': 'Mostrar todas as tarefas',
@@ -293,6 +297,8 @@ class AppMessagesPt {
     'nav_delivery': 'Entrega',
     'nav_filters': 'Filters',
     'nav_logs': 'Logs',
+    'nav_more': 'Mais',
+    'nav_more_title': 'Todas as seções',
     'nav_rules': 'Tarefas',
     'nav_sessions': 'Contas',
     'nav_settings': 'Configurações',
@@ -355,6 +361,7 @@ class AppMessagesPt {
     'rules_edit_target': 'Editar Destino',
     'rules_empty':
         'Ainda não há tarefas. Crie uma para começar a reencaminhar.',
+    'rules_empty_sub': 'Uma tarefa encaminha mensagens de um chat de origem para um ou mais destinos.',
     'rules_enabled': 'Enabled',
     'rules_filter_mode': 'Filter mode',
     'rules_filters': 'Filtros',
@@ -393,6 +400,7 @@ class AppMessagesPt {
     'rules_logs_title': 'Logs da tarefa',
     'rules_media_mode': 'Media handling',
     'rules_media_toggles_title': 'Media & Sync Settings (bot/web parity)',
+    'rules_more_actions': 'Mais ações',
     'rules_pick_from_chats': 'Selecionar dos meus chats',
     'rules_pick_sources': 'Escolher origens',
     'rules_pick_targets': 'Escolher destinos',
@@ -428,6 +436,7 @@ class AppMessagesPt {
     'rules_route_sources': 'Origens (separadas por vírgula)',
     'rules_route_sources_hint':
         'IDs, @nomes de usuário ou links t.me, separados por vírgulas',
+    'rules_route_summary': '{source} → {target}',
     'rules_route_targets': 'Destinos (separados por vírgula)',
     'rules_route_targets_hint':
         'Cada mensagem é encaminhada para todos estes destinos',
@@ -447,6 +456,9 @@ class AppMessagesPt {
     'rules_sec_schedules': 'Agendamentos',
     'rules_sec_status': 'Status de encaminhamento',
     'rules_sec_time_forward': 'Encaminhamento programado',
+    'rules_select_hint':
+        'Escolha uma tarefa na lista para ver a rota, o status e as ações.',
+    'rules_select_prompt': 'Selecione uma tarefa',
     'rules_sender_account': 'Conta Pessoal do Telegram',
     'rules_sender_bot': 'Conta de bot',
     'rules_sender_line': 'Remetente: {type}',
@@ -535,6 +547,7 @@ class AppMessagesPt {
     'rules_time_forward_sub': 'Limites de atraso e tempo de edição',
     'rules_title': 'Tarefas de Encaminhamento',
     'rules_toggle': 'Enable / disable',
+    'rules_toggle_state': 'Ativar ou pausar esta tarefa',
     'rules_topic_hint': '0 (desativado)',
     'rules_topic_label': 'Tópico #',
     'rules_validation_failed':

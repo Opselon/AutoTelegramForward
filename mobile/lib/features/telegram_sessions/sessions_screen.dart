@@ -13,7 +13,10 @@ import 'package:provider/provider.dart';
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
+import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
+import '../../widgets/app_ui.dart';
+import '../../widgets/loading_list.dart';
 import 'telegram_login_dialog.dart';
 
 class SessionsScreen extends StatefulWidget {
@@ -161,18 +164,18 @@ class _SessionsScreenState extends State<SessionsScreen> {
         child: Column(
           children: [
             if (_error != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: InlineBanner(
+                  message: _error!,
+                  onRetry: _load,
+                  retryLabel: t.get('action_retry'),
                 ),
-                child: Text(_error!, style: const TextStyle(color: Colors.red)),
               ),
             Expanded(
-              child: _sessions.isEmpty && !_loading
+              child: _loading && _sessions.isEmpty
+                  ? const LoadingList(rows: 6, itemExtent: 84)
+                  : _sessions.isEmpty
                   ? ListView(
                       children: [
                         Padding(

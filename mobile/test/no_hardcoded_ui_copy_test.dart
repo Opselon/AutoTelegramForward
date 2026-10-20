@@ -54,7 +54,6 @@ const Map<String, String> technicalTokens = <String, String>{
   'AutoTelegramForward': 'brand name',
   // The transport the route card labels itself with. A brand name, and the
   // server's own chat-type vocabulary (`telegram`), not a sentence.
-  'Telegram': 'platform brand name',
   // A URL example shown as a hint, not a sentence.
   'https://atf.example.com': 'URL example',
   // Bot-token shape example (`123456789:AA…`), documentation only.

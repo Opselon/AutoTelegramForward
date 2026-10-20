@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
+import '../../core/layout.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../../l10n/app_messages.dart';
@@ -308,7 +309,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         ? Theme.of(context).colorScheme.primary
         : Theme.of(context).colorScheme.tertiary;
     return Padding(
-      padding: EdgeInsets.only(left: dense ? 0 : 6, bottom: 2),
+      padding: EdgeInsetsDirectional.only(start: dense ? 0 : 6, bottom: 2),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.14),
@@ -441,7 +442,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
             children: [
               // ------------------------------------------------------- header
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 12, 8),
+                padding: const EdgeInsetsDirectional.fromSTEB(20, 0, 12, 8),
                 child: Row(
                   children: [
                     Expanded(
@@ -470,7 +471,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
                     ),
                     if (_schema != null)
                       Padding(
-                        padding: const EdgeInsets.only(right: 4),
+                        padding: const EdgeInsetsDirectional.only(end: 4),
                         child: Text(
                           t.get(
                             'rules_settings_count',
@@ -495,7 +496,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
               // -------------------------------------------------------- search
               if (_schema != null && _loadError == null)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 0),
                   child: TextField(
                     key: const ValueKey<String>('rules_settings_search'),
                     style: const TextStyle(fontSize: 13),
@@ -505,6 +506,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
                       suffixIcon: _query.isEmpty
                           ? null
                           : IconButton(
+                              tooltip: t.get('action_close'),
                               icon: const Icon(Icons.close, size: 16),
                               onPressed: () => setState(() => _query = ''),
                             ),
@@ -523,14 +525,19 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
                 const Divider(height: 1),
                 if (_saveError != null)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                    padding: const EdgeInsetsDirectional.fromSTEB(
+                      20,
+                      10,
+                      20,
+                      0,
+                    ),
                     child: Text(
                       _saveError!,
                       style: const TextStyle(fontSize: 12, color: Colors.red),
                     ),
                   ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                  padding: const EdgeInsetsDirectional.fromSTEB(16, 10, 16, 12),
                   child: Row(
                     children: [
                       Expanded(
@@ -654,7 +661,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         );
       }
       return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
         children: [
           for (final spec in hits) ...[
             Text(
@@ -680,7 +687,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
     ];
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
       children: [
         if (pinned.isNotEmpty) ...[
           Row(
@@ -778,6 +785,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: hasSelected ? selectedId : '',
             isDense: true,
             decoration: InputDecoration(
@@ -1006,6 +1014,7 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
       return Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: selected,
           isDense: true,
           decoration: InputDecoration(
@@ -1318,9 +1327,9 @@ class _PairEditorState extends State<_PairEditor> {
                       onChanged: (_) => _emit(),
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6),
-                    child: Icon(Icons.arrow_forward, size: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Icon(AppIcons.arrow(context), size: 16),
                   ),
                   Expanded(
                     child: TextField(

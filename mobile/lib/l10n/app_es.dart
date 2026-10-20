@@ -220,6 +220,8 @@ class AppMessagesEs {
     'logs_copy': 'Copiar',
     'logs_detail_label': 'detalles',
     'logs_empty': 'No errors recorded.',
+    'logs_empty_sub':
+        'Las entradas aparecen aquí en cuanto el motor las registra.',
     'logs_end_of_history': 'Fin del historial',
     'logs_export_copied': 'Exportación copiada',
     'logs_export_csv': 'Exportar como CSV',
@@ -277,6 +279,9 @@ class AppMessagesEs {
     'logs_scope_task': 'Tarea',
     'logs_scope_task_chip': 'tarea:{id}',
     'logs_search_hint': 'Buscar mensaje y detalles…',
+    'logs_select_hint':
+        'Elige una entrada de la lista para leer su contenido y su origen.',
+    'logs_select_prompt': 'Selecciona una entrada de registro',
     'logs_service_unreachable':
         'No se pudo contactar con el servicio de registros: {error}',
     'logs_show_all_tasks': 'Mostrar todas las tareas',
@@ -292,6 +297,8 @@ class AppMessagesEs {
     'nav_delivery': 'Entrega',
     'nav_filters': 'Filters',
     'nav_logs': 'Logs',
+    'nav_more': 'Más',
+    'nav_more_title': 'Todas las secciones',
     'nav_rules': 'Tareas',
     'nav_sessions': 'Cuentas',
     'nav_settings': 'Ajustes',
@@ -353,6 +360,7 @@ class AppMessagesEs {
     'rules_edit_source': 'Editar Origen',
     'rules_edit_target': 'Editar Destino',
     'rules_empty': 'Aún no hay tareas. Crea una para empezar a reenviar.',
+    'rules_empty_sub': 'Una tarea reenvía mensajes de un chat de origen a uno o varios destinos.',
     'rules_enabled': 'Enabled',
     'rules_filter_mode': 'Filter mode',
     'rules_filters': 'Filtros',
@@ -392,6 +400,7 @@ class AppMessagesEs {
     'rules_logs_title': 'Registros de la tarea',
     'rules_media_mode': 'Media handling',
     'rules_media_toggles_title': 'Media & Sync Settings (bot/web parity)',
+    'rules_more_actions': 'Más acciones',
     'rules_pick_from_chats': 'Seleccionar de mis chats',
     'rules_pick_sources': 'Elegir orígenes',
     'rules_pick_targets': 'Elegir destinos',
@@ -426,6 +435,7 @@ class AppMessagesEs {
     'rules_route_sources': 'Orígenes (separados por comas)',
     'rules_route_sources_hint':
         'IDs, @nombres de usuario o enlaces t.me, separados por comas',
+    'rules_route_summary': '{source} → {target}',
     'rules_route_targets': 'Destinos (separados por comas)',
     'rules_route_targets_hint': 'Cada mensaje se envía a todos estos destinos',
     'rules_sched_auto': 'Programador de publicaciones',
@@ -444,6 +454,9 @@ class AppMessagesEs {
     'rules_sec_schedules': 'Programaciones',
     'rules_sec_status': 'Estado de reenvío',
     'rules_sec_time_forward': 'Reenvío programado',
+    'rules_select_hint':
+        'Elige una tarea de la lista para ver su ruta, estado y acciones.',
+    'rules_select_prompt': 'Selecciona una tarea',
     'rules_sender_account': 'Cuenta Personal de Telegram',
     'rules_sender_bot': 'Cuenta de bot',
     'rules_sender_line': 'Remitente: {type}',
@@ -531,6 +544,7 @@ class AppMessagesEs {
     'rules_time_forward_sub': 'Límites de retraso y tiempo de edición',
     'rules_title': 'Tareas de reenvío',
     'rules_toggle': 'Enable / disable',
+    'rules_toggle_state': 'Activar o pausar esta tarea',
     'rules_topic_hint': '0 (desactivado)',
     'rules_topic_label': 'Tema #',
     'rules_validation_failed':

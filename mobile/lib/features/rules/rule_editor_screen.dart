@@ -18,6 +18,7 @@ import 'rule_settings_sheet.dart';
 import 'rule_simulator_sheet.dart';
 
 import '../../core/api_client.dart';
+import '../../core/layout.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../../core/route_input.dart';
@@ -677,6 +678,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
               // Session Selector
               if (_sessions.isNotEmpty)
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: _selectedSessionId,
                   decoration: InputDecoration(
                     labelText: t.get('rules_session'),
@@ -1166,7 +1168,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                           t.get('rules_cleanup_hint'),
                           style: const TextStyle(fontSize: 11),
                         ),
-                        trailing: const Icon(Icons.chevron_right, size: 18),
+                        trailing: Icon(AppIcons.forward(context), size: 18),
                         // A task that has not been created yet has no id, so
                         // there is nothing to attach settings to; the tile says
                         // so instead of opening an empty sheet.

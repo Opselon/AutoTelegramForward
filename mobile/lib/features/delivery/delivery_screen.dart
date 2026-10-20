@@ -31,6 +31,7 @@ import '../../core/models.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../../widgets/app_ui.dart';
+import '../../widgets/loading_list.dart';
 
 class DeliveryScreen extends StatefulWidget {
   const DeliveryScreen({super.key});
@@ -327,7 +328,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
 
   Widget _queueTab(AppMessages t) {
     if (_loading && _stats == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingList(rows: 5, itemExtent: 96, showAvatar: false);
     }
     final stats = _stats;
     return RefreshIndicator(
@@ -569,7 +570,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
 
   Widget _deadLetterTab(AppMessages t) {
     if (_loadingDlq && _dlq.isEmpty && _dlqError == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingList(rows: 5, itemExtent: 88);
     }
     return RefreshIndicator(
       onRefresh: () async {

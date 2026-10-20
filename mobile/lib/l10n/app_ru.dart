@@ -218,6 +218,8 @@ class AppMessagesRu {
     'logs_copy': 'Копировать',
     'logs_detail_label': 'детали',
     'logs_empty': 'No errors recorded.',
+    'logs_empty_sub':
+        'Записи появятся здесь, как только движок их зафиксирует.',
     'logs_end_of_history': 'Конец истории',
     'logs_export_copied': 'Экспорт скопирован',
     'logs_export_csv': 'Экспорт в CSV',
@@ -273,6 +275,9 @@ class AppMessagesRu {
     'logs_scope_task': 'Задача',
     'logs_scope_task_chip': 'задача:{id}',
     'logs_search_hint': 'Поиск по сообщению и деталям…',
+    'logs_select_hint':
+        'Выберите запись в списке, чтобы увидеть её содержимое и источник.',
+    'logs_select_prompt': 'Выберите запись журнала',
     'logs_service_unreachable':
         'Не удалось связаться с сервисом логов: {error}',
     'logs_show_all_tasks': 'Показать все задачи',
@@ -288,6 +293,8 @@ class AppMessagesRu {
     'nav_delivery': 'Доставка',
     'nav_filters': 'Filters',
     'nav_logs': 'Logs',
+    'nav_more': 'Ещё',
+    'nav_more_title': 'Все разделы',
     'nav_rules': 'Задачи',
     'nav_sessions': 'Аккаунты',
     'nav_settings': 'Настройки',
@@ -348,6 +355,7 @@ class AppMessagesRu {
     'rules_edit_source': 'Изменить источник',
     'rules_edit_target': 'Изменить цель',
     'rules_empty': 'Задач пока нет. Создайте её, чтобы начать пересылку.',
+    'rules_empty_sub': 'Задача пересылает сообщения из чата-источника в один или несколько чатов.',
     'rules_enabled': 'Enabled',
     'rules_filter_mode': 'Filter mode',
     'rules_filters': 'Фильтры',
@@ -386,6 +394,7 @@ class AppMessagesRu {
     'rules_logs_title': 'Журналы задачи',
     'rules_media_mode': 'Media handling',
     'rules_media_toggles_title': 'Media & Sync Settings (bot/web parity)',
+    'rules_more_actions': 'Другие действия',
     'rules_pick_from_chats': 'Выбрать из моих чатов',
     'rules_pick_sources': 'Выбрать источники',
     'rules_pick_targets': 'Выбрать получателей',
@@ -421,6 +430,7 @@ class AppMessagesRu {
     'rules_route_sources': 'Источники (через запятую)',
     'rules_route_sources_hint':
         'ID, @имена пользователей или ссылки t.me, через запятую',
+    'rules_route_summary': '{source} → {target}',
     'rules_route_targets': 'Цели (через запятую)',
     'rules_route_targets_hint': 'Каждое сообщение отправляется во все эти цели',
     'rules_sched_auto': 'Планировщик авто-публикаций',
@@ -439,6 +449,9 @@ class AppMessagesRu {
     'rules_sec_schedules': 'Расписания',
     'rules_sec_status': 'Статус пересылки',
     'rules_sec_time_forward': 'Отложенная пересылка',
+    'rules_select_hint':
+        'Выберите задачу в списке, чтобы увидеть маршрут, статус и действия.',
+    'rules_select_prompt': 'Выберите задачу',
     'rules_sender_account': 'Личный аккаунт Telegram',
     'rules_sender_bot': 'Аккаунт бота',
     'rules_sender_line': 'Отправитель: {type}',
@@ -528,6 +541,7 @@ class AppMessagesRu {
     'rules_time_forward_sub': 'Лимиты задержки и времени редактирования',
     'rules_title': 'Задачи пересылки',
     'rules_toggle': 'Enable / disable',
+    'rules_toggle_state': 'Включить или приостановить задачу',
     'rules_topic_hint': '0 (отключено)',
     'rules_topic_label': 'Тема #',
     'rules_validation_failed':

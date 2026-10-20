@@ -222,6 +222,7 @@ class AppMessagesIt {
     'logs_copy': 'Copia',
     'logs_detail_label': 'dettagli',
     'logs_empty': 'No errors recorded.',
+    'logs_empty_sub': 'Le voci compaiono qui non appena il motore le registra.',
     'logs_end_of_history': 'Fine della cronologia',
     'logs_export_copied': 'Esportazione copiata',
     'logs_export_csv': 'Esporta come CSV',
@@ -278,6 +279,9 @@ class AppMessagesIt {
     'logs_scope_task': 'Attività',
     'logs_scope_task_chip': 'attività:{id}',
     'logs_search_hint': 'Cerca messaggio e dettagli…',
+    'logs_select_hint':
+        'Scegli una voce dall\'elenco per leggerne contenuto e origine.',
+    'logs_select_prompt': 'Seleziona una voce di log',
     'logs_service_unreachable':
         'Impossibile raggiungere il servizio log: {error}',
     'logs_show_all_tasks': 'Mostra tutte le attività',
@@ -293,6 +297,8 @@ class AppMessagesIt {
     'nav_delivery': 'Consegna',
     'nav_filters': 'Filters',
     'nav_logs': 'Logs',
+    'nav_more': 'Altro',
+    'nav_more_title': 'Tutte le sezioni',
     'nav_rules': 'Attività',
     'nav_sessions': 'Account',
     'nav_settings': 'Impostazioni',
@@ -354,6 +360,7 @@ class AppMessagesIt {
     'rules_edit_source': 'Modifica Sorgente',
     'rules_edit_target': 'Modifica Destinazione',
     'rules_empty': 'Nessuna attività. Creane una per iniziare a inoltrare.',
+    'rules_empty_sub': 'Un\'attività inoltra i messaggi da una chat di origine a una o più destinazioni.',
     'rules_enabled': 'Enabled',
     'rules_filter_mode': 'Filter mode',
     'rules_filters': 'Filtri',
@@ -392,6 +399,7 @@ class AppMessagesIt {
     'rules_logs_title': 'Log delle attività',
     'rules_media_mode': 'Media handling',
     'rules_media_toggles_title': 'Media & Sync Settings (bot/web parity)',
+    'rules_more_actions': 'Altre azioni',
     'rules_pick_from_chats': 'Seleziona dalle mie chat',
     'rules_pick_sources': 'Scegli le sorgenti',
     'rules_pick_targets': 'Scegli le destinazioni',
@@ -426,6 +434,7 @@ class AppMessagesIt {
     'rules_route_sources': 'Sorgenti (separate da virgole)',
     'rules_route_sources_hint':
         'ID, @nomi utente o link t.me, separati da virgole',
+    'rules_route_summary': '{source} → {target}',
     'rules_route_targets': 'Destinazioni (separate da virgole)',
     'rules_route_targets_hint':
         'Ogni messaggio viene inviato a tutte queste destinazioni',
@@ -445,6 +454,9 @@ class AppMessagesIt {
     'rules_sec_schedules': 'Pianificazioni',
     'rules_sec_status': 'Stato inoltro',
     'rules_sec_time_forward': 'Inoltro programmato',
+    'rules_select_hint':
+        'Scegli un\'attività dall\'elenco per vedere percorso, stato e azioni.',
+    'rules_select_prompt': 'Seleziona un\'attività',
     'rules_sender_account': 'Account Telegram Personale',
     'rules_sender_bot': 'Account bot',
     'rules_sender_line': 'Mittente: {type}',
@@ -533,6 +545,7 @@ class AppMessagesIt {
     'rules_time_forward_sub': 'Limiti di ritardo e tempo di modifica',
     'rules_title': 'Attività di inoltro',
     'rules_toggle': 'Enable / disable',
+    'rules_toggle_state': 'Attiva o sospendi questa attività',
     'rules_topic_hint': '0 (disattivato)',
     'rules_topic_label': 'Argomento #',
     'rules_validation_failed':

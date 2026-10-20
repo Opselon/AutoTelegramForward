@@ -220,6 +220,8 @@ class AppMessagesFr {
     'logs_copy': 'Copier',
     'logs_detail_label': 'détails',
     'logs_empty': 'No errors recorded.',
+    'logs_empty_sub':
+        'Les entrées apparaissent ici dès que le moteur les enregistre.',
     'logs_end_of_history': 'Fin de l’historique',
     'logs_export_copied': 'Export copié',
     'logs_export_csv': 'Exporter en CSV',
@@ -276,6 +278,8 @@ class AppMessagesFr {
     'logs_scope_task': 'Tâche',
     'logs_scope_task_chip': 'tâche:{id}',
     'logs_search_hint': 'Rechercher message et détails…',
+    'logs_select_hint': 'Choisissez une entrée dans la liste pour lire son contenu et son origine.',
+    'logs_select_prompt': 'Sélectionnez une entrée de journal',
     'logs_service_unreachable':
         'Impossible de joindre le service de journalisation : {error}',
     'logs_show_all_tasks': 'Afficher toutes les tâches',
@@ -291,6 +295,8 @@ class AppMessagesFr {
     'nav_delivery': 'Livraison',
     'nav_filters': 'Filters',
     'nav_logs': 'Logs',
+    'nav_more': 'Plus',
+    'nav_more_title': 'Toutes les sections',
     'nav_rules': 'Tâches',
     'nav_sessions': 'Comptes',
     'nav_settings': 'Paramètres',
@@ -351,6 +357,7 @@ class AppMessagesFr {
     'rules_edit_source': 'Modifier la Source',
     'rules_edit_target': 'Modifier la Destination',
     'rules_empty': 'Aucune tâche pour l\'instant. Créez-en une pour commencer le transfert.',
+    'rules_empty_sub': 'Une tâche transfère les messages d\'un chat source vers une ou plusieurs cibles.',
     'rules_enabled': 'Enabled',
     'rules_filter_mode': 'Filter mode',
     'rules_filters': 'Filtres',
@@ -390,6 +397,7 @@ class AppMessagesFr {
     'rules_logs_title': 'Journaux de la tâche',
     'rules_media_mode': 'Media handling',
     'rules_media_toggles_title': 'Media & Sync Settings (bot/web parity)',
+    'rules_more_actions': 'Plus d\'actions',
     'rules_pick_from_chats': 'Sélectionner parmi mes chats',
     'rules_pick_sources': 'Choisir les sources',
     'rules_pick_targets': 'Choisir les cibles',
@@ -424,6 +432,7 @@ class AppMessagesFr {
     'rules_route_sources': 'Sources (séparées par des virgules)',
     'rules_route_sources_hint':
         'ID, @noms d’utilisateur ou liens t.me, séparés par des virgules',
+    'rules_route_summary': '{source} → {target}',
     'rules_route_targets': 'Destinations (séparées par des virgules)',
     'rules_route_targets_hint':
         'Chaque message est diffusé vers toutes ces destinations',
@@ -443,6 +452,8 @@ class AppMessagesFr {
     'rules_sec_schedules': 'Planifications',
     'rules_sec_status': 'État du transfert',
     'rules_sec_time_forward': 'Transfert programmé',
+    'rules_select_hint': 'Choisissez une tâche dans la liste pour voir son itinéraire, son état et ses actions.',
+    'rules_select_prompt': 'Sélectionnez une tâche',
     'rules_sender_account': 'Compte Telegram Personnel',
     'rules_sender_bot': 'Compte bot',
     'rules_sender_line': 'Expéditeur: {type}',
@@ -531,6 +542,7 @@ class AppMessagesFr {
     'rules_time_forward_sub': 'Limites de délai et de temps d\'édition',
     'rules_title': 'Tâches de transfert',
     'rules_toggle': 'Enable / disable',
+    'rules_toggle_state': 'Activer ou suspendre cette tâche',
     'rules_topic_hint': '0 (désactivé)',
     'rules_topic_label': 'Sujet #',
     'rules_validation_failed':
