@@ -33,7 +33,10 @@ within a major API version):
 - `product_version`: resolved at runtime from the repo-root `VERSION` file
   (falls back to the `-ldflags`-injected `ProductVersion`, then `"dev"`).
 - `commit_sha`: `$ATF_COMMIT_SHA` env, else the `-ldflags`-injected
-  `CommitSHA`, else `"unknown"`.
+  `CommitSHA`, else `"unknown"`. Published images (`Dockerfile.api` in the
+  Publish workflow) bake the commit they were built from into both that
+  variable and the `org.opencontainers.image.revision` label, so a deployed
+  server can always be reconciled against the `sha-<short>` tag it runs.
 - `features`: capability keys clients can probe to gate UI without
   authenticating first.
 

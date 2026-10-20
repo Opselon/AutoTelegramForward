@@ -5,12 +5,18 @@ COPY api/go.mod api/go.sum ./
 RUN --mount=type=cache,id=atf-api-go-mod,target=/go/pkg/mod go mod download
 
 COPY api/ .
+# The published container build gets the revision it builds from. CommitSHA is
+# a declared -X target: without this arg a container deployment names its live
+# commit through /api/version only as "unknown", exactly what
+# docs/api-compatibility.md - the mobile/web reconciliation contract - says the
+# field is there to prevent.
+ARG ATF_COMMIT_SHA=unknown
 # Module and build caches are mounted, so a source-only change reuses every
 # compiled dependency package instead of rebuilding the Go standard library
 # dependencies from scratch.
 RUN --mount=type=cache,id=atf-api-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=atf-api-go-build,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o /atf-api .
+    CGO_ENABLED=0 go build -ldflags="-s -w -X autoforward/internal/handlers.CommitSHA=${ATF_COMMIT_SHA}" -o /atf-api .
 
 FROM alpine:3.20
 # Retry: dl-cdn.alpinelinux.org intermittently returns transient network
@@ -29,6 +35,12 @@ COPY VERSION /etc/atf/VERSION
 # GET /api/openapi.yaml returns exactly this document (no second copy in the
 # website can drift from it).
 COPY docs/openapi.yaml /etc/atf/openapi.yaml
+
+# Same value as an OCI label: `docker inspect` then answers "which commit is
+# this?" even on a host that cannot reach the API, and a registry scan of a
+# running image can be reconciled against the commit CI published.
+ARG ATF_COMMIT_SHA=unknown
+LABEL org.opencontainers.image.revision="${ATF_COMMIT_SHA}"
 
 EXPOSE 8080
 ENV ATF_CORE_GRPC=core:50051 \
