@@ -21,6 +21,7 @@ import '../../core/models.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../../widgets/app_ui.dart';
+import '../../widgets/loading_list.dart';
 import '../rules/rule_editor_screen.dart';
 import 'chat_picker_sheet.dart' show kChatPageSize;
 
@@ -354,10 +355,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   Widget _list(AppMessages t) {
     if (_loading && _chats.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
-        child: Center(child: CircularProgressIndicator()),
-      );
+      // Skeleton, not a spinner on a blank page: the rows land where the
+      // placeholders already are, so the list does not jump.
+      return const LoadingList(rows: 5, itemExtent: 76, shrinkWrap: true);
     }
     final visible = _visible;
     if (visible.isEmpty) {

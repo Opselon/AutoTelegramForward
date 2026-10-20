@@ -11,10 +11,14 @@ import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
+import '../../core/layout.dart';
 import '../../core/models.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_ui.dart';
+import '../../widgets/error_state.dart';
+import '../../widgets/loading_list.dart';
 import '../system/system_status_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -149,234 +153,274 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: Text(t.get('dash_title')),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
+          AppIconButton(
+            icon: Icons.refresh,
             tooltip: t.get('action_refresh'),
             onPressed: _loading ? null : _load,
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          padding: AppSpacing.screen,
-          children: [
-            if (_error != null) ...[
-              InlineBanner(
-                message: _error!,
-                onRetry: _load,
-                retryLabel: t.get('action_retry'),
-              ),
-              AppSpacing.gapLg,
-            ],
+      body: AppPageBody(
+        padding: EdgeInsets.zero,
+        maxWidth: 960,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: AppSpacing.screen,
+            children: [
+              if (_error != null) ...[
+                InlineBanner(
+                  message: _error!,
+                  onRetry: _load,
+                  retryLabel: t.get('action_retry'),
+                ),
+                AppSpacing.gapLg,
+              ],
 
-            GradientHeader(
-              title: t.get('dash_title'),
-              subtitle: stats != null
-                  ? '${t.get('dash_total_rules')} • ${t.get('dash_sessions')}'
-                  : null,
-              icon: Icons.insights_rounded,
-            ),
-            AppSpacing.gapLg,
+              if (_stats == null && _error != null)
+                ErrorState(message: _error!, onRetry: _load)
+              else if (_stats == null && _loading)
+                // Skeleton of the real layout: the hero block plus four metrics,
+                // so nothing jumps when the numbers land.
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                  child: Column(
+                    children: [
+                      SkeletonBlock(height: 96, radius: AppRadius.md),
+                      SizedBox(height: AppSpacing.md),
+                      LoadingList(rows: 4, itemExtent: 76, showAvatar: false),
+                    ],
+                  ),
+                )
+              else ...[
+                GradientHeader(
+                  title: t.get('dash_title'),
+                  subtitle: stats != null
+                      ? '${t.get('dash_total_rules')} • ${t.get('dash_sessions')}'
+                      : null,
+                  icon: Icons.insights_rounded,
+                ),
+                AppSpacing.gapLg,
 
-            // Readiness first: "is this thing set up?" outranks any counter.
-            if (_setup != null) ...[
-              ReadinessHero(
-                ready: _setup!.ready,
-                title: _setup!.ready
-                    ? t.get('sys_ready')
-                    : t.get('sys_not_ready'),
-                subtitle: _setup!.deployment.isEmpty
-                    ? t.get('sys_subtitle')
-                    : '${t.get('sys_deployment')}: ${_setup!.deployment}',
-                verdictLabel: _setup!.ready
-                    ? t.get('sys_ready')
-                    : t.get('sys_not_ready'),
-                serviceSummary: t.get(
-                  'sys_services_online',
-                  params: {
-                    'online': '${_setup!.onlineServices}',
-                    'total': '${_setup!.services.length}',
+                // Readiness first: "is this thing set up?" outranks any counter.
+                if (_setup != null) ...[
+                  ReadinessHero(
+                    ready: _setup!.ready,
+                    title: _setup!.ready
+                        ? t.get('sys_ready')
+                        : t.get('sys_not_ready'),
+                    subtitle: _setup!.deployment.isEmpty
+                        ? t.get('sys_subtitle')
+                        : '${t.get('sys_deployment')}: ${_setup!.deployment}',
+                    verdictLabel: _setup!.ready
+                        ? t.get('sys_ready')
+                        : t.get('sys_not_ready'),
+                    serviceSummary: t.get(
+                      'sys_services_online',
+                      params: {
+                        'online': '${_setup!.onlineServices}',
+                        'total': '${_setup!.services.length}',
+                      },
+                    ),
+                    footnote: _setup!.missingRequired.isEmpty
+                        ? null
+                        : t.get(
+                            'sys_missing_required',
+                            params: {
+                              'count': '${_setup!.missingRequired.length}',
+                            },
+                          ),
+                    openLabel: t.get('sys_open'),
+                    onOpen: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const SystemStatusScreen(),
+                      ),
+                    ),
+                  ),
+                  AppSpacing.gapLg,
+                ],
+
+                // Metric grid
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Two columns on a phone, four when the window is wide enough
+                    // that two tiles would stretch into billboards.
+                    final columns = constraints.maxWidth >= 880
+                        ? 4
+                        : (constraints.maxWidth >= 620 ? 3 : 2);
+                    return GridView.count(
+                      crossAxisCount: columns,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisSpacing: AppSpacing.md,
+                      mainAxisSpacing: AppSpacing.md,
+                      childAspectRatio: 1.45,
+                      children: [
+                        StatTile(
+                          label: t.get('dash_total_rules'),
+                          value: rules.value,
+                          caption: rules.caption,
+                          icon: Icons.alt_route_rounded,
+                          gradient: AppGradients.brand,
+                        ),
+                        StatTile(
+                          label: t.get('dash_sessions'),
+                          value: sessions.value,
+                          caption: sessions.caption,
+                          icon: Icons.send_rounded,
+                          gradient: AppGradients.cyan,
+                        ),
+                        StatTile(
+                          label: t.get('dash_delivered'),
+                          value: stats != null
+                              ? '${stats.deliveredTotal}'
+                              : '—',
+                          icon: Icons.check_circle_outline,
+                          gradient: AppGradients.success,
+                        ),
+                        StatTile(
+                          label: t.get('dash_failed'),
+                          value: stats != null ? '$failed' : '—',
+                          icon: Icons.error_outline,
+                          gradient: failed > 0
+                              ? AppGradients.danger
+                              : AppGradients.gold,
+                        ),
+                      ],
+                    );
                   },
                 ),
-                footnote: _setup!.missingRequired.isEmpty
-                    ? null
-                    : t.get(
-                        'sys_missing_required',
-                        params: {'count': '${_setup!.missingRequired.length}'},
+                AppSpacing.gapXl,
+
+                // Preflight diagnostics — only shown when the server answered.
+                if (_diagnostics != null)
+                  SectionCard(
+                    title: t.get('diag_title'),
+                    icon: Icons.health_and_safety_outlined,
+                    trailing: StatusPill(
+                      label: '${_diagnostics!.score}/100',
+                      color: AppTheme.severityColor(
+                        _diagnostics!.isHealthy
+                            ? 'info'
+                            : (_diagnostics!.errorCount > 0
+                                  ? 'error'
+                                  : 'warning'),
                       ),
-                openLabel: t.get('sys_open'),
-                onOpen: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const SystemStatusScreen(),
+                      icon: _diagnostics!.isHealthy
+                          ? Icons.verified_outlined
+                          : Icons.report_problem_outlined,
+                    ),
+                    child: _diagnostics!.findings.isEmpty
+                        ? EmptyStateView(
+                            message: t.get('diag_all_ok'),
+                            icon: Icons.verified_outlined,
+                            color: AppTheme.primary,
+                          )
+                        : Column(
+                            children: [
+                              for (
+                                var i = 0;
+                                i < _diagnostics!.findings.length;
+                                i++
+                              ) ...[
+                                if (i > 0) const Divider(height: 1),
+                                _FindingRow(finding: _diagnostics!.findings[i]),
+                              ],
+                            ],
+                          ),
                   ),
-                ),
-              ),
-              AppSpacing.gapLg,
-            ],
+                if (_diagnostics != null) AppSpacing.gapLg,
 
-            // Metric grid
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: AppSpacing.md,
-              mainAxisSpacing: AppSpacing.md,
-              childAspectRatio: 1.45,
-              children: [
-                StatTile(
-                  label: t.get('dash_total_rules'),
-                  value: rules.value,
-                  caption: rules.caption,
-                  icon: Icons.alt_route_rounded,
-                  gradient: AppGradients.brand,
-                ),
-                StatTile(
-                  label: t.get('dash_sessions'),
-                  value: sessions.value,
-                  caption: sessions.caption,
-                  icon: Icons.send_rounded,
-                  gradient: AppGradients.cyan,
-                ),
-                StatTile(
-                  label: t.get('dash_delivered'),
-                  value: stats != null ? '${stats.deliveredTotal}' : '—',
-                  icon: Icons.check_circle_outline,
-                  gradient: AppGradients.success,
-                ),
-                StatTile(
-                  label: t.get('dash_failed'),
-                  value: stats != null ? '$failed' : '—',
-                  icon: Icons.error_outline,
-                  gradient: failed > 0
-                      ? AppGradients.danger
-                      : AppGradients.gold,
-                ),
-              ],
-            ),
-            AppSpacing.gapXl,
-
-            // Preflight diagnostics — only shown when the server answered.
-            if (_diagnostics != null)
-              SectionCard(
-                title: t.get('diag_title'),
-                icon: Icons.health_and_safety_outlined,
-                trailing: StatusPill(
-                  label: '${_diagnostics!.score}/100',
-                  color: AppTheme.severityColor(
-                    _diagnostics!.isHealthy
-                        ? 'info'
-                        : (_diagnostics!.errorCount > 0 ? 'error' : 'warning'),
-                  ),
-                  icon: _diagnostics!.isHealthy
-                      ? Icons.verified_outlined
-                      : Icons.report_problem_outlined,
-                ),
-                child: _diagnostics!.findings.isEmpty
-                    ? EmptyStateView(
-                        message: t.get('diag_all_ok'),
-                        icon: Icons.verified_outlined,
-                        color: AppTheme.primary,
-                      )
-                    : Column(
-                        children: [
-                          for (
-                            var i = 0;
-                            i < _diagnostics!.findings.length;
-                            i++
-                          ) ...[
-                            if (i > 0) const Divider(height: 1),
-                            _FindingRow(finding: _diagnostics!.findings[i]),
+                // Service topology
+                SectionCard(
+                  title: t.get('dash_health'),
+                  icon: Icons.hub_outlined,
+                  child: _services.isEmpty && _loading
+                      ? const LoadingList(
+                          rows: 3,
+                          itemExtent: 56,
+                          showAvatar: false,
+                          padding: EdgeInsets.zero,
+                        )
+                      : _error != null && _services.isEmpty
+                      ? ErrorState(message: _error!, onRetry: _load)
+                      : _services.isEmpty
+                      ? EmptyStateView(
+                          message: t.get('state_empty'),
+                          icon: Icons.cloud_off_outlined,
+                          color: AppTheme.warning,
+                        )
+                      : Column(
+                          children: [
+                            for (var i = 0; i < _services.length; i++) ...[
+                              if (i > 0) const Divider(height: 1),
+                              ServiceTile(
+                                name: _services[i].name,
+                                online: _services[i].online,
+                                detail: _services[i].detail,
+                                latencyMs: _services[i].latencyMs,
+                                onlineLabel: t.get('status_online'),
+                                offlineLabel: t.get('status_offline'),
+                                latencyLabel: t.get(
+                                  'sys_latency',
+                                  params: {'ms': '${_services[i].latencyMs}'},
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
-                      ),
-              ),
-            if (_diagnostics != null) AppSpacing.gapLg,
+                        ),
+                ),
+                AppSpacing.gapLg,
 
-            // Service topology
-            SectionCard(
-              title: t.get('dash_health'),
-              icon: Icons.hub_outlined,
-              child: _services.isEmpty && _loading
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(AppSpacing.lg),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
-                  : _services.isEmpty
-                  ? EmptyStateView(
-                      message: t.get('state_empty'),
-                      icon: Icons.cloud_off_outlined,
-                      color: AppTheme.warning,
-                    )
-                  : Column(
-                      children: [
-                        for (var i = 0; i < _services.length; i++) ...[
-                          if (i > 0) const Divider(height: 1),
-                          ServiceTile(
-                            name: _services[i].name,
-                            online: _services[i].online,
-                            detail: _services[i].detail,
-                            latencyMs: _services[i].latencyMs,
-                            onlineLabel: t.get('status_online'),
-                            offlineLabel: t.get('status_offline'),
-                            latencyLabel: t.get(
-                              'sys_latency',
-                              params: {'ms': '${_services[i].latencyMs}'},
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-            ),
-            AppSpacing.gapLg,
-
-            // Recent errors
-            SectionCard(
-              title: t.get('dash_recent_errors'),
-              icon: Icons.report_gmailerrorred_outlined,
-              child: _recentErrors.isEmpty
-                  ? EmptyStateView(
-                      message: t.get('logs_empty'),
-                      icon: Icons.sentiment_satisfied_alt,
-                      color: AppTheme.primary,
-                    )
-                  : Column(
-                      children: [
-                        for (var i = 0; i < _recentErrors.length; i++) ...[
-                          if (i > 0) const Divider(height: 1),
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: AppTheme.warning.withValues(alpha: 0.14),
-                                borderRadius: AppRadii.allSm,
+                // Recent errors
+                SectionCard(
+                  title: t.get('dash_recent_errors'),
+                  icon: Icons.report_gmailerrorred_outlined,
+                  child: _recentErrors.isEmpty
+                      ? EmptyStateView(
+                          message: t.get('logs_empty'),
+                          icon: Icons.sentiment_satisfied_alt,
+                          color: AppTheme.primary,
+                        )
+                      : Column(
+                          children: [
+                            for (var i = 0; i < _recentErrors.length; i++) ...[
+                              if (i > 0) const Divider(height: 1),
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.warning.withValues(
+                                      alpha: 0.14,
+                                    ),
+                                    borderRadius: AppRadii.allSm,
+                                  ),
+                                  child: const Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: AppTheme.warning,
+                                    size: 18,
+                                  ),
+                                ),
+                                title: Text(
+                                  _recentErrors[i].message,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                                subtitle: Text(
+                                  '${_recentErrors[i].category} • ${_recentErrors[i].timestamp}',
+                                  style: theme.textTheme.bodySmall,
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.warning_amber_rounded,
-                                color: AppTheme.warning,
-                                size: 18,
-                              ),
-                            ),
-                            title: Text(
-                              _recentErrors[i].message,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                            subtitle: Text(
-                              '${_recentErrors[i].category} • ${_recentErrors[i].timestamp}',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-            ),
-            AppSpacing.gapXl,
-          ],
+                            ],
+                          ],
+                        ),
+                ),
+                AppSpacing.gapXl,
+              ],
+            ],
+          ),
         ),
       ),
     );

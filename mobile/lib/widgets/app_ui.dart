@@ -15,8 +15,13 @@ import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 import '../l10n/app_messages.dart';
+import 'app_card.dart';
+import 'empty_state.dart';
+import 'status_badge.dart';
 
-/// Card with a section title, optional trailing widget and body child.
+/// Titled card. Now a thin adapter over [AppCard], so every screen that used
+/// this widget inherits the design-system card (surface-2, radius `md`,
+/// elevation 1, 16 dp padding) instead of keeping its own border colour.
 class SectionCard extends StatelessWidget {
   const SectionCard({
     super.key,
@@ -35,35 +40,12 @@ class SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: padding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 18, color: theme.colorScheme.primary),
-                  const SizedBox(width: AppSpacing.sm),
-                ],
-                Expanded(
-                  child: Text(
-                    title,
-                    style: theme.textTheme.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                ?trailing,
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            child,
-          ],
-        ),
-      ),
+    return AppCard(
+      title: title,
+      icon: icon,
+      trailing: trailing,
+      padding: padding,
+      child: child,
     );
   }
 }
@@ -181,6 +163,10 @@ class StatTile extends StatelessWidget {
 }
 
 /// Compact status badge — the one place that decides what "online" looks like.
+///
+/// Kept as a named constructor pair for the screens that predate the design
+/// system; the rendering (and therefore the colour of "success") is
+/// [StatusBadge]'s.
 class StatusPill extends StatelessWidget {
   const StatusPill({
     super.key,
@@ -211,38 +197,19 @@ class StatusPill extends StatelessWidget {
   final IconData? icon;
   final bool dense;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: dense ? 7 : 9,
-        vertical: dense ? 2 : 4,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: AppRadii.allPill,
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: dense ? 11 : 13, color: color),
-            const SizedBox(width: 4),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: dense ? 10 : 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
-            ),
-          ),
-        ],
-      ),
-    );
+  /// Maps the legacy semantic colour onto a badge tone. Status colours are the
+  /// only input, so this is a total function over the palette, not a guess.
+  StatusTone get _tone {
+    if (color == AppTheme.success) return StatusTone.success;
+    if (color == AppTheme.warning) return StatusTone.warning;
+    if (color == AppTheme.error) return StatusTone.danger;
+    if (color == AppTheme.info) return StatusTone.info;
+    return StatusTone.neutral;
   }
+
+  @override
+  Widget build(BuildContext context) =>
+      StatusBadge(label: label, tone: _tone, icon: icon, dense: dense);
 }
 
 /// Readiness hero: the one-line answer to "is this server actually set up?".
@@ -723,7 +690,7 @@ class InlineBanner extends StatelessWidget {
   }
 }
 
-/// Consistent empty / "all good" panel.
+/// Consistent empty / "all good" panel. Adapter over [EmptyState].
 class EmptyStateView extends StatelessWidget {
   const EmptyStateView({
     super.key,
@@ -736,29 +703,16 @@ class EmptyStateView extends StatelessWidget {
   final IconData icon;
   final Color? color;
 
-  @override
-  Widget build(BuildContext context) {
-    final c = color ?? Theme.of(context).colorScheme.primary;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: c.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: c, size: 26),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
+  StatusTone get _tone {
+    if (color == AppTheme.success) return StatusTone.success;
+    if (color == AppTheme.warning) return StatusTone.warning;
+    if (color == AppTheme.error) return StatusTone.danger;
+    if (color == AppTheme.info) return StatusTone.info;
+    if (color == AppTheme.primary) return StatusTone.info;
+    return StatusTone.neutral;
   }
+
+  @override
+  Widget build(BuildContext context) =>
+      EmptyState(title: message, icon: icon, tone: _tone, compact: true);
 }

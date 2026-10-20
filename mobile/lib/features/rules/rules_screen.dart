@@ -1,4 +1,15 @@
-/// Rules listing screen: view, toggle, pause/resume, delete forwarding rules.
+/// Rules listing screen: view, toggle, pause/resume, delete forwarding tasks.
+///
+/// Layout follows the adaptive contract: on a phone the screen is one column of
+/// task cards with a create action; on an expanded window (>= 840 dp) it becomes
+/// a two-pane master–detail — a dense task list beside the selected task's
+/// route, status and controls — so a tablet does not waste half its width on
+/// stretched cards.
+///
+/// Every async state is explicit: skeleton while the first page loads, an empty
+/// state with a call to action when the account has no tasks, and an error state
+/// with Retry when the request failed (a dead server must never look like "you
+/// have no tasks").
 library;
 
 import 'package:flutter/material.dart';
@@ -6,8 +17,17 @@ import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
+import '../../core/design_tokens.dart';
+import '../../core/layout.dart';
 import '../../core/models.dart';
 import '../../l10n/app_messages.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_toast.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
+import '../../widgets/loading_list.dart';
+import '../../widgets/status_badge.dart';
 import 'rule_editor_screen.dart';
 import 'rule_settings_sheet.dart';
 import '../logs/logs_screen.dart';
@@ -23,6 +43,10 @@ class _RulesScreenState extends State<RulesScreen> {
   List<ForwardRule> _rules = const [];
   bool _loading = false;
   String? _error;
+
+  /// Selected task in the two-pane layout. Null means "nothing chosen yet"; the
+  /// build derives the effective selection so no post-frame setState is needed.
+  String? _selectedId;
 
   /// One-shot guard: `didChangeDependencies` can fire more than once, and a
   /// second fetch on every theme/locale change would hammer the API.
@@ -87,15 +111,34 @@ class _RulesScreenState extends State<RulesScreen> {
     return <String>[primary, ...ids.skip(1)].join(', ');
   }
 
+  String _sourceLabel(ForwardRule r, AppMessages t) => _routeLabel(
+    r.sourceIds,
+    r.sourceChatTitle,
+    r.sourceChatId.isNotEmpty ? r.sourceChatId : t.get('rules_source_fallback'),
+  );
+
+  String _targetLabel(ForwardRule r, AppMessages t) => _routeLabel(
+    r.allTargets,
+    r.targetChatTitle,
+    r.targetChatId.isNotEmpty ? r.targetChatId : t.get('rules_target_fallback'),
+  );
+
   Future<void> _toggle(ForwardRule rule) async {
+    final t = AppMessages.of(context);
     final client = context.read<AppState>().buildApiClient();
     try {
       await client.toggleRule(rule.id);
       await _load();
+      if (!mounted) return;
+      AppToast.success(
+        context,
+        rule.isEnabled
+            ? t.get('rules_status_paused')
+            : t.get('rules_status_active'),
+      );
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(exc.error.message)));
+      AppToast.failure(context, exc.error.message);
     }
   }
 
@@ -106,12 +149,10 @@ class _RulesScreenState extends State<RulesScreen> {
       await client.duplicateRule(rule.id);
       await _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(t.get('rules_duplicated'))));
+      AppToast.success(context, t.get('rules_duplicated'));
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(exc.error.message)));
+      AppToast.failure(context, exc.error.message);
     }
   }
 
@@ -121,16 +162,25 @@ class _RulesScreenState extends State<RulesScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t.get('rules_delete_confirm')),
-        content: Text('${rule.sourceChatTitle} -> ${rule.targetChatTitle}'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(t.get('action_cancel')),
+        content: Text(
+          t.get(
+            'rules_route_summary',
+            params: {
+              'source': _sourceLabel(rule, t),
+              'target': _targetLabel(rule, t),
+            },
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+        ),
+        actions: [
+          AppButton(
+            label: t.get('action_cancel'),
+            variant: AppButtonVariant.ghost,
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          AppButton(
+            label: t.get('action_delete'),
+            variant: AppButtonVariant.danger,
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(t.get('action_delete')),
           ),
         ],
       ),
@@ -141,11 +191,11 @@ class _RulesScreenState extends State<RulesScreen> {
     final client = context.read<AppState>().buildApiClient();
     try {
       await client.deleteRule(rule.id);
+      if (_selectedId == rule.id) _selectedId = null;
       await _load();
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(exc.error.message)));
+      AppToast.failure(context, exc.error.message);
     }
   }
 
@@ -159,547 +209,602 @@ class _RulesScreenState extends State<RulesScreen> {
     }
   }
 
+  void _openLogs(ForwardRule rule, AppMessages t) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LogsScreen(
+          initialRuleId: rule.id,
+          initialRuleLabel: _sourceLabel(rule, t),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppMessages.of(context);
+    final twoPane = AppWindow.of(context).supportsTwoPane;
+
+    final selected = _selectedId == null
+        ? (twoPane && _rules.isNotEmpty ? _rules.first.id : null)
+        : _rules.where((r) => r.id == _selectedId).map((r) => r.id).firstOrNull;
+    final selectedRule = selected == null
+        ? null
+        : _rules.where((r) => r.id == selected).firstOrNull;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(t.get('rules_title')),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
+          AppIconButton(
+            icon: Icons.refresh,
             tooltip: t.get('action_refresh'),
             onPressed: _loading ? null : _load,
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openEditor(),
-        icon: const Icon(Icons.add),
-        label: Text(t.get('rules_create')),
+      floatingActionButton: twoPane
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _openEditor(),
+              icon: const Icon(Icons.add),
+              label: Text(t.get('rules_create')),
+            ),
+      body: MasterDetailPane(
+        master: _buildMaster(context, t, dense: twoPane, selectedId: selected),
+        detailBuilder: (_) => selectedRule == null
+            ? _buildDetailPlaceholder(context, t)
+            : _buildDetail(context, t, selectedRule),
       ),
-      body: RefreshIndicator(
+    );
+  }
+
+  // ---------------------------------------------------------------- master
+
+  Widget _buildMaster(
+    BuildContext context,
+    AppMessages t, {
+    required bool dense,
+    required String? selectedId,
+  }) {
+    if (_loading && _rules.isEmpty) {
+      return LoadingList(rows: dense ? 7 : 4, itemExtent: dense ? 76 : 236);
+    }
+    if (_error != null && _rules.isEmpty) {
+      return ErrorState(message: _error!, onRetry: _load);
+    }
+    if (_rules.isEmpty) {
+      return RefreshIndicator(
         onRefresh: _load,
-        child: Column(
-          children: [
-            if (_error != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red),
-                ),
-                child: Text(_error!, style: const TextStyle(color: Colors.red)),
+        child: EmptyState.scrollable(
+          title: t.get('rules_empty'),
+          subtitle: t.get('rules_empty_sub'),
+          icon: Icons.alt_route_rounded,
+          actionLabel: t.get('rules_create'),
+          onAction: () => _openEditor(),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        padding: dense
+            ? const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.sm,
+              )
+            : const EdgeInsetsDirectional.fromSTEB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                AppSpacing.xxl * 2,
               ),
-            Expanded(
-              child: _rules.isEmpty && !_loading
-                  ? ListView(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 64,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.alt_route_rounded,
-                                size: 64,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                t.get('rules_empty'),
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: Colors.grey),
-                              ),
-                              const SizedBox(height: 24),
-                              ElevatedButton.icon(
-                                onPressed: () => _openEditor(),
-                                icon: const Icon(Icons.add),
-                                label: Text(t.get('rules_create')),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _rules.length,
-                      itemBuilder: (context, index) {
-                        final r = _rules[index];
-                        final taskName = r.name.isNotEmpty
-                            ? r.name
-                            : (r.id.length >= 8
-                                  ? 'af_route_lab_${r.id.substring(0, 4)}'
-                                  : 'af_route_lab_b');
-                        final srcTitle = r.sourceChatTitle.isNotEmpty
-                            ? r.sourceChatTitle
-                            : (r.sourceChatId.isNotEmpty
-                                  ? r.sourceChatId
-                                  : t.get('rules_source_fallback'));
-                        final dstTitle = r.targetChatTitle.isNotEmpty
-                            ? r.targetChatTitle
-                            : (r.targetChatId.isNotEmpty
-                                  ? r.targetChatId
-                                  : t.get('rules_target_fallback'));
-                        // A task can hold several sources and several targets;
-                        // the card shows the whole fan-out so a multi-entry
-                        // route is visible without opening the task.
-                        final srcDisplay = _routeLabel(
-                          r.sourceIds,
-                          r.sourceChatTitle,
-                          srcTitle,
-                        );
-                        final dstDisplay = _routeLabel(
-                          r.allTargets,
-                          r.targetChatTitle,
-                          dstTitle,
-                        );
+        itemCount: _rules.length + (_error != null ? 1 : 0),
+        // Fixed extents: the master list is a uniform row, so the viewport can
+        // jump-scroll without measuring every child, and only the visible rows
+        // are built (no more than ~10 mounted at any size).
+        itemExtent: dense ? 76 : null,
+        prototypeItem: dense ? null : null,
+        itemBuilder: (context, index) {
+          if (_error != null && index == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: _errorBanner(t),
+            );
+          }
+          final rule = _rules[_error != null ? index - 1 : index];
+          if (dense) {
+            return _RuleMasterRow(
+              rule: rule,
+              title: rule.name.isNotEmpty ? rule.name : '#${rule.shortId}',
+              source: _sourceLabel(rule, t),
+              target: _targetLabel(rule, t),
+              selected: rule.id == selectedId,
+              enabledLabel: rule.isEnabled
+                  ? t.get('rules_status_active')
+                  : t.get('rules_status_paused'),
+              onTap: () => setState(() => _selectedId = rule.id),
+            );
+          }
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: _buildDetail(context, t, rule),
+          );
+        },
+      ),
+    );
+  }
 
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            side: BorderSide(
-                              color: r.isEnabled
-                                  ? const Color(0xFF10B981)
-                                        .withValues(alpha: 0.3)
-                                  : Colors.grey.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          elevation: 2,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Task Header
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.sync_alt_rounded,
-                                          size: 18,
-                                          color: Color(0xFF38BDF8),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          taskName,
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      children: [
-                                        InkWell(
-                                          onTap: () => _toggle(r),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: r.isEnabled
-                                                  ? const Color(0xFF10B981)
-                                                  : Colors.grey.shade700,
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  r.isEnabled
-                                                      ? Icons.play_arrow
-                                                      : Icons.pause,
-                                                  size: 12,
-                                                  color: Colors.white,
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  r.isEnabled
-                                                      ? t.get(
-                                                          'rules_status_active',
-                                                        )
-                                                      : t.get(
-                                                          'rules_status_paused',
-                                                        ),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.tune_outlined,
-                                            size: 20,
-                                          ),
-                                          tooltip: t.get('rules_full_control'),
-                                          onPressed: () =>
-                                              showRuleSettingsSheet(
-                                                context,
-                                                ruleId: r.id,
-                                                ruleLabel: srcTitle,
-                                              ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.receipt_long_outlined,
-                                            size: 20,
-                                          ),
-                                          tooltip: t.get('rules_logs_action'),
-                                          onPressed: () =>
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute<void>(
-                                                  builder: (_) => LogsScreen(
-                                                    initialRuleId: r.id,
-                                                    initialRuleLabel: srcTitle,
-                                                  ),
-                                                ),
-                                              ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.copy_outlined,
-                                            size: 20,
-                                          ),
-                                          tooltip: t.get(
-                                            'rules_duplicate_task',
-                                          ),
-                                          onPressed: () => _duplicate(r),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.delete_outline,
-                                            color: Colors.red,
-                                            size: 20,
-                                          ),
-                                          tooltip: t.get('action_delete'),
-                                          onPressed: () => _delete(r),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
+  Widget _errorBanner(AppMessages t) {
+    final palette = AppColors.of(context);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: palette.danger.withValues(alpha: 0.12),
+        borderRadius: AppRadius.allMd,
+        border: Border.all(color: palette.danger.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline, size: 18, color: palette.danger),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              _error!,
+              maxLines: 4,
+              style: TextStyle(fontSize: AppType.xs, color: palette.text),
+            ),
+          ),
+          AppButton(
+            label: t.get('action_retry'),
+            variant: AppButtonVariant.link,
+            size: AppButtonSize.sm,
+            onPressed: _load,
+          ),
+        ],
+      ),
+    );
+  }
 
-                                // Source & Target Routing Visualizer
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).cardColor
-                                        .withValues(alpha: 0.5),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.05,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              t.get('rules_col_source'),
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.grey,
-                                              ),
-                                            ),
-                                            Text(
-                                              srcDisplay,
-                                              style: const TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            const Text(
-                                              'Telegram',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: Color(0xFF38BDF8),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                        ),
-                                        child: Icon(
-                                          Icons.arrow_forward_rounded,
-                                          size: 16,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              t.get('rules_col_target'),
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.grey,
-                                              ),
-                                            ),
-                                            Text(
-                                              dstDisplay,
-                                              style: const TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            Text(
-                                              r.isFanOut
-                                                  ? t.get(
-                                                      'rules_route_fan_out',
-                                                      params: {
-                                                        'count':
-                                                            '${r.allTargets.length}',
-                                                      },
-                                                    )
-                                                  : 'Telegram',
-                                              style: const TextStyle(
-                                                fontSize: 10,
-                                                color: Color(0xFF38BDF8),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
+  // ---------------------------------------------------------------- detail
 
-                                // The rule id is the per-task identity: it is
-                                // what a log line, an audit event or a ticket
-                                // quotes, so the card shows it up front.
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.fingerprint,
-                                      size: 13,
-                                      color: Colors.grey,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      t.get('rules_task_id'),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade400,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '#${r.shortId}',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade300,
-                                        fontFamily: 'monospace',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
+  Widget _buildDetailPlaceholder(BuildContext context, AppMessages t) {
+    return EmptyState(
+      title: t.get('rules_select_prompt'),
+      subtitle: t.get('rules_select_hint'),
+      icon: Icons.touch_app_outlined,
+    );
+  }
 
-                                // Sender Type & Debug
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      t.get(
-                                        'rules_sender_line',
-                                        params: {'type': r.senderType},
-                                      ),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade400,
-                                      ),
-                                    ),
-                                    Text(
-                                      t.get(
-                                        'rules_debug_line',
-                                        params: {
-                                          'st': r.debugMode
-                                              ? t.get('rules_state_on')
-                                              : t.get('rules_state_off'),
-                                        },
-                                      ),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: r.debugMode
-                                            ? const Color(0xFF10B981)
-                                            : Colors.grey,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
+  Widget _buildDetail(BuildContext context, AppMessages t, ForwardRule rule) {
+    final palette = AppColors.of(context);
+    final theme = Theme.of(context);
+    final name = rule.name.isNotEmpty ? rule.name : '#${rule.shortId}';
 
-                                // 4 Colored Buttons Grid
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        onPressed: () => _openEditor(r),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(
-                                            0xFF16A34A,
-                                          ),
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 10,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          t.get('rules_edit_source'),
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        onPressed: () => _openEditor(r),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(
-                                            0xFFDC2626,
-                                          ),
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 10,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          t.get('rules_edit_target'),
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        onPressed: () => _openEditor(r),
-                                        icon: const Icon(Icons.tag, size: 14),
-                                        label: Text(
-                                          r.topicId > 0
-                                              ? '#${r.topicId}'
-                                              : t.get('rules_forwarding_topic'),
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(
-                                            0xFF2563EB,
-                                          ),
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 10,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: OutlinedButton.icon(
-                                        onPressed: () => _openEditor(r),
-                                        icon: const Icon(
-                                          Icons.tune_rounded,
-                                          size: 14,
-                                        ),
-                                        label: Text(
-                                          t.get('rules_advanced_settings'),
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        style: OutlinedButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 10,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+    return AppCard(
+      title: name,
+      subtitle: t.get('rules_task_id').isEmpty ? null : '#${rule.shortId}',
+      trailing: PopupMenuButton<String>(
+        tooltip: t.get('rules_more_actions'),
+        onSelected: (value) {
+          switch (value) {
+            case 'settings':
+              showRuleSettingsSheet(
+                context,
+                ruleId: rule.id,
+                ruleLabel: _sourceLabel(rule, t),
+              );
+            case 'logs':
+              _openLogs(rule, t);
+            case 'duplicate':
+              _duplicate(rule);
+            case 'delete':
+              _delete(rule);
+          }
+        },
+        itemBuilder: (ctx) => [
+          PopupMenuItem(
+            value: 'settings',
+            child: _menuRow(Icons.tune_outlined, t.get('rules_full_control')),
+          ),
+          PopupMenuItem(
+            value: 'logs',
+            child: _menuRow(
+              Icons.receipt_long_outlined,
+              t.get('rules_logs_action'),
+            ),
+          ),
+          PopupMenuItem(
+            value: 'duplicate',
+            child: _menuRow(Icons.copy_outlined, t.get('rules_duplicate_task')),
+          ),
+          PopupMenuItem(
+            value: 'delete',
+            child: _menuRow(
+              Icons.delete_outline,
+              t.get('action_delete'),
+              color: palette.danger,
+            ),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Status + toggle: one control, one label, one 48 dp target.
+          Row(
+            children: [
+              StatusBadge(
+                label: rule.isEnabled
+                    ? t.get('rules_status_active')
+                    : t.get('rules_status_paused'),
+                tone: rule.isEnabled ? StatusTone.success : StatusTone.neutral,
+                icon: rule.isEnabled ? Icons.play_arrow : Icons.pause,
+              ),
+              const Spacer(),
+              Semantics(
+                label: t.get('rules_toggle_state'),
+                child: Switch(
+                  value: rule.isEnabled,
+                  onChanged: (_) => _toggle(rule),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _RouteVisualiser(
+            sourceLabel: t.get('rules_col_source'),
+            source: _sourceLabel(rule, t),
+            targetLabel: t.get('rules_col_target'),
+            target: _targetLabel(rule, t),
+            fanOut: rule.isFanOut
+                ? t.get(
+                    'rules_route_fan_out',
+                    params: {'count': '${rule.allTargets.length}'},
+                  )
+                : null,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _MetaRow(
+            icon: Icons.fingerprint,
+            label: t.get('rules_task_id'),
+            value: '#${rule.shortId}',
+            mono: true,
+          ),
+          _MetaRow(
+            icon: Icons.person_outline,
+            label: t.get(
+              'rules_sender_line',
+              params: {'type': rule.senderType},
+            ),
+            value: rule.debugMode
+                ? t.get(
+                    'rules_debug_line',
+                    params: {'st': t.get('rules_state_on')},
+                  )
+                : t.get(
+                    'rules_debug_line',
+                    params: {'st': t.get('rules_state_off')},
+                  ),
+          ),
+          if (rule.topicId > 0)
+            _MetaRow(
+              icon: Icons.tag,
+              label: t.get('rules_forwarding_topic'),
+              value: '#${rule.topicId}',
+              mono: true,
+            ),
+          const SizedBox(height: AppSpacing.md),
+          // Wrap, not Row: at 320 dp or text scale 1.3 the buttons move to a
+          // second line instead of overflowing the card.
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              AppButton(
+                label: t.get('action_edit'),
+                icon: Icons.edit_outlined,
+                onPressed: () => _openEditor(rule),
+                size: AppButtonSize.sm,
+              ),
+              AppButton(
+                label: t.get('rules_logs_action'),
+                icon: Icons.receipt_long_outlined,
+                variant: AppButtonVariant.secondary,
+                size: AppButtonSize.sm,
+                onPressed: () => _openLogs(rule, t),
+              ),
+              AppButton(
+                label: t.get('rules_duplicate_task'),
+                icon: Icons.copy_outlined,
+                variant: AppButtonVariant.ghost,
+                size: AppButtonSize.sm,
+                onPressed: () => _duplicate(rule),
+              ),
+            ],
+          ),
+          if (rule.isFanOut) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              t.get(
+                'rules_route_fan_out',
+                params: {'count': '${rule.allTargets.length}'},
+              ),
+              style: theme.textTheme.bodySmall,
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _menuRow(IconData icon, String label, {Color? color}) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: AppSpacing.sm),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: color == null ? null : TextStyle(color: color),
+          ),
         ),
+      ],
+    );
+  }
+}
+
+/// One row of the two-pane master list: status, name, route.
+class _RuleMasterRow extends StatelessWidget {
+  const _RuleMasterRow({
+    required this.rule,
+    required this.title,
+    required this.source,
+    required this.target,
+    required this.selected,
+    required this.enabledLabel,
+    required this.onTap,
+  });
+
+  final ForwardRule rule;
+  final String title;
+  final String source;
+  final String target;
+  final bool selected;
+  final String enabledLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppColors.of(context);
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Semantics(
+        selected: selected,
+        button: true,
+        label: '$title. $source → $target. $enabledLabel',
+        child: Material(
+          color: selected ? palette.surface3 : Colors.transparent,
+          borderRadius: AppRadius.allMd,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: AppRadius.allMd,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: AppRadius.allMd,
+                border: Border.all(
+                  color: selected ? palette.primary : Colors.transparent,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: rule.isEnabled ? palette.success : palette.neutral,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$source → $target',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textDirection: TextDirection.ltr,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Icon(Icons.chevron_right, size: 18, color: palette.textMuted),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Source → target pair, side by side when there is room and stacked when there
+/// is not (320 dp, or text scale 1.3 with long chat titles).
+class _RouteVisualiser extends StatelessWidget {
+  const _RouteVisualiser({
+    required this.sourceLabel,
+    required this.source,
+    required this.targetLabel,
+    required this.target,
+    this.fanOut,
+  });
+
+  final String sourceLabel;
+  final String source;
+  final String targetLabel;
+  final String target;
+  final String? fanOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppColors.of(context);
+
+    final sourceCol = _Endpoint(label: sourceLabel, value: source);
+    final targetCol = _Endpoint(
+      label: targetLabel,
+      value: target,
+      trailing: fanOut,
+      alignEnd: true,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: palette.surface3,
+        borderRadius: AppRadius.allMd,
+        border: Border.all(color: palette.border),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stack = constraints.maxWidth < 260;
+          if (stack) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                sourceCol,
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  child: Icon(
+                    Icons.arrow_downward_rounded,
+                    size: 16,
+                    color: palette.textMuted,
+                  ),
+                ),
+                targetCol,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: sourceCol),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                child: Icon(
+                  // Directional icon: mirrored in RTL by the framework.
+                  Icons.arrow_forward_rounded,
+                  size: 16,
+                  color: palette.textMuted,
+                ),
+              ),
+              Expanded(child: targetCol),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Endpoint extends StatelessWidget {
+  const _Endpoint({
+    required this.label,
+    required this.value,
+    this.trailing,
+    this.alignEnd = false,
+  });
+
+  final String label;
+  final String value;
+  final String? trailing;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cross = alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    return Column(
+      crossAxisAlignment: cross,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: theme.textTheme.labelSmall),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+          style: theme.textTheme.titleSmall,
+        ),
+        if (trailing != null)
+          Text(
+            trailing!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _MetaRow extends StatelessWidget {
+  const _MetaRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.mono = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool mono;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppColors.of(context);
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(icon, size: 13, color: palette.textMuted),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(label, maxLines: 2, style: theme.textTheme.bodySmall),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            value,
+            style: mono
+                ? theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace')
+                : theme.textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }

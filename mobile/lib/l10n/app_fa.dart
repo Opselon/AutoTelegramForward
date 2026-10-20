@@ -222,6 +222,8 @@ class AppMessagesFa {
     'logs_copy': 'کپی',
     'logs_detail_label': 'جزئیات',
     'logs_empty': 'خطایی ثبت نشده است.',
+    'logs_empty_sub':
+        'به‌محض ثبت رویدادها توسط موتور، اینجا نمایش داده می‌شوند.',
     'logs_end_of_history': 'پایان تاریخچه',
     'logs_export_copied': 'خروجی کپی شد',
     'logs_export_csv': 'خروجی CSV',
@@ -277,6 +279,9 @@ class AppMessagesFa {
     'logs_scope_task': 'تسک',
     'logs_scope_task_chip': 'تسک:{id}',
     'logs_search_hint': 'جستجو در پیام و جزئیات…',
+    'logs_select_hint':
+        'برای دیدن محتوا و منبع، رکوردی را از فهرست کنار انتخاب کنید.',
+    'logs_select_prompt': 'یک رکورد لاگ انتخاب کنید',
     'logs_service_unreachable': 'دسترسی به سرویس لاگ ممکن نشد: {error}',
     'logs_show_all_tasks': 'نمایش همهٔ تسکu200cها',
     'logs_tab_audit': 'ممیزی',
@@ -290,6 +295,8 @@ class AppMessagesFa {
     'nav_delivery': 'تحویل',
     'nav_filters': 'فیلترها',
     'nav_logs': 'گزارش‌ها',
+    'nav_more': 'بیشتر',
+    'nav_more_title': 'همه بخش‌ها',
     'nav_rules': 'قوانین',
     'nav_sessions': 'سشن‌ها',
     'nav_settings': 'تنظیمات',
@@ -350,6 +357,8 @@ class AppMessagesFa {
     'rules_edit_source': 'ویرایش مبدأ',
     'rules_edit_target': 'ویرایش مقصد',
     'rules_empty': 'هنوز قانونی تعریف نشده است. یک قانون جدید ایجاد کنید.',
+    'rules_empty_sub':
+        'یک تسک پیام‌ها را از چت مبدأ به یک یا چند مقصد هدایت می‌کند.',
     'rules_enabled': 'فعال',
     'rules_filter_mode': 'نوع اعمال فیلتر',
     'rules_filters': 'فیلترها',
@@ -388,6 +397,7 @@ class AppMessagesFa {
     'rules_logs_title': 'لاگu200cهای تسک',
     'rules_media_mode': 'نوع رسانه‌ها',
     'rules_media_toggles_title': 'تنظیمات رسانه و سینک (مشابه ربات و وب)',
+    'rules_more_actions': 'عملیات بیشتر',
     'rules_pick_from_chats': 'انتخاب از چت‌های من',
     'rules_pick_sources': 'انتخاب منابع',
     'rules_pick_targets': 'انتخاب مقصدها',
@@ -424,6 +434,7 @@ class AppMessagesFa {
     'rules_route_sources': 'منابع (با کاما جدا کنید)',
     'rules_route_sources_hint':
         'شناسه‌ها، یوزرنیم‌ها یا لینک‌های t.me، جدا شده با کاما',
+    'rules_route_summary': '{source} → {target}',
     'rules_route_targets': 'مقصدها (با کاما جدا کنید)',
     'rules_route_targets_hint': 'هر پیام به همه این مقصدها ارسال می‌شود',
     'rules_sched_auto': 'زمان‌بند ارسال خودکار',
@@ -441,6 +452,9 @@ class AppMessagesFa {
     'rules_sec_schedules': 'زمان‌بندی‌ها',
     'rules_sec_status': 'وضعیت فوروارد',
     'rules_sec_time_forward': 'فوروارد زمانی',
+    'rules_select_hint':
+        'برای دیدن مسیر، وضعیت و عملیات، تسکی را از فهرست کنار انتخاب کنید.',
+    'rules_select_prompt': 'یک تسک انتخاب کنید',
     'rules_sender_account': 'حساب شخصی تلگرام',
     'rules_sender_bot': 'حساب ربات',
     'rules_sender_line': 'ارسال‌کننده: {type}',
@@ -527,6 +541,7 @@ class AppMessagesFa {
     'rules_time_forward_sub': 'محدودیت‌های تأخیر و زمان ویرایش',
     'rules_title': 'قوانین فوروارد',
     'rules_toggle': 'فعال/غیرفعال کردن',
+    'rules_toggle_state': 'فعال یا متوقف کردن این تسک',
     'rules_topic_hint': '0 (غیرفعال)',
     'rules_topic_label': 'تاپیک #',
     'rules_validation_failed':

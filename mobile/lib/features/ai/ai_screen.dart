@@ -12,7 +12,10 @@ import 'package:provider/provider.dart';
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
+import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
+import '../../widgets/app_ui.dart';
+import '../../widgets/loading_list.dart';
 import 'ai_config_editor_dialog.dart';
 
 class AiScreen extends StatefulWidget {
@@ -221,15 +224,13 @@ class _AiScreenState extends State<AiScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             if (_error != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: InlineBanner(
+                  message: _error!,
+                  onRetry: _load,
+                  retryLabel: t.get('action_retry'),
                 ),
-                child: Text(_error!, style: const TextStyle(color: Colors.red)),
               ),
             // Notice about API keys security
             Container(
@@ -249,7 +250,9 @@ class _AiScreenState extends State<AiScreen> {
               ),
             ),
 
-            if (_configs.isEmpty && !_loading)
+            if (_loading && _configs.isEmpty)
+              const LoadingList(rows: 4, itemExtent: 96, showAvatar: false)
+            else if (_configs.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 32,

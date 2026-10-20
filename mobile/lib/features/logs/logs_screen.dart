@@ -19,8 +19,16 @@ import 'package:provider/provider.dart';
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
+import '../../core/design_tokens.dart';
+import '../../core/layout.dart';
 import '../../l10n/app_messages.dart';
-import '../../widgets/list_state_view.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_field.dart';
+import '../../widgets/app_toast.dart';
+import '../../widgets/app_ui.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
+import '../../widgets/loading_list.dart';
 import 'log_policy_tab.dart';
 
 class LogsScreen extends StatefulWidget {
@@ -52,6 +60,10 @@ class _LogsScreenState extends State<LogsScreen> {
   String _levelFilter = '';
   String _search = '';
   String _correlationSearch = '';
+
+  /// Entry shown in the expanded layout's detail pane. Null means "nothing
+  /// selected yet" and the pane shows the select prompt.
+  LogEntry? _selectedLog;
 
   // --- v18 history controls -------------------------------------------- //
   /// Real match count for the current filter, across the whole archive.
@@ -168,10 +180,9 @@ class _LogsScreenState extends State<LogsScreen> {
                         await Clipboard.setData(ClipboardData(text: body));
                         if (ctx.mounted) Navigator.of(ctx).pop();
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(t.get('logs_export_copied')),
-                            ),
+                          AppToast.success(
+                            context,
+                            t.get('logs_export_copied'),
                           );
                         }
                       },
@@ -224,11 +235,13 @@ class _LogsScreenState extends State<LogsScreen> {
     }
   }
 
-  /// Detail sheet for one log row: the structured payload plus the attribution
-  /// that makes the event traceable back to a task and a request.
-  void _showLogDetail(LogEntry log) {
-    final t = AppMessages.of(context);
-    String pretty = log.detail;
+  // ----------------------------------------------------------------------- //
+  // Log detail (bottom sheet on a phone, inline pane on an expanded window)
+  // ----------------------------------------------------------------------- //
+
+  /// Pretty-prints the payload when it is JSON; otherwise verbatim.
+  String _prettyDetail(LogEntry log) {
+    var pretty = log.detail;
     if (pretty.isNotEmpty) {
       try {
         pretty = const JsonEncoder.withIndent('  ').convert(jsonDecode(pretty));
@@ -236,15 +249,16 @@ class _LogsScreenState extends State<LogsScreen> {
         // Not JSON — show it verbatim.
       }
     }
-    final meta = <(String, String)>[
-      ('level', log.levelUpper),
-      ('service', log.service),
-      ('category', log.category),
-      ('time', log.timestamp),
-      ('rule_id', log.ruleId),
-      ('user_id', log.userId > 0 ? '${log.userId}' : ''),
-      ('correlation_id', log.correlationId),
-    ];
+    return pretty;
+  }
+
+  /// Phone: a bottom sheet. Expanded: the persistent detail pane, so reading
+  /// through a stream does not open and close a modal per entry.
+  void _openLogDetail(LogEntry log) {
+    if (AppWindow.of(context).supportsTwoPane) {
+      setState(() => _selectedLog = log);
+      return;
+    }
 
     showModalBottomSheet<void>(
       context: context,
@@ -252,81 +266,18 @@ class _LogsScreenState extends State<LogsScreen> {
       isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                log.message,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...meta
-                  .where((m) => m.$2.isNotEmpty)
-                  .map(
-                    (m) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 112,
-                            child: Text(
-                              m.$1,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: SelectableText(
-                              m.$2,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontFamily: m.$1.contains('id')
-                                    ? 'monospace'
-                                    : null,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              if (pretty.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(
-                  t.get('logs_detail_label'),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 6),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 260),
-                  child: SingleChildScrollView(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: SelectableText(
-                        pretty,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            AppSpacing.xl,
+            0,
+            AppSpacing.xl,
+            AppSpacing.xl,
+          ),
+          child: SingleChildScrollView(
+            child: _LogDetailBody(
+              log: log,
+              meta: _logMeta(log),
+              pretty: _prettyDetail(log),
+            ),
           ),
         ),
       ),
@@ -496,16 +447,20 @@ class _LogsScreenState extends State<LogsScreen> {
   // ----------------------------------------------------------------------- //
   // Logs tab (Central Logger stream)
   // ----------------------------------------------------------------------- //
-  Widget _buildLogsTab(AppMessages t) {
-    final first = _total == 0 ? 0 : _offset + 1;
-    final last = _offset + _logs.length;
 
+  /// Filters: level chips, task and service scope, search, order, page size and
+  /// export. Every one of these is a server-side filter, so paging stays correct
+  /// after a change.
+  Widget _buildFilters(AppMessages t) {
+    final palette = AppColors.of(context);
     return Column(
       children: [
-        // ---------------------------------------------------------- filters
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
           child: Row(
             children: [
               for (final entry in const [
@@ -516,7 +471,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 ('logs_level_debug', 'DEBUG'),
               ])
                 Padding(
-                  padding: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
                   child: ChoiceChip(
                     label: Text(_levelLabel(t, entry.$1)),
                     selected: _levelFilter == entry.$2,
@@ -533,11 +488,8 @@ class _LogsScreenState extends State<LogsScreen> {
             ],
           ),
         ),
-
-        // Task + service scope, read direction, page size. Every one of these
-        // is a server-side filter, so paging stays correct after a change.
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: Column(
             children: [
               Row(
@@ -549,7 +501,6 @@ class _LogsScreenState extends State<LogsScreen> {
                       decoration: InputDecoration(
                         isDense: true,
                         labelText: t.get('logs_scope_task'),
-                        border: const OutlineInputBorder(),
                       ),
                       items: [
                         DropdownMenuItem(
@@ -585,7 +536,7 @@ class _LogsScreenState extends State<LogsScreen> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _serviceFilter,
@@ -593,7 +544,6 @@ class _LogsScreenState extends State<LogsScreen> {
                       decoration: InputDecoration(
                         isDense: true,
                         labelText: t.get('logs_scope_service'),
-                        border: const OutlineInputBorder(),
                       ),
                       items: [
                         DropdownMenuItem(
@@ -630,28 +580,22 @@ class _LogsScreenState extends State<LogsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              TextField(
-                decoration: InputDecoration(
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  hintText: t.get('logs_search_hint'),
-                  border: const OutlineInputBorder(),
-                ),
+              const SizedBox(height: AppSpacing.sm),
+              AppField(
+                label: t.get('logs_search_hint'),
+                prefixIcon: Icons.search,
                 onChanged: (v) => setState(() => _search = v),
                 onSubmitted: (_) {
                   _offset = 0;
                   _load(offset: 0);
                 },
               ),
-              const SizedBox(height: 6),
               Row(
                 children: [
-                  IconButton(
-                    icon: Icon(
-                      _ascending ? Icons.arrow_upward : Icons.arrow_downward,
-                      size: 18,
-                    ),
+                  AppIconButton(
+                    icon: _ascending
+                        ? Icons.arrow_upward
+                        : Icons.arrow_downward,
                     tooltip: t.get('logs_order_toggle_desc'),
                     onPressed: () {
                       setState(() {
@@ -661,11 +605,11 @@ class _LogsScreenState extends State<LogsScreen> {
                       _load(offset: 0);
                     },
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: AppSpacing.xs),
                   DropdownButton<int>(
                     value: _pageSize,
                     underline: const SizedBox.shrink(),
-                    style: const TextStyle(fontSize: 12),
+                    style: const TextStyle(fontSize: AppType.xs),
                     items: [
                       for (final n in const [25, 50, 100, 200])
                         DropdownMenuItem(
@@ -685,8 +629,8 @@ class _LogsScreenState extends State<LogsScreen> {
                     },
                   ),
                   const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.download_outlined, size: 20),
+                  AppIconButton(
+                    icon: Icons.download_outlined,
                     tooltip: t.get('logs_export_evidence'),
                     onPressed: _exporting ? null : () => _showExportOptions(),
                   ),
@@ -695,180 +639,248 @@ class _LogsScreenState extends State<LogsScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 4),
-        const Divider(height: 1),
-
-        // --------------------------------------------------- range + paging
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Row(
-            children: [
-              Text(
-                _total == 0
-                    ? t.get('logs_empty')
-                    : '$first–$last / ${_total.toString()}',
-                style: const TextStyle(fontSize: 12),
-              ),
-              if (_oldestTs > 0) ...[
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    t.get(
-                      'logs_history_from',
-                      params: {
-                        'date': DateTime.fromMillisecondsSinceEpoch(
-                          _oldestTs * 1000,
-                        ).toIso8601String().substring(0, 10),
-                      },
-                    ),
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.keyboard_arrow_up, size: 20),
-                tooltip: t.get('logs_newer'),
-                onPressed: _offset == 0 || _loading
-                    ? null
-                    : () => _load(offset: _offset - _pageSize),
-              ),
-              IconButton(
-                icon: const Icon(Icons.keyboard_arrow_down, size: 20),
-                tooltip: _hasMore
-                    ? t.get('logs_older')
-                    : t.get('logs_end_of_history'),
-                onPressed: !_hasMore || _loading
-                    ? null
-                    : () => _load(offset: _offset + _pageSize),
-              ),
-            ],
-          ),
-        ),
-
-        // ------------------------------------------------------------- rows
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: _reloadAll,
-            child: _logs.isEmpty && !_loading
-                ? ListStateView(
-                    isEmpty: true,
-                    isLoading: false,
-                    error: _error,
-                    emptyTitle: t.get('logs_empty'),
-                    onRetry: _reloadAll,
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    itemCount: _logs.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final log = _logs[index];
-                      final isErr = log.isError;
-                      final isWarn = log.isWarning;
-                      final when = log.when;
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(
-                          isErr
-                              ? Icons.error
-                              : (isWarn ? Icons.warning : Icons.info_outline),
-                          color: isErr
-                              ? Colors.red
-                              : (isWarn ? Colors.amber : Colors.blue),
-                          size: 20,
-                        ),
-                        title: Text(
-                          log.message,
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              [
-                                if (when != null)
-                                  when.toIso8601String().substring(11, 19),
-                                log.service.isNotEmpty ? log.service : 'core',
-                                if (log.category.isNotEmpty) log.category,
-                              ].join(' • '),
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            // Attribution chips: tap to narrow the whole
-                            // stream to this task or this request.
-                            if (log.ruleId.isNotEmpty ||
-                                log.correlationId.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Wrap(
-                                  spacing: 6,
-                                  children: [
-                                    if (log.ruleId.isNotEmpty)
-                                      ActionChip(
-                                        visualDensity: VisualDensity.compact,
-                                        label: Text(
-                                          t.get(
-                                            'logs_scope_task_chip',
-                                            params: {
-                                              'id': log.ruleId.length > 8
-                                                  ? log.ruleId.substring(0, 8)
-                                                  : log.ruleId,
-                                            },
-                                          ),
-                                          style: const TextStyle(fontSize: 10),
-                                        ),
-                                        onPressed: () {
-                                          setState(() {
-                                            _ruleFilter = log.ruleId;
-                                            _offset = 0;
-                                          });
-                                          _load(offset: 0);
-                                        },
-                                      ),
-                                    if (log.correlationId.isNotEmpty)
-                                      ActionChip(
-                                        visualDensity: VisualDensity.compact,
-                                        label: Text(
-                                          t.get(
-                                            'logs_scope_corr_chip',
-                                            params: {
-                                              'id': log.correlationId.length > 8
-                                                  ? log.correlationId.substring(
-                                                      0,
-                                                      8,
-                                                    )
-                                                  : log.correlationId,
-                                            },
-                                          ),
-                                          style: const TextStyle(fontSize: 10),
-                                        ),
-                                        onPressed: () {
-                                          final corr = log.correlationId;
-                                          setState(() {
-                                            _search = corr;
-                                            _offset = 0;
-                                          });
-                                          _load(offset: 0);
-                                        },
-                                      ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                        onTap: () => _showLogDetail(log),
-                      );
-                    },
-                  ),
-          ),
-        ),
+        const SizedBox(height: AppSpacing.xs),
+        Divider(height: 1, color: palette.border),
       ],
     );
   }
+
+  /// Range line: "first–last / total", history depth, and the page arrows.
+  Widget _buildRangeRow(AppMessages t, int first, int last) {
+    final palette = AppColors.of(context);
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.sm,
+        AppSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Flexible(
+            child: Text(
+              _total == 0
+                  ? t.get('logs_empty')
+                  : '$first–$last / ${_total.toString()}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: AppType.xs, color: palette.textMuted),
+            ),
+          ),
+          if (_oldestTs > 0) ...[
+            const SizedBox(width: AppSpacing.sm),
+            Flexible(
+              child: Text(
+                t.get(
+                  'logs_history_from',
+                  params: {
+                    'date': DateTime.fromMillisecondsSinceEpoch(
+                      _oldestTs * 1000,
+                    ).toIso8601String().substring(0, 10),
+                  },
+                ),
+                style: TextStyle(
+                  fontSize: AppType.xs,
+                  color: palette.textMuted,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+          const Spacer(),
+          AppIconButton(
+            icon: Icons.keyboard_arrow_up,
+            tooltip: t.get('logs_newer'),
+            size: 20,
+            onPressed: _offset == 0 || _loading
+                ? null
+                : () => _load(offset: _offset - _pageSize),
+          ),
+          AppIconButton(
+            icon: Icons.keyboard_arrow_down,
+            tooltip: _hasMore
+                ? t.get('logs_older')
+                : t.get('logs_end_of_history'),
+            size: 20,
+            onPressed: !_hasMore || _loading
+                ? null
+                : () => _load(offset: _offset + _pageSize),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The rows, with all four async states explicit.
+  Widget _buildRows(AppMessages t) {
+    if (_loading && _logs.isEmpty) {
+      return const LoadingList(
+        rows: 8,
+        itemExtent: 84,
+        padding: EdgeInsetsDirectional.fromSTEB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.xl,
+        ),
+      );
+    }
+    if (_error != null && _logs.isEmpty) {
+      return ErrorState(message: _error!, onRetry: _reloadAll);
+    }
+    if (_logs.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _reloadAll,
+        child: EmptyState.scrollable(
+          title: t.get('logs_empty'),
+          subtitle: t.get('logs_empty_sub'),
+          icon: Icons.history_toggle_off,
+          actionLabel: t.get('action_refresh'),
+          actionIcon: Icons.refresh,
+          onAction: _reloadAll,
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _reloadAll,
+      // Virtualized: only the rows in (and just around) the viewport are
+      // mounted. No fixed itemExtent on purpose - a row carries optional
+      // attribution chips and must be allowed to grow at text scale 1.3.
+      child: ListView.builder(
+        padding: const EdgeInsetsDirectional.fromSTEB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.xl,
+        ),
+        itemCount: _logs.length,
+        itemBuilder: (context, index) {
+          final log = _logs[index];
+          return RepaintBoundary(
+            child:
+                _headerBanner(t, log, index) ??
+                _LogRow(
+                  log: log,
+                  selected: identical(_selectedLog, log),
+                  onTap: () => _openLogDetail(log),
+                  onFilterRule: (id) {
+                    setState(() {
+                      _ruleFilter = id;
+                      _offset = 0;
+                    });
+                    _load(offset: 0);
+                  },
+                  onFilterCorrelation: (corr) {
+                    setState(() {
+                      _search = corr;
+                      _offset = 0;
+                    });
+                    _load(offset: 0);
+                  },
+                ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// The first row of a stale-but-populated list carries the error banner, so a
+  /// refresh failure is visible without hiding data that is still good.
+  Widget? _headerBanner(AppMessages t, LogEntry log, int index) {
+    if (_error == null || index != 0) return null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: InlineBanner(
+        message: _error!,
+        onRetry: _reloadAll,
+        retryLabel: t.get('action_retry'),
+      ),
+    );
+  }
+
+  Widget _buildLogsTab(AppMessages t) {
+    final first = _total == 0 ? 0 : _offset + 1;
+    final last = _offset + _logs.length;
+    final twoPane = AppWindow.of(context).supportsTwoPane;
+
+    final master = Column(
+      children: [
+        _buildFilters(t),
+        _buildRangeRow(t, first, last),
+        Expanded(child: _buildRows(t)),
+      ],
+    );
+
+    if (!twoPane) {
+      // Single column: centred and width-capped so a tablet does not stretch a
+      // log line across 1200 dp.
+      return AppPageBody(
+        padding: EdgeInsets.zero,
+        maxWidth: 900,
+        child: master,
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: 420.0.clamp(320.0, MediaQuery.sizeOf(context).width * 0.45),
+          child: master,
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(child: _buildLogDetailPane(t)),
+      ],
+    );
+  }
+
+  /// Detail pane for the expanded layout: the same body the phone shows in a
+  /// bottom sheet, so the two layouts cannot disagree about a log entry.
+  Widget _buildLogDetailPane(AppMessages t) {
+    final log = _selectedLog;
+    if (log == null) {
+      return EmptyState(
+        title: t.get('logs_select_prompt'),
+        subtitle: t.get('logs_select_hint'),
+        icon: Icons.receipt_long_outlined,
+      );
+    }
+    return AppDetailPane(
+      title: log.message,
+      subtitle: [
+        log.levelUpper,
+        if (log.service.isNotEmpty) log.service,
+        if (log.timestamp.isNotEmpty) log.timestamp,
+      ].join(' • '),
+      actions: [
+        AppIconButton(
+          icon: Icons.close,
+          tooltip: t.get('action_close'),
+          onPressed: () => setState(() => _selectedLog = null),
+        ),
+      ],
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: _LogDetailBody(
+          log: log,
+          meta: _logMeta(log),
+          pretty: _prettyDetail(log),
+        ),
+      ),
+    );
+  }
+
+  List<(String, String)> _logMeta(LogEntry log) => [
+    ('level', log.levelUpper),
+    ('service', log.service),
+    ('category', log.category),
+    ('time', log.timestamp),
+    ('rule_id', log.ruleId),
+    ('user_id', log.userId > 0 ? '${log.userId}' : ''),
+    ('correlation_id', log.correlationId),
+  ];
 
   /// Log-level chip label. Levels absent from the catalog fall back to the raw
   /// uppercase name rather than showing a key.
@@ -935,14 +947,18 @@ class _LogsScreenState extends State<LogsScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: _reloadAll,
-            child: _audit.isEmpty && !_loadingAudit
-                ? ListStateView(
-                    isEmpty: true,
-                    isLoading: false,
-                    error: _auditError,
-                    emptyTitle: t.get('logs_audit_empty_title'),
-                    emptySubtitle: t.get('logs_audit_empty_sub'),
-                    onRetry: _loadAudit,
+            child: _audit.isEmpty && _loadingAudit
+                ? const LoadingList(rows: 5, itemExtent: 76)
+                : _audit.isEmpty && _auditError != null
+                ? ErrorState(message: _auditError!, onRetry: _loadAudit)
+                : _audit.isEmpty
+                ? EmptyState.scrollable(
+                    title: t.get('logs_audit_empty_title'),
+                    subtitle: t.get('logs_audit_empty_sub'),
+                    icon: Icons.verified_outlined,
+                    actionLabel: t.get('action_refresh'),
+                    actionIcon: Icons.refresh,
+                    onAction: _loadAudit,
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
@@ -1096,6 +1112,274 @@ class _LogsScreenState extends State<LogsScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// One log entry in the stream.
+///
+/// A row, not a [ListTile]: the attribution chips need to sit under the meta
+/// line and the whole row must stay ≥ 48 dp at text scale 1.3 without clipping.
+class _LogRow extends StatelessWidget {
+  const _LogRow({
+    required this.log,
+    required this.selected,
+    required this.onTap,
+    this.onFilterRule,
+    this.onFilterCorrelation,
+  });
+
+  final LogEntry log;
+  final bool selected;
+  final VoidCallback onTap;
+  final ValueChanged<String>? onFilterRule;
+  final ValueChanged<String>? onFilterCorrelation;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppMessages.of(context);
+    final palette = AppColors.of(context);
+    final theme = Theme.of(context);
+    final tone = log.isError
+        ? palette.danger
+        : (log.isWarning ? palette.warning : palette.info);
+    final when = log.when;
+
+    final meta = [
+      if (when != null) when.toIso8601String().substring(11, 19),
+      log.service.isEmpty ? 'core' : log.service,
+      if (log.category.isNotEmpty) log.category,
+    ].join(' • ');
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${log.levelUpper}. ${log.message}',
+      child: Material(
+        color: selected ? palette.surface3 : Colors.transparent,
+        borderRadius: AppRadius.allMd,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadius.allMd,
+          child: Container(
+            constraints: const BoxConstraints(
+              minHeight: AppBreakpoints.touchTarget,
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.sm,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: AppRadius.allMd,
+              border: Border(
+                bottom: BorderSide(
+                  color: palette.border.withValues(alpha: 0.5),
+                ),
+                left: BorderSide(
+                  color: selected ? palette.primary : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(top: 2),
+                  child: Icon(
+                    log.isError
+                        ? Icons.error
+                        : (log.isWarning ? Icons.warning : Icons.info_outline),
+                    color: tone,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        log.message,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      if (log.ruleId.isNotEmpty || log.correlationId.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.xs),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              if (log.ruleId.isNotEmpty)
+                                _AttributionChip(
+                                  label: t.get(
+                                    'logs_scope_task_chip',
+                                    params: {
+                                      'id': log.ruleId.length > 8
+                                          ? log.ruleId.substring(0, 8)
+                                          : log.ruleId,
+                                    },
+                                  ),
+                                  onTap: onFilterRule == null
+                                      ? null
+                                      : () => onFilterRule!(log.ruleId),
+                                ),
+                              if (log.correlationId.isNotEmpty)
+                                _AttributionChip(
+                                  label: t.get(
+                                    'logs_scope_corr_chip',
+                                    params: {
+                                      'id': log.correlationId.length > 8
+                                          ? log.correlationId.substring(0, 8)
+                                          : log.correlationId,
+                                    },
+                                  ),
+                                  onTap: onFilterCorrelation == null
+                                      ? null
+                                      : () => onFilterCorrelation!(
+                                          log.correlationId,
+                                        ),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact tappable attribution token (task id / correlation id).
+class _AttributionChip extends StatelessWidget {
+  const _AttributionChip({required this.label, this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppColors.of(context);
+    return Semantics(
+      button: onTap != null,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadius.allFull,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: 2,
+          ),
+          decoration: BoxDecoration(
+            color: palette.primary.withValues(alpha: 0.12),
+            borderRadius: AppRadius.allFull,
+            border: Border.all(color: palette.primary.withValues(alpha: 0.35)),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'monospace',
+              color: palette.primary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The body of a log detail: message, attribution fields, structured payload.
+class _LogDetailBody extends StatelessWidget {
+  const _LogDetailBody({
+    required this.log,
+    required this.meta,
+    required this.pretty,
+  });
+
+  final LogEntry log;
+  final List<(String, String)> meta;
+  final String pretty;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppMessages.of(context);
+    final palette = AppColors.of(context);
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(log.message, style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.md),
+        for (final entry in meta.where((m) => m.$2.isNotEmpty))
+          Padding(
+            padding: const EdgeInsetsDirectional.only(bottom: AppSpacing.sm),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 112,
+                  child: Text(
+                    entry.$1,
+                    maxLines: 2,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                Expanded(
+                  child: SelectableText(
+                    entry.$2,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontFamily: entry.$1.contains('id') ? 'monospace' : null,
+                      color: palette.text,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (pretty.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(t.get('logs_detail_label'), style: theme.textTheme.labelSmall),
+          const SizedBox(height: AppSpacing.xs),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: palette.surface3,
+              borderRadius: AppRadius.allMd,
+              border: Border.all(color: palette.border),
+            ),
+            child: SelectableText(
+              pretty,
+              style: const TextStyle(
+                fontSize: 11,
+                fontFamily: 'monospace',
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
