@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Gauge, RefreshCw, ShieldAlert } from 'lucide-react'
 import { api } from '../api'
 import type { LogPolicyScopes, LogPolicyScope } from '../types'
-import { makeT, type UiLang } from '../locales'
+import { makeT, type UiLang } from '../locales/engine'
 
 /**
  * Operator control for the collection policy, per producer.
@@ -44,7 +44,7 @@ function Levels({
           key={l}
           className="badge"
           style={{
-            fontSize: '0.68rem',
+            fontSize: 'var(--type-xs)',
             background: tone === 'effective' ? 'rgba(56,189,248,0.15)' : 'rgba(148,163,184,0.15)',
             color: tone === 'effective' ? '#38bdf8' : '#cbd5e1',
           }}
@@ -138,7 +138,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
           <AlertTriangle size={15} color="#f59e0b" />
         )}
         <strong style={{ fontSize: '0.85rem' }}>{scope?.process ?? key}</strong>
-        <span className="muted" style={{ fontSize: '0.7rem' }}>
+        <span className="muted" style={{ fontSize: 'var(--type-xs)' }}>
           {scope?.scope}
         </span>
       </div>
@@ -172,7 +172,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
             </div>
           )}
           {scope.counters && (
-            <div className="muted" style={{ fontSize: '0.72rem' }}>
+            <div className="muted" style={{ fontSize: 'var(--type-xs)' }}>
               {t('ui_scope_4_emitted_scope_5_dropped_by_level_scope_6_dropped_by_rate', { scope_4: scope.counters.emitted, scope_5: scope.counters.suppressed_level, scope_6: scope.counters.suppressed_rate })}
             </div>
           )}
@@ -231,7 +231,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
                 className="badge"
                 style={{
                   cursor: 'pointer',
-                  fontSize: '0.7rem',
+                  fontSize: 'var(--type-xs)',
                   border: on ? '1px solid rgba(56,189,248,0.5)' : '1px solid rgba(255,255,255,0.12)',
                   background: on ? 'rgba(56,189,248,0.18)' : 'rgba(15,23,42,0.6)',
                   color: on ? '#38bdf8' : '#94a3b8',

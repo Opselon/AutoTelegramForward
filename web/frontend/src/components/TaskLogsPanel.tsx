@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertCircle, ChevronDown, ChevronRight, ChevronUp, Copy, Download, Loader2, RefreshCw } from 'lucide-react'
 import { api } from '../api'
 import type { LogItem, LogPage } from '../types'
-import { makeT, type UiLang } from '../locales'
+import { makeT, type UiLang } from '../locales/engine'
 
 interface Props {
   ruleId: string
@@ -139,7 +139,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
         style={{
           padding: '3px 10px',
           borderRadius: '999px',
-          fontSize: '0.7rem',
+          fontSize: 'var(--type-xs)',
           fontWeight: 700,
           cursor: 'pointer',
           border: `1px solid ${on ? style.fg : 'rgba(255,255,255,0.12)'}`,
@@ -253,7 +253,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
       </div>
 
       {/* ------------------------------------------------------- range badge */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10, fontSize: '0.72rem' }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10, fontSize: 'var(--type-xs)' }}>
         <span className="badge badge-gray">
           {total === 0
             ? t('ui_no_log_events')
@@ -316,11 +316,11 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
         }}
       >
         {loading && !logs.length ? (
-          <div style={{ textAlign: 'center', padding: '28px 0', color: '#64748b' }}>
+          <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--color-text-muted)' }}>
             <Loader2 size={18} className="spin" /> {t('ui_task_logs_loading')}
           </div>
         ) : logs.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '28px 0', color: '#64748b' }}>
+          <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--color-text-muted)' }}>
             {t('ui_no_log_events_recorded_for_this_task_yet')}
           </div>
         ) : (
@@ -345,12 +345,12 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                   <button
                     type="button"
                     onClick={() => toggle(key)}
-                    style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0, marginTop: 2 }}
+                    style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', padding: 0, marginTop: 2 }}
                     title={t('ui_show_detail')}
                   >
                     {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                   </button>
-                  <span style={{ color: '#475569', flexShrink: 0, fontSize: '0.68rem' }}>
+                  <span style={{ color: 'var(--color-text-muted)', flexShrink: 0, fontSize: 'var(--type-xs)' }}>
                     {new Date(item.ts * 1000).toLocaleTimeString()}
                   </span>
                   <span
@@ -359,14 +359,14 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                       background: style.bg,
                       borderRadius: 4,
                       padding: '1px 6px',
-                      fontSize: '0.62rem',
+                      fontSize: 'var(--type-xs)',
                       fontWeight: 700,
                       flexShrink: 0,
                     }}
                   >
                     {lvl}
                   </span>
-                  <span style={{ color: '#94a3b8', flexShrink: 0, fontSize: '0.68rem' }}>
+                  <span style={{ color: '#94a3b8', flexShrink: 0, fontSize: 'var(--type-xs)' }}>
                     {item.service || 'core'}/{item.category || 'sys'}
                   </span>
                   <span style={{ color: '#e2e8f0', flex: 1, wordBreak: 'break-word' }}>
@@ -375,16 +375,16 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                   <button
                     type="button"
                     onClick={() => void copyRow(item, key)}
-                    style={{ background: 'none', border: 'none', color: copied === key ? '#34d399' : '#64748b', cursor: 'pointer', padding: 0 }}
+                    style={{ background: 'none', border: 'none', color: copied === key ? '#34d399' : 'var(--color-text-muted)', cursor: 'pointer', padding: 0 }}
                     title={t('ui_copy_row')}
                   >
                     <Copy size={11} />
                   </button>
                 </div>
                 {(isOpen || item.correlation_id) && (
-                  <div style={{ marginTop: 5, marginInlineStart: 20, fontSize: '0.68rem' }}>
+                  <div style={{ marginTop: 5, marginInlineStart: 20, fontSize: 'var(--type-xs)' }}>
                     {item.correlation_id && (
-                      <div style={{ color: '#64748b' }}>
+                      <div style={{ color: 'var(--color-text-muted)' }}>
                         {t('ui_corr')} <span style={{ color: '#93c5fd' }}>{item.correlation_id}</span>
                       </div>
                     )}
@@ -419,7 +419,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
         )}
       </div>
 
-      <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: 8 }}>
+      <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginTop: 8 }}>
         {t('ui_this_panel_pages_through_the_task_s_entire_history_search_matche')}
       </div>
     </div>

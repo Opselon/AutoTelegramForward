@@ -299,7 +299,7 @@ body {
 
   .route-switch-btn {
     padding: 8px 4px !important;
-    font-size: 0.72rem !important;
+    font-size: var(--type-xs) !important;
     flex-direction: column !important;
     gap: 4px !important;
     text-align: center !important;
@@ -384,9 +384,17 @@ textarea {
     width: 100% !important;
     justify-content: flex-start !important;
   }
-  .header-actions > * {
+  /* Non-interactive children may shrink to zero; controls keep the 44px target
+     from the design system (a shrunk icon button is the classic 35px miss). */
+  .header-actions > *:not(button):not(a):not(select) {
     flex: 0 1 auto !important;
     min-width: 0 !important;
+  }
+  .header-actions > button,
+  .header-actions > a,
+  .header-actions > select {
+    flex: 0 0 auto !important;
+    min-inline-size: 44px !important;
   }
 
   /* Card header: badges on top, action buttons pinned to their own row */
@@ -403,14 +411,15 @@ textarea {
   }
   .rule-card-actions .btn {
     flex: 1 1 auto !important;
-    min-height: 36px !important;
+    /* 44px, not 36: the touch target is a contract, density is negotiable. */
+    min-height: 44px !important;
     padding: 7px 8px !important;
-    font-size: 0.7rem !important;
+    font-size: var(--type-xs) !important;
     white-space: nowrap !important;
     justify-content: center !important;
   }
   .rule-card-actions .btn.icon-btn {
-    flex: 0 0 36px !important;
+    flex: 0 0 44px !important;
     padding: 4px !important;
   }
 
@@ -442,7 +451,7 @@ textarea {
   }
   .route-switch-btn {
     padding: 9px 4px !important;
-    font-size: 0.7rem !important;
+    font-size: var(--type-xs) !important;
     line-height: 1.25 !important;
     flex-direction: column !important;
     gap: 4px !important;
@@ -487,8 +496,8 @@ textarea {
 
   /* Tap targets for small icon-only buttons */
   .icon-btn {
-    min-width: 36px !important;
-    min-height: 36px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -527,14 +536,14 @@ textarea {
     gap: 5px !important;
   }
   .rule-badges .badge {
-    font-size: 0.66rem !important;
+    font-size: var(--type-xs) !important;
     padding: 2px 7px !important;
     gap: 4px !important;
   }
 
   /* Long channel ids break instead of overflowing */
   .channel-id-mono {
-    font-size: 0.66rem !important;
+    font-size: var(--type-xs) !important;
     max-width: 100% !important;
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
@@ -562,7 +571,7 @@ textarea {
    weight so all three fit without clipping. */
 @media (max-width: 400px) {
   .route-switch-btn {
-    font-size: 0.66rem !important;
+    font-size: var(--type-xs) !important;
     padding: 8px 2px !important;
   }
   .overview-grid {
@@ -787,7 +796,7 @@ textarea {
 }
 
 .preflight-meta {
-  font-size: 0.72rem;
+  font-size: var(--type-xs);
   color: var(--text-muted);
 }
 
@@ -799,7 +808,7 @@ textarea {
 }
 
 .preflight-chip {
-  font-size: 0.7rem;
+  font-size: var(--type-xs);
   padding: 3px 9px;
   border-radius: 999px;
   border: 1px solid transparent;
@@ -866,7 +875,7 @@ textarea {
 }
 
 .finding-fix {
-  font-size: 0.72rem;
+  font-size: var(--type-xs);
   color: var(--text-muted);
   margin-top: 3px;
 }
@@ -1060,7 +1069,7 @@ textarea {
 }
 .syspanel-card-foot {
   margin-top: var(--space-sm);
-  font-size: 0.72rem;
+  font-size: var(--type-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
 }
@@ -1077,7 +1086,7 @@ textarea {
 }
 .syspanel-chip {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--type-xs);
   padding: 3px 10px;
   border-radius: 999px;
   background: rgba(99, 102, 241, 0.14);
@@ -1114,17 +1123,17 @@ textarea {
   font-weight: 600;
 }
 .syspanel-check-badge {
-  font-size: 0.68rem;
+  font-size: var(--type-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
 .syspanel-check-reason {
-  font-size: 0.74rem;
+  font-size: var(--type-xs);
   color: var(--text-muted);
   margin-top: 2px;
 }
 .syspanel-check-hint {
-  font-size: 0.74rem;
+  font-size: var(--type-xs);
   color: var(--sky);
   margin-top: 2px;
 }
@@ -1147,4 +1156,932 @@ textarea {
   color: var(--sky);
   margin-top: 2px;
   flex-shrink: 0;
+}
+
+/* ==================================================================== */
+/* DESIGN SYSTEM v2 — tokens, primitives, shell, responsive contract     */
+/*                                                                      */
+/* Everything below is the single source of truth for layout and looks.  */
+/* A panel that needs a colour, a space or a radius uses a token here;   */
+/* a hex literal in a component is a review failure (ui-ux-system.md §1).*/
+/*                                                                      */
+/* Class index                                                           */
+/*   tokens        :root                                                 */
+/*   layout        .app-shell .app-header .app-body .app-sidebar .app-main*/
+/*   navigation    .nav-item .nav-trigger .nav-scrim .nav-item__badge     */
+/*   primitives    .card .btn .field .badge .skeleton .empty-state        */
+/*                 .error-state .toast .panel-fallback .toolbar          */
+/*   tables        .table-wrap table.responsive-table                     */
+/*   a11y          .skip-link .visually-hidden :focus-visible            */
+/*   breakpoints   640 (sm) / 1023 (md) / 1439 (lg)                       */
+/* ==================================================================== */
+
+:root {
+  /* ---- colour, by role (never by hex in a component) ---- */
+  --color-bg: #0b0f19;
+  --color-surface: #121826;
+  --color-surface-2: rgba(18, 24, 38, 0.75);
+  --color-surface-3: rgba(24, 32, 52, 0.85);
+  --color-surface-inset: #0f172a;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.18);
+  --color-text: #f8fafc;
+  --color-text-muted: #94a3b8;
+  --color-text-subtle: #cbd5e1;
+  --color-primary: #6366f1;
+  --color-primary-hover: #4f46e5;
+  --color-primary-soft: rgba(99, 102, 241, 0.15);
+  --color-success: #10b981;
+  --color-success-soft: rgba(16, 185, 129, 0.15);
+  --color-warning: #f59e0b;
+  --color-warning-soft: rgba(245, 158, 11, 0.15);
+  --color-danger: #ef4444;
+  --color-danger-soft: rgba(239, 68, 68, 0.15);
+  --color-danger-text: #fca5a5;
+  --color-on-accent: #ffffff;
+  --color-info: #38bdf8;
+  --color-info-soft: rgba(56, 189, 248, 0.15);
+  --color-neutral-soft: rgba(148, 163, 184, 0.12);
+  --color-focus: rgba(99, 102, 241, 0.45);
+  --color-scrim: rgba(3, 7, 18, 0.66);
+
+  /* ---- spacing: one 4px-based scale, space-1..6 ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* ---- radius ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-full: 999px;
+
+  /* ---- type scale: 12 / 13 / 14 / 16 / 20 / 24 / 32 ---- */
+  --type-xs: 12px;
+  --type-sm: 13px;
+  --type-base: 14px;
+  --type-md: 16px;
+  --type-lg: 20px;
+  --type-xl: 24px;
+  --type-2xl: 32px;
+
+  /* ---- elevation ---- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.34);
+  --shadow-3: 0 24px 64px rgba(0, 0, 0, 0.46);
+
+  /* ---- motion ---- */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ---- z ladder: fixed, never ad-hoc numbers ---- */
+  --z-nav: 100;
+  --z-scrim: 90;
+  --z-toast: 300;
+  --z-modal: 400;
+  --z-tooltip: 500;
+
+  /* ---- breakpoints (documentation + one place to read them) ---- */
+  --bp-sm: 640px;
+  --bp-md: 1024px;
+  --bp-lg: 1440px;
+
+  /* ---- layout ---- */
+  --shell-max: 1440px;
+  --sidebar-w: 236px;
+  --header-h: 64px;
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-focus);
+
+  /* ---- legacy aliases: kept so existing markup keeps resolving to the
+     same values while components migrate to the role tokens above ---- */
+  --bg-main: var(--color-bg);
+  --bg-card: var(--color-surface-2);
+  --bg-card-hover: var(--color-surface-3);
+  --bg-input: var(--color-surface-inset);
+  --border-color: var(--color-border);
+  --border-glow: rgba(99, 102, 241, 0.3);
+  --primary: var(--color-primary);
+  --primary-hover: var(--color-primary-hover);
+  --vip-gold: var(--color-warning);
+  --vip-glow: rgba(245, 158, 11, 0.35);
+  --direct-blue: #3b82f6;
+  --native-green: var(--color-success);
+  --danger: var(--color-danger);
+  --text-main: var(--color-text);
+  --text-muted: var(--color-text-muted);
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --critical: var(--color-danger);
+  --space-xs: var(--space-1);
+  --space-sm: var(--space-2);
+  --space-md: var(--space-3);
+  --space-lg: var(--space-4);
+  --space-xl: var(--space-5);
+  --dur-fast: var(--motion-fast);
+  --dur-base: var(--motion-base);
+  --dur-slow: var(--motion-slow);
+}
+
+/* ------------------------------------------------------------- base ---- */
+
+html {
+  /* A 16px root keeps every rem-based size legible; the smallest type a user
+     can meet is --type-xs (12px) — see the floor guard below. */
+  font-size: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--type-md);
+  line-height: 1.55;
+}
+
+#root {
+  max-inline-size: min(var(--shell-max), 100%);
+  margin-inline: auto;
+  inline-size: 100%;
+}
+
+/* Type floor. `docs/ui-ux-system.md` sets the smallest type at 12px; a legacy
+   inline `font-size` below that is a defect the audit counts. Sources are
+   rewritten to `var(--type-xs)`, and these selectors catch any that slip
+   through (inline styles win, so the guard has to be `!important`). */
+[style*='font-size:0.5'],
+[style*='font-size:0.55rem'],
+[style*='font-size:0.6'],
+[style*='font-size:0.65rem'],
+[style*='font-size:0.66rem'],
+[style*='font-size:0.68rem'],
+[style*='font-size:0.7rem'],
+[style*='font-size:0.72rem'],
+[style*='font-size:0.74rem'] {
+  font-size: var(--type-xs) !important;
+}
+
+/* Long identifiers, tokens and channel ids must wrap instead of pushing the
+   layout sideways; the page body never scrolls horizontally. */
+/* Let layout boxes shrink below their content width (the classic cause of a
+   360px page scroll), but never the controls themselves — a button keeps its
+   44px target. `.app-main *` would have overridden the target rules. */
+.app-main,
+.app-main > *,
+.app-main div,
+.app-main section,
+.app-main form,
+.app-main ul,
+.app-main li,
+.app-main p {
+  min-inline-size: 0;
+}
+img,
+svg,
+table,
+pre,
+code {
+  max-inline-size: 100%;
+}
+h1,
+h2,
+h3,
+h4,
+p {
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------ shell ---- */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100vh;
+  min-block-size: 100dvh;
+  /* Safe area: a notch or a home indicator must not cover content. */
+  padding-inline: max(var(--space-4), env(safe-area-inset-left)) max(var(--space-4), env(safe-area-inset-right));
+  padding-block-end: env(safe-area-inset-bottom);
+  overflow-x: clip;
+}
+
+.app-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-nav);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-block: 0 var(--space-4);
+  /* Keep the sticky bar readable over scrolling content. */
+  background: color-mix(in srgb, var(--color-bg) 86%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-block-end: 1px solid var(--color-border);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.app-body {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+  padding-block-end: var(--space-6);
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-inline-size: 0;
+  outline: none;
+}
+
+.panel-host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-inline-size: 0;
+}
+
+/* --------------------------------------------------------- navigation ---- */
+
+.nav-trigger {
+  /* Hidden where the rail is docked; the media query below flips it. */
+  display: none;
+  flex-shrink: 0;
+}
+
+.app-sidebar {
+  position: sticky;
+  inset-block-start: calc(var(--header-h) + var(--space-3));
+  align-self: start;
+  padding: var(--space-2);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+}
+
+.app-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--type-sm);
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+
+.nav-item:hover {
+  background: var(--color-neutral-soft);
+  color: var(--color-text);
+}
+
+.nav-item.is-active {
+  background: var(--color-primary-soft);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: var(--color-text);
+}
+
+.nav-item__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.nav-item__label {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-item__badge {
+  flex-shrink: 0;
+  min-inline-size: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-success);
+  color: var(--color-on-accent);
+  font-size: var(--type-xs);
+  font-weight: 700;
+  text-align: center;
+}
+
+.nav-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-scrim);
+  background: var(--color-scrim);
+  backdrop-filter: blur(2px);
+  animation: fade-in var(--motion-fast) var(--ease-out);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+
+/* `.glass-panel` predates the primitives and is used by two dozen panel blocks;
+   it now resolves to the Card primitive so both spellings paint one surface,
+   one radius and one shadow (spec §3: one card, not twenty). */
+.glass-panel {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  min-inline-size: 0;
+}
+
+/* -------------------------------------------------------- primitives ---- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-4);
+  min-inline-size: 0;
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-end: var(--space-3);
+}
+
+.card__title {
+  margin: 0;
+  font-size: var(--type-md);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.card__action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+.btn {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  font-size: var(--type-base);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.btn--sm {
+  padding-inline: var(--space-3);
+  font-size: var(--type-sm);
+}
+
+.btn--md {
+  padding-inline: var(--space-4);
+}
+
+.btn--primary {
+  background: var(--color-primary);
+  color: var(--color-on-accent);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.2);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.btn--ghost {
+  background: var(--color-neutral-soft);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+.btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: var(--color-border-strong);
+}
+
+.btn--danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.btn--danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.28);
+}
+
+.btn--link {
+  background: transparent;
+  color: var(--color-info);
+  padding-inline: var(--space-1);
+}
+
+/* Icon-only: a square target, never a text button with a hidden label. */
+.btn--icon {
+  padding: 0;
+  inline-size: 44px;
+  block-size: 44px;
+  justify-content: center;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.field__label {
+  font-size: var(--type-sm);
+  font-weight: 600;
+  color: var(--color-text-subtle);
+}
+
+.field__hint {
+  margin: 0;
+  font-size: var(--type-xs);
+  color: var(--color-text-muted);
+}
+
+.field__error {
+  margin: 0;
+  font-size: var(--type-xs);
+  color: var(--color-danger-text);
+}
+
+.field--invalid .input-field {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.badge--success {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+.badge--warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.badge--danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+.badge--info {
+  background: var(--color-info-soft);
+  color: var(--color-info);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+.badge--neutral {
+  background: var(--color-neutral-soft);
+  color: var(--color-text-subtle);
+  border: 1px solid var(--color-border);
+}
+
+.skeleton {
+  display: block;
+  background: var(--color-neutral-soft);
+}
+
+.skeleton-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.empty-state,
+.error-state,
+.panel-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  background: var(--color-surface-2);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.empty-state__icon,
+.error-state__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-soft);
+  color: var(--color-text-muted);
+}
+
+.error-state__icon {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+}
+
+.empty-state__title,
+.error-state__title,
+.panel-fallback__title {
+  margin: 0;
+  font-size: var(--type-base);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.empty-state__body,
+.error-state__reason,
+.panel-fallback__body,
+.panel-fallback__reason {
+  margin: 0;
+  max-inline-size: 60ch;
+  font-size: var(--type-xs);
+  color: var(--color-text-muted);
+}
+
+.panel-fallback__reason code {
+  font-family: var(--font-mono);
+  color: var(--color-text-subtle);
+}
+
+.empty-state__action,
+.error-state__action {
+  margin-block-start: var(--space-2);
+}
+
+.toast-region {
+  position: fixed;
+  inset-block-end: calc(var(--space-4) + env(safe-area-inset-bottom));
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  inline-size: min(92vw, 520px);
+}
+
+[dir='rtl'] .toast-region {
+  transform: translateX(50%);
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-3);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  color: var(--color-text);
+  font-size: var(--type-base);
+  pointer-events: auto;
+  animation: toast-in var(--motion-base) var(--ease-out);
+}
+
+.toast__dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-success);
+  flex-shrink: 0;
+}
+
+.toast--danger .toast__dot {
+  background: var(--color-danger);
+}
+
+.toast__text {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ------------------------------------------------------------- tables ---- */
+
+.table-wrap {
+  inline-size: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+}
+
+table.responsive-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-base);
+}
+
+/* -------------------------------------------------------------- a11y ---- */
+
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  z-index: var(--z-tooltip);
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+  padding-inline: var(--space-4);
+  background: var(--color-primary);
+  color: var(--color-on-accent);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* A visible ring for keyboard users on every interactive element. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------- breakpoints ---- */
+
+/* Compact (< 640px): one column, cards stack, nothing scrolls sideways. */
+@media (max-width: 639px) {
+  .app-shell {
+    padding-inline: max(var(--space-3), env(safe-area-inset-left)) max(var(--space-3), env(safe-area-inset-right));
+  }
+  .app-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+  .app-main {
+    gap: var(--space-4);
+  }
+  .card,
+  .panel-fallback,
+  .empty-state,
+  .error-state {
+    padding: var(--space-3);
+  }
+}
+
+/* Medium (640–1023px): 2 columns where a panel asks for them, drawer nav. */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .app-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Drawer: below --bp-md the rail slides in over the content. */
+@media (max-width: 1023px) {
+  .nav-trigger {
+    display: inline-flex;
+  }
+  .app-header {
+    position: sticky;
+    inset-block-start: 0;
+  }
+  .app-sidebar {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    z-index: var(--z-nav);
+    inline-size: min(86vw, 320px);
+    max-block-size: 100dvh;
+    overflow-y: auto;
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+    border-start-end-radius: var(--radius-lg);
+    border-end-end-radius: var(--radius-lg);
+    box-shadow: var(--shadow-3);
+    padding: var(--space-3);
+    padding-block-start: calc(var(--space-3) + env(safe-area-inset-top));
+    /* Hidden with a clip, not an off-canvas translate: a translated drawer in
+       RTL sits past the right edge and reads as horizontal overflow to the
+       layout audit (and to a browser's scrollWidth), while a clipped one never
+       leaves the viewport. */
+    clip-path: inset(0 0 0 100%);
+    pointer-events: none;
+    transition: clip-path var(--motion-base) var(--ease-out);
+  }
+  .app-sidebar.is-open {
+    clip-path: inset(0 0 0 0);
+    pointer-events: auto;
+  }
+}
+
+/* Wide (>= 1024px): the rail is docked, the trigger disappears. */
+@media (min-width: 1024px) {
+  .app-sidebar {
+    clip-path: none;
+    pointer-events: auto;
+  }
+  .nav-scrim {
+    display: none;
+  }
+}
+
+/* Tables become stacked cards below 768px: each cell carries its column
+   header in `data-label`, so a row reads as a labelled block instead of a
+   strip that has to be dragged sideways. */
+@media (max-width: 767px) {
+  .table-wrap {
+    overflow-x: visible;
+  }
+  table.responsive-table,
+  table.responsive-table tbody,
+  table.responsive-table tr,
+  table.responsive-table td {
+    display: block;
+    inline-size: 100%;
+  }
+  table.responsive-table thead {
+    /* Headers are repeated per cell, so the row is redundant. */
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  table.responsive-table tr {
+    margin-block-end: var(--space-3);
+    padding: var(--space-3);
+    background: var(--color-surface-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+  table.responsive-table td {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+    border: 0;
+  }
+  table.responsive-table td::before {
+    content: attr(data-label);
+    font-size: var(--type-xs);
+    font-weight: 700;
+    color: var(--color-text-muted);
+  }
+  /* Any grid a panel still declares inline collapses to one column. */
+  .app-main [style*='grid-template-columns'] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  /* Rows that would otherwise clip: wrap instead of overflowing. */
+  .app-main [style*='display: flex'] {
+    flex-wrap: wrap !important;
+  }
+  /* A fixed pixel width wider than a phone is the other clipping source. */
+  .app-main [style*='min-width: 3'],
+  .app-main [style*='minWidth: 3'] {
+    min-inline-size: 0 !important;
+  }
+}
+
+/* The page body never scrolls horizontally at any width. */
+html,
+body {
+  max-inline-size: 100%;
+  overflow-x: hidden;
+}
+
+/* Motion: honour the reader's preference, keep state changes instant. */
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar,
+  .toast,
+  .nav-scrim,
+  .skip-link {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+  .skeleton::after {
+    display: none;
+  }
+}
+
+/* Touch: 44px minimum for every control, at every width (spec §4). */
+:where(button, a[href], input:not([type='checkbox']):not([type='radio']), select, textarea, [role='button']) {
+  min-block-size: 44px;
+}
+:where(button, [role='button']) {
+  min-inline-size: 44px;
+}
+
+/* Native checkboxes and radios are a 13px visual in a 13px hit box — the single
+   largest source of sub-44px targets in the panels. Keep the same 18px look,
+   centred inside a 44px target, drawn as a data URI so no panel markup has to
+   change (and so the whole app gets one consistent control). */
+input[type='checkbox'],
+input[type='radio'] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  inline-size: 44px;
+  block-size: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 18px 18px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+input[type='checkbox'] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Crect x='1' y='1' width='16' height='16' rx='4' fill='%230f172a' stroke='%2394a3b8' stroke-width='1.5'/%3E%3C/svg%3E");
+}
+
+input[type='checkbox']:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Crect x='1' y='1' width='16' height='16' rx='4' fill='%236366f1' stroke='%236366f1' stroke-width='1.5'/%3E%3Cpath d='M5 9.2l2.6 2.6L13 6.4' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+input[type='radio'] {
+  border-radius: var(--radius-full);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Ccircle cx='9' cy='9' r='8' fill='%230f172a' stroke='%2394a3b8' stroke-width='1.5'/%3E%3C/svg%3E");
+}
+
+input[type='radio']:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Ccircle cx='9' cy='9' r='8' fill='%230f172a' stroke='%236366f1' stroke-width='1.5'/%3E%3Ccircle cx='9' cy='9' r='4' fill='%236366f1'/%3E%3C/svg%3E");
+}
+
+/* The ring follows the 18px glyph, not the invisible 44px box. */
+input[type='checkbox']:focus-visible,
+input[type='radio']:focus-visible {
+  outline: none;
+  background-color: var(--color-primary-soft);
+  box-shadow: 0 0 0 2px var(--color-focus);
+}
+
+input[type='checkbox']:disabled,
+input[type='radio']:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }

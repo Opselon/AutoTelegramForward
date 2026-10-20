@@ -19,7 +19,7 @@ import {
   ScrollText,
 } from 'lucide-react'
 import type { ForwardRule } from '../types'
-import { makeT, type UiLang } from '../locales'
+import { makeT, type UiLang } from '../locales/engine'
 import { ADDONS, OVERVIEW_ADDONS } from '../addons'
 import { TaskControlPanel } from './TaskControlPanel'
 import { TaskLogsPanel } from './TaskLogsPanel'
@@ -283,7 +283,7 @@ export function TaskOverviewModal({
                         fontWeight: 700,
                         fontSize: '11px',
                         cursor: 'pointer',
-                        backgroundColor: isRunning ? '#10b981' : '#475569',
+                        backgroundColor: isRunning ? '#10b981' : 'var(--color-text-muted)',
                         color: '#ffffff',
                         display: 'flex',
                         alignItems: 'center',
@@ -310,13 +310,13 @@ export function TaskOverviewModal({
                   }}
                 >
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>{t('ui_source')}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '2px' }}>{t('ui_source')}</div>
                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>{sourceName}</div>
                     <div style={{ fontSize: '11px', color: '#38bdf8' }}>{t('ui_telegram')}</div>
                   </div>
-                  <ArrowRight size={18} color="#64748b" style={{ margin: '0 10px' }} />
+                  <ArrowRight size={18} color="var(--color-text-muted)" style={{ margin: '0 10px' }} />
                   <div style={{ flex: 1, textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>{t('ui_target')}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '2px' }}>{t('ui_target')}</div>
                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>{targetName}</div>
                     <div style={{ fontSize: '11px', color: '#38bdf8' }}>{t('ui_telegram')}</div>
                   </div>
@@ -415,7 +415,7 @@ export function TaskOverviewModal({
                   style={{
                     backgroundColor: '#0f172a',
                     color: '#e2e8f0',
-                    border: '1px solid #475569',
+                    border: '1px solid var(--color-border-strong)',
                     borderRadius: '8px',
                     padding: '6px 10px',
                     fontSize: '12px',
@@ -531,7 +531,7 @@ export function TaskOverviewModal({
                       style={{
                         flex: 1,
                         background: '#1e293b',
-                        border: '1px solid #475569',
+                        border: '1px solid var(--color-border-strong)',
                         color: '#fff',
                         borderRadius: '6px',
                         padding: '6px 10px',
@@ -649,7 +649,7 @@ export function TaskOverviewModal({
                   }}
                 >
                   <span style={{ fontSize: '14px', fontWeight: 700, color: '#f1f5f9' }}>{t('ui_features')}</span>
-                  <span style={{ fontSize: '11px', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}>
                     {t('ui_explain')} &gt;
                   </span>
                 </div>
@@ -762,7 +762,7 @@ export function TaskOverviewModal({
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>{t('ui_feature_groups')}</span>
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>{t('ui_choose_customize_tools')}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_choose_customize_tools')}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
                   {[
@@ -814,7 +814,7 @@ export function TaskOverviewModal({
                     <Sparkles size={14} color="#f59e0b" />
                     <span style={{ fontSize: '13px', fontWeight: 700, color: '#f59e0b' }}>{t('ui_paid_addon')}</span>
                     <span title={t('ui_unlock_premium_features_with_credits')} style={{ display: 'inline-flex' }}>
-                      <Info size={13} color="#64748b" />
+                      <Info size={13} color="var(--color-text-muted)" />
                     </span>
                   </div>
                   <button
@@ -908,7 +908,7 @@ export function TaskOverviewModal({
                       type="button"
                       onClick={() => handleToggle('duplicate_filters')}
                       style={{
-                        background: draft.duplicate_filters ? '#22c55e' : '#475569',
+                        background: draft.duplicate_filters ? '#22c55e' : 'var(--color-text-muted)',
                         border: 'none',
                         borderRadius: '12px',
                         padding: '3px 10px',
@@ -928,7 +928,7 @@ export function TaskOverviewModal({
                       type="button"
                       onClick={() => handleToggle('crypto_mode')}
                       style={{
-                        background: draft.crypto_mode ? '#22c55e' : '#475569',
+                        background: draft.crypto_mode ? '#22c55e' : 'var(--color-text-muted)',
                         border: 'none',
                         borderRadius: '12px',
                         padding: '3px 10px',
@@ -970,7 +970,7 @@ export function TaskOverviewModal({
                       type="button"
                       onClick={() => handleToggle('auto_posting')}
                       style={{
-                        background: draft.auto_posting ? '#22c55e' : '#475569',
+                        background: draft.auto_posting ? '#22c55e' : 'var(--color-text-muted)',
                         border: 'none',
                         borderRadius: '12px',
                         padding: '3px 10px',
@@ -990,7 +990,7 @@ export function TaskOverviewModal({
                       type="button"
                       onClick={() => handleToggle('power_control')}
                       style={{
-                        background: draft.power_control ? '#22c55e' : '#475569',
+                        background: draft.power_control ? '#22c55e' : 'var(--color-text-muted)',
                         border: 'none',
                         borderRadius: '12px',
                         padding: '3px 10px',
@@ -1030,7 +1030,7 @@ export function TaskOverviewModal({
                       style={{
                         width: '100%',
                         backgroundColor: '#0f172a',
-                        border: '1px solid #475569',
+                        border: '1px solid var(--color-border-strong)',
                         color: '#fff',
                         borderRadius: '8px',
                         padding: '6px 10px',
@@ -1049,7 +1049,7 @@ export function TaskOverviewModal({
                       style={{
                         width: '100%',
                         backgroundColor: '#0f172a',
-                        border: '1px solid #475569',
+                        border: '1px solid var(--color-border-strong)',
                         color: '#fff',
                         borderRadius: '8px',
                         padding: '6px 10px',
@@ -1079,7 +1079,7 @@ export function TaskOverviewModal({
                       type="button"
                       onClick={() => handleToggle('process_raw_text')}
                       style={{
-                        background: draft.process_raw_text ? '#22c55e' : '#475569',
+                        background: draft.process_raw_text ? '#22c55e' : 'var(--color-text-muted)',
                         border: 'none',
                         borderRadius: '12px',
                         padding: '3px 10px',
@@ -1098,7 +1098,7 @@ export function TaskOverviewModal({
                       type="button"
                       onClick={() => handleToggle('button_to_text')}
                       style={{
-                        background: draft.button_to_text ? '#22c55e' : '#475569',
+                        background: draft.button_to_text ? '#22c55e' : 'var(--color-text-muted)',
                         border: 'none',
                         borderRadius: '12px',
                         padding: '3px 10px',
@@ -1139,7 +1139,7 @@ export function TaskOverviewModal({
                       style={{
                         width: '100%',
                         backgroundColor: '#0f172a',
-                        border: '1px solid #475569',
+                        border: '1px solid var(--color-border-strong)',
                         color: '#fff',
                         borderRadius: '8px',
                         padding: '6px 10px',
@@ -1159,7 +1159,7 @@ export function TaskOverviewModal({
                       style={{
                         width: '100%',
                         backgroundColor: '#0f172a',
-                        border: '1px solid #475569',
+                        border: '1px solid var(--color-border-strong)',
                         color: '#fff',
                         borderRadius: '8px',
                         padding: '6px 10px',
@@ -1179,7 +1179,7 @@ export function TaskOverviewModal({
                       style={{
                         width: '100%',
                         backgroundColor: '#0f172a',
-                        border: '1px solid #475569',
+                        border: '1px solid var(--color-border-strong)',
                         color: '#fff',
                         borderRadius: '8px',
                         padding: '6px 10px',
@@ -1231,7 +1231,7 @@ export function TaskOverviewModal({
                       type="button"
                       onClick={() => handleToggle('ocr_image_ai')}
                       style={{
-                        background: draft.ocr_image_ai ? '#22c55e' : '#475569',
+                        background: draft.ocr_image_ai ? '#22c55e' : 'var(--color-text-muted)',
                         border: 'none',
                         borderRadius: '12px',
                         padding: '3px 10px',
@@ -1251,7 +1251,7 @@ export function TaskOverviewModal({
                       type="button"
                       onClick={() => handleToggle('smart_ai_rewrite')}
                       style={{
-                        background: draft.smart_ai_rewrite ? '#22c55e' : '#475569',
+                        background: draft.smart_ai_rewrite ? '#22c55e' : 'var(--color-text-muted)',
                         border: 'none',
                         borderRadius: '12px',
                         padding: '3px 10px',
@@ -1344,7 +1344,7 @@ export function TaskOverviewModal({
                   type="button"
                   onClick={() => handleToggle('cleaner_enabled')}
                   style={{
-                    backgroundColor: draft.cleaner_enabled ? '#16a34a' : '#475569',
+                    backgroundColor: draft.cleaner_enabled ? '#16a34a' : 'var(--color-text-muted)',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '16px',
@@ -1456,7 +1456,7 @@ export function TaskOverviewModal({
                     style={{
                       flex: 1,
                       backgroundColor: '#0f172a',
-                      border: '1px solid #475569',
+                      border: '1px solid var(--color-border-strong)',
                       color: '#fff',
                       borderRadius: '8px',
                       padding: '8px 10px',
@@ -1499,7 +1499,7 @@ export function TaskOverviewModal({
                       key={idx}
                       style={{
                         backgroundColor: '#0f172a',
-                        border: '1px solid #475569',
+                        border: '1px solid var(--color-border-strong)',
                         color: '#f8fafc',
                         borderRadius: '12px',
                         padding: '4px 10px',
@@ -1535,7 +1535,7 @@ export function TaskOverviewModal({
                     </span>
                   ))}
                   {listPatterns((draft.cleaner_config as any)?.patterns).length === 0 && (
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>{t('ui_no_custom_strip_patterns_added_yet')}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_no_custom_strip_patterns_added_yet')}</span>
                   )}
                 </div>
               </div>
@@ -1584,7 +1584,7 @@ export function TaskOverviewModal({
                     onChange={(e) => setNewReplaceFrom(e.target.value)}
                     style={{
                       backgroundColor: '#0f172a',
-                      border: '1px solid #475569',
+                      border: '1px solid var(--color-border-strong)',
                       color: '#fff',
                       borderRadius: '8px',
                       padding: '8px 10px',
@@ -1598,7 +1598,7 @@ export function TaskOverviewModal({
                     onChange={(e) => setNewReplaceTo(e.target.value)}
                     style={{
                       backgroundColor: '#0f172a',
-                      border: '1px solid #475569',
+                      border: '1px solid var(--color-border-strong)',
                       color: '#fff',
                       borderRadius: '8px',
                       padding: '8px 10px',
@@ -1657,7 +1657,7 @@ export function TaskOverviewModal({
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
                         <code style={{ color: '#f87171' }}>{from}</code>
-                        <span style={{ color: '#64748b' }}>➔</span>
+                        <span style={{ color: 'var(--color-text-muted)' }}>➔</span>
                         <code style={{ color: '#4ade80' }}>{to as string}</code>
                       </div>
                       <button
@@ -1680,7 +1680,7 @@ export function TaskOverviewModal({
                     </div>
                   ))}
                   {Object.keys((draft as any).replacements || {}).length === 0 && (
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>{t('ui_no_text_replacements_configured')}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_no_text_replacements_configured')}</div>
                   )}
                 </div>
               </div>
@@ -1740,7 +1740,7 @@ export function TaskOverviewModal({
                     style={{
                       flex: 1,
                       backgroundColor: '#0f172a',
-                      border: '1px solid #475569',
+                      border: '1px solid var(--color-border-strong)',
                       color: '#fff',
                       borderRadius: '8px',
                       padding: '8px 10px',
@@ -1822,7 +1822,7 @@ export function TaskOverviewModal({
                     </span>
                   ))}
                   {(draft.blacklist_keywords || []).length === 0 && (
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>{t('ui_no_words_in_blacklist')}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_no_words_in_blacklist')}</span>
                   )}
                 </div>
               </div>
@@ -1882,7 +1882,7 @@ export function TaskOverviewModal({
                     style={{
                       flex: 1,
                       backgroundColor: '#0f172a',
-                      border: '1px solid #475569',
+                      border: '1px solid var(--color-border-strong)',
                       color: '#fff',
                       borderRadius: '8px',
                       padding: '8px 10px',
@@ -1964,7 +1964,7 @@ export function TaskOverviewModal({
                     </span>
                   ))}
                   {(draft.whitelist_keywords || []).length === 0 && (
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>{t('ui_no_whitelist_restrictions_all_permitted')}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_no_whitelist_restrictions_all_permitted')}</span>
                   )}
                 </div>
               </div>

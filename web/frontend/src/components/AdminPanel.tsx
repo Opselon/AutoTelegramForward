@@ -14,7 +14,7 @@ import {
   Sliders,
 } from 'lucide-react'
 import { api } from '../api'
-import { makeT, type UiLang } from '../locales'
+import { makeT, type UiLang } from '../locales/engine'
 
 interface Props {
   lang: UiLang
@@ -666,12 +666,12 @@ export function AdminPanel({ lang }: Props) {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.92rem' }}>{ext.name}</span>
-                    <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>v{ext.version}</span>
+                    <span className="badge badge-success" style={{ fontSize: 'var(--type-xs)' }}>v{ext.version}</span>
                   </div>
                   <p style={{ margin: '0 0 12px', fontSize: '0.8rem', color: '#94a3b8' }}>{ext.description}</p>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.75rem', color: '#4ade80' }}>● {ext.status.toUpperCase()}</span>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{ext.author}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{ext.author}</span>
                   </div>
                 </div>
               ))}

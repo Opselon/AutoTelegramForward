@@ -1,6 +1,6 @@
 import { ShieldAlert, AlertTriangle, Info, CheckCircle2, RefreshCw } from 'lucide-react'
 import type { DiagnosticsResponse, DiagnosticFinding } from '../types'
-import { makeT, type UiLang } from '../locales'
+import { makeT, type UiLang } from '../locales/engine'
 
 /**
  * Preflight diagnostics panel — renders the /api/diagnostics report as ranked,

@@ -1,0 +1,97 @@
+{
+  "label": "web-before",
+  "started_at": "2026-10-20T02:54:56Z",
+  "http": {
+    "version": {
+      "path": "/api/version",
+      "status": 200,
+      "n": 60,
+      "mean_ms": 0.81,
+      "p50_ms": 0.67,
+      "p95_ms": 1.65,
+      "p99_ms": 3.32,
+      "max_ms": 3.32,
+      "rps": 1236.1
+    },
+    "health_services": {
+      "path": "/api/v1/health/services",
+      "status": 200,
+      "n": 60,
+      "mean_ms": 53.04,
+      "p50_ms": 52.46,
+      "p95_ms": 56.51,
+      "p99_ms": 65.48,
+      "max_ms": 65.48,
+      "rps": 18.9
+    },
+    "rules_list": {
+      "path": "/api/rules",
+      "status": 401,
+      "n": 40,
+      "mean_ms": 8.98,
+      "p50_ms": 1.6,
+      "p95_ms": 52.83,
+      "p99_ms": 148.46,
+      "max_ms": 148.46,
+      "rps": 111.3
+    },
+    "tasks_list": {
+      "path": "/api/tasks",
+      "status": 401,
+      "n": 40,
+      "mean_ms": 1.76,
+      "p50_ms": 1.28,
+      "p95_ms": 6.22,
+      "p99_ms": 8.99,
+      "max_ms": 8.99,
+      "rps": 569.0
+    },
+    "logs_tail": {
+      "path": "/api/logs?limit=50",
+      "status": 401,
+      "n": 30,
+      "mean_ms": 1.18,
+      "p50_ms": 0.91,
+      "p95_ms": 2.19,
+      "p99_ms": 6.03,
+      "max_ms": 6.03,
+      "rps": 849.6
+    },
+    "logs_stats": {
+      "path": "/api/logs/stats",
+      "status": 401,
+      "n": 30,
+      "mean_ms": 1.14,
+      "p50_ms": 0.86,
+      "p95_ms": 2.96,
+      "p99_ms": 3.33,
+      "max_ms": 3.33,
+      "rps": 875.9
+    },
+    "settings_schema": {
+      "path": "/api/rules/settings/schema",
+      "status": 401,
+      "n": 30,
+      "mean_ms": 1.15,
+      "p50_ms": 0.66,
+      "p95_ms": 5.37,
+      "p99_ms": 10.04,
+      "max_ms": 10.04,
+      "rps": 867.1
+    }
+  },
+  "http_failures": {},
+  "web": {
+    "chunks": 1,
+    "total_kb": 1045.4,
+    "total_gzip_kb": 308.5,
+    "largest": [
+      {
+        "file": "index-TLFDniUf.js",
+        "kb": 1045.4,
+        "gzip_kb": 308.5
+      }
+    ],
+    "build_seconds": 1.85
+  }
+}
