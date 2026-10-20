@@ -6,7 +6,7 @@
     <description>AutoTelegramForward is a self-hosted Telegram message routing platform. This feed carries every release note and every feature deep dive.</description>
     <language>en</language>
     <generator>Astro</generator>
-    <lastBuildDate>Mon, 19 Oct 2026 13:43:08 GMT</lastBuildDate>
+    <lastBuildDate>Tue, 20 Oct 2026 12:27:01 GMT</lastBuildDate>
     <atom:link href="https://opselon.github.io/AutoTelegramForward/rss.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>v2.0 — Multi-Source Routing, Per-Task Policies, AI Control &amp; Full Observability</title>

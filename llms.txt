@@ -9,7 +9,7 @@ Key facts, all derived from the repository at build time:
 - License: MIT
 - Services: 4 (core, logger, api/web gateway, bot UI)
 - UI languages: 10 (en, es, fa, fr, id, it, pt, ru, uz, zh) with enforced 1:1 catalog parity and strict English fallback
-- Localized strings: 1552
+- Localized strings: 1561
 - CLI command groups: 29
 - gRPC RPCs: 78
 - Registered REST routes parsed from api/main.go: 102
