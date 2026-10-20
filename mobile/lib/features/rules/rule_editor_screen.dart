@@ -18,6 +18,7 @@ import 'rule_settings_sheet.dart';
 import 'rule_simulator_sheet.dart';
 
 import '../../core/api_client.dart';
+import '../../core/json_cast.dart';
 import '../../core/layout.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
@@ -122,6 +123,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   late TextEditingController _intermediateCtrl;
   late TextEditingController _filtersCtrl;
   late TextEditingController _delayCtrl;
+  late TextEditingController _everyNCtrl;
   late TextEditingController _editTimeCtrl;
   late TextEditingController _headerCtrl;
   late TextEditingController _footerCtrl;
@@ -191,6 +193,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     );
     _filtersCtrl = TextEditingController(text: r?.filters.join(', ') ?? '');
     _delayCtrl = TextEditingController(text: '${r?.delaySeconds ?? 0}');
+    _everyNCtrl = TextEditingController(text: '${r?.forwardEveryN ?? 1}');
     _editTimeCtrl = TextEditingController(
       text: '${r?.editTimeLimitSeconds ?? 0}',
     );
@@ -258,6 +261,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     _intermediateCtrl.dispose();
     _filtersCtrl.dispose();
     _delayCtrl.dispose();
+    _everyNCtrl.dispose();
     _editTimeCtrl.dispose();
     _headerCtrl.dispose();
     _footerCtrl.dispose();
@@ -498,6 +502,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       filterMode: _filterMode,
       mediaMode: _mediaMode,
       delaySeconds: int.tryParse(_delayCtrl.text.trim()) ?? 0,
+      // Out-of-range input is clamped here, not rejected: the field is a
+      // convenience, and the server clamps the same way.
+      forwardEveryN: clampForwardEveryN(_everyNCtrl.text.trim()),
       headerTemplate: _headerCtrl.text,
       footerTemplate: _footerCtrl.text,
       name: _nameCtrl.text.trim(),
@@ -1000,6 +1007,28 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
               ),
               const SizedBox(height: 16),
 
+              // Forward every Nth message: 1 forwards everything, which is the
+              // default this task had before the setting existed.
+              TextFormField(
+                controller: _everyNCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: t.get('rules_forward_every_n'),
+                  helperText: t.get('rules_forward_every_n_hint'),
+                  hintText: '1',
+                ),
+                validator: (value) {
+                  final raw = (value ?? '').trim();
+                  if (raw.isEmpty) return null;
+                  final n = int.tryParse(raw);
+                  if (n == null || n < 1 || n > 1000) {
+                    return t.get('rules_forward_every_n_invalid');
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
               // Templates
               TextFormField(
                 controller: _headerCtrl,
@@ -1308,6 +1337,18 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: TextFormField(
+                              controller: _everyNCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: t.get('rules_forward_every_n'),
+                                helperText: t.get('rules_forward_every_n_hint'),
+                                hintText: '1',
+                              ),
                             ),
                           ),
                         ],

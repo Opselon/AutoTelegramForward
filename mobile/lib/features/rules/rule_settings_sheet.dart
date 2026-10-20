@@ -291,6 +291,19 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
     }
   }
 
+  /// A setting's label, localised when the app carries a translation.
+  ///
+  /// The schema comes from the server with English labels, so nine locales
+  /// would read English here. `rule_setting_<key>` in the catalogs overrides
+  /// it; a setting with no entry keeps the server's label rather than
+  /// rendering a bare key.
+  String _label(AppMessages t, RuleSettingSpec spec) =>
+      t.maybeGet('rule_setting_${spec.key}') ?? spec.label;
+
+  /// A setting's help text, localised the same way as [_label].
+  String _help(AppMessages t, RuleSettingSpec spec) =>
+      t.maybeGet('rule_setting_help_${spec.key}') ?? spec.help;
+
   /// Where a setting's value comes from, as a small label — or null when there
   /// is nothing worth saying (the registry default is the quiet, usual case).
   Widget? _provenanceChip(RuleSettingSpec spec, {bool dense = false}) {
@@ -644,8 +657,8 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
           .where(
             (spec) =>
                 spec.key.toLowerCase().contains(needle) ||
-                spec.label.toLowerCase().contains(needle) ||
-                spec.help.toLowerCase().contains(needle),
+                _label(t, spec).toLowerCase().contains(needle) ||
+                _help(t, spec).toLowerCase().contains(needle),
           )
           .toList();
       if (hits.isEmpty) {
@@ -790,8 +803,8 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
             isDense: true,
             decoration: InputDecoration(
               isDense: true,
-              labelText: spec.label,
-              helperText: spec.help.isEmpty ? null : spec.help,
+              labelText: _label(t, spec),
+              helperText: spec.help.isEmpty ? null : _help(t, spec),
               errorText: error,
               border: const OutlineInputBorder(),
             ),
@@ -977,6 +990,10 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
   }
 
   Widget _field(RuleSettingSpec spec) {
+    // Every branch below resolves the label and help text through the app's own
+    // catalogs when they carry a translation, so the server-driven schema does
+    // not force English labels on nine of the ten supported locales.
+    final t = AppMessages.of(context);
     final value = _values[spec.key];
     final error = _errors[spec.key];
 
@@ -993,14 +1010,14 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         title: Row(
           children: <Widget>[
             Flexible(
-              child: Text(spec.label, style: const TextStyle(fontSize: 13)),
+              child: Text(_label(t, spec), style: const TextStyle(fontSize: 13)),
             ),
             ?chip,
           ],
         ),
         subtitle: spec.help.isEmpty
             ? null
-            : Text(spec.help, style: const TextStyle(fontSize: 11)),
+            : Text(_help(t, spec), style: const TextStyle(fontSize: 11)),
         value: value == true,
         secondary: reset,
         onChanged: (v) => setState(() => _values[spec.key] = v),
@@ -1019,8 +1036,8 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
           isDense: true,
           decoration: InputDecoration(
             isDense: true,
-            labelText: spec.label,
-            helperText: spec.help.isEmpty ? null : spec.help,
+            labelText: _label(t, spec),
+            helperText: spec.help.isEmpty ? null : _help(t, spec),
             errorText: error,
             suffix: _provenanceTrailing(spec),
             border: const OutlineInputBorder(),
@@ -1033,8 +1050,6 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         ),
       );
     }
-
-    final t = AppMessages.of(context);
 
     // `replacements` is the one dict that is genuinely a flat find/replace list,
     // so it gets a row editor. Every other dict holds structured data — nested

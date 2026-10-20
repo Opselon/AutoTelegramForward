@@ -44,6 +44,20 @@ int? jsonIntOrNull(Object? value) => jsonNum(value)?.toInt();
 double jsonDouble(Object? value, [double fallback = 0]) =>
     jsonNum(value)?.toDouble() ?? fallback;
 
+/// The "forward every Nth message" interval, or 1 when the value is absent,
+/// not a number, or outside the registry's documented range.
+///
+/// 1 is "every message" and the default for every rule created before the
+/// setting existed, so anything unreadable degrades to legacy behaviour
+/// rather than to silence.
+int clampForwardEveryN(Object? value, [int fallback = 1]) {
+  final n = jsonNum(value)?.toInt();
+  if (n == null) return fallback;
+  if (n < 1) return 1;
+  if (n > 1000) return 1000;
+  return n;
+}
+
 /// A `{name: count}` map whose values may be numbers or numeric strings.
 Map<String, int> jsonIntMap(Object? value) {
   if (value is! Map) return const {};

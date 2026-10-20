@@ -283,6 +283,7 @@ class ForwardRule {
     this.filterMode = 'all',
     this.mediaMode = 'all',
     this.delaySeconds = 0,
+    this.forwardEveryN = 1,
     this.headerTemplate = '',
     this.footerTemplate = '',
     this.aiConfigId = '',
@@ -415,6 +416,11 @@ class ForwardRule {
   final String filterMode;
   final String mediaMode;
   final int delaySeconds;
+
+  /// Forward every Nth accepted message (1–1000). 1 = every message, which is
+  /// what every rule created before this setting existed does. Clamped on read
+  /// and on write, so a hand-edited payload cannot silence a route.
+  final int forwardEveryN;
   final String headerTemplate;
   final String footerTemplate;
   final String aiConfigId;
@@ -458,6 +464,7 @@ class ForwardRule {
     String? filterMode,
     String? mediaMode,
     int? delaySeconds,
+    int? forwardEveryN,
     String? headerTemplate,
     String? footerTemplate,
     String? aiConfigId,
@@ -518,6 +525,7 @@ class ForwardRule {
     filters: filters ?? this.filters,
     filterMode: filterMode ?? this.filterMode,
     mediaMode: mediaMode ?? this.mediaMode,
+    forwardEveryN: forwardEveryN ?? this.forwardEveryN,
     delaySeconds: delaySeconds ?? this.delaySeconds,
     headerTemplate: headerTemplate ?? this.headerTemplate,
     footerTemplate: footerTemplate ?? this.footerTemplate,
@@ -609,6 +617,7 @@ class ForwardRule {
     'filter_mode': filterMode,
     'media_mode': mediaMode,
     'delay_seconds': delaySeconds,
+    'forward_every_n': forwardEveryN,
     'header_template': headerTemplate,
     'footer_template': footerTemplate,
     if (aiConfigId.isNotEmpty) 'ai_config_id': aiConfigId,
@@ -820,6 +829,12 @@ class ForwardRule {
       albumMode:
           (json['album_mode'] as String?) ??
           (meta['album_mode'] as String? ?? 'album'),
+      // The server stores the interval in the rule's metadata, and also echoes
+      // it at the top level; either is the same number. Anything that is not a
+      // whole number in range reads as "every message" rather than as silence.
+      forwardEveryN: clampForwardEveryN(
+        json['forward_every_n'] ?? meta['forward_every_n'],
+      ),
       version: jsonInt(json['version']),
       isEnabled:
           json['is_enabled'] as bool? ?? !(json['is_paused'] as bool? ?? false),

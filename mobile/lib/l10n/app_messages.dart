@@ -308,6 +308,8 @@ class AppMessagesEn {
     'nav_sessions': 'Sessions',
     'nav_settings': 'Settings',
     'nav_stats': 'Statistics',
+    'rule_setting_forward_every_n': 'Forward every N messages',
+    'rule_setting_help_forward_every_n': 'Only messages that pass every filter are counted; a media album counts once.',
     'rules_adv_categories': 'Advanced settings categories',
     'rules_advanced_settings': 'Advanced Settings',
     'rules_ai_config': 'AI rewriting',
@@ -380,6 +382,9 @@ class AppMessagesEn {
     'rules_footer': 'Footer template',
     'rules_footer_empty_hint': 'FOOTER EMPTY',
     'rules_footer_hint': 'Footer text',
+    'rules_forward_every_n': 'Forward every N messages',
+    'rules_forward_every_n_hint': '1–1000. Only messages that pass all filters count; an album counts once.',
+    'rules_forward_every_n_invalid': 'Enter a whole number from 1 to 1000',
     'rules_forward_mode': 'Forward mode',
     'rules_forwarding_topic': 'Forwarding Topic',
     'rules_full_control': 'Full control',
@@ -779,6 +784,18 @@ class AppMessages {
       default:
         return _en.get(key, params: params);
     }
+  }
+
+  /// Resolves [key] when the catalogs define it, else null.
+  ///
+  /// The per-task settings schema is server-driven, so its labels arrive as
+  /// English prose rather than as keys. Where the app does carry a translation
+  /// for a setting (`rule_setting_<key>`), it wins; where it does not, the
+  /// caller keeps the server's label instead of tripping `get`'s missing-key
+  /// assert. English is the fallback catalog, so checking it is sufficient.
+  String? maybeGet(String key, {Map<String, String>? params}) {
+    if (!AppMessagesEn.knownKeys.contains(key)) return null;
+    return get(key, params: params);
   }
 
   /// Resolves a key against one locale's catalog, falling back to English.
