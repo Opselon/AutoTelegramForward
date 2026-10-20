@@ -52,9 +52,9 @@ LOCALES = ("fa", "ru", "zh", "pt", "uz", "id", "es", "fr", "it")
 #: test below fails on it.
 SAME_IN_EVERY_LANGUAGE = {
     # words that are the same in the target language
-    "bot", "media", "multi", "no", "on", "off", "general", "type", "source",
-    "sources", "support", "minutes", "error", "account", "target", "edit",
-    "header", "footer", "administrator", "status", "debug", "sticker", "emoji",
+    "bot", "media", "no", "on", "off", "general", "type", "source",
+    "sources", "minutes", "error", "account", "target", "edit",
+    "administrator", "status", "debug", "sticker", "emoji",
     "links", "link", "audio", "video",
     # names, acronyms, product and policy words
     "ai", "api", "id", "vip", "pro", "prompt",
@@ -135,9 +135,12 @@ def test_a_value_that_is_translated_is_not_caught():
 
 
 def test_a_name_dropped_in_its_english_form_is_not_caught():
-    cat = {"en": {"ui_x": "🔑 **API ID:** `{id}`", "ui_y": "🆘 Support (@Capxi)"}}
+    # "API ID" and "VIP Pro" are names, not copy: they are the same in every
+    # language by definition. ("Support" left the allowlist when French and
+    # Indonesian started translating it.)
+    cat = {"en": {"ui_x": "🔑 **API ID:** `{id}`", "ui_y": "VIP Pro"}}
     for locale in LOCALES:
-        cat[locale] = {"ui_x": "🔑 **API ID:** `{id}`", "ui_y": "🆘 Support (@Capxi)"}
+        cat[locale] = {"ui_x": "🔑 **API ID:** `{id}`", "ui_y": "VIP Pro"}
     assert still_english(cat) == []
 
 
