@@ -80,6 +80,48 @@ async def test_forward_rule_active_by_source(db, crypto):
 
 
 @pytest.mark.asyncio
+async def test_active_rule_cache_sees_a_write_from_another_handle(db, crypto):
+    """A routing table cached by one repository must not survive a write by another.
+
+    The pipeline holds its own ``SqliteForwardRuleRepository``; the dashboard and
+    the bot build theirs. Caching ``list_active_by_source`` is what makes a busy
+    channel cheap, but the invalidation has to be per *database*, not per object:
+    otherwise an operator who flips ``multi_route`` is ignored until the TTL runs
+    out, and a second task of the same tenant stays starved.
+    """
+    s_repo = SqliteSessionRepository(db, crypto)
+    await s_repo.add(TelegramSession(phone_number="+1001", session_string_encrypted=""))
+    session_id = (await s_repo.list_all())[0].id
+
+    writer = SqliteForwardRuleRepository(db)
+    reader = SqliteForwardRuleRepository(db)
+
+    rule = ForwardRule(
+        session_id=session_id,
+        source_chat_id="-100333",
+        target_chat_id="-100444",
+        routing_type=RoutingType.CHANNEL_TO_CHANNEL,
+        forward_mode=ForwardMode.COPY_MESSAGE,
+        multi_route=False,
+    )
+    await writer.add(rule)
+
+    warm = await reader.list_active_by_source("-100333")
+    assert [r.multi_route for r in warm] == [False]
+
+    # The write goes through a *different* repository instance.
+    fetched = await writer.get_by_id(rule.id)
+    assert fetched is not None
+    fetched.multi_route = True
+    await writer.update(fetched)
+
+    refreshed = await reader.list_active_by_source("-100333")
+    assert [r.multi_route for r in refreshed] == [True], (
+        "the cached routing table outlived a write made through another handle"
+    )
+
+
+@pytest.mark.asyncio
 async def test_filter_rule_roundtrip(db):
     repo = SqliteFilterRuleRepository(db)
     fr = FilterRule(name="f1", whitelist_keywords=["a"], blacklist_keywords=["b"],

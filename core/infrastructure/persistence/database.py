@@ -778,10 +778,14 @@ class Row(dict):
         self._values: Tuple[Any, ...] = tuple(values)
 
     def __getitem__(self, key):
-        if isinstance(key, int):
+        # Hot path: this runs once per column per row, and a rules page or an
+        # inbound message hydrates thousands of them (measured: 2M lookups for
+        # one 1000-rule resolve). `type(key) is int` skips the subclass scan of
+        # isinstance, and `dict.__getitem__` skips building a `super` object.
+        if type(key) is int:
             return self._values[key]
         try:
-            return super().__getitem__(key)
+            return dict.__getitem__(self, key)
         except KeyError as exc:  # sqlite3.Row semantics
             raise IndexError(key) from exc
 
@@ -821,6 +825,11 @@ class SqliteDatabase:
         self._lock = threading.Lock()
         self._apply_pragmas()
         self._migrate()
+
+    @property
+    def path(self) -> str:
+        """The database this handle points at (``:memory:`` included)."""
+        return self._db_path
 
     def _apply_pragmas(self) -> None:
         """Apply high-performance, low-resource pragmas optimal for low-spec servers."""

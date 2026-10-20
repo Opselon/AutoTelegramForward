@@ -3,11 +3,11 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	pb "autoforward/proto"
@@ -27,106 +27,93 @@ type ServiceProbe struct {
 	LatencyMs int64  `json:"latency_ms"`
 }
 
-// ProbeServices checks every service in the ATF chain in parallel with short
-// timeouts. Core proves the gRPC channel AND the pipeline loop (GetSystemStats),
-// logger proves the log store answers, web is a proxy reachability probe of its
-// own /healthz, and api is this process.
+// ProbeServices checks every service in the ATF chain concurrently with short
+// timeouts, through the process-wide cache (health_probe.go). Core proves the
+// gRPC channel AND the pipeline loop (GetSystemStats), logger proves the log
+// store answers, web is a proxy reachability probe of its own /healthz, and api
+// is this process.
+//
+// The per-hop checks take a context bounded by the prober's per-check timeout,
+// so a hanging hop costs at most that timeout and never the whole response.
 func (h *Handlers) ProbeServices() ([]ServiceProbe, bool) {
-	results := make([]ServiceProbe, 0, 4)
-	var mu sync.Mutex
-	check := func(name string, fn func() (bool, string)) {
-		start := time.Now()
-		ok, detail := false, ""
-		done := make(chan struct{})
-		go func() { ok, detail = fn(); close(done) }()
-		select {
-		case <-done:
-		case <-time.After(4 * time.Second):
-			ok, detail = false, "probe timeout (4s)"
-		}
-		mu.Lock()
-		results = append(results, ServiceProbe{
-			Name:      name,
-			Online:    ok,
-			Detail:    detail,
-			LatencyMs: time.Since(start).Milliseconds(),
-		})
-		mu.Unlock()
-	}
-
-	go check("core", func() (bool, string) {
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-		defer cancel()
-		resp, err := h.c.System.GetSystemStats(ctx, &pb.SystemStatsRequest{})
-		if err != nil {
-			return false, "gRPC: " + err.Error()
-		}
-		return resp.CoreRunning, fmt.Sprintf("uptime=%ds sessions=%d", resp.UptimeSeconds, resp.ActiveSessionsCount)
-	})
-
-	go check("logger", func() (bool, string) {
-		if h.c.Logs == nil {
-			return false, "logger stub not wired (dial failed at startup)"
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-		defer cancel()
-		resp, err := h.c.Logs.LogStats(ctx, &pb.LogStatsRequest{})
-		if err != nil {
-			return false, "gRPC: " + err.Error()
-		}
-		return true, fmt.Sprintf("events=%d", resp.Total)
-	})
-
-	go check("api", func() (bool, string) { return true, "this process" })
-
-	go check("web", func() (bool, string) {
-		webURL := os.Getenv("ATF_WEB_HEALTH_URL")
-		if webURL == "" {
-			webURL = "http://127.0.0.1:8088/healthz"
-		}
-		client := &http.Client{Timeout: 4 * time.Second}
-		resp, err := client.Get(webURL)
-		if err != nil {
-			return false, err.Error()
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return false, "HTTP " + resp.Status
-		}
-		return true, webURL
-	})
-
-	deadline := time.After(4500 * time.Millisecond)
-	for len(results) < 4 {
-		select {
-		case <-deadline:
-			mu.Lock()
-			if len(results) < 4 {
-				results = append(results, ServiceProbe{Name: "?", Online: false, Detail: "probe pending"})
-			}
-			mu.Unlock()
-			deadline = time.After(0)
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
-
-	// Deterministic order for the UI: core → logger → api → web.
-	order := map[string]int{"core": 0, "logger": 1, "api": 2, "web": 3}
-	for i := 0; i < len(results); i++ {
-		for j := i + 1; j < len(results); j++ {
-			if order[results[j].Name] < order[results[i].Name] {
-				results[i], results[j] = results[j], results[i]
-			}
-		}
-	}
-
-	allOK := true
-	for _, s := range results {
-		if !s.Online {
-			allOK = false
-		}
-	}
+	results, allOK, _, _ := h.probeServices(context.Background())
 	return results, allOK
+}
+
+// probeServices is ProbeServices plus the cache metadata the endpoint reports.
+func (h *Handlers) probeServices(ctx context.Context) ([]ServiceProbe, bool, bool, time.Duration) {
+	return h.prober().probe(ctx)
+}
+
+// prober returns the process-wide prober, building it (and its checks) once.
+//
+// Tests replace it directly: the checks are the real network calls, so the
+// cache and timeout behaviour is tested against a prober with fake checks
+// rather than against a live stack.
+func (h *Handlers) prober() *serviceProber {
+	h.proberMu.Lock()
+	defer h.proberMu.Unlock()
+	if h.probes != nil {
+		return h.probes
+	}
+	h.probes = newServiceProber(h.liveChecks())
+	return h.probes
+}
+
+// liveChecks is the deployment's probe set, in the order the UI shows it.
+func (h *Handlers) liveChecks() []probeCheck {
+	return []probeCheck{
+		{name: "core", fn: func(ctx context.Context) (bool, string) {
+			if h.c == nil || h.c.System == nil {
+				return false, "core client not wired (dial failed at startup)"
+			}
+			resp, err := h.c.System.GetSystemStats(ctx, &pb.SystemStatsRequest{})
+			if err != nil {
+				return false, "gRPC: " + err.Error()
+			}
+			return resp.CoreRunning, fmt.Sprintf("uptime=%ds sessions=%d", resp.UptimeSeconds, resp.ActiveSessionsCount)
+		}},
+		{name: "logger", fn: func(ctx context.Context) (bool, string) {
+			if h.c == nil || h.c.Logs == nil {
+				return false, "logger stub not wired (dial failed at startup)"
+			}
+			// A reachability probe asks the cheapest question that proves the
+			// store answers. It used to call LogStats — the whole-archive
+			// aggregate — which made the health endpoint's own latency depend on
+			// how much history the deployment had (measured 42ms of the 52ms
+			// budget). One page of one row proves the same thing for ~0.5ms.
+			resp, err := h.c.Logs.QueryLogs(ctx, &pb.QueryLogsRequest{Limit: 1})
+			if err != nil {
+				return false, "gRPC: " + err.Error()
+			}
+			return true, fmt.Sprintf("events=%d", resp.Total)
+		}},
+		{name: "api", fn: func(context.Context) (bool, string) { return true, "this process" }},
+		{name: "web", fn: func(ctx context.Context) (bool, string) {
+			webURL := os.Getenv("ATF_WEB_HEALTH_URL")
+			if webURL == "" {
+				webURL = "http://127.0.0.1:8088/healthz"
+			}
+			// The request carries the per-check deadline, so a web gateway that
+			// accepts the connection and then stalls is bounded too — the old
+			// client timeout was the only bound and it was twice the probe
+			// budget.
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, webURL, nil)
+			if err != nil {
+				return false, err.Error()
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return false, err.Error()
+			}
+			defer resp.Body.Close()
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			if resp.StatusCode != http.StatusOK {
+				return false, "HTTP " + resp.Status
+			}
+			return true, webURL
+		}},
+	}
 }
 
 // EnvCheck is one configuration input this process depends on.

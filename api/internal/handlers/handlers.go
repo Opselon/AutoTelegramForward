@@ -50,6 +50,16 @@ type Handlers struct {
 	// mutated from concurrent HTTP handlers.
 	diagMu        sync.Mutex
 	lastDiagStart time.Time
+
+	// proberMu guards probes: the service prober is built on first use and
+	// carries the short-TTL snapshot every health request reads.
+	proberMu sync.Mutex
+	probes   *serviceProber
+
+	// statsMu guards logStats: the log-aggregate cache, built on first use. A
+	// purge invalidates it so a deleted window cannot stay visible for the TTL.
+	statsMu  sync.Mutex
+	logStats *ttlCache[*pb.LogStatsResponse]
 }
 
 func New(c *grpcclient.Clients) *Handlers { return &Handlers{c: c} }
@@ -62,13 +72,16 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 }
 
 // ServicesHealth reports live reachability of every microservice in the ATF
-// chain, probed in parallel with short timeouts. It powers the Web-UI topology
-// view so outages are visible at a glance instead of being discovered when a
-// forward silently fails.
+// chain in the order core → logger → api → web, from a short-TTL cache with
+// stale-while-revalidate (see health_probe.go for why the probing is written
+// the way it is).
+//
+// The response carries the cache's age so a dashboard can show "as of 1.4s
+// ago" instead of implying the answer is live when it was served stale.
 func (h *Handlers) ServicesHealth(w http.ResponseWriter, r *http.Request) {
 	// The probing itself lives in system.go (ProbeServices) so the same live
 	// check can back both this topology endpoint and the setup report.
-	results, allOK := h.ProbeServices()
+	results, allOK, probed, age := h.probeServices(r.Context())
 
 	status := "degraded"
 	if allOK {
@@ -77,6 +90,8 @@ func (h *Handlers) ServicesHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":   status,
 		"time":     time.Now().UTC().Format(time.RFC3339),
+		"cached":   !probed,
+		"age_ms":   age.Milliseconds(),
 		"services": results,
 	})
 }
@@ -2842,6 +2857,23 @@ func (h *Handlers) ExportLogs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// statsCacheKey is the cache key for a stats scope: the exact pair the RPC
+// takes. Tenants must never share a cached aggregate, so the user id is part of
+// the key even when it is 0 (the deployment-wide view).
+func statsCacheKey(ruleID string, userID int64) string {
+	return ruleID + "\x00" + strconv.FormatInt(userID, 10)
+}
+
+// statsCache returns the process-wide aggregate cache, building it once.
+func (h *Handlers) statsCache() *ttlCache[*pb.LogStatsResponse] {
+	h.statsMu.Lock()
+	defer h.statsMu.Unlock()
+	if h.logStats == nil {
+		h.logStats = newTTLCache[*pb.LogStatsResponse](defaultStatsTTL)
+	}
+	return h.logStats
+}
+
 func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := withTimeout(r)
 	defer cancel()
@@ -2855,7 +2887,8 @@ func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 	if v := r.URL.Query().Get("mine"); v == "1" || v == "true" {
 		req.UserId = identity(r).UserID
 	}
-	resp, err := h.c.Logs.LogStats(ctx, req)
+
+	resp, cached, age, err := h.statsFor(ctx, req, r.URL.Query().Get("fresh") == "1")
 	if err != nil {
 		grpcError(w, err)
 		return
@@ -2868,8 +2901,35 @@ func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 		"by_service":  resp.ByService,
 		"oldest_ts":   resp.OldestTs,
 		"newest_ts":   resp.NewestTs,
+		"cached":      cached,
+		"age_ms":      age.Milliseconds(),
 	})
 }
+
+// statsFor answers one aggregate, through the TTL cache unless bypass is set.
+//
+// The cached fill runs on its own context: the request that happened to trigger
+// it is allowed to time out (or the client to hang up) without aborting a
+// computation every other poller will read.
+func (h *Handlers) statsFor(ctx context.Context, req *pb.LogStatsRequest, bypass bool) (*pb.LogStatsResponse, bool, time.Duration, error) {
+	fill := func(fctx context.Context) (*pb.LogStatsResponse, error) {
+		return h.c.Logs.LogStats(fctx, req)
+	}
+	if bypass {
+		resp, err := fill(ctx)
+		return resp, false, 0, err
+	}
+	key := statsCacheKey(req.RuleId, req.UserId)
+	return h.statsCache().get(key, func() (*pb.LogStatsResponse, error) {
+		fctx, cancel := context.WithTimeout(context.Background(), statsFillTimeout)
+		defer cancel()
+		return fill(fctx)
+	})
+}
+
+// statsFillTimeout bounds one aggregate computation, including a logger that
+// accepts the RPC and never answers.
+const statsFillTimeout = 5 * time.Second
 
 // PurgeLogs deletes log rows from the logger microservice. Filters are all
 // optional; older_than_hours (default 24) protects the newest window so a
@@ -2961,6 +3021,10 @@ func (h *Handlers) PurgeLogs(w http.ResponseWriter, r *http.Request) {
 		"purged":    resp.Purged,
 		"remaining": resp.Remaining,
 	})
+	// The aggregate cache is now wrong, not merely old: drop it so the next
+	// poll reports the post-purge total instead of the pre-purge one for the
+	// rest of the TTL.
+	h.invalidateStatsCache()
 }
 
 // ------------------------------------------------------------- internals

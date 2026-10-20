@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 #: The background-colour names of ``button_style`` (their wire encoding lives
 #: there). Redeclared instead of imported on purpose: importing
@@ -56,6 +57,7 @@ __all__ = [
     "SURFACE_PREFIXES",
     "style_for_key",
     "action_part",
+    "KEY_STYLE_RULES_COMPILED",
     "style_glyph",
     "color_for_key",
     "color_for_label",
@@ -198,11 +200,19 @@ LEADING_GLYPH = re.compile(rf"^(\s*)({GLYPH_TOKEN})\s*")
 REPEATED_GLYPH = re.compile(rf"^(\s*)({GLYPH_TOKEN})(?:\s*\2)+\s*")
 #: Any glyph anywhere, used by the style audit.
 ANY_GLYPH = re.compile(GLYPH_TOKEN)
+#: The rule table above, compiled once. ``re.search`` with a *pattern string*
+#: consults a 512-entry cache on every call and re-compiles on a miss; the style
+#: layer runs for every button of every rendered panel, so the patterns are
+#: compiled here instead — same table, same order, same result.
+KEY_STYLE_RULES_COMPILED: tuple[tuple[re.Pattern[str], str], ...] = tuple(
+    (re.compile(pattern), style) for pattern, style in KEY_STYLE_RULES
+)
 
 
 # --------------------------------------------------------------------------- #
 # resolution
 # --------------------------------------------------------------------------- #
+@lru_cache(maxsize=4096)
 def action_part(key: str) -> str:
     """The action a key performs, with its surface namespace removed.
 
@@ -217,27 +227,31 @@ def action_part(key: str) -> str:
     return name
 
 
+@lru_cache(maxsize=4096)
 def style_for_key(key: str) -> str:
     """Return the semantic style of a catalog key (``neutral`` if unknown)."""
     name = (key or "").strip().lower()
     if name in KEY_STYLE_OVERRIDES:
         return KEY_STYLE_OVERRIDES[name]
-    for pattern, style in KEY_STYLE_RULES:
-        if re.search(pattern, action_part(name)):
+    for pattern, style in KEY_STYLE_RULES_COMPILED:
+        if pattern.search(action_part(name)):
             return style
     return "neutral"
 
 
+@lru_cache(maxsize=4096)
 def style_glyph(key: str) -> str:
     """Canonical glyph for a catalog key (empty for neutral)."""
     return STYLES.get(style_for_key(key), STYLES["neutral"]).glyph
 
 
+@lru_cache(maxsize=4096)
 def color_for_key(key: str) -> str | None:
     """Background colour for a catalog key (``None`` when unstyled)."""
     return STYLES.get(style_for_key(key), STYLES["neutral"]).color
 
 
+@lru_cache(maxsize=8192)
 def leading_glyph(label: str) -> str:
     """First glyph of a label, canonicalised through the alias table."""
     match = LEADING_GLYPH.match(label or "")
@@ -246,11 +260,13 @@ def leading_glyph(label: str) -> str:
     return GLYPH_ALIASES.get(match.group(2), match.group(2))
 
 
+@lru_cache(maxsize=1024)
 def canonical_glyph(glyph: str) -> str:
     """Map an alias glyph to its canonical twin (identity otherwise)."""
     return GLYPH_ALIASES.get(glyph, glyph)
 
 
+@lru_cache(maxsize=8192)
 def color_for_label(label: str) -> str | None:
     """Background colour implied by a rendered label's leading glyph.
 
@@ -273,6 +289,7 @@ def color_for_label(label: str) -> str | None:
 # --------------------------------------------------------------------------- #
 # decoration
 # --------------------------------------------------------------------------- #
+@lru_cache(maxsize=8192)
 def style_label(label: str) -> str:
     """Normalise the decoration of a rendered label.
 
@@ -297,6 +314,7 @@ def style_label(label: str) -> str:
     return f"{pad}{canonical} {label[first.end():].lstrip()}"
 
 
+@lru_cache(maxsize=8192)
 def decorate(key: str, label: str, style: str | None = None) -> str:
     """Apply the canonical style glyph of ``key`` to a resolved label.
 
