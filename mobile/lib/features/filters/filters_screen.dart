@@ -101,6 +101,7 @@ class _FiltersScreenState extends State<FiltersScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: kind,
                 decoration: InputDecoration(labelText: t.get('filters_kind')),
                 items: [
@@ -275,9 +276,10 @@ class _FiltersScreenState extends State<FiltersScreen> {
                             ),
                             onTap: () => _addOrEdit(f),
                             trailing: IconButton(
-                              icon: const Icon(
+                              tooltip: t.get('action_delete'),
+                              icon: Icon(
                                 Icons.delete_outline,
-                                color: Colors.red,
+                                color: AppColors.of(context).danger,
                               ),
                               onPressed: () => _delete(f),
                             ),

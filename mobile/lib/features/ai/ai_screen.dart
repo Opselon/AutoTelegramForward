@@ -208,6 +208,7 @@ class _AiScreenState extends State<AiScreen> {
         title: Text(t.get('ai_title')),
         actions: [
           IconButton(
+            tooltip: t.get('action_refresh'),
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _load,
           ),
@@ -301,7 +302,11 @@ class _AiScreenState extends State<AiScreen> {
                     isThreeLine: true,
                     onTap: () => _openEditor(c),
                     trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      tooltip: t.get('action_delete'),
+                      icon: Icon(
+                        Icons.delete_outline,
+                        color: AppColors.of(context).danger,
+                      ),
                       onPressed: () => _delete(c),
                     ),
                   ),

@@ -285,7 +285,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     ('users', 'chats_picker_filter_users'),
                   ])
                     Padding(
-                      padding: const EdgeInsets.only(right: AppSpacing.sm),
+                      padding: const EdgeInsetsDirectional.only(
+                        end: AppSpacing.sm,
+                      ),
                       child: ChoiceChip(
                         key: ValueKey<String>('chats_filter_${entry.$1}'),
                         label: Text(t.get(entry.$2)),
@@ -327,6 +329,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       title: t.get('chats_session_label'),
       icon: Icons.send_outlined,
       child: DropdownButtonFormField<String>(
+        isExpanded: true,
         key: const ValueKey<String>('chats_session_dropdown'),
         initialValue: _sessionId.isEmpty ? null : _sessionId,
         isDense: true,
@@ -403,7 +406,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       builder: (sheetCtx) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(
+            padding: const EdgeInsetsDirectional.fromSTEB(
               AppSpacing.lg,
               AppSpacing.sm,
               AppSpacing.lg,

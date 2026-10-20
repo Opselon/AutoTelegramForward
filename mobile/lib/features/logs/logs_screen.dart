@@ -151,7 +151,7 @@ class _LogsScreenState extends State<LogsScreen> {
         isScrollControlled: true,
         builder: (ctx) => SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -496,6 +496,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _ruleFilter,
                       isDense: true,
                       decoration: InputDecoration(
@@ -539,6 +540,7 @@ class _LogsScreenState extends State<LogsScreen> {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _serviceFilter,
                       isDense: true,
                       decoration: InputDecoration(
@@ -1069,7 +1071,7 @@ class _LogsScreenState extends State<LogsScreen> {
       builder: (ctx) => SafeArea(
         child: ListView(
           shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 8, 20, 24),
           children: [
             Text(
               evt.eventType,

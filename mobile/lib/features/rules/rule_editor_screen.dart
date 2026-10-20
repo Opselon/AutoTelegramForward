@@ -677,6 +677,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
               // Session Selector
               if (_sessions.isNotEmpty)
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: _selectedSessionId,
                   decoration: InputDecoration(
                     labelText: t.get('rules_session'),

@@ -230,15 +230,20 @@ class AppIconButton extends StatelessWidget {
       label: tooltip,
       child: Tooltip(
         message: tooltip,
-        child: IconButton(
-          icon: Icon(icon, size: size),
-          color: color,
-          tooltip: null,
-          constraints: const BoxConstraints(
-            minWidth: AppBreakpoints.touchTarget,
-            minHeight: AppBreakpoints.touchTarget,
+        // The IconButton would otherwise contribute its own button node with
+        // an empty label — a screen reader would announce "button" twice, once
+        // unnamed. The Semantics above is the single labelled node.
+        child: ExcludeSemantics(
+          child: IconButton(
+            icon: Icon(icon, size: size),
+            color: color,
+            tooltip: null,
+            constraints: const BoxConstraints(
+              minWidth: AppBreakpoints.touchTarget,
+              minHeight: AppBreakpoints.touchTarget,
+            ),
+            onPressed: onPressed,
           ),
-          onPressed: onPressed,
         ),
       ),
     );

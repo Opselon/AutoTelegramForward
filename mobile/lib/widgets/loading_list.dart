@@ -94,28 +94,19 @@ class _LoadingListState extends State<LoadingList>
     final reduced = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final label = AppMessages.of(context).get('state_loading');
 
-    final list = widget.shrinkWrap
-        ? Padding(
-            padding: widget.padding,
-            child: Column(
-              children: [
-                for (var i = 0; i < widget.rows; i++)
-                  SizedBox(
-                    height: widget.itemExtent,
-                    child: _SkeletonRow(showAvatar: widget.showAvatar),
-                  ),
-              ],
-            ),
-          )
-        : ListView.builder(
-            padding: widget.padding,
-            itemExtent: widget.itemExtent,
-            itemCount: widget.rows,
-            physics: const NeverScrollableScrollPhysics(),
-            itemBuilder: (context, index) => RepaintBoundary(
-              child: _SkeletonRow(showAvatar: widget.showAvatar),
-            ),
-          );
+    // A shrink-wrapped viewport sizes itself to its rows without asking the
+    // parent for unbounded height, which is what a Column-inside-ListView
+    // placement would do (and then overflow when the rows are taller than the
+    // window). The pulse and the row shapes are identical either way.
+    final list = ListView.builder(
+      padding: widget.padding,
+      itemExtent: widget.itemExtent,
+      itemCount: widget.rows,
+      shrinkWrap: widget.shrinkWrap,
+      physics: const NeverScrollableScrollPhysics(),
+      itemBuilder: (context, index) =>
+          RepaintBoundary(child: _SkeletonRow(showAvatar: widget.showAvatar)),
+    );
 
     if (reduced) {
       return Semantics(label: label, container: true, child: list);
