@@ -65,6 +65,22 @@ function token() {
 const MEASURE = () => {
   const vw = window.innerWidth;
   const all = [...document.querySelectorAll('*')];
+  const drawerTriggerEl = document.querySelector('[aria-label*="menu" i], .hamburger, [data-drawer-toggle], button[aria-expanded]');
+  const sidebarEl = document.querySelector('aside#app-navigation, [data-sidebar]');
+  const isClipped = (el) => el ? /inset\([^)]*100%/.test(getComputedStyle(el).clipPath || '') : false;
+  const isVisible = (el) => {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    // Off-canvas counts as invisible: the closed drawer keeps its box and is
+    // translated out, so width/height alone would report it as on screen.
+    return (
+      rect.width > 0 && rect.height > 0 &&
+      rect.right > 0 && rect.left < window.innerWidth &&
+      style.display !== 'none' && style.visibility !== 'hidden' &&
+      Number(style.opacity) > 0.05
+    );
+  };
   const scrollerOf = (el) => {
     let p = el.parentElement;
     while (p) {
@@ -108,6 +124,15 @@ const MEASURE = () => {
     minFontPx: sizes.length ? Math.round(Math.min(...sizes) * 10) / 10 : null,
     under12px: sizes.filter((v) => v < 12).length,
     drawerTrigger: !!(document.querySelector('[aria-label*="menu" i], .hamburger, [data-drawer-toggle], button[aria-expanded]')),
+    // Presence in the DOM says nothing: the trigger exists at every width and is
+    // hidden above the breakpoint, so "drawer=true" at 1440 px read as a mobile
+    // menu on a desktop. The rail is hidden with `clip-path: inset(... 100%)` and
+    // `pointer-events: none`, which keeps its box, so geometry alone cannot tell
+    // a closed drawer from a docked rail either. These three report the state a
+    // user would see.
+    drawerVisible: isVisible(drawerTriggerEl),
+    drawerOpen: !!drawerTriggerEl && drawerTriggerEl.getAttribute('aria-expanded') === 'true',
+    sidebarDocked: isVisible(sidebarEl) && !isClipped(sidebarEl),
   };
 };
 
@@ -143,7 +168,7 @@ for (const width of WIDTHS) {
   console.log(
     `${String(width).padStart(4)}px  overflow=${metrics.realOverflow}  clipped=${metrics.clippedInScrollers}  ` +
       `smallTargets=${metrics.smallTargets}  unnamed=${metrics.unnamedIconButtons}  minFont=${metrics.minFontPx}px  ` +
-      `drawer=${metrics.drawerTrigger}`,
+      `drawer=${metrics.drawerVisible}  drawerOpen=${metrics.drawerOpen}  sidebarDocked=${metrics.sidebarDocked}`,
   );
   const shot = argOf('shot');
   if (shot) {
