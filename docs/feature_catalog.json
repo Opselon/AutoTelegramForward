@@ -1,130 +1,248 @@
 {
   "schema_version": "1.0.0",
   "generated_from": "source inspection of master@d05f059",
-  "lifecycle_states": ["RECEIVED", "VALIDATING", "AUTHORIZED", "ACCEPTED", "IN_PROGRESS", "RETRY_WAIT", "SUCCEEDED", "FAILED", "CANCELLED", "OUTCOME_UNCONFIRMED"],
+  "lifecycle_states": [
+    "RECEIVED",
+    "VALIDATING",
+    "AUTHORIZED",
+    "ACCEPTED",
+    "IN_PROGRESS",
+    "RETRY_WAIT",
+    "SUCCEEDED",
+    "FAILED",
+    "CANCELLED",
+    "OUTCOME_UNCONFIRMED"
+  ],
   "features": [
     {
       "id": "FWD_RULE_CREATE",
       "name": "Create forwarding rule",
-      "entry_points": ["api/internal/handlers/handlers.go#CreateRule", "core/infrastructure/grpc_server/servicers.py#ForwardRuleControlServicer.CreateRule", "core/infrastructure/telegram/pro_bot_ui.py#_finish_rule_creation"],
-      "clients": ["web", "bot", "mobile", "miniapp"],
-      "db_tables": ["forward_rules"],
+      "entry_points": [
+        "api/internal/handlers/handlers.go#CreateRule",
+        "core/infrastructure/grpc_server/servicers.py#ForwardRuleControlServicer.CreateRule",
+        "core/infrastructure/telegram/pro_bot_ui.py#_finish_rule_creation"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "miniapp"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
       "completion_condition": "rule row committed with generated id and owner_user_id",
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "FWD_RULE_UPDATE",
       "name": "Update forwarding rule (optimistic concurrency)",
-      "entry_points": ["core/infrastructure/persistence/postgres_repositories.py#update", "core/infrastructure/grpc_server/servicers.py#UpdateRule"],
-      "db_tables": ["forward_rules"],
+      "entry_points": [
+        "core/infrastructure/persistence/postgres_repositories.py#update",
+        "core/infrastructure/grpc_server/servicers.py#UpdateRule"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
       "completion_condition": "version-bumped UPDATE committed; version conflict returns explicit error",
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "FWD_RULE_PAUSE_RESUME",
       "name": "Pause/resume rule with durable queue semantics",
-      "entry_points": ["core/domain/entities.py#is_currently_paused", "core/domain/services.py#evaluate_rule", "core/application/pipeline.py#_process_for_rule", "core/infrastructure/telegram/durable_queue.py#_process_job", "core/infrastructure/grpc_server/servicers.py#ResumeRule"],
-      "db_tables": ["forward_rules", "delivery_jobs"],
+      "entry_points": [
+        "core/domain/entities.py#is_currently_paused",
+        "core/domain/services.py#evaluate_rule",
+        "core/application/pipeline.py#_process_for_rule",
+        "core/infrastructure/telegram/durable_queue.py#_process_job",
+        "core/infrastructure/grpc_server/servicers.py#ResumeRule"
+      ],
+      "db_tables": [
+        "forward_rules",
+        "delivery_jobs"
+      ],
       "completion_condition": "paused rules never forward new messages; queued jobs deferred with backoff; resume unblocks RETRY_WAIT jobs",
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "FWD_MESSAGE_DELIVERY",
       "name": "Durable message forwarding pipeline",
-      "entry_points": ["core/application/pipeline.py#DurableMessagePipeline", "core/infrastructure/telegram/durable_queue.py#_process_job", "core/infrastructure/telegram/dispatcher.py"],
-      "db_tables": ["delivery_jobs", "message_map", "content_dedup"],
+      "entry_points": [
+        "core/application/pipeline.py#DurableMessagePipeline",
+        "core/infrastructure/telegram/durable_queue.py#_process_job",
+        "core/infrastructure/telegram/dispatcher.py"
+      ],
+      "db_tables": [
+        "delivery_jobs",
+        "message_map",
+        "content_dedup"
+      ],
       "completion_condition": "Telegram API confirms delivery (target_msg_id > 0); UNKNOWN on timeout; DLQ after max retries",
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "FWD_BRANDING_HOP",
       "name": "Branding hop (A -> C -> B) composed with every message transform",
-      "entry_points": ["core/domain/branding.py#should_hop", "core/application/branding_hop.py#post_to_channel", "core/application/pipeline.py#_perform_brand_hop", "core/infrastructure/telegram/dispatcher.py#perform_branding_hop", "core/infrastructure/telegram/durable_queue.py#_dispatch_to_telegram"],
-      "db_tables": ["delivery_jobs (branding hop state)"],
+      "entry_points": [
+        "core/domain/branding.py#should_hop",
+        "core/application/branding_hop.py#post_to_channel",
+        "core/application/pipeline.py#_perform_brand_hop",
+        "core/infrastructure/telegram/dispatcher.py#perform_branding_hop",
+        "core/infrastructure/telegram/durable_queue.py#_dispatch_to_telegram"
+      ],
+      "db_tables": [
+        "delivery_jobs (branding hop state)"
+      ],
       "completion_condition": "the processed message is posted into C once per deliverable and the target receives a forward of C; transforms run exactly once (never skipped or doubled by the worker); any hop failure falls back to a direct A -> B delivery",
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "FWD_CONTENT_DEDUP",
       "name": "SHA-256 content fingerprint deduplication",
-      "entry_points": ["core/application/pipeline.py#_process_for_rule", "core/infrastructure/persistence/postgres_repositories.py#PostgresMessageMapRepository.was_content_forwarded"],
-      "db_tables": ["content_dedup"],
+      "entry_points": [
+        "core/application/pipeline.py#_process_for_rule",
+        "core/infrastructure/persistence/postgres_repositories.py#PostgresMessageMapRepository.was_content_forwarded"
+      ],
+      "db_tables": [
+        "content_dedup"
+      ],
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "FWD_KEYWORD_REPLY",
       "name": "Keyword-triggered reply add-on",
-      "entry_points": ["core/application/pipeline.py#_process_for_rule (job_kind=keyword_reply)"],
+      "entry_points": [
+        "core/application/pipeline.py#_process_for_rule (job_kind=keyword_reply)"
+      ],
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "OBS_CENTRAL_LOGGER",
       "name": "Central Logger gRPC microservice",
-      "entry_points": ["rust/logger/src/transport.rs#LogControlService", "core/observability/log_client.py#LogClient"],
-      "db_tables": ["logs (logger-owned SQLite)"],
+      "entry_points": [
+        "rust/logger/src/transport.rs#LogControlService",
+        "core/observability/log_client.py#LogClient"
+      ],
+      "db_tables": [
+        "logs (logger-owned SQLite)"
+      ],
       "completion_condition": "durable insert before ack; bounded queue with drop-oldest shedding counter",
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "OBS_CORRELATION_ID",
       "name": "End-to-end correlation ID propagation",
-      "entry_points": ["api/internal/middleware/correlation.go", "api/internal/grpcclient/grpcclient.go", "web/backend/src/main.rs#proxy_api_handler", "core/application/pipeline.py#PipelineContext.correlation_id", "core/infrastructure/telegram/durable_queue.py#enqueue_delivery"],
+      "entry_points": [
+        "api/internal/middleware/correlation.go",
+        "api/internal/grpcclient/grpcclient.go",
+        "web/backend/src/main.rs#proxy_api_handler",
+        "core/application/pipeline.py#PipelineContext.correlation_id",
+        "core/infrastructure/telegram/durable_queue.py#enqueue_delivery"
+      ],
       "completion_condition": "ID extracted/generated at gateway, echoed in response, propagated via gRPC metadata, persisted in queue job payload",
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "OBS_DB_QUERY_EVENTS",
       "name": "Database query error/latency events",
-      "entry_points": ["core/infrastructure/persistence/postgres_repositories.py#_execute_db/_fetch_all_db", "core/infrastructure/persistence/database.py#SqliteDatabase.execute"],
+      "entry_points": [
+        "core/infrastructure/persistence/postgres_repositories.py#_execute_db/_fetch_all_db",
+        "core/infrastructure/persistence/database.py#SqliteDatabase.execute"
+      ],
       "implementation_status": "PARTIALLY_IMPLEMENTED"
     },
     {
       "id": "OBS_AUDIT_OUTBOX",
       "name": "Transactional audit / outbox for business mutations",
-      "entry_points": ["(new) core/infrastructure/persistence/audit_outbox.py", "scripts/postgres/schema.sql#audit_events/audit_outbox"],
+      "entry_points": [
+        "(new) core/infrastructure/persistence/audit_outbox.py",
+        "scripts/postgres/schema.sql#audit_events/audit_outbox"
+      ],
       "implementation_status": "PARTIALLY_IMPLEMENTED"
     },
     {
       "id": "OBS_UI_LOG_EXPLORER",
       "name": "Web DevOps log explorer with live stream, filters, stats, purge",
-      "entry_points": ["web/frontend/src/App.tsx#devops tab", "api/internal/handlers/handlers.go#QueryLogs/LogStats/PurgeLogs"],
+      "entry_points": [
+        "web/frontend/src/App.tsx#devops tab",
+        "api/internal/handlers/handlers.go#QueryLogs/LogStats/PurgeLogs"
+      ],
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "OBS_SECRET_REDACTION",
       "name": "Field-aware secret redaction in logs/errors",
-      "entry_points": ["core/infrastructure/telegram/errors.py#redact", "core/infrastructure/telegram/raw_tracer.py"],
+      "entry_points": [
+        "core/infrastructure/telegram/errors.py#redact",
+        "core/infrastructure/telegram/raw_tracer.py"
+      ],
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "OBS_DLQ_LIFECYCLE",
       "name": "Dead-letter queue inspect/replay/purge with tenant scoping",
-      "entry_points": ["core/infrastructure/grpc_server/servicers.py#DeliveryControlServicer"],
+      "entry_points": [
+        "core/infrastructure/grpc_server/servicers.py#DeliveryControlServicer"
+      ],
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "OBS_UNKNOWN_OUTCOME",
       "name": "Telegram timeout classified as OUTCOME_UNCONFIRMED (never silent success/failure)",
-      "entry_points": ["core/infrastructure/telegram/durable_queue.py#_process_job (mark_unknown / DeliveryStatus.UNKNOWN)"],
+      "entry_points": [
+        "core/infrastructure/telegram/durable_queue.py#_process_job (mark_unknown / DeliveryStatus.UNKNOWN)"
+      ],
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "OBS_HEALTH_TOPOLOGY",
       "name": "Service topology live health probing",
-      "entry_points": ["api/main.go#/api/v1/health/services", "web/frontend/src/App.tsx#Services Topology panel"],
+      "entry_points": [
+        "api/main.go#/api/v1/health/services",
+        "web/frontend/src/App.tsx#Services Topology panel"
+      ],
       "implementation_status": "IMPLEMENTED"
     },
     {
       "id": "OBS_SLOW_QUERY_MONITOR",
       "name": "Slow-query threshold monitoring with configurable limits",
-      "entry_points": ["(new) core/infrastructure/persistence/db_observability.py"],
+      "entry_points": [
+        "(new) core/infrastructure/persistence/db_observability.py"
+      ],
       "implementation_status": "NOT_IMPLEMENTED"
     },
     {
       "id": "OBS_METRICS_AGGREGATION",
       "name": "Bounded-label metrics aggregation (per-feature latency, error rates)",
-      "entry_points": ["(new) core/infrastructure/persistence/db_observability.py#metrics"],
+      "entry_points": [
+        "(new) core/infrastructure/persistence/db_observability.py#metrics"
+      ],
       "implementation_status": "NOT_IMPLEMENTED"
+    },
+    {
+      "id": "FWD_FORWARD_EVERY_N",
+      "name": "Forward every Nth message",
+      "entry_points": [
+        "core/infrastructure/telegram/pro_bot_ui.py#_render_every_n_menu",
+        "core/infrastructure/telegram/pro_bot_ui.py#_cb_rule_every_n_set",
+        "core/infrastructure/telegram/pro_bot_ui.py#_step_set_every_n",
+        "web/frontend/src/components/TaskOverviewModal.tsx#every_n",
+        "mobile/lib/features/rules/rule_editor_screen.dart",
+        "api/internal/handlers/handlers.go#enrichCustomMetadata",
+        "core/application/pipeline.py#FORWARD_INTERVAL"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile"
+      ],
+      "db_tables": [
+        "forward_rules",
+        "rule_counters"
+      ],
+      "completion_condition": "the accepted-message sequence for the rule crosses a multiple of N, exactly one worker owns the slot, and only the owning message is delivered",
+      "implementation_status": "IMPLEMENTED",
+      "notes": "N=1 is inert: no counter row is read or written. Albums consume one slot; filtered messages consume none."
     }
   ],
   "known_gaps": [

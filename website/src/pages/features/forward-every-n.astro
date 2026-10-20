@@ -1,0 +1,86 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { url } from '../../utils/paths';
+
+const pageTitle = "Forward Every N Messages";
+const pageDesc = "Deliver only every Nth message each task receives — sampled forwarding for curation, digests and anti-spam, with album and filter aware counting.";
+---
+
+<DocsLayout
+  title={pageTitle}
+  description={pageDesc}
+  breadcrumbs={[
+    { name: 'Features', href: url('/features/') },
+    { name: 'Forward Every N Messages', href: url('/features/forward-every-n/') },
+  ]}
+  prev={{ title: 'Scheduling & Delays', href: url('/features/scheduling-and-delays/') }}
+  next={{ title: 'Media & Albums', href: url('/features/media-and-albums/') }}
+>
+  <div class="space-y-6">
+    <h2 id="overview">Overview</h2>
+    <p>
+      Sometimes you do not want every message a source publishes — you want a sample. Curation channels, digests, anti-spam
+      throttling and "keep the destination quiet but alive" all share one need: <strong>forward only every Nth
+      message</strong>. AutoTelegramForward gives each task an interval setting, <code>forward_every_n</code>, from 1 to
+      1,000. With <code>N = 5</code>, messages 1, 6, 11, 16, … are delivered; everything between them is skipped.
+    </p>
+
+    <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 not-prose my-4">
+      <div class="text-xs font-mono text-sky-400 mb-1">Configuration Parameter</div>
+      <div class="text-sm font-bold text-white mb-2"><code>forward_every_n</code> (integer 1–1000, default: 1)</div>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        The default <code>1</code> means "every message": the setting is off, and the task behaves exactly as it did before
+        the feature existed — down to not writing a single counter row. Anything above 1 turns the cadence on.
+      </p>
+    </div>
+
+    <h2 id="what-counts">What counts as a message</h2>
+    <ul>
+      <li><strong>Filters decide.</strong> Only messages that pass every configured filter — media type gates, blacklist and
+        whitelist keywords, links policy, everything — are counted. A message the filters reject never advances the counter,
+        so rejecting ten junk messages does not move your cadence.</li>
+      <li><strong>An album is one message.</strong> A media group of any size (2 photos or a 10-item album) consumes exactly
+        one slot, and the album as a whole is delivered or skipped together.</li>
+      <li><strong>Edits are free.</strong> Edit synchronization of an already-counted message never consumes another slot.</li>
+    </ul>
+
+    <h2 id="determinism">Deterministic, restart-proof counting</h2>
+    <p>
+      The counter lives in the task's own row in the <code>rule_counters</code> table and is advanced by a single atomic
+      upsert whose returned sequence decides whether the message owns the current slot. Consequences you can rely on:
+    </p>
+    <ul>
+      <li>Two workers processing a burst cannot both claim the same slot — the database serialises them.</li>
+      <li>The count survives restarts, redeploys and backup restores; nothing is recomputed at boot and nothing restarts the cadence silently.</li>
+      <li>The counter is per task and per account: one task's cadence is never influenced by another task sharing the same source.</li>
+    </ul>
+
+    <h2 id="surfaces">Where you configure it</h2>
+    <p>
+      The same setting is reachable from every client, and each writes the same number the engine reads:
+    </p>
+    <ul>
+      <li><strong>Telegram bot:</strong> the task panel's <em>Forward Every N Messages</em> row opens the interval screen —
+        presets (1, 2, 3, 5, 10, 25, 50, 100) plus a typed value for anything up to 1,000, in all ten interface languages.</li>
+      <li><strong>Web dashboard:</strong> the task overview's <em>Forward Every N</em> card opens the interval screen with the
+        same presets and a number field.</li>
+      <li><strong>Mobile apps (iOS & Android):</strong> the task editor carries the field next to the forwarding delay, and
+        the per-task settings sheet lists it with the rest of the schema.</li>
+      <li><strong>API:</strong> <code>forward_every_n</code> travels with the rule's advanced settings
+        (<code>PATCH /api/rules/{'{'}id{'}'}</code> / <code>PATCH /api/rules/{'{'}id{'}'}/settings</code>), clamped to 1–1000 server-side.</li>
+    </ul>
+
+    <h2 id="recipes">Two recipes</h2>
+    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400"><code># A news source posts 80 messages a day; you only want the day's shape
+forward_every_n = 20        # four posts a day, roughly evenly spaced
+
+# A busy source behaves like spam if forwarded raw
+forward_every_n = 5         # every 5th accepted message keeps the feed alive</code></pre>
+
+    <p>
+      Interval sampling composes with the rest of the pipeline rather than replacing it: filters still decide what is
+      eligible, delays still pace what the slot delivers, cleaners and headers still apply to what is sent, and a failed
+      delivery is retried with the normal retry budget — a retry never consumes a second slot.
+    </p>
+  </div>
+</DocsLayout>

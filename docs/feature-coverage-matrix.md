@@ -104,7 +104,7 @@ by scheduled deletion; `content_dedup` the duplicate-filter claim; `delivery_job
 | F21 | Categories | task-list filter buttons | `GET /rules` | caller-scoped query | `forward_rules.category`/metadata | n/a (list filter) | Part 2 batch D | in audit |
 | F22 | Back to Rules | `_cb_rule_back_*`, `_cb_back` | n/a | resolves the task id via owner | n/a (navigation) | n/a | Part 2 batch D | in audit |
 | F23 | Channel comments | task option | `PATCH /rules/{id}` | `_owned_rule` | metadata | delivery path | Part 2 batch D | in audit |
-| F24 | Forward Every N | `_cb_rule_*` counter options | `PATCH /rules/{id}` | `_owned_rule` | `channel_cursors` / counters | pipeline counter | Part 2 batch D | in audit |
+| F24 | Forward Every N | `radon:<id>:every_n` → interval screen `ren:<id>:<n>` / `renc:<id>` | `PATCH /rules/{id}` + `PATCH /rules/{id}/settings` (`forward_every_n`) | `_owned_rule` on every tap; the counter row carries `owner_user_id` and is scoped by rule | `forward_rules.metadata.forward_every_n` + `rule_counters(rule_id, owner_user_id, every_n, accepted)` | `DurableMessagePipeline` stage `FORWARD_INTERVAL` (and the reply/PV use case) | `test_forward_every_n.py`, `test_bot_every_n_panel.py` | PASS |
 | F25 | Keyword confirmation | keyword callbacks | n/a (bot-local) | callback bound to task+user, expiring | callback payload | bot reply path | Part 2 batch C | in audit |
 | F26 | Keyword reply threshold | `_cb_rule_*` keyword options | `PATCH /rules/{id}` | `_owned_rule` | keyword state | reply matcher | Part 2 batch D | in audit |
 | F27 | Auto delete message | task option + interval | `PATCH /rules/{id}` | `_owned_rule` | scheduled deletion rows | scheduler / worker | Part 2 batch E | in audit |
@@ -319,7 +319,7 @@ routing unit tests.
 | F21 Categories | **PASS** | caller-scoped list query; `test_cross_tenant_boundaries.py` |
 | F22 Back to Rules | **PASS** | Part 2 batch D (task id resolved through the owner) |
 | F23 Channel comments | **PARTIAL — premium addon** | entitlement enforced and never bypassed; `test_task_overview_and_advanced_settings.py` proves the flag round-trips and stays gated. The addon's delivery behaviour is not reachable for an unentitled tenant by design, so it is not exercised end to end |
-| F24 Forward every N messages | **NOT_IMPLEMENTED — premium addon** | only the flag exists (bot UI `radon:<rule>:every_n`, web `TaskOverviewModal` `locked: true`, catalog `ui_addon_every_n`); no engine path consumes it. Entitlement respected, not bypassed |
+| F24 Forward every N messages | **PASS** | the interval is a real setting (`forward_every_n`, 1–1000) that the pipeline enforces, with the counter in `rule_counters`; the add-on flag `paid_addons["every_n"]` is now a *mirror* of `N > 1` rather than the switch itself. `test_forward_every_n.py` (61, incl. concurrency, albums, restarts, N=1/N=1000), `test_bot_every_n_panel.py` (10) |
 | F25 Keyword confirmation | **PASS** | Part 2 batch C |
 | F26 Keyword reply threshold | **PASS** | Part 2 batch C/C1; `test_queue_concurrency_and_idempotency.py` |
 | F27 Auto delete message | **PASS** | the setting reaches the worker and deletion is scheduled off the delivered id (`durable_queue._schedule_auto_delete`); `test_phase2_advanced_settings_execution.py` |
@@ -348,10 +348,13 @@ The audit's remaining findings are recorded as such rather than silently
 digest, raw text, button-to-text, schedules), the `paid_addons` key mismatch
 between the UI toggles and the engine gates (`kw_reply` vs `keyword_reply`,
 `auto_del` vs `auto_delete_message`, `comments` vs `channel_comments`),
-auto-delete not surviving a restart, F24 (forward every N) and F28 (outbound
-webhook) having no engine path at all, and the `owner_user_id=0` gRPC bypass
-(mitigated by `ATF_CORE_RPC_TOKEN`). They are the next batches, not this one.
+auto-delete not surviving a restart, F28 (outbound webhook) having no engine
+path at all, and the `owner_user_id=0` gRPC bypass (mitigated by
+`ATF_CORE_RPC_TOKEN`). They are the next batches, not this one.
 
-F23, F24 and F28 are reported as what they are rather than as passing: the toggle renders and persists, which is exactly the
-evidence the steer forbids treating as proof that the feature works. Nothing was enabled to make them look complete — the
-locked-addon rule was inspected, not bypassed.
+F23 and F28 are reported as what they are rather than as passing: the toggle
+renders and persists, which is exactly the evidence the steer forbids treating
+as proof that the feature works. Nothing was enabled to make them look complete
+— the locked-addon rule was inspected, not bypassed. F24 is no longer in that
+list: it has a real setting, a real counter and a real gate, and its status
+comes from the engine test, not from the panel rendering.
