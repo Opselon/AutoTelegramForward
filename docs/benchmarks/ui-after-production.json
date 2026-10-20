@@ -1,0 +1,52 @@
+{
+  "url": "https://api.legoten.com",
+  "authenticated": true,
+  "measured_at": "2026-10-20T10:29:32.089Z",
+  "widths": {
+    "360": {
+      "vw": 360,
+      "pageScrollX": false,
+      "realOverflow": 0,
+      "realOverflowSamples": [],
+      "clippedInScrollers": 0,
+      "smallTargets": 0,
+      "unnamedIconButtons": 0,
+      "minFontPx": 12,
+      "under12px": 0,
+      "drawerTrigger": true,
+      "drawerVisible": true,
+      "drawerOpen": false,
+      "sidebarDocked": false
+    },
+    "768": {
+      "vw": 768,
+      "pageScrollX": false,
+      "realOverflow": 0,
+      "realOverflowSamples": [],
+      "clippedInScrollers": 0,
+      "smallTargets": 0,
+      "unnamedIconButtons": 0,
+      "minFontPx": 12,
+      "under12px": 0,
+      "drawerTrigger": true,
+      "drawerVisible": true,
+      "drawerOpen": false,
+      "sidebarDocked": false
+    },
+    "1440": {
+      "vw": 1440,
+      "pageScrollX": false,
+      "realOverflow": 0,
+      "realOverflowSamples": [],
+      "clippedInScrollers": 0,
+      "smallTargets": 0,
+      "unnamedIconButtons": 0,
+      "minFontPx": 12,
+      "under12px": 0,
+      "drawerTrigger": true,
+      "drawerVisible": false,
+      "drawerOpen": false,
+      "sidebarDocked": true
+    }
+  }
+}
