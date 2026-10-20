@@ -826,6 +826,11 @@ class SqliteDatabase:
         self._apply_pragmas()
         self._migrate()
 
+    @property
+    def path(self) -> str:
+        """The database this handle points at (``:memory:`` included)."""
+        return self._db_path
+
     def _apply_pragmas(self) -> None:
         """Apply high-performance, low-resource pragmas optimal for low-spec servers."""
         with self._lock:

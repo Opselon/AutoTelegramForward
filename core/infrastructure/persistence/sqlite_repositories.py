@@ -228,9 +228,42 @@ def _reject_inherited_write(rule: Any) -> None:
         )
 
 
+#: Process-wide invalidation counter for `list_active_by_source`'s cache, keyed
+#: by database. Each repository keeps its own dict, but a write through *any*
+#: repository on the same database has to invalidate all of them: a caller that
+#: loads a rule with a fresh repository, edits it and saves it otherwise leaves
+#: the pipeline serving the pre-edit routing table until the TTL expires. That
+#: is not hypothetical — it starved a second task of the same tenant in
+#: `test_full_stack_cross_feature.py`, because the pipeline's repository never
+#: saw the write.
+_ACTIVE_GENERATION: Dict[str, int] = {}
+_ACTIVE_GENERATION_LOCK = threading.Lock()
+
+
+def _db_identity(db: Any) -> str:
+    """A stable key for one database file, across handles and instances."""
+    path = getattr(db, "path", None) or getattr(db, "_db_path", None)
+    if path:
+        try:
+            return os.path.realpath(str(path))
+        except OSError:  # pragma: no cover - exotic paths only
+            return str(path)
+    return f"id:{id(db)}"
+
+
+def _active_generation(db: Any) -> int:
+    with _ACTIVE_GENERATION_LOCK:
+        return _ACTIVE_GENERATION.get(_db_identity(db), 0)
+
+
+def _bump_active_generation(db: Any) -> None:
+    key = _db_identity(db)
+    with _ACTIVE_GENERATION_LOCK:
+        _ACTIVE_GENERATION[key] = _ACTIVE_GENERATION.get(key, 0) + 1
+
+
 class SqliteForwardRuleRepository(IForwardRuleRepository):
     #: How long a resolved active-rule set may be reused, in seconds.
-    #:
     #: ``list_active_by_source`` runs once per inbound message. Its result is a
     #: *routing table*, not a live reading: it changes when a human creates,
     #: edits, pauses or deletes a task, which is minutes apart, while a busy
@@ -257,9 +290,13 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         self._active_misses = 0
 
     def invalidate_active_cache(self) -> None:
-        """Forget every cached active-rule set. Called by every write here."""
+        """Forget every cached active-rule set, for every handle on this database."""
         with self._active_lock:
             self._active_cache.clear()
+        # Bumping the shared generation is what makes a write through a *second*
+        # repository instance visible here; clearing the local dict alone only
+        # covers writers that happen to share this object.
+        _bump_active_generation(self._db)
 
     def active_cache_stats(self) -> Dict[str, int]:
         with self._active_lock:
@@ -707,15 +744,19 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
 
     def _cache_get(self, cid: str):
         now = time.monotonic()
+        generation = _active_generation(self._db)
         with self._active_lock:
             entry = self._active_cache.get(cid)
             if entry is None:
                 self._active_misses += 1
                 return None
-            stored_at, rules = entry
-            if now - stored_at > self.ACTIVE_CACHE_TTL:
-                # Expired, but not invalidated: a writer in another process may
-                # have changed the table, so it must not be served.
+            stored_at, stored_generation, rules = entry
+            if (
+                now - stored_at > self.ACTIVE_CACHE_TTL
+                or stored_generation != generation
+            ):
+                # Expired, or a writer on another handle touched the table: a
+                # routing table from before that write must not be served.
                 self._active_cache.pop(cid, None)
                 self._active_misses += 1
                 return None
@@ -723,10 +764,11 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             return list(rules)
 
     def _cache_put(self, cid: str, rules: List[ForwardRule]) -> None:
+        generation = _active_generation(self._db)
         with self._active_lock:
             if len(self._active_cache) >= self.ACTIVE_CACHE_MAX:
                 self._active_cache.clear()
-            self._active_cache[cid] = (time.monotonic(), tuple(rules))
+            self._active_cache[cid] = (time.monotonic(), generation, tuple(rules))
 
     #: A task's own bookkeeping, all keyed by ``rule_id``. Deleting a task has to
     #: take these with it:
