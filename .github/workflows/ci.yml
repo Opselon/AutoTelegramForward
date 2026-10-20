@@ -437,6 +437,17 @@ jobs:
         working-directory: mobile
         run: flutter build apk --debug
 
+      # The APK is the one artifact a reviewer cannot get from the test log: the
+      # Gradle build above proves it compiles, and this makes the shippable file
+      # downloadable from the run itself (7 days, no long-term storage cost).
+      - name: Upload the debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: atf-mobile-debug-apk
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
 # Rust Logger engine gate. Deliberately SEPARATE from the existing CodeQL
 # rust job, which runs with build-mode: none and therefore never compiles
 # anything -- a crate whose tests all fail would sail through it.
